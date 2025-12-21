@@ -3,6 +3,7 @@
 import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 
 from app.config import settings
 
@@ -20,7 +21,7 @@ def init_scheduler() -> AsyncIOScheduler:
 
     # Import jobs here to avoid circular imports
     from app.jobs.daily_sync import sync_portfolio, sync_prices
-    from app.jobs.monthly_rebalance import execute_monthly_rebalance
+    from app.jobs.cash_rebalance import check_and_rebalance
 
     # Daily portfolio sync (at configured hour)
     scheduler.add_job(
@@ -40,12 +41,12 @@ def init_scheduler() -> AsyncIOScheduler:
         replace_existing=True,
     )
 
-    # Monthly rebalance (on configured day at 10:00)
+    # Cash-based rebalance check (every N minutes)
     scheduler.add_job(
-        execute_monthly_rebalance,
-        CronTrigger(day=settings.monthly_rebalance_day, hour=10, minute=0),
-        id="monthly_rebalance",
-        name="Monthly Rebalance",
+        check_and_rebalance,
+        IntervalTrigger(minutes=settings.cash_check_interval_minutes),
+        id="cash_rebalance_check",
+        name="Cash Rebalance Check",
         replace_existing=True,
     )
 
