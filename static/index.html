@@ -520,7 +520,7 @@
                 sortBy: 'total_score',
                 sortDesc: true,
                 showRebalanceModal: false,
-                rebalancePreview: null,
+                rebalancePreview: { deposit_amount: 0, total_trades: 0, total_value: 0, trades: [] },
                 loading: { rebalance: false, scores: false, sync: false, execute: false, geoSave: false, industrySave: false },
                 message: '',
                 messageType: 'success',
@@ -617,33 +617,47 @@
                 },
 
                 initChart() {
-                    const ctx = document.getElementById('geoChart').getContext('2d');
-                    this.geoChart = new Chart(ctx, {
-                        type: 'doughnut',
-                        data: {
-                            labels: ['EU', 'Asia', 'US'],
-                            datasets: [{
-                                data: [0, 0, 0],
-                                backgroundColor: ['#3B82F6', '#EF4444', '#22C55E'],
-                                borderWidth: 0
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: true,
-                            plugins: {
-                                legend: { display: false }
+                    const canvas = document.getElementById('geoChart');
+                    if (!canvas) return;
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) return;
+                    try {
+                        this.geoChart = new Chart(ctx, {
+                            type: 'doughnut',
+                            data: {
+                                labels: ['EU', 'Asia', 'US'],
+                                datasets: [{
+                                    data: [1, 1, 1],  // Start with non-zero to avoid Chart.js issues
+                                    backgroundColor: ['#3B82F6', '#EF4444', '#22C55E'],
+                                    borderWidth: 0
+                                }]
                             },
-                            cutout: '60%'
-                        }
-                    });
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: true,
+                                plugins: {
+                                    legend: { display: false }
+                                },
+                                cutout: '60%'
+                            }
+                        });
+                    } catch (e) {
+                        console.error('Chart init error:', e);
+                    }
                 },
 
                 updateChart() {
-                    if (this.geoChart && this.allocation.geographic) {
-                        const data = this.allocation.geographic.map(g => g.current_value || 0);
+                    if (!this.geoChart || !this.allocation.geographic) return;
+                    try {
+                        const data = this.allocation.geographic.map(g => g.current_value || 1);
+                        // Ensure we have valid data (at least some non-zero values)
+                        if (data.every(v => v === 0)) {
+                            data[0] = 1; // Prevent empty chart
+                        }
                         this.geoChart.data.datasets[0].data = data;
                         this.geoChart.update();
+                    } catch (e) {
+                        console.error('Chart update error:', e);
                     }
                 },
 
