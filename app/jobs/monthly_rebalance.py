@@ -15,74 +15,56 @@ async def execute_monthly_rebalance():
     Execute monthly portfolio rebalance.
 
     This job:
-    1. Calculates current allocation vs targets
-    2. Scores all stocks in universe
-    3. Determines optimal trades for the monthly deposit
+    1. Syncs portfolio from Tradernet
+    2. Refreshes stock scores
+    3. Calculates optimal trades for the monthly deposit
     4. Executes trades via Tradernet
-
-    Note: This is a placeholder - full implementation in Phase 4.
     """
     logger.info("Starting monthly rebalance")
 
     try:
-        # Import here to avoid circular imports
-        from app.services.tradernet import get_tradernet_client
-        from app.services.allocator import calculate_rebalance_trades
+        from app.jobs.daily_sync import sync_portfolio
+        from app.services.scorer import score_all_stocks
+        from app.services.allocator import calculate_rebalance_trades, execute_trades
 
-        client = get_tradernet_client()
+        # Step 1: Sync portfolio
+        logger.info("Step 1: Syncing portfolio...")
+        await sync_portfolio()
 
-        if not client.is_connected:
-            if not client.connect():
-                logger.error("Failed to connect to Tradernet, skipping rebalance")
+        async with aiosqlite.connect(settings.database_path) as db:
+            # Step 2: Refresh scores
+            logger.info("Step 2: Refreshing stock scores...")
+            scores = await score_all_stocks(db)
+            logger.info(f"Scored {len(scores)} stocks")
+
+            # Step 3: Calculate rebalance trades
+            logger.info("Step 3: Calculating rebalance trades...")
+            trades = await calculate_rebalance_trades(db, settings.monthly_deposit)
+
+            if not trades:
+                logger.info("No rebalance trades needed")
                 return
 
-        # Get current portfolio state
-        async with aiosqlite.connect(settings.database_path) as db:
-            # Get allocation targets
-            cursor = await db.execute(
-                "SELECT type, name, target_pct FROM allocation_targets"
+            logger.info(f"Generated {len(trades)} trade recommendations:")
+            for trade in trades:
+                logger.info(
+                    f"  {trade.side} {trade.quantity} {trade.symbol} "
+                    f"@ {trade.estimated_price:.2f} ({trade.reason})"
+                )
+
+            # Step 4: Execute trades
+            logger.info("Step 4: Executing trades...")
+            results = await execute_trades(db, trades)
+
+            successful = sum(1 for r in results if r["status"] == "success")
+            failed = sum(1 for r in results if r["status"] != "success")
+
+            logger.info(
+                f"Monthly rebalance complete: {successful} successful, {failed} failed"
             )
-            targets = {
-                f"{row[0]}:{row[1]}": row[2]
-                for row in await cursor.fetchall()
-            }
 
-            # Get current positions with geography
-            cursor = await db.execute(
-                """
-                SELECT p.symbol, p.quantity, p.current_price, s.geography, s.industry
-                FROM positions p
-                JOIN stocks s ON p.symbol = s.symbol
-                """
-            )
-            positions = await cursor.fetchall()
-
-            # Get stock scores
-            cursor = await db.execute(
-                """
-                SELECT s.symbol, s.geography, s.industry, sc.total_score
-                FROM stocks s
-                LEFT JOIN scores sc ON s.symbol = sc.symbol
-                WHERE s.active = 1
-                ORDER BY sc.total_score DESC NULLS LAST
-                """
-            )
-            scored_stocks = await cursor.fetchall()
-
-        # Calculate rebalance trades
-        # This will be implemented in Phase 4
-        trades = []  # calculate_rebalance_trades(...)
-
-        if not trades:
-            logger.info("No rebalance trades needed")
-            return
-
-        # Execute trades
-        for trade in trades:
-            logger.info(f"Executing trade: {trade}")
-            # result = client.place_order(...)
-
-        logger.info(f"Monthly rebalance complete: {len(trades)} trades executed")
+            # Create snapshot after rebalance
+            await sync_portfolio()
 
     except Exception as e:
         logger.error(f"Monthly rebalance failed: {e}")
