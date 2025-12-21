@@ -27,24 +27,22 @@ async def get_status(db: aiosqlite.Connection = Depends(get_db)):
     cursor = await db.execute("SELECT COUNT(*) as count FROM positions")
     position_count = (await cursor.fetchone())["count"]
 
-    # Calculate next rebalance date
-    today = datetime.now()
-    if today.day >= settings.monthly_rebalance_day:
-        # Next month
-        if today.month == 12:
-            next_rebalance = datetime(today.year + 1, 1, settings.monthly_rebalance_day)
-        else:
-            next_rebalance = datetime(today.year, today.month + 1, settings.monthly_rebalance_day)
-    else:
-        next_rebalance = datetime(today.year, today.month, settings.monthly_rebalance_day)
+    # Get cash balance to determine if rebalance will trigger
+    cursor = await db.execute("""
+        SELECT cash_balance FROM portfolio_snapshots ORDER BY date DESC LIMIT 1
+    """)
+    cash_row = await cursor.fetchone()
+    cash_balance = cash_row["cash_balance"] if cash_row else 0
 
     return {
         "status": "healthy",
         "last_sync": last_sync,
-        "next_rebalance": next_rebalance.isoformat(),
         "stock_universe_count": stock_count,
         "active_positions": position_count,
-        "monthly_deposit": settings.monthly_deposit,
+        "cash_balance": cash_balance,
+        "min_cash_threshold": settings.min_cash_threshold,
+        "rebalance_ready": cash_balance >= settings.min_cash_threshold,
+        "check_interval_minutes": settings.cash_check_interval_minutes,
     }
 
 
