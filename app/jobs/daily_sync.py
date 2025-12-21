@@ -33,7 +33,7 @@ async def sync_portfolio():
     try:
         # Get positions from Tradernet
         positions = client.get_portfolio()
-        cash_balance = client.get_cash_balance()
+        cash_balance = client.get_total_cash_eur()
 
         async with aiosqlite.connect(settings.database_path) as db:
             # Clear old positions
@@ -59,11 +59,12 @@ async def sync_portfolio():
                     ),
                 )
 
-                # Calculate values by geography
-                market_value = pos.quantity * pos.current_price
+                # Use market_value from API (already in correct currency)
+                market_value = pos.market_value
                 total_value += market_value
 
-                # Get geography from stocks table
+                # Determine geography from symbol suffix or stocks table
+                geo = None
                 cursor = await db.execute(
                     "SELECT geography FROM stocks WHERE symbol = ?",
                     (pos.symbol,)
@@ -71,6 +72,17 @@ async def sync_portfolio():
                 row = await cursor.fetchone()
                 if row:
                     geo = row[0]
+                else:
+                    # Infer geography from symbol suffix
+                    symbol = pos.symbol.upper()
+                    if symbol.endswith(".GR") or symbol.endswith(".DE") or symbol.endswith(".PA"):
+                        geo = "EU"
+                    elif symbol.endswith(".AS") or symbol.endswith(".HK") or symbol.endswith(".T"):
+                        geo = "ASIA"
+                    elif symbol.endswith(".US"):
+                        geo = "US"
+
+                if geo:
                     geo_values[geo] = geo_values.get(geo, 0) + market_value
 
             # Create daily snapshot

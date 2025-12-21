@@ -1,11 +1,11 @@
 """Tradernet (Freedom24) API client service."""
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
 from dataclasses import dataclass
 
-from tradernet import TraderNetAPI, TraderNetSymbol, Trading
+from tradernet import Tradernet
 
 from app.config import settings
 
@@ -16,12 +16,20 @@ logger = logging.getLogger(__name__)
 class Position:
     """Portfolio position."""
     symbol: str
+    name: str
     quantity: float
     avg_price: float
     current_price: float
     market_value: float
     unrealized_pnl: float
-    unrealized_pnl_pct: float
+    currency: str
+
+
+@dataclass
+class CashBalance:
+    """Cash balance in a currency."""
+    currency: str
+    amount: float
 
 
 @dataclass
@@ -62,8 +70,7 @@ class TradernetClient:
 
     def __init__(self):
         """Initialize the Tradernet client."""
-        self._client: Optional[TraderNetAPI] = None
-        self._trading: Optional[Trading] = None
+        self._client: Optional[Tradernet] = None
         self._connected = False
 
     def connect(self) -> bool:
@@ -73,12 +80,12 @@ class TradernetClient:
             return False
 
         try:
-            self._client = TraderNetAPI(
+            self._client = Tradernet(
                 settings.tradernet_api_key,
                 settings.tradernet_api_secret
             )
-            self._trading = Trading(self._client)
-            # Test connection - the API validates on first request
+            # Test connection by fetching user info
+            self._client.user_info()
             self._connected = True
             logger.info("Connected to Tradernet API")
             return True
@@ -92,14 +99,15 @@ class TradernetClient:
         """Check if client is connected."""
         return self._connected and self._client is not None
 
-    def get_user_info(self) -> dict:
-        """Get user account information."""
+    def get_account_summary(self) -> dict:
+        """Get full account summary including positions and cash."""
         if not self.is_connected:
             raise ConnectionError("Not connected to Tradernet")
-        # TraderNetAPI may have different method names
+
         try:
-            return self._client.get_user_info()
-        except AttributeError:
+            return self._client.account_summary()
+        except Exception as e:
+            logger.error(f"Failed to get account summary: {e}")
             return {}
 
     def get_portfolio(self) -> list[Position]:
@@ -108,22 +116,27 @@ class TradernetClient:
             raise ConnectionError("Not connected to Tradernet")
 
         try:
-            # The SDK provides portfolio data through user_info
-            user_data = self._client.user_info()
+            summary = self._client.account_summary()
             positions = []
 
-            # Parse portfolio from user data
-            # Note: Actual structure depends on API response
-            portfolio_data = user_data.get("portfolio", [])
-            for item in portfolio_data:
+            # Parse positions from result.ps.pos
+            ps_data = summary.get("result", {}).get("ps", {})
+            pos_data = ps_data.get("pos", [])
+
+            for item in pos_data:
+                avg_price = float(item.get("bal_price_a", 0))
+                current_price = float(item.get("mkt_price", 0))
+                quantity = float(item.get("q", 0))
+
                 positions.append(Position(
-                    symbol=item.get("ticker", ""),
-                    quantity=float(item.get("qty", 0)),
-                    avg_price=float(item.get("avg_price", 0)),
-                    current_price=float(item.get("last_price", 0)),
+                    symbol=item.get("i", ""),
+                    name=item.get("name", item.get("name2", "")),
+                    quantity=quantity,
+                    avg_price=avg_price,
+                    current_price=current_price,
                     market_value=float(item.get("market_value", 0)),
-                    unrealized_pnl=float(item.get("unrealized_pnl", 0)),
-                    unrealized_pnl_pct=float(item.get("unrealized_pnl_pct", 0)),
+                    unrealized_pnl=float(item.get("profit_close", 0)),
+                    currency=item.get("curr", "EUR"),
                 ))
 
             return positions
@@ -131,16 +144,59 @@ class TradernetClient:
             logger.error(f"Failed to get portfolio: {e}")
             return []
 
-    def get_cash_balance(self) -> float:
-        """Get available cash balance."""
+    def get_cash_balances(self) -> list[CashBalance]:
+        """Get cash balances in all currencies."""
         if not self.is_connected:
             raise ConnectionError("Not connected to Tradernet")
 
         try:
-            user_data = self._client.user_info()
-            return float(user_data.get("cash", 0))
+            summary = self._client.account_summary()
+            balances = []
+
+            # Parse cash from result.ps.acc
+            ps_data = summary.get("result", {}).get("ps", {})
+            acc_data = ps_data.get("acc", [])
+
+            for item in acc_data:
+                amount = float(item.get("s", 0))
+                if amount > 0:  # Only include non-zero balances
+                    balances.append(CashBalance(
+                        currency=item.get("curr", ""),
+                        amount=amount,
+                    ))
+
+            return balances
         except Exception as e:
-            logger.error(f"Failed to get cash balance: {e}")
+            logger.error(f"Failed to get cash balances: {e}")
+            return []
+
+    def get_total_cash_eur(self) -> float:
+        """Get total cash balance converted to EUR."""
+        if not self.is_connected:
+            raise ConnectionError("Not connected to Tradernet")
+
+        try:
+            summary = self._client.account_summary()
+            total = 0.0
+
+            # Parse cash from result.ps.acc
+            ps_data = summary.get("result", {}).get("ps", {})
+            acc_data = ps_data.get("acc", [])
+
+            for item in acc_data:
+                amount = float(item.get("s", 0))
+                currency = item.get("curr", "")
+                currval = float(item.get("currval", 1))  # Exchange rate to base
+
+                if currency == "EUR":
+                    total += amount
+                elif amount > 0 and currval > 0:
+                    # Convert to EUR using the exchange rate
+                    total += amount / currval
+
+            return total
+        except Exception as e:
+            logger.error(f"Failed to get total cash: {e}")
             return 0.0
 
     def get_quote(self, symbol: str) -> Optional[Quote]:
@@ -149,17 +205,18 @@ class TradernetClient:
             raise ConnectionError("Not connected to Tradernet")
 
         try:
-            ts = TradernetSymbol(symbol, self._client)
-            data = ts.get_data()
-
-            return Quote(
-                symbol=symbol,
-                price=float(data.get("last_price", 0)),
-                change=float(data.get("change", 0)),
-                change_pct=float(data.get("change_pct", 0)),
-                volume=int(data.get("volume", 0)),
-                timestamp=datetime.now(),
-            )
+            quotes = self._client.get_quotes([symbol])
+            if quotes and len(quotes) > 0:
+                data = quotes[0] if isinstance(quotes, list) else quotes
+                return Quote(
+                    symbol=symbol,
+                    price=float(data.get("ltp", data.get("last_price", 0))),
+                    change=float(data.get("chg", data.get("change", 0))),
+                    change_pct=float(data.get("chg_pc", data.get("change_pct", 0))),
+                    volume=int(data.get("v", data.get("volume", 0))),
+                    timestamp=datetime.now(),
+                )
+            return None
         except Exception as e:
             logger.error(f"Failed to get quote for {symbol}: {e}")
             return None
@@ -174,17 +231,14 @@ class TradernetClient:
             raise ConnectionError("Not connected to Tradernet")
 
         try:
-            ts = TradernetSymbol(symbol, self._client)
-            data = ts.get_data()
-
-            candles = data.candles if hasattr(data, 'candles') else []
-            timestamps = data.timestamps if hasattr(data, 'timestamps') else []
-
+            data = self._client.get_candles(symbol, count=days)
             result = []
-            for i, candle in enumerate(candles):
-                if i < len(timestamps):
+
+            if isinstance(data, dict):
+                candles = data.get("candles", data.get("hloc", []))
+                for candle in candles:
                     result.append(OHLC(
-                        timestamp=datetime.fromtimestamp(timestamps[i]),
+                        timestamp=datetime.fromtimestamp(candle.get("t", 0)),
                         open=float(candle.get("o", 0)),
                         high=float(candle.get("h", 0)),
                         low=float(candle.get("l", 0)),
@@ -218,18 +272,17 @@ class TradernetClient:
         Returns:
             OrderResult if successful, None otherwise
         """
-        if not self.is_connected or not self._trading:
+        if not self.is_connected:
             raise ConnectionError("Not connected to Tradernet")
 
         try:
             if side.upper() == "BUY":
-                result = self._trading.buy(symbol, quantity)
+                result = self._client.buy(symbol, quantity)
             elif side.upper() == "SELL":
-                result = self._trading.sell(symbol, quantity)
+                result = self._client.sell(symbol, quantity)
             else:
                 raise ValueError(f"Invalid side: {side}")
 
-            # Handle different response formats
             if isinstance(result, dict):
                 return OrderResult(
                     order_id=str(result.get("order_id", result.get("orderId", ""))),
@@ -253,11 +306,11 @@ class TradernetClient:
 
     def cancel_order(self, order_id: str) -> bool:
         """Cancel an open order."""
-        if not self.is_connected or not self._trading:
+        if not self.is_connected:
             raise ConnectionError("Not connected to Tradernet")
 
         try:
-            self._trading.cancel(order_id)
+            self._client.cancel(order_id)
             return True
         except Exception as e:
             logger.error(f"Failed to cancel order {order_id}: {e}")

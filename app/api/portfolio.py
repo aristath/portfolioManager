@@ -11,30 +11,49 @@ router = APIRouter()
 async def get_portfolio(db: aiosqlite.Connection = Depends(get_db)):
     """Get current portfolio positions with values."""
     cursor = await db.execute("""
-        SELECT p.*, s.name, s.industry, s.geography
+        SELECT p.*, s.name as stock_name, s.industry, s.geography
         FROM positions p
-        JOIN stocks s ON p.symbol = s.symbol
+        LEFT JOIN stocks s ON p.symbol = s.symbol
         ORDER BY (p.quantity * p.current_price) DESC
     """)
     rows = await cursor.fetchall()
     return [dict(row) for row in rows]
 
 
+def infer_geography(symbol: str) -> str:
+    """Infer geography from symbol suffix."""
+    symbol = symbol.upper()
+    if symbol.endswith(".GR") or symbol.endswith(".DE") or symbol.endswith(".PA"):
+        return "EU"
+    elif symbol.endswith(".AS") or symbol.endswith(".HK") or symbol.endswith(".T"):
+        return "ASIA"
+    elif symbol.endswith(".US"):
+        return "US"
+    return "OTHER"
+
+
 @router.get("/summary")
 async def get_portfolio_summary(db: aiosqlite.Connection = Depends(get_db)):
     """Get portfolio summary: total value, cash, allocation percentages."""
-    # Get total portfolio value by geography
+    # Get all positions with optional geography from stocks table
     cursor = await db.execute("""
-        SELECT
-            s.geography,
-            SUM(p.quantity * COALESCE(p.current_price, p.avg_price)) as value
+        SELECT p.symbol, p.quantity, p.current_price, p.avg_price, s.geography
         FROM positions p
-        JOIN stocks s ON p.symbol = s.symbol
-        GROUP BY s.geography
+        LEFT JOIN stocks s ON p.symbol = s.symbol
     """)
-    geo_values = {row["geography"]: row["value"] for row in await cursor.fetchall()}
+    rows = await cursor.fetchall()
 
-    total_value = sum(geo_values.values()) if geo_values else 0
+    # Calculate values by geography
+    geo_values = {"EU": 0.0, "ASIA": 0.0, "US": 0.0}
+    total_value = 0.0
+
+    for row in rows:
+        value = row["quantity"] * (row["current_price"] or row["avg_price"] or 0)
+        total_value += value
+
+        geo = row["geography"] or infer_geography(row["symbol"])
+        if geo in geo_values:
+            geo_values[geo] += value
 
     # Get latest snapshot for cash balance
     cursor = await db.execute("""
@@ -48,9 +67,9 @@ async def get_portfolio_summary(db: aiosqlite.Connection = Depends(get_db)):
         "total_value": total_value,
         "cash_balance": cash_balance,
         "allocations": {
-            "EU": geo_values.get("EU", 0) / total_value if total_value else 0,
-            "ASIA": geo_values.get("ASIA", 0) / total_value if total_value else 0,
-            "US": geo_values.get("US", 0) / total_value if total_value else 0,
+            "EU": geo_values.get("EU", 0) / total_value * 100 if total_value else 0,
+            "ASIA": geo_values.get("ASIA", 0) / total_value * 100 if total_value else 0,
+            "US": geo_values.get("US", 0) / total_value * 100 if total_value else 0,
         },
     }
 
