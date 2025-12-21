@@ -2,6 +2,7 @@
 # Shows portfolio value as big digits + progress bar
 
 from arduino.app_utils import App, Bridge, Logger, Frame
+import math
 import time
 import requests
 import numpy as np
@@ -45,6 +46,7 @@ last_value = 0
 scroll_offset = 0
 syncing_frame = 0
 current_balance_arr = None  # Store current balance display
+api_call_phase = 0  # For pulsing animation on API calls
 
 def create_balance_arr(value):
     """Create big digits + progress bar array for portfolio value.
@@ -183,16 +185,37 @@ last_update = 0
 last_heartbeat = 0
 heartbeat_on = False
 
-def combine_with_heartbeat(balance_arr, on=False):
-    """Combine balance display with heartbeat indicator (bottom-left pixel)."""
+def combine_with_status(balance_arr, heartbeat_on=False, web_active=False, api_active=False, api_phase=0):
+    """Combine balance display with all status indicators on bottom 2 rows.
+
+    Layout (rows 6-7):
+    - Heartbeat: col 0 (bottom-left pixel, row 7)
+    - API call: cols 3-5 (middle 6 pixels, pulsing)
+    - Web request: cols 11-12 (bottom-right 4 pixels)
+    """
     arr = balance_arr.copy()
-    if on:
-        arr[7, 0] = PIXEL_ON  # Bottom-left pixel
+
+    # Heartbeat - bottom-left pixel (row 7, col 0)
+    if heartbeat_on:
+        arr[7, 0] = PIXEL_ON
+
+    # Web request - bottom-right 4 pixels (cols 11-12, rows 6-7)
+    if web_active:
+        arr[6, 11:13] = PIXEL_ON
+        arr[7, 11:13] = PIXEL_ON
+
+    # API call - middle 6 pixels with pulsing (cols 3-5, rows 6-7)
+    if api_active:
+        # Pulse brightness using sine wave (smooth 0-255)
+        brightness = int(127 + 127 * math.sin(api_phase * 0.3))
+        arr[6, 3:6] = brightness
+        arr[7, 3:6] = brightness
+
     return arr
 
 def loop():
     global last_value, last_mode, scroll_offset, syncing_frame, last_update, current_balance_arr
-    global last_heartbeat, heartbeat_on
+    global last_heartbeat, heartbeat_on, api_call_phase
 
     try:
         state = fetch_display_state()
@@ -204,14 +227,20 @@ def loop():
 
         mode = state.get("mode", "balance")
         value = state.get("value", 0)
+        web_active = state.get("web_request_active", False)
+        api_active = state.get("api_call_active", False)
+
+        # Increment API call animation phase
+        if api_active:
+            api_call_phase += 1
 
         # Update balance display if needed
         if mode == "balance":
             now = time.time()
             value_changed = value != last_value or mode != last_mode or current_balance_arr is None
 
-            # Toggle heartbeat every 2 seconds
-            if now - last_heartbeat >= 2:
+            # Toggle heartbeat every 1 second
+            if now - last_heartbeat >= 1:
                 heartbeat_on = not heartbeat_on
                 last_heartbeat = now
 
@@ -220,9 +249,15 @@ def loop():
                 current_balance_arr = create_balance_arr(value)
                 last_value = value
 
-            # Draw balance with heartbeat indicator
+            # Draw balance with all status indicators
             if current_balance_arr is not None:
-                combined = combine_with_heartbeat(current_balance_arr, heartbeat_on)
+                combined = combine_with_status(
+                    current_balance_arr,
+                    heartbeat_on=heartbeat_on,
+                    web_active=web_active,
+                    api_active=api_active,
+                    api_phase=api_call_phase
+                )
                 draw_frame(Frame(combined))
 
         # Handle different modes

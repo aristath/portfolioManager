@@ -19,6 +19,7 @@ Display modes:
 import json
 import logging
 import socket
+import time
 from dataclasses import dataclass
 from typing import Optional
 from enum import Enum
@@ -70,6 +71,9 @@ class LEDDisplay:
         self._display_value: float = 0.0
         self._rgb_flash: Optional[list[int]] = None
         self._heartbeat_pending: bool = False
+        # Status indicators for bottom rows
+        self._web_request_time: float = 0.0  # Timestamp of last web request
+        self._api_call_active: bool = False   # Currently making external API call
 
     def connect(self) -> bool:
         """Connect to MCU via serial."""
@@ -296,6 +300,9 @@ class LEDDisplay:
             "heartbeat": self._heartbeat_pending,
             "rgb_flash": self._rgb_flash,
             "system_status": self._current_state.system_status if self._current_state else "ok",
+            # Status indicators for bottom rows
+            "web_request_active": (time.time() - self._web_request_time) < 0.5,
+            "api_call_active": self._api_call_active,
         }
         # Clear one-time events after reading
         self._heartbeat_pending = False
@@ -318,6 +325,14 @@ class LEDDisplay:
     def trigger_rgb_flash(self, color: list[int]):
         """Trigger an RGB flash on next poll."""
         self._rgb_flash = color
+
+    def mark_web_request(self):
+        """Mark that a web request was just served."""
+        self._web_request_time = time.time()
+
+    def set_api_call_active(self, active: bool):
+        """Set whether an external API call is in progress."""
+        self._api_call_active = active
 
 
 # Singleton instance

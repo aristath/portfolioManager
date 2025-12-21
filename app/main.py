@@ -72,6 +72,8 @@ app = FastAPI(
 async def led_request_indicator(request: Request, call_next):
     """Flash RGB LEDs on web requests to show activity."""
     display = get_led_display()
+    # Mark web request for status indicator
+    display.mark_web_request()
     # Trigger RGB flash for API-based display
     display.trigger_rgb_flash([0, 255, 255])  # Cyan
     # Also try serial if connected
