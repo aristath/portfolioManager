@@ -77,10 +77,12 @@ MAIN_APP_CHANGED=false
 ARDUINO_APP_CHANGED=false
 SKETCH_CHANGED=false
 REQUIREMENTS_CHANGED=false
+DEPLOY_SCRIPT_CHANGED=false
 
 while IFS= read -r file; do
     # Check for main app changes
     if [[ "$file" == app/* ]] || \
+       [[ "$file" == static/* ]] || \
        [[ "$file" == *.py ]] || \
        [[ "$file" == requirements.txt ]] || \
        [[ "$file" == deploy/arduino-trader.service ]] || \
@@ -95,13 +97,26 @@ while IFS= read -r file; do
     # Check for arduino-app changes
     if [[ "$file" == arduino-app/* ]]; then
         ARDUINO_APP_CHANGED=true
-        
+
         # Check for sketch changes
         if [[ "$file" == arduino-app/sketch/* ]]; then
             SKETCH_CHANGED=true
         fi
+
+        # Check for deploy script changes
+        if [[ "$file" == arduino-app/deploy/auto-deploy.sh ]]; then
+            DEPLOY_SCRIPT_CHANGED=true
+        fi
     fi
 done <<< "$CHANGED_FILES"
+
+# Self-update: Update this script if it changed
+if [ "$DEPLOY_SCRIPT_CHANGED" = true ]; then
+    log "Deploy script changed - updating self..."
+    cp "$REPO_DIR/arduino-app/deploy/auto-deploy.sh" /home/arduino/bin/auto-deploy.sh
+    chmod +x /home/arduino/bin/auto-deploy.sh
+    log "Deploy script updated"
+fi
 
 # Pull latest changes
 log "Pulling latest changes from origin/$CURRENT_BRANCH"
@@ -112,19 +127,25 @@ fi
 # Deploy main FastAPI app if needed
 if [ "$MAIN_APP_CHANGED" = true ]; then
     log "Deploying main FastAPI app..."
-    
-    # Sync files to main app directory
+
+    # Sync files to main app directory using cp (rsync not available)
     log "Syncing files to $MAIN_APP_DIR"
-    if ! rsync -av --delete \
-        --exclude='.git' \
-        --exclude='venv' \
-        --exclude='*.pyc' \
-        --exclude='__pycache__' \
-        --exclude='.env' \
-        --exclude='arduino-app' \
-        "$REPO_DIR/" "$MAIN_APP_DIR/" >> "$LOG_FILE" 2>&1; then
-        error_exit "Failed to sync main app files"
-    fi
+
+    # Create target directory if it doesn't exist
+    mkdir -p "$MAIN_APP_DIR"
+
+    # Copy main app directories/files (excluding venv, .env, arduino-app, .git)
+    for item in app static scripts data deploy requirements.txt run.py; do
+        if [ -e "$REPO_DIR/$item" ]; then
+            cp -r "$REPO_DIR/$item" "$MAIN_APP_DIR/" 2>>"$LOG_FILE" || log "WARNING: Failed to copy $item"
+        fi
+    done
+
+    # Clean up __pycache__ directories
+    find "$MAIN_APP_DIR" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+    find "$MAIN_APP_DIR" -name "*.pyc" -delete 2>/dev/null || true
+
+    log "Main app files synced"
     
     # Update Python dependencies if requirements.txt changed
     if [ "$REQUIREMENTS_CHANGED" = true ]; then
@@ -161,14 +182,20 @@ fi
 # Deploy Arduino app if needed
 if [ "$ARDUINO_APP_CHANGED" = true ]; then
     log "Deploying Arduino app..."
-    
-    # Sync arduino-app files
+
+    # Sync arduino-app files using cp (rsync not available)
     log "Syncing arduino-app files to $ARDUINO_APP_DIR"
-    if ! rsync -av --delete \
-        --exclude='.git' \
-        "$REPO_DIR/arduino-app/" "$ARDUINO_APP_DIR/" >> "$LOG_FILE" 2>&1; then
-        error_exit "Failed to sync arduino-app files"
-    fi
+
+    # Create target directory if it doesn't exist
+    mkdir -p "$ARDUINO_APP_DIR"
+
+    # Remove old files (except hidden files like .git if any)
+    rm -rf "$ARDUINO_APP_DIR"/* 2>/dev/null || true
+
+    # Copy all arduino-app contents
+    cp -r "$REPO_DIR/arduino-app/"* "$ARDUINO_APP_DIR/" 2>>"$LOG_FILE" || error_exit "Failed to copy arduino-app files"
+
+    log "Arduino app files synced"
     
     # Rebuild sketch if sketch files changed
     if [ "$SKETCH_CHANGED" = true ]; then
