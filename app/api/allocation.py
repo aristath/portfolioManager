@@ -23,13 +23,13 @@ class GeographyTargets(BaseModel):
 
 
 class IndustryTargets(BaseModel):
-    """Industry allocation targets."""
-    Technology: Optional[float] = None
-    Healthcare: Optional[float] = None
-    Finance: Optional[float] = None
-    Consumer: Optional[float] = None
-    Industrial: Optional[float] = None
-    Energy: Optional[float] = None
+    """
+    Dynamic industry allocation targets.
+
+    Accepts any industry names as keys with percentage values.
+    Example: {"Technology": 0.20, "Defense": 0.10, "Industrial": 0.30}
+    """
+    targets: dict[str, float]
 
 
 @router.get("/targets")
@@ -122,23 +122,12 @@ async def update_industry_targets(
     """
     Update industry allocation targets.
 
+    Accepts dynamic industry names with percentage values.
     Targets should be decimals (e.g., 0.20 for 20%).
+    Industries with 0% target will be removed from tracking.
     Sum should equal 1.0 (100%).
     """
-    updates = {}
-
-    if targets.Technology is not None:
-        updates["Technology"] = targets.Technology
-    if targets.Healthcare is not None:
-        updates["Healthcare"] = targets.Healthcare
-    if targets.Finance is not None:
-        updates["Finance"] = targets.Finance
-    if targets.Consumer is not None:
-        updates["Consumer"] = targets.Consumer
-    if targets.Industrial is not None:
-        updates["Industrial"] = targets.Industrial
-    if targets.Energy is not None:
-        updates["Energy"] = targets.Energy
+    updates = targets.targets
 
     if not updates:
         raise HTTPException(status_code=400, detail="No targets provided")
@@ -151,15 +140,24 @@ async def update_industry_targets(
                 detail=f"Target for {name} must be between 0 and 1"
             )
 
-    # Update targets
-    for name, pct in updates.items():
+    # Remove industries with 0% target
+    to_remove = [name for name, pct in updates.items() if pct == 0]
+    for name in to_remove:
         await db.execute(
-            """
-            INSERT OR REPLACE INTO allocation_targets (type, name, target_pct)
-            VALUES ('industry', ?, ?)
-            """,
-            (name, pct)
+            "DELETE FROM allocation_targets WHERE type = 'industry' AND name = ?",
+            (name,)
         )
+
+    # Update/insert non-zero targets
+    for name, pct in updates.items():
+        if pct > 0:
+            await db.execute(
+                """
+                INSERT OR REPLACE INTO allocation_targets (type, name, target_pct)
+                VALUES ('industry', ?, ?)
+                """,
+                (name, pct)
+            )
 
     await db.commit()
 

@@ -36,7 +36,7 @@ class IndustryChart extends HTMLElement {
 
         <!-- Edit Mode -->
         <div x-show="$store.app.editingIndustry" x-transition>
-          <template x-for="name in ['Technology', 'Healthcare', 'Finance', 'Consumer', 'Industrial']" :key="name">
+          <template x-for="name in Object.keys($store.app.industryTargets).sort()" :key="name">
             <div class="slider-control">
               <div class="slider-control__header">
                 <span x-text="name"></span>

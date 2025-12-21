@@ -26,6 +26,8 @@ document.addEventListener('alpine:init', () => {
     sortDesc: true,
     showRebalanceModal: false,
     showAddStockModal: false,
+    showEditStockModal: false,
+    editingStock: null,
     rebalancePreview: null,
     message: '',
     messageType: 'success',
@@ -37,20 +39,15 @@ document.addEventListener('alpine:init', () => {
       sync: false,
       execute: false,
       geoSave: false,
-      industrySave: false
+      industrySave: false,
+      stockSave: false
     },
 
     // Edit Mode States
     editingGeo: false,
     geoTargets: { EU: 50, ASIA: 30, US: 20 },
     editingIndustry: false,
-    industryTargets: {
-      Technology: 20,
-      Healthcare: 20,
-      Finance: 20,
-      Consumer: 20,
-      Industrial: 20
-    },
+    industryTargets: {},  // Dynamic - populated from API
 
     // Add Stock Form
     newStock: { symbol: '', name: '', geography: 'EU', industry: '' },
@@ -112,9 +109,17 @@ document.addEventListener('alpine:init', () => {
       }
     },
 
-    // Get unique industries for filter dropdown
+    // Get unique industries for filter dropdown (handles comma-separated)
     get industries() {
-      const set = new Set(this.stocks.map(s => s.industry).filter(Boolean));
+      const set = new Set();
+      this.stocks.forEach(s => {
+        if (s.industry) {
+          s.industry.split(',').forEach(ind => {
+            const trimmed = ind.trim();
+            if (trimmed) set.add(trimmed);
+          });
+        }
+      });
       return Array.from(set).sort();
     },
 
@@ -127,9 +132,13 @@ document.addEventListener('alpine:init', () => {
         filtered = filtered.filter(s => s.geography === this.stockFilter);
       }
 
-      // Industry filter
+      // Industry filter (handles comma-separated industries)
       if (this.industryFilter !== 'all') {
-        filtered = filtered.filter(s => s.industry === this.industryFilter);
+        filtered = filtered.filter(s => {
+          if (!s.industry) return false;
+          const industries = s.industry.split(',').map(i => i.trim());
+          return industries.includes(this.industryFilter);
+        });
       }
 
       // Search filter
@@ -304,23 +313,19 @@ document.addEventListener('alpine:init', () => {
       this.loading.geoSave = false;
     },
 
-    // Industry Allocation Editing
+    // Industry Allocation Editing (dynamic industries)
     get industryTotal() {
       return Math.round(
-        this.industryTargets.Technology +
-        this.industryTargets.Healthcare +
-        this.industryTargets.Finance +
-        this.industryTargets.Consumer +
-        this.industryTargets.Industrial
+        Object.values(this.industryTargets).reduce((sum, val) => sum + val, 0)
       );
     },
 
     startEditIndustry() {
+      // Load current targets from allocation data
+      this.industryTargets = {};
       if (this.allocation.industry) {
         this.allocation.industry.forEach(ind => {
-          if (this.industryTargets.hasOwnProperty(ind.name)) {
-            this.industryTargets[ind.name] = Math.round(ind.target_pct * 100);
-          }
+          this.industryTargets[ind.name] = Math.round(ind.target_pct * 100);
         });
       }
       this.editingIndustry = true;
@@ -331,7 +336,7 @@ document.addEventListener('alpine:init', () => {
     },
 
     adjustIndustrySlider(changed, newValue) {
-      const industries = ['Technology', 'Healthcare', 'Finance', 'Consumer', 'Industrial'];
+      const industries = Object.keys(this.industryTargets);
       const others = industries.filter(i => i !== changed);
       const remaining = 100 - newValue;
       const otherTotal = others.reduce((sum, i) => sum + this.industryTargets[i], 0);
@@ -366,16 +371,15 @@ document.addEventListener('alpine:init', () => {
       }
       this.loading.industrySave = true;
       try {
+        // Convert percentages to decimals for API
+        const targets = {};
+        for (const [name, pct] of Object.entries(this.industryTargets)) {
+          targets[name] = pct / 100;
+        }
         const res = await fetch('/api/allocation/targets/industry', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            Technology: this.industryTargets.Technology / 100,
-            Healthcare: this.industryTargets.Healthcare / 100,
-            Finance: this.industryTargets.Finance / 100,
-            Consumer: this.industryTargets.Consumer / 100,
-            Industrial: this.industryTargets.Industrial / 100
-          })
+          body: JSON.stringify({ targets })
         });
         if (res.ok) {
           this.showMessage('Industry targets updated', 'success');
@@ -443,6 +447,56 @@ document.addEventListener('alpine:init', () => {
       } catch (e) {
         this.showMessage('Failed to remove stock', 'error');
       }
+    },
+
+    // Edit Stock
+    openEditStock(stock) {
+      this.editingStock = {
+        symbol: stock.symbol,
+        yahoo_symbol: stock.yahoo_symbol || '',
+        name: stock.name,
+        geography: stock.geography,
+        industry: stock.industry || ''
+      };
+      this.showEditStockModal = true;
+    },
+
+    closeEditStock() {
+      this.showEditStockModal = false;
+      this.editingStock = null;
+    },
+
+    async saveStock() {
+      if (!this.editingStock) return;
+
+      this.loading.stockSave = true;
+      try {
+        const payload = {
+          name: this.editingStock.name,
+          yahoo_symbol: this.editingStock.yahoo_symbol || null,
+          geography: this.editingStock.geography,
+          industry: this.editingStock.industry || null
+        };
+
+        const res = await fetch(`/api/stocks/${this.editingStock.symbol}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+          this.showMessage('Stock updated successfully', 'success');
+          this.closeEditStock();
+          await this.fetchStocks();
+          await this.fetchAllocation();
+        } else {
+          const data = await res.json();
+          this.showMessage(data.detail || 'Failed to update stock', 'error');
+        }
+      } catch (e) {
+        this.showMessage('Failed to update stock', 'error');
+      }
+      this.loading.stockSave = false;
     },
 
     // Utilities

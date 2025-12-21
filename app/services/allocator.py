@@ -11,6 +11,21 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
+def parse_industries(industry_str: str) -> list[str]:
+    """
+    Parse comma-separated industry string into list.
+
+    Args:
+        industry_str: Comma-separated industries (e.g., "Industrial, Defense")
+
+    Returns:
+        List of industry names, or empty list if None/empty
+    """
+    if not industry_str:
+        return []
+    return [ind.strip() for ind in industry_str.split(",") if ind.strip()]
+
+
 @dataclass
 class AllocationStatus:
     """Current allocation vs target."""
@@ -81,11 +96,18 @@ async def get_portfolio_summary(db: aiosqlite.Connection) -> PortfolioSummary:
 
         total_value += eur_value
 
-        geo = pos[6]  # geography (shifted due to new column)
-        industry = pos[7]  # industry (shifted due to new column)
+        geo = pos[6]  # geography
+        industry_str = pos[7]  # industry (may be comma-separated)
 
+        # Geographic allocation (simple - each stock has one geography)
         geo_values[geo] = geo_values.get(geo, 0) + eur_value
-        industry_values[industry] = industry_values.get(industry, 0) + eur_value
+
+        # Industry allocation - proportional split for multi-industry stocks
+        industries = parse_industries(industry_str)
+        if industries:
+            split_value = eur_value / len(industries)
+            for ind in industries:
+                industry_values[ind] = industry_values.get(ind, 0) + split_value
 
     # Get cash balance from latest snapshot
     cursor = await db.execute("""
@@ -111,8 +133,20 @@ async def get_portfolio_summary(db: aiosqlite.Connection) -> PortfolioSummary:
             deviation=round(current_pct - target, 4),
         ))
 
+    # Build dynamic industry list from targets + actual positions
+    # This ensures we show all industries that have targets OR holdings
+    all_industries = set()
+
+    # Add industries from targets
+    for key in targets:
+        if key.startswith("industry:"):
+            all_industries.add(key.split(":", 1)[1])
+
+    # Add industries from current holdings
+    all_industries.update(industry_values.keys())
+
     industry_allocations = []
-    for industry in ["Technology", "Healthcare", "Finance", "Consumer", "Industrial"]:
+    for industry in sorted(all_industries):
         target = targets.get(f"industry:{industry}", 0)
         current_val = industry_values.get(industry, 0)
         current_pct = current_val / total_value if total_value > 0 else 0
@@ -216,9 +250,16 @@ async def calculate_rebalance_trades(
         geo_deviation = geo_deviations.get(geography, 0)
         geo_need = max(0, -geo_deviation)  # Convert negative deviation to positive need
 
-        # Get industry need (negative deviation = underweight = positive need)
-        industry_deviation = industry_deviations.get(industry, 0) if industry else 0
-        industry_need = max(0, -industry_deviation)
+        # Get industry need - average across all industries for multi-industry stocks
+        industries = parse_industries(industry)
+        if industries:
+            industry_needs = [
+                max(0, -industry_deviations.get(ind, 0))
+                for ind in industries
+            ]
+            industry_need = sum(industry_needs) / len(industry_needs)
+        else:
+            industry_need = 0
 
         # Combined priority: balance geography + industry + stock quality
         combined_priority = geo_need + industry_need + score
@@ -282,7 +323,10 @@ async def calculate_rebalance_trades(
         if candidate.geo_need > 0:
             reason_parts.append(f"{candidate.geography} underweight")
         if candidate.industry_need > 0:
-            reason_parts.append(f"{candidate.industry} underweight")
+            # Show first industry for brevity (all are underweight if need > 0)
+            industries = parse_industries(candidate.industry)
+            if industries:
+                reason_parts.append(f"{industries[0]} underweight")
         reason_parts.append(f"score: {candidate.stock_score:.2f}")
         reason = ", ".join(reason_parts)
 

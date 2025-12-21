@@ -1,14 +1,14 @@
 {
   "stocks": [
-    {"symbol": "AETF.GR", "name": "Alpha ETF FTSE Athex", "industry": null, "geography": "EU"},
-    {"symbol": "ELPE.GR", "name": "HELLENiQ Energy", "industry": null, "geography": "EU"},
-    {"symbol": "MEVA.GR", "name": "Mevaco", "industry": null, "geography": "EU"},
-    {"symbol": "MOH.GR", "name": "Motor Oil", "industry": null, "geography": "EU"},
-    {"symbol": "PPA.GR", "name": "PPA", "industry": null, "geography": "EU"},
-    {"symbol": "PPC.GR", "name": "PPC", "industry": null, "geography": "EU"},
+    {"symbol": "AETF.GR", "yahoo_symbol": null, "name": "Alpha ETF FTSE Athex", "industry": "Finance", "geography": "EU"},
+    {"symbol": "ELPE.GR", "yahoo_symbol": null, "name": "HELLENiQ Energy", "industry": "Energy", "geography": "EU"},
+    {"symbol": "MEVA.GR", "yahoo_symbol": null, "name": "Mevaco", "industry": "Industrial, Defense", "geography": "EU"},
+    {"symbol": "MOH.GR", "yahoo_symbol": null, "name": "Motor Oil", "industry": "Energy", "geography": "EU"},
+    {"symbol": "PPA.GR", "yahoo_symbol": null, "name": "PPA", "industry": "Industrial", "geography": "EU"},
+    {"symbol": "PPC.GR", "yahoo_symbol": null, "name": "PPC", "industry": "Energy", "geography": "EU"},
 
-    {"symbol": "BYD.285.AS", "name": "BYD Electronic", "industry": null, "geography": "ASIA"},
-    {"symbol": "CAT.3750.AS", "name": "CATL", "industry": null, "geography": "ASIA"},
-    {"symbol": "XIAO.1810.AS", "name": "Xiaomi", "industry": null, "geography": "ASIA"}
+    {"symbol": "BYD.285.AS", "yahoo_symbol": "285.HK", "name": "BYD Electronic", "industry": "Technology, Industrial", "geography": "ASIA"},
+    {"symbol": "CAT.3750.AS", "yahoo_symbol": "300750.SZ", "name": "CATL", "industry": "Industrial, Energy", "geography": "ASIA"},
+    {"symbol": "XIAO.1810.AS", "yahoo_symbol": "1810.HK", "name": "Xiaomi", "industry": "Technology", "geography": "ASIA"}
   ]
 }

@@ -12,6 +12,7 @@ router = APIRouter()
 class StockCreate(BaseModel):
     """Request model for creating a stock."""
     symbol: str
+    yahoo_symbol: Optional[str] = None  # Explicit Yahoo Finance symbol override
     name: str
     geography: str  # EU, ASIA, US
     industry: Optional[str] = None  # Auto-detect if not provided
@@ -20,6 +21,7 @@ class StockCreate(BaseModel):
 class StockUpdate(BaseModel):
     """Request model for updating a stock."""
     name: Optional[str] = None
+    yahoo_symbol: Optional[str] = None  # Explicit Yahoo Finance symbol override
     geography: Optional[str] = None
     industry: Optional[str] = None
     active: Optional[bool] = None
@@ -73,14 +75,20 @@ async def get_stock(symbol: str, db: aiosqlite.Connection = Depends(get_db)):
 @router.post("/{symbol}/refresh")
 async def refresh_stock_score(symbol: str, db: aiosqlite.Connection = Depends(get_db)):
     """Trigger score recalculation for a stock."""
-    # Check stock exists
-    cursor = await db.execute("SELECT 1 FROM stocks WHERE symbol = ?", (symbol,))
-    if not await cursor.fetchone():
+    # Check stock exists and get yahoo_symbol
+    cursor = await db.execute(
+        "SELECT yahoo_symbol FROM stocks WHERE symbol = ?",
+        (symbol,)
+    )
+    row = await cursor.fetchone()
+    if not row:
         raise HTTPException(status_code=404, detail="Stock not found")
+
+    yahoo_symbol = row[0]  # May be None
 
     from app.services.scorer import calculate_stock_score
 
-    score = calculate_stock_score(symbol)
+    score = calculate_stock_score(symbol, yahoo_symbol)
     if score:
         await db.execute(
             """
@@ -118,24 +126,24 @@ async def refresh_all_scores(db: aiosqlite.Connection = Depends(get_db)):
     from app.services import yahoo
 
     try:
-        # Get all active stocks
-        cursor = await db.execute("SELECT symbol FROM stocks WHERE active = 1")
+        # Get all active stocks with yahoo_symbol overrides
+        cursor = await db.execute(
+            "SELECT symbol, yahoo_symbol, industry FROM stocks WHERE active = 1"
+        )
         rows = await cursor.fetchall()
 
         # Update industries from Yahoo Finance for stocks without industry
         for row in rows:
             symbol = row[0]
-            cursor = await db.execute(
-                "SELECT industry FROM stocks WHERE symbol = ?",
-                (symbol,)
-            )
-            stock_row = await cursor.fetchone()
-            if not stock_row[0]:  # No industry set
-                industry = yahoo.get_stock_industry(symbol)
-                if industry:
+            yahoo_symbol = row[1]  # May be None
+            industry = row[2]
+
+            if not industry:  # No industry set
+                detected_industry = yahoo.get_stock_industry(symbol, yahoo_symbol)
+                if detected_industry:
                     await db.execute(
                         "UPDATE stocks SET industry = ? WHERE symbol = ?",
-                        (industry, symbol)
+                        (detected_industry, symbol)
                     )
 
         await db.commit()
@@ -175,16 +183,17 @@ async def create_stock(stock: StockCreate, db: aiosqlite.Connection = Depends(ge
     industry = stock.industry
     if not industry:
         from app.services import yahoo
-        industry = yahoo.get_stock_industry(stock.symbol)
+        industry = yahoo.get_stock_industry(stock.symbol, stock.yahoo_symbol)
 
     # Insert stock
     await db.execute(
         """
-        INSERT INTO stocks (symbol, name, geography, industry, active)
-        VALUES (?, ?, ?, ?, 1)
+        INSERT INTO stocks (symbol, yahoo_symbol, name, geography, industry, active)
+        VALUES (?, ?, ?, ?, ?, 1)
         """,
         (
             stock.symbol.upper(),
+            stock.yahoo_symbol,
             stock.name,
             stock.geography.upper(),
             industry,
@@ -195,6 +204,7 @@ async def create_stock(stock: StockCreate, db: aiosqlite.Connection = Depends(ge
     return {
         "message": f"Stock {stock.symbol.upper()} added to universe",
         "symbol": stock.symbol.upper(),
+        "yahoo_symbol": stock.yahoo_symbol,
         "name": stock.name,
         "geography": stock.geography.upper(),
         "industry": industry,
@@ -224,6 +234,11 @@ async def update_stock(
     if update.name is not None:
         updates.append("name = ?")
         values.append(update.name)
+
+    if update.yahoo_symbol is not None:
+        # Allow setting to empty string to clear the override
+        updates.append("yahoo_symbol = ?")
+        values.append(update.yahoo_symbol if update.yahoo_symbol else None)
 
     if update.geography is not None:
         if update.geography.upper() not in ["EU", "ASIA", "US"]:

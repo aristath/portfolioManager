@@ -157,17 +157,19 @@ async def sync_prices():
         async with aiosqlite.connect(settings.database_path) as db:
             # Get all active stocks
             cursor = await db.execute(
-                "SELECT symbol FROM stocks WHERE active = 1"
+                "SELECT symbol, yahoo_symbol FROM stocks WHERE active = 1"
             )
             rows = await cursor.fetchall()
-            symbols = [row[0] for row in rows]
 
-            if not symbols:
+            if not rows:
                 logger.info("No stocks to sync")
                 return
 
+            # Build symbol -> yahoo_symbol mapping
+            symbol_yahoo_map = {row[0]: row[1] for row in rows}
+
             # Get batch quotes from Yahoo Finance
-            quotes = yahoo.get_batch_quotes(symbols)
+            quotes = yahoo.get_batch_quotes(symbol_yahoo_map)
 
             # Update positions with new prices
             updated = 0

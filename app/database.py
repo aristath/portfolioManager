@@ -29,6 +29,7 @@ SCHEMA = """
 -- Stock universe
 CREATE TABLE IF NOT EXISTS stocks (
     symbol TEXT PRIMARY KEY,
+    yahoo_symbol TEXT,
     name TEXT NOT NULL,
     industry TEXT,
     geography TEXT NOT NULL,

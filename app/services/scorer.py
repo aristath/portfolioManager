@@ -55,7 +55,7 @@ class StockScore:
     calculated_at: datetime
 
 
-def calculate_technical_score(symbol: str) -> Optional[TechnicalScore]:
+def calculate_technical_score(symbol: str, yahoo_symbol: str = None) -> Optional[TechnicalScore]:
     """
     Calculate technical score from price data.
 
@@ -63,9 +63,13 @@ def calculate_technical_score(symbol: str) -> Optional[TechnicalScore]:
     - Trend (40%): Price vs 50-day and 200-day MA
     - Momentum (35%): 14-day and 30-day rate of change
     - Volatility (25%): Standard deviation (inverse - lower is better)
+
+    Args:
+        symbol: Tradernet symbol
+        yahoo_symbol: Optional explicit Yahoo symbol override
     """
     try:
-        prices = yahoo.get_historical_prices(symbol, period="1y")
+        prices = yahoo.get_historical_prices(symbol, yahoo_symbol=yahoo_symbol, period="1y")
 
         if len(prices) < 50:
             logger.warning(f"Insufficient price data for {symbol}")
@@ -135,16 +139,20 @@ def calculate_technical_score(symbol: str) -> Optional[TechnicalScore]:
         return None
 
 
-def calculate_analyst_score(symbol: str) -> Optional[AnalystScore]:
+def calculate_analyst_score(symbol: str, yahoo_symbol: str = None) -> Optional[AnalystScore]:
     """
     Calculate analyst score from recommendations and price targets.
 
     Components:
     - Recommendation (60%): Buy/Hold/Sell consensus
     - Price Target (40%): Upside potential
+
+    Args:
+        symbol: Tradernet symbol
+        yahoo_symbol: Optional explicit Yahoo symbol override
     """
     try:
-        data = yahoo.get_analyst_data(symbol)
+        data = yahoo.get_analyst_data(symbol, yahoo_symbol=yahoo_symbol)
 
         if not data:
             return None
@@ -175,7 +183,7 @@ def calculate_analyst_score(symbol: str) -> Optional[AnalystScore]:
         return None
 
 
-def calculate_fundamental_score(symbol: str) -> Optional[FundamentalScore]:
+def calculate_fundamental_score(symbol: str, yahoo_symbol: str = None) -> Optional[FundamentalScore]:
     """
     Calculate fundamental score from financial metrics.
 
@@ -183,9 +191,13 @@ def calculate_fundamental_score(symbol: str) -> Optional[FundamentalScore]:
     - Valuation (40%): P/E ratio relative to market
     - Growth (35%): Revenue and earnings growth
     - Profitability (25%): Margins
+
+    Args:
+        symbol: Tradernet symbol
+        yahoo_symbol: Optional explicit Yahoo symbol override
     """
     try:
-        data = yahoo.get_fundamental_data(symbol)
+        data = yahoo.get_fundamental_data(symbol, yahoo_symbol=yahoo_symbol)
 
         if not data:
             return None
@@ -236,7 +248,7 @@ def calculate_fundamental_score(symbol: str) -> Optional[FundamentalScore]:
         return None
 
 
-def calculate_stock_score(symbol: str) -> Optional[StockScore]:
+def calculate_stock_score(symbol: str, yahoo_symbol: str = None) -> Optional[StockScore]:
     """
     Calculate complete stock score with all components.
 
@@ -244,10 +256,14 @@ def calculate_stock_score(symbol: str) -> Optional[StockScore]:
     - Technical: 50%
     - Analyst: 30%
     - Fundamental: 20%
+
+    Args:
+        symbol: Tradernet symbol
+        yahoo_symbol: Optional explicit Yahoo symbol override
     """
-    technical = calculate_technical_score(symbol)
-    analyst = calculate_analyst_score(symbol)
-    fundamental = calculate_fundamental_score(symbol)
+    technical = calculate_technical_score(symbol, yahoo_symbol)
+    analyst = calculate_analyst_score(symbol, yahoo_symbol)
+    fundamental = calculate_fundamental_score(symbol, yahoo_symbol)
 
     # Handle missing scores with defaults
     tech_score = technical.total if technical else 0.5
@@ -291,15 +307,18 @@ async def score_all_stocks(db) -> list[StockScore]:
     """
     from aiosqlite import Connection
 
-    # Get all active stocks
-    cursor = await db.execute("SELECT symbol FROM stocks WHERE active = 1")
+    # Get all active stocks with their Yahoo symbol overrides
+    cursor = await db.execute(
+        "SELECT symbol, yahoo_symbol FROM stocks WHERE active = 1"
+    )
     rows = await cursor.fetchall()
-    symbols = [row[0] for row in rows]
 
     scores = []
-    for symbol in symbols:
+    for row in rows:
+        symbol = row[0]
+        yahoo_symbol = row[1]  # May be None
         logger.info(f"Scoring {symbol}...")
-        score = calculate_stock_score(symbol)
+        score = calculate_stock_score(symbol, yahoo_symbol)
 
         if score:
             scores.append(score)

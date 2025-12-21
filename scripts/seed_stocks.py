@@ -33,10 +33,16 @@ async def seed_stocks():
         for stock in data["stocks"]:
             await db.execute(
                 """
-                INSERT OR REPLACE INTO stocks (symbol, name, industry, geography, active)
-                VALUES (?, ?, ?, ?, 1)
+                INSERT OR REPLACE INTO stocks (symbol, yahoo_symbol, name, industry, geography, active)
+                VALUES (?, ?, ?, ?, ?, 1)
                 """,
-                (stock["symbol"], stock["name"], stock["industry"], stock["geography"]),
+                (
+                    stock["symbol"],
+                    stock.get("yahoo_symbol"),
+                    stock["name"],
+                    stock.get("industry"),
+                    stock["geography"],
+                ),
             )
         await db.commit()
         print(f"Seeded {len(data['stocks'])} stocks")

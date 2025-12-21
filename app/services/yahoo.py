@@ -77,29 +77,56 @@ class HistoricalPrice:
     adj_close: float
 
 
-def _normalize_symbol(symbol: str) -> str:
+def get_yahoo_symbol(tradernet_symbol: str, yahoo_override: str = None) -> str:
     """
     Convert Tradernet symbol format to Yahoo Finance format.
 
-    Tradernet uses: AAPL.US, SAP.DE, 7203.T
-    Yahoo uses: AAPL, SAP.DE, 7203.T (US stocks don't need suffix)
+    Uses explicit override if provided, otherwise applies conventions:
+    - US stocks (.US): Strip suffix (AAPL.US -> AAPL)
+    - Greek stocks (.GR): Convert to Athens (.GR -> .AT)
+    - Other suffixes: Keep as-is
+
+    Args:
+        tradernet_symbol: Symbol in Tradernet format
+        yahoo_override: Explicit Yahoo symbol (used for Asian stocks with different formats)
+
+    Returns:
+        Yahoo Finance compatible symbol
     """
+    if yahoo_override:
+        return yahoo_override
+
+    symbol = tradernet_symbol.upper()
+
+    # US stocks: strip .US suffix
     if symbol.endswith(".US"):
-        return symbol[:-3]  # Remove .US suffix for US stocks
+        return symbol[:-3]
+
+    # Greek stocks: .GR -> .AT (Athens Exchange)
+    if symbol.endswith(".GR"):
+        return symbol[:-3] + ".AT"
+
     return symbol
 
 
-def get_analyst_data(symbol: str) -> Optional[AnalystData]:
+# Keep old name as alias for backward compatibility during transition
+def _normalize_symbol(symbol: str) -> str:
+    """Deprecated: Use get_yahoo_symbol() instead."""
+    return get_yahoo_symbol(symbol)
+
+
+def get_analyst_data(symbol: str, yahoo_symbol: str = None) -> Optional[AnalystData]:
     """
     Get analyst recommendations and price targets.
 
     Args:
         symbol: Stock symbol (Tradernet format)
+        yahoo_symbol: Optional explicit Yahoo symbol override
 
     Returns:
         AnalystData if available, None otherwise
     """
-    yf_symbol = _normalize_symbol(symbol)
+    yf_symbol = get_yahoo_symbol(symbol, yahoo_symbol)
 
     try:
         with _led_api_call():
@@ -145,17 +172,18 @@ def get_analyst_data(symbol: str) -> Optional[AnalystData]:
         return None
 
 
-def get_fundamental_data(symbol: str) -> Optional[FundamentalData]:
+def get_fundamental_data(symbol: str, yahoo_symbol: str = None) -> Optional[FundamentalData]:
     """
     Get fundamental analysis data.
 
     Args:
         symbol: Stock symbol (Tradernet format)
+        yahoo_symbol: Optional explicit Yahoo symbol override
 
     Returns:
         FundamentalData if available, None otherwise
     """
-    yf_symbol = _normalize_symbol(symbol)
+    yf_symbol = get_yahoo_symbol(symbol, yahoo_symbol)
 
     try:
         with _led_api_call():
@@ -185,6 +213,7 @@ def get_fundamental_data(symbol: str) -> Optional[FundamentalData]:
 
 def get_historical_prices(
     symbol: str,
+    yahoo_symbol: str = None,
     period: str = "1y"
 ) -> list[HistoricalPrice]:
     """
@@ -192,12 +221,13 @@ def get_historical_prices(
 
     Args:
         symbol: Stock symbol (Tradernet format)
+        yahoo_symbol: Optional explicit Yahoo symbol override
         period: Time period (1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max)
 
     Returns:
         List of HistoricalPrice objects
     """
-    yf_symbol = _normalize_symbol(symbol)
+    yf_symbol = get_yahoo_symbol(symbol, yahoo_symbol)
 
     try:
         ticker = yf.Ticker(yf_symbol)
@@ -221,17 +251,18 @@ def get_historical_prices(
         return []
 
 
-def get_current_price(symbol: str) -> Optional[float]:
+def get_current_price(symbol: str, yahoo_symbol: str = None) -> Optional[float]:
     """
     Get current stock price.
 
     Args:
         symbol: Stock symbol (Tradernet format)
+        yahoo_symbol: Optional explicit Yahoo symbol override
 
     Returns:
         Current price or None
     """
-    yf_symbol = _normalize_symbol(symbol)
+    yf_symbol = get_yahoo_symbol(symbol, yahoo_symbol)
 
     try:
         with _led_api_call():
@@ -243,17 +274,18 @@ def get_current_price(symbol: str) -> Optional[float]:
         return None
 
 
-def get_stock_industry(symbol: str) -> Optional[str]:
+def get_stock_industry(symbol: str, yahoo_symbol: str = None) -> Optional[str]:
     """
     Get stock industry/sector from Yahoo Finance.
 
     Args:
         symbol: Stock symbol (Tradernet format)
+        yahoo_symbol: Optional explicit Yahoo symbol override
 
     Returns:
         Industry name or None
     """
-    yf_symbol = _normalize_symbol(symbol)
+    yf_symbol = get_yahoo_symbol(symbol, yahoo_symbol)
 
     try:
         ticker = yf.Ticker(yf_symbol)
@@ -312,21 +344,26 @@ def get_stock_industry(symbol: str) -> Optional[str]:
         return None
 
 
-def get_batch_quotes(symbols: list[str]) -> dict[str, float]:
+def get_batch_quotes(symbol_yahoo_map: dict[str, str | None]) -> dict[str, float]:
     """
     Get current prices for multiple symbols efficiently.
 
     Args:
-        symbols: List of stock symbols (Tradernet format)
+        symbol_yahoo_map: Dict mapping Tradernet symbol to Yahoo symbol override
+                          (None values use convention-based derivation)
 
     Returns:
-        Dict mapping symbol to current price
+        Dict mapping Tradernet symbol to current price
     """
     result = {}
 
-    # Convert symbols
-    yf_symbols = [_normalize_symbol(s) for s in symbols]
-    symbol_map = dict(zip(yf_symbols, symbols))
+    # Convert symbols using overrides where provided
+    yf_symbols = []
+    symbol_map = {}  # yf_symbol -> tradernet_symbol
+    for tradernet_sym, yahoo_override in symbol_yahoo_map.items():
+        yf_sym = get_yahoo_symbol(tradernet_sym, yahoo_override)
+        yf_symbols.append(yf_sym)
+        symbol_map[yf_sym] = tradernet_sym
 
     try:
         with _led_api_call():

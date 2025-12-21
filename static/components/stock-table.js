@@ -127,6 +127,11 @@ class StockTable extends HTMLElement {
                   </td>
                   <td class="table__col--center">
                     <div class="table-actions">
+                      <button @click="$store.app.openEditStock(stock)"
+                              class="action-link action-link--secondary"
+                              title="Edit stock">
+                        Edit
+                      </button>
                       <button @click="$store.app.refreshSingleScore(stock.symbol)"
                               class="action-link action-link--primary"
                               title="Refresh score">
