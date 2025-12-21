@@ -130,25 +130,59 @@ async def get_portfolio_summary(db: aiosqlite.Connection) -> PortfolioSummary:
     )
 
 
+@dataclass
+class StockPriority:
+    """Priority score for a stock candidate."""
+    symbol: str
+    name: str
+    geography: str
+    industry: str
+    stock_score: float
+    geo_need: float  # How underweight is this geography (0 to 1)
+    industry_need: float  # How underweight is this industry (0 to 1)
+    combined_priority: float  # geo_need + industry_need + stock_score
+
+
+def get_max_trades(cash: float) -> int:
+    """Calculate maximum trades based on available cash."""
+    return min(
+        settings.max_trades_per_cycle,
+        int(cash / settings.min_trade_size)
+    )
+
+
 async def calculate_rebalance_trades(
     db: aiosqlite.Connection,
-    deposit_amount: float = None
+    available_cash: float
 ) -> list[TradeRecommendation]:
     """
-    Calculate optimal trades for rebalancing with a monthly deposit.
+    Calculate optimal trades using hybrid allocation logic.
 
     Strategy:
-    1. Identify underweight geographies
-    2. Within underweight areas, pick highest-scored stocks
-    3. Allocate deposit to bring closest to target allocations
+    1. Only consider stocks with score > 0.5 (min_stock_score)
+    2. Calculate geo_need and industry_need for each stock
+    3. Combined priority = geo_need + industry_need + stock_score
+    4. Select top N stocks by combined priority
+    5. Minimum €400 per trade (min_trade_size)
+    6. Maximum 5 trades per cycle (max_trades_per_cycle)
     """
-    if deposit_amount is None:
-        deposit_amount = settings.monthly_deposit
+    # Check minimum cash threshold
+    if available_cash < settings.min_cash_threshold:
+        logger.info(f"Cash €{available_cash:.2f} below minimum €{settings.min_cash_threshold:.2f}")
+        return []
 
-    # Get current portfolio summary
+    max_trades = get_max_trades(available_cash)
+    if max_trades == 0:
+        return []
+
+    # Get current portfolio summary for deviation calculations
     summary = await get_portfolio_summary(db)
 
-    # Get scored stocks not currently held (or can add to)
+    # Build deviation maps for quick lookup
+    geo_deviations = {a.name: a.deviation for a in summary.geographic_allocations}
+    industry_deviations = {a.name: a.deviation for a in summary.industry_allocations}
+
+    # Get scored stocks from universe
     cursor = await db.execute("""
         SELECT s.symbol, s.name, s.geography, s.industry,
                sc.total_score, p.quantity, p.current_price
@@ -156,121 +190,114 @@ async def calculate_rebalance_trades(
         LEFT JOIN scores sc ON s.symbol = sc.symbol
         LEFT JOIN positions p ON s.symbol = p.symbol
         WHERE s.active = 1
-        ORDER BY sc.total_score DESC NULLS LAST
     """)
     stocks = await cursor.fetchall()
 
-    # Get current prices from Yahoo for stocks we might buy
+    # Calculate priority for each stock
+    candidates: list[StockPriority] = []
+
+    for stock in stocks:
+        symbol = stock[0]
+        name = stock[1]
+        geography = stock[2]
+        industry = stock[3]
+        score = stock[4] or 0
+
+        # Only consider stocks with score above threshold
+        if score < settings.min_stock_score:
+            logger.debug(f"Skipping {symbol}: score {score:.2f} < {settings.min_stock_score}")
+            continue
+
+        # Get geography need (negative deviation = underweight = positive need)
+        geo_deviation = geo_deviations.get(geography, 0)
+        geo_need = max(0, -geo_deviation)  # Convert negative deviation to positive need
+
+        # Get industry need (negative deviation = underweight = positive need)
+        industry_deviation = industry_deviations.get(industry, 0) if industry else 0
+        industry_need = max(0, -industry_deviation)
+
+        # Combined priority: balance geography + industry + stock quality
+        combined_priority = geo_need + industry_need + score
+
+        candidates.append(StockPriority(
+            symbol=symbol,
+            name=name,
+            geography=geography,
+            industry=industry or "Unknown",
+            stock_score=score,
+            geo_need=round(geo_need, 4),
+            industry_need=round(industry_need, 4),
+            combined_priority=round(combined_priority, 4),
+        ))
+
+    # Sort by combined priority (highest first)
+    candidates.sort(key=lambda x: x.combined_priority, reverse=True)
+
+    logger.info(f"Found {len(candidates)} qualified stocks (score >= {settings.min_stock_score})")
+
+    if not candidates:
+        logger.warning("No stocks qualify for purchase (all scores below threshold)")
+        return []
+
+    # Select top N candidates
+    selected = candidates[:max_trades]
+
+    # Calculate trade size per stock
+    # Distribute cash evenly, respecting minimum trade size
+    trade_size = max(settings.min_trade_size, available_cash / len(selected))
+
+    # Get current prices and generate recommendations
     from app.services import yahoo
 
     recommendations = []
-    remaining_deposit = deposit_amount
+    remaining_cash = available_cash
 
-    # Sort geographies by deviation (most underweight first)
-    geo_sorted = sorted(
-        summary.geographic_allocations,
-        key=lambda x: x.deviation
-    )
-
-    for geo_alloc in geo_sorted:
-        if remaining_deposit <= 0:
+    for candidate in selected:
+        if remaining_cash < settings.min_trade_size:
             break
 
-        # Skip if not underweight
-        if geo_alloc.deviation >= 0:
-            continue
-
-        # How much do we need to invest in this geography?
-        # Simple approach: proportional to underweight severity
-        underweight_amount = abs(geo_alloc.deviation) * (summary.total_value + deposit_amount)
-        invest_amount = min(underweight_amount, remaining_deposit * 0.5)  # Don't put all eggs in one basket
-
-        if invest_amount < 50:  # Minimum trade size
-            continue
-
-        # Find best stocks in this geography
-        geo_stocks = [
-            s for s in stocks
-            if s[2] == geo_alloc.name  # geography match
-        ]
-
-        if not geo_stocks:
-            continue
-
-        # Pick top scored stock in this geography
-        best_stock = geo_stocks[0]  # Already sorted by score
-
-        symbol = best_stock[0]
-        name = best_stock[1]
-        current_qty = best_stock[5] or 0
-
         # Get current price
-        price = yahoo.get_current_price(symbol)
+        price = yahoo.get_current_price(candidate.symbol)
         if not price or price <= 0:
+            logger.warning(f"Could not get price for {candidate.symbol}, skipping")
             continue
 
-        # Calculate quantity to buy
+        # Calculate quantity - ensure minimum trade value
+        invest_amount = min(trade_size, remaining_cash)
+        if invest_amount < settings.min_trade_size:
+            continue
+
         qty = int(invest_amount / price)
         if qty <= 0:
             continue
 
         actual_value = qty * price
 
+        # Build reason string
+        reason_parts = []
+        if candidate.geo_need > 0:
+            reason_parts.append(f"{candidate.geography} underweight")
+        if candidate.industry_need > 0:
+            reason_parts.append(f"{candidate.industry} underweight")
+        reason_parts.append(f"score: {candidate.stock_score:.2f}")
+        reason = ", ".join(reason_parts)
+
         recommendations.append(TradeRecommendation(
-            symbol=symbol,
-            name=name,
+            symbol=candidate.symbol,
+            name=candidate.name,
             side="BUY",
             quantity=qty,
             estimated_price=round(price, 2),
             estimated_value=round(actual_value, 2),
-            reason=f"Underweight {geo_alloc.name} ({geo_alloc.deviation*100:.1f}%), score: {best_stock[4]:.2f}",
+            reason=reason,
         ))
 
-        remaining_deposit -= actual_value
+        remaining_cash -= actual_value
 
-    # If we still have money left, diversify across remaining underweight areas
-    if remaining_deposit > 100:
-        # Find any stock with high score that we don't already have much of
-        for stock in stocks[:5]:  # Top 5 scored stocks
-            if remaining_deposit < 50:
-                break
-
-            symbol = stock[0]
-            name = stock[1]
-            current_qty = stock[5] or 0
-            score = stock[4] or 0.5
-
-            # Skip if already recommended
-            if any(r.symbol == symbol for r in recommendations):
-                continue
-
-            price = yahoo.get_current_price(symbol)
-            if not price or price <= 0:
-                continue
-
-            # Buy small amount
-            invest = min(remaining_deposit * 0.3, 200)
-            qty = int(invest / price)
-            if qty <= 0:
-                continue
-
-            actual_value = qty * price
-
-            recommendations.append(TradeRecommendation(
-                symbol=symbol,
-                name=name,
-                side="BUY",
-                quantity=qty,
-                estimated_price=round(price, 2),
-                estimated_value=round(actual_value, 2),
-                reason=f"High score ({score:.2f}), diversification",
-            ))
-
-            remaining_deposit -= actual_value
-
+    total_invested = available_cash - remaining_cash
     logger.info(
         f"Generated {len(recommendations)} trade recommendations, "
-        f"total value: {deposit_amount - remaining_deposit:.2f}"
+        f"total value: €{total_invested:.2f} from €{available_cash:.2f}"
     )
 
     return recommendations
