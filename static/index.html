@@ -7,15 +7,15 @@
   <link rel="icon" href="data:,">
 
   <!-- Styles -->
-  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="stylesheet" href="/static/css/styles.css">
 
   <!-- Libraries (local, no CDN) -->
-  <script src="/lib/chart.min.js"></script>
-  <script defer src="/lib/alpine.min.js"></script>
+  <script src="/static/lib/chart.min.js"></script>
+  <script defer src="/static/lib/alpine.min.js"></script>
 
   <!-- Application -->
-  <script src="/js/utils.js"></script>
-  <script src="/js/store.js"></script>
+  <script src="/static/js/utils.js"></script>
+  <script src="/static/js/store.js"></script>
 </head>
 <body x-data x-init="$store.app.fetchAll(); setInterval(() => $store.app.fetchAll(), 60000)">
   <div class="layout">
@@ -47,15 +47,15 @@
   <add-stock-modal></add-stock-modal>
 
   <!-- Load Components -->
-  <script src="/components/app-header.js"></script>
-  <script src="/components/status-bar.js"></script>
-  <script src="/components/summary-cards.js"></script>
-  <script src="/components/geo-chart.js"></script>
-  <script src="/components/industry-chart.js"></script>
-  <script src="/components/quick-actions.js"></script>
-  <script src="/components/stock-table.js"></script>
-  <script src="/components/trades-table.js"></script>
-  <script src="/components/rebalance-modal.js"></script>
-  <script src="/components/add-stock-modal.js"></script>
+  <script src="/static/components/app-header.js"></script>
+  <script src="/static/components/status-bar.js"></script>
+  <script src="/static/components/summary-cards.js"></script>
+  <script src="/static/components/geo-chart.js"></script>
+  <script src="/static/components/industry-chart.js"></script>
+  <script src="/static/components/quick-actions.js"></script>
+  <script src="/static/components/stock-table.js"></script>
+  <script src="/static/components/trades-table.js"></script>
+  <script src="/static/components/rebalance-modal.js"></script>
+  <script src="/static/components/add-stock-modal.js"></script>
 </body>
 </html>
