@@ -273,6 +273,10 @@
                         <option value="ASIA">Asia</option>
                         <option value="US">US</option>
                     </select>
+                    <button @click="showAddStockModal = true"
+                            class="bg-green-600 hover:bg-green-700 text-white text-sm px-3 py-1 rounded">
+                        + Add Stock
+                    </button>
                 </div>
             </div>
             <div class="overflow-x-auto">
@@ -313,10 +317,14 @@
                                 <td class="py-2 text-right text-gray-400" x-text="stock.technical_score?.toFixed(2) || '-'"></td>
                                 <td class="py-2 text-right text-gray-400" x-text="stock.analyst_score?.toFixed(2) || '-'"></td>
                                 <td class="py-2 text-right text-gray-400" x-text="stock.fundamental_score?.toFixed(2) || '-'"></td>
-                                <td class="py-2 text-center">
+                                <td class="py-2 text-center space-x-2">
                                     <button @click="refreshSingleScore(stock.symbol)"
                                             class="text-blue-400 hover:text-blue-300 text-xs">
                                         Refresh
+                                    </button>
+                                    <button @click="removeStock(stock.symbol)"
+                                            class="text-red-400 hover:text-red-300 text-xs">
+                                        Remove
                                     </button>
                                 </td>
                             </tr>
@@ -446,6 +454,58 @@
                 </div>
             </div>
         </div>
+
+        <!-- Add Stock Modal -->
+        <div x-show="showAddStockModal"
+             class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+             x-transition>
+            <div class="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold">Add Stock to Universe</h2>
+                    <button @click="showAddStockModal = false; resetNewStock()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+                </div>
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-1">Symbol *</label>
+                        <input type="text" x-model="newStock.symbol" placeholder="e.g., AAPL, MSFT.US"
+                               class="w-full bg-gray-700 rounded px-3 py-2 text-white placeholder-gray-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-1">Name *</label>
+                        <input type="text" x-model="newStock.name" placeholder="e.g., Apple Inc."
+                               class="w-full bg-gray-700 rounded px-3 py-2 text-white placeholder-gray-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-1">Region *</label>
+                        <select x-model="newStock.geography"
+                                class="w-full bg-gray-700 rounded px-3 py-2 text-white">
+                            <option value="EU">EU</option>
+                            <option value="ASIA">Asia</option>
+                            <option value="US">US</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-1">Industry (optional)</label>
+                        <input type="text" x-model="newStock.industry" placeholder="Auto-detected from Yahoo Finance"
+                               class="w-full bg-gray-700 rounded px-3 py-2 text-white placeholder-gray-500">
+                    </div>
+                </div>
+
+                <div class="flex justify-end space-x-3 mt-6">
+                    <button @click="showAddStockModal = false; resetNewStock()"
+                            class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded">
+                        Cancel
+                    </button>
+                    <button @click="addStock()"
+                            :disabled="addingStock || !newStock.symbol || !newStock.name"
+                            class="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded flex items-center">
+                        <span x-show="addingStock" class="animate-spin mr-2">&#9696;</span>
+                        Add Stock
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -469,6 +529,9 @@
                 geoTargets: { EU: 50, ASIA: 30, US: 20 },
                 editingIndustry: false,
                 industryTargets: { Technology: 20, Healthcare: 20, Finance: 20, Consumer: 20, Industrial: 20 },
+                showAddStockModal: false,
+                newStock: { symbol: '', name: '', geography: 'EU', industry: '' },
+                addingStock: false,
 
                 async init() {
                     await this.fetchAll();
@@ -791,6 +854,60 @@
                         this.showMessage('Failed to save targets', 'error');
                     }
                     this.loading.industrySave = false;
+                },
+
+                resetNewStock() {
+                    this.newStock = { symbol: '', name: '', geography: 'EU', industry: '' };
+                },
+
+                async addStock() {
+                    if (!this.newStock.symbol || !this.newStock.name) {
+                        this.showMessage('Symbol and name are required', 'error');
+                        return;
+                    }
+                    this.addingStock = true;
+                    try {
+                        const payload = {
+                            symbol: this.newStock.symbol.toUpperCase(),
+                            name: this.newStock.name,
+                            geography: this.newStock.geography
+                        };
+                        if (this.newStock.industry) {
+                            payload.industry = this.newStock.industry;
+                        }
+                        const res = await fetch('/api/stocks', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        if (res.ok) {
+                            this.showMessage('Stock added successfully', 'success');
+                            this.showAddStockModal = false;
+                            this.resetNewStock();
+                            await this.fetchStocks();
+                        } else {
+                            const data = await res.json();
+                            this.showMessage(data.detail || 'Failed to add stock', 'error');
+                        }
+                    } catch (e) {
+                        this.showMessage('Failed to add stock', 'error');
+                    }
+                    this.addingStock = false;
+                },
+
+                async removeStock(symbol) {
+                    if (!confirm(`Remove ${symbol} from the universe?`)) return;
+                    try {
+                        const res = await fetch(`/api/stocks/${symbol}`, { method: 'DELETE' });
+                        if (res.ok) {
+                            this.showMessage(`${symbol} removed`, 'success');
+                            await this.fetchStocks();
+                        } else {
+                            this.showMessage('Failed to remove stock', 'error');
+                        }
+                    } catch (e) {
+                        this.showMessage('Failed to remove stock', 'error');
+                    }
                 },
 
                 showMessage(msg, type) {
