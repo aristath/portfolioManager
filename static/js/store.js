@@ -17,8 +17,11 @@ document.addEventListener('alpine:init', () => {
     trades: [],
     tradernet: { connected: false },
 
-    // UI State
+    // UI State - Filters
     stockFilter: 'all',
+    industryFilter: 'all',
+    searchQuery: '',
+    minScore: 0,
     sortBy: 'total_score',
     sortDesc: true,
     showRebalanceModal: false,
@@ -109,15 +112,57 @@ document.addEventListener('alpine:init', () => {
       }
     },
 
+    // Get unique industries for filter dropdown
+    get industries() {
+      const set = new Set(this.stocks.map(s => s.industry).filter(Boolean));
+      return Array.from(set).sort();
+    },
+
     // Filtered & Sorted Stocks
     get filteredStocks() {
       let filtered = this.stocks;
+
+      // Region filter
       if (this.stockFilter !== 'all') {
         filtered = filtered.filter(s => s.geography === this.stockFilter);
       }
+
+      // Industry filter
+      if (this.industryFilter !== 'all') {
+        filtered = filtered.filter(s => s.industry === this.industryFilter);
+      }
+
+      // Search filter
+      if (this.searchQuery) {
+        const q = this.searchQuery.toLowerCase();
+        filtered = filtered.filter(s =>
+          s.symbol.toLowerCase().includes(q) ||
+          s.name.toLowerCase().includes(q)
+        );
+      }
+
+      // Score threshold
+      if (this.minScore > 0) {
+        filtered = filtered.filter(s => (s.total_score || 0) >= this.minScore);
+      }
+
+      // Sort
       return filtered.sort((a, b) => {
-        const aVal = a[this.sortBy] || 0;
-        const bVal = b[this.sortBy] || 0;
+        let aVal = a[this.sortBy];
+        let bVal = b[this.sortBy];
+
+        // Handle nulls/undefined
+        if (aVal == null) aVal = this.sortDesc ? -Infinity : Infinity;
+        if (bVal == null) bVal = this.sortDesc ? -Infinity : Infinity;
+
+        // String comparison for text fields
+        if (typeof aVal === 'string' && typeof bVal === 'string') {
+          return this.sortDesc
+            ? bVal.localeCompare(aVal)
+            : aVal.localeCompare(bVal);
+        }
+
+        // Numeric comparison
         return this.sortDesc ? bVal - aVal : aVal - bVal;
       });
     },

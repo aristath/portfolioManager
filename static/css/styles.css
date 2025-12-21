@@ -498,6 +498,18 @@ body {
   color: var(--color-text-muted);
 }
 
+.table__col--truncate {
+  max-width: 180px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.table__col--value {
+  font-weight: 600;
+  color: var(--color-success);
+}
+
 /* ========================================
    Tag / Pill
    ======================================== */
@@ -921,6 +933,49 @@ body {
 .filter-bar {
   display: flex;
   gap: var(--gap-sm);
+}
+
+/* ========================================
+   Stock Filters (enhanced filter bar)
+   ======================================== */
+.stock-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+  margin-bottom: var(--gap);
+  padding-bottom: var(--gap);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.stock-filters__search {
+  flex: 1;
+  min-width: 200px;
+}
+
+.stock-filters__dropdowns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-sm);
+}
+
+.stock-filters__count {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin-bottom: var(--gap-sm);
+}
+
+.input--sm {
+  padding: var(--gap-xs) var(--gap-sm);
+  font-size: var(--font-size-sm);
+}
+
+/* ========================================
+   Sort Indicator
+   ======================================== */
+.sort-indicator {
+  font-size: var(--font-size-xs);
+  color: var(--color-primary);
+  margin-left: var(--gap-xs);
 }
 
 /* ========================================

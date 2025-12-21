@@ -27,12 +27,15 @@ class StockUpdate(BaseModel):
 
 @router.get("")
 async def get_stocks(db: aiosqlite.Connection = Depends(get_db)):
-    """Get all stocks in universe with current scores."""
+    """Get all stocks in universe with current scores and position data."""
     cursor = await db.execute("""
         SELECT s.*, sc.technical_score, sc.analyst_score,
-               sc.fundamental_score, sc.total_score, sc.calculated_at
+               sc.fundamental_score, sc.total_score, sc.calculated_at,
+               p.quantity as shares, p.current_price, p.avg_price,
+               p.market_value_eur as position_value
         FROM stocks s
         LEFT JOIN scores sc ON s.symbol = sc.symbol
+        LEFT JOIN positions p ON s.symbol = p.symbol
         WHERE s.active = 1
         ORDER BY sc.total_score DESC NULLS LAST
     """)
