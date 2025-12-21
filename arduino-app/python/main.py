@@ -195,7 +195,7 @@ def combine_with_status(balance_arr, heartbeat_phase=0, web_active=False, api_ac
     arr = balance_arr.copy()
 
     # Heartbeat - bottom-left pixel with sine pulse (row 7, col 0)
-    heartbeat_brightness = int(127 + 127 * math.sin(heartbeat_phase * 0.15))
+    heartbeat_brightness = int(127 + 127 * math.sin(heartbeat_phase * 0.18))
     arr[7, 0] = heartbeat_brightness
 
     # Web request - bottom-right 4 pixels (cols 11-12, rows 6-7)
