@@ -21,15 +21,18 @@ class Settings(BaseSettings):
     tradernet_base_url: str = "https://api.tradernet.com"
 
     # Scheduling
-    monthly_rebalance_day: int = 1  # Day of month for rebalance
     daily_sync_hour: int = 18  # Hour for daily portfolio sync
+    cash_check_interval_minutes: int = 15  # Check cash balance every 15 min
 
     # LED Display
     led_serial_port: str = "/dev/ttyACM0"
     led_baud_rate: int = 115200
 
-    # Investment
-    monthly_deposit: float = 1000.0  # EUR
+    # Investment / Rebalancing
+    min_cash_threshold: float = 400.0  # EUR - minimum cash to trigger rebalance
+    min_trade_size: float = 400.0  # EUR - keeps commission at 0.5% (€2 fee)
+    max_trades_per_cycle: int = 5  # Maximum trades per rebalance cycle
+    min_stock_score: float = 0.5  # Minimum score to consider buying a stock
 
     class Config:
         env_file = ".env"
