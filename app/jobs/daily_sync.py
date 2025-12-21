@@ -47,20 +47,23 @@ async def sync_portfolio():
                 await db.execute(
                     """
                     INSERT INTO positions
-                    (symbol, quantity, avg_price, current_price, last_updated)
-                    VALUES (?, ?, ?, ?, ?)
+                    (symbol, quantity, avg_price, current_price, currency, currency_rate, market_value_eur, last_updated)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         pos.symbol,
                         pos.quantity,
                         pos.avg_price,
                         pos.current_price,
+                        pos.currency,
+                        pos.currency_rate,
+                        pos.market_value_eur,
                         datetime.now().isoformat(),
                     ),
                 )
 
-                # Use market_value from API (already in correct currency)
-                market_value = pos.market_value
+                # Use market_value_eur (converted to EUR)
+                market_value = pos.market_value_eur
                 total_value += market_value
 
                 # Determine geography from symbol suffix or stocks table

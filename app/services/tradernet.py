@@ -1,7 +1,8 @@
 """Tradernet (Freedom24) API client service."""
 
 import logging
-from datetime import datetime
+import requests
+from datetime import datetime, timedelta
 from typing import Optional
 from dataclasses import dataclass
 
@@ -10,6 +11,54 @@ from tradernet import Tradernet
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+# Cache for exchange rates (refreshed every hour)
+_exchange_rates: dict[str, float] = {}
+_rates_updated: Optional[datetime] = None
+
+
+def get_exchange_rate(from_currency: str, to_currency: str = "EUR") -> float:
+    """Get exchange rate from currency to EUR using real-time data."""
+    global _exchange_rates, _rates_updated
+
+    if from_currency == to_currency:
+        return 1.0
+
+    # Check if cache is valid (less than 1 hour old)
+    if _rates_updated and datetime.now() - _rates_updated < timedelta(hours=1):
+        cache_key = f"{from_currency}_{to_currency}"
+        if cache_key in _exchange_rates:
+            return _exchange_rates[cache_key]
+
+    # Fetch fresh rates
+    try:
+        # Use exchangerate-api (free tier)
+        url = f"https://api.exchangerate-api.com/v4/latest/{to_currency}"
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            rates = data.get("rates", {})
+
+            # Update cache with all rates
+            _exchange_rates = {}
+            for curr, rate in rates.items():
+                # Store as "how many units of curr per 1 EUR"
+                _exchange_rates[f"{curr}_{to_currency}"] = rate
+            _rates_updated = datetime.now()
+
+            cache_key = f"{from_currency}_{to_currency}"
+            if cache_key in _exchange_rates:
+                return _exchange_rates[cache_key]
+    except Exception as e:
+        logger.warning(f"Failed to fetch exchange rates: {e}")
+
+    # Fallback rates if API fails
+    fallback_rates = {
+        "HKD_EUR": 8.5,   # ~8.5 HKD per EUR
+        "USD_EUR": 1.05,  # ~1.05 USD per EUR
+        "GBP_EUR": 0.85,  # ~0.85 GBP per EUR
+    }
+    return fallback_rates.get(f"{from_currency}_{to_currency}", 1.0)
 
 
 @dataclass
@@ -21,8 +70,10 @@ class Position:
     avg_price: float
     current_price: float
     market_value: float
+    market_value_eur: float  # Market value converted to EUR
     unrealized_pnl: float
     currency: str
+    currency_rate: float  # Exchange rate to EUR (1.0 for EUR positions)
 
 
 @dataclass
@@ -127,6 +178,17 @@ class TradernetClient:
                 avg_price = float(item.get("bal_price_a", 0))
                 current_price = float(item.get("mkt_price", 0))
                 quantity = float(item.get("q", 0))
+                market_value = float(item.get("market_value", 0))
+                currency = item.get("curr", "EUR")
+
+                # Get real-time exchange rate instead of API's currval
+                currency_rate = get_exchange_rate(currency, "EUR")
+
+                # Convert market_value to EUR
+                if currency == "EUR":
+                    market_value_eur = market_value
+                else:
+                    market_value_eur = market_value / currency_rate
 
                 positions.append(Position(
                     symbol=item.get("i", ""),
@@ -134,9 +196,11 @@ class TradernetClient:
                     quantity=quantity,
                     avg_price=avg_price,
                     current_price=current_price,
-                    market_value=float(item.get("market_value", 0)),
+                    market_value=market_value,
+                    market_value_eur=market_value_eur,
                     unrealized_pnl=float(item.get("profit_close", 0)),
-                    currency=item.get("curr", "EUR"),
+                    currency=currency,
+                    currency_rate=currency_rate,
                 ))
 
             return positions
@@ -170,6 +234,13 @@ class TradernetClient:
             logger.error(f"Failed to get cash balances: {e}")
             return []
 
+    def get_total_portfolio_value_eur(self) -> float:
+        """Get total portfolio value (positions + cash) in EUR."""
+        positions = self.get_portfolio()
+        cash = self.get_total_cash_eur()
+        total_positions = sum(p.market_value_eur for p in positions)
+        return total_positions + cash
+
     def get_total_cash_eur(self) -> float:
         """Get total cash balance converted to EUR."""
         if not self.is_connected:
@@ -186,13 +257,13 @@ class TradernetClient:
             for item in acc_data:
                 amount = float(item.get("s", 0))
                 currency = item.get("curr", "")
-                currval = float(item.get("currval", 1))  # Exchange rate to base
 
                 if currency == "EUR":
                     total += amount
-                elif amount > 0 and currval > 0:
-                    # Convert to EUR using the exchange rate
-                    total += amount / currval
+                elif amount > 0:
+                    # Convert to EUR using real-time exchange rate
+                    rate = get_exchange_rate(currency, "EUR")
+                    total += amount / rate
 
             return total
         except Exception as e:

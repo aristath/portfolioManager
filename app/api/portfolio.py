@@ -37,7 +37,7 @@ async def get_portfolio_summary(db: aiosqlite.Connection = Depends(get_db)):
     """Get portfolio summary: total value, cash, allocation percentages."""
     # Get all positions with optional geography from stocks table
     cursor = await db.execute("""
-        SELECT p.symbol, p.quantity, p.current_price, p.avg_price, s.geography
+        SELECT p.symbol, p.quantity, p.current_price, p.avg_price, p.market_value_eur, s.geography
         FROM positions p
         LEFT JOIN stocks s ON p.symbol = s.symbol
     """)
@@ -48,7 +48,8 @@ async def get_portfolio_summary(db: aiosqlite.Connection = Depends(get_db)):
     total_value = 0.0
 
     for row in rows:
-        value = row["quantity"] * (row["current_price"] or row["avg_price"] or 0)
+        # Use stored EUR value if available, otherwise fallback to calculation
+        value = row["market_value_eur"] or (row["quantity"] * (row["current_price"] or row["avg_price"] or 0))
         total_value += value
 
         geo = row["geography"] or infer_geography(row["symbol"])
