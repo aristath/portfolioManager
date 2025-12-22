@@ -11,6 +11,7 @@
 
   <!-- Libraries (local, no CDN) -->
   <script defer src="/static/lib/alpine.min.js"></script>
+  <script src="/static/lib/lightweight-charts.standalone.production.js"></script>
 
   <!-- Application -->
   <script src="/static/js/utils.js"></script>
@@ -27,6 +28,9 @@
 
     <!-- Portfolio Summary -->
     <summary-cards></summary-cards>
+
+    <!-- Portfolio Chart -->
+    <portfolio-chart></portfolio-chart>
 
     <!-- Allocation & Actions Row -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -49,6 +53,7 @@
   <rebalance-modal></rebalance-modal>
   <add-stock-modal></add-stock-modal>
   <edit-stock-modal></edit-stock-modal>
+  <stock-chart-modal></stock-chart-modal>
 
   <!-- Load Components -->
   <script src="/static/components/app-header.js"></script>
@@ -63,5 +68,7 @@
   <script src="/static/components/rebalance-modal.js"></script>
   <script src="/static/components/add-stock-modal.js"></script>
   <script src="/static/components/edit-stock-modal.js"></script>
+  <script src="/static/components/portfolio-chart.js"></script>
+  <script src="/static/components/stock-chart.js"></script>
 </body>
 </html>

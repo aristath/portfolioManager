@@ -111,7 +111,13 @@ class StockTable extends HTMLElement {
               <template x-for="stock in $store.app.filteredStocks" :key="stock.symbol">
                 <tr class="hover:bg-gray-800/50 cursor-pointer md:cursor-default"
                     @click="window.innerWidth < 768 && $store.app.openEditStock(stock)">
-                  <td class="py-1.5 px-2 font-mono text-blue-400 sticky left-0 bg-gray-800" x-text="stock.symbol"></td>
+                  <td class="py-1.5 px-2 font-mono text-blue-400 sticky left-0 bg-gray-800">
+                    <button @click.stop="$store.app.showStockChart = true; $store.app.selectedStockSymbol = stock.symbol"
+                            class="hover:underline cursor-pointer"
+                            title="View chart">
+                      <span x-text="stock.symbol"></span>
+                    </button>
+                  </td>
                   <td class="py-1.5 px-2 text-gray-300 truncate max-w-32 hidden sm:table-cell" x-text="stock.name"></td>
                   <td class="py-1.5 px-2 text-center">
                     <span class="px-1.5 py-0.5 rounded text-xs"

@@ -118,6 +118,47 @@ async def apply_migrations(db: aiosqlite.Connection, current_version: int):
         )
         logger.info("Migration 2 complete")
 
+    # Migration 3: Add stock price history cache table
+    if current_version < 3:
+        logger.info("Applying migration 3: Adding stock_price_history table...")
+
+        # Check if table already exists (in case of partial migration)
+        cursor = await db.execute("""
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name='stock_price_history'
+        """)
+        table_exists = await cursor.fetchone()
+
+        if not table_exists:
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS stock_price_history (
+                    id INTEGER PRIMARY KEY,
+                    symbol TEXT NOT NULL,
+                    date TEXT NOT NULL,
+                    close_price REAL NOT NULL,
+                    open_price REAL,
+                    high_price REAL,
+                    low_price REAL,
+                    volume INTEGER,
+                    source TEXT,
+                    created_at TEXT NOT NULL,
+                    UNIQUE(symbol, date)
+                )
+            """)
+            await db.execute("""
+                CREATE INDEX IF NOT EXISTS idx_stock_price_symbol_date 
+                ON stock_price_history(symbol, date)
+            """)
+            logger.info("  Created table: stock_price_history")
+        else:
+            logger.info("  Table stock_price_history already exists, skipping")
+
+        await db.execute(
+            "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
+            (3, datetime.now().isoformat(), "Add stock_price_history table for chart data caching")
+        )
+        logger.info("Migration 3 complete")
+
 
 SCHEMA = """
 -- Stock universe
@@ -229,4 +270,21 @@ CREATE TABLE IF NOT EXISTS cash_flows (
 CREATE INDEX IF NOT EXISTS idx_cash_flows_date ON cash_flows(date);
 CREATE INDEX IF NOT EXISTS idx_cash_flows_type ON cash_flows(transaction_type);
 CREATE INDEX IF NOT EXISTS idx_cash_flows_type_doc_id ON cash_flows(type_doc_id);
+
+-- Stock price history cache
+CREATE TABLE IF NOT EXISTS stock_price_history (
+    id INTEGER PRIMARY KEY,
+    symbol TEXT NOT NULL,
+    date TEXT NOT NULL,
+    close_price REAL NOT NULL,
+    open_price REAL,
+    high_price REAL,
+    low_price REAL,
+    volume INTEGER,
+    source TEXT,  -- 'tradernet' or 'yahoo'
+    created_at TEXT NOT NULL,
+    UNIQUE(symbol, date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_stock_price_symbol_date ON stock_price_history(symbol, date);
 """

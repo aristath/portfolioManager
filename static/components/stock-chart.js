@@ -1,0 +1,210 @@
+/**
+ * Stock Chart Modal Component
+ * Displays stock price history in a modal using Lightweight Charts
+ */
+class StockChartModal extends HTMLElement {
+  connectedCallback() {
+    this.innerHTML = `
+      <div x-data="stockChartComponent()" 
+           x-show="$store.app.showStockChart"
+           class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+           x-transition>
+        <div class="bg-gray-800 border border-gray-700 rounded-lg w-full max-w-4xl max-h-[90vh] flex flex-col" @click.stop>
+          <div class="flex items-center justify-between p-4 border-b border-gray-700">
+            <div>
+              <h2 class="text-lg font-semibold text-gray-100" x-text="symbol || 'Stock Chart'"></h2>
+              <p class="text-xs text-gray-400" x-show="stockName" x-text="stockName"></p>
+            </div>
+            <button @click="$store.app.showStockChart = false; closeChart()"
+                    class="text-gray-400 hover:text-gray-200 text-2xl leading-none">&times;</button>
+          </div>
+
+          <div class="p-4 flex-1 overflow-auto">
+            <!-- Controls -->
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex gap-2">
+                <select x-model="selectedRange" 
+                        @change="loadChart()"
+                        class="px-2 py-1 bg-gray-900 border border-gray-600 rounded text-xs text-gray-100 focus:border-blue-500 focus:outline-none">
+                  <option value="1M">1M</option>
+                  <option value="3M">3M</option>
+                  <option value="6M">6M</option>
+                  <option value="1Y">1Y</option>
+                  <option value="all">All</option>
+                </select>
+                <select x-model="selectedSource" 
+                        @change="loadChart()"
+                        class="px-2 py-1 bg-gray-900 border border-gray-600 rounded text-xs text-gray-100 focus:border-blue-500 focus:outline-none">
+                  <option value="tradernet">Tradernet</option>
+                  <option value="yahoo">Yahoo Finance</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Loading state -->
+            <div x-show="loading" class="flex items-center justify-center h-96 text-gray-500 text-sm">
+              <span class="animate-spin">&#9696;</span>
+              <span class="ml-2">Loading chart data...</span>
+            </div>
+
+            <!-- Error state -->
+            <div x-show="error && !loading" class="text-red-400 text-sm p-4" x-text="error"></div>
+
+            <!-- Chart container -->
+            <div x-show="!loading && !error" id="stock-chart-container" class="h-96"></div>
+
+            <!-- Empty state -->
+            <div x-show="!loading && !error && (!chartData || chartData.length === 0)" 
+                 class="flex items-center justify-center h-96 text-gray-500 text-sm">
+              No data available for this stock
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Initialize Alpine.js component
+    if (window.Alpine) {
+      Alpine.data('stockChartComponent', () => ({
+        selectedRange: '1Y',
+        selectedSource: 'tradernet',
+        loading: false,
+        error: null,
+        chartData: null,
+        chart: null,
+        lineSeries: null,
+        symbol: null,
+        stockName: null,
+
+        init() {
+          // Watch for symbol changes from store
+          this.$watch('$store.app.selectedStockSymbol', (symbol) => {
+            if (symbol) {
+              this.symbol = symbol;
+              // Find stock name from store
+              const stocks = this.$store.app.stocks || [];
+              const stock = stocks.find(s => s.symbol === symbol);
+              this.stockName = stock ? stock.name : null;
+              this.loadChart();
+            }
+          });
+
+          // Load chart when modal opens
+          this.$watch('$store.app.showStockChart', (show) => {
+            if (show && this.symbol) {
+              this.loadChart();
+            } else if (!show) {
+              this.closeChart();
+            }
+          });
+        },
+
+        async loadChart() {
+          if (!this.symbol) return;
+
+          this.loading = true;
+          this.error = null;
+
+          try {
+            const data = await API.fetchStockChart(this.symbol, this.selectedRange, this.selectedSource);
+            
+            if (!data || data.length === 0) {
+              this.chartData = [];
+              if (this.chart) {
+                this.chart.remove();
+                this.chart = null;
+                this.lineSeries = null;
+              }
+              this.loading = false;
+              return;
+            }
+
+            this.chartData = data;
+
+            // Initialize or update chart
+            await this.$nextTick();
+            this.renderChart();
+          } catch (err) {
+            console.error('Failed to load stock chart:', err);
+            this.error = 'Failed to load chart data';
+            if (this.chart) {
+              this.chart.remove();
+              this.chart = null;
+              this.lineSeries = null;
+            }
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        renderChart() {
+          const container = document.getElementById('stock-chart-container');
+          if (!container) return;
+
+          // Remove existing chart
+          if (this.chart) {
+            this.chart.remove();
+          }
+
+          // Create chart
+          this.chart = LightweightCharts.createChart(container, {
+            layout: {
+              background: { color: '#1f2937' }, // gray-800
+              textColor: '#9ca3af', // gray-400
+            },
+            grid: {
+              vertLines: { color: '#374151' }, // gray-700
+              horzLines: { color: '#374151' },
+            },
+            timeScale: {
+              timeVisible: true,
+              secondsVisible: false,
+            },
+            width: container.clientWidth,
+            height: 384,
+          });
+
+          // Add line series
+          this.lineSeries = this.chart.addLineSeries({
+            color: '#10b981', // green-500
+            lineWidth: 2,
+            priceFormat: {
+              type: 'price',
+              precision: 2,
+              minMove: 0.01,
+            },
+          });
+
+          // Set data
+          this.lineSeries.setData(this.chartData);
+
+          // Fit content
+          this.chart.timeScale().fitContent();
+
+          // Handle resize
+          const resizeObserver = new ResizeObserver(entries => {
+            if (entries.length > 0) {
+              const { width, height } = entries[0].contentRect;
+              this.chart.applyOptions({ width, height: Math.max(height, 300) });
+            }
+          });
+          resizeObserver.observe(container);
+        },
+
+        closeChart() {
+          if (this.chart) {
+            this.chart.remove();
+            this.chart = null;
+            this.lineSeries = null;
+          }
+          this.chartData = null;
+          this.error = null;
+          this.symbol = null;
+          this.stockName = null;
+        },
+      }));
+    }
+  }
+}
+
+customElements.define('stock-chart-modal', StockChartModal);
