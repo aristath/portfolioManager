@@ -27,7 +27,10 @@ from app.services.allocator import (
 )
 from app.services.scorer import (
     calculate_allocation_fit_score,
+    calculate_portfolio_score,
+    calculate_post_transaction_score,
     PortfolioContext,
+    PortfolioScore,
 )
 from app.services import yahoo
 from app.domain.constants import TRADE_SIDE_BUY
@@ -40,13 +43,16 @@ class Recommendation:
     """A single trade recommendation."""
     symbol: str
     name: str
-    amount: float  # Fixed trade amount in EUR
+    amount: float  # Trade amount in EUR (min_lot * price)
     priority: float  # Combined priority score
     reason: str
     geography: str
     industry: str | None
     current_price: float | None = None
-    quantity: int | None = None  # Calculated from amount / price
+    quantity: int | None = None  # Actual shares to buy (respects min_lot)
+    current_portfolio_score: float | None = None  # Portfolio score before transaction
+    new_portfolio_score: float | None = None  # Portfolio score after transaction
+    score_change: float | None = None  # Positive = improvement
 
 
 class RebalancingService:
@@ -66,12 +72,12 @@ class RebalancingService:
 
     async def get_recommendations(self, limit: int = 3) -> List[Recommendation]:
         """
-        Get top N trade recommendations based on current portfolio state.
+        Get top N trade recommendations based on POST-TRANSACTION portfolio impact.
 
-        Returns prioritized list of stocks to buy, independent of cash.
-        Each recommendation has a fixed amount from settings.min_trade_size.
+        Each recommendation respects min_lot and shows the actual trade amount.
+        Recommendations are scored by how much they IMPROVE portfolio balance.
         """
-        trade_amount = settings.min_trade_size
+        base_trade_amount = settings.min_trade_size
 
         # Get portfolio summary for allocation context
         from app.application.services.portfolio_service import PortfolioService
@@ -90,24 +96,41 @@ class RebalancingService:
         # Get scored stocks
         stocks_data = await self._stock_repo.get_with_scores()
 
-        # Build positions map
+        # Build complete portfolio context with all metadata
         positions = {}
+        stock_geographies = {}
+        stock_industries = {}
+        stock_scores = {}
+        stock_dividends = {}
+
         for stock in stocks_data:
+            symbol = stock["symbol"]
             position_value = stock.get("position_value") or 0
             if position_value > 0:
-                positions[stock["symbol"]] = position_value
+                positions[symbol] = position_value
+            stock_geographies[symbol] = stock["geography"]
+            stock_industries[symbol] = stock.get("industry")
+            stock_scores[symbol] = stock.get("quality_score") or stock.get("total_score") or 0.5
+            # Get dividend yield from fundamentals if available
+            stock_dividends[symbol] = stock.get("dividend_yield") or 0
 
-        # Create portfolio context
+        # Create rich portfolio context
         portfolio_context = PortfolioContext(
             geo_weights=geo_weights,
             industry_weights=industry_weights,
             positions=positions,
             total_value=total_value,
+            stock_geographies=stock_geographies,
+            stock_industries=stock_industries,
+            stock_scores=stock_scores,
+            stock_dividends=stock_dividends,
         )
 
-        # Calculate priority for each stock
-        priority_inputs = []
-        stock_metadata = {}
+        # Calculate current portfolio score
+        current_portfolio_score = calculate_portfolio_score(portfolio_context)
+
+        # Calculate priority for each stock with POST-TRANSACTION scoring
+        candidates = []
 
         for stock in stocks_data:
             symbol = stock["symbol"]
@@ -115,102 +138,110 @@ class RebalancingService:
             geography = stock["geography"]
             industry = stock.get("industry")
             multiplier = stock.get("priority_multiplier") or 1.0
-            volatility = stock.get("volatility")
+            min_lot = stock.get("min_lot") or 1
+            yahoo_symbol = stock.get("yahoo_symbol")
 
             quality_score = stock.get("quality_score") or stock.get("total_score") or 0
             opportunity_score = stock.get("opportunity_score") or stock.get("fundamental_score") or 0.5
+            analyst_score = stock.get("analyst_score") or 0.5
+            dividend_yield = stock.get("dividend_yield") or 0
 
-            allocation_fit = calculate_allocation_fit_score(
+            # Get current price early to calculate actual trade value
+            price = yahoo.get_current_price(symbol, yahoo_symbol)
+            if not price or price <= 0:
+                continue
+
+            # Calculate actual transaction value (respecting min_lot)
+            lot_cost = min_lot * price
+
+            # If min_lot cost exceeds base trade amount, use 1 lot
+            # Otherwise, use as many lots as fit in base_trade_amount
+            if lot_cost > base_trade_amount:
+                quantity = min_lot
+                trade_value = lot_cost
+            else:
+                num_lots = int(base_trade_amount / lot_cost)
+                quantity = num_lots * min_lot
+                trade_value = quantity * price
+
+            # Calculate POST-TRANSACTION portfolio score
+            new_score, score_change = calculate_post_transaction_score(
                 symbol=symbol,
                 geography=geography,
                 industry=industry,
-                quality_score=quality_score,
-                opportunity_score=opportunity_score,
+                proposed_value=trade_value,
+                stock_quality=quality_score,
+                stock_dividend=dividend_yield,
                 portfolio_context=portfolio_context,
             )
 
-            analyst_score = stock.get("analyst_score") or 0.5
-            final_score = (
+            # Skip stocks that worsen portfolio balance significantly
+            if score_change < -1.0:
+                logger.debug(f"Skipping {symbol}: transaction worsens balance ({score_change:.2f})")
+                continue
+
+            # Base score from quality and opportunity
+            base_score = (
                 quality_score * 0.35 +
                 opportunity_score * 0.35 +
-                analyst_score * 0.15 +
-                allocation_fit.total * 0.15
+                analyst_score * 0.15
             )
+
+            # Use score_change as allocation fit component
+            # Normalize: -5 to +5 -> 0 to 1
+            normalized_score_change = max(0, min(1, (score_change + 5) / 10))
+
+            final_score = base_score * 0.85 + normalized_score_change * 0.15
 
             if final_score < settings.min_stock_score:
                 continue
 
-            priority_inputs.append(PriorityInput(
-                symbol=symbol,
-                name=name,
-                geography=geography,
-                industry=industry,
-                stock_score=final_score,
-                volatility=volatility,
-                multiplier=multiplier,
-                quality_score=quality_score,
-                opportunity_score=opportunity_score,
-                allocation_fit_score=allocation_fit.total,
-            ))
+            # Build reason
+            reason_parts = []
+            if quality_score >= 0.7:
+                reason_parts.append("high quality")
+            if opportunity_score >= 0.7:
+                reason_parts.append("buy opportunity")
+            if score_change > 0.5:
+                reason_parts.append(f"↑{score_change:.1f} portfolio")
+            if multiplier != 1.0:
+                reason_parts.append(f"{multiplier:.1f}x mult")
+            reason = ", ".join(reason_parts) if reason_parts else "good score"
 
-            stock_metadata[symbol] = {
+            candidates.append({
+                "symbol": symbol,
                 "name": name,
                 "geography": geography,
                 "industry": industry,
-                "yahoo_symbol": stock.get("yahoo_symbol"),
-                "min_lot": stock.get("min_lot") or 1,
-            }
+                "price": price,
+                "quantity": quantity,
+                "trade_value": trade_value,
+                "final_score": final_score * multiplier,
+                "reason": reason,
+                "current_portfolio_score": current_portfolio_score.total,
+                "new_portfolio_score": new_score.total,
+                "score_change": score_change,
+            })
 
-        if not priority_inputs:
-            return []
-
-        # Calculate priorities
-        priority_results = PriorityCalculator.calculate_priorities(
-            priority_inputs,
-            geo_weights,
-            industry_weights,
-        )
+        # Sort by final score (with multiplier applied)
+        candidates.sort(key=lambda x: x["final_score"], reverse=True)
 
         # Build recommendations for top N
         recommendations = []
-        for result in priority_results[:limit]:
-            metadata = stock_metadata[result.symbol]
-
-            # Get current price
-            yahoo_symbol = metadata.get("yahoo_symbol")
-            price = yahoo.get_current_price(result.symbol, yahoo_symbol)
-
-            # Calculate quantity if we have price
-            quantity = None
-            if price and price > 0:
-                min_lot = metadata["min_lot"]
-                lot_cost = min_lot * price
-                if lot_cost <= trade_amount:
-                    num_lots = int(trade_amount / lot_cost)
-                    quantity = num_lots * min_lot
-
-            # Build reason
-            reason_parts = []
-            if result.quality_score and result.quality_score >= 0.7:
-                reason_parts.append("high quality")
-            if result.opportunity_score and result.opportunity_score >= 0.7:
-                reason_parts.append("buy opportunity")
-            if result.allocation_fit_score and result.allocation_fit_score >= 0.7:
-                reason_parts.append("fills allocation gap")
-            if result.multiplier != 1.0:
-                reason_parts.append(f"{result.multiplier:.1f}x multiplier")
-            reason = ", ".join(reason_parts) if reason_parts else "good score"
-
+        for candidate in candidates[:limit]:
             recommendations.append(Recommendation(
-                symbol=result.symbol,
-                name=metadata["name"],
-                amount=trade_amount,
-                priority=round(result.combined_priority, 2),
-                reason=reason,
-                geography=metadata["geography"],
-                industry=metadata["industry"],
-                current_price=round(price, 2) if price else None,
-                quantity=quantity,
+                symbol=candidate["symbol"],
+                name=candidate["name"],
+                amount=round(candidate["trade_value"], 2),
+                priority=round(candidate["final_score"], 2),
+                reason=candidate["reason"],
+                geography=candidate["geography"],
+                industry=candidate["industry"],
+                current_price=round(candidate["price"], 2),
+                quantity=candidate["quantity"],
+                current_portfolio_score=round(candidate["current_portfolio_score"], 1),
+                new_portfolio_score=round(candidate["new_portfolio_score"], 1),
+                score_change=round(candidate["score_change"], 2),
             ))
 
         return recommendations

@@ -76,6 +76,20 @@ class PortfolioContext:
     industry_weights: dict  # name -> weight (-1 to +1)
     positions: dict  # symbol -> position_value
     total_value: float
+    # Additional data for portfolio scoring
+    stock_geographies: dict = None  # symbol -> geography
+    stock_industries: dict = None  # symbol -> industry
+    stock_scores: dict = None  # symbol -> quality_score
+    stock_dividends: dict = None  # symbol -> dividend_yield
+
+
+@dataclass
+class PortfolioScore:
+    """Overall portfolio health score."""
+    diversification_score: float  # Geographic + industry balance (0-100)
+    dividend_score: float  # Weighted average dividend yield score (0-100)
+    quality_score: float  # Weighted average stock quality (0-100)
+    total: float  # Combined score (0-100)
 
 
 @dataclass
@@ -521,6 +535,149 @@ def calculate_allocation_fit_score(
         averaging_down_score=round(averaging_down_score, 3),
         total=round(total, 3),
     )
+
+
+def calculate_portfolio_score(portfolio_context: PortfolioContext) -> PortfolioScore:
+    """
+    Calculate overall portfolio health score.
+
+    Components:
+    - Diversification (40%): How close to target geo/industry allocations
+    - Dividend (30%): Weighted average dividend yield across positions
+    - Quality (30%): Weighted average stock quality scores
+
+    Returns:
+        PortfolioScore with component scores and total (0-100 scale)
+    """
+    total_value = portfolio_context.total_value
+    if total_value <= 0:
+        return PortfolioScore(
+            diversification_score=50.0,
+            dividend_score=50.0,
+            quality_score=50.0,
+            total=50.0,
+        )
+
+    # 1. Diversification Score (40%)
+    # Calculate how close current allocations are to targets
+    geo_deviations = []
+    if portfolio_context.stock_geographies:
+        # Calculate current geo allocations
+        geo_values = {}
+        for symbol, value in portfolio_context.positions.items():
+            geo = portfolio_context.stock_geographies.get(symbol, "OTHER")
+            geo_values[geo] = geo_values.get(geo, 0) + value
+
+        # Compare to targets (weights are -1 to +1, convert to percentages)
+        for geo, weight in portfolio_context.geo_weights.items():
+            target_pct = 0.33 + (weight * 0.15)  # Base 33% +/- 15%
+            current_pct = geo_values.get(geo, 0) / total_value if total_value > 0 else 0
+            deviation = abs(current_pct - target_pct)
+            geo_deviations.append(deviation)
+
+    avg_geo_deviation = sum(geo_deviations) / len(geo_deviations) if geo_deviations else 0.2
+    # Convert deviation to score: 0 deviation = 100, 0.3+ deviation = 0
+    diversification_score = max(0, 100 * (1 - avg_geo_deviation / 0.3))
+
+    # 2. Dividend Score (30%)
+    # Weighted average dividend yield
+    if portfolio_context.stock_dividends:
+        weighted_dividend = 0.0
+        for symbol, value in portfolio_context.positions.items():
+            div_yield = portfolio_context.stock_dividends.get(symbol, 0) or 0
+            weighted_dividend += div_yield * (value / total_value)
+        # Score: 0% yield = 30, 3% = 60, 6%+ = 100
+        dividend_score = min(100, 30 + weighted_dividend * 1000)
+    else:
+        dividend_score = 50.0
+
+    # 3. Quality Score (30%)
+    # Weighted average stock quality
+    if portfolio_context.stock_scores:
+        weighted_quality = 0.0
+        for symbol, value in portfolio_context.positions.items():
+            quality = portfolio_context.stock_scores.get(symbol, 0.5) or 0.5
+            weighted_quality += quality * (value / total_value)
+        # Convert 0-1 to 0-100
+        quality_score = weighted_quality * 100
+    else:
+        quality_score = 50.0
+
+    # Combined score
+    total = (
+        diversification_score * 0.40 +
+        dividend_score * 0.30 +
+        quality_score * 0.30
+    )
+
+    return PortfolioScore(
+        diversification_score=round(diversification_score, 1),
+        dividend_score=round(dividend_score, 1),
+        quality_score=round(quality_score, 1),
+        total=round(total, 1),
+    )
+
+
+def calculate_post_transaction_score(
+    symbol: str,
+    geography: str,
+    industry: Optional[str],
+    proposed_value: float,
+    stock_quality: float,
+    stock_dividend: float,
+    portfolio_context: PortfolioContext,
+) -> tuple[PortfolioScore, float]:
+    """
+    Calculate portfolio score AFTER a proposed transaction.
+
+    Args:
+        symbol: Stock symbol to buy
+        geography: Stock geography (EU, ASIA, US)
+        industry: Stock industry
+        proposed_value: Transaction value (min_lot * price)
+        stock_quality: Quality score of the stock (0-1)
+        stock_dividend: Dividend yield of the stock (0-1)
+        portfolio_context: Current portfolio context
+
+    Returns:
+        Tuple of (new_portfolio_score, score_change)
+    """
+    # Calculate current portfolio score
+    current_score = calculate_portfolio_score(portfolio_context)
+
+    # Create a modified context with the proposed transaction
+    new_positions = dict(portfolio_context.positions)
+    new_positions[symbol] = new_positions.get(symbol, 0) + proposed_value
+
+    new_geographies = dict(portfolio_context.stock_geographies or {})
+    new_geographies[symbol] = geography
+
+    new_industries = dict(portfolio_context.stock_industries or {})
+    if industry:
+        new_industries[symbol] = industry
+
+    new_scores = dict(portfolio_context.stock_scores or {})
+    new_scores[symbol] = stock_quality
+
+    new_dividends = dict(portfolio_context.stock_dividends or {})
+    new_dividends[symbol] = stock_dividend
+
+    new_context = PortfolioContext(
+        geo_weights=portfolio_context.geo_weights,
+        industry_weights=portfolio_context.industry_weights,
+        positions=new_positions,
+        total_value=portfolio_context.total_value + proposed_value,
+        stock_geographies=new_geographies,
+        stock_industries=new_industries,
+        stock_scores=new_scores,
+        stock_dividends=new_dividends,
+    )
+
+    # Calculate new portfolio score
+    new_score = calculate_portfolio_score(new_context)
+    score_change = new_score.total - current_score.total
+
+    return new_score, score_change
 
 
 # =============================================================================

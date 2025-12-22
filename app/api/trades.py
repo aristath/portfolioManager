@@ -202,6 +202,9 @@ async def get_recommendations(
                     "industry": r.industry,
                     "current_price": r.current_price,
                     "quantity": r.quantity,
+                    "current_portfolio_score": r.current_portfolio_score,
+                    "new_portfolio_score": r.new_portfolio_score,
+                    "score_change": r.score_change,
                 }
                 for r in recommendations
             ],

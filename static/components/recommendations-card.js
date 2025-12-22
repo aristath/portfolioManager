@@ -44,9 +44,18 @@ class RecommendationsCard extends HTMLElement {
                   <div class="text-xs text-gray-500 mt-1" x-text="rec.reason"></div>
                 </div>
                 <div class="text-right flex-shrink-0">
-                  <div class="text-sm font-mono font-bold text-green-400" x-text="'€' + rec.amount"></div>
-                  <div class="text-xs text-gray-400" x-text="rec.quantity ? rec.quantity + ' shares' : ''"></div>
-                  <div class="text-xs text-gray-500" x-text="'priority: ' + rec.priority"></div>
+                  <div class="text-sm font-mono font-bold text-green-400" x-text="'€' + rec.amount.toLocaleString()"></div>
+                  <div class="text-xs text-gray-400" x-text="rec.quantity ? rec.quantity + ' @ €' + rec.current_price : ''"></div>
+                  <div class="flex items-center justify-end gap-1 mt-1">
+                    <span class="text-xs text-gray-500" x-text="rec.current_portfolio_score"></span>
+                    <span x-show="rec.score_change > 0" class="text-green-400 text-xs">→</span>
+                    <span x-show="rec.score_change < 0" class="text-red-400 text-xs">→</span>
+                    <span x-show="rec.score_change === 0" class="text-gray-400 text-xs">→</span>
+                    <span class="text-xs" :class="rec.score_change > 0 ? 'text-green-400' : rec.score_change < 0 ? 'text-red-400' : 'text-gray-400'" x-text="rec.new_portfolio_score"></span>
+                    <span class="text-xs px-1 rounded"
+                          :class="rec.score_change > 0 ? 'bg-green-900/50 text-green-400' : rec.score_change < 0 ? 'bg-red-900/50 text-red-400' : 'bg-gray-700 text-gray-400'"
+                          x-text="(rec.score_change > 0 ? '+' : '') + rec.score_change"></span>
+                  </div>
                 </div>
               </div>
               <button @click="$store.app.executeRecommendation(rec.symbol)"

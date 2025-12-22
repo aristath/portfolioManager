@@ -359,6 +359,28 @@ class TradernetClient:
             logger.error(f"Failed to get historical prices for {symbol}: {e}")
             return []
 
+    def get_security_info(self, symbol: str) -> dict | None:
+        """
+        Get security info including lot size from Tradernet API.
+
+        Args:
+            symbol: Stock symbol (e.g., "XIAO.1810.AS")
+
+        Returns:
+            Dict with security info including 'lot' (minimum lot size) if available,
+            None if the request fails.
+        """
+        if not self.is_connected:
+            raise ConnectionError("Not connected to Tradernet")
+
+        try:
+            with _led_api_call():
+                info = self._client.security_info(symbol)
+            return info
+        except Exception as e:
+            logger.warning(f"Failed to get security info for {symbol}: {e}")
+            return None
+
     def place_order(
         self,
         symbol: str,
