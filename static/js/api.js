@@ -72,6 +72,7 @@ const API = {
   // Settings
   fetchSettings: () => fetch('/api/settings').then(r => r.json()),
   updateMinTradeSize: (value) => API._put('/api/settings/min_trade_size', { value }),
+  restartSystem: () => API._post('/api/settings/restart'),
 };
 
 // Make available globally

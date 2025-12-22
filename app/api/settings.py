@@ -64,3 +64,11 @@ async def update_min_trade_size(data: MinTradeSizeUpdate):
     await set_setting("min_trade_size", str(data.value))
 
     return {"min_trade_size": data.value}
+
+
+@router.post("/restart")
+async def restart_system():
+    """Trigger system reboot."""
+    import subprocess
+    subprocess.Popen(["sudo", "reboot"])
+    return {"status": "rebooting"}
