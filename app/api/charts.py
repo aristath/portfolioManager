@@ -32,49 +32,6 @@ def _parse_date_range(range_str: str) -> Optional[datetime]:
         return None
 
 
-@router.get("/portfolio")
-async def get_portfolio_chart(
-    range: str = Query("all", description="Time range: 1M, 3M, 6M, 1Y, all"),
-    db: aiosqlite.Connection = Depends(get_db),
-):
-    """
-    Get portfolio value history for charting.
-    
-    Returns array of {time: 'YYYY-MM-DD', value: number} for portfolio total_value.
-    If data is missing, attempts to fetch from Tradernet API (if available).
-    """
-    try:
-        start_date = _parse_date_range(range)
-        
-        # Query portfolio_snapshots
-        if start_date:
-            start_date_str = start_date.strftime("%Y-%m-%d")
-            cursor = await db.execute("""
-                SELECT date, total_value 
-                FROM portfolio_snapshots 
-                WHERE date >= ?
-                ORDER BY date ASC
-            """, (start_date_str,))
-        else:
-            cursor = await db.execute("""
-                SELECT date, total_value 
-                FROM portfolio_snapshots 
-                ORDER BY date ASC
-            """)
-        
-        rows = await cursor.fetchall()
-        result = [{"time": row["date"], "value": row["total_value"]} for row in rows]
-        
-        # Note: Tradernet API doesn't provide historical portfolio snapshots directly
-        # We can only return what's in the database (from daily sync job)
-        # Historical data will accumulate over time as the sync job continues
-        
-        return result
-    except Exception as e:
-        logger.error(f"Failed to get portfolio chart data: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to get portfolio chart data: {str(e)}")
-
-
 async def _get_cached_stock_prices(
     db: aiosqlite.Connection,
     symbol: str,

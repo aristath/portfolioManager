@@ -60,10 +60,6 @@ const API = {
   executeRecommendation: (symbol) => API._post(`/api/trades/recommendations/${symbol}/execute`),
 
   // Charts
-  fetchPortfolioChart: (range = 'all') => {
-    const params = new URLSearchParams({ range });
-    return fetch(`/api/charts/portfolio?${params}`).then(r => r.json());
-  },
   fetchStockChart: (symbol, range = '1Y', source = 'tradernet') => {
     const params = new URLSearchParams({ range, source });
     return fetch(`/api/charts/stocks/${symbol}?${params}`).then(r => r.json());
