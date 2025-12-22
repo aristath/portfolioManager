@@ -22,7 +22,7 @@ class GeoChart extends HTMLElement {
             <circle cx="50" cy="50" r="40" fill="none" stroke="#374151" stroke-width="16"/>
 
             <!-- Dynamic segments based on active geographies -->
-            <template x-for="(geo, index) in geographicAllocations" :key="geo.name">
+            <template x-for="(geo, index) in (geographicAllocations || [])" :key="geo.name">
               <circle cx="50" cy="50" r="40" fill="none"
                       :stroke="getGeoColor(geo.name)"
                       stroke-width="16"
@@ -36,7 +36,7 @@ class GeoChart extends HTMLElement {
 
         <!-- View Mode - Only show active geographies (with stocks) -->
         <div x-show="!$store.app.editingGeo" class="space-y-1.5">
-          <template x-for="geo in geographicAllocations.filter(g => $store.app.activeGeographies.includes(g.name))" :key="geo.name">
+          <template x-for="geo in (geographicAllocations || []).filter(g => $store.app.activeGeographies && $store.app.activeGeographies.includes(g.name))" :key="geo.name">
             <div class="flex items-center justify-between text-sm">
               <span class="flex items-center gap-2">
                 <span class="w-2.5 h-2.5 rounded-full" :style="'background-color: ' + getGeoColor(geo.name)"></span>

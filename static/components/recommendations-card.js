@@ -29,7 +29,7 @@ class RecommendationsCard extends HTMLElement {
 
         <!-- Recommendations list -->
         <div class="space-y-2">
-          <template x-for="(rec, index) in $store.app.recommendations" :key="rec.symbol">
+          <template x-for="(rec, index) in ($store.app.recommendations || [])" :key="rec.symbol">
             <div class="bg-gray-900 rounded p-2 border border-gray-700">
               <div class="flex items-start justify-between gap-2">
                 <div class="flex-1 min-w-0">
