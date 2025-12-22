@@ -39,6 +39,7 @@ document.addEventListener('alpine:init', () => {
       recommendations: false,
       scores: false,
       sync: false,
+      historical: false,
       execute: false,
       geoSave: false,
       industrySave: false,
@@ -262,6 +263,17 @@ document.addEventListener('alpine:init', () => {
         this.showMessage('Failed to sync prices', 'error');
       }
       this.loading.sync = false;
+    },
+
+    async syncHistorical() {
+      this.loading.historical = true;
+      try {
+        const data = await API.syncHistorical();
+        this.showMessage(data.message, 'success');
+      } catch (e) {
+        this.showMessage('Failed to sync historical data', 'error');
+      }
+      this.loading.historical = false;
     },
 
     // Geographic Allocation

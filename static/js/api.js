@@ -38,6 +38,7 @@ const API = {
   fetchStatus: () => fetch('/api/status').then(r => r.json()),
   fetchTradernet: () => fetch('/api/status/tradernet').then(r => r.json()),
   syncPrices: () => API._post('/api/status/sync/prices'),
+  syncHistorical: () => API._post('/api/status/sync/historical'),
 
   // Allocation
   fetchAllocation: () => fetch('/api/trades/allocation').then(r => r.json()),
