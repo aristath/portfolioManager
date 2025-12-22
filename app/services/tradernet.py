@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from tradernet import Tradernet
 
 from app.config import settings
-from app.led.display import get_led_display
+from app.infrastructure.hardware.led_display import get_led_display
 
 logger = logging.getLogger(__name__)
 

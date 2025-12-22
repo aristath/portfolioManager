@@ -3,8 +3,17 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
-import aiosqlite
-from app.database import get_db
+from app.infrastructure.dependencies import (
+    get_allocation_repository,
+    get_portfolio_repository,
+    get_position_repository,
+)
+from app.domain.repositories import (
+    AllocationRepository,
+    PortfolioRepository,
+    PositionRepository,
+)
+from app.application.services.portfolio_service import PortfolioService
 
 router = APIRouter()
 
@@ -46,21 +55,22 @@ class IndustryTargets(BaseModel):
 
 
 @router.get("/targets")
-async def get_allocation_targets(db: aiosqlite.Connection = Depends(get_db)):
+async def get_allocation_targets(
+    allocation_repo: AllocationRepository = Depends(get_allocation_repository),
+):
     """Get all allocation targets (geography and industry)."""
-    cursor = await db.execute(
-        "SELECT type, name, target_pct FROM allocation_targets ORDER BY type, name"
-    )
-    rows = await cursor.fetchall()
+    targets = await allocation_repo.get_all()
 
     geography = {}
     industry = {}
 
-    for row in rows:
-        if row["type"] == "geography":
-            geography[row["name"]] = row["target_pct"]
-        elif row["type"] == "industry":
-            industry[row["name"]] = row["target_pct"]
+    for key, value in targets.items():
+        if key.startswith("geography:"):
+            name = key.split(":", 1)[1]
+            geography[name] = value
+        elif key.startswith("industry:"):
+            name = key.split(":", 1)[1]
+            industry[name] = value
 
     return {
         "geography": geography,
@@ -71,7 +81,7 @@ async def get_allocation_targets(db: aiosqlite.Connection = Depends(get_db)):
 @router.put("/targets/geography")
 async def update_geography_targets(
     targets: GeographyTargets,
-    db: aiosqlite.Connection = Depends(get_db)
+    allocation_repo: AllocationRepository = Depends(get_allocation_repository),
 ):
     """
     Update geography allocation weights.
@@ -82,6 +92,8 @@ async def update_geography_targets(
     -  0 = Neutral (default)
     - +1 = Prioritize/overweight this region
     """
+    from app.domain.repositories import AllocationTarget
+
     updates = targets.targets
 
     if not updates:
@@ -97,23 +109,16 @@ async def update_geography_targets(
 
     # Update/insert all weights (including 0 = neutral)
     for name, weight in updates.items():
-        await db.execute(
-            """
-            INSERT OR REPLACE INTO allocation_targets (type, name, target_pct)
-            VALUES ('geography', ?, ?)
-            """,
-            (name, weight)
+        target = AllocationTarget(
+            type="geography",
+            name=name,
+            target_pct=weight,
         )
-
-    await db.commit()
+        await allocation_repo.upsert(target)
 
     # Fetch and return current weights
-    cursor = await db.execute(
-        "SELECT name, target_pct FROM allocation_targets WHERE type = 'geography'"
-    )
-    rows = await cursor.fetchall()
-
-    result = {row["name"]: row["target_pct"] for row in rows}
+    geo_targets = await allocation_repo.get_by_type("geography")
+    result = {t.name: t.target_pct for t in geo_targets}
 
     return {
         "weights": result,
@@ -124,7 +129,7 @@ async def update_geography_targets(
 @router.put("/targets/industry")
 async def update_industry_targets(
     targets: IndustryTargets,
-    db: aiosqlite.Connection = Depends(get_db)
+    allocation_repo: AllocationRepository = Depends(get_allocation_repository),
 ):
     """
     Update industry allocation weights.
@@ -135,6 +140,8 @@ async def update_industry_targets(
     -  0 = Neutral (default)
     - +1 = Prioritize/overweight this industry
     """
+    from app.domain.repositories import AllocationTarget
+
     updates = targets.targets
 
     if not updates:
@@ -150,23 +157,16 @@ async def update_industry_targets(
 
     # Update/insert all weights (including 0 = neutral)
     for name, weight in updates.items():
-        await db.execute(
-            """
-            INSERT OR REPLACE INTO allocation_targets (type, name, target_pct)
-            VALUES ('industry', ?, ?)
-            """,
-            (name, weight)
+        target = AllocationTarget(
+            type="industry",
+            name=name,
+            target_pct=weight,
         )
-
-    await db.commit()
+        await allocation_repo.upsert(target)
 
     # Fetch and return current weights
-    cursor = await db.execute(
-        "SELECT name, target_pct FROM allocation_targets WHERE type = 'industry'"
-    )
-    rows = await cursor.fetchall()
-
-    result = {row["name"]: row["target_pct"] for row in rows}
+    industry_targets = await allocation_repo.get_by_type("industry")
+    result = {t.name: t.target_pct for t in industry_targets}
 
     return {
         "weights": result,
@@ -175,11 +175,18 @@ async def update_industry_targets(
 
 
 @router.get("/current")
-async def get_current_allocation(db: aiosqlite.Connection = Depends(get_db)):
+async def get_current_allocation(
+    portfolio_repo: PortfolioRepository = Depends(get_portfolio_repository),
+    position_repo: PositionRepository = Depends(get_position_repository),
+    allocation_repo: AllocationRepository = Depends(get_allocation_repository),
+):
     """Get current allocation vs targets for both geography and industry."""
-    from app.services.allocator import get_portfolio_summary
-
-    summary = await get_portfolio_summary(db)
+    portfolio_service = PortfolioService(
+        portfolio_repo,
+        position_repo,
+        allocation_repo,
+    )
+    summary = await portfolio_service.get_portfolio_summary()
 
     return {
         "total_value": summary.total_value,
@@ -208,16 +215,23 @@ async def get_current_allocation(db: aiosqlite.Connection = Depends(get_db)):
 
 
 @router.get("/deviations")
-async def get_allocation_deviations(db: aiosqlite.Connection = Depends(get_db)):
+async def get_allocation_deviations(
+    portfolio_repo: PortfolioRepository = Depends(get_portfolio_repository),
+    position_repo: PositionRepository = Depends(get_position_repository),
+    allocation_repo: AllocationRepository = Depends(get_allocation_repository),
+):
     """
     Get allocation deviation scores for rebalancing decisions.
 
     Negative deviation = underweight (needs buying)
     Positive deviation = overweight
     """
-    from app.services.allocator import get_portfolio_summary
-
-    summary = await get_portfolio_summary(db)
+    portfolio_service = PortfolioService(
+        portfolio_repo,
+        position_repo,
+        allocation_repo,
+    )
+    summary = await portfolio_service.get_portfolio_summary()
 
     geo_deviations = {
         a.name: {

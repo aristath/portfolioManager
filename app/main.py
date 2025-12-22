@@ -12,7 +12,7 @@ from app.database import init_db
 from app.api import portfolio, stocks, trades, status, allocation
 from app.jobs.scheduler import init_scheduler, start_scheduler, stop_scheduler
 from app.services.tradernet import get_tradernet_client
-from app.led.display import get_led_display
+from app.infrastructure.hardware.led_display import get_led_display
 
 # Configure logging
 logging.basicConfig(

@@ -8,7 +8,8 @@ import aiosqlite
 from app.config import settings
 from app.services.tradernet import get_tradernet_client
 from app.services import yahoo
-from app.led.display import get_led_display, update_balance_display
+from app.infrastructure.hardware.led_display import get_led_display, update_balance_display
+from app.infrastructure.dependencies import get_position_repository
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +119,8 @@ async def sync_portfolio():
             await db.commit()
 
             # Update LED with new balance
-            await update_balance_display(db)
+            position_repo = get_position_repository(db)
+            await update_balance_display(position_repo)
 
         logger.info(
             f"Portfolio sync complete: {len(positions)} positions, "
@@ -188,7 +190,8 @@ async def sync_prices():
             await db.commit()
 
             # Update LED with new balance
-            await update_balance_display(db)
+            position_repo = get_position_repository(db)
+            await update_balance_display(position_repo)
 
         logger.info(f"Price sync complete: {len(quotes)} quotes, {updated} positions updated")
 

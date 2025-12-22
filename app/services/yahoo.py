@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 import yfinance as yf
 
-from app.led.display import get_led_display
+from app.infrastructure.hardware.led_display import get_led_display
 
 logger = logging.getLogger(__name__)
 
@@ -26,12 +26,7 @@ def _led_api_call():
         display.set_api_call_active(False)
 
 
-def _led_api_indicator():
-    """Show LED API call indicator if connected (legacy, use _led_api_call() instead)."""
-    display = get_led_display()
-    display.set_api_call_active(True)
-    if display.is_connected:
-        display.show_api_call()
+# Removed _led_api_indicator() - use _led_api_call() instead
 
 
 @dataclass
@@ -109,10 +104,7 @@ def get_yahoo_symbol(tradernet_symbol: str, yahoo_override: str = None) -> str:
     return symbol
 
 
-# Keep old name as alias for backward compatibility during transition
-def _normalize_symbol(symbol: str) -> str:
-    """Deprecated: Use get_yahoo_symbol() instead."""
-    return get_yahoo_symbol(symbol)
+# Removed _normalize_symbol() - use get_yahoo_symbol() instead
 
 
 def get_analyst_data(symbol: str, yahoo_symbol: str = None) -> Optional[AnalystData]:

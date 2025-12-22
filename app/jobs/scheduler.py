@@ -15,7 +15,7 @@ scheduler: AsyncIOScheduler = None
 
 def heartbeat_job():
     """Send heartbeat pulse to LED display every 60 seconds."""
-    from app.led.display import get_led_display
+    from app.infrastructure.hardware.led_display import get_led_display
 
     display = get_led_display()
     # Trigger heartbeat for API-based display
@@ -28,7 +28,7 @@ def heartbeat_job():
 
 def wifi_check_job():
     """Check wifi connectivity and update LED display."""
-    from app.led.display import get_led_display, LEDDisplay, DisplayMode
+    from app.infrastructure.hardware.led_display import get_led_display, LEDDisplay, DisplayMode
 
     display = get_led_display()
 

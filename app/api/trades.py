@@ -3,9 +3,21 @@
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-import aiosqlite
-from app.database import get_db
 from app.config import settings
+from app.infrastructure.dependencies import (
+    get_portfolio_repository,
+    get_position_repository,
+    get_allocation_repository,
+    get_trade_repository,
+    get_stock_repository,
+)
+from app.domain.repositories import (
+    PortfolioRepository,
+    PositionRepository,
+    AllocationRepository,
+    TradeRepository,
+    StockRepository,
+)
 
 router = APIRouter()
 
@@ -23,35 +35,41 @@ class RebalancePreview(BaseModel):
 @router.get("")
 async def get_trades(
     limit: int = 50,
-    db: aiosqlite.Connection = Depends(get_db)
+    trade_repo: TradeRepository = Depends(get_trade_repository),
 ):
     """Get trade history."""
-    cursor = await db.execute("""
-        SELECT t.*, s.name
-        FROM trades t
-        JOIN stocks s ON t.symbol = s.symbol
-        ORDER BY t.executed_at DESC
-        LIMIT ?
-    """, (limit,))
-    rows = await cursor.fetchall()
-    return [dict(row) for row in rows]
+    trades = await trade_repo.get_history(limit=limit)
+    return [
+        {
+            "id": None,  # Not in domain model
+            "symbol": t.symbol,
+            "side": t.side,
+            "quantity": t.quantity,
+            "price": t.price,
+            "executed_at": t.executed_at.isoformat() if t.executed_at else None,
+            "order_id": t.order_id,
+        }
+        for t in trades
+    ]
 
 
 @router.post("/execute")
 async def execute_trade(
     trade: TradeRequest,
-    db: aiosqlite.Connection = Depends(get_db)
+    stock_repo: StockRepository = Depends(get_stock_repository),
+    trade_repo: TradeRepository = Depends(get_trade_repository),
 ):
     """Execute a manual trade."""
     if trade.side not in ("BUY", "SELL"):
         raise HTTPException(status_code=400, detail="Side must be BUY or SELL")
 
     # Check stock exists
-    cursor = await db.execute("SELECT 1 FROM stocks WHERE symbol = ?", (trade.symbol,))
-    if not await cursor.fetchone():
+    stock = await stock_repo.get_by_symbol(trade.symbol)
+    if not stock:
         raise HTTPException(status_code=404, detail="Stock not found")
 
     from app.services.tradernet import get_tradernet_client
+    from app.domain.repositories import Trade
 
     client = get_tradernet_client()
     if not client.is_connected:
@@ -64,22 +82,16 @@ async def execute_trade(
     )
 
     if result:
-        # Record trade
-        await db.execute(
-            """
-            INSERT INTO trades (symbol, side, quantity, price, executed_at, order_id)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                trade.symbol,
-                trade.side,
-                trade.quantity,
-                result.price,
-                datetime.now().isoformat(),
-                result.order_id,
-            ),
+        # Record trade using repository
+        trade_record = Trade(
+            symbol=trade.symbol,
+            side=trade.side,
+            quantity=trade.quantity,
+            price=result.price,
+            executed_at=datetime.now(),
+            order_id=result.order_id,
         )
-        await db.commit()
+        await trade_repo.create(trade_record)
 
         return {
             "status": "success",
@@ -94,11 +106,20 @@ async def execute_trade(
 
 
 @router.get("/allocation")
-async def get_allocation(db: aiosqlite.Connection = Depends(get_db)):
+async def get_allocation(
+    portfolio_repo: PortfolioRepository = Depends(get_portfolio_repository),
+    position_repo: PositionRepository = Depends(get_position_repository),
+    allocation_repo: AllocationRepository = Depends(get_allocation_repository),
+):
     """Get current portfolio allocation vs targets."""
-    from app.services.allocator import get_portfolio_summary
+    from app.application.services.portfolio_service import PortfolioService
 
-    summary = await get_portfolio_summary(db)
+    portfolio_service = PortfolioService(
+        portfolio_repo,
+        position_repo,
+        allocation_repo,
+    )
+    summary = await portfolio_service.get_portfolio_summary()
 
     return {
         "total_value": summary.total_value,
@@ -129,15 +150,24 @@ async def get_allocation(db: aiosqlite.Connection = Depends(get_db)):
 @router.post("/rebalance/preview")
 async def preview_rebalance(
     request: RebalancePreview = None,
-    db: aiosqlite.Connection = Depends(get_db)
+    stock_repo: StockRepository = Depends(get_stock_repository),
+    position_repo: PositionRepository = Depends(get_position_repository),
+    allocation_repo: AllocationRepository = Depends(get_allocation_repository),
+    portfolio_repo: PortfolioRepository = Depends(get_portfolio_repository),
 ):
     """Preview rebalance trades for deposit."""
-    from app.services.allocator import calculate_rebalance_trades
+    from app.application.services.rebalancing_service import RebalancingService
 
     deposit = request.deposit_amount if request and request.deposit_amount else settings.monthly_deposit
 
     try:
-        trades = await calculate_rebalance_trades(db, deposit)
+        rebalancing_service = RebalancingService(
+            stock_repo,
+            position_repo,
+            allocation_repo,
+            portfolio_repo,
+        )
+        trades = await rebalancing_service.calculate_rebalance_trades(deposit)
 
         return {
             "deposit_amount": deposit,
@@ -163,16 +193,27 @@ async def preview_rebalance(
 @router.post("/rebalance/execute")
 async def execute_rebalance(
     request: RebalancePreview = None,
-    db: aiosqlite.Connection = Depends(get_db)
+    stock_repo: StockRepository = Depends(get_stock_repository),
+    position_repo: PositionRepository = Depends(get_position_repository),
+    allocation_repo: AllocationRepository = Depends(get_allocation_repository),
+    portfolio_repo: PortfolioRepository = Depends(get_portfolio_repository),
+    trade_repo: TradeRepository = Depends(get_trade_repository),
 ):
     """Execute monthly rebalance."""
-    from app.services.allocator import calculate_rebalance_trades, execute_trades
+    from app.application.services.rebalancing_service import RebalancingService
+    from app.application.services.trade_execution_service import TradeExecutionService
 
     deposit = request.deposit_amount if request and request.deposit_amount else settings.monthly_deposit
 
     try:
-        # Calculate trades
-        trades = await calculate_rebalance_trades(db, deposit)
+        # Calculate trades using application service
+        rebalancing_service = RebalancingService(
+            stock_repo,
+            position_repo,
+            allocation_repo,
+            portfolio_repo,
+        )
+        trades = await rebalancing_service.calculate_rebalance_trades(deposit)
 
         if not trades:
             return {
@@ -180,8 +221,9 @@ async def execute_rebalance(
                 "message": "No rebalance trades needed",
             }
 
-        # Execute trades
-        results = await execute_trades(db, trades)
+        # Execute trades using application service
+        trade_execution_service = TradeExecutionService(trade_repo)
+        results = await trade_execution_service.execute_trades(trades)
 
         successful = sum(1 for r in results if r["status"] == "success")
         failed = sum(1 for r in results if r["status"] != "success")

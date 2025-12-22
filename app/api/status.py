@@ -2,37 +2,40 @@
 
 from datetime import datetime
 from fastapi import APIRouter, Depends
-import aiosqlite
-from app.database import get_db
 from app.config import settings
+from app.infrastructure.dependencies import (
+    get_portfolio_repository,
+    get_stock_repository,
+    get_position_repository,
+)
+from app.domain.repositories import (
+    PortfolioRepository,
+    StockRepository,
+    PositionRepository,
+)
 
 router = APIRouter()
 
 
 @router.get("")
-async def get_status(db: aiosqlite.Connection = Depends(get_db)):
+async def get_status(
+    portfolio_repo: PortfolioRepository = Depends(get_portfolio_repository),
+    stock_repo: StockRepository = Depends(get_stock_repository),
+    position_repo: PositionRepository = Depends(get_position_repository),
+):
     """Get system health and status."""
-    # Get last sync time
-    cursor = await db.execute("""
-        SELECT date FROM portfolio_snapshots ORDER BY date DESC LIMIT 1
-    """)
-    row = await cursor.fetchone()
-    last_sync = row["date"] if row else None
+    # Get last sync time and cash balance from latest portfolio snapshot
+    latest_snapshot = await portfolio_repo.get_latest()
+    last_sync = latest_snapshot.date if latest_snapshot else None
+    cash_balance = latest_snapshot.cash_balance if latest_snapshot else 0
 
     # Get stock count
-    cursor = await db.execute("SELECT COUNT(*) as count FROM stocks WHERE active = 1")
-    stock_count = (await cursor.fetchone())["count"]
+    active_stocks = await stock_repo.get_all_active()
+    stock_count = len(active_stocks)
 
     # Get position count
-    cursor = await db.execute("SELECT COUNT(*) as count FROM positions")
-    position_count = (await cursor.fetchone())["count"]
-
-    # Get cash balance to determine if rebalance will trigger
-    cursor = await db.execute("""
-        SELECT cash_balance FROM portfolio_snapshots ORDER BY date DESC LIMIT 1
-    """)
-    cash_row = await cursor.fetchone()
-    cash_balance = cash_row["cash_balance"] if cash_row else 0
+    positions = await position_repo.get_all()
+    position_count = len(positions)
 
     return {
         "status": "healthy",
@@ -49,7 +52,7 @@ async def get_status(db: aiosqlite.Connection = Depends(get_db)):
 @router.get("/led")
 async def get_led_status():
     """Get current LED matrix state."""
-    from app.led.display import get_led_display
+    from app.infrastructure.hardware.led_display import get_led_display
 
     display = get_led_display()
     state = display.get_state()
@@ -67,7 +70,9 @@ async def get_led_status():
 
 
 @router.get("/led/display")
-async def get_led_display_state(db: aiosqlite.Connection = Depends(get_db)):
+async def get_led_display_state(
+    position_repo: PositionRepository = Depends(get_position_repository),
+):
     """
     Get display state for Arduino Bridge apps.
 
@@ -77,16 +82,13 @@ async def get_led_display_state(db: aiosqlite.Connection = Depends(get_db)):
     - heartbeat: true if a heartbeat pulse should be shown
     - rgb_flash: RGB color array if RGB should flash
     """
-    from app.led.display import get_led_display
+    from app.infrastructure.hardware.led_display import get_led_display
 
     display = get_led_display()
 
-    # Get current portfolio value if not set
-    cursor = await db.execute("""
-        SELECT SUM(market_value_eur) as total FROM positions
-    """)
-    row = await cursor.fetchone()
-    portfolio_value = row["total"] if row and row["total"] else 0
+    # Get current portfolio value from positions
+    positions = await position_repo.get_all()
+    portfolio_value = sum(pos.market_value_eur for pos in positions if pos.market_value_eur)
 
     # Update display value
     display.set_display_value(portfolio_value)
@@ -97,7 +99,7 @@ async def get_led_display_state(db: aiosqlite.Connection = Depends(get_db)):
 @router.post("/led/connect")
 async def connect_led():
     """Attempt to connect to LED display."""
-    from app.led.display import get_led_display
+    from app.infrastructure.hardware.led_display import get_led_display
 
     display = get_led_display()
     success = display.connect()
@@ -111,7 +113,7 @@ async def connect_led():
 @router.post("/led/test")
 async def test_led():
     """Test LED display with success animation."""
-    from app.led.display import get_led_display
+    from app.infrastructure.hardware.led_display import get_led_display
 
     display = get_led_display()
     if not display.is_connected:

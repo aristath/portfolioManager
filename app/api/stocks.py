@@ -3,9 +3,26 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
-import aiosqlite
-from app.database import get_db
-from app.services.allocator import get_portfolio_summary, parse_industries
+from app.infrastructure.dependencies import (
+    get_stock_repository,
+    get_score_repository,
+    get_allocation_repository,
+    get_position_repository,
+    get_portfolio_repository,
+)
+from app.domain.repositories import (
+    StockRepository,
+    ScoreRepository,
+    AllocationRepository,
+    PositionRepository,
+    PortfolioRepository,
+)
+from app.application.services.portfolio_service import PortfolioService
+from app.domain.services.priority_calculator import (
+    PriorityCalculator,
+    PriorityInput,
+)
+from app.services.allocator import parse_industries
 
 router = APIRouter()
 
@@ -32,170 +49,141 @@ class StockUpdate(BaseModel):
 
 
 @router.get("")
-async def get_stocks(db: aiosqlite.Connection = Depends(get_db)):
+async def get_stocks(
+    stock_repo: StockRepository = Depends(get_stock_repository),
+    portfolio_repo: PortfolioRepository = Depends(get_portfolio_repository),
+    position_repo: PositionRepository = Depends(get_position_repository),
+    allocation_repo: AllocationRepository = Depends(get_allocation_repository),
+):
     """Get all stocks in universe with current scores, position data, and priority."""
-    # Get allocation weights for priority calculation
-    summary = await get_portfolio_summary(db)
+    # Get portfolio summary for allocation weights
+    portfolio_service = PortfolioService(
+        portfolio_repo,
+        position_repo,
+        allocation_repo,
+    )
+    summary = await portfolio_service.get_portfolio_summary()
+    
     # target_pct now stores weights (-1 to +1) instead of percentages
     geo_weights = {g.name: g.target_pct for g in summary.geographic_allocations}
     ind_weights = {i.name: i.target_pct for i in summary.industry_allocations}
-
     total_value = summary.total_value or 1  # Avoid division by zero
 
-    cursor = await db.execute("""
-        SELECT s.*, sc.technical_score, sc.analyst_score,
-               sc.fundamental_score, sc.total_score, sc.volatility,
-               sc.calculated_at,
-               p.quantity as shares, p.current_price, p.avg_price,
-               p.market_value_eur as position_value
-        FROM stocks s
-        LEFT JOIN scores sc ON s.symbol = sc.symbol
-        LEFT JOIN positions p ON s.symbol = p.symbol
-        WHERE s.active = 1
-    """)
-    rows = await cursor.fetchall()
+    # Get stocks with scores and positions
+    stocks_data = await stock_repo.get_with_scores()
 
-    stocks = []
-    for row in rows:
-        stock = dict(row)
-        stock_score = stock.get("total_score") or 0
-        volatility = stock.get("volatility")
-        multiplier = stock.get("priority_multiplier") or 1.0
-        geo = stock.get("geography")
-        industries = parse_industries(stock.get("industry"))
-        position_value = stock.get("position_value") or 0
+    # Calculate priorities using domain service
+    priority_inputs = []
+    stock_dicts = []
 
-        # 1. Stock quality with conviction boost (high scorers get extra)
-        conviction_boost = max(0, (stock_score - 0.5) * 0.4) if stock_score > 0.5 else 0
-        quality = stock_score + conviction_boost
+    for stock in stocks_data:
+        stock_dict = dict(stock)
+        stock_score = stock_dict.get("total_score") or 0
+        volatility = stock_dict.get("volatility")
+        multiplier = stock_dict.get("priority_multiplier") or 1.0
+        geo = stock_dict.get("geography")
+        industry = stock_dict.get("industry")
+        position_value = stock_dict.get("position_value") or 0
 
-        # 2. Allocation weight boost
-        # Get weight for this stock's geography and industries
-        # Weight ranges from -1 (avoid) to +1 (prioritize), 0 = neutral
-        geo_weight = geo_weights.get(geo, 0)  # Default 0 = neutral
-        geo_boost = calculate_weight_boost(geo_weight)
+        priority_inputs.append(PriorityInput(
+            symbol=stock_dict["symbol"],
+            name=stock_dict["name"],
+            geography=geo,
+            industry=industry,
+            stock_score=stock_score,
+            volatility=volatility,
+            multiplier=multiplier,
+            position_value=position_value,
+            total_portfolio_value=total_value,
+        ))
+        stock_dicts.append(stock_dict)
 
-        ind_boost = 0.5  # Default neutral
-        if industries:
-            ind_boosts = [calculate_weight_boost(ind_weights.get(ind, 0)) for ind in industries]
-            ind_boost = sum(ind_boosts) / len(ind_boosts)
+    # Calculate priorities
+    priority_results = PriorityCalculator.calculate_priorities(
+        priority_inputs,
+        geo_weights,
+        ind_weights,
+    )
 
-        # Combined allocation boost (weighted average of geo and industry)
-        allocation_boost = geo_boost * 0.6 + ind_boost * 0.4
+    # Map priorities back to stocks
+    priority_map = {r.symbol: r.combined_priority for r in priority_results}
+    for stock_dict in stock_dicts:
+        stock_dict["priority_score"] = round(priority_map.get(stock_dict["symbol"], 0), 3)
 
-        # 3. Diversification penalty (reduce priority for concentrated positions)
-        position_pct = position_value / total_value if total_value > 0 else 0
-        # Higher weight = ok to have more, lower weight = penalize concentration more
-        geo_concentration_penalty = position_pct * (1 - geo_boost)
-        diversification = 1.0 - min(0.5, geo_concentration_penalty * 3)
-
-        # 4. Risk adjustment based on volatility (lower vol = higher score)
-        risk_adj = calculate_risk_adjustment(volatility)
-
-        # Weighted combination (quality 40%, allocation 30%, diversification 15%, risk 15%)
-        raw_priority = (
-            quality * 0.40 +
-            allocation_boost * 0.30 +
-            diversification * 0.15 +
-            risk_adj * 0.15
-        )
-
-        # Apply manual multiplier
-        priority_score = raw_priority * multiplier
-        stock["priority_score"] = round(priority_score, 3)
-
-        stocks.append(stock)
-
-    return stocks
-
-
-def calculate_weight_boost(weight: float) -> float:
-    """
-    Convert allocation weight (-1 to +1) to priority boost (0 to 1).
-
-    Weight scale:
-    - weight = +1 → boost = 1.0 (strong buy signal)
-    - weight = 0 → boost = 0.5 (neutral)
-    - weight = -1 → boost = 0.0 (avoid)
-    """
-    # Clamp weight to valid range
-    weight = max(-1, min(1, weight))
-    # Linear mapping: -1 → 0, 0 → 0.5, +1 → 1.0
-    return (weight + 1) / 2
-
-
-def calculate_risk_adjustment(volatility: float) -> float:
-    """Lower score for higher volatility."""
-    if volatility is None:
-        return 0.5  # Neutral if unknown
-    # 15% vol = 1.0, 50% vol = 0.0
-    return max(0, min(1, 1 - (volatility - 0.15) / 0.35))
+    return stock_dicts
 
 
 @router.get("/{symbol}")
-async def get_stock(symbol: str, db: aiosqlite.Connection = Depends(get_db)):
+async def get_stock(
+    symbol: str,
+    stock_repo: StockRepository = Depends(get_stock_repository),
+    position_repo: PositionRepository = Depends(get_position_repository),
+    score_repo: ScoreRepository = Depends(get_score_repository),
+):
     """Get detailed stock info with score breakdown."""
-    cursor = await db.execute("""
-        SELECT s.*, sc.technical_score, sc.analyst_score,
-               sc.fundamental_score, sc.total_score, sc.calculated_at
-        FROM stocks s
-        LEFT JOIN scores sc ON s.symbol = sc.symbol
-        WHERE s.symbol = ?
-    """, (symbol,))
-    row = await cursor.fetchone()
-
-    if not row:
+    stock = await stock_repo.get_by_symbol(symbol)
+    if not stock:
         raise HTTPException(status_code=404, detail="Stock not found")
 
+    # Get score
+    score = await score_repo.get_by_symbol(symbol)
+    
     # Get position if any
-    cursor = await db.execute("""
-        SELECT * FROM positions WHERE symbol = ?
-    """, (symbol,))
-    position = await cursor.fetchone()
+    position = await position_repo.get_by_symbol(symbol)
 
-    return {
-        **dict(row),
-        "position": dict(position) if position else None,
+    result = {
+        "symbol": stock.symbol,
+        "yahoo_symbol": stock.yahoo_symbol,
+        "name": stock.name,
+        "industry": stock.industry,
+        "geography": stock.geography,
+        "priority_multiplier": stock.priority_multiplier,
+        "min_lot": stock.min_lot,
+        "active": stock.active,
     }
+
+    if score:
+        result.update({
+            "technical_score": score.technical_score,
+            "analyst_score": score.analyst_score,
+            "fundamental_score": score.fundamental_score,
+            "total_score": score.total_score,
+            "calculated_at": score.calculated_at.isoformat() if score.calculated_at else None,
+        })
+
+    if position:
+        result["position"] = {
+            "symbol": position.symbol,
+            "quantity": position.quantity,
+            "avg_price": position.avg_price,
+            "current_price": position.current_price,
+            "currency": position.currency,
+            "market_value_eur": position.market_value_eur,
+        }
+    else:
+        result["position"] = None
+
+    return result
 
 
 @router.post("/{symbol}/refresh")
-async def refresh_stock_score(symbol: str, db: aiosqlite.Connection = Depends(get_db)):
+async def refresh_stock_score(
+    symbol: str,
+    stock_repo: StockRepository = Depends(get_stock_repository),
+    score_repo: ScoreRepository = Depends(get_score_repository),
+):
     """Trigger score recalculation for a stock."""
-    # Check stock exists and get yahoo_symbol
-    cursor = await db.execute(
-        "SELECT yahoo_symbol FROM stocks WHERE symbol = ?",
-        (symbol,)
-    )
-    row = await cursor.fetchone()
-    if not row:
+    # Check stock exists
+    stock = await stock_repo.get_by_symbol(symbol)
+    if not stock:
         raise HTTPException(status_code=404, detail="Stock not found")
 
-    yahoo_symbol = row[0]  # May be None
-
-    from app.services.scorer import calculate_stock_score
-
-    score = calculate_stock_score(symbol, yahoo_symbol)
+    # Calculate and save score using application service
+    from app.application.services.scoring_service import ScoringService
+    scoring_service = ScoringService(stock_repo, score_repo)
+    
+    score = await scoring_service.calculate_and_save_score(symbol, stock.yahoo_symbol)
     if score:
-        await db.execute(
-            """
-            INSERT OR REPLACE INTO scores
-            (symbol, technical_score, analyst_score, fundamental_score,
-             total_score, volatility, calculated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                symbol,
-                score.technical.total,
-                score.analyst.total,
-                score.fundamental.total,
-                score.total_score,
-                score.technical.volatility_raw,
-                score.calculated_at.isoformat(),
-            ),
-        )
-        await db.commit()
-
         return {
             "symbol": symbol,
             "total_score": score.total_score,
@@ -209,36 +197,29 @@ async def refresh_stock_score(symbol: str, db: aiosqlite.Connection = Depends(ge
 
 
 @router.post("/refresh-all")
-async def refresh_all_scores(db: aiosqlite.Connection = Depends(get_db)):
+async def refresh_all_scores(
+    stock_repo: StockRepository = Depends(get_stock_repository),
+    score_repo: ScoreRepository = Depends(get_score_repository),
+):
     """Recalculate scores for all stocks in universe and update industries."""
-    from app.services.scorer import score_all_stocks
     from app.services import yahoo
 
     try:
-        # Get all active stocks with yahoo_symbol overrides
-        cursor = await db.execute(
-            "SELECT symbol, yahoo_symbol, industry FROM stocks WHERE active = 1"
-        )
-        rows = await cursor.fetchall()
+        # Get all active stocks
+        stocks = await stock_repo.get_all_active()
 
         # Update industries from Yahoo Finance for stocks without industry
-        for row in rows:
-            symbol = row[0]
-            yahoo_symbol = row[1]  # May be None
-            industry = row[2]
-
-            if not industry:  # No industry set
-                detected_industry = yahoo.get_stock_industry(symbol, yahoo_symbol)
+        for stock in stocks:
+            if not stock.industry:  # No industry set
+                detected_industry = yahoo.get_stock_industry(stock.symbol, stock.yahoo_symbol)
                 if detected_industry:
-                    await db.execute(
-                        "UPDATE stocks SET industry = ? WHERE symbol = ?",
-                        (detected_industry, symbol)
-                    )
+                    await stock_repo.update(stock.symbol, industry=detected_industry)
 
-        await db.commit()
-
-        # Now calculate scores
-        scores = await score_all_stocks(db)
+        # Calculate scores using application service
+        from app.application.services.scoring_service import ScoringService
+        scoring_service = ScoringService(stock_repo, score_repo)
+        scores = await scoring_service.score_all_stocks()
+        
         return {
             "message": f"Refreshed scores for {len(scores)} stocks",
             "scores": [
@@ -251,14 +232,15 @@ async def refresh_all_scores(db: aiosqlite.Connection = Depends(get_db)):
 
 
 @router.post("")
-async def create_stock(stock: StockCreate, db: aiosqlite.Connection = Depends(get_db)):
+async def create_stock(
+    stock: StockCreate,
+    stock_repo: StockRepository = Depends(get_stock_repository),
+    score_repo: ScoreRepository = Depends(get_score_repository),
+):
     """Add a new stock to the universe."""
     # Check if already exists
-    cursor = await db.execute(
-        "SELECT 1 FROM stocks WHERE symbol = ?",
-        (stock.symbol.upper(),)
-    )
-    if await cursor.fetchone():
+    existing = await stock_repo.get_by_symbol(stock.symbol.upper())
+    if existing:
         raise HTTPException(status_code=400, detail="Stock already exists")
 
     # Auto-detect industry if not provided
@@ -270,45 +252,29 @@ async def create_stock(stock: StockCreate, db: aiosqlite.Connection = Depends(ge
     # Validate min_lot
     min_lot = max(1, stock.min_lot or 1)
 
-    # Insert stock
-    await db.execute(
-        """
-        INSERT INTO stocks (symbol, yahoo_symbol, name, geography, industry, min_lot, active)
-        VALUES (?, ?, ?, ?, ?, ?, 1)
-        """,
-        (
-            stock.symbol.upper(),
-            stock.yahoo_symbol,
-            stock.name,
-            stock.geography.upper(),
-            industry,
-            min_lot,
-        )
+    # Create stock domain model
+    from app.domain.repositories import Stock
+    new_stock = Stock(
+        symbol=stock.symbol.upper(),
+        yahoo_symbol=stock.yahoo_symbol,
+        name=stock.name,
+        geography=stock.geography.upper(),
+        industry=industry,
+        priority_multiplier=1.0,
+        min_lot=min_lot,
+        active=True,
     )
-    await db.commit()
+
+    # Insert stock
+    await stock_repo.create(new_stock)
 
     # Auto-calculate score for new stock
-    from app.services.scorer import calculate_stock_score
-    score = calculate_stock_score(stock.symbol.upper(), stock.yahoo_symbol)
-    if score:
-        await db.execute(
-            """
-            INSERT OR REPLACE INTO scores
-            (symbol, technical_score, analyst_score, fundamental_score,
-             total_score, volatility, calculated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                stock.symbol.upper(),
-                score.technical.total,
-                score.analyst.total,
-                score.fundamental.total,
-                score.total_score,
-                score.technical.volatility_raw,
-                score.calculated_at.isoformat(),
-            ),
-        )
-        await db.commit()
+    from app.application.services.scoring_service import ScoringService
+    scoring_service = ScoringService(stock_repo, score_repo)
+    score = await scoring_service.calculate_and_save_score(
+        stock.symbol.upper(),
+        stock.yahoo_symbol
+    )
 
     return {
         "message": f"Stock {stock.symbol.upper()} added to universe",
@@ -326,117 +292,80 @@ async def create_stock(stock: StockCreate, db: aiosqlite.Connection = Depends(ge
 async def update_stock(
     symbol: str,
     update: StockUpdate,
-    db: aiosqlite.Connection = Depends(get_db)
+    stock_repo: StockRepository = Depends(get_stock_repository),
+    score_repo: ScoreRepository = Depends(get_score_repository),
 ):
     """Update stock details."""
     # Check stock exists
-    cursor = await db.execute(
-        "SELECT * FROM stocks WHERE symbol = ?",
-        (symbol.upper(),)
-    )
-    row = await cursor.fetchone()
-    if not row:
+    stock = await stock_repo.get_by_symbol(symbol.upper())
+    if not stock:
         raise HTTPException(status_code=404, detail="Stock not found")
 
-    # Build update query
-    updates = []
-    values = []
-
+    # Build update dict
+    updates = {}
     if update.name is not None:
-        updates.append("name = ?")
-        values.append(update.name)
-
+        updates["name"] = update.name
     if update.yahoo_symbol is not None:
-        # Allow setting to empty string to clear the override
-        updates.append("yahoo_symbol = ?")
-        values.append(update.yahoo_symbol if update.yahoo_symbol else None)
-
+        updates["yahoo_symbol"] = update.yahoo_symbol if update.yahoo_symbol else None
     if update.geography is not None:
-        updates.append("geography = ?")
-        values.append(update.geography.upper())
-
+        updates["geography"] = update.geography.upper()
     if update.industry is not None:
-        updates.append("industry = ?")
-        values.append(update.industry)
-
+        updates["industry"] = update.industry
     if update.priority_multiplier is not None:
         # Clamp multiplier between 0.1 and 3.0
-        multiplier = max(0.1, min(3.0, update.priority_multiplier))
-        updates.append("priority_multiplier = ?")
-        values.append(multiplier)
-
+        updates["priority_multiplier"] = max(0.1, min(3.0, update.priority_multiplier))
     if update.min_lot is not None:
         # Ensure min_lot is at least 1
-        min_lot = max(1, update.min_lot)
-        updates.append("min_lot = ?")
-        values.append(min_lot)
-
+        updates["min_lot"] = max(1, update.min_lot)
     if update.active is not None:
-        updates.append("active = ?")
-        values.append(1 if update.active else 0)
+        updates["active"] = update.active
 
     if not updates:
         raise HTTPException(status_code=400, detail="No updates provided")
 
-    values.append(symbol.upper())
+    # Update stock
+    await stock_repo.update(symbol.upper(), **updates)
 
-    await db.execute(
-        f"UPDATE stocks SET {', '.join(updates)} WHERE symbol = ?",
-        values
-    )
-    await db.commit()
-
-    # Get updated stock data
-    cursor = await db.execute(
-        "SELECT * FROM stocks WHERE symbol = ?",
-        (symbol.upper(),)
-    )
-    row = await cursor.fetchone()
-    stock_data = dict(row)
+    # Get updated stock
+    updated_stock = await stock_repo.get_by_symbol(symbol.upper())
 
     # Auto-refresh score after update
-    from app.services.scorer import calculate_stock_score
-    score = calculate_stock_score(symbol.upper(), stock_data.get('yahoo_symbol'))
+    from app.application.services.scoring_service import ScoringService
+    scoring_service = ScoringService(stock_repo, score_repo)
+    score = await scoring_service.calculate_and_save_score(
+        symbol.upper(),
+        updated_stock.yahoo_symbol
+    )
+
+    stock_data = {
+        "symbol": updated_stock.symbol,
+        "yahoo_symbol": updated_stock.yahoo_symbol,
+        "name": updated_stock.name,
+        "industry": updated_stock.industry,
+        "geography": updated_stock.geography,
+        "priority_multiplier": updated_stock.priority_multiplier,
+        "min_lot": updated_stock.min_lot,
+        "active": updated_stock.active,
+    }
+
     if score:
-        await db.execute(
-            """
-            INSERT OR REPLACE INTO scores
-            (symbol, technical_score, analyst_score, fundamental_score,
-             total_score, volatility, calculated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                symbol.upper(),
-                score.technical.total,
-                score.analyst.total,
-                score.fundamental.total,
-                score.total_score,
-                score.technical.volatility_raw,
-                score.calculated_at.isoformat(),
-            ),
-        )
-        await db.commit()
         stock_data['total_score'] = score.total_score
 
     return stock_data
 
 
 @router.delete("/{symbol}")
-async def delete_stock(symbol: str, db: aiosqlite.Connection = Depends(get_db)):
+async def delete_stock(
+    symbol: str,
+    stock_repo: StockRepository = Depends(get_stock_repository),
+):
     """Remove a stock from the universe (soft delete by setting active=0)."""
     # Check stock exists
-    cursor = await db.execute(
-        "SELECT 1 FROM stocks WHERE symbol = ?",
-        (symbol.upper(),)
-    )
-    if not await cursor.fetchone():
+    stock = await stock_repo.get_by_symbol(symbol.upper())
+    if not stock:
         raise HTTPException(status_code=404, detail="Stock not found")
 
     # Soft delete - set active = 0
-    await db.execute(
-        "UPDATE stocks SET active = 0 WHERE symbol = ?",
-        (symbol.upper(),)
-    )
-    await db.commit()
+    await stock_repo.delete(symbol.upper())
 
     return {"message": f"Stock {symbol.upper()} removed from universe"}

@@ -3,8 +3,21 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
-import aiosqlite
-from app.database import get_db
+from app.infrastructure.dependencies import (
+    get_portfolio_repository,
+    get_position_repository,
+    get_allocation_repository,
+    get_stock_repository,
+    get_settings_repository,
+)
+from app.domain.repositories import (
+    PortfolioRepository,
+    PositionRepository,
+    AllocationRepository,
+    StockRepository,
+    SettingsRepository,
+)
+from app.application.services.portfolio_service import PortfolioService
 
 router = APIRouter()
 
@@ -15,16 +28,37 @@ class ManualDeposits(BaseModel):
 
 
 @router.get("")
-async def get_portfolio(db: aiosqlite.Connection = Depends(get_db)):
+async def get_portfolio(
+    position_repo: PositionRepository = Depends(get_position_repository),
+    stock_repo: StockRepository = Depends(get_stock_repository),
+):
     """Get current portfolio positions with values."""
-    cursor = await db.execute("""
-        SELECT p.*, s.name as stock_name, s.industry, s.geography
-        FROM positions p
-        LEFT JOIN stocks s ON p.symbol = s.symbol
-        ORDER BY (p.quantity * p.current_price) DESC
-    """)
-    rows = await cursor.fetchall()
-    return [dict(row) for row in rows]
+    positions = await position_repo.get_all()
+    result = []
+    
+    for position in positions:
+        stock = await stock_repo.get_by_symbol(position.symbol)
+        pos_dict = {
+            "symbol": position.symbol,
+            "quantity": position.quantity,
+            "avg_price": position.avg_price,
+            "current_price": position.current_price,
+            "currency": position.currency,
+            "currency_rate": position.currency_rate,
+            "market_value_eur": position.market_value_eur,
+            "last_updated": position.last_updated,
+        }
+        if stock:
+            pos_dict.update({
+                "stock_name": stock.name,
+                "industry": stock.industry,
+                "geography": stock.geography,
+            })
+        result.append(pos_dict)
+    
+    # Sort by market value
+    result.sort(key=lambda x: (x.get("quantity", 0) or 0) * (x.get("current_price") or x.get("avg_price") or 0), reverse=True)
+    return result
 
 
 def infer_geography(symbol: str) -> str:
@@ -40,82 +74,69 @@ def infer_geography(symbol: str) -> str:
 
 
 @router.get("/summary")
-async def get_portfolio_summary(db: aiosqlite.Connection = Depends(get_db)):
+async def get_portfolio_summary(
+    portfolio_repo: PortfolioRepository = Depends(get_portfolio_repository),
+    position_repo: PositionRepository = Depends(get_position_repository),
+    allocation_repo: AllocationRepository = Depends(get_allocation_repository),
+):
     """Get portfolio summary: total value, cash, allocation percentages."""
-    # Get all positions with optional geography from stocks table
-    cursor = await db.execute("""
-        SELECT p.symbol, p.quantity, p.current_price, p.avg_price, p.market_value_eur, s.geography
-        FROM positions p
-        LEFT JOIN stocks s ON p.symbol = s.symbol
-    """)
-    rows = await cursor.fetchall()
+    portfolio_service = PortfolioService(
+        portfolio_repo,
+        position_repo,
+        allocation_repo,
+    )
+    summary = await portfolio_service.get_portfolio_summary()
 
-    # Calculate values by geography
-    geo_values = {"EU": 0.0, "ASIA": 0.0, "US": 0.0}
-    total_value = 0.0
-
-    for row in rows:
-        # Use stored EUR value if available, otherwise fallback to calculation
-        value = row["market_value_eur"] or (row["quantity"] * (row["current_price"] or row["avg_price"] or 0))
-        total_value += value
-
-        geo = row["geography"] or infer_geography(row["symbol"])
-        if geo in geo_values:
-            geo_values[geo] += value
-
-    # Get latest snapshot for cash balance
-    cursor = await db.execute("""
-        SELECT cash_balance FROM portfolio_snapshots
-        ORDER BY date DESC LIMIT 1
-    """)
-    row = await cursor.fetchone()
-    cash_balance = row["cash_balance"] if row else 0
-
+    # Calculate geographic percentages
+    geo_dict = {g.name: g.current_pct for g in summary.geographic_allocations}
+    
     return {
-        "total_value": total_value,
-        "cash_balance": cash_balance,
+        "total_value": summary.total_value,
+        "cash_balance": summary.cash_balance,
         "allocations": {
-            "EU": geo_values.get("EU", 0) / total_value * 100 if total_value else 0,
-            "ASIA": geo_values.get("ASIA", 0) / total_value * 100 if total_value else 0,
-            "US": geo_values.get("US", 0) / total_value * 100 if total_value else 0,
+            "EU": geo_dict.get("EU", 0) * 100,
+            "ASIA": geo_dict.get("ASIA", 0) * 100,
+            "US": geo_dict.get("US", 0) * 100,
         },
     }
 
 
 @router.get("/history")
-async def get_portfolio_history(db: aiosqlite.Connection = Depends(get_db)):
+async def get_portfolio_history(
+    portfolio_repo: PortfolioRepository = Depends(get_portfolio_repository),
+):
     """Get historical portfolio snapshots."""
-    cursor = await db.execute("""
-        SELECT * FROM portfolio_snapshots
-        ORDER BY date DESC
-        LIMIT 90
-    """)
-    rows = await cursor.fetchall()
-    return [dict(row) for row in rows]
+    snapshots = await portfolio_repo.get_history(limit=90)
+    return [
+        {
+            "id": None,  # Not in domain model
+            "date": s.date,
+            "total_value": s.total_value,
+            "cash_balance": s.cash_balance,
+            "geo_eu_pct": s.geo_eu_pct,
+            "geo_asia_pct": s.geo_asia_pct,
+            "geo_us_pct": s.geo_us_pct,
+        }
+        for s in snapshots
+    ]
 
 
 @router.get("/deposits")
-async def get_manual_deposits(db: aiosqlite.Connection = Depends(get_db)):
+async def get_manual_deposits(
+    settings_repo: SettingsRepository = Depends(get_settings_repository),
+):
     """Get manual deposits setting."""
-    cursor = await db.execute(
-        "SELECT value FROM settings WHERE key = 'manual_deposits'"
-    )
-    row = await cursor.fetchone()
-    amount = float(row["value"]) if row else 0.0
+    amount = await settings_repo.get_float("manual_deposits", 0.0)
     return {"amount": amount}
 
 
 @router.put("/deposits")
 async def set_manual_deposits(
     deposits: ManualDeposits,
-    db: aiosqlite.Connection = Depends(get_db)
+    settings_repo: SettingsRepository = Depends(get_settings_repository),
 ):
     """Set manual deposits amount (EUR)."""
-    await db.execute(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES ('manual_deposits', ?)",
-        (str(deposits.amount),)
-    )
-    await db.commit()
+    await settings_repo.set_float("manual_deposits", deposits.amount)
     return {"message": "Manual deposits updated", "amount": deposits.amount}
 
 
@@ -145,7 +166,9 @@ async def get_transaction_history():
 
 
 @router.get("/pnl")
-async def get_portfolio_pnl(db: aiosqlite.Connection = Depends(get_db)):
+async def get_portfolio_pnl(
+    settings_repo: SettingsRepository = Depends(get_settings_repository),
+):
     """
     Get portfolio profit/loss.
 
@@ -174,12 +197,8 @@ async def get_portfolio_pnl(db: aiosqlite.Connection = Depends(get_db)):
         cash_movements = client.get_cash_movements()
         total_withdrawals = cash_movements.get("total_withdrawals", 0)
 
-        # Get manual deposits from database
-        cursor = await db.execute(
-            "SELECT value FROM settings WHERE key = 'manual_deposits'"
-        )
-        row = await cursor.fetchone()
-        manual_deposits = float(row["value"]) if row else 0.0
+        # Get manual deposits from settings repository
+        manual_deposits = await settings_repo.get_float("manual_deposits", 0.0)
 
         # Calculate net investment (what's still invested after withdrawals)
         net_investment = manual_deposits - total_withdrawals

@@ -347,52 +347,17 @@ def get_led_display() -> LEDDisplay:
     return _display
 
 
-async def update_display_from_portfolio(db) -> bool:
-    """
-    Update LED display with current portfolio allocation.
-
-    Called after portfolio sync to reflect current state.
-    """
-    display = get_led_display()
-
-    if not display.is_connected:
-        return False
-
-    try:
-        # Get current allocation
-        cursor = await db.execute("""
-            SELECT
-                SUM(CASE WHEN s.geography = 'EU' THEN p.quantity * p.current_price ELSE 0 END) as eu,
-                SUM(CASE WHEN s.geography = 'ASIA' THEN p.quantity * p.current_price ELSE 0 END) as asia,
-                SUM(CASE WHEN s.geography = 'US' THEN p.quantity * p.current_price ELSE 0 END) as us,
-                SUM(p.quantity * p.current_price) as total
-            FROM positions p
-            JOIN stocks s ON p.symbol = s.symbol
-        """)
-        row = await cursor.fetchone()
-
-        if row and row[3] > 0:
-            total = row[3]
-            display.update_allocation(
-                eu=row[0] / total,
-                asia=row[1] / total,
-                us=row[2] / total
-            )
-            display.set_system_status("ok")
-            return True
-
-    except Exception as e:
-        logger.error(f"Failed to update LED display: {e}")
-        display.set_system_status("error")
-
-    return False
-
-
-async def update_balance_display(db) -> bool:
+async def update_balance_display(position_repo) -> bool:
     """
     Update LED display with current portfolio balance in abacus style.
 
     Called after sync operations to show total portfolio value.
+
+    Args:
+        position_repo: PositionRepository instance
+
+    Returns:
+        True if update was successful
     """
     display = get_led_display()
 
@@ -400,73 +365,15 @@ async def update_balance_display(db) -> bool:
         return False
 
     try:
-        # Get total portfolio value in EUR
-        cursor = await db.execute("""
-            SELECT SUM(market_value_eur) as total
-            FROM positions
-        """)
-        row = await cursor.fetchone()
+        # Get total portfolio value from positions
+        positions = await position_repo.get_all()
+        total_value = sum(pos.market_value_eur for pos in positions if pos.market_value_eur)
 
-        if row and row[0]:
-            display.show_balance(row[0])
+        if total_value:
+            display.show_balance(total_value)
             return True
 
     except Exception as e:
         logger.error(f"Failed to update balance display: {e}")
 
     return False
-
-
-@contextmanager
-def led_api_call():
-    """
-    Context manager to show API call animation during external API requests.
-
-    Usage:
-        with led_api_call():
-            response = requests.get(url)
-    """
-    display = get_led_display()
-    previous_state = display.get_state()
-
-    if display.is_connected:
-        display.show_api_call()
-
-    try:
-        yield
-    finally:
-        if display.is_connected and previous_state:
-            # Restore previous state
-            if previous_state.mode == DisplayMode.HEALTH:
-                display.update_allocation(
-                    previous_state.geo_eu,
-                    previous_state.geo_asia,
-                    previous_state.geo_us
-                )
-            elif previous_state.mode == DisplayMode.BALANCE:
-                # Re-show balance (value not stored in state, will need to refresh)
-                display.set_mode(DisplayMode.IDLE)
-            else:
-                display.set_mode(DisplayMode.IDLE)
-
-
-@contextmanager
-def led_syncing():
-    """
-    Context manager to show syncing animation during sync operations.
-
-    Usage:
-        with led_syncing():
-            await sync_portfolio()
-    """
-    display = get_led_display()
-
-    if display.is_connected:
-        display.show_syncing()
-        display.set_system_status("syncing")
-
-    try:
-        yield
-    finally:
-        if display.is_connected:
-            display.set_system_status("ok")
