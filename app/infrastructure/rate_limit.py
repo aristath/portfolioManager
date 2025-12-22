@@ -4,8 +4,9 @@ import logging
 import time
 from collections import defaultdict
 from typing import Callable
-from fastapi import Request, HTTPException, status
+from fastapi import Request, status
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
 
@@ -54,9 +55,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             
             # Check if limit exceeded
             if len(self._request_history[key]) >= self.trade_max:
-                raise HTTPException(
+                return JSONResponse(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail=f"Rate limit exceeded: Maximum {self.trade_max} trade executions per {self.trade_window} seconds"
+                    content={"detail": f"Rate limit exceeded: Maximum {self.trade_max} trade executions per {self.trade_window} seconds"}
                 )
             
             # Record this request
@@ -75,9 +76,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             
             # Check if limit exceeded
             if len(self._request_history[key]) >= self.max_requests:
-                raise HTTPException(
+                return JSONResponse(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail=f"Rate limit exceeded: Maximum {self.max_requests} requests per {self.window_seconds} seconds"
+                    content={"detail": f"Rate limit exceeded: Maximum {self.max_requests} requests per {self.window_seconds} seconds"}
                 )
             
             # Record this request
