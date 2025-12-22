@@ -150,6 +150,18 @@ async def trigger_price_sync():
         return {"status": "error", "message": str(e)}
 
 
+@router.post("/sync/historical")
+async def trigger_historical_sync():
+    """Manually trigger historical data sync (stock prices + portfolio reconstruction)."""
+    from app.jobs.historical_data_sync import sync_historical_data
+
+    try:
+        await sync_historical_data()
+        return {"status": "success", "message": "Historical data sync completed"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
 @router.get("/tradernet")
 async def get_tradernet_status():
     """Get Tradernet connection status."""
