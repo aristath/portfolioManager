@@ -62,8 +62,18 @@ async def _sync_portfolio_internal():
             # Clear old positions and insert new ones atomically
             await db.execute("BEGIN TRANSACTION")
             try:
-                # Clear old positions (no commit - part of transaction)
                 position_repo = get_position_repository(db)
+
+                # Save tracking dates before clearing
+                cursor = await db.execute(
+                    "SELECT symbol, first_bought_at, last_sold_at FROM positions"
+                )
+                tracking_dates = {
+                    row[0]: (row[1], row[2])
+                    for row in await cursor.fetchall()
+                }
+
+                # Clear old positions (no commit - part of transaction)
                 await position_repo.delete_all(auto_commit=False)
 
                 # Insert current positions
@@ -71,6 +81,9 @@ async def _sync_portfolio_internal():
                 geo_values = {"EU": 0.0, "ASIA": 0.0, "US": 0.0}
                 
                 for pos in positions:
+                    # Get saved tracking dates for this symbol
+                    saved_dates = tracking_dates.get(pos.symbol, (None, None))
+
                     position = Position(
                         symbol=pos.symbol,
                         quantity=pos.quantity,
@@ -80,6 +93,8 @@ async def _sync_portfolio_internal():
                         currency_rate=pos.currency_rate,
                         market_value_eur=pos.market_value_eur,
                         last_updated=datetime.now().isoformat(),
+                        first_bought_at=saved_dates[0],  # Preserve existing
+                        last_sold_at=saved_dates[1],      # Preserve existing
                     )
                     await position_repo.upsert(position, auto_commit=False)
 
