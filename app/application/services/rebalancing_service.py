@@ -33,9 +33,48 @@ from app.services.scorer import (
     PortfolioScore,
 )
 from app.services import yahoo
+from app.services.tradernet import get_exchange_rate
 from app.domain.constants import TRADE_SIDE_BUY
 
 logger = logging.getLogger(__name__)
+
+
+def _determine_stock_currency(stock: dict) -> str:
+    """
+    Determine the currency for a stock.
+    
+    First checks if stock has a position with currency, otherwise infers from geography/symbol.
+    
+    Args:
+        stock: Stock dict from get_with_scores()
+        
+    Returns:
+        Currency code (EUR, USD, HKD, CNY, etc.)
+    """
+    # First, check if stock has a position with currency
+    currency = stock.get("currency")
+    if currency:
+        return currency
+    
+    # Infer from geography and yahoo_symbol
+    geography = stock.get("geography", "").upper()
+    yahoo_symbol = stock.get("yahoo_symbol", "")
+    
+    if geography == "EU":
+        return "EUR"
+    elif geography == "US":
+        return "USD"
+    elif geography == "ASIA":
+        # Check yahoo_symbol for exchange indicators
+        if yahoo_symbol and ".HK" in yahoo_symbol:
+            return "HKD"
+        elif yahoo_symbol and ".SZ" in yahoo_symbol:
+            return "CNY"
+        # Default for ASIA if no specific indicator
+        return "HKD"
+    
+    # Default fallback
+    return "EUR"
 
 
 @dataclass
@@ -43,7 +82,7 @@ class Recommendation:
     """A single trade recommendation."""
     symbol: str
     name: str
-    amount: float  # Trade amount in EUR (min_lot * price)
+    amount: float  # Trade amount in EUR (converted from native currency)
     priority: float  # Combined priority score
     reason: str
     geography: str
@@ -152,25 +191,44 @@ class RebalancingService:
             if not price or price <= 0:
                 continue
 
+            # Determine stock currency
+            currency = _determine_stock_currency(stock)
+
+            # Get exchange rate for currency conversion
+            exchange_rate = 1.0
+            if currency != "EUR":
+                exchange_rate = get_exchange_rate(currency, "EUR")
+                if exchange_rate <= 0:
+                    logger.warning(f"Invalid exchange rate for {currency} to EUR, assuming 1.0")
+                    exchange_rate = 1.0
+
             # Calculate actual transaction value (respecting min_lot)
-            lot_cost = min_lot * price
+            # lot_cost is in native currency, convert to EUR for comparison with base_trade_amount
+            lot_cost_native = min_lot * price
+            lot_cost_eur = lot_cost_native / exchange_rate
 
             # If min_lot cost exceeds base trade amount, use 1 lot
             # Otherwise, use as many lots as fit in base_trade_amount
-            if lot_cost > base_trade_amount:
+            if lot_cost_eur > base_trade_amount:
                 quantity = min_lot
-                trade_value = lot_cost
+                trade_value_native = lot_cost_native
             else:
-                num_lots = int(base_trade_amount / lot_cost)
+                # Convert base_trade_amount to native currency for lot calculation
+                base_trade_amount_native = base_trade_amount * exchange_rate
+                num_lots = int(base_trade_amount_native / lot_cost_native)
                 quantity = num_lots * min_lot
-                trade_value = quantity * price
+                trade_value_native = quantity * price
+
+            # Convert trade_value to EUR for display
+            trade_value_eur = trade_value_native / exchange_rate
 
             # Calculate POST-TRANSACTION portfolio score
+            # Use EUR value since portfolio is tracked in EUR
             new_score, score_change = calculate_post_transaction_score(
                 symbol=symbol,
                 geography=geography,
                 industry=industry,
-                proposed_value=trade_value,
+                proposed_value=trade_value_eur,
                 stock_quality=quality_score,
                 stock_dividend=dividend_yield,
                 portfolio_context=portfolio_context,
@@ -216,7 +274,7 @@ class RebalancingService:
                 "industry": industry,
                 "price": price,
                 "quantity": quantity,
-                "trade_value": trade_value,
+                "trade_value": trade_value_eur,  # Already converted to EUR
                 "final_score": final_score * multiplier,
                 "reason": reason,
                 "current_portfolio_score": current_portfolio_score.total,

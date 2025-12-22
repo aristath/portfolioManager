@@ -130,7 +130,7 @@ class SQLiteStockRepository(StockRepository):
                    sc.fundamental_score, sc.total_score, sc.volatility,
                    sc.calculated_at,
                    p.quantity as shares, p.current_price, p.avg_price,
-                   p.market_value_eur as position_value
+                   p.market_value_eur as position_value, p.currency
             FROM stocks s
             LEFT JOIN scores sc ON s.symbol = sc.symbol
             LEFT JOIN positions p ON s.symbol = p.symbol
