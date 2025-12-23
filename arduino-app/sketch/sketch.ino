@@ -7,15 +7,9 @@
 
 Arduino_LED_Matrix matrix;
 
-// RGB LED 3 & 4 pins (active-low, driven by STM32U585)
-// LED 3: D27401
-#define LED3_R PH_10
-#define LED3_G PH_11
-#define LED3_B PH_12
-// LED 4: D27402
-#define LED4_R PH_13
-#define LED4_G PH_14
-#define LED4_B PH_15
+// RGB LED 3 & 4 pins are defined in variant.h as:
+// LED3_R, LED3_G, LED3_B (active-low)
+// LED4_R, LED4_G, LED4_B (active-low)
 
 // Draw frame to LED matrix
 void draw(std::vector<uint8_t> frame) {
