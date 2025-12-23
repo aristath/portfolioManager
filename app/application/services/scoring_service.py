@@ -14,7 +14,7 @@ from app.domain.repositories import (
 from app.domain.repositories import StockScore
 from app.services.scorer import (
     calculate_stock_score,
-    StockScore as ScorerStockScore,
+    CalculatedStockScore,
 )
 
 
@@ -35,7 +35,7 @@ class ScoringService:
         yahoo_symbol: Optional[str] = None,
         geography: Optional[str] = None,
         industry: Optional[str] = None,
-    ) -> Optional[ScorerStockScore]:
+    ) -> Optional[CalculatedStockScore]:
         """
         Calculate stock score and save to database.
 
@@ -80,7 +80,7 @@ class ScoringService:
 
         return score
 
-    async def score_all_stocks(self) -> List[ScorerStockScore]:
+    async def score_all_stocks(self) -> List[CalculatedStockScore]:
         """
         Score all active stocks in the universe and update database.
 

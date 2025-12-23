@@ -103,8 +103,12 @@ class PortfolioScore:
 
 
 @dataclass
-class StockScore:
-    """Complete stock score with all components."""
+class CalculatedStockScore:
+    """Complete stock score with all components.
+
+    Named CalculatedStockScore to distinguish from the domain model StockScore
+    in app.domain.repositories.score_repository which is a flat DB model.
+    """
     symbol: str
     quality: QualityScore
     opportunity: OpportunityScore
@@ -924,7 +928,7 @@ async def calculate_stock_score(
     geography: str = None,
     industry: str = None,
     portfolio_context: PortfolioContext = None,
-) -> Optional[StockScore]:
+) -> Optional[CalculatedStockScore]:
     """
     Calculate complete stock score with all components.
 
@@ -1009,7 +1013,7 @@ async def calculate_stock_score(
     if not analyst:
         analyst = AnalystScore(0.5, 0.5, 0.5)
 
-    return StockScore(
+    return CalculatedStockScore(
         symbol=symbol,
         quality=quality,
         opportunity=opportunity,
@@ -1025,7 +1029,7 @@ async def calculate_stock_score(
 # Batch Scoring
 # =============================================================================
 
-async def score_all_stocks(db, portfolio_context: PortfolioContext = None) -> list[StockScore]:
+async def score_all_stocks(db, portfolio_context: PortfolioContext = None) -> list[CalculatedStockScore]:
     """
     Score all active stocks in the universe and update database.
 
