@@ -133,6 +133,27 @@ async def _check_and_rebalance_internal():
             }
             logger.info(f"Currency balances: {currency_balances}")
 
+            # Deduct pending order amounts from available balances
+            pending_totals = client.get_pending_order_totals()
+            if pending_totals:
+                logger.info(f"Pending order totals by currency: {pending_totals}")
+                for currency, pending_amount in pending_totals.items():
+                    if currency in currency_balances:
+                        currency_balances[currency] = max(0, currency_balances[currency] - pending_amount)
+                        logger.info(
+                            f"Adjusted {currency} balance: {currency_balances[currency]:.2f} "
+                            f"(pending: {pending_amount:.2f})"
+                        )
+
+                # Check if adjusted total is still above threshold
+                adjusted_cash = sum(currency_balances.values())
+                if adjusted_cash < min_trade_size:
+                    logger.info(
+                        f"Adjusted cash €{adjusted_cash:.2f} below threshold "
+                        f"after pending orders, skipping"
+                    )
+                    return
+
             buy_recommendations = await rebalancing_service.calculate_rebalance_trades(cash_balance)
 
             if buy_recommendations:

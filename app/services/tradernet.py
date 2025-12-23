@@ -344,6 +344,59 @@ class TradernetClient:
             logger.error(f"Failed to get raw quotes: {e}")
             return {}
 
+    def get_pending_orders(self) -> list[dict]:
+        """
+        Get all pending/active orders from Tradernet.
+
+        Returns list of order dicts with keys: id, symbol, side, quantity, price, currency
+        """
+        if not self.is_connected:
+            raise ConnectionError("Not connected to Tradernet")
+
+        try:
+            with _led_api_call():
+                response = self._client.get_placed(active=True)
+
+            orders_data = response.get("result", {}).get("orders", {})
+            order_list = orders_data.get("order", [])
+
+            # Handle single order (not in list) vs multiple orders
+            if isinstance(order_list, dict):
+                order_list = [order_list]
+
+            pending = []
+            for order in order_list:
+                pending.append({
+                    "id": order.get("id"),
+                    "symbol": order.get("instr_name"),
+                    "side": order.get("buy_sell"),  # "buy" or "sell"
+                    "quantity": float(order.get("qty", 0)),
+                    "price": float(order.get("price", 0)),
+                    "currency": order.get("curr"),
+                })
+
+            return pending
+        except Exception as e:
+            logger.error(f"Failed to get pending orders: {e}")
+            return []
+
+    def get_pending_order_totals(self) -> dict[str, float]:
+        """
+        Get total value of pending BUY orders grouped by currency.
+
+        Returns dict like: {"EUR": 500.0, "USD": 200.0}
+        """
+        pending = self.get_pending_orders()
+        totals = {}
+
+        for order in pending:
+            if order["side"] and order["side"].lower() == "buy":
+                currency = order["currency"] or "EUR"
+                value = order["quantity"] * order["price"]
+                totals[currency] = totals.get(currency, 0) + value
+
+        return totals
+
     def get_historical_prices(
         self,
         symbol: str,
