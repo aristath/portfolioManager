@@ -83,7 +83,7 @@ async def _check_and_rebalance_internal():
             trade_repo = get_trade_repository(db)
 
             rebalancing_service = RebalancingService(
-                stock_repo, position_repo, allocation_repo, portfolio_repo
+                stock_repo, position_repo, allocation_repo, portfolio_repo, trade_repo
             )
             trade_execution = TradeExecutionService(
                 trade_repo, db=db, position_repo=position_repo
