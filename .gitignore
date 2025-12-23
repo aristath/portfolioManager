@@ -33,3 +33,5 @@ htmlcov/
 
 # Tailwind CLI binary
 tailwindcss
+
+.claude/
