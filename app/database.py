@@ -221,6 +221,40 @@ async def apply_migrations(db: aiosqlite.Connection, current_version: int):
         )
         logger.info("Migration 4 complete")
 
+    # Migration 5: Add performance indexes
+    if current_version < 5:
+        logger.info("Applying migration 5: Adding performance indexes...")
+
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_positions_symbol
+            ON positions(symbol)
+        """)
+        logger.info("  Created index: idx_positions_symbol")
+
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_trades_symbol_side_date
+            ON trades(symbol, side, executed_at)
+        """)
+        logger.info("  Created index: idx_trades_symbol_side_date")
+
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_stocks_active
+            ON stocks(active)
+        """)
+        logger.info("  Created index: idx_stocks_active")
+
+        await db.execute("""
+            CREATE INDEX IF NOT EXISTS idx_trades_executed_at
+            ON trades(executed_at)
+        """)
+        logger.info("  Created index: idx_trades_executed_at")
+
+        await db.execute(
+            "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
+            (5, datetime.now().isoformat(), "Add performance indexes")
+        )
+        logger.info("Migration 5 complete")
+
 
 SCHEMA = """
 -- Stock universe
