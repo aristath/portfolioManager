@@ -70,7 +70,7 @@ const API = {
 
   // Trades
   fetchTrades: () => fetch('/api/trades').then(r => r.json()),
-  fetchRecommendations: () => fetch('/api/trades/recommendations').then(r => r.json()),
+  fetchRecommendations: () => fetch('/api/trades/recommendations?limit=10').then(r => r.json()),
   executeRecommendation: (symbol) => API._post(`/api/trades/recommendations/${symbol}/execute`),
   fetchSellRecommendations: () => fetch('/api/trades/sell-recommendations').then(r => r.json()),
   executeSellRecommendation: (symbol) => API._post(`/api/trades/sell-recommendations/${symbol}/execute`),

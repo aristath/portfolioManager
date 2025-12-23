@@ -17,6 +17,9 @@ class NextActionsCard extends HTMLElement {
           </button>
         </div>
 
+        <!-- Scrollable content area -->
+        <div class="max-h-[500px] overflow-y-auto">
+
         <!-- Empty state -->
         <template x-if="!$store.app.loading.recommendations && !$store.app.loading.sellRecommendations && $store.app.recommendations.length === 0 && $store.app.sellRecommendations.length === 0">
           <div class="text-gray-500 text-sm py-4 text-center">No pending actions</div>
@@ -76,6 +79,8 @@ class NextActionsCard extends HTMLElement {
             </div>
           </div>
         </template>
+
+        </div><!-- End scrollable content -->
       </div>
     `;
   }
