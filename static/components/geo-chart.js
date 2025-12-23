@@ -7,9 +7,9 @@
 class GeoChart extends HTMLElement {
   connectedCallback() {
     this.innerHTML = `
-      <div class="bg-gray-800 border border-gray-700 rounded p-3" x-data="geoChartComponent()">
-        <div class="flex items-center justify-between mb-3">
-          <h2 class="text-xs text-gray-400 uppercase tracking-wide">Geographic Weights</h2>
+      <div x-data="geoChartComponent()">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-xs text-gray-500 font-medium">Geographic</h3>
           <button x-show="!$store.app.editingGeo"
                   @click="$store.app.startEditGeo()"
                   class="text-xs text-blue-400 hover:text-blue-300 transition-colors">

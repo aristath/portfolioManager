@@ -7,9 +7,9 @@
 class IndustryChart extends HTMLElement {
   connectedCallback() {
     this.innerHTML = `
-      <div class="bg-gray-800 border border-gray-700 rounded p-3" x-data="industryChartComponent()">
-        <div class="flex items-center justify-between mb-3">
-          <h2 class="text-xs text-gray-400 uppercase tracking-wide">Industry Weights</h2>
+      <div x-data="industryChartComponent()">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-xs text-gray-500 font-medium">Industry</h3>
           <button x-show="!$store.app.editingIndustry"
                   @click="$store.app.startEditIndustry()"
                   class="text-xs text-purple-400 hover:text-purple-300 transition-colors">
