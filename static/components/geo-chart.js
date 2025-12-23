@@ -152,26 +152,24 @@ function geoChartComponent() {
       return (deviation >= 0 ? '+' : '') + pct + '%';
     },
 
-    // Badge class for deviation value
+    // Badge class for deviation value - consistent with bar colors
     getDeviationBadgeClass(deviation) {
-      if (Math.abs(deviation) < 0.02) return 'bg-gray-700 text-gray-400'; // Within 2%
-      return deviation > 0 ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400';
+      if (Math.abs(deviation) < 0.02) return 'bg-gray-700 text-gray-400'; // At target
+      return deviation > 0
+        ? 'bg-amber-900/50 text-amber-400'  // Overweight
+        : 'bg-blue-900/50 text-blue-400';   // Underweight
     },
 
-    // Bar color based on whether deviation aligns with weight intent
+    // Bar color - simple over/under logic
     getDeviationBarColor(name, deviation) {
-      const weight = this.$store.app.geoTargets?.[name] || 0;
-      // Good: deviation direction matches weight intent
-      // Overweight + positive weight = good (we wanted more, we have more)
-      // Underweight + negative weight = good (we wanted less, we have less)
-      const isAligned = (deviation > 0 && weight > 0) || (deviation < 0 && weight < 0) || Math.abs(deviation) < 0.02;
-      return isAligned ? 'bg-green-500' : 'bg-red-500';
+      if (Math.abs(deviation) < 0.02) return 'bg-gray-500'; // At target
+      return deviation > 0 ? 'bg-amber-500' : 'bg-blue-500';
     },
 
     // Bar style for deviation visualization
     getDeviationBarStyle(deviation) {
-      // Scale: ±20% deviation = full half bar
-      const maxDev = 0.20;
+      // Scale: ±50% deviation = full half bar
+      const maxDev = 0.50;
       const pct = Math.min(Math.abs(deviation), maxDev) / maxDev * 50;
 
       if (deviation >= 0) {
