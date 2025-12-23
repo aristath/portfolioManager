@@ -224,7 +224,7 @@ async def get_job_status():
 
 @router.get("/database/stats")
 async def get_database_stats():
-    """Get database statistics including historical data counts."""
+    """Get database statistics including historical data counts and freshness."""
     import aiosqlite
 
     try:
@@ -280,6 +280,34 @@ async def get_database_stats():
             cursor = await db.execute("SELECT COUNT(*) as count FROM trades")
             trades_count = (await cursor.fetchone())["count"]
 
+            # Calculate data freshness
+            today = datetime.now().date()
+
+            # Daily price freshness
+            daily_latest = price_range["max_date"] if price_range["max_date"] else None
+            daily_days_old = None
+            daily_stale = False
+            if daily_latest:
+                try:
+                    latest_date = datetime.strptime(daily_latest, "%Y-%m-%d").date()
+                    daily_days_old = (today - latest_date).days
+                    daily_stale = daily_days_old > 3  # Stale if > 3 days old (weekend buffer)
+                except ValueError:
+                    pass
+
+            # Monthly price freshness
+            monthly_latest = monthly_range["max_date"] if monthly_range["max_date"] else None
+            monthly_days_old = None
+            monthly_stale = False
+            if monthly_latest:
+                try:
+                    # Parse YYYY-MM format
+                    latest_month = datetime.strptime(monthly_latest + "-01", "%Y-%m-%d").date()
+                    monthly_days_old = (today - latest_month).days
+                    monthly_stale = monthly_days_old > 45  # Stale if > 45 days (1.5 months)
+                except ValueError:
+                    pass
+
             return {
                 "status": "ok",
                 "stock_price_history_daily": {
@@ -287,7 +315,11 @@ async def get_database_stats():
                     "unique_symbols": price_history_symbols,
                     "date_range": {
                         "min": price_range["min_date"] if price_range["min_date"] else None,
-                        "max": price_range["max_date"] if price_range["max_date"] else None,
+                        "max": daily_latest,
+                    },
+                    "freshness": {
+                        "days_old": daily_days_old,
+                        "stale": daily_stale,
                     }
                 },
                 "stock_price_monthly": {
@@ -295,7 +327,11 @@ async def get_database_stats():
                     "unique_symbols": monthly_symbols,
                     "date_range": {
                         "min": monthly_range["min_date"] if monthly_range["min_date"] else None,
-                        "max": monthly_range["max_date"] if monthly_range["max_date"] else None,
+                        "max": monthly_latest,
+                    },
+                    "freshness": {
+                        "days_old": monthly_days_old,
+                        "stale": monthly_stale,
                     }
                 },
                 "portfolio_snapshots": {
