@@ -135,8 +135,8 @@ def animate_normal(phase: int, temp: float = 0) -> np.ndarray:
     center_row = (ROWS - 1) / 2  # 3.5
     center_col = (COLS - 1) / 2  # 6
 
-    # Max radius to reach edges
-    max_radius = 8
+    # Max radius (30% smaller than full matrix)
+    max_radius = 5.5
 
     # Cycle timing based on temperature (faster)
     if temp >= 65:
@@ -170,8 +170,8 @@ def animate_normal(phase: int, temp: float = 0) -> np.ndarray:
             # Only light pixels within current expansion radius
             if dist <= expansion:
                 # Radial fade: brightest at center, dimmer toward edge
-                # Steeper falloff while keeping smooth gradient
-                radial_fade = 1.0 - (dist / max_radius) ** 1.5
+                # Steeper falloff
+                radial_fade = 1.0 - (dist / max_radius) ** 2.0
 
                 # Combined brightness: radial gradient * time fade
                 brightness = int(peak_brightness * radial_fade * time_fade)
