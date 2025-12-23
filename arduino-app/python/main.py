@@ -77,27 +77,73 @@ scroll_offset = 0
 trade_start_time = 0
 last_mode = None
 
+# Temperature cache (read every 5 seconds)
+_temp_cache = {"value": 0.0, "time": 0.0}
+
+
+# =============================================================================
+# Temperature monitoring
+# =============================================================================
+
+def get_max_temperature() -> float:
+    """Read max temperature from thermal zones (cached 5s).
+
+    Returns temperature in °C, or 0 if unavailable.
+    """
+    global _temp_cache
+    now = time.time()
+
+    # Return cached value if fresh
+    if now - _temp_cache["time"] < 5:
+        return _temp_cache["value"]
+
+    max_temp = 0.0
+    try:
+        for i in range(10):
+            path = f"/sys/class/thermal/thermal_zone{i}/temp"
+            try:
+                with open(path, "r") as f:
+                    temp = int(f.read().strip()) / 1000  # millidegrees to °C
+                    max_temp = max(max_temp, temp)
+            except (IOError, FileNotFoundError):
+                continue
+    except Exception:
+        pass
+
+    _temp_cache = {"value": max_temp, "time": now}
+    return max_temp
+
 
 # =============================================================================
 # Matrix animations
 # =============================================================================
 
-def animate_normal(phase: int) -> np.ndarray:
-    """Slow breathing wave - calm ambient presence.
+def animate_normal(phase: int, temp: float = 0) -> np.ndarray:
+    """Slow breathing wave - speed varies with temperature.
 
-    Single column travels left-to-right over ~3 seconds.
-    Peak brightness 80, fades over 2 columns.
+    - Cool (<45°C): 3 second cycle, brightness 80 (calm)
+    - Warm (45-55°C): 2.5 second cycle, brightness 80
+    - Hot (>55°C): 1.5 second cycle, brightness 100 (alert)
     """
     arr = np.zeros((ROWS, COLS), dtype=np.uint8)
 
-    # Wave position (3 second cycle at 100ms updates = 30 frames)
-    wave_col = (phase % 30) * COLS / 30
+    # Adjust animation based on temperature
+    if temp > 55:  # Hot
+        cycle_frames = 15  # 1.5s cycle
+        peak_brightness = 100
+    elif temp > 45:  # Warm
+        cycle_frames = 25  # 2.5s cycle
+        peak_brightness = 80
+    else:  # Cool/normal
+        cycle_frames = 30  # 3s cycle
+        peak_brightness = 80
+
+    wave_col = (phase % cycle_frames) * COLS / cycle_frames
 
     for col in range(COLS):
         dist = abs(col - wave_col)
         if dist <= 2:
-            # Fade based on distance from wave center
-            brightness = int(80 * (1 - dist / 2.5))
+            brightness = int(peak_brightness * (1 - dist / 2.5))
             for row in range(ROWS):
                 arr[row, col] = max(0, brightness)
 
@@ -272,8 +318,9 @@ def loop():
                 draw_frame(Frame(animate_trade(phase, trade_is_buy)))
                 time.sleep(0.1)
             else:
-                # Trade animation done, show normal
-                draw_frame(Frame(animate_normal(phase)))
+                # Trade animation done, show normal with temp awareness
+                temp = get_max_temperature()
+                draw_frame(Frame(animate_normal(phase, temp)))
                 time.sleep(0.1)
 
         elif mode == "syncing":
@@ -282,8 +329,9 @@ def loop():
             time.sleep(0.1)
 
         else:
-            # Normal - calm breathing wave
-            draw_frame(Frame(animate_normal(phase)))
+            # Normal - calm breathing wave (speed varies with temperature)
+            temp = get_max_temperature()
+            draw_frame(Frame(animate_normal(phase, temp)))
             time.sleep(0.1)
 
         phase += 1
