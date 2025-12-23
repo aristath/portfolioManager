@@ -152,8 +152,8 @@ def animate_normal(phase: int, temp: float = 0) -> np.ndarray:
     # Current expansion radius (0 to max_radius)
     expansion = (phase % cycle_frames) * max_radius / cycle_frames
 
-    # Time-based fade (gentle curve for smooth falloff)
-    time_fade = (1.0 - (phase % cycle_frames) / cycle_frames) ** 0.7
+    # Time-based fade (balanced curve)
+    time_fade = (1.0 - (phase % cycle_frames) / cycle_frames) ** 1.2
 
     # Effective radius for radial fade (minimum 1.0 to avoid div by zero)
     effective_radius = max(expansion, 1.0)
