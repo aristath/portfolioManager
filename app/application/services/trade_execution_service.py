@@ -13,6 +13,10 @@ from app.services.allocator import TradeRecommendation
 from app.services.tradernet import get_tradernet_client
 from app.database import transaction
 from app.infrastructure.events import emit, SystemEvent
+from app.application.services.currency_exchange_service import (
+    CurrencyExchangeService,
+    get_currency_exchange_service,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +41,9 @@ class TradeExecutionService:
         self,
         trades: List[TradeRecommendation],
         use_transaction: bool = True,
-        currency_balances: Optional[dict[str, float]] = None
+        currency_balances: Optional[dict[str, float]] = None,
+        auto_convert_currency: bool = False,
+        source_currency: str = "EUR"
     ) -> List[dict]:
         """
         Execute a list of trade recommendations via Tradernet.
@@ -46,6 +52,8 @@ class TradeExecutionService:
             trades: List of trade recommendations to execute
             use_transaction: If True and db is available, wrap all trades in a transaction
             currency_balances: Per-currency cash balances for validation (optional)
+            auto_convert_currency: If True, automatically convert currency before buying
+            source_currency: Currency to convert from when auto_convert is enabled (default: EUR)
 
         Returns:
             List of execution results with status for each trade
@@ -57,15 +65,20 @@ class TradeExecutionService:
                 emit(SystemEvent.ERROR_OCCURRED, message="TRADE FAIL")
                 raise ConnectionError("Failed to connect to Tradernet")
 
+        # Get currency exchange service if auto-convert is enabled
+        currency_service = get_currency_exchange_service() if auto_convert_currency else None
+
         # Use transaction if available and requested
         if use_transaction and self._db:
             async with transaction(self._db) as tx_db:
                 return await self._execute_trades_internal(
-                    trades, client, auto_commit=False, currency_balances=currency_balances
+                    trades, client, auto_commit=False, currency_balances=currency_balances,
+                    currency_service=currency_service, source_currency=source_currency
                 )
         else:
             return await self._execute_trades_internal(
-                trades, client, auto_commit=True, currency_balances=currency_balances
+                trades, client, auto_commit=True, currency_balances=currency_balances,
+                currency_service=currency_service, source_currency=source_currency
             )
 
     async def _execute_trades_internal(
@@ -73,31 +86,70 @@ class TradeExecutionService:
         trades: List[TradeRecommendation],
         client,
         auto_commit: bool = True,
-        currency_balances: Optional[dict[str, float]] = None
+        currency_balances: Optional[dict[str, float]] = None,
+        currency_service: Optional[CurrencyExchangeService] = None,
+        source_currency: str = "EUR"
     ) -> List[dict]:
         """Internal method to execute trades."""
         results = []
         skipped_count = 0
+        converted_currencies = set()  # Track which currencies we've converted to
 
         for trade in trades:
             try:
                 # Check currency balance before executing (BUY orders only)
-                if trade.side.upper() == "BUY" and currency_balances is not None:
+                if trade.side.upper() == "BUY":
                     required = trade.quantity * trade.estimated_price
-                    available = currency_balances.get(trade.currency, 0)
+                    trade_currency = trade.currency or "EUR"
 
-                    if available < required:
-                        logger.warning(
-                            f"Skipping {trade.symbol}: insufficient {trade.currency} balance "
-                            f"(need {required:.2f}, have {available:.2f})"
-                        )
-                        results.append({
-                            "symbol": trade.symbol,
-                            "status": "skipped",
-                            "error": f"Insufficient {trade.currency} balance (need {required:.2f}, have {available:.2f})",
-                        })
-                        skipped_count += 1
-                        continue
+                    # If auto-convert is enabled and currency differs from source
+                    if currency_service and trade_currency != source_currency:
+                        # Check if we need to convert
+                        available = currency_balances.get(trade_currency, 0) if currency_balances else 0
+
+                        if available < required:
+                            # Only convert once per currency per batch
+                            if trade_currency not in converted_currencies:
+                                logger.info(
+                                    f"Auto-converting {source_currency} to {trade_currency} "
+                                    f"for {trade.symbol} (need {required:.2f} {trade_currency})"
+                                )
+
+                                # Ensure we have enough balance
+                                if currency_service.ensure_balance(
+                                    trade_currency, required, source_currency
+                                ):
+                                    converted_currencies.add(trade_currency)
+                                    logger.info(f"Currency conversion successful for {trade_currency}")
+                                else:
+                                    logger.warning(
+                                        f"Currency conversion failed for {trade.symbol}: "
+                                        f"could not convert {source_currency} to {trade_currency}"
+                                    )
+                                    results.append({
+                                        "symbol": trade.symbol,
+                                        "status": "skipped",
+                                        "error": f"Currency conversion failed ({source_currency} to {trade_currency})",
+                                    })
+                                    skipped_count += 1
+                                    continue
+
+                    # Validate balance if currency_balances provided and no auto-convert
+                    elif currency_balances is not None:
+                        available = currency_balances.get(trade_currency, 0)
+
+                        if available < required:
+                            logger.warning(
+                                f"Skipping {trade.symbol}: insufficient {trade_currency} balance "
+                                f"(need {required:.2f}, have {available:.2f})"
+                            )
+                            results.append({
+                                "symbol": trade.symbol,
+                                "status": "skipped",
+                                "error": f"Insufficient {trade_currency} balance (need {required:.2f}, have {available:.2f})",
+                            })
+                            skipped_count += 1
+                            continue
 
                 # For SELL orders, validate quantity against position
                 if trade.side.upper() == "SELL" and self._position_repo:
