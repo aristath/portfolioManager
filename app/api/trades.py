@@ -1,6 +1,7 @@
 """Trade execution API endpoints."""
 
 from datetime import datetime
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 from enum import Enum
@@ -447,6 +448,292 @@ async def execute_sell_recommendation(
             }
 
         raise HTTPException(status_code=500, detail="Trade execution failed")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class FundingSellRequest(BaseModel):
+    """A single sell in a funding execution request."""
+    symbol: str
+    quantity: int
+
+
+class ExecuteFundingRequest(BaseModel):
+    """Request to execute a funding plan."""
+    strategy: str
+    sells: List[FundingSellRequest]
+
+
+@router.get("/recommendations/{symbol}/funding-options")
+async def get_funding_options(
+    symbol: str,
+    stock_repo: StockRepository = Depends(get_stock_repository),
+    position_repo: PositionRepository = Depends(get_position_repository),
+    allocation_repo: AllocationRepository = Depends(get_allocation_repository),
+    portfolio_repo: PortfolioRepository = Depends(get_portfolio_repository),
+):
+    """
+    Get funding options for a buy recommendation that can't be executed due to insufficient cash.
+
+    Returns 3-4 strategies for raising cash by selling existing positions:
+    - score_based: Sell based on underperformance scoring
+    - minimal_sells: Minimize number of transactions
+    - overweight: Reduce overweight positions first
+    - currency_match: Prefer selling same-currency positions
+    """
+    from app.application.services.funding_service import FundingService
+    from app.application.services.rebalancing_service import RebalancingService
+    from app.services.tradernet import get_tradernet_client
+
+    symbol = symbol.upper()
+
+    try:
+        # Get current recommendation for this symbol
+        rebalancing_service = RebalancingService(
+            stock_repo,
+            position_repo,
+            allocation_repo,
+            portfolio_repo,
+        )
+        recommendations = await rebalancing_service.get_recommendations(limit=10)
+
+        rec = next((r for r in recommendations if r.symbol == symbol), None)
+        if not rec:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No recommendation found for {symbol}"
+            )
+
+        # Get current cash balance
+        client = get_tradernet_client()
+        if not client.is_connected:
+            if not client.connect():
+                raise HTTPException(
+                    status_code=503,
+                    detail="Failed to connect to Tradernet"
+                )
+
+        available_cash = client.get_total_cash_eur()
+
+        # Check if funding is needed
+        if available_cash >= rec.amount:
+            return {
+                "buy_symbol": symbol,
+                "buy_amount": rec.amount,
+                "cash_available": available_cash,
+                "cash_needed": 0,
+                "options": [],
+                "message": "Sufficient cash available, no funding needed"
+            }
+
+        # Generate funding options
+        funding_service = FundingService(
+            stock_repo,
+            position_repo,
+            allocation_repo,
+            portfolio_repo,
+        )
+
+        options = await funding_service.get_funding_options(
+            buy_symbol=symbol,
+            buy_amount_eur=rec.amount,
+            available_cash=available_cash,
+        )
+
+        return {
+            "buy_symbol": symbol,
+            "buy_amount": rec.amount,
+            "cash_available": round(available_cash, 2),
+            "cash_needed": round(rec.amount - available_cash, 2),
+            "options": [
+                {
+                    "strategy": opt.strategy,
+                    "description": opt.description,
+                    "sells": [
+                        {
+                            "symbol": s.symbol,
+                            "name": s.name,
+                            "quantity": s.quantity,
+                            "sell_pct": round(s.sell_pct * 100, 1),
+                            "value_eur": s.value_eur,
+                            "currency": s.currency,
+                            "current_price": s.current_price,
+                            "profit_pct": round(s.profit_pct * 100, 1),
+                            "warnings": s.warnings,
+                        }
+                        for s in opt.sells
+                    ],
+                    "total_sell_value": opt.total_sell_value,
+                    "current_score": opt.current_score,
+                    "new_score": opt.new_score,
+                    "net_score_change": opt.net_score_change,
+                    "has_warnings": opt.has_warnings,
+                }
+                for opt in options
+            ],
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/recommendations/{symbol}/execute-funding")
+async def execute_funding(
+    symbol: str,
+    request: ExecuteFundingRequest,
+    stock_repo: StockRepository = Depends(get_stock_repository),
+    position_repo: PositionRepository = Depends(get_position_repository),
+    trade_repo: TradeRepository = Depends(get_trade_repository),
+):
+    """
+    Execute a funding plan: sell specified positions then buy the target stock.
+
+    Executes all sells first, then executes the buy with the newly available cash.
+    """
+    from app.services.tradernet import get_tradernet_client
+    from app.domain.repositories import Trade
+
+    symbol = symbol.upper()
+
+    try:
+        client = get_tradernet_client()
+        if not client.is_connected:
+            if not client.connect():
+                raise HTTPException(
+                    status_code=503,
+                    detail="Failed to connect to Tradernet"
+                )
+
+        # Execute all sells
+        sell_results = []
+        total_sold_value = 0.0
+
+        for sell in request.sells:
+            sell_symbol = sell.symbol.upper()
+
+            result = client.place_order(
+                symbol=sell_symbol,
+                side=TRADE_SIDE_SELL,
+                quantity=sell.quantity,
+            )
+
+            if result:
+                # Record the trade
+                trade_record = Trade(
+                    symbol=sell_symbol,
+                    side=TRADE_SIDE_SELL,
+                    quantity=sell.quantity,
+                    price=result.price,
+                    executed_at=datetime.now(),
+                    order_id=result.order_id,
+                )
+                await trade_repo.create(trade_record)
+
+                sell_results.append({
+                    "symbol": sell_symbol,
+                    "status": "success",
+                    "quantity": sell.quantity,
+                    "price": result.price,
+                    "order_id": result.order_id,
+                })
+                total_sold_value += sell.quantity * result.price
+            else:
+                sell_results.append({
+                    "symbol": sell_symbol,
+                    "status": "failed",
+                    "error": "Order execution failed",
+                })
+
+        # Check how many sells succeeded
+        successful_sells = [r for r in sell_results if r["status"] == "success"]
+        if not successful_sells:
+            raise HTTPException(
+                status_code=500,
+                detail="All sell orders failed, cannot proceed with buy"
+            )
+
+        # Get the buy recommendation
+        from app.application.services.rebalancing_service import RebalancingService
+        from app.infrastructure.dependencies import get_allocation_repository, get_portfolio_repository
+
+        # Execute the buy
+        stock = await stock_repo.get_by_symbol(symbol)
+        if not stock:
+            raise HTTPException(status_code=404, detail=f"Stock {symbol} not found")
+
+        # Get current price and calculate quantity
+        from app.services import yahoo
+        price = yahoo.get_current_price(symbol, stock.yahoo_symbol)
+        if not price or price <= 0:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Could not get current price for {symbol}"
+            )
+
+        # Calculate quantity based on available cash (including new sales)
+        available_cash = client.get_total_cash_eur()
+        min_lot = stock.min_lot or 1
+        quantity = int(available_cash / price / min_lot) * min_lot
+
+        if quantity <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient cash for minimum lot of {symbol}"
+            )
+
+        buy_result = client.place_order(
+            symbol=symbol,
+            side=TRADE_SIDE_BUY,
+            quantity=quantity,
+        )
+
+        if buy_result:
+            # Record the buy trade
+            trade_record = Trade(
+                symbol=symbol,
+                side=TRADE_SIDE_BUY,
+                quantity=quantity,
+                price=buy_result.price,
+                executed_at=datetime.now(),
+                order_id=buy_result.order_id,
+            )
+            await trade_repo.create(trade_record)
+
+            # Clear recommendation cache
+            cache.delete("recommendations:3")
+            cache.delete("recommendations:10")
+            cache.delete("sell_recommendations:3")
+            cache.delete("sell_recommendations:20")
+
+            return {
+                "status": "success",
+                "strategy": request.strategy,
+                "sells": sell_results,
+                "buy": {
+                    "symbol": symbol,
+                    "status": "success",
+                    "quantity": quantity,
+                    "price": buy_result.price,
+                    "order_id": buy_result.order_id,
+                },
+                "total_sold": round(total_sold_value, 2),
+            }
+        else:
+            return {
+                "status": "partial",
+                "message": "Sells succeeded but buy failed",
+                "sells": sell_results,
+                "buy": {
+                    "symbol": symbol,
+                    "status": "failed",
+                    "error": "Buy order execution failed",
+                },
+            }
 
     except HTTPException:
         raise

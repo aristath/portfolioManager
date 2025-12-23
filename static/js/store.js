@@ -32,12 +32,20 @@ document.addEventListener('alpine:init', () => {
     showEditStockModal: false,
     showStockChart: false,
     showSettingsModal: false,
+    showFundingModal: false,
     selectedStockSymbol: null,
     editingStock: null,
     executingSymbol: null,
     executingSellSymbol: null,
     message: '',
     messageType: 'success',
+
+    // Funding Modal State
+    fundingTarget: null,
+    fundingOptions: [],
+    fundingData: null,
+    loadingFundingOptions: false,
+    executingFunding: false,
 
     // Loading States
     loading: {
@@ -213,6 +221,65 @@ document.addEventListener('alpine:init', () => {
       }
       this.executingSellSymbol = null;
       this.loading.execute = false;
+    },
+
+    // Funding Methods
+    async openFundingModal(recommendation) {
+      this.fundingTarget = recommendation;
+      this.showFundingModal = true;
+      this.loadingFundingOptions = true;
+      this.fundingOptions = [];
+      this.fundingData = null;
+
+      try {
+        const data = await API.getFundingOptions(recommendation.symbol);
+        this.fundingData = data;
+        this.fundingOptions = data.options || [];
+      } catch (e) {
+        console.error('Failed to fetch funding options:', e);
+        this.showMessage('Failed to fetch funding options', 'error');
+      }
+      this.loadingFundingOptions = false;
+    },
+
+    closeFundingModal() {
+      this.showFundingModal = false;
+      this.fundingTarget = null;
+      this.fundingOptions = [];
+      this.fundingData = null;
+    },
+
+    async executeFunding(option) {
+      if (!this.fundingTarget) return;
+
+      this.executingFunding = true;
+      try {
+        const sells = option.sells.map(s => ({
+          symbol: s.symbol,
+          quantity: s.quantity
+        }));
+
+        const result = await API.executeFunding(this.fundingTarget.symbol, {
+          strategy: option.strategy,
+          sells: sells
+        });
+
+        if (result.status === 'success') {
+          this.showMessage(
+            `Funding complete: Sold ${result.sells.length} position(s), bought ${result.buy.quantity} ${result.buy.symbol}`,
+            'success'
+          );
+        } else {
+          this.showMessage(result.message || 'Partial success - check trades', 'warning');
+        }
+
+        this.closeFundingModal();
+        await this.fetchAll();
+      } catch (e) {
+        console.error('Failed to execute funding:', e);
+        this.showMessage('Failed to execute funding plan', 'error');
+      }
+      this.executingFunding = false;
     },
 
     // Computed Properties

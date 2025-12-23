@@ -87,6 +87,12 @@ const API = {
   updateMinTradeSize: (value) => API._put('/api/settings/min_trade_size', { value }),
   restartSystem: () => API._post('/api/settings/restart'),
   resetCache: () => API._post('/api/settings/reset-cache'),
+
+  // Funding
+  getFundingOptions: (symbol) =>
+    fetch(`/api/trades/recommendations/${symbol}/funding-options`).then(r => r.json()),
+  executeFunding: (symbol, options) =>
+    API._post(`/api/trades/recommendations/${symbol}/execute-funding`, options),
 };
 
 // Make available globally
