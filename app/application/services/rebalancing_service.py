@@ -6,9 +6,12 @@ Uses long-term value scoring with portfolio-aware allocation fit.
 
 import logging
 from dataclasses import dataclass
-from typing import List
+from typing import List, Dict, Optional
+
+import numpy as np
 
 from app.config import settings
+from app.database import get_db_connection
 from app.domain.repositories import (
     StockRepository,
     PositionRepository,
@@ -31,10 +34,11 @@ from app.services.scorer import (
     calculate_post_transaction_score,
     PortfolioContext,
     PortfolioScore,
+    _get_daily_prices_from_db,
 )
 from app.services import yahoo
 from app.services.tradernet import get_exchange_rate
-from app.services.sell_scorer import calculate_all_sell_scores, SellScore
+from app.services.sell_scorer import calculate_all_sell_scores, SellScore, TechnicalData
 from app.domain.constants import TRADE_SIDE_BUY, TRADE_SIDE_SELL
 
 logger = logging.getLogger(__name__)
@@ -109,6 +113,77 @@ class RebalancingService:
         self._position_repo = position_repo
         self._allocation_repo = allocation_repo
         self._portfolio_repo = portfolio_repo
+
+    async def _get_technical_data_for_positions(
+        self,
+        symbols: List[str]
+    ) -> Dict[str, TechnicalData]:
+        """
+        Calculate technical indicators for instability detection.
+
+        Uses stock_price_history table to calculate:
+        - Current volatility (last 60 days)
+        - Historical volatility (last 365 days)
+        - Distance from 200-day MA
+
+        Args:
+            symbols: List of stock symbols to fetch data for
+
+        Returns:
+            Dict mapping symbol to TechnicalData
+        """
+        result = {}
+
+        async with get_db_connection() as db:
+            for symbol in symbols:
+                try:
+                    daily_prices = await _get_daily_prices_from_db(db, symbol, days=400)
+
+                    if len(daily_prices) < 60:
+                        # Not enough data - use neutral values
+                        result[symbol] = TechnicalData(
+                            current_volatility=0.20,  # Assume 20% baseline
+                            historical_volatility=0.20,
+                            distance_from_ma_200=0.0
+                        )
+                        continue
+
+                    closes = np.array([p['close'] for p in daily_prices])
+
+                    # Current volatility (last 60 days)
+                    if len(closes) >= 60:
+                        recent_returns = np.diff(closes[-60:]) / closes[-61:-1]
+                        current_vol = float(np.std(recent_returns) * np.sqrt(252))
+                    else:
+                        current_vol = 0.20
+
+                    # Historical volatility (full period, up to 365 days)
+                    returns = np.diff(closes) / closes[:-1]
+                    historical_vol = float(np.std(returns) * np.sqrt(252))
+
+                    # Distance from 200-day MA
+                    if len(closes) >= 200:
+                        ma_200 = float(np.mean(closes[-200:]))
+                        current_price = float(closes[-1])
+                        distance = (current_price - ma_200) / ma_200 if ma_200 > 0 else 0.0
+                    else:
+                        distance = 0.0
+
+                    result[symbol] = TechnicalData(
+                        current_volatility=current_vol,
+                        historical_volatility=historical_vol,
+                        distance_from_ma_200=distance
+                    )
+
+                except Exception as e:
+                    logger.warning(f"Failed to get technical data for {symbol}: {e}")
+                    result[symbol] = TechnicalData(
+                        current_volatility=0.20,
+                        historical_volatility=0.20,
+                        distance_from_ma_200=0.0
+                    )
+
+        return result
 
     async def get_recommendations(self, limit: int = 3) -> List[Recommendation]:
         """
@@ -617,12 +692,17 @@ class RebalancingService:
             logger.info("No positions to evaluate for selling")
             return []
 
+        # Get technical data for instability detection
+        symbols = [p['symbol'] for p in positions]
+        technical_data = await self._get_technical_data_for_positions(symbols)
+
         # Calculate sell scores for all positions
         sell_scores = calculate_all_sell_scores(
             positions=positions,
             total_portfolio_value=total_value,
             geo_allocations=geo_allocations,
-            ind_allocations=ind_allocations
+            ind_allocations=ind_allocations,
+            technical_data=technical_data
         )
 
         # Filter to eligible sells
@@ -660,6 +740,10 @@ class RebalancingService:
                 reason_parts.append(f"held {score.days_held} days")
             if score.portfolio_balance_score >= 0.7:
                 reason_parts.append("overweight")
+            if score.instability_score >= 0.6:
+                reason_parts.append("high instability")
+            elif score.instability_score >= 0.4:
+                reason_parts.append("elevated instability")
             reason_parts.append(f"sell score: {score.total_score:.2f}")
             reason = ", ".join(reason_parts) if reason_parts else "eligible for sell"
 

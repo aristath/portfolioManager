@@ -2,9 +2,14 @@
 
 This module implements a 4-component weighted scoring model for SELL decisions:
 - Underperformance Score (40%): How poorly stock performed vs target (8-15% annual)
-- Time Held Score (25%): Longer hold with underperformance = higher sell priority
+- Time Held Score (20%): Longer hold with underperformance = higher sell priority
 - Portfolio Balance Score (20%): Overweight positions score higher
-- Profit Taking Score (15%): For profitable positions, lock in gains
+- Instability Score (20%): Detect potential bubbles and unsustainable gains
+
+The instability score evaluates:
+- Rate of gain: How fast did the gain happen? (annualized return)
+- Volatility spike: Is current volatility elevated vs historical?
+- Valuation stretch: How far above 200-day MA?
 
 Hard Blocks (NEVER sell if any apply):
 - allow_sell=false
@@ -34,6 +39,14 @@ TARGET_RETURN_MAX = 0.15  # 15%
 
 
 @dataclass
+class TechnicalData:
+    """Technical indicators for instability detection."""
+    current_volatility: float    # Last 60 days
+    historical_volatility: float  # Last 365 days
+    distance_from_ma_200: float  # Positive = above MA, negative = below
+
+
+@dataclass
 class SellScore:
     """Result of sell score calculation."""
     symbol: str
@@ -42,7 +55,7 @@ class SellScore:
     underperformance_score: float
     time_held_score: float
     portfolio_balance_score: float
-    profit_taking_score: float
+    instability_score: float
     total_score: float
     suggested_sell_pct: float  # 0.10 to 0.50
     suggested_sell_quantity: int
@@ -191,26 +204,77 @@ def calculate_portfolio_balance_score(
     return score
 
 
-def calculate_profit_taking_score(profit_pct: float) -> float:
+def calculate_instability_score(
+    profit_pct: float,
+    days_held: int,
+    current_volatility: float,
+    historical_volatility: float,
+    distance_from_ma_200: float,
+) -> float:
     """
-    Calculate profit taking score for profitable positions.
-    Higher profit = more reason to lock in gains.
+    Detect potential instability/bubble conditions.
+    High score = signs of unsustainable gains, consider trimming.
+
+    Components:
+    - Rate of gain (40%): Annualized return - penalize if unsustainably high
+    - Volatility spike (30%): Current vs historical volatility
+    - Valuation stretch (30%): Distance above 200-day MA
     """
-    if profit_pct < 0.05:
-        # Not profitable enough - no profit-taking score
-        return 0.0
-    elif profit_pct < 0.15:
-        # 5-15% profit
-        return 0.2
-    elif profit_pct < 0.30:
-        # 15-30% profit
-        return 0.4
-    elif profit_pct < 0.50:
-        # 30-50% profit
-        return 0.7
+    score = 0.0
+
+    # 1. Rate of gain (40%)
+    if days_held > 30:
+        years = days_held / 365.0
+        try:
+            annualized = ((1 + profit_pct) ** (1 / years)) - 1 if years > 0 else profit_pct
+        except (ValueError, OverflowError):
+            annualized = profit_pct
+
+        if annualized > 0.50:      # >50% annualized = very hot
+            rate_score = 1.0
+        elif annualized > 0.30:    # >30% annualized = hot
+            rate_score = 0.7
+        elif annualized > 0.20:    # >20% annualized = warm
+            rate_score = 0.4
+        else:
+            rate_score = 0.1       # Sustainable pace
     else:
-        # >50% profit - excellent time to take profits
-        return 1.0
+        rate_score = 0.5  # Too early to tell
+    score += rate_score * 0.40
+
+    # 2. Volatility spike (30%)
+    if historical_volatility > 0:
+        vol_ratio = current_volatility / historical_volatility
+        if vol_ratio > 2.0:        # Vol doubled
+            vol_score = 1.0
+        elif vol_ratio > 1.5:      # Vol up 50%
+            vol_score = 0.7
+        elif vol_ratio > 1.2:      # Vol up 20%
+            vol_score = 0.4
+        else:
+            vol_score = 0.1        # Normal volatility
+    else:
+        vol_score = 0.3  # No historical data - neutral
+    score += vol_score * 0.30
+
+    # 3. Valuation stretch (30%)
+    if distance_from_ma_200 > 0.30:    # >30% above MA
+        valuation_score = 1.0
+    elif distance_from_ma_200 > 0.20:  # >20% above MA
+        valuation_score = 0.7
+    elif distance_from_ma_200 > 0.10:  # >10% above MA
+        valuation_score = 0.4
+    else:
+        valuation_score = 0.1          # Near or below MA
+    score += valuation_score * 0.30
+
+    # Floor for extreme profits (safety net)
+    if profit_pct > 1.0:  # >100% gain
+        score = max(score, 0.2)
+    elif profit_pct > 0.75:  # >75% gain
+        score = max(score, 0.1)
+
+    return score
 
 
 def check_sell_eligibility(
@@ -318,7 +382,8 @@ def calculate_sell_score(
     industry: str,
     total_portfolio_value: float,
     geo_allocations: Dict[str, float],
-    ind_allocations: Dict[str, float]
+    ind_allocations: Dict[str, float],
+    technical_data: Optional[TechnicalData] = None
 ) -> SellScore:
     """
     Calculate complete sell score for a position.
@@ -337,6 +402,7 @@ def calculate_sell_score(
         total_portfolio_value: Total portfolio value in EUR
         geo_allocations: Current geography allocation percentages
         ind_allocations: Current industry allocation percentages
+        technical_data: Technical indicators for instability detection
 
     Returns:
         SellScore with all components and recommendations
@@ -368,7 +434,7 @@ def calculate_sell_score(
             underperformance_score=0,
             time_held_score=0,
             portfolio_balance_score=0,
-            profit_taking_score=0,
+            instability_score=0,
             total_score=0,
             suggested_sell_pct=0,
             suggested_sell_quantity=0,
@@ -391,7 +457,7 @@ def calculate_sell_score(
             underperformance_score=0,
             time_held_score=time_held_score,
             portfolio_balance_score=0,
-            profit_taking_score=0,
+            instability_score=0,
             total_score=0,
             suggested_sell_pct=0,
             suggested_sell_quantity=0,
@@ -406,14 +472,26 @@ def calculate_sell_score(
         geo_allocations, ind_allocations
     )
 
-    profit_taking_score = calculate_profit_taking_score(profit_pct)
+    # Calculate instability score using technical data
+    if technical_data:
+        instability_score = calculate_instability_score(
+            profit_pct=profit_pct,
+            days_held=days_held,
+            current_volatility=technical_data.current_volatility,
+            historical_volatility=technical_data.historical_volatility,
+            distance_from_ma_200=technical_data.distance_from_ma_200,
+        )
+    else:
+        # No technical data - use neutral instability score
+        instability_score = 0.3
 
     # Calculate total score (weighted)
+    # Weights: underperformance 40%, time_held 20%, portfolio_balance 20%, instability 20%
     total_score = (
         (underperformance_score * 0.40) +
-        (time_held_score * 0.25) +
+        (time_held_score * 0.20) +
         (portfolio_balance_score * 0.20) +
-        (profit_taking_score * 0.15)
+        (instability_score * 0.20)
     )
 
     # Determine sell quantity
@@ -429,7 +507,7 @@ def calculate_sell_score(
         underperformance_score=round(underperformance_score, 3),
         time_held_score=round(time_held_score, 3),
         portfolio_balance_score=round(portfolio_balance_score, 3),
-        profit_taking_score=round(profit_taking_score, 3),
+        instability_score=round(instability_score, 3),
         total_score=round(total_score, 3),
         suggested_sell_pct=round(sell_pct, 3),
         suggested_sell_quantity=sell_quantity,
@@ -443,7 +521,8 @@ def calculate_all_sell_scores(
     positions: List[dict],
     total_portfolio_value: float,
     geo_allocations: Dict[str, float],
-    ind_allocations: Dict[str, float]
+    ind_allocations: Dict[str, float],
+    technical_data: Optional[Dict[str, TechnicalData]] = None
 ) -> List[SellScore]:
     """
     Calculate sell scores for all positions.
@@ -453,15 +532,18 @@ def calculate_all_sell_scores(
         total_portfolio_value: Total portfolio value in EUR
         geo_allocations: Current geography allocation percentages
         ind_allocations: Current industry allocation percentages
+        technical_data: Dict mapping symbol to TechnicalData for instability detection
 
     Returns:
         List of SellScore objects, sorted by total_score descending
     """
     scores = []
+    technical_data = technical_data or {}
 
     for pos in positions:
+        symbol = pos['symbol']
         score = calculate_sell_score(
-            symbol=pos['symbol'],
+            symbol=symbol,
             quantity=pos['quantity'],
             avg_price=pos['avg_price'],
             current_price=pos['current_price'] or pos['avg_price'],
@@ -473,7 +555,8 @@ def calculate_all_sell_scores(
             industry=pos.get('industry', ''),
             total_portfolio_value=total_portfolio_value,
             geo_allocations=geo_allocations,
-            ind_allocations=ind_allocations
+            ind_allocations=ind_allocations,
+            technical_data=technical_data.get(symbol)
         )
         scores.append(score)
 
