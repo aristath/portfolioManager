@@ -254,8 +254,13 @@ async def execute_recommendation(symbol: str):
             )
             await trade_repo.create(trade_record)
 
-            # Invalidate caches
+            # Invalidate caches (including limit-specific keys)
             cache.invalidate("recommendations")
+            cache.invalidate("recommendations:3")
+            cache.invalidate("recommendations:10")
+            cache.invalidate("sell_recommendations")
+            cache.invalidate("sell_recommendations:3")
+            cache.invalidate("sell_recommendations:20")
             cache.invalidate("multi_step_recommendations:default")
             # Invalidate all depth-specific caches
             for depth in range(1, 6):
@@ -544,10 +549,14 @@ async def execute_multi_step_recommendation_step(step_number: int):
                 except Exception as e:
                     logger.warning(f"Failed to update last_sold_at: {e}")
 
-            # Invalidate cache to force refresh
+            # Invalidate cache to force refresh (including limit-specific keys)
             cache.invalidate("multi_step_recommendations:default")
             cache.invalidate("recommendations")
+            cache.invalidate("recommendations:3")
+            cache.invalidate("recommendations:10")
             cache.invalidate("sell_recommendations")
+            cache.invalidate("sell_recommendations:3")
+            cache.invalidate("sell_recommendations:20")
             # Invalidate all depth-specific caches
             for depth in range(1, 6):
                 cache.invalidate(f"multi_step_recommendations:{depth}")
@@ -688,10 +697,14 @@ async def execute_all_multi_step_recommendations():
                 logger.warning(f"Step {idx} errored, continuing with remaining steps")
                 continue
 
-        # Invalidate cache to force refresh after all steps complete
+        # Invalidate cache to force refresh after all steps complete (including limit-specific keys)
         cache.invalidate("multi_step_recommendations:default")
         cache.invalidate("recommendations")
+        cache.invalidate("recommendations:3")
+        cache.invalidate("recommendations:10")
         cache.invalidate("sell_recommendations")
+        cache.invalidate("sell_recommendations:3")
+        cache.invalidate("sell_recommendations:20")
         # Invalidate all depth-specific caches
         for depth in range(1, 6):
             cache.invalidate(f"multi_step_recommendations:{depth}")
