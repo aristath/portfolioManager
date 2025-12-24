@@ -21,7 +21,7 @@ class NextActionsCard extends HTMLElement {
         <div class="max-h-[300px] overflow-y-auto">
 
         <!-- Empty state -->
-        <template x-if="!$store.app.loading.recommendations && !$store.app.loading.sellRecommendations && !$store.app.loading.multiStepRecommendations && !$store.app.multiStepRecommendations && $store.app.recommendations.length === 0 && $store.app.sellRecommendations.length === 0">
+        <template x-if="!$store.app.loading.recommendations && !$store.app.loading.sellRecommendations && !$store.app.loading.multiStepRecommendations && !$store.app.multiStepRecommendations?.steps?.length && $store.app.recommendations.length === 0 && $store.app.sellRecommendations.length === 0">
           <div class="text-gray-500 text-sm py-4 text-center">No pending actions</div>
         </template>
 
