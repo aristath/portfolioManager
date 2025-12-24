@@ -43,6 +43,20 @@ function formatDateTime(dateStr) {
 }
 
 /**
+ * Format a number with specified decimal places
+ * @param {number|null} value - The value to format
+ * @param {number} decimals - Number of decimal places (default 2)
+ * @returns {string} Formatted number string
+ */
+function formatNumber(value, decimals = 2) {
+  if (value == null) return '-';
+  return value.toLocaleString('en-IE', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals
+  });
+}
+
+/**
  * Format a percentage value
  * @param {number} value - Decimal value (e.g., 0.5 for 50%)
  * @param {number} decimals - Number of decimal places
@@ -133,6 +147,7 @@ function getSideTagClass(side) {
 
 // Make functions available globally for Alpine.js
 window.formatCurrency = formatCurrency;
+window.formatNumber = formatNumber;
 window.formatDate = formatDate;
 window.formatDateTime = formatDateTime;
 window.formatPercent = formatPercent;

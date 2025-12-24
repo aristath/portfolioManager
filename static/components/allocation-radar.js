@@ -16,7 +16,7 @@ class AllocationRadar extends HTMLElement {
               Edit Weights
             </button>
           </div>
-          <div class="relative w-full" style="height: 180px;">
+          <div class="relative w-full" style="aspect-ratio: 1;">
             <canvas id="geo-radar-chart"></canvas>
           </div>
         </div>
@@ -30,7 +30,7 @@ class AllocationRadar extends HTMLElement {
               Edit Weights
             </button>
           </div>
-          <div class="relative w-full" style="height: 180px;">
+          <div class="relative w-full" style="aspect-ratio: 1;">
             <canvas id="industry-radar-chart"></canvas>
           </div>
         </div>
@@ -313,7 +313,8 @@ function allocationRadarComponent() {
       
       return {
         responsive: true,
-        maintainAspectRatio: false,
+        maintainAspectRatio: true,
+        aspectRatio: 1,
         plugins: {
           legend: {
             display: true,
