@@ -38,25 +38,19 @@ void setRGB4(uint8_t r, uint8_t g, uint8_t b) {
 // Scroll text across LED matrix using native ArduinoGraphics
 // text: String to scroll, speed: ms per scroll step (lower = faster)
 void scrollText(String text, int speed) {
-  matrix.beginDraw();
-  matrix.stroke(0xFFFFFFFF);
   matrix.textScrollSpeed(speed);
   matrix.textFont(Font_5x7);
   matrix.beginText(0, 1, 0xFFFFFF);
-  matrix.println(text);
+  matrix.print(text);
   matrix.endText(SCROLL_LEFT);
-  matrix.endDraw();
 }
 
 // Display static text at position
 void printText(String text, int x, int y) {
-  matrix.beginDraw();
-  matrix.stroke(0xFFFFFFFF);
   matrix.textFont(Font_5x7);
   matrix.beginText(x, y, 0xFFFFFF);
-  matrix.println(text);
+  matrix.print(text);
   matrix.endText();
-  matrix.endDraw();
 }
 
 void setup() {
