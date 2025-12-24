@@ -80,7 +80,7 @@ async def get_portfolio_summary():
 async def get_portfolio_history():
     """Get historical portfolio snapshots."""
     portfolio_repo = PortfolioRepository()
-    snapshots = await portfolio_repo.get_history(limit=90)
+    snapshots = await portfolio_repo.get_history(days=90)
     return [
         {
             "id": None,  # Not in domain model

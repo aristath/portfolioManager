@@ -100,7 +100,7 @@ class StockScore:
 @dataclass
 class AllocationTarget:
     """Target allocation for geography or industry."""
-    category: str  # 'geography' or 'industry'
+    type: str  # 'geography' or 'industry'
     name: str
     target_pct: float  # Weight from -1.0 to 1.0
 

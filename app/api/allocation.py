@@ -32,11 +32,15 @@ async def get_allocation_targets():
     geography = {}
     industry = {}
 
-    for target in targets:
-        if target.category == "geography":
-            geography[target.name] = target.target_pct
-        elif target.category == "industry":
-            industry[target.name] = target.target_pct
+    # get_all() returns Dict[str, float] with keys like "geography:name"
+    for key, target_pct in targets.items():
+        parts = key.split(":", 1)
+        if len(parts) == 2:
+            target_type, name = parts
+            if target_type == "geography":
+                geography[name] = target_pct
+            elif target_type == "industry":
+                industry[name] = target_pct
 
     return {
         "geography": geography,
@@ -62,7 +66,7 @@ async def update_geography_targets(targets: GeographyTargets):
 
     for name, weight in updates.items():
         target = AllocationTarget(
-            category="geography",
+            type="geography",
             name=name,
             target_pct=weight,
         )
@@ -95,7 +99,7 @@ async def update_industry_targets(targets: IndustryTargets):
 
     for name, weight in updates.items():
         target = AllocationTarget(
-            category="industry",
+            type="industry",
             name=name,
             target_pct=weight,
         )

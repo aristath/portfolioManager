@@ -45,7 +45,8 @@ async def _get_cached_stock_prices(
 
     if start_date:
         start_date_str = start_date.strftime("%Y-%m-%d")
-        rows = await db_manager.history(symbol).fetch_all(
+        history_db = await db_manager.history(symbol)
+        rows = await history_db.fetchall(
             """
             SELECT date, close_price
             FROM daily_prices
@@ -55,7 +56,8 @@ async def _get_cached_stock_prices(
             (start_date_str,)
         )
     else:
-        rows = await db_manager.history(symbol).fetch_all(
+        history_db = await db_manager.history(symbol)
+        rows = await history_db.fetchall(
             """
             SELECT date, close_price
             FROM daily_prices
@@ -96,7 +98,8 @@ async def _store_stock_prices(
         else:
             continue
 
-        await db_manager.history(symbol).execute(
+        history_db = await db_manager.history(symbol)
+        await history_db.execute(
             """
             INSERT OR REPLACE INTO daily_prices
             (date, close_price, open_price, high_price, low_price, volume, source, created_at)
@@ -123,7 +126,7 @@ async def get_all_stock_sparklines():
         start_date = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
 
         # Get all active stocks
-        stocks = await db_manager.config.fetch_all(
+        stocks = await db_manager.config.fetchall(
             "SELECT symbol FROM stocks WHERE active = 1"
         )
 
@@ -131,7 +134,8 @@ async def get_all_stock_sparklines():
         for stock in stocks:
             symbol = stock["symbol"]
             # Get prices from per-symbol database
-            prices = await db_manager.history(symbol).fetch_all(
+            history_db = await db_manager.history(symbol)
+            prices = await history_db.fetchall(
                 """
                 SELECT date, close_price
                 FROM daily_prices

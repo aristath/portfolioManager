@@ -47,7 +47,7 @@ class SettingUpdate(BaseModel):
 async def get_setting(key: str, default: str = None) -> str | None:
     """Get a setting value from the database."""
     settings_repo = SettingsRepository()
-    value = await settings_repo.get_value(key)
+    value = await settings_repo.get(key)
     return str(value) if value is not None else default
 
 
@@ -72,7 +72,7 @@ async def get_settings_batch(keys: list[str]) -> dict[str, str]:
 async def set_setting(key: str, value: str) -> None:
     """Set a setting value in the database."""
     settings_repo = SettingsRepository()
-    await settings_repo.set_value(key, float(value))
+    await settings_repo.set_float(key, float(value))
     # Invalidate settings cache
     cache.invalidate("settings:all")
 

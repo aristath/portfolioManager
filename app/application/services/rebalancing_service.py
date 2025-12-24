@@ -142,7 +142,7 @@ class RebalancingService:
                     )
                     continue
 
-                closes = np.array([row['close'] for row in reversed(rows)])
+                closes = np.array([row['close_price'] for row in reversed(rows)])
                 closes_series = pd.Series(closes)
 
                 if np.any(closes <= 0):
@@ -562,10 +562,10 @@ class RebalancingService:
 
         # Get sell settings
         sell_settings = {
-            "min_hold_days": await self._settings_repo.get_value("min_hold_days", 90),
-            "sell_cooldown_days": await self._settings_repo.get_value("sell_cooldown_days", 180),
-            "max_loss_threshold": await self._settings_repo.get_value("max_loss_threshold", 0.20),
-            "target_annual_return": await self._settings_repo.get_value("target_annual_return", 0.10),
+            "min_hold_days": await self._settings_repo.get_int("min_hold_days", 90),
+            "sell_cooldown_days": await self._settings_repo.get_int("sell_cooldown_days", 180),
+            "max_loss_threshold": await self._settings_repo.get_float("max_loss_threshold", -0.20),
+            "target_annual_return": await self._settings_repo.get_float("target_annual_return", 0.10),
         }
 
         # Calculate sell scores
