@@ -1,34 +1,31 @@
 """Funding service for generating sell options to fund buy recommendations.
 
-Provides 3-4 funding strategies when a buy recommendation can't be executed
+Provides multiple funding strategies when a buy recommendation can't be executed
 due to insufficient cash. Each strategy shows which positions to sell with
 warnings for rule overrides and net portfolio score impact.
 """
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from typing import List, Dict, Optional
+from datetime import datetime
+from typing import List, Dict, Optional, Callable
 
-from app.domain.repositories import (
+from app.repositories import (
     StockRepository,
     PositionRepository,
     AllocationRepository,
     PortfolioRepository,
 )
-from app.services.sell_scorer import (
+from app.domain.scoring import (
     calculate_all_sell_scores,
-    SellScore,
-    TechnicalData,
+    calculate_portfolio_score,
+    calculate_post_transaction_score,
     get_sell_settings,
+    SellScore,
+    PortfolioContext,
     DEFAULT_MIN_HOLD_DAYS,
     DEFAULT_SELL_COOLDOWN_DAYS,
     DEFAULT_MAX_LOSS_THRESHOLD,
-)
-from app.services.scorer import (
-    calculate_portfolio_score,
-    calculate_post_transaction_score,
-    PortfolioContext,
 )
 from app.services.tradernet import get_exchange_rate
 
@@ -53,8 +50,8 @@ class FundingSell:
 @dataclass
 class FundingOption:
     """A complete funding plan."""
-    strategy: str  # "score_based", "minimal_sells", "overweight", "currency_match"
-    description: str  # Human-readable description
+    strategy: str
+    description: str
     sells: List[FundingSell]
     total_sell_value: float
     buy_symbol: str
@@ -63,7 +60,30 @@ class FundingOption:
     new_score: float
     net_score_change: float
     has_warnings: bool
-    signature: str = ""  # Unique signature for deduplication
+    signature: str = ""
+
+
+@dataclass
+class StrategyConfig:
+    """Configuration for a funding strategy."""
+    name: str
+    description: str
+    sort_key: Callable[[dict, Dict[str, 'SellScore']], tuple]
+    sell_pct: float = 0.20  # Default sell percentage
+    max_sell_pct: float = 0.40  # Cap for dynamic sell calculation
+    include_blocked: bool = True  # Whether to fall back to blocked positions
+    use_scorer_suggestion: bool = True  # Use sell scorer's suggested quantity
+
+
+def _default_sell_score() -> SellScore:
+    """Create a default SellScore for positions without scores."""
+    return SellScore(
+        symbol="", eligible=False, block_reason="",
+        underperformance_score=0, time_held_score=0,
+        portfolio_balance_score=0, instability_score=0, total_score=0,
+        suggested_sell_pct=0, suggested_sell_quantity=0, suggested_sell_value=0,
+        profit_pct=0, days_held=0
+    )
 
 
 def _get_option_signature(sells: List[FundingSell]) -> str:
@@ -76,15 +96,7 @@ def _partition_positions(
     positions: List[dict],
     sell_scores: Dict[str, 'SellScore']
 ) -> tuple[List[dict], List[dict]]:
-    """
-    Partition positions into eligible and blocked.
-
-    Eligible positions have allow_sell=YES and pass all sell checks.
-    Blocked positions have allow_sell=NO or fail other checks.
-
-    Returns:
-        (eligible, blocked) tuple of position lists
-    """
+    """Partition positions into eligible and blocked."""
     eligible = []
     blocked = []
     for pos in positions:
@@ -167,57 +179,63 @@ class FundingService:
         # Calculate sell scores for context (but we'll also consider blocked positions)
         sell_scores = await self._calculate_sell_scores(positions, portfolio_context)
 
-        # Generate each strategy
-        options = []
+        # Define strategies using StrategyConfig
+        strategies = [
+            StrategyConfig(
+                name="score_based",
+                description="Sell lowest-scoring positions first",
+                sort_key=self._sort_by_score_asc,
+                sell_pct=0.20,
+            ),
+            StrategyConfig(
+                name="minimal_sells",
+                description="Minimize number of sell transactions",
+                sort_key=self._sort_by_value_desc,
+                sell_pct=0.20,
+                max_sell_pct=0.40,
+                use_scorer_suggestion=False,
+            ),
+            StrategyConfig(
+                name="overweight",
+                description="Reduce overweight positions first",
+                sort_key=self._sort_by_overweight,
+                sell_pct=0.20,
+                max_sell_pct=0.35,
+            ),
+            StrategyConfig(
+                name="eligible_only",
+                description="Only sell positions with no restrictions",
+                sort_key=self._sort_by_score_asc,
+                sell_pct=0.25,
+                include_blocked=False,
+            ),
+            StrategyConfig(
+                name="spread_thin",
+                description="Sell small amounts from many positions",
+                sort_key=self._sort_by_score_asc,
+                sell_pct=0.12,
+                use_scorer_suggestion=False,
+            ),
+        ]
 
-        # Strategy 1: Score-based (use sell scorer ranking)
-        score_based = await self._generate_score_based_option(
-            positions, sell_scores, cash_needed_with_buffer, buy_symbol, buy_amount_eur,
-            portfolio_context, buy_stock
-        )
-        if score_based:
-            options.append(score_based)
-
-        # Strategy 2: Minimal sells (fewer positions, larger chunks)
-        minimal = await self._generate_minimal_sells_option(
-            positions, sell_scores, cash_needed_with_buffer, buy_symbol, buy_amount_eur,
-            portfolio_context, buy_stock
-        )
-        if minimal:
-            options.append(minimal)
-
-        # Strategy 3: Overweight first (prioritize overweight positions)
-        overweight = await self._generate_overweight_option(
-            positions, sell_scores, cash_needed_with_buffer, buy_symbol, buy_amount_eur,
-            portfolio_context, buy_stock
-        )
-        if overweight:
-            options.append(overweight)
-
-        # Strategy 4: Currency match (prefer same-currency sells)
+        # Add currency match strategy if applicable
         if buy_currency != "EUR":
-            currency_match = await self._generate_currency_match_option(
-                positions, sell_scores, cash_needed_with_buffer, buy_symbol, buy_amount_eur,
-                portfolio_context, buy_stock, buy_currency
+            strategies.insert(3, StrategyConfig(
+                name="currency_match",
+                description=f"Prefer selling {buy_currency} positions",
+                sort_key=self._sort_by_currency_then_score(buy_currency),
+                sell_pct=0.20,
+            ))
+
+        # Generate options for all strategies
+        options = []
+        for config in strategies:
+            option = await self._generate_option(
+                positions, sell_scores, cash_needed_with_buffer, buy_symbol,
+                buy_amount_eur, portfolio_context, buy_stock, config
             )
-            if currency_match:
-                options.append(currency_match)
-
-        # Strategy 5: Eligible only (no warnings/restrictions)
-        eligible_only = await self._generate_eligible_only_option(
-            positions, sell_scores, cash_needed_with_buffer, buy_symbol, buy_amount_eur,
-            portfolio_context, buy_stock
-        )
-        if eligible_only:
-            options.append(eligible_only)
-
-        # Strategy 6: Spread thin (small amounts from many positions)
-        spread_thin = await self._generate_spread_thin_option(
-            positions, sell_scores, cash_needed_with_buffer, buy_symbol, buy_amount_eur,
-            portfolio_context, buy_stock
-        )
-        if spread_thin:
-            options.append(spread_thin)
+            if option:
+                options.append(option)
 
         # Assign signatures and deduplicate (including excluded from previous pages)
         seen_signatures = set(exclude_signatures or [])
@@ -303,7 +321,7 @@ class FundingService:
         # Load settings from database
         settings = await get_sell_settings()
 
-        scores = calculate_all_sell_scores(
+        scores = await calculate_all_sell_scores(
             positions=positions,
             total_portfolio_value=portfolio_context.total_value,
             geo_allocations=geo_allocations,
@@ -475,7 +493,61 @@ class FundingService:
 
         return current_score.total, new_score.total, new_score.total - current_score.total
 
-    async def _generate_score_based_option(
+    def _calculate_sell_quantity(
+        self,
+        pos: dict,
+        sell_scores: Dict[str, SellScore],
+        config: StrategyConfig,
+        cash_needed: float,
+        total_value: float,
+    ) -> Optional[int]:
+        """Calculate sell quantity for a position based on strategy config."""
+        quantity = pos.get("quantity", 0)
+        min_lot = pos.get("min_lot", 1)
+        current_price = pos.get("current_price") or pos.get("avg_price", 0)
+
+        if quantity <= 0 or current_price <= 0:
+            return None
+
+        score = sell_scores.get(pos["symbol"])
+
+        # Use scorer suggestion if enabled and available
+        if config.use_scorer_suggestion and score and score.eligible and score.suggested_sell_quantity > 0:
+            sell_qty = score.suggested_sell_quantity
+        else:
+            # Calculate based on strategy's sell_pct or dynamically based on need
+            if config.max_sell_pct > config.sell_pct:
+                # Dynamic calculation (for minimal_sells strategy)
+                currency = pos.get("currency", "EUR")
+                if currency != "EUR":
+                    exchange_rate = get_exchange_rate(currency, "EUR")
+                    price_eur = current_price / exchange_rate if exchange_rate > 0 else current_price
+                else:
+                    price_eur = current_price
+                position_value = quantity * price_eur
+                remaining_needed = cash_needed - total_value
+                needed_pct = min(config.max_sell_pct, remaining_needed / position_value) if position_value > 0 else config.sell_pct
+                sell_pct = max(config.sell_pct, needed_pct)
+            else:
+                sell_pct = config.sell_pct
+
+            # For overweight strategy, sell more aggressively
+            if score and score.portfolio_balance_score >= 0.7 and config.sell_pct < 0.35:
+                sell_pct = min(0.35, config.max_sell_pct)
+
+            sell_qty = int((quantity * sell_pct) // min_lot) * min_lot
+            if sell_qty < min_lot:
+                sell_qty = min_lot
+
+        # Don't sell entire position
+        if sell_qty >= quantity:
+            sell_qty = int((quantity - min_lot) // min_lot) * min_lot
+            if sell_qty <= 0:
+                return None
+
+        return sell_qty
+
+    async def _generate_option(
         self,
         positions: List[dict],
         sell_scores: Dict[str, SellScore],
@@ -484,24 +556,19 @@ class FundingService:
         buy_amount_eur: float,
         portfolio_context: PortfolioContext,
         buy_stock: dict,
+        config: StrategyConfig,
     ) -> Optional[FundingOption]:
-        """Generate option using sell scorer ranking.
+        """
+        Generate a funding option using the given strategy configuration.
 
-        Prioritizes eligible positions (allow_sell=YES) over blocked ones.
-        Sorts by score ASCENDING (lowest score = worst performer = sell first).
+        This is the single implementation for all funding strategies.
+        Strategy-specific behavior is controlled via StrategyConfig.
         """
         # Partition into eligible and blocked positions
         eligible, blocked = _partition_positions(positions, sell_scores)
 
-        # Sort eligible by score ASCENDING (sell worst performers first)
-        eligible.sort(
-            key=lambda p: sell_scores.get(p["symbol"], SellScore(
-                symbol=p["symbol"], eligible=False, block_reason="", underperformance_score=0,
-                time_held_score=0, portfolio_balance_score=0, instability_score=0, total_score=0,
-                suggested_sell_pct=0, suggested_sell_quantity=0, suggested_sell_value=0,
-                profit_pct=0, days_held=0
-            )).total_score
-        )
+        # Sort eligible positions using strategy's sort key
+        eligible.sort(key=lambda p: config.sort_key(p, sell_scores))
 
         sells = []
         total_value = 0.0
@@ -509,185 +576,40 @@ class FundingService:
         # First pass: try eligible positions only
         for pos in eligible:
             if pos["symbol"] == buy_symbol:
-                continue  # Don't sell what we're trying to buy
-
+                continue
             if total_value >= cash_needed:
                 break
 
-            score = sell_scores.get(pos["symbol"])
-            quantity = pos.get("quantity", 0)
-            min_lot = pos.get("min_lot", 1)
-            current_price = pos.get("current_price") or pos.get("avg_price", 0)
-
-            if quantity <= 0 or current_price <= 0:
+            sell_qty = self._calculate_sell_quantity(pos, sell_scores, config, cash_needed, total_value)
+            if sell_qty is None:
                 continue
 
-            # Use suggested sell quantity from scorer, or calculate 20%
-            if score and score.eligible and score.suggested_sell_quantity > 0:
-                sell_qty = score.suggested_sell_quantity
-            else:
-                sell_pct = 0.20
-                sell_qty = int((quantity * sell_pct) // min_lot) * min_lot
-                if sell_qty < min_lot:
-                    sell_qty = min_lot
-
-            # Don't sell entire position
-            if sell_qty >= quantity:
-                sell_qty = int((quantity - min_lot) // min_lot) * min_lot
-                if sell_qty <= 0:
-                    continue
-
+            quantity = pos.get("quantity", 0)
             sell_pct = sell_qty / quantity
             funding_sell = self._create_funding_sell(pos, sell_qty, sell_pct)
             sells.append(funding_sell)
             total_value += funding_sell.value_eur
 
-        # Second pass: if not enough, add blocked positions (with warnings)
-        if total_value < cash_needed * 0.9:
-            # Sort blocked by value descending (largest positions first)
-            blocked.sort(
-                key=lambda p: (p.get("current_price", 0) or p.get("avg_price", 0)) * p.get("quantity", 0),
-                reverse=True
-            )
+        # Second pass: if not enough and include_blocked is True, add blocked positions
+        if config.include_blocked and total_value < cash_needed * 0.9:
+            # Sort blocked positions the same way
+            blocked.sort(key=lambda p: config.sort_key(p, sell_scores))
             for pos in blocked:
                 if pos["symbol"] == buy_symbol:
                     continue
-
                 if total_value >= cash_needed:
                     break
 
-                quantity = pos.get("quantity", 0)
-                min_lot = pos.get("min_lot", 1)
-                current_price = pos.get("current_price") or pos.get("avg_price", 0)
-
-                if quantity <= 0 or current_price <= 0:
+                sell_qty = self._calculate_sell_quantity(pos, sell_scores, config, cash_needed, total_value)
+                if sell_qty is None:
                     continue
 
-                # Calculate 20% of position
-                sell_pct = 0.20
-                sell_qty = int((quantity * sell_pct) // min_lot) * min_lot
-                if sell_qty < min_lot:
-                    sell_qty = min_lot
-
-                if sell_qty >= quantity:
-                    sell_qty = int((quantity - min_lot) // min_lot) * min_lot
-                    if sell_qty <= 0:
-                        continue
-
+                quantity = pos.get("quantity", 0)
                 sell_pct = sell_qty / quantity
                 funding_sell = self._create_funding_sell(pos, sell_qty, sell_pct)
                 sells.append(funding_sell)
                 total_value += funding_sell.value_eur
 
-        if not sells or total_value < cash_needed * 0.9:  # Need at least 90% of target
-            return None
-
-        current_score, new_score, net_change = self._calculate_net_score_change(
-            sells, buy_symbol, buy_amount_eur, portfolio_context, buy_stock
-        )
-
-        return FundingOption(
-            strategy="score_based",
-            description="Sell lowest-scoring positions first",
-            sells=sells,
-            total_sell_value=round(total_value, 2),
-            buy_symbol=buy_symbol,
-            buy_amount=buy_amount_eur,
-            current_score=round(current_score, 1),
-            new_score=round(new_score, 1),
-            net_score_change=round(net_change, 2),
-            has_warnings=any(s.warnings for s in sells),
-        )
-
-    async def _generate_minimal_sells_option(
-        self,
-        positions: List[dict],
-        sell_scores: Dict[str, SellScore],
-        cash_needed: float,
-        buy_symbol: str,
-        buy_amount_eur: float,
-        portfolio_context: PortfolioContext,
-        buy_stock: dict,
-    ) -> Optional[FundingOption]:
-        """Generate option with fewest positions, larger chunks.
-
-        Prioritizes eligible positions over blocked ones.
-        Sorts by value descending (largest first for fewer transactions).
-        """
-        # Partition into eligible and blocked positions
-        eligible, blocked = _partition_positions(positions, sell_scores)
-
-        # Sort eligible by value descending (largest first)
-        eligible.sort(
-            key=lambda p: (p.get("current_price", 0) or p.get("avg_price", 0)) * p.get("quantity", 0),
-            reverse=True
-        )
-
-        sells = []
-        total_value = 0.0
-
-        # Helper function to add position
-        def add_position(pos):
-            nonlocal total_value
-            if pos["symbol"] == buy_symbol:
-                return False
-
-            quantity = pos.get("quantity", 0)
-            min_lot = pos.get("min_lot", 1)
-            current_price = pos.get("current_price") or pos.get("avg_price", 0)
-
-            if quantity <= 0 or current_price <= 0:
-                return False
-
-            # Sell up to 40% of position (larger chunks for minimal sells)
-            remaining_needed = cash_needed - total_value
-
-            # Calculate position value in EUR
-            currency = pos.get("currency", "EUR")
-            if currency != "EUR":
-                exchange_rate = get_exchange_rate(currency, "EUR")
-                price_eur = current_price / exchange_rate if exchange_rate > 0 else current_price
-            else:
-                price_eur = current_price
-
-            position_value = quantity * price_eur
-
-            # How much of this position do we need?
-            needed_pct = min(0.40, remaining_needed / position_value) if position_value > 0 else 0.40
-
-            sell_qty = int((quantity * needed_pct) // min_lot) * min_lot
-            if sell_qty < min_lot:
-                sell_qty = min_lot
-
-            # Don't sell entire position
-            if sell_qty >= quantity:
-                sell_qty = int((quantity - min_lot) // min_lot) * min_lot
-                if sell_qty <= 0:
-                    return False
-
-            sell_pct = sell_qty / quantity
-            funding_sell = self._create_funding_sell(pos, sell_qty, sell_pct)
-            sells.append(funding_sell)
-            total_value += funding_sell.value_eur
-            return True
-
-        # First pass: try eligible positions only
-        for pos in eligible:
-            if total_value >= cash_needed:
-                break
-            add_position(pos)
-
-        # Second pass: if not enough, add blocked positions
-        if total_value < cash_needed * 0.9:
-            blocked.sort(
-                key=lambda p: (p.get("current_price", 0) or p.get("avg_price", 0)) * p.get("quantity", 0),
-                reverse=True
-            )
-            for pos in blocked:
-                if total_value >= cash_needed:
-                    break
-                add_position(pos)
-
         if not sells or total_value < cash_needed * 0.9:
             return None
 
@@ -696,8 +618,8 @@ class FundingService:
         )
 
         return FundingOption(
-            strategy="minimal_sells",
-            description="Minimize number of sell transactions",
+            strategy=config.name,
+            description=config.description,
             sells=sells,
             total_sell_value=round(total_value, 2),
             buy_symbol=buy_symbol,
@@ -708,411 +630,29 @@ class FundingService:
             has_warnings=any(s.warnings for s in sells),
         )
 
-    async def _generate_overweight_option(
-        self,
-        positions: List[dict],
-        sell_scores: Dict[str, SellScore],
-        cash_needed: float,
-        buy_symbol: str,
-        buy_amount_eur: float,
-        portfolio_context: PortfolioContext,
-        buy_stock: dict,
-    ) -> Optional[FundingOption]:
-        """Generate option prioritizing overweight positions.
-
-        Prioritizes eligible positions over blocked ones.
-        Sorts by portfolio_balance_score descending (most overweight first).
-        """
-        # Partition into eligible and blocked positions
-        eligible, blocked = _partition_positions(positions, sell_scores)
-
-        # Sort eligible by portfolio balance score descending (most overweight first)
-        eligible.sort(
-            key=lambda p: sell_scores.get(p["symbol"], SellScore(
-                symbol=p["symbol"], eligible=False, block_reason="", underperformance_score=0,
-                time_held_score=0, portfolio_balance_score=0, instability_score=0, total_score=0,
-                suggested_sell_pct=0, suggested_sell_quantity=0, suggested_sell_value=0,
-                profit_pct=0, days_held=0
-            )).portfolio_balance_score,
-            reverse=True
-        )
-
-        sells = []
-        total_value = 0.0
-
-        # Helper function to add position
-        def add_position(pos):
-            nonlocal total_value
-            if pos["symbol"] == buy_symbol:
-                return False
-
-            score = sell_scores.get(pos["symbol"])
-            quantity = pos.get("quantity", 0)
-            min_lot = pos.get("min_lot", 1)
-            current_price = pos.get("current_price") or pos.get("avg_price", 0)
-
-            if quantity <= 0 or current_price <= 0:
-                return False
-
-            # For overweight positions, sell more aggressively (up to 35%)
-            sell_pct = 0.35 if score and score.portfolio_balance_score >= 0.7 else 0.20
-            sell_qty = int((quantity * sell_pct) // min_lot) * min_lot
-            if sell_qty < min_lot:
-                sell_qty = min_lot
-
-            # Don't sell entire position
-            if sell_qty >= quantity:
-                sell_qty = int((quantity - min_lot) // min_lot) * min_lot
-                if sell_qty <= 0:
-                    return False
-
-            actual_pct = sell_qty / quantity
-            funding_sell = self._create_funding_sell(pos, sell_qty, actual_pct)
-            sells.append(funding_sell)
-            total_value += funding_sell.value_eur
-            return True
-
-        # First pass: try eligible positions only
-        for pos in eligible:
-            if total_value >= cash_needed:
-                break
-            add_position(pos)
-
-        # Second pass: if not enough, add blocked positions
-        if total_value < cash_needed * 0.9:
-            blocked.sort(
-                key=lambda p: sell_scores.get(p["symbol"], SellScore(
-                    symbol=p["symbol"], eligible=False, block_reason="", underperformance_score=0,
-                    time_held_score=0, portfolio_balance_score=0, instability_score=0, total_score=0,
-                    suggested_sell_pct=0, suggested_sell_quantity=0, suggested_sell_value=0,
-                    profit_pct=0, days_held=0
-                )).portfolio_balance_score,
-                reverse=True
-            )
-            for pos in blocked:
-                if total_value >= cash_needed:
-                    break
-                add_position(pos)
-
-        if not sells or total_value < cash_needed * 0.9:
-            return None
-
-        current_score, new_score, net_change = self._calculate_net_score_change(
-            sells, buy_symbol, buy_amount_eur, portfolio_context, buy_stock
-        )
-
-        return FundingOption(
-            strategy="overweight",
-            description="Reduce overweight positions first",
-            sells=sells,
-            total_sell_value=round(total_value, 2),
-            buy_symbol=buy_symbol,
-            buy_amount=buy_amount_eur,
-            current_score=round(current_score, 1),
-            new_score=round(new_score, 1),
-            net_score_change=round(net_change, 2),
-            has_warnings=any(s.warnings for s in sells),
-        )
-
-    async def _generate_currency_match_option(
-        self,
-        positions: List[dict],
-        sell_scores: Dict[str, SellScore],
-        cash_needed: float,
-        buy_symbol: str,
-        buy_amount_eur: float,
-        portfolio_context: PortfolioContext,
-        buy_stock: dict,
-        target_currency: str,
-    ) -> Optional[FundingOption]:
-        """Generate option preferring same-currency sells.
-
-        Prioritizes eligible positions over blocked ones.
-        Within each group, prefers matching currency and sorts by score ascending.
-        """
-        # Partition into eligible and blocked positions
-        eligible, blocked = _partition_positions(positions, sell_scores)
-
-        # Helper to sort by currency match then score ascending (worst first)
-        def sort_key(p):
-            currency_match = 0 if p.get("currency", "EUR") == target_currency else 1
-            score = sell_scores.get(p["symbol"], SellScore(
-                symbol=p["symbol"], eligible=False, block_reason="", underperformance_score=0,
-                time_held_score=0, portfolio_balance_score=0, instability_score=0, total_score=0,
-                suggested_sell_pct=0, suggested_sell_quantity=0, suggested_sell_value=0,
-                profit_pct=0, days_held=0
-            )).total_score
-            return (currency_match, score)  # Sort by currency match first, then by score ascending
-
-        eligible.sort(key=sort_key)
-
-        sells = []
-        total_value = 0.0
-
-        # Helper function to add position
-        def add_position(pos):
-            nonlocal total_value
-            if pos["symbol"] == buy_symbol:
-                return False
-
-            score = sell_scores.get(pos["symbol"])
-            quantity = pos.get("quantity", 0)
-            min_lot = pos.get("min_lot", 1)
-            current_price = pos.get("current_price") or pos.get("avg_price", 0)
-
-            if quantity <= 0 or current_price <= 0:
-                return False
-
-            # Use standard 20% or suggested amount
-            if score and score.eligible and score.suggested_sell_quantity > 0:
-                sell_qty = score.suggested_sell_quantity
-            else:
-                sell_qty = int((quantity * 0.20) // min_lot) * min_lot
-                if sell_qty < min_lot:
-                    sell_qty = min_lot
-
-            # Don't sell entire position
-            if sell_qty >= quantity:
-                sell_qty = int((quantity - min_lot) // min_lot) * min_lot
-                if sell_qty <= 0:
-                    return False
-
-            sell_pct = sell_qty / quantity
-            funding_sell = self._create_funding_sell(pos, sell_qty, sell_pct)
-            sells.append(funding_sell)
-            total_value += funding_sell.value_eur
-            return True
-
-        # First pass: try eligible positions only
-        for pos in eligible:
-            if total_value >= cash_needed:
-                break
-            add_position(pos)
-
-        # Second pass: if not enough, add blocked positions
-        if total_value < cash_needed * 0.9:
-            blocked.sort(key=sort_key)
-            for pos in blocked:
-                if total_value >= cash_needed:
-                    break
-                add_position(pos)
-
-        if not sells or total_value < cash_needed * 0.9:
-            return None
-
-        current_score, new_score, net_change = self._calculate_net_score_change(
-            sells, buy_symbol, buy_amount_eur, portfolio_context, buy_stock
-        )
-
-        return FundingOption(
-            strategy="currency_match",
-            description=f"Prefer selling {target_currency} positions",
-            sells=sells,
-            total_sell_value=round(total_value, 2),
-            buy_symbol=buy_symbol,
-            buy_amount=buy_amount_eur,
-            current_score=round(current_score, 1),
-            new_score=round(new_score, 1),
-            net_score_change=round(net_change, 2),
-            has_warnings=any(s.warnings for s in sells),
-        )
-
-    async def _generate_eligible_only_option(
-        self,
-        positions: List[dict],
-        sell_scores: Dict[str, SellScore],
-        cash_needed: float,
-        buy_symbol: str,
-        buy_amount_eur: float,
-        portfolio_context: PortfolioContext,
-        buy_stock: dict,
-    ) -> Optional[FundingOption]:
-        """Generate option using ONLY eligible positions (no warnings).
-
-        Returns None if eligible positions can't cover the cash needed.
-        This provides a "clean" option with no rule violations.
-        """
-        # Get only eligible positions
-        eligible, _ = _partition_positions(positions, sell_scores)
-
-        # Sort by score ascending (sell worst performers first)
-        eligible.sort(
-            key=lambda p: sell_scores.get(p["symbol"], SellScore(
-                symbol=p["symbol"], eligible=False, block_reason="", underperformance_score=0,
-                time_held_score=0, portfolio_balance_score=0, instability_score=0, total_score=0,
-                suggested_sell_pct=0, suggested_sell_quantity=0, suggested_sell_value=0,
-                profit_pct=0, days_held=0
-            )).total_score
-        )
-
-        sells = []
-        total_value = 0.0
-
-        for pos in eligible:
-            if pos["symbol"] == buy_symbol:
-                continue
-
-            if total_value >= cash_needed:
-                break
-
-            score = sell_scores.get(pos["symbol"])
-            quantity = pos.get("quantity", 0)
-            min_lot = pos.get("min_lot", 1)
-            current_price = pos.get("current_price") or pos.get("avg_price", 0)
-
-            if quantity <= 0 or current_price <= 0:
-                continue
-
-            # Use suggested sell quantity or calculate 25%
-            if score and score.eligible and score.suggested_sell_quantity > 0:
-                sell_qty = score.suggested_sell_quantity
-            else:
-                sell_pct = 0.25
-                sell_qty = int((quantity * sell_pct) // min_lot) * min_lot
-                if sell_qty < min_lot:
-                    sell_qty = min_lot
-
-            # Don't sell entire position
-            if sell_qty >= quantity:
-                sell_qty = int((quantity - min_lot) // min_lot) * min_lot
-                if sell_qty <= 0:
-                    continue
-
-            sell_pct = sell_qty / quantity
-            funding_sell = self._create_funding_sell(pos, sell_qty, sell_pct)
-            sells.append(funding_sell)
-            total_value += funding_sell.value_eur
-
-        # Only return if eligible positions can cover the cash needed
-        if not sells or total_value < cash_needed * 0.9:
-            return None
-
-        current_score, new_score, net_change = self._calculate_net_score_change(
-            sells, buy_symbol, buy_amount_eur, portfolio_context, buy_stock
-        )
-
-        return FundingOption(
-            strategy="eligible_only",
-            description="Only sell positions with no restrictions",
-            sells=sells,
-            total_sell_value=round(total_value, 2),
-            buy_symbol=buy_symbol,
-            buy_amount=buy_amount_eur,
-            current_score=round(current_score, 1),
-            new_score=round(new_score, 1),
-            net_score_change=round(net_change, 2),
-            has_warnings=any(s.warnings for s in sells),
-        )
-
-    async def _generate_spread_thin_option(
-        self,
-        positions: List[dict],
-        sell_scores: Dict[str, SellScore],
-        cash_needed: float,
-        buy_symbol: str,
-        buy_amount_eur: float,
-        portfolio_context: PortfolioContext,
-        buy_stock: dict,
-    ) -> Optional[FundingOption]:
-        """Generate option selling small amounts from many positions.
-
-        Sells 10-15% from multiple eligible positions to spread the impact.
-        """
-        # Get only eligible positions
-        eligible, blocked = _partition_positions(positions, sell_scores)
-
-        # Sort by score ascending (sell worst performers first)
-        eligible.sort(
-            key=lambda p: sell_scores.get(p["symbol"], SellScore(
-                symbol=p["symbol"], eligible=False, block_reason="", underperformance_score=0,
-                time_held_score=0, portfolio_balance_score=0, instability_score=0, total_score=0,
-                suggested_sell_pct=0, suggested_sell_quantity=0, suggested_sell_value=0,
-                profit_pct=0, days_held=0
-            )).total_score
-        )
-
-        sells = []
-        total_value = 0.0
-
-        # First pass: sell 12% from each eligible position
-        for pos in eligible:
-            if pos["symbol"] == buy_symbol:
-                continue
-
-            if total_value >= cash_needed:
-                break
-
-            quantity = pos.get("quantity", 0)
-            min_lot = pos.get("min_lot", 1)
-            current_price = pos.get("current_price") or pos.get("avg_price", 0)
-
-            if quantity <= 0 or current_price <= 0:
-                continue
-
-            # Sell only 12% of each position
-            sell_pct = 0.12
-            sell_qty = int((quantity * sell_pct) // min_lot) * min_lot
-            if sell_qty < min_lot:
-                sell_qty = min_lot
-
-            # Don't sell entire position
-            if sell_qty >= quantity:
-                sell_qty = int((quantity - min_lot) // min_lot) * min_lot
-                if sell_qty <= 0:
-                    continue
-
-            actual_pct = sell_qty / quantity
-            funding_sell = self._create_funding_sell(pos, sell_qty, actual_pct)
-            sells.append(funding_sell)
-            total_value += funding_sell.value_eur
-
-        # Second pass: if not enough, add blocked positions
-        if total_value < cash_needed * 0.9:
-            for pos in blocked:
-                if pos["symbol"] == buy_symbol:
-                    continue
-
-                if total_value >= cash_needed:
-                    break
-
-                quantity = pos.get("quantity", 0)
-                min_lot = pos.get("min_lot", 1)
-                current_price = pos.get("current_price") or pos.get("avg_price", 0)
-
-                if quantity <= 0 or current_price <= 0:
-                    continue
-
-                sell_pct = 0.12
-                sell_qty = int((quantity * sell_pct) // min_lot) * min_lot
-                if sell_qty < min_lot:
-                    sell_qty = min_lot
-
-                if sell_qty >= quantity:
-                    sell_qty = int((quantity - min_lot) // min_lot) * min_lot
-                    if sell_qty <= 0:
-                        continue
-
-                actual_pct = sell_qty / quantity
-                funding_sell = self._create_funding_sell(pos, sell_qty, actual_pct)
-                sells.append(funding_sell)
-                total_value += funding_sell.value_eur
-
-        if not sells or total_value < cash_needed * 0.9:
-            return None
-
-        current_score, new_score, net_change = self._calculate_net_score_change(
-            sells, buy_symbol, buy_amount_eur, portfolio_context, buy_stock
-        )
-
-        return FundingOption(
-            strategy="spread_thin",
-            description="Sell small amounts from many positions",
-            sells=sells,
-            total_sell_value=round(total_value, 2),
-            buy_symbol=buy_symbol,
-            buy_amount=buy_amount_eur,
-            current_score=round(current_score, 1),
-            new_score=round(new_score, 1),
-            net_score_change=round(net_change, 2),
-            has_warnings=any(s.warnings for s in sells),
-        )
+    # Strategy sort key functions
+    @staticmethod
+    def _sort_by_score_asc(pos: dict, sell_scores: Dict[str, SellScore]) -> tuple:
+        """Sort by total score ascending (worst performers first)."""
+        score = sell_scores.get(pos["symbol"], _default_sell_score())
+        return (score.total_score,)
+
+    @staticmethod
+    def _sort_by_value_desc(pos: dict, sell_scores: Dict[str, SellScore]) -> tuple:
+        """Sort by position value descending (largest first)."""
+        value = (pos.get("current_price", 0) or pos.get("avg_price", 0)) * pos.get("quantity", 0)
+        return (-value,)
+
+    @staticmethod
+    def _sort_by_overweight(pos: dict, sell_scores: Dict[str, SellScore]) -> tuple:
+        """Sort by portfolio balance score descending (most overweight first)."""
+        score = sell_scores.get(pos["symbol"], _default_sell_score())
+        return (-score.portfolio_balance_score,)
+
+    def _sort_by_currency_then_score(self, target_currency: str):
+        """Create sort key that prefers matching currency, then sorts by score."""
+        def sort_key(pos: dict, sell_scores: Dict[str, SellScore]) -> tuple:
+            currency_match = 0 if pos.get("currency", "EUR") == target_currency else 1
+            score = sell_scores.get(pos["symbol"], _default_sell_score())
+            return (currency_match, score.total_score)
+        return sort_key

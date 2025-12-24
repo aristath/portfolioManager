@@ -6,12 +6,14 @@ can cause real financial losses, so edge cases are critical.
 
 import pytest
 from datetime import datetime, timedelta
-from app.services.sell_scorer import (
+from app.domain.scoring.sell import (
     calculate_underperformance_score,
     calculate_time_held_score,
     calculate_portfolio_balance_score,
-    MIN_HOLD_DAYS,
-    MAX_LOSS_THRESHOLD,
+)
+from app.domain.scoring.constants import (
+    DEFAULT_MIN_HOLD_DAYS as MIN_HOLD_DAYS,
+    DEFAULT_MAX_LOSS_THRESHOLD as MAX_LOSS_THRESHOLD,
     TARGET_RETURN_MIN,
     TARGET_RETURN_MAX,
 )

@@ -7,10 +7,9 @@ import tempfile
 import os
 from datetime import datetime
 
-from app.infrastructure.locking import file_lock, LOCK_DIR
-from app.database import transaction
-from app.domain.repositories import Position, Stock
-from app.infrastructure.database.repositories import SQLitePositionRepository, SQLiteStockRepository
+from app.infrastructure.locking import file_lock
+from app.domain.models import Position, Stock, Trade
+from app.repositories import PositionRepository, StockRepository, TradeRepository
 
 
 @pytest.mark.asyncio
@@ -18,22 +17,22 @@ async def test_file_lock_prevents_concurrent_execution():
     """Test that file locks prevent concurrent execution of critical operations."""
     lock_name = "test_concurrent_lock"
     execution_order = []
-    
+
     async def operation1():
         async with file_lock(lock_name, timeout=5.0):
             execution_order.append("start1")
             await asyncio.sleep(0.1)
             execution_order.append("end1")
-    
+
     async def operation2():
         async with file_lock(lock_name, timeout=5.0):
             execution_order.append("start2")
             await asyncio.sleep(0.1)
             execution_order.append("end2")
-    
+
     # Run both operations concurrently
     await asyncio.gather(operation1(), operation2())
-    
+
     # Operations should not interleave
     assert execution_order == ["start1", "end1", "start2", "end2"] or \
            execution_order == ["start2", "end2", "start1", "end1"]
@@ -43,11 +42,11 @@ async def test_file_lock_prevents_concurrent_execution():
 async def test_file_lock_timeout():
     """Test that file locks timeout when held too long."""
     lock_name = "test_timeout_lock"
-    
+
     async def long_operation():
         async with file_lock(lock_name, timeout=1.0):
             await asyncio.sleep(2.0)  # Hold lock longer than timeout
-    
+
     async def waiting_operation():
         await asyncio.sleep(0.1)  # Wait a bit for first operation to acquire lock
         try:
@@ -55,7 +54,7 @@ async def test_file_lock_timeout():
                 pytest.fail("Should have timed out")
         except TimeoutError:
             pass  # Expected
-    
+
     # Start long operation
     task1 = asyncio.create_task(long_operation())
     # Try to acquire lock (should timeout)
@@ -67,9 +66,9 @@ async def test_file_lock_timeout():
 @pytest.mark.asyncio
 async def test_concurrent_position_updates_with_lock(db):
     """Test that concurrent position updates are serialized with locking."""
-    position_repo = SQLitePositionRepository(db)
+    position_repo = PositionRepository(db=db)
     updates_completed = []
-    
+
     async def update_position(symbol, quantity, delay):
         async with file_lock("portfolio_sync", timeout=5.0):
             position = Position(
@@ -85,22 +84,22 @@ async def test_concurrent_position_updates_with_lock(db):
             await position_repo.upsert(position, auto_commit=True)
             await asyncio.sleep(delay)
             updates_completed.append(symbol)
-    
+
     # Run multiple updates concurrently
     await asyncio.gather(
         update_position("AAPL", 10.0, 0.05),
         update_position("MSFT", 5.0, 0.05),
         update_position("GOOGL", 3.0, 0.05),
     )
-    
+
     # All updates should complete
     assert len(updates_completed) == 3
-    
+
     # Verify all positions were saved correctly
     aapl = await position_repo.get_by_symbol("AAPL")
     msft = await position_repo.get_by_symbol("MSFT")
     googl = await position_repo.get_by_symbol("GOOGL")
-    
+
     assert aapl is not None
     assert msft is not None
     assert googl is not None
@@ -112,11 +111,8 @@ async def test_concurrent_position_updates_with_lock(db):
 @pytest.mark.asyncio
 async def test_concurrent_trade_execution_atomicity(db):
     """Test that concurrent trade executions maintain atomicity."""
-    from app.infrastructure.database.repositories import SQLiteTradeRepository
-    from app.domain.repositories import Trade
-
     # Create stocks first (required for trade history JOIN)
-    stock_repo = SQLiteStockRepository(db)
+    stock_repo = StockRepository(db=db)
     for symbol in ["AAPL", "MSFT", "GOOGL"]:
         stock = Stock(
             symbol=symbol,
@@ -130,12 +126,12 @@ async def test_concurrent_trade_execution_atomicity(db):
         )
         await stock_repo.create(stock)
 
-    trade_repo = SQLiteTradeRepository(db)
+    trade_repo = TradeRepository(db=db)
     trades_created = []
-    
+
     async def create_trade(symbol, side, quantity):
         async with file_lock("rebalance", timeout=5.0):
-            async with transaction(db):
+            async with db.transaction():
                 trade = Trade(
                     symbol=symbol,
                     side=side,
@@ -147,21 +143,21 @@ async def test_concurrent_trade_execution_atomicity(db):
                 await trade_repo.create(trade, auto_commit=False)
                 await asyncio.sleep(0.05)  # Simulate processing time
                 trades_created.append(symbol)
-    
+
     # Create multiple trades concurrently
     await asyncio.gather(
         create_trade("AAPL", "BUY", 10.0),
         create_trade("MSFT", "BUY", 5.0),
         create_trade("GOOGL", "SELL", 3.0),
     )
-    
+
     # All trades should be created
     assert len(trades_created) == 3
-    
+
     # Verify all trades were saved
     history = await trade_repo.get_history(limit=10)
     assert len(history) == 3
-    
+
     symbols = {t.symbol for t in history}
     assert "AAPL" in symbols
     assert "MSFT" in symbols
@@ -169,4 +165,3 @@ async def test_concurrent_trade_execution_atomicity(db):
 
 
 # Lock directory setup is handled in conftest.py
-

@@ -8,13 +8,11 @@ not just placed orders (which may be cancelled externally).
 import logging
 from datetime import datetime
 
-import aiosqlite
-
-from app.config import settings
 from app.services.tradernet import get_tradernet_client
 from app.infrastructure.locking import file_lock
 from app.infrastructure.hardware.led_display import set_activity
 from app.infrastructure.events import emit, SystemEvent
+from app.infrastructure.database.manager import get_db_manager
 
 logger = logging.getLogger(__name__)
 
@@ -54,26 +52,24 @@ async def _sync_trades_internal():
 
         logger.info(f"Fetched {len(executed_trades)} trades from Tradernet")
 
-        async with aiosqlite.connect(settings.database_path) as db:
-            db.row_factory = aiosqlite.Row
-            await db.execute("PRAGMA journal_mode=WAL")
-            await db.execute("PRAGMA busy_timeout=30000")
+        db_manager = get_db_manager()
 
-            # Get existing order_ids to avoid duplicates
-            cursor = await db.execute(
-                "SELECT order_id FROM trades WHERE order_id IS NOT NULL"
-            )
-            existing_order_ids = {row["order_id"] for row in await cursor.fetchall()}
-            logger.info(f"Found {len(existing_order_ids)} existing trades in database")
+        # Get existing order_ids to avoid duplicates
+        cursor = await db_manager.ledger.execute(
+            "SELECT order_id FROM trades WHERE order_id IS NOT NULL"
+        )
+        existing_order_ids = {row[0] for row in await cursor.fetchall()}
+        logger.info(f"Found {len(existing_order_ids)} existing trades in database")
 
-            # Get valid symbols from stocks table
-            cursor = await db.execute("SELECT symbol FROM stocks")
-            valid_symbols = {row["symbol"] for row in await cursor.fetchall()}
+        # Get valid symbols from stocks table
+        cursor = await db_manager.config.execute("SELECT symbol FROM stocks")
+        valid_symbols = {row[0] for row in await cursor.fetchall()}
 
-            # Insert new trades
-            inserted = 0
-            skipped = 0
+        # Insert new trades
+        inserted = 0
+        skipped = 0
 
+        async with db_manager.ledger.transaction():
             for trade in executed_trades:
                 order_id = trade.get("order_id")
                 if not order_id:
@@ -105,10 +101,10 @@ async def _sync_trades_internal():
                     executed_at = datetime.now().isoformat()
 
                 try:
-                    await db.execute(
+                    await db_manager.ledger.execute(
                         """
-                        INSERT INTO trades (symbol, side, quantity, price, executed_at, order_id)
-                        VALUES (?, ?, ?, ?, ?, ?)
+                        INSERT INTO trades (symbol, side, quantity, price, executed_at, order_id, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
                         """,
                         (symbol, side, quantity, price, executed_at, order_id)
                     )
@@ -118,8 +114,7 @@ async def _sync_trades_internal():
                     logger.error(f"Failed to insert trade {order_id}: {e}")
                     skipped += 1
 
-            await db.commit()
-            logger.info(f"Trade sync complete: {inserted} inserted, {skipped} skipped")
+        logger.info(f"Trade sync complete: {inserted} inserted, {skipped} skipped")
 
         emit(SystemEvent.TRADE_SYNC_COMPLETE)
         set_activity("TRADE SYNC COMPLETE", duration=5.0)
@@ -138,20 +133,18 @@ async def clear_and_resync_trades():
     """
     logger.warning("Clearing all trades and resyncing from Tradernet...")
 
-    async with aiosqlite.connect(settings.database_path) as db:
-        db.row_factory = aiosqlite.Row
-        await db.execute("PRAGMA journal_mode=WAL")
-        await db.execute("PRAGMA busy_timeout=30000")
+    db_manager = get_db_manager()
 
-        # Count existing trades
-        cursor = await db.execute("SELECT COUNT(*) as count FROM trades")
-        count = (await cursor.fetchone())["count"]
-        logger.info(f"Deleting {count} existing trades...")
+    # Count existing trades
+    cursor = await db_manager.ledger.execute("SELECT COUNT(*) as count FROM trades")
+    count = (await cursor.fetchone())[0]
+    logger.info(f"Deleting {count} existing trades...")
 
-        # Clear trades table
-        await db.execute("DELETE FROM trades")
-        await db.commit()
-        logger.info("Trades table cleared")
+    # Clear trades table
+    async with db_manager.ledger.transaction():
+        await db_manager.ledger.execute("DELETE FROM trades")
+
+    logger.info("Trades table cleared")
 
     # Now sync fresh data
     await _sync_trades_internal()

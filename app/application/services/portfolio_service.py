@@ -3,17 +3,13 @@
 Orchestrates portfolio operations using repositories and domain services.
 """
 
-from typing import List
-from app.domain.repositories import (
+from app.repositories import (
     PortfolioRepository,
     PositionRepository,
     AllocationRepository,
 )
-from app.services.allocator import (
-    AllocationStatus,
-    PortfolioSummary,
-    parse_industries,
-)
+from app.domain.models import AllocationStatus, PortfolioSummary
+from app.services.allocator import parse_industries
 
 
 class PortfolioService:

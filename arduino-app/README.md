@@ -4,12 +4,12 @@ Displays portfolio information on the Arduino Uno Q's 8x13 LED matrix using a sc
 
 ## Display Layout
 
-The display uses a 7-pixel tall variable-width font that scrolls right-to-left across the 8x13 matrix. The ticker shows:
+The display uses native ArduinoGraphics Font_5x7 that scrolls right-to-left across the 8x13 matrix. The ticker shows:
 - Portfolio value (e.g., "EUR12,345")
 - Cash balance (e.g., "CASH EUR675")
 - Trading recommendations (e.g., "BUY XIAO EUR855", "SELL ABC EUR200")
 
-When no ticker text is available, a heartbeat pulse animation is shown as a fallback.
+When no ticker text is available, the display remains blank.
 
 ## How It Works
 
@@ -19,9 +19,9 @@ Trading API (FastAPI) → Python Script → Router Bridge → STM32 MCU → LED 
 
 1. Python script fetches `/api/status/led/display` from the trading API
 2. Builds ticker text from portfolio data and recommendations
-3. Renders scrolling text frames using 7px font
-4. Sends frame data to STM32 via Router Bridge
-5. STM32 renders the frame on the LED matrix
+3. Uses native ArduinoGraphics to scroll text on the LED matrix
+4. Sends text scrolling commands to STM32 via Router Bridge
+5. STM32 renders the scrolling text using native Font_5x7
 
 ## Display Modes
 

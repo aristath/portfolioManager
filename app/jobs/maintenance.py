@@ -1,7 +1,7 @@
 """Database maintenance jobs for long-term reliability.
 
-These jobs ensure the database stays healthy and disk usage is controlled:
-- Daily backup of the database
+These jobs ensure the databases stay healthy and disk usage is controlled:
+- Daily backup of all databases
 - WAL checkpoint to prevent file growth
 - Weekly integrity check
 - Cleanup of old daily prices (keep 1 year)
@@ -9,23 +9,22 @@ These jobs ensure the database stays healthy and disk usage is controlled:
 """
 
 import logging
-import os
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
 
 from app.config import settings
-from app.database import get_db_connection
 from app.infrastructure.locking import file_lock
 from app.infrastructure.hardware.led_display import set_activity
 from app.infrastructure.events import emit, SystemEvent
+from app.infrastructure.database.manager import get_db_manager
 
 logger = logging.getLogger(__name__)
 
 
 async def create_backup():
     """
-    Create a backup of the database using SQLite's backup API.
+    Create a backup of all databases using SQLite's backup API.
 
     Runs daily, keeps the last 7 backups.
     """
@@ -42,23 +41,31 @@ async def _create_backup_internal():
 
     try:
         # Ensure backup directory exists
-        backup_dir = Path(settings.database_path).parent / "backups"
+        backup_dir = settings.data_dir / "backups"
         backup_dir.mkdir(parents=True, exist_ok=True)
 
-        # Create timestamped backup filename
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_path = backup_dir / f"trader_{timestamp}.db"
 
-        # Use SQLite backup API (synchronous, but safe)
-        source = sqlite3.connect(settings.database_path)
-        dest = sqlite3.connect(backup_path)
-        source.backup(dest)
-        source.close()
-        dest.close()
+        # Backup core databases
+        core_dbs = ["config.db", "ledger.db", "state.db", "cache.db"]
+        for db_name in core_dbs:
+            db_path = settings.data_dir / db_name
+            if db_path.exists():
+                backup_path = backup_dir / f"{db_name.replace('.db', '')}_{timestamp}.db"
+                _backup_database(db_path, backup_path)
 
-        logger.info(f"Database backup created: {backup_path}")
+        # Backup history databases
+        history_dir = settings.data_dir / "history"
+        if history_dir.exists():
+            history_backup_dir = backup_dir / f"history_{timestamp}"
+            history_backup_dir.mkdir(parents=True, exist_ok=True)
+            for db_file in history_dir.glob("*.db"):
+                backup_path = history_backup_dir / db_file.name
+                _backup_database(db_file, backup_path)
 
-        # Clean up old backups (keep last N)
+        logger.info(f"Database backups created in {backup_dir}")
+
+        # Clean up old backups
         await _cleanup_old_backups(backup_dir)
 
         emit(SystemEvent.BACKUP_COMPLETE)
@@ -70,16 +77,46 @@ async def _create_backup_internal():
         raise
 
 
+def _backup_database(source_path: Path, dest_path: Path):
+    """Backup a single database file."""
+    source = sqlite3.connect(str(source_path))
+    dest = sqlite3.connect(str(dest_path))
+    source.backup(dest)
+    source.close()
+    dest.close()
+
+
 async def _cleanup_old_backups(backup_dir: Path):
     """Remove old backup files, keeping only the most recent ones."""
-    backups = sorted(backup_dir.glob("trader_*.db"), key=os.path.getmtime, reverse=True)
+    import os
 
-    for old_backup in backups[settings.backup_retention_count:]:
+    # Clean core database backups
+    for prefix in ["config_", "ledger_", "state_", "cache_"]:
+        backups = sorted(
+            backup_dir.glob(f"{prefix}*.db"),
+            key=os.path.getmtime,
+            reverse=True
+        )
+        for old_backup in backups[settings.backup_retention_count:]:
+            try:
+                old_backup.unlink()
+                logger.info(f"Removed old backup: {old_backup.name}")
+            except Exception as e:
+                logger.warning(f"Failed to remove old backup {old_backup.name}: {e}")
+
+    # Clean history backup directories
+    history_dirs = sorted(
+        [d for d in backup_dir.iterdir() if d.is_dir() and d.name.startswith("history_")],
+        key=os.path.getmtime,
+        reverse=True
+    )
+    for old_dir in history_dirs[settings.backup_retention_count:]:
         try:
-            old_backup.unlink()
-            logger.info(f"Removed old backup: {old_backup.name}")
+            import shutil
+            shutil.rmtree(old_dir)
+            logger.info(f"Removed old history backup: {old_dir.name}")
         except Exception as e:
-            logger.warning(f"Failed to remove old backup {old_backup.name}: {e}")
+            logger.warning(f"Failed to remove old backup {old_dir.name}: {e}")
 
 
 async def checkpoint_wal():
@@ -95,20 +132,29 @@ async def checkpoint_wal():
 
 async def _checkpoint_wal_internal():
     """Internal WAL checkpoint implementation."""
-    logger.info("Running WAL checkpoint")
+    logger.info("Running WAL checkpoint on all databases")
 
     set_activity("CHECKPOINTING DATABASE...", duration=30.0)
 
     try:
-        async with get_db_connection() as db:
-            # Run checkpoint with TRUNCATE mode
-            result = await db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-            row = await result.fetchone()
-            if row:
-                # Returns (busy, log, checkpointed)
-                logger.info(f"WAL checkpoint complete: busy={row[0]}, log={row[1]}, checkpointed={row[2]}")
-            else:
-                logger.info("WAL checkpoint complete")
+        db_manager = get_db_manager()
+
+        # Checkpoint core databases
+        for db_name, db in [
+            ("config", db_manager.config),
+            ("ledger", db_manager.ledger),
+            ("state", db_manager.state),
+            ("cache", db_manager.cache),
+        ]:
+            try:
+                result = await db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                row = await result.fetchone()
+                if row:
+                    logger.info(f"{db_name}: checkpoint complete - busy={row[0]}, log={row[1]}, checkpointed={row[2]}")
+            except Exception as e:
+                logger.warning(f"Checkpoint failed for {db_name}: {e}")
+
+        logger.info("WAL checkpoint complete")
 
     except Exception as e:
         logger.error(f"WAL checkpoint failed: {e}")
@@ -119,7 +165,7 @@ async def integrity_check():
     """
     Run database integrity check.
 
-    Runs weekly to ensure database is not corrupted.
+    Runs weekly to ensure databases are not corrupted.
     """
     async with file_lock("integrity_check", timeout=600.0):
         await _integrity_check_internal()
@@ -133,19 +179,34 @@ async def _integrity_check_internal():
     set_activity("CHECKING DATABASE INTEGRITY...", duration=120.0)
 
     try:
-        async with get_db_connection() as db:
-            result = await db.execute("PRAGMA integrity_check")
-            row = await result.fetchone()
+        db_manager = get_db_manager()
+        all_ok = True
 
-            if row and row[0] == "ok":
-                logger.info("Database integrity check passed")
-                emit(SystemEvent.INTEGRITY_CHECK_COMPLETE)
-                set_activity("INTEGRITY CHECK PASSED", duration=5.0)
-            else:
-                error_msg = row[0] if row else "Unknown error"
-                logger.error(f"Database integrity check FAILED: {error_msg}")
-                emit(SystemEvent.ERROR_OCCURRED, message="INTEGRITY CHECK FAILED")
-                # Could add alerting here
+        # Check core databases
+        for db_name, db in [
+            ("config", db_manager.config),
+            ("ledger", db_manager.ledger),
+            ("state", db_manager.state),
+            ("cache", db_manager.cache),
+        ]:
+            try:
+                result = await db.execute("PRAGMA integrity_check")
+                row = await result.fetchone()
+                if row and row[0] == "ok":
+                    logger.info(f"{db_name}: integrity check passed")
+                else:
+                    error_msg = row[0] if row else "Unknown error"
+                    logger.error(f"{db_name}: integrity check FAILED: {error_msg}")
+                    all_ok = False
+            except Exception as e:
+                logger.error(f"{db_name}: integrity check error: {e}")
+                all_ok = False
+
+        if all_ok:
+            emit(SystemEvent.INTEGRITY_CHECK_COMPLETE)
+            set_activity("INTEGRITY CHECK PASSED", duration=5.0)
+        else:
+            emit(SystemEvent.ERROR_OCCURRED, message="INTEGRITY CHECK FAILED")
 
     except Exception as e:
         logger.error(f"Database integrity check failed: {e}")
@@ -172,27 +233,42 @@ async def _cleanup_old_daily_prices_internal():
     set_activity("CLEANING OLD PRICES...", duration=60.0)
 
     try:
-        async with get_db_connection() as db:
-            cutoff = (datetime.now() - timedelta(days=settings.daily_price_retention_days)).strftime("%Y-%m-%d")
+        db_manager = get_db_manager()
+        cutoff = (datetime.now() - timedelta(days=settings.daily_price_retention_days)).strftime("%Y-%m-%d")
 
-            # Count records to be deleted
-            cursor = await db.execute(
-                "SELECT COUNT(*) FROM stock_price_history WHERE date < ?",
-                (cutoff,)
-            )
-            row = await cursor.fetchone()
-            delete_count = row[0] if row else 0
+        # Get all active symbols
+        cursor = await db_manager.config.execute(
+            "SELECT symbol FROM stocks WHERE active = 1"
+        )
+        symbols = [row[0] for row in await cursor.fetchall()]
 
-            if delete_count > 0:
-                # Delete old records
-                await db.execute(
-                    "DELETE FROM stock_price_history WHERE date < ?",
+        total_deleted = 0
+        for symbol in symbols:
+            try:
+                history_db = await db_manager.history(symbol)
+
+                # Count records to be deleted
+                cursor = await history_db.execute(
+                    "SELECT COUNT(*) FROM daily_prices WHERE date < ?",
                     (cutoff,)
                 )
-                await db.commit()
-                logger.info(f"Deleted {delete_count} old daily price records (before {cutoff})")
-            else:
-                logger.info("No old daily price records to clean up")
+                row = await cursor.fetchone()
+                delete_count = row[0] if row else 0
+
+                if delete_count > 0:
+                    await history_db.execute(
+                        "DELETE FROM daily_prices WHERE date < ?",
+                        (cutoff,)
+                    )
+                    await history_db.commit()
+                    total_deleted += delete_count
+            except Exception as e:
+                logger.warning(f"Cleanup failed for {symbol}: {e}")
+
+        if total_deleted > 0:
+            logger.info(f"Deleted {total_deleted} old daily price records (before {cutoff})")
+        else:
+            logger.info("No old daily price records to clean up")
 
         emit(SystemEvent.CLEANUP_COMPLETE)
 
@@ -219,27 +295,26 @@ async def _cleanup_old_snapshots_internal():
     set_activity("CLEANING OLD SNAPSHOTS...", duration=30.0)
 
     try:
-        async with get_db_connection() as db:
-            cutoff = (datetime.now() - timedelta(days=settings.snapshot_retention_days)).strftime("%Y-%m-%d")
+        db_manager = get_db_manager()
+        cutoff = (datetime.now() - timedelta(days=settings.snapshot_retention_days)).strftime("%Y-%m-%d")
 
-            # Count records to be deleted
-            cursor = await db.execute(
-                "SELECT COUNT(*) FROM portfolio_snapshots WHERE date < ?",
+        # Count records to be deleted
+        cursor = await db_manager.state.execute(
+            "SELECT COUNT(*) FROM portfolio_snapshots WHERE date < ?",
+            (cutoff,)
+        )
+        row = await cursor.fetchone()
+        delete_count = row[0] if row else 0
+
+        if delete_count > 0:
+            await db_manager.state.execute(
+                "DELETE FROM portfolio_snapshots WHERE date < ?",
                 (cutoff,)
             )
-            row = await cursor.fetchone()
-            delete_count = row[0] if row else 0
-
-            if delete_count > 0:
-                # Delete old records
-                await db.execute(
-                    "DELETE FROM portfolio_snapshots WHERE date < ?",
-                    (cutoff,)
-                )
-                await db.commit()
-                logger.info(f"Deleted {delete_count} old portfolio snapshots (before {cutoff})")
-            else:
-                logger.info("No old portfolio snapshots to clean up")
+            await db_manager.state.commit()
+            logger.info(f"Deleted {delete_count} old portfolio snapshots (before {cutoff})")
+        else:
+            logger.info("No old portfolio snapshots to clean up")
 
     except Exception as e:
         logger.error(f"Snapshot cleanup failed: {e}")

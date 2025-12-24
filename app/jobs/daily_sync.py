@@ -3,17 +3,15 @@
 import logging
 from datetime import datetime
 
-import aiosqlite
-
 from app.config import settings
 from app.services.tradernet import get_tradernet_client
 from app.services import yahoo
 from app.infrastructure.events import emit, SystemEvent
 from app.infrastructure.hardware.led_display import set_activity
-from app.infrastructure.dependencies import get_position_repository
 from app.infrastructure.locking import file_lock
+from app.infrastructure.database.manager import get_db_manager
 from app.domain.constants import DEFAULT_CURRENCY
-from app.domain.repositories import Position
+from app.domain.scoring.cache import get_score_cache
 
 logger = logging.getLogger(__name__)
 
@@ -53,130 +51,142 @@ async def _sync_portfolio_internal():
         positions = client.get_portfolio()
         cash_balance = client.get_total_cash_eur()
 
-        async with aiosqlite.connect(settings.database_path) as db:
-            db.row_factory = aiosqlite.Row
-            await db.execute("BEGIN TRANSACTION")
-            try:
-                position_repo = get_position_repository(db)
+        db_manager = get_db_manager()
 
-                # Save Yahoo-derived prices before clearing (for price continuity)
-                cursor = await db.execute(
-                    "SELECT symbol, current_price, market_value_eur FROM positions"
-                )
-                saved_price_data = {
-                    row[0]: {
-                        "current_price": row[1],
-                        "market_value_eur": row[2],
-                    }
-                    for row in await cursor.fetchall()
+        async with db_manager.state.transaction():
+            # Save Yahoo-derived prices before clearing (for price continuity)
+            cursor = await db_manager.state.execute(
+                "SELECT symbol, current_price, market_value_eur FROM positions"
+            )
+            saved_price_data = {
+                row[0]: {
+                    "current_price": row[1],
+                    "market_value_eur": row[2],
                 }
+                for row in await cursor.fetchall()
+            }
 
-                # Derive first_bought_at and last_sold_at from trades table
-                # This ensures dates reflect actual Tradernet trade history
-                cursor = await db.execute("""
-                    SELECT
-                        symbol,
-                        MIN(CASE WHEN UPPER(side) = 'BUY' THEN executed_at END) as first_buy,
-                        MAX(CASE WHEN UPPER(side) = 'SELL' THEN executed_at END) as last_sell
-                    FROM trades
-                    GROUP BY symbol
-                """)
-                trade_dates = {
-                    row[0]: {"first_bought_at": row[1], "last_sold_at": row[2]}
-                    for row in await cursor.fetchall()
-                }
+            # Derive first_bought_at and last_sold_at from trades table
+            cursor = await db_manager.ledger.execute("""
+                SELECT
+                    symbol,
+                    MIN(CASE WHEN UPPER(side) = 'BUY' THEN executed_at END) as first_buy,
+                    MAX(CASE WHEN UPPER(side) = 'SELL' THEN executed_at END) as last_sell
+                FROM trades
+                GROUP BY symbol
+            """)
+            trade_dates = {
+                row[0]: {"first_bought_at": row[1], "last_sold_at": row[2]}
+                for row in await cursor.fetchall()
+            }
 
-                await position_repo.delete_all(auto_commit=False)
+            # Clear existing positions
+            await db_manager.state.execute("DELETE FROM positions")
 
-                # Insert current positions
-                total_value = 0.0
-                geo_values = {"EU": 0.0, "ASIA": 0.0, "US": 0.0}
+            # Insert current positions
+            total_value = 0.0
+            invested_value = 0.0
+            unrealized_pnl = 0.0
+            geo_values = {"EU": 0.0, "ASIA": 0.0, "US": 0.0}
 
-                for pos in positions:
-                    price_data = saved_price_data.get(pos.symbol, {})
-                    dates = trade_dates.get(pos.symbol, {})
+            for pos in positions:
+                price_data = saved_price_data.get(pos.symbol, {})
+                dates = trade_dates.get(pos.symbol, {})
 
-                    # Use saved Yahoo prices if available, otherwise None
-                    # sync_prices() will update these with fresh Yahoo data
-                    current_price = price_data.get("current_price")
-                    market_value_eur = price_data.get("market_value_eur")
+                current_price = price_data.get("current_price")
+                market_value_eur = price_data.get("market_value_eur")
 
-                    # Recalculate market_value_eur if we have current_price but quantity changed
-                    if current_price and pos.currency_rate:
-                        market_value_eur = pos.quantity * current_price / pos.currency_rate
+                if current_price and pos.currency_rate:
+                    market_value_eur = pos.quantity * current_price / pos.currency_rate
 
-                    position = Position(
-                        symbol=pos.symbol,
-                        quantity=pos.quantity,
-                        avg_price=pos.avg_price,
-                        current_price=current_price,
-                        currency=pos.currency or DEFAULT_CURRENCY,
-                        currency_rate=pos.currency_rate,
-                        market_value_eur=market_value_eur,
-                        last_updated=datetime.now().isoformat(),
-                        first_bought_at=dates.get("first_bought_at"),
-                        last_sold_at=dates.get("last_sold_at"),
-                    )
-                    await position_repo.upsert(position, auto_commit=False)
+                # Calculate cost basis (invested value)
+                cost_basis_eur = pos.quantity * pos.avg_price / pos.currency_rate if pos.currency_rate else pos.quantity * pos.avg_price
+                invested_value += cost_basis_eur
 
-                    # Use Yahoo-based market_value_eur for snapshot (or 0 if not yet set)
-                    market_value = market_value_eur or 0
-                    total_value += market_value
+                # Calculate unrealized P&L
+                if current_price and pos.currency_rate:
+                    position_unrealized_pnl = (current_price - pos.avg_price) * pos.quantity / pos.currency_rate
+                    unrealized_pnl += position_unrealized_pnl
 
-                    # Determine geography
-                    geo = None
-                    cursor = await db.execute(
-                        "SELECT geography FROM stocks WHERE symbol = ?",
-                        (pos.symbol,)
-                    )
-                    row = await cursor.fetchone()
-                    if row:
-                        geo = row[0]
-                    else:
-                        symbol = pos.symbol.upper()
-                        if symbol.endswith(".GR") or symbol.endswith(".DE") or symbol.endswith(".PA"):
-                            geo = "EU"
-                        elif symbol.endswith(".AS") or symbol.endswith(".HK") or symbol.endswith(".T"):
-                            geo = "ASIA"
-                        elif symbol.endswith(".US"):
-                            geo = "US"
-
-                    if geo:
-                        geo_values[geo] = geo_values.get(geo, 0) + market_value
-
-                # Create daily snapshot
-                today = datetime.now().strftime("%Y-%m-%d")
-                await db.execute(
+                await db_manager.state.execute(
                     """
-                    INSERT OR REPLACE INTO portfolio_snapshots
-                    (date, total_value, cash_balance, geo_eu_pct, geo_asia_pct, geo_us_pct)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    INSERT INTO positions
+                    (symbol, quantity, avg_price, current_price, currency,
+                     currency_rate, market_value_eur, last_updated,
+                     first_bought_at, last_sold_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
-                        today,
-                        total_value,
-                        cash_balance,
-                        geo_values["EU"] / total_value if total_value else 0,
-                        geo_values["ASIA"] / total_value if total_value else 0,
-                        geo_values["US"] / total_value if total_value else 0,
-                    ),
+                        pos.symbol,
+                        pos.quantity,
+                        pos.avg_price,
+                        current_price,
+                        pos.currency or DEFAULT_CURRENCY,
+                        pos.currency_rate,
+                        market_value_eur,
+                        datetime.now().isoformat(),
+                        dates.get("first_bought_at"),
+                        dates.get("last_sold_at"),
+                    )
                 )
 
-                await db.commit()
-            except Exception:
-                await db.rollback()
-                raise
+                market_value = market_value_eur or 0
+                total_value += market_value
+
+                # Determine geography from config
+                cursor = await db_manager.config.execute(
+                    "SELECT geography FROM stocks WHERE symbol = ?",
+                    (pos.symbol,)
+                )
+                row = await cursor.fetchone()
+                if row:
+                    geo = row[0]
+                else:
+                    symbol = pos.symbol.upper()
+                    if symbol.endswith(".GR") or symbol.endswith(".DE") or symbol.endswith(".PA"):
+                        geo = "EU"
+                    elif symbol.endswith(".AS") or symbol.endswith(".HK") or symbol.endswith(".T"):
+                        geo = "ASIA"
+                    elif symbol.endswith(".US"):
+                        geo = "US"
+                    else:
+                        geo = None
+
+                if geo:
+                    geo_values[geo] = geo_values.get(geo, 0) + market_value
+
+            # Create daily snapshot
+            today = datetime.now().strftime("%Y-%m-%d")
+            position_count = len(positions)
+            await db_manager.state.execute(
+                """
+                INSERT OR REPLACE INTO portfolio_snapshots
+                (date, total_value, cash_balance, invested_value, unrealized_pnl,
+                 geo_eu_pct, geo_asia_pct, geo_us_pct, position_count, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                """,
+                (
+                    today,
+                    total_value,
+                    cash_balance,
+                    invested_value,
+                    unrealized_pnl,
+                    geo_values["EU"] / total_value if total_value else 0,
+                    geo_values["ASIA"] / total_value if total_value else 0,
+                    geo_values["US"] / total_value if total_value else 0,
+                    position_count,
+                ),
+            )
 
         logger.info(
             f"Portfolio sync complete: {len(positions)} positions, "
             f"total value: {total_value:.2f}, cash: {cash_balance:.2f}"
         )
 
-        # Sync stock currencies (do this during portfolio sync)
+        # Sync stock currencies
         await sync_stock_currencies()
 
-        # Sync prices from Yahoo to ensure market_value_eur is calculated correctly
-        # This is especially important for new positions that don't have Yahoo prices yet
+        # Sync prices from Yahoo
         await _sync_prices_internal()
 
         emit(SystemEvent.SYNC_COMPLETE)
@@ -206,30 +216,29 @@ async def _sync_prices_internal():
     emit(SystemEvent.SYNC_START)
 
     try:
-        async with aiosqlite.connect(settings.database_path) as db:
-            await db.execute("PRAGMA journal_mode=WAL")
-            await db.execute("PRAGMA busy_timeout=30000")
+        db_manager = get_db_manager()
 
-            cursor = await db.execute(
-                "SELECT symbol, yahoo_symbol FROM stocks WHERE active = 1"
-            )
-            rows = await cursor.fetchall()
+        # Get active stocks from config
+        cursor = await db_manager.config.execute(
+            "SELECT symbol, yahoo_symbol FROM stocks WHERE active = 1"
+        )
+        rows = await cursor.fetchall()
 
-            if not rows:
-                logger.info("No stocks to sync")
-                emit(SystemEvent.SYNC_COMPLETE)
-                return
+        if not rows:
+            logger.info("No stocks to sync")
+            emit(SystemEvent.SYNC_COMPLETE)
+            return
 
-            symbol_yahoo_map = {row[0]: row[1] for row in rows}
+        symbol_yahoo_map = {row[0]: row[1] for row in rows}
 
-            quotes = yahoo.get_batch_quotes(symbol_yahoo_map)
+        quotes = yahoo.get_batch_quotes(symbol_yahoo_map)
 
-            updated = 0
-            now = datetime.now().isoformat()
+        updated = 0
+        now = datetime.now().isoformat()
+
+        async with db_manager.state.transaction():
             for symbol, price in quotes.items():
-                # Update current_price and recalculate market_value_eur from Yahoo price
-                # This ensures portfolio value uses fresh Yahoo prices, not stale Tradernet values
-                result = await db.execute(
+                result = await db_manager.state.execute(
                     """
                     UPDATE positions
                     SET current_price = ?,
@@ -242,9 +251,16 @@ async def _sync_prices_internal():
                 if result.rowcount > 0:
                     updated += 1
 
-            await db.commit()
-
         logger.info(f"Price sync complete: {len(quotes)} quotes, {updated} positions updated")
+
+        # Invalidate FAST cache components for updated symbols
+        cache = get_score_cache()
+        if cache:
+            for symbol in quotes.keys():
+                await cache.invalidate(symbol, "opportunity")
+                await cache.invalidate(symbol, "short_term")
+                await cache.invalidate(symbol, "technicals")
+            logger.debug(f"Invalidated FAST score cache for {len(quotes)} symbols")
 
         emit(SystemEvent.SYNC_COMPLETE)
 
@@ -258,9 +274,6 @@ async def _sync_prices_internal():
 async def sync_stock_currencies():
     """
     Fetch and store trading currency for all stocks from Tradernet.
-
-    Uses the x_curr field from get_quotes() which contains the actual
-    trading currency (e.g., BA.EU trades in GBP, not EUR).
     """
     logger.info("Starting stock currency sync")
 
@@ -274,46 +287,44 @@ async def sync_stock_currencies():
             return
 
     try:
-        async with aiosqlite.connect(settings.database_path) as db:
-            db.row_factory = aiosqlite.Row
-            await db.execute("PRAGMA journal_mode=WAL")
-            await db.execute("PRAGMA busy_timeout=30000")
+        db_manager = get_db_manager()
 
-            # Get all active stock symbols
-            cursor = await db.execute("SELECT symbol FROM stocks WHERE active=1")
-            symbols = [row[0] for row in await cursor.fetchall()]
+        # Get all active stock symbols from config
+        cursor = await db_manager.config.execute(
+            "SELECT symbol FROM stocks WHERE active = 1"
+        )
+        symbols = [row[0] for row in await cursor.fetchall()]
 
-            if not symbols:
-                logger.info("No stocks to sync currencies for")
-                return
+        if not symbols:
+            logger.info("No stocks to sync currencies for")
+            return
 
-            # Fetch quotes to get x_curr
-            quotes_response = client.get_quotes_raw(symbols)
+        # Fetch quotes to get x_curr
+        quotes_response = client.get_quotes_raw(symbols)
 
-            # Handle different response formats
-            if isinstance(quotes_response, list):
-                q_list = quotes_response
-            elif isinstance(quotes_response, dict):
-                q_list = quotes_response.get("result", {}).get("q", [])
-                if not q_list:
-                    q_list = quotes_response.get("q", [])
-            else:
-                q_list = []
+        if isinstance(quotes_response, list):
+            q_list = quotes_response
+        elif isinstance(quotes_response, dict):
+            q_list = quotes_response.get("result", {}).get("q", [])
+            if not q_list:
+                q_list = quotes_response.get("q", [])
+        else:
+            q_list = []
 
-            updated = 0
+        updated = 0
+        async with db_manager.config.transaction():
             for q in q_list:
                 if isinstance(q, dict):
                     symbol = q.get("c")
                     currency = q.get("x_curr")
                     if symbol and currency:
-                        await db.execute(
+                        await db_manager.config.execute(
                             "UPDATE stocks SET currency = ? WHERE symbol = ?",
                             (currency, symbol)
                         )
                         updated += 1
 
-            await db.commit()
-            logger.info(f"Stock currency sync complete: updated {updated} stocks")
+        logger.info(f"Stock currency sync complete: updated {updated} stocks")
 
     except Exception as e:
         logger.error(f"Stock currency sync failed: {e}")

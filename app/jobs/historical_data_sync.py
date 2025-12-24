@@ -1,17 +1,19 @@
-"""Historical data sync job for stock prices."""
+"""Historical data sync job for stock prices.
+
+Fetches historical prices from Yahoo and stores in per-symbol databases.
+"""
 
 import logging
 import asyncio
 from datetime import datetime, timedelta
 
-import aiosqlite
-
 from app.config import settings
-from app.database import get_db_connection
 from app.services import yahoo
 from app.infrastructure.locking import file_lock
 from app.infrastructure.events import emit, SystemEvent
 from app.infrastructure.hardware.led_display import set_activity
+from app.infrastructure.database.manager import get_db_manager
+from app.domain.scoring.cache import get_score_cache
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +40,6 @@ async def _sync_historical_data_internal():
 
     try:
         await _sync_stock_price_history()
-        await _aggregate_to_monthly()
         logger.info("Historical data sync complete")
         emit(SystemEvent.SYNC_COMPLETE)
     except Exception as e:
@@ -48,70 +49,74 @@ async def _sync_historical_data_internal():
 
 
 async def _sync_stock_price_history():
-    """Fetch and store historical stock prices for all active stocks (1 year)."""
+    """Fetch and store historical stock prices for all active stocks."""
     logger.info("Starting stock price history sync (using Yahoo Finance)")
 
     set_activity("SYNCING HISTORICAL PRICES...", duration=300.0)
 
-    async with get_db_connection() as db:
-        cursor = await db.execute(
-            "SELECT symbol, yahoo_symbol FROM stocks WHERE active = 1"
-        )
-        rows = await cursor.fetchall()
-        stocks = [(row["symbol"], row["yahoo_symbol"]) for row in rows]
+    db_manager = get_db_manager()
 
-        if not stocks:
-            logger.info("No active stocks to sync")
-            return
+    # Get all active stocks from config
+    cursor = await db_manager.config.execute(
+        "SELECT symbol, yahoo_symbol FROM stocks WHERE active = 1"
+    )
+    rows = await cursor.fetchall()
+    stocks = [(row[0], row[1]) for row in rows]
 
-        logger.info(f"Syncing historical prices for {len(stocks)} stocks")
+    if not stocks:
+        logger.info("No active stocks to sync")
+        return
 
-        processed = 0
-        errors = 0
+    logger.info(f"Syncing historical prices for {len(stocks)} stocks")
 
-        for symbol, yahoo_symbol in stocks:
-            try:
-                # Check if we already have recent data
-                cursor = await db.execute("""
-                    SELECT MAX(date) as max_date
-                    FROM stock_price_history
-                    WHERE symbol = ?
-                """, (symbol,))
-                row = await cursor.fetchone()
+    processed = 0
+    errors = 0
 
-                if row and row["max_date"]:
-                    max_date = datetime.strptime(row["max_date"], "%Y-%m-%d")
-                    if max_date >= datetime.now() - timedelta(days=1):
-                        processed += 1
-                        continue
+    for symbol, yahoo_symbol in stocks:
+        try:
+            # Get history database for this symbol
+            history_db = await db_manager.history(symbol)
 
-                await _fetch_and_store_prices(db, symbol, yahoo_symbol)
+            # Check if we already have recent data
+            cursor = await history_db.execute(
+                "SELECT MAX(date) as max_date FROM daily_prices"
+            )
+            row = await cursor.fetchone()
 
-                processed += 1
-                if processed % 10 == 0:
-                    logger.info(f"Processed {processed}/{len(stocks)} stocks")
+            if row and row[0]:
+                max_date = datetime.strptime(row[0], "%Y-%m-%d")
+                if max_date >= datetime.now() - timedelta(days=1):
+                    processed += 1
+                    continue
 
-                await asyncio.sleep(settings.external_api_rate_limit_delay)
+            await _fetch_and_store_prices(history_db, symbol, yahoo_symbol)
 
-            except Exception as e:
-                errors += 1
-                logger.error(f"Failed to sync historical prices for {symbol}: {e}")
-                continue
+            # Invalidate SLOW cache components after historical data update
+            cache = get_score_cache()
+            if cache:
+                await cache.invalidate(symbol, "long_term")
+                await cache.invalidate(symbol, "fundamentals")
 
-        logger.info(f"Stock price history sync complete: {processed} processed, {errors} errors")
+            processed += 1
+            if processed % 10 == 0:
+                logger.info(f"Processed {processed}/{len(stocks)} stocks")
+
+            await asyncio.sleep(settings.external_api_rate_limit_delay)
+
+        except Exception as e:
+            errors += 1
+            logger.error(f"Failed to sync historical prices for {symbol}: {e}")
+            continue
+
+    logger.info(f"Stock price history sync complete: {processed} processed, {errors} errors")
 
 
-async def _fetch_and_store_prices(
-    db: aiosqlite.Connection,
-    symbol: str,
-    yahoo_symbol: str = None
-):
-    """Fetch historical prices from Yahoo Finance and store in database."""
+async def _fetch_and_store_prices(history_db, symbol: str, yahoo_symbol: str = None):
+    """Fetch historical prices from Yahoo Finance and store in per-symbol database."""
     try:
         # Check if we have monthly data (indicates initial seeding was done)
-        cursor = await db.execute(
-            "SELECT COUNT(*) FROM stock_price_monthly WHERE symbol = ?",
-            (symbol,)
+        cursor = await history_db.execute(
+            "SELECT COUNT(*) FROM monthly_prices"
         )
         has_monthly = (await cursor.fetchone())[0] > 0
 
@@ -127,26 +132,27 @@ async def _fetch_and_store_prices(
 
         logger.info(f"Fetched {len(ohlc_data)} price records for {symbol} ({period}) from Yahoo")
 
-        now = datetime.now().isoformat()
-        for ohlc in ohlc_data:
-            date = ohlc.date.strftime("%Y-%m-%d")
-            await db.execute("""
-                INSERT OR REPLACE INTO stock_price_history
-                (symbol, date, close_price, open_price, high_price, low_price, volume, source, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                symbol,
-                date,
-                ohlc.close,
-                ohlc.open,
-                ohlc.high,
-                ohlc.low,
-                ohlc.volume,
-                "yahoo",
-                now,
-            ))
+        async with history_db.transaction():
+            for ohlc in ohlc_data:
+                date = ohlc.date.strftime("%Y-%m-%d") if hasattr(ohlc, 'date') else ohlc.get('date')
+                close = ohlc.close if hasattr(ohlc, 'close') else ohlc.get('close')
+                open_price = ohlc.open if hasattr(ohlc, 'open') else ohlc.get('open')
+                high = ohlc.high if hasattr(ohlc, 'high') else ohlc.get('high')
+                low = ohlc.low if hasattr(ohlc, 'low') else ohlc.get('low')
+                volume = ohlc.volume if hasattr(ohlc, 'volume') else ohlc.get('volume')
 
-        await db.commit()
+                await history_db.execute(
+                    """
+                    INSERT OR REPLACE INTO daily_prices
+                    (date, open_price, high_price, low_price, close_price, volume, source, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, 'yahoo', datetime('now'))
+                    """,
+                    (date, open_price, high, low, close, volume)
+                )
+
+            # Aggregate to monthly
+            await _aggregate_to_monthly(history_db)
+
         logger.debug(f"Stored {len(ohlc_data)} Yahoo price records for {symbol}")
 
     except Exception as e:
@@ -154,33 +160,17 @@ async def _fetch_and_store_prices(
         raise
 
 
-async def _aggregate_to_monthly():
-    """Aggregate daily prices to monthly averages for all symbols."""
-    logger.info("Aggregating daily prices to monthly averages")
-
-    set_activity("AGGREGATING MONTHLY PRICES...", duration=60.0)
-
-    async with get_db_connection() as db:
-        cursor = await db.execute("SELECT DISTINCT symbol FROM stock_price_history")
-        symbols = [row["symbol"] for row in await cursor.fetchall()]
-
-        for symbol in symbols:
-            await db.execute("""
-                INSERT OR REPLACE INTO stock_price_monthly
-                (symbol, year_month, avg_close, avg_adj_close, min_price, max_price, source, created_at)
-                SELECT
-                    symbol,
-                    strftime('%Y-%m', date) as year_month,
-                    AVG(close_price) as avg_close,
-                    AVG(close_price) as avg_adj_close,
-                    MIN(low_price) as min_price,
-                    MAX(high_price) as max_price,
-                    'calculated' as source,
-                    datetime('now') as created_at
-                FROM stock_price_history
-                WHERE symbol = ?
-                GROUP BY symbol, strftime('%Y-%m', date)
-            """, (symbol,))
-
-        await db.commit()
-        logger.info(f"Aggregated monthly prices for {len(symbols)} symbols")
+async def _aggregate_to_monthly(history_db):
+    """Aggregate daily prices to monthly averages for this symbol."""
+    await history_db.execute("""
+        INSERT OR REPLACE INTO monthly_prices
+        (year_month, avg_close, avg_adj_close, source, created_at)
+        SELECT
+            strftime('%Y-%m', date) as year_month,
+            AVG(close_price) as avg_close,
+            AVG(close_price) as avg_adj_close,
+            'calculated',
+            datetime('now')
+        FROM daily_prices
+        GROUP BY strftime('%Y-%m', date)
+    """)
