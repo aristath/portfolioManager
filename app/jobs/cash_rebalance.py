@@ -395,10 +395,10 @@ async def _get_best_sell_trade(
     # Get sell settings
     settings_repo = SettingsRepository()
     sell_settings = {
-        "min_hold_days": await settings_repo.get_value("min_hold_days", 90),
-        "sell_cooldown_days": await settings_repo.get_value("sell_cooldown_days", 180),
-        "max_loss_threshold": await settings_repo.get_value("max_loss_threshold", 0.20),
-        "target_annual_return": await settings_repo.get_value("target_annual_return", 0.10),
+        "min_hold_days": await settings_repo.get_int("min_hold_days", 90),
+        "sell_cooldown_days": await settings_repo.get_int("sell_cooldown_days", 180),
+        "max_loss_threshold": await settings_repo.get_float("max_loss_threshold", 0.20),
+        "target_annual_return": await settings_repo.get_float("target_annual_return", 0.10),
     }
 
     sell_scores = await calculate_all_sell_scores(

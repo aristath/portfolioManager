@@ -253,7 +253,7 @@ class RebalancingService:
         """
         set_activity("PROCESSING RECOMMENDATIONS (BUY)...", duration=10.0)
 
-        base_trade_amount = await self._settings_repo.get_value("min_trade_size", 150.0)
+        base_trade_amount = await self._settings_repo.get_float("min_trade_size", 150.0)
 
         # Build portfolio context
         portfolio_context = await self._build_portfolio_context()
