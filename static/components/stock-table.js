@@ -99,6 +99,7 @@ class StockTable extends HTMLElement {
                   <span x-show="$store.app.sortBy === 'priority_multiplier'" class="ml-1"
                         x-text="$store.app.sortDesc ? '▼' : '▲'"></span>
                 </th>
+                <th class="py-2 px-2 text-center hidden lg:table-cell" title="Buy/Sell status">B/S</th>
                 <th @click="$store.app.sortStocks('priority_score')"
                     class="py-2 px-2 cursor-pointer hover:text-gray-300 text-right">
                   Priority
@@ -113,21 +114,11 @@ class StockTable extends HTMLElement {
                 <tr class="hover:bg-gray-800/50 cursor-pointer md:cursor-default"
                     @click="window.innerWidth < 768 && $store.app.openEditStock(stock)">
                   <td class="py-1.5 px-2 font-mono text-blue-400 sticky left-0 bg-gray-800">
-                    <div class="flex items-center gap-1">
-                      <button @click.stop="$store.app.showStockChart = true; $store.app.selectedStockSymbol = stock.symbol"
-                              class="hover:underline cursor-pointer"
-                              title="View chart">
-                        <span x-text="stock.symbol"></span>
-                      </button>
-                      <!-- Buy blocked indicator -->
-                      <span x-show="!stock.allow_buy"
-                            class="text-[10px] px-1 py-0.5 rounded bg-red-900/50 text-red-400 font-sans"
-                            title="Buying disabled">✕B</span>
-                      <!-- Sell enabled indicator -->
-                      <span x-show="stock.allow_sell"
-                            class="text-[10px] px-1 py-0.5 rounded bg-green-900/50 text-green-400 font-sans"
-                            title="Selling enabled">S</span>
-                    </div>
+                    <button @click.stop="$store.app.showStockChart = true; $store.app.selectedStockSymbol = stock.symbol"
+                            class="hover:underline cursor-pointer"
+                            title="View chart">
+                      <span x-text="stock.symbol"></span>
+                    </button>
                   </td>
                   <td class="py-1.5 px-1 hidden md:table-cell">
                     <div class="sparkline-container"
@@ -160,6 +151,18 @@ class StockTable extends HTMLElement {
                            @click.stop
                            @change="$store.app.updateMultiplier(stock.symbol, $event.target.value)"
                            title="Priority multiplier (0.1-3.0)">
+                  </td>
+                  <td class="py-1.5 px-2 text-center hidden lg:table-cell">
+                    <div class="flex justify-center gap-1">
+                      <span x-show="stock.allow_buy"
+                            class="w-2.5 h-2.5 rounded-full bg-green-500"
+                            title="Buy enabled"></span>
+                      <span x-show="stock.allow_sell"
+                            class="w-2.5 h-2.5 rounded-full bg-red-500"
+                            title="Sell enabled"></span>
+                      <span x-show="!stock.allow_buy && !stock.allow_sell"
+                            class="text-gray-600">-</span>
+                    </div>
                   </td>
                   <td class="py-1.5 px-2 text-right">
                     <span class="font-mono px-1.5 py-0.5 rounded"
