@@ -124,6 +124,44 @@ class SettingsModal extends HTMLElement {
               </div>
             </div>
 
+            <!-- LED Matrix Section -->
+            <div class="border-b border-gray-700 pb-4">
+              <h3 class="text-sm font-medium text-gray-400 uppercase tracking-wide mb-3">LED Matrix</h3>
+
+              <div class="grid grid-cols-[1fr_auto] gap-x-4 gap-y-3 items-start">
+                <!-- Ticker Speed -->
+                <div>
+                  <span class="text-sm text-gray-300">Ticker Speed</span>
+                  <p class="text-xs text-gray-500">How fast the ticker scrolls across the LED matrix. Lower values = faster scrolling. Range: 20ms (very fast) to 100ms (slow). Default is 50ms</p>
+                </div>
+                <div class="flex items-center gap-1">
+                  <input type="number"
+                         min="20"
+                         max="100"
+                         step="5"
+                         :value="$store.app.settings.ticker_speed"
+                         @change="$store.app.updateSetting('ticker_speed', $event.target.value)"
+                         class="w-20 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-right font-mono text-sm text-gray-200 focus:outline-none focus:border-blue-500">
+                  <span class="text-gray-400 text-sm">ms</span>
+                </div>
+
+                <!-- LED Brightness -->
+                <div>
+                  <span class="text-sm text-gray-300">Brightness</span>
+                  <p class="text-xs text-gray-500">Brightness of the LED matrix display. Range: 0 (off) to 255 (maximum). Lower values save power and reduce eye strain in dark rooms. Default is 150</p>
+                </div>
+                <div class="flex items-center gap-1">
+                  <input type="number"
+                         min="0"
+                         max="255"
+                         step="10"
+                         :value="$store.app.settings.led_brightness"
+                         @change="$store.app.updateSetting('led_brightness', $event.target.value)"
+                         class="w-20 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-right font-mono text-sm text-gray-200 focus:outline-none focus:border-blue-500">
+                </div>
+              </div>
+            </div>
+
             <!-- System Actions Section -->
             <div>
               <h3 class="text-sm font-medium text-gray-400 uppercase tracking-wide mb-3">System</h3>

@@ -14,10 +14,14 @@ API_URL = "http://172.17.0.1:8000"
 ROWS = 8
 COLS = 13
 
-# Brightness constants (0 = off, 255 = brightest)
-PIXEL_BRIGHT = 150    # Main animation brightness
+# Default brightness constants (0 = off, 255 = brightest)
+# These can be overridden by API settings
+PIXEL_BRIGHT = 150    # Main animation brightness (default)
 PIXEL_DIM = 60        # Secondary/fading pixels
 PIXEL_OFF = 0
+
+# Default ticker speed in ms (can be overridden by API)
+DEFAULT_TICKER_SPEED = 50
 
 
 # =============================================================================
@@ -325,11 +329,16 @@ def get_text_width(text: str) -> int:
     return max(0, width - 1)  # Remove trailing space
 
 
-def animate_ticker(text: str, offset: int) -> np.ndarray:
+def animate_ticker(text: str, offset: int, brightness: int = PIXEL_BRIGHT) -> np.ndarray:
     """Smooth scrolling ticker using 7px variable-width font.
 
     Text scrolls right-to-left across the 8x13 matrix.
     Uses 7-pixel tall characters, leaving 1 row for spacing at bottom.
+
+    Args:
+        text: Text to display
+        offset: Current scroll offset (pixels)
+        brightness: LED brightness (0-255)
     """
     arr = np.zeros((ROWS, COLS), dtype=np.uint8)
 
@@ -355,7 +364,7 @@ def animate_ticker(text: str, offset: int) -> np.ndarray:
                         c = col + col_idx
                         # Only draw if within visible matrix
                         if 0 <= c < COLS and row_idx < ROWS:
-                            arr[row_idx, c] = PIXEL_BRIGHT
+                            arr[row_idx, c] = brightness
             col += char_width + 1  # Move to next char position + spacing
         else:
             # Unknown char - skip 3 pixels
@@ -438,6 +447,11 @@ def loop():
         ticker_text = state.get("ticker_text", "")
         activity_message = state.get("activity_message", "")
 
+        # Get configurable settings from API
+        ticker_speed_ms = state.get("ticker_speed", DEFAULT_TICKER_SPEED)
+        led_brightness = int(state.get("led_brightness", PIXEL_BRIGHT))
+        ticker_sleep = ticker_speed_ms / 1000.0  # Convert ms to seconds
+
         # Mode change logging
         if mode != last_mode:
             logger.info(f"Mode: {mode}")
@@ -466,9 +480,9 @@ def loop():
             else:
                 # Trade animation done, show ticker
                 if ticker_text:
-                    draw_frame(Frame(animate_ticker(ticker_text, scroll_offset)))
+                    draw_frame(Frame(animate_ticker(ticker_text, scroll_offset, led_brightness)))
                     scroll_offset += 1
-                    time.sleep(0.05)
+                    time.sleep(ticker_sleep)
                 else:
                     temp = get_max_temperature()
                     draw_frame(Frame(animate_normal(phase, temp)))
@@ -476,9 +490,11 @@ def loop():
 
         elif activity_message:
             # Activity message (higher priority than ticker/syncing)
-            draw_frame(Frame(animate_ticker(activity_message, scroll_offset)))
+            # Activity runs slightly faster than normal ticker
+            activity_sleep = max(0.02, ticker_sleep * 0.8)
+            draw_frame(Frame(animate_ticker(activity_message, scroll_offset, led_brightness)))
             scroll_offset += 1
-            time.sleep(0.04)  # Slightly faster for activity
+            time.sleep(activity_sleep)
 
         elif mode == "syncing":
             # Active sync wave
@@ -488,9 +504,9 @@ def loop():
         else:
             # Normal mode - show ticker (replaces heartbeat)
             if ticker_text:
-                draw_frame(Frame(animate_ticker(ticker_text, scroll_offset)))
+                draw_frame(Frame(animate_ticker(ticker_text, scroll_offset, led_brightness)))
                 scroll_offset += 1
-                time.sleep(0.05)
+                time.sleep(ticker_sleep)
             else:
                 # Fallback to heartbeat if no ticker
                 temp = get_max_temperature()

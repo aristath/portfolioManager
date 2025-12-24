@@ -160,8 +160,11 @@ async def get_led_display_state(
     - led4: RGB values for LED 4 (processing indicator)
     - ticker_text: scrolling ticker with portfolio info
     - activity_message: current activity (higher priority)
+    - ticker_speed: scroll speed in ms per frame
+    - led_brightness: brightness 0-255
     """
     from app.infrastructure.hardware.led_display import get_display_state
+    from app.api.settings import get_setting_value
 
     state = get_display_state()
 
@@ -171,6 +174,10 @@ async def get_led_display_state(
             portfolio_repo, position_repo, allocation_repo, stock_repo
         )
         state["ticker_text"] = ticker
+
+    # Add LED settings
+    state["ticker_speed"] = await get_setting_value("ticker_speed")
+    state["led_brightness"] = int(await get_setting_value("led_brightness"))
 
     return state
 
