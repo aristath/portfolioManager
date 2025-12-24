@@ -2,8 +2,8 @@
 // Controls 8x13 LED matrix and RGB LEDs 3 & 4 on Arduino UNO Q
 
 #include <Arduino_RouterBridge.h>
-#include <ArduinoGraphics.h>
-#include <Arduino_LED_Matrix.h>
+#include "ArduinoGraphics.h"
+#include "Arduino_LED_Matrix.h"
 #include <vector>
 
 ArduinoLEDMatrix matrix;
