@@ -322,13 +322,11 @@ class RebalancingService:
             total_score = score_row["total_score"] or 0.5
 
             if total_score < settings.min_stock_score:
-                logger.info(f"Skipping {symbol}: score {total_score:.2f} below min {settings.min_stock_score}")
                 continue
 
             # Get current price from batch-fetched prices
             price = batch_prices.get(symbol)
             if not price or price <= 0:
-                logger.info(f"Skipping {symbol}: no price in batch (got {price})")
                 continue
 
             # Determine stock currency and exchange rate
@@ -409,7 +407,7 @@ class RebalancingService:
 
             # Skip stocks that worsen portfolio balance significantly
             if score_change < -1.0:
-                logger.info(f"Skipping {symbol}: transaction worsens balance ({score_change:.2f})")
+                logger.debug(f"Skipping {symbol}: transaction worsens balance ({score_change:.2f})")
                 continue
 
             # Calculate final priority score
