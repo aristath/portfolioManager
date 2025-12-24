@@ -105,14 +105,24 @@ async def _fetch_and_store_prices(
 ):
     """Fetch historical prices from Yahoo Finance and store in database."""
     try:
-        # Fetch 1 year of historical data from Yahoo Finance
-        ohlc_data = yahoo.get_historical_prices(symbol, yahoo_symbol, period="1y")
+        # Check if we have monthly data (indicates initial seeding was done)
+        cursor = await db.execute(
+            "SELECT COUNT(*) FROM stock_price_monthly WHERE symbol = ?",
+            (symbol,)
+        )
+        has_monthly = (await cursor.fetchone())[0] > 0
+
+        # Initial seed: 10 years for CAGR calculations
+        # Ongoing updates: 1 year for daily charts
+        period = "1y" if has_monthly else "10y"
+
+        ohlc_data = yahoo.get_historical_prices(symbol, yahoo_symbol, period=period)
 
         if not ohlc_data:
             logger.warning(f"No price data from Yahoo for {symbol}")
             return
 
-        logger.info(f"Fetched {len(ohlc_data)} price records for {symbol} from Yahoo")
+        logger.info(f"Fetched {len(ohlc_data)} price records for {symbol} ({period}) from Yahoo")
 
         now = datetime.now().isoformat()
         for ohlc in ohlc_data:
