@@ -88,6 +88,10 @@ function allocationRadarComponent(geoCanvasId, industryCanvasId, chartType) {
     industryChart: null,
     chartsInitialized: false,
     updatingCharts: false,
+    initializing: false,
+    updateTimer: null,
+    previousGeoData: null,
+    previousIndustryData: null,
     geoCanvasId: geoCanvasId,
     industryCanvasId: industryCanvasId,
     chartType: chartType,
@@ -153,6 +157,15 @@ function allocationRadarComponent(geoCanvasId, industryCanvasId, chartType) {
       }
     },
 
+    hasDataChanged(newData, previousData) {
+      if (!previousData) return true;
+      if (newData.labels.length !== previousData.labels.length) return true;
+      if (JSON.stringify(newData.labels) !== JSON.stringify(previousData.labels)) return true;
+      if (JSON.stringify(newData.currentData) !== JSON.stringify(previousData.currentData)) return true;
+      if (JSON.stringify(newData.targetData) !== JSON.stringify(previousData.targetData)) return true;
+      return false;
+    },
+
     getTargetPcts(weights, activeItems) {
       // Convert weights (-1 to +1) to percentages
       const shifted = {};
@@ -182,9 +195,25 @@ function allocationRadarComponent(geoCanvasId, industryCanvasId, chartType) {
         return;
       }
 
-      // Destroy existing chart if it exists
+      // Check Chart.js registry for existing chart
+      const existingChart = Chart.getChart(canvas);
+      if (existingChart) {
+        try {
+          existingChart.destroy();
+        } catch (e) {
+          console.warn('Error destroying existing chart from registry:', e);
+        }
+      }
+
+      // Also destroy our reference if it exists
       if (this.geoChart) {
-        this.geoChart.destroy();
+        try {
+          if (!this.geoChart.destroyed) {
+            this.geoChart.destroy();
+          }
+        } catch (e) {
+          console.warn('Error destroying geoChart reference:', e);
+        }
         this.geoChart = null;
       }
 
@@ -266,9 +295,25 @@ function allocationRadarComponent(geoCanvasId, industryCanvasId, chartType) {
         return;
       }
 
-      // Destroy existing chart if it exists
+      // Check Chart.js registry for existing chart
+      const existingChart = Chart.getChart(canvas);
+      if (existingChart) {
+        try {
+          existingChart.destroy();
+        } catch (e) {
+          console.warn('Error destroying existing chart from registry:', e);
+        }
+      }
+
+      // Also destroy our reference if it exists
       if (this.industryChart) {
-        this.industryChart.destroy();
+        try {
+          if (!this.industryChart.destroyed) {
+            this.industryChart.destroy();
+          }
+        } catch (e) {
+          console.warn('Error destroying industryChart reference:', e);
+        }
         this.industryChart = null;
       }
 
@@ -385,95 +430,127 @@ function allocationRadarComponent(geoCanvasId, industryCanvasId, chartType) {
     updateCharts() {
       // Prevent recursive updates
       if (this.updatingCharts) return;
-      this.updatingCharts = true;
 
-      try {
-        // Update or create geo chart
-        if (this.chartType === 'geographic' || this.chartType === 'both') {
-          const activeGeos = this.$store.app.activeGeographies || [];
-          const geoAllocation = this.$store.app.allocation?.geographic || [];
-
-          if (activeGeos.length > 0 && Array.isArray(geoAllocation) && geoAllocation.length > 0) {
-            if (this.geoChart && !this.geoChart.destroyed) {
-              try {
-                // Update existing chart
-                const currentData = activeGeos.map(geo => {
-                  const item = geoAllocation.find(a => a.name === geo);
-                  return item ? item.current_pct * 100 : 0;
-                });
-
-                const weights = {};
-                geoAllocation.forEach(a => { weights[a.name] = a.target_pct || 0; });
-                const targetPcts = this.getTargetPcts(weights, activeGeos);
-                const targetData = activeGeos.map(geo => (targetPcts[geo] || 0) * 100);
-
-                // Calculate max value from both datasets for auto-scaling
-                const allValues = [...targetData, ...currentData];
-                const maxValue = allValues.length > 0 ? Math.max(...allValues) : 100;
-                const paddedMax = maxValue > 0 ? Math.ceil(maxValue * 1.25) : 100;
-
-                this.geoChart.data.labels = activeGeos;
-                this.geoChart.data.datasets[0].data = targetData;
-                this.geoChart.data.datasets[1].data = currentData;
-                this.geoChart.options.scales.r.suggestedMax = paddedMax;
-                this.geoChart.update('none');
-              } catch (error) {
-                console.error('Error updating geo chart:', error);
-                // Recreate chart if update fails
-                this.geoChart = null;
-                this.createGeoChart();
-              }
-            } else {
-              // Chart doesn't exist yet or was destroyed, create it
-              this.createGeoChart();
-            }
-          }
-        }
-
-        // Update or create industry chart
-        if (this.chartType === 'industry' || this.chartType === 'both') {
-          const activeIndustries = this.$store.app.activeIndustries || [];
-          const industryAllocation = this.$store.app.allocation?.industry || [];
-
-          if (activeIndustries.length > 0 && Array.isArray(industryAllocation) && industryAllocation.length > 0) {
-            if (this.industryChart && !this.industryChart.destroyed) {
-              try {
-                // Update existing chart
-                const currentData = activeIndustries.map(ind => {
-                  const item = industryAllocation.find(a => a.name === ind);
-                  return item ? item.current_pct * 100 : 0;
-                });
-
-                const weights = {};
-                industryAllocation.forEach(a => { weights[a.name] = a.target_pct || 0; });
-                const targetPcts = this.getTargetPcts(weights, activeIndustries);
-                const targetData = activeIndustries.map(ind => (targetPcts[ind] || 0) * 100);
-
-                // Calculate max value from both datasets for auto-scaling
-                const allValues = [...targetData, ...currentData];
-                const maxValue = allValues.length > 0 ? Math.max(...allValues) : 100;
-                const paddedMax = maxValue > 0 ? Math.ceil(maxValue * 1.25) : 100;
-
-                this.industryChart.data.labels = activeIndustries;
-                this.industryChart.data.datasets[0].data = targetData;
-                this.industryChart.data.datasets[1].data = currentData;
-                this.industryChart.options.scales.r.suggestedMax = paddedMax;
-                this.industryChart.update('none');
-              } catch (error) {
-                console.error('Error updating industry chart:', error);
-                // Recreate chart if update fails
-                this.industryChart = null;
-                this.createIndustryChart();
-              }
-            } else {
-              // Chart doesn't exist yet or was destroyed, create it
-              this.createIndustryChart();
-            }
-          }
-        }
-      } finally {
-        this.updatingCharts = false;
+      // Clear any pending updates
+      if (this.updateTimer) {
+        clearTimeout(this.updateTimer);
+        this.updateTimer = null;
       }
+
+      // Debounce the update
+      this.updateTimer = setTimeout(() => {
+        this.updatingCharts = true;
+        try {
+          // Update or create geo chart
+          if (this.chartType === 'geographic' || this.chartType === 'both') {
+            const activeGeos = this.$store.app.activeGeographies || [];
+            const geoAllocation = this.$store.app.allocation?.geographic || [];
+
+            if (activeGeos.length > 0 && Array.isArray(geoAllocation) && geoAllocation.length > 0) {
+              // Prepare data for change detection
+              const currentData = activeGeos.map(geo => {
+                const item = geoAllocation.find(a => a.name === geo);
+                return item ? item.current_pct * 100 : 0;
+              });
+
+              const weights = {};
+              geoAllocation.forEach(a => { weights[a.name] = a.target_pct || 0; });
+              const targetPcts = this.getTargetPcts(weights, activeGeos);
+              const targetData = activeGeos.map(geo => (targetPcts[geo] || 0) * 100);
+
+              const newGeoData = {
+                labels: activeGeos,
+                currentData: currentData,
+                targetData: targetData
+              };
+
+              // Only update if data has changed
+              if (this.hasDataChanged(newGeoData, this.previousGeoData)) {
+                this.previousGeoData = JSON.parse(JSON.stringify(newGeoData));
+
+                if (this.geoChart && !this.geoChart.destroyed) {
+                  try {
+                    // Calculate max value from both datasets for auto-scaling
+                    const allValues = [...targetData, ...currentData];
+                    const maxValue = allValues.length > 0 ? Math.max(...allValues) : 100;
+                    const paddedMax = maxValue > 0 ? Math.ceil(maxValue * 1.25) : 100;
+
+                    this.geoChart.data.labels = activeGeos;
+                    this.geoChart.data.datasets[0].data = targetData;
+                    this.geoChart.data.datasets[1].data = currentData;
+                    this.geoChart.options.scales.r.suggestedMax = paddedMax;
+                    this.geoChart.update('none');
+                  } catch (error) {
+                    console.error('Error updating geo chart:', error);
+                    // Recreate chart if update fails
+                    this.geoChart = null;
+                    this.createGeoChart();
+                  }
+                } else {
+                  // Chart doesn't exist yet or was destroyed, create it
+                  this.createGeoChart();
+                }
+              }
+            }
+          }
+
+          // Update or create industry chart
+          if (this.chartType === 'industry' || this.chartType === 'both') {
+            const activeIndustries = this.$store.app.activeIndustries || [];
+            const industryAllocation = this.$store.app.allocation?.industry || [];
+
+            if (activeIndustries.length > 0 && Array.isArray(industryAllocation) && industryAllocation.length > 0) {
+              // Prepare data for change detection
+              const currentData = activeIndustries.map(ind => {
+                const item = industryAllocation.find(a => a.name === ind);
+                return item ? item.current_pct * 100 : 0;
+              });
+
+              const weights = {};
+              industryAllocation.forEach(a => { weights[a.name] = a.target_pct || 0; });
+              const targetPcts = this.getTargetPcts(weights, activeIndustries);
+              const targetData = activeIndustries.map(ind => (targetPcts[ind] || 0) * 100);
+
+              const newIndustryData = {
+                labels: activeIndustries,
+                currentData: currentData,
+                targetData: targetData
+              };
+
+              // Only update if data has changed
+              if (this.hasDataChanged(newIndustryData, this.previousIndustryData)) {
+                this.previousIndustryData = JSON.parse(JSON.stringify(newIndustryData));
+
+                if (this.industryChart && !this.industryChart.destroyed) {
+                  try {
+                    // Calculate max value from both datasets for auto-scaling
+                    const allValues = [...targetData, ...currentData];
+                    const maxValue = allValues.length > 0 ? Math.max(...allValues) : 100;
+                    const paddedMax = maxValue > 0 ? Math.ceil(maxValue * 1.25) : 100;
+
+                    this.industryChart.data.labels = activeIndustries;
+                    this.industryChart.data.datasets[0].data = targetData;
+                    this.industryChart.data.datasets[1].data = currentData;
+                    this.industryChart.options.scales.r.suggestedMax = paddedMax;
+                    this.industryChart.update('none');
+                  } catch (error) {
+                    console.error('Error updating industry chart:', error);
+                    // Recreate chart if update fails
+                    this.industryChart = null;
+                    this.createIndustryChart();
+                  }
+                } else {
+                  // Chart doesn't exist yet or was destroyed, create it
+                  this.createIndustryChart();
+                }
+              }
+            }
+          }
+        } finally {
+          this.updatingCharts = false;
+          this.updateTimer = null;
+        }
+      }, 150);
     }
   };
 }
