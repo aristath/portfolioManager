@@ -93,7 +93,7 @@ class NextActionsCard extends HTMLElement {
         </template>
 
         <!-- SELL SECTION (only show if no multi-step recommendations) -->
-        <template x-if="(!$store.app.multiStepRecommendations || $store.app.multiStepRecommendations.steps.length === 0) && $store.app.sellRecommendations.length > 0">
+        <template x-if="!$store.app.multiStepRecommendations?.steps?.length && $store.app.sellRecommendations.length > 0">
           <div class="mb-3">
             <div class="space-y-2">
               <template x-for="rec in ($store.app.sellRecommendations || [])" :key="rec.symbol">
@@ -119,7 +119,7 @@ class NextActionsCard extends HTMLElement {
         </template>
 
         <!-- BUY SECTION (only show if no multi-step recommendations) -->
-        <template x-if="(!$store.app.multiStepRecommendations || $store.app.multiStepRecommendations.steps.length === 0) && $store.app.recommendations.length > 0">
+        <template x-if="!$store.app.multiStepRecommendations?.steps?.length && $store.app.recommendations.length > 0">
           <div>
             <div class="space-y-2">
               <template x-for="(rec, index) in ($store.app.recommendations || [])" :key="rec.symbol">
