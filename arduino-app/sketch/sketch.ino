@@ -40,7 +40,7 @@ void setRGB4(uint8_t r, uint8_t g, uint8_t b) {
 void scrollText(String text, int speed) {
   matrix.textScrollSpeed(speed);
   matrix.textFont(Font_5x7);
-  matrix.beginText(0, 1, 0xFFFFFF);
+  matrix.beginText(13, 1, 0xFFFFFF);  // Start at X=13 (matrix width) to scroll in from right
   matrix.print(text);
   matrix.endText(SCROLL_LEFT);
 }
