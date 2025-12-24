@@ -1,0 +1,156 @@
+"""
+Domain Models - All dataclasses for the application.
+
+This consolidates all domain models in one place for easy imports.
+"""
+
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Optional
+
+
+@dataclass
+class Stock:
+    """Stock in the investment universe."""
+    symbol: str
+    name: str
+    geography: str
+    yahoo_symbol: Optional[str] = None
+    industry: Optional[str] = None
+    priority_multiplier: float = 1.0
+    min_lot: int = 1
+    active: bool = True
+    allow_buy: bool = True
+    allow_sell: bool = False
+    currency: Optional[str] = None
+
+
+@dataclass
+class Position:
+    """Current position in a stock."""
+    symbol: str
+    quantity: float
+    avg_price: float
+    currency: str = "EUR"
+    currency_rate: float = 1.0
+    current_price: Optional[float] = None
+    market_value_eur: Optional[float] = None
+    cost_basis_eur: Optional[float] = None
+    unrealized_pnl: Optional[float] = None
+    unrealized_pnl_pct: Optional[float] = None
+    last_updated: Optional[str] = None
+    first_bought_at: Optional[str] = None
+    last_sold_at: Optional[str] = None
+
+
+@dataclass
+class Trade:
+    """Executed trade record."""
+    symbol: str
+    side: str  # 'BUY' or 'SELL'
+    quantity: float
+    price: float
+    executed_at: datetime
+    order_id: Optional[str] = None
+    currency: Optional[str] = None
+    currency_rate: Optional[float] = None
+    value_eur: Optional[float] = None
+    source: str = "tradernet"
+    id: Optional[int] = None
+
+
+@dataclass
+class StockScore:
+    """Calculated score for a stock."""
+    symbol: str
+
+    # Primary component scores (0-1 range)
+    quality_score: Optional[float] = None
+    opportunity_score: Optional[float] = None
+    analyst_score: Optional[float] = None
+    allocation_fit_score: Optional[float] = None
+
+    # Quality breakdown
+    cagr_score: Optional[float] = None
+    consistency_score: Optional[float] = None
+    financial_strength_score: Optional[float] = None
+    sharpe_score: Optional[float] = None
+    drawdown_score: Optional[float] = None
+    dividend_bonus: Optional[float] = None
+
+    # Technical indicators
+    rsi: Optional[float] = None
+    ema_200: Optional[float] = None
+    below_52w_high_pct: Optional[float] = None
+
+    # Combined scores
+    total_score: Optional[float] = None
+    sell_score: Optional[float] = None
+
+    # Metadata
+    history_years: Optional[float] = None
+    volatility: Optional[float] = None
+    calculated_at: Optional[datetime] = None
+
+
+@dataclass
+class AllocationTarget:
+    """Target allocation for geography or industry."""
+    type: str  # 'geography' or 'industry'
+    name: str
+    target_pct: float  # 0.0 to 1.0
+
+
+@dataclass
+class CashFlow:
+    """Cash flow transaction (deposit, withdrawal, dividend, etc.)."""
+    transaction_id: str
+    type_doc_id: int
+    date: str
+    amount: float
+    currency: str
+    amount_eur: float
+    transaction_type: Optional[str] = None
+    status: Optional[str] = None
+    status_c: Optional[int] = None
+    description: Optional[str] = None
+    params_json: Optional[str] = None
+    created_at: Optional[str] = None
+    id: Optional[int] = None
+
+
+@dataclass
+class PortfolioSnapshot:
+    """Daily portfolio summary."""
+    date: str
+    total_value: float
+    cash_balance: float
+    invested_value: Optional[float] = None
+    unrealized_pnl: Optional[float] = None
+    geo_eu_pct: Optional[float] = None
+    geo_asia_pct: Optional[float] = None
+    geo_us_pct: Optional[float] = None
+    position_count: Optional[int] = None
+
+
+@dataclass
+class DailyPrice:
+    """Daily OHLC price data for a stock."""
+    date: str
+    close_price: float
+    open_price: Optional[float] = None
+    high_price: Optional[float] = None
+    low_price: Optional[float] = None
+    volume: Optional[int] = None
+    source: str = "yahoo"
+
+
+@dataclass
+class MonthlyPrice:
+    """Monthly aggregated price data for CAGR calculations."""
+    year_month: str  # 'YYYY-MM' format
+    avg_close: float
+    avg_adj_close: Optional[float] = None
+    min_price: Optional[float] = None
+    max_price: Optional[float] = None
+    source: str = "calculated"
