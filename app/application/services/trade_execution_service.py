@@ -96,10 +96,32 @@ class TradeExecutionService:
         skipped_count = 0
         converted_currencies = set()  # Track which currencies we've converted to
 
+        # Get recently bought symbols for cooldown safety check
+        from app.domain.constants import BUY_COOLDOWN_DAYS
+        recently_bought = set()
+        try:
+            recently_bought = await self._trade_repo.get_recently_bought_symbols(BUY_COOLDOWN_DAYS)
+        except Exception as e:
+            logger.error(f"SAFETY: Failed to get recently bought symbols: {e}")
+            # If we can't check cooldown, refuse to execute any buys
+            return [{"symbol": t.symbol, "status": "failed", "error": "Cooldown check failed"} for t in trades if t.side.upper() == "BUY"]
+
         for trade in trades:
             try:
                 # Check currency balance before executing (BUY orders only)
                 if trade.side.upper() == "BUY":
+                    # SAFETY: Final cooldown check before any BUY
+                    if trade.symbol in recently_bought:
+                        logger.warning(
+                            f"SAFETY BLOCK: {trade.symbol} in cooldown period, refusing to execute"
+                        )
+                        results.append({
+                            "symbol": trade.symbol,
+                            "status": "blocked",
+                            "error": f"Cooldown active (bought within {BUY_COOLDOWN_DAYS} days)"
+                        })
+                        continue
+
                     required = trade.quantity * trade.estimated_price
                     trade_currency = trade.currency or "EUR"
 
