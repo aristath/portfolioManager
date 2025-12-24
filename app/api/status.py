@@ -10,12 +10,14 @@ from app.infrastructure.dependencies import (
     get_stock_repository,
     get_position_repository,
     get_allocation_repository,
+    get_trade_repository,
 )
 from app.domain.repositories import (
     PortfolioRepository,
     StockRepository,
     PositionRepository,
     AllocationRepository,
+    TradeRepository,
 )
 
 router = APIRouter()
@@ -86,14 +88,16 @@ async def _build_ticker_text(
     position_repo: PositionRepository,
     allocation_repo: AllocationRepository,
     stock_repo: StockRepository,
+    trade_repo: TradeRepository,
 ) -> str:
     """Build ticker text from portfolio data and recommendations.
 
-    Format: EUR 12,345 | CASH EUR 624 | SELL ABC EUR 200 | BUY XIAO EUR 855
+    Format: EUR12,345 | CASH EUR675 | SELL ABC EUR200 | BUY XIAO EUR855
     Respects user settings for what to show.
     """
     from app.infrastructure.cache import cache
     from app.application.services.portfolio_service import PortfolioService
+    from app.application.services.rebalancing_service import RebalancingService
     from app.api.settings import get_setting_value
 
     parts = []
@@ -115,17 +119,57 @@ async def _build_ticker_text(
 
         # Portfolio value
         if show_value and summary.total_value:
-            parts.append(f"EUR {int(summary.total_value):,}")
+            parts.append(f"EUR{int(summary.total_value):,}")
 
         # Cash balance
         if show_cash and summary.cash_balance:
-            parts.append(f"CASH EUR {int(summary.cash_balance):,}")
+            parts.append(f"CASH EUR{int(summary.cash_balance):,}")
 
         # Add recommendations if enabled
         if show_actions:
-            # Try to get recommendations from cache first (avoid recalculation)
+            # Try cache first, calculate if empty
             sell_recs = cache.get("sell_recommendations:3")
             buy_recs = cache.get("recommendations:3")
+
+            # Calculate recommendations if not cached
+            if buy_recs is None or sell_recs is None:
+                rebalancing_service = RebalancingService(
+                    stock_repo,
+                    position_repo,
+                    allocation_repo,
+                    portfolio_repo,
+                    trade_repo,
+                )
+
+                if buy_recs is None:
+                    recommendations = await rebalancing_service.get_recommendations(
+                        limit=3
+                    )
+                    buy_recs = {
+                        "recommendations": [
+                            {
+                                "symbol": r.symbol,
+                                "amount": r.amount,
+                            }
+                            for r in recommendations
+                        ]
+                    }
+                    cache.set("recommendations:3", buy_recs, ttl_seconds=300)
+
+                if sell_recs is None:
+                    sell_recommendations = (
+                        await rebalancing_service.get_sell_recommendations(limit=3)
+                    )
+                    sell_recs = {
+                        "recommendations": [
+                            {
+                                "symbol": r.symbol,
+                                "estimated_value": r.estimated_value,
+                            }
+                            for r in sell_recommendations
+                        ]
+                    }
+                    cache.set("sell_recommendations:3", sell_recs, ttl_seconds=300)
 
             # Add sell recommendations (priority - shown first)
             if sell_recs and sell_recs.get("recommendations"):
@@ -133,7 +177,7 @@ async def _build_ticker_text(
                     symbol = rec["symbol"].split(".")[0]  # Remove .US/.EU suffix
                     value = int(rec.get("estimated_value", 0))
                     if show_amounts and value > 0:
-                        parts.append(f"SELL {symbol} EUR {value:,}")
+                        parts.append(f"SELL {symbol} EUR{value:,}")
                     else:
                         parts.append(f"SELL {symbol}")
 
@@ -143,7 +187,7 @@ async def _build_ticker_text(
                     symbol = rec["symbol"].split(".")[0]  # Remove .US/.EU suffix
                     value = int(rec.get("amount", 0))
                     if show_amounts and value > 0:
-                        parts.append(f"BUY {symbol} EUR {value:,}")
+                        parts.append(f"BUY {symbol} EUR{value:,}")
                     else:
                         parts.append(f"BUY {symbol}")
 
@@ -160,6 +204,7 @@ async def get_led_display_state(
     position_repo: PositionRepository = Depends(get_position_repository),
     allocation_repo: AllocationRepository = Depends(get_allocation_repository),
     stock_repo: StockRepository = Depends(get_stock_repository),
+    trade_repo: TradeRepository = Depends(get_trade_repository),
 ):
     """
     Get display state for Arduino Bridge apps.
@@ -184,7 +229,7 @@ async def get_led_display_state(
     # Build ticker text if not already set and no activity message
     if not state.get("ticker_text") and not state.get("activity_message"):
         ticker = await _build_ticker_text(
-            portfolio_repo, position_repo, allocation_repo, stock_repo
+            portfolio_repo, position_repo, allocation_repo, stock_repo, trade_repo
         )
         state["ticker_text"] = ticker
 
