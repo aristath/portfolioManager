@@ -89,15 +89,22 @@ async def _build_ticker_text(
 ) -> str:
     """Build ticker text from portfolio data and recommendations.
 
-    Format: €12,345 | CASH €624 | SELL ABC €200 | BUY XIAO €855
+    Format: EUR 12,345 | CASH EUR 624 | SELL ABC EUR 200 | BUY XIAO EUR 855
+    Respects user settings for what to show.
     """
     from app.infrastructure.cache import cache
-    from app.application.services.rebalancing_service import RebalancingService
     from app.application.services.portfolio_service import PortfolioService
+    from app.api.settings import get_setting_value
 
     parts = []
 
     try:
+        # Get display settings
+        show_value = await get_setting_value("ticker_show_value") == 1.0
+        show_cash = await get_setting_value("ticker_show_cash") == 1.0
+        show_actions = await get_setting_value("ticker_show_actions") == 1.0
+        show_amounts = await get_setting_value("ticker_show_amounts") == 1.0
+
         # Get portfolio summary
         portfolio_service = PortfolioService(
             portfolio_repo,
@@ -107,32 +114,38 @@ async def _build_ticker_text(
         summary = await portfolio_service.get_portfolio_summary()
 
         # Portfolio value
-        if summary.total_value:
+        if show_value and summary.total_value:
             parts.append(f"EUR {int(summary.total_value):,}")
 
         # Cash balance
-        if summary.cash_balance:
+        if show_cash and summary.cash_balance:
             parts.append(f"CASH EUR {int(summary.cash_balance):,}")
 
-        # Try to get recommendations from cache first (avoid recalculation)
-        sell_recs = cache.get("sell_recommendations:3")
-        buy_recs = cache.get("recommendations:3")
+        # Add recommendations if enabled
+        if show_actions:
+            # Try to get recommendations from cache first (avoid recalculation)
+            sell_recs = cache.get("sell_recommendations:3")
+            buy_recs = cache.get("recommendations:3")
 
-        # Add sell recommendations (priority - shown first)
-        if sell_recs and sell_recs.get("recommendations"):
-            for rec in sell_recs["recommendations"][:2]:  # Max 2 sells
-                symbol = rec["symbol"].split(".")[0]  # Remove .US/.EU suffix
-                value = int(rec.get("estimated_value", 0))
-                if value > 0:
-                    parts.append(f"SELL {symbol} EUR {value:,}")
+            # Add sell recommendations (priority - shown first)
+            if sell_recs and sell_recs.get("recommendations"):
+                for rec in sell_recs["recommendations"][:2]:  # Max 2 sells
+                    symbol = rec["symbol"].split(".")[0]  # Remove .US/.EU suffix
+                    value = int(rec.get("estimated_value", 0))
+                    if show_amounts and value > 0:
+                        parts.append(f"SELL {symbol} EUR {value:,}")
+                    else:
+                        parts.append(f"SELL {symbol}")
 
-        # Add buy recommendations
-        if buy_recs and buy_recs.get("recommendations"):
-            for rec in buy_recs["recommendations"][:2]:  # Max 2 buys
-                symbol = rec["symbol"].split(".")[0]  # Remove .US/.EU suffix
-                value = int(rec.get("amount", 0))
-                if value > 0:
-                    parts.append(f"BUY {symbol} EUR {value:,}")
+            # Add buy recommendations
+            if buy_recs and buy_recs.get("recommendations"):
+                for rec in buy_recs["recommendations"][:2]:  # Max 2 buys
+                    symbol = rec["symbol"].split(".")[0]  # Remove .US/.EU suffix
+                    value = int(rec.get("amount", 0))
+                    if show_amounts and value > 0:
+                        parts.append(f"BUY {symbol} EUR {value:,}")
+                    else:
+                        parts.append(f"BUY {symbol}")
 
     except Exception:
         # On error, just return empty (no ticker)

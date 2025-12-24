@@ -160,6 +160,60 @@ class SettingsModal extends HTMLElement {
                          class="w-20 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-right font-mono text-sm text-gray-200 focus:outline-none focus:border-blue-500">
                 </div>
               </div>
+
+              <!-- Ticker Content Options -->
+              <div class="mt-4 pt-3 border-t border-gray-700/50">
+                <span class="text-xs text-gray-500 uppercase tracking-wide">Ticker Content</span>
+                <div class="mt-2 space-y-2">
+                  <!-- Show Portfolio Value -->
+                  <label class="flex items-start gap-3 cursor-pointer">
+                    <input type="checkbox"
+                           :checked="$store.app.settings.ticker_show_value == 1"
+                           @change="$store.app.updateSetting('ticker_show_value', $event.target.checked ? 1 : 0)"
+                           class="mt-0.5 w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-800">
+                    <div>
+                      <span class="text-sm text-gray-300">Show portfolio value</span>
+                      <p class="text-xs text-gray-500">Display total portfolio value (e.g., "EUR 18,647") in the scrolling ticker</p>
+                    </div>
+                  </label>
+
+                  <!-- Show Cash Balance -->
+                  <label class="flex items-start gap-3 cursor-pointer">
+                    <input type="checkbox"
+                           :checked="$store.app.settings.ticker_show_cash == 1"
+                           @change="$store.app.updateSetting('ticker_show_cash', $event.target.checked ? 1 : 0)"
+                           class="mt-0.5 w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-800">
+                    <div>
+                      <span class="text-sm text-gray-300">Show cash balance</span>
+                      <p class="text-xs text-gray-500">Display available cash (e.g., "CASH EUR 675") in the scrolling ticker</p>
+                    </div>
+                  </label>
+
+                  <!-- Show Next Actions -->
+                  <label class="flex items-start gap-3 cursor-pointer">
+                    <input type="checkbox"
+                           :checked="$store.app.settings.ticker_show_actions == 1"
+                           @change="$store.app.updateSetting('ticker_show_actions', $event.target.checked ? 1 : 0)"
+                           class="mt-0.5 w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-800">
+                    <div>
+                      <span class="text-sm text-gray-300">Show next actions</span>
+                      <p class="text-xs text-gray-500">Display upcoming trades (e.g., "BUY XIAO", "SELL ABC") in the scrolling ticker</p>
+                    </div>
+                  </label>
+
+                  <!-- Show Amounts for Actions -->
+                  <label class="flex items-start gap-3 cursor-pointer">
+                    <input type="checkbox"
+                           :checked="$store.app.settings.ticker_show_amounts == 1"
+                           @change="$store.app.updateSetting('ticker_show_amounts', $event.target.checked ? 1 : 0)"
+                           class="mt-0.5 w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-800">
+                    <div>
+                      <span class="text-sm text-gray-300">Show amounts for actions</span>
+                      <p class="text-xs text-gray-500">Include EUR amounts with actions (e.g., "BUY XIAO EUR 855" vs just "BUY XIAO")</p>
+                    </div>
+                  </label>
+                </div>
+              </div>
             </div>
 
             <!-- System Actions Section -->

@@ -22,6 +22,11 @@ SETTING_DEFAULTS = {
     # LED Matrix settings
     "ticker_speed": 50.0,           # Ticker scroll speed in ms per frame (lower = faster)
     "led_brightness": 150.0,        # LED brightness (0-255)
+    # Ticker display options (1.0 = show, 0.0 = hide)
+    "ticker_show_value": 1.0,       # Show portfolio value
+    "ticker_show_cash": 1.0,        # Show cash balance
+    "ticker_show_actions": 1.0,     # Show next actions (BUY/SELL)
+    "ticker_show_amounts": 1.0,     # Show amounts for actions
 }
 
 
