@@ -87,6 +87,10 @@ class StockScore:
     total_score: Optional[float] = None
     sell_score: Optional[float] = None
 
+    # Legacy compatibility scores
+    technical_score: Optional[float] = None
+    fundamental_score: Optional[float] = None
+
     # Metadata
     history_years: Optional[float] = None
     volatility: Optional[float] = None
@@ -96,9 +100,9 @@ class StockScore:
 @dataclass
 class AllocationTarget:
     """Target allocation for geography or industry."""
-    type: str  # 'geography' or 'industry'
+    category: str  # 'geography' or 'industry'
     name: str
-    target_pct: float  # 0.0 to 1.0
+    target_pct: float  # Weight from -1.0 to 1.0
 
 
 @dataclass
@@ -116,6 +120,7 @@ class CashFlow:
     description: Optional[str] = None
     params_json: Optional[str] = None
     created_at: Optional[str] = None
+    updated_at: Optional[str] = None
     id: Optional[int] = None
 
 
