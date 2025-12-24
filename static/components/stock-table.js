@@ -1,7 +1,6 @@
 /**
  * Stock Table Component
  * Displays the stock universe with filtering, sorting, and position data
- * Responsive: Progressive column hiding on smaller screens
  */
 class StockTable extends HTMLElement {
   connectedCallback() {
@@ -30,14 +29,14 @@ class StockTable extends HTMLElement {
               <option value="US">US</option>
             </select>
             <select x-model="$store.app.industryFilter"
-                    class="px-2 py-1.5 bg-gray-900 border border-gray-600 rounded text-sm text-gray-100 focus:border-blue-500 focus:outline-none hidden sm:block">
+                    class="px-2 py-1.5 bg-gray-900 border border-gray-600 rounded text-sm text-gray-100 focus:border-blue-500 focus:outline-none">
               <option value="all">All Sectors</option>
               <template x-for="ind in ($store.app.industries || [])" :key="ind">
                 <option :value="ind" x-text="ind"></option>
               </template>
             </select>
             <select x-model="$store.app.minScore"
-                    class="px-2 py-1.5 bg-gray-900 border border-gray-600 rounded text-sm text-gray-100 focus:border-blue-500 focus:outline-none hidden md:block">
+                    class="px-2 py-1.5 bg-gray-900 border border-gray-600 rounded text-sm text-gray-100 focus:border-blue-500 focus:outline-none">
               <option value="0">Any Score</option>
               <option value="0.3">Score >= 0.3</option>
               <option value="0.5">Score >= 0.5</option>
@@ -62,9 +61,9 @@ class StockTable extends HTMLElement {
                   <span x-show="$store.app.sortBy === 'symbol'" class="ml-1"
                         x-text="$store.app.sortDesc ? '▼' : '▲'"></span>
                 </th>
-                <th class="py-2 px-1 hidden md:table-cell">Chart</th>
+                <th class="py-2 px-1">Chart</th>
                 <th @click="$store.app.sortStocks('name')"
-                    class="py-2 px-2 cursor-pointer hover:text-gray-300 hidden sm:table-cell">
+                    class="py-2 px-2 cursor-pointer hover:text-gray-300">
                   Company
                   <span x-show="$store.app.sortBy === 'name'" class="ml-1"
                         x-text="$store.app.sortDesc ? '▼' : '▲'"></span>
@@ -76,7 +75,7 @@ class StockTable extends HTMLElement {
                         x-text="$store.app.sortDesc ? '▼' : '▲'"></span>
                 </th>
                 <th @click="$store.app.sortStocks('industry')"
-                    class="py-2 px-2 cursor-pointer hover:text-gray-300 hidden lg:table-cell">
+                    class="py-2 px-2 cursor-pointer hover:text-gray-300">
                   Sector
                   <span x-show="$store.app.sortBy === 'industry'" class="ml-1"
                         x-text="$store.app.sortDesc ? '▼' : '▲'"></span>
@@ -94,25 +93,24 @@ class StockTable extends HTMLElement {
                         x-text="$store.app.sortDesc ? '▼' : '▲'"></span>
                 </th>
                 <th @click="$store.app.sortStocks('priority_multiplier')"
-                    class="py-2 px-2 cursor-pointer hover:text-gray-300 text-center hidden lg:table-cell">
+                    class="py-2 px-2 cursor-pointer hover:text-gray-300 text-center">
                   Mult
                   <span x-show="$store.app.sortBy === 'priority_multiplier'" class="ml-1"
                         x-text="$store.app.sortDesc ? '▼' : '▲'"></span>
                 </th>
-                <th class="py-2 px-2 text-center hidden lg:table-cell" title="Buy/Sell status">B/S</th>
+                <th class="py-2 px-2 text-center" title="Buy/Sell status">B/S</th>
                 <th @click="$store.app.sortStocks('priority_score')"
                     class="py-2 px-2 cursor-pointer hover:text-gray-300 text-right">
                   Priority
                   <span x-show="$store.app.sortBy === 'priority_score'" class="ml-1"
                         x-text="$store.app.sortDesc ? '▼' : '▲'"></span>
                 </th>
-                <th class="py-2 px-2 text-center hidden md:table-cell">Actions</th>
+                <th class="py-2 px-2 text-center">Actions</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-800">
               <template x-for="stock in ($store.app.filteredStocks || [])" :key="stock.symbol">
-                <tr class="hover:bg-gray-800/50 cursor-pointer md:cursor-default"
-                    @click="window.innerWidth < 768 && $store.app.openEditStock(stock)">
+                <tr class="hover:bg-gray-800/50">
                   <td class="py-1.5 px-2 font-mono text-blue-400 sticky left-0 bg-gray-800">
                     <button @click.stop="$store.app.showStockChart = true; $store.app.selectedStockSymbol = stock.symbol"
                             class="hover:underline cursor-pointer"
@@ -120,19 +118,19 @@ class StockTable extends HTMLElement {
                       <span x-text="stock.symbol"></span>
                     </button>
                   </td>
-                  <td class="py-1.5 px-1 hidden md:table-cell">
+                  <td class="py-1.5 px-1">
                     <div class="sparkline-container"
                          :data-symbol="stock.symbol"
                          :data-has-position="stock.position_value > 0"
                          style="width: 80px; height: 32px;"></div>
                   </td>
-                  <td class="py-1.5 px-2 text-gray-300 truncate max-w-32 hidden sm:table-cell" x-text="stock.name"></td>
+                  <td class="py-1.5 px-2 text-gray-300 truncate max-w-32" x-text="stock.name"></td>
                   <td class="py-1.5 px-2 text-center">
                     <span class="px-1.5 py-0.5 rounded text-xs"
                           :class="getGeoTagClass(stock.geography)"
                           x-text="stock.geography"></span>
                   </td>
-                  <td class="py-1.5 px-2 text-gray-500 truncate max-w-24 hidden lg:table-cell" x-text="stock.industry || '-'"></td>
+                  <td class="py-1.5 px-2 text-gray-500 truncate max-w-24" x-text="stock.industry || '-'"></td>
                   <td class="py-1.5 px-2 text-right font-mono"
                       :class="stock.position_value ? 'text-green-400' : 'text-gray-600'"
                       x-text="stock.position_value ? formatCurrency(stock.position_value) : '-'"></td>
@@ -141,7 +139,7 @@ class StockTable extends HTMLElement {
                           :class="getScoreClass(stock.total_score)"
                           x-text="formatScore(stock.total_score)"></span>
                   </td>
-                  <td class="py-1.5 px-2 text-center hidden lg:table-cell">
+                  <td class="py-1.5 px-2 text-center">
                     <input type="number"
                            class="w-12 px-1 py-0.5 bg-gray-900 border border-gray-600 rounded text-center text-xs text-gray-300 focus:border-blue-500 focus:outline-none"
                            :value="stock.priority_multiplier || 1"
@@ -152,7 +150,7 @@ class StockTable extends HTMLElement {
                            @change="$store.app.updateMultiplier(stock.symbol, $event.target.value)"
                            title="Priority multiplier (0.1-3.0)">
                   </td>
-                  <td class="py-1.5 px-2 text-center hidden lg:table-cell">
+                  <td class="py-1.5 px-2 text-center">
                     <div class="flex justify-center gap-1">
                       <span x-show="stock.allow_buy"
                             class="w-2.5 h-2.5 rounded-full bg-green-500"
@@ -169,7 +167,7 @@ class StockTable extends HTMLElement {
                           :class="getPriorityClass(stock.priority_score)"
                           x-text="formatPriority(stock.priority_score)"></span>
                   </td>
-                  <td class="py-1.5 px-2 text-center hidden md:table-cell" @click.stop>
+                  <td class="py-1.5 px-2 text-center" @click.stop>
                     <div class="flex justify-center gap-1">
                       <button @click="$store.app.openEditStock(stock)"
                               class="p-1 text-gray-400 hover:text-blue-400 transition-colors"
