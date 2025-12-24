@@ -214,11 +214,14 @@ class RebalancingService:
         # Build allocation weight maps
         geo_weights = {}
         industry_weights = {}
-        for alloc in allocations:
-            if alloc.category == "geography":
-                geo_weights[alloc.name] = alloc.target_pct
-            elif alloc.category == "industry":
-                industry_weights[alloc.name] = alloc.target_pct
+        for key, target_pct in allocations.items():
+            parts = key.split(":", 1)
+            if len(parts) == 2:
+                alloc_type, name = parts
+                if alloc_type == "geography":
+                    geo_weights[name] = target_pct
+                elif alloc_type == "industry":
+                    industry_weights[name] = target_pct
 
         # Build stock metadata maps
         position_map = {p.symbol: p.market_value_eur or 0 for p in positions}
@@ -665,8 +668,16 @@ class RebalancingService:
             # Get base allocation targets
             allocations = await self._allocation_repo.get_all()
             
-            base_geo_weights = {a.name: a.target_pct for a in allocations if a.category == "geography"}
-            base_ind_weights = {a.name: a.target_pct for a in allocations if a.category == "industry"}
+            base_geo_weights = {
+                key.split(":", 1)[1]: val
+                for key, val in allocations.items()
+                if key.startswith("geography:")
+            }
+            base_ind_weights = {
+                key.split(":", 1)[1]: val
+                for key, val in allocations.items()
+                if key.startswith("industry:")
+            }
             
             # Calculate average return for comparison
             avg_geo_return = sum(geo_attribution.values()) / len(geo_attribution) if geo_attribution else 0.0
