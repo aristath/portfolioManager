@@ -221,7 +221,7 @@ class SettingsModal extends HTMLElement {
                     </div>
                     <input type="number"
                            min="1"
-                           max="5"
+                           max="10"
                            step="1"
                            :value="$store.app.settings.ticker_max_actions"
                            @change="$store.app.updateSetting('ticker_max_actions', $event.target.value)"
