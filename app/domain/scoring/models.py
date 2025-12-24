@@ -90,13 +90,18 @@ class PortfolioScore:
 class CalculatedStockScore:
     """Complete stock score with all components."""
     symbol: str
-    quality: QualityScore
-    opportunity: OpportunityScore
-    analyst: AnalystScore
-    allocation_fit: Optional[AllocationFitScore]  # None if no portfolio context
     total_score: float          # Final weighted score
     volatility: Optional[float] # Raw annualized volatility
     calculated_at: datetime
+
+    # New 8-group scores (Dict with long_term, fundamentals, opportunity, etc.)
+    group_scores: Optional[Dict[str, float]] = None
+
+    # Legacy fields - deprecated, kept for backwards compatibility
+    quality: Optional[QualityScore] = None
+    opportunity: Optional[OpportunityScore] = None
+    analyst: Optional[AnalystScore] = None
+    allocation_fit: Optional[AllocationFitScore] = None
 
 
 @dataclass

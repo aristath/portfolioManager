@@ -1,0 +1,178 @@
+"""
+Long-term Performance Score - Historical returns and risk-adjusted performance.
+
+Components:
+- CAGR (40%): Compound Annual Growth Rate
+- Sortino Ratio (35%): Downside risk-adjusted returns (from PyFolio)
+- Sharpe Ratio (25%): Overall risk-adjusted returns
+"""
+
+import logging
+from typing import Optional, List, Dict
+
+import numpy as np
+
+from app.domain.scoring.constants import (
+    OPTIMAL_CAGR,
+    BELL_CURVE_SIGMA_LEFT,
+    BELL_CURVE_SIGMA_RIGHT,
+    BELL_CURVE_FLOOR,
+    SHARPE_EXCELLENT,
+    SHARPE_GOOD,
+    SHARPE_OK,
+    MIN_MONTHS_FOR_CAGR,
+)
+from app.domain.scoring.technical import calculate_sharpe_ratio
+import math
+
+logger = logging.getLogger(__name__)
+
+# Internal weights for sub-components (hardcoded)
+WEIGHT_CAGR = 0.40
+WEIGHT_SORTINO = 0.35
+WEIGHT_SHARPE = 0.25
+
+
+def calculate_cagr(prices: List[Dict], months: int) -> Optional[float]:
+    """
+    Calculate CAGR from monthly prices.
+
+    Args:
+        prices: List of dicts with year_month and avg_adj_close
+        months: Number of months to use (e.g., 60 for 5 years)
+
+    Returns:
+        CAGR as decimal or None if insufficient data
+    """
+    if len(prices) < MIN_MONTHS_FOR_CAGR:
+        return None
+
+    use_months = min(months, len(prices))
+    price_slice = prices[-use_months:]
+
+    start_price = price_slice[0].get("avg_adj_close")
+    end_price = price_slice[-1].get("avg_adj_close")
+
+    if not start_price or not end_price or start_price <= 0:
+        return None
+
+    years = use_months / 12.0
+    if years < 0.25:
+        return (end_price / start_price) - 1
+
+    try:
+        return (end_price / start_price) ** (1 / years) - 1
+    except (ValueError, ZeroDivisionError):
+        return None
+
+
+def score_cagr(cagr: float, target: float = OPTIMAL_CAGR) -> float:
+    """
+    Bell curve scoring for CAGR.
+
+    Peak at target (default 11%). Uses asymmetric Gaussian.
+
+    Returns:
+        Score from 0.15 to 1.0
+    """
+    if cagr <= 0:
+        return BELL_CURVE_FLOOR
+
+    sigma = BELL_CURVE_SIGMA_LEFT if cagr < target else BELL_CURVE_SIGMA_RIGHT
+    raw_score = math.exp(-((cagr - target) ** 2) / (2 * sigma ** 2))
+
+    return BELL_CURVE_FLOOR + raw_score * (1 - BELL_CURVE_FLOOR)
+
+
+def score_sharpe(sharpe_ratio: Optional[float]) -> float:
+    """
+    Convert Sharpe ratio to score.
+
+    Sharpe > 2.0 is excellent, > 1.0 is good.
+
+    Returns:
+        Score from 0 to 1.0
+    """
+    if sharpe_ratio is None:
+        return 0.5
+
+    if sharpe_ratio >= SHARPE_EXCELLENT:
+        return 1.0
+    elif sharpe_ratio >= SHARPE_GOOD:
+        return 0.7 + (sharpe_ratio - SHARPE_GOOD) * 0.3
+    elif sharpe_ratio >= SHARPE_OK:
+        return 0.4 + (sharpe_ratio - SHARPE_OK) * 0.6
+    elif sharpe_ratio >= 0:
+        return sharpe_ratio * 0.8
+    else:
+        return 0.0
+
+
+def score_sortino(sortino_ratio: Optional[float]) -> float:
+    """
+    Convert Sortino ratio to score.
+
+    Sortino > 2.0 is excellent (focuses on downside risk).
+
+    Returns:
+        Score from 0 to 1.0
+    """
+    if sortino_ratio is None:
+        return 0.5
+
+    if sortino_ratio >= 2.0:
+        return 1.0
+    elif sortino_ratio >= 1.5:
+        return 0.8 + (sortino_ratio - 1.5) * 0.4
+    elif sortino_ratio >= 1.0:
+        return 0.6 + (sortino_ratio - 1.0) * 0.4
+    elif sortino_ratio >= 0.5:
+        return 0.4 + (sortino_ratio - 0.5) * 0.4
+    elif sortino_ratio >= 0:
+        return sortino_ratio * 0.8
+    else:
+        return 0.0
+
+
+def calculate_long_term_score(
+    monthly_prices: List[Dict],
+    daily_prices: List[Dict],
+    sortino_ratio: Optional[float] = None,
+    target_annual_return: float = OPTIMAL_CAGR,
+) -> float:
+    """
+    Calculate long-term performance score.
+
+    Args:
+        monthly_prices: Monthly price data for CAGR
+        daily_prices: Daily price data for Sharpe
+        sortino_ratio: Pre-calculated Sortino from PyFolio (optional)
+        target_annual_return: Target return for CAGR scoring
+
+    Returns:
+        Combined score from 0 to 1.0
+    """
+    # Calculate CAGR
+    cagr = calculate_cagr(monthly_prices, 60)  # 5 years
+    if cagr is None:
+        cagr = calculate_cagr(monthly_prices, len(monthly_prices))
+    cagr_score = score_cagr(cagr or 0, target_annual_return)
+
+    # Calculate Sharpe from daily prices
+    sharpe_ratio = None
+    if len(daily_prices) >= 50:
+        closes = np.array([p["close"] for p in daily_prices])
+        sharpe_ratio = calculate_sharpe_ratio(closes)
+    sharpe_score = score_sharpe(sharpe_ratio)
+
+    # Sortino from PyFolio (passed in or default)
+    sortino_score = score_sortino(sortino_ratio)
+
+    # Combine with internal weights
+    total = (
+        cagr_score * WEIGHT_CAGR +
+        sortino_score * WEIGHT_SORTINO +
+        sharpe_score * WEIGHT_SHARPE
+    )
+
+    return round(min(1.0, total), 3)

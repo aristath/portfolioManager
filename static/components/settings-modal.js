@@ -124,6 +124,91 @@ class SettingsModal extends HTMLElement {
               </div>
             </div>
 
+            <!-- Scoring Algorithm Section -->
+            <div class="border-b border-gray-700 pb-4"
+                 x-data="{
+                   buyGroups: [
+                     { key: 'long_term', label: 'Long-term Performance', desc: 'CAGR, Sortino, Sharpe ratio' },
+                     { key: 'fundamentals', label: 'Fundamentals', desc: 'Financial strength, consistency' },
+                     { key: 'opportunity', label: 'Opportunity', desc: '52W high distance, P/E ratio' },
+                     { key: 'dividends', label: 'Dividends', desc: 'Yield, dividend consistency' },
+                     { key: 'short_term', label: 'Short-term', desc: 'Recent momentum, drawdown' },
+                     { key: 'technicals', label: 'Technicals', desc: 'RSI, Bollinger, EMA' },
+                     { key: 'opinion', label: 'Opinion', desc: 'Analyst recommendations, targets' },
+                     { key: 'diversification', label: 'Diversification', desc: 'Geography, industry, averaging' }
+                   ],
+                   sellGroups: [
+                     { key: 'underperformance', label: 'Underperformance', desc: 'Return vs target' },
+                     { key: 'time_held', label: 'Time Held', desc: 'Position age' },
+                     { key: 'portfolio_balance', label: 'Portfolio Balance', desc: 'Overweight detection' },
+                     { key: 'instability', label: 'Instability', desc: 'Bubble/volatility signals' },
+                     { key: 'drawdown', label: 'Drawdown', desc: 'Current drawdown severity' }
+                   ],
+                   get buySum() {
+                     return this.buyGroups.reduce((sum, g) =>
+                       sum + (($store.app.settings['score_weight_' + g.key] || 0) * 100), 0).toFixed(0);
+                   },
+                   get sellSum() {
+                     return this.sellGroups.reduce((sum, g) =>
+                       sum + (($store.app.settings['sell_weight_' + g.key] || 0) * 100), 0).toFixed(0);
+                   }
+                 }">
+              <h3 class="text-sm font-medium text-gray-400 uppercase tracking-wide mb-3">Scoring Algorithm</h3>
+              <p class="text-xs text-gray-500 mb-4">Adjust how much each factor group contributes to stock ratings. Each section must total 100%.</p>
+
+              <!-- Buy Score Weights -->
+              <div class="mb-4">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-xs text-gray-500 uppercase tracking-wide">Buy Score Weights</span>
+                  <span :class="buySum == 100 ? 'text-green-400' : 'text-red-400'" class="text-xs font-mono">
+                    Total: <span x-text="buySum"></span>%
+                  </span>
+                </div>
+                <div class="space-y-2">
+                  <template x-for="group in buyGroups" :key="group.key">
+                    <div class="grid grid-cols-[1fr_60px_40px] gap-2 items-center">
+                      <div>
+                        <span class="text-sm text-gray-300" x-text="group.label"></span>
+                        <p class="text-xs text-gray-500" x-text="group.desc"></p>
+                      </div>
+                      <input type="range" min="0" max="50" step="1"
+                             :value="($store.app.settings['score_weight_' + group.key] * 100).toFixed(0)"
+                             @input="$store.app.updateSetting('score_weight_' + group.key, $event.target.value / 100)"
+                             class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500">
+                      <span class="text-sm text-gray-400 font-mono text-right"
+                            x-text="($store.app.settings['score_weight_' + group.key] * 100).toFixed(0) + '%'"></span>
+                    </div>
+                  </template>
+                </div>
+              </div>
+
+              <!-- Sell Score Weights -->
+              <div class="pt-3 border-t border-gray-700/50">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-xs text-gray-500 uppercase tracking-wide">Sell Score Weights</span>
+                  <span :class="sellSum == 100 ? 'text-green-400' : 'text-red-400'" class="text-xs font-mono">
+                    Total: <span x-text="sellSum"></span>%
+                  </span>
+                </div>
+                <div class="space-y-2">
+                  <template x-for="group in sellGroups" :key="group.key">
+                    <div class="grid grid-cols-[1fr_60px_40px] gap-2 items-center">
+                      <div>
+                        <span class="text-sm text-gray-300" x-text="group.label"></span>
+                        <p class="text-xs text-gray-500" x-text="group.desc"></p>
+                      </div>
+                      <input type="range" min="0" max="50" step="1"
+                             :value="($store.app.settings['sell_weight_' + group.key] * 100).toFixed(0)"
+                             @input="$store.app.updateSetting('sell_weight_' + group.key, $event.target.value / 100)"
+                             class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500">
+                      <span class="text-sm text-gray-400 font-mono text-right"
+                            x-text="($store.app.settings['sell_weight_' + group.key] * 100).toFixed(0) + '%'"></span>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
+
             <!-- LED Matrix Section -->
             <div class="border-b border-gray-700 pb-4">
               <h3 class="text-sm font-medium text-gray-400 uppercase tracking-wide mb-3">LED Matrix</h3>

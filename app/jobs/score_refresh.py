@@ -13,9 +13,9 @@ from app.infrastructure.hardware.led_display import set_activity
 from app.infrastructure.database.manager import get_db_manager
 from app.domain.scoring import (
     calculate_stock_score,
-    calculate_allocation_fit_score,
     PortfolioContext,
 )
+from app.api.settings import get_buy_score_weights
 
 logger = logging.getLogger(__name__)
 
@@ -49,8 +49,11 @@ async def _refresh_all_scores_internal():
             emit(SystemEvent.SCORE_REFRESH_COMPLETE)
             return
 
-        # Build portfolio context for allocation fit scoring
+        # Build portfolio context for diversification scoring
         portfolio_context = await _build_portfolio_context(db_manager)
+
+        # Load scoring weights from settings
+        weights = await get_buy_score_weights()
 
         scores_updated = 0
         for row in stocks:
@@ -71,7 +74,7 @@ async def _refresh_all_scores_internal():
                     logger.warning(f"Insufficient monthly data for {symbol}")
                     continue
 
-                # Calculate score using new scoring domain
+                # Calculate score using 8-group scoring system
                 score = calculate_stock_score(
                     symbol=symbol,
                     daily_prices=daily_prices,
@@ -81,29 +84,27 @@ async def _refresh_all_scores_internal():
                     industry=industry,
                     portfolio_context=portfolio_context,
                     yahoo_symbol=yahoo_symbol,
+                    weights=weights,
                 )
 
-                if score:
-                    # Update scores table
-                    alloc_fit_score = score.allocation_fit.total if score.allocation_fit else None
+                if score and score.group_scores:
+                    gs = score.group_scores
 
                     await db_manager.state.execute(
                         """
                         INSERT OR REPLACE INTO scores
                         (symbol, quality_score, opportunity_score, analyst_score,
-                         allocation_fit_score, total_score, cagr_score, history_years,
-                         calculated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         allocation_fit_score, total_score, calculated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             symbol,
-                            score.quality.total,
-                            score.opportunity.total,
-                            score.analyst.total,
-                            alloc_fit_score,
+                            # Map new groups to old columns for compatibility
+                            (gs.get("long_term", 0) + gs.get("fundamentals", 0)) / 2,
+                            gs.get("opportunity", 0),
+                            gs.get("opinion", 0),
+                            gs.get("diversification", 0),
                             score.total_score,
-                            score.quality.cagr_5y,  # Maps to cagr_score column
-                            score.quality.history_years,
                             datetime.now().isoformat(),
                         )
                     )

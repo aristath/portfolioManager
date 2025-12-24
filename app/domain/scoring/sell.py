@@ -28,11 +28,6 @@ from app.domain.scoring.constants import (
     MAX_SELL_PCT,
     TARGET_RETURN_MIN,
     TARGET_RETURN_MAX,
-    SELL_WEIGHT_UNDERPERFORMANCE,
-    SELL_WEIGHT_TIME_HELD,
-    SELL_WEIGHT_PORTFOLIO_BALANCE,
-    SELL_WEIGHT_INSTABILITY,
-    SELL_WEIGHT_DRAWDOWN,
     INSTABILITY_RATE_VERY_HOT,
     INSTABILITY_RATE_HOT,
     INSTABILITY_RATE_WARM,
@@ -43,6 +38,15 @@ from app.domain.scoring.constants import (
     VALUATION_STRETCH_MED,
     VALUATION_STRETCH_LOW,
 )
+
+# Default sell weights (fallback if settings can't be loaded)
+DEFAULT_SELL_WEIGHTS = {
+    "underperformance": 0.35,
+    "time_held": 0.18,
+    "portfolio_balance": 0.18,
+    "instability": 0.14,
+    "drawdown": 0.15,
+}
 
 logger = logging.getLogger(__name__)
 
@@ -375,7 +379,8 @@ async def calculate_sell_score(
     geo_allocations: Dict[str, float],
     ind_allocations: Dict[str, float],
     technical_data: Optional[TechnicalData] = None,
-    settings: Optional[Dict] = None
+    settings: Optional[Dict] = None,
+    weights: Optional[Dict[str, float]] = None
 ) -> SellScore:
     """
     Calculate complete sell score for a position.
@@ -396,10 +401,14 @@ async def calculate_sell_score(
         ind_allocations: Current industry allocation percentages
         technical_data: Technical indicators for instability detection
         settings: Optional settings dict for thresholds
+        weights: Optional sell score weights (loaded from settings)
 
     Returns:
         SellScore with all components and recommendations
     """
+    # Use provided weights or defaults
+    if weights is None:
+        weights = DEFAULT_SELL_WEIGHTS
     # Extract settings with defaults
     settings = settings or {}
     min_hold_days = settings.get("min_hold_days", DEFAULT_MIN_HOLD_DAYS)
@@ -524,11 +533,11 @@ async def calculate_sell_score(
 
     # Calculate total score with all weighted components (sum to 1.0)
     total_score = (
-        (underperformance_score * SELL_WEIGHT_UNDERPERFORMANCE) +
-        (time_held_score * SELL_WEIGHT_TIME_HELD) +
-        (portfolio_balance_score * SELL_WEIGHT_PORTFOLIO_BALANCE) +
-        (instability_score * SELL_WEIGHT_INSTABILITY) +
-        (drawdown_score * SELL_WEIGHT_DRAWDOWN)
+        (underperformance_score * weights.get("underperformance", 0.35)) +
+        (time_held_score * weights.get("time_held", 0.18)) +
+        (portfolio_balance_score * weights.get("portfolio_balance", 0.18)) +
+        (instability_score * weights.get("instability", 0.14)) +
+        (drawdown_score * weights.get("drawdown", 0.15))
     )
     # Weights sum to 1.0, so no capping needed
 
@@ -573,7 +582,8 @@ async def calculate_all_sell_scores(
     geo_allocations: Dict[str, float],
     ind_allocations: Dict[str, float],
     technical_data: Optional[Dict[str, TechnicalData]] = None,
-    settings: Optional[Dict] = None
+    settings: Optional[Dict] = None,
+    weights: Optional[Dict[str, float]] = None
 ) -> List[SellScore]:
     """
     Calculate sell scores for all positions.
@@ -585,10 +595,20 @@ async def calculate_all_sell_scores(
         ind_allocations: Current industry allocation percentages
         technical_data: Dict mapping symbol to TechnicalData for instability detection
         settings: Optional settings dict with min_hold_days, sell_cooldown_days, etc.
+        weights: Optional sell score weights (loaded from settings)
 
     Returns:
         List of SellScore objects, sorted by total_score descending
     """
+    # Load weights from settings if not provided
+    if weights is None:
+        try:
+            from app.api.settings import get_sell_score_weights
+            weights = await get_sell_score_weights()
+        except Exception as e:
+            logger.warning(f"Failed to load sell weights from settings: {e}")
+            weights = DEFAULT_SELL_WEIGHTS
+
     scores = []
     technical_data = technical_data or {}
 
@@ -609,7 +629,8 @@ async def calculate_all_sell_scores(
             geo_allocations=geo_allocations,
             ind_allocations=ind_allocations,
             technical_data=technical_data.get(symbol),
-            settings=settings
+            settings=settings,
+            weights=weights
         )
         scores.append(score)
 
