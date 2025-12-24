@@ -57,12 +57,17 @@ async def _sync_portfolio_internal():
             try:
                 position_repo = get_position_repository(db)
 
-                # Save tracking dates before clearing
+                # Save tracking dates and Yahoo-derived prices before clearing
                 cursor = await db.execute(
-                    "SELECT symbol, first_bought_at, last_sold_at FROM positions"
+                    "SELECT symbol, first_bought_at, last_sold_at, current_price, market_value_eur FROM positions"
                 )
-                tracking_dates = {
-                    row[0]: (row[1], row[2])
+                saved_position_data = {
+                    row[0]: {
+                        "first_bought_at": row[1],
+                        "last_sold_at": row[2],
+                        "current_price": row[3],
+                        "market_value_eur": row[4],
+                    }
                     for row in await cursor.fetchall()
                 }
 
@@ -73,23 +78,33 @@ async def _sync_portfolio_internal():
                 geo_values = {"EU": 0.0, "ASIA": 0.0, "US": 0.0}
 
                 for pos in positions:
-                    saved_dates = tracking_dates.get(pos.symbol, (None, None))
+                    saved_data = saved_position_data.get(pos.symbol, {})
+
+                    # Use saved Yahoo prices if available, otherwise None
+                    # sync_prices() will update these with fresh Yahoo data
+                    current_price = saved_data.get("current_price")
+                    market_value_eur = saved_data.get("market_value_eur")
+
+                    # Recalculate market_value_eur if we have current_price but quantity changed
+                    if current_price and pos.currency_rate:
+                        market_value_eur = pos.quantity * current_price / pos.currency_rate
 
                     position = Position(
                         symbol=pos.symbol,
                         quantity=pos.quantity,
                         avg_price=pos.avg_price,
-                        current_price=pos.current_price,
+                        current_price=current_price,
                         currency=pos.currency or DEFAULT_CURRENCY,
                         currency_rate=pos.currency_rate,
-                        market_value_eur=pos.market_value_eur,
+                        market_value_eur=market_value_eur,
                         last_updated=datetime.now().isoformat(),
-                        first_bought_at=saved_dates[0],
-                        last_sold_at=saved_dates[1],
+                        first_bought_at=saved_data.get("first_bought_at"),
+                        last_sold_at=saved_data.get("last_sold_at"),
                     )
                     await position_repo.upsert(position, auto_commit=False)
 
-                    market_value = pos.market_value_eur
+                    # Use Yahoo-based market_value_eur for snapshot (or 0 if not yet set)
+                    market_value = market_value_eur or 0
                     total_value += market_value
 
                     # Determine geography
@@ -143,6 +158,10 @@ async def _sync_portfolio_internal():
 
         # Sync stock currencies (do this during portfolio sync)
         await sync_stock_currencies()
+
+        # Sync prices from Yahoo to ensure market_value_eur is calculated correctly
+        # This is especially important for new positions that don't have Yahoo prices yet
+        await _sync_prices_internal()
 
         emit(SystemEvent.SYNC_COMPLETE)
 
