@@ -146,37 +146,47 @@ class SettingsModal extends HTMLElement {
                    ],
                    get buySum() {
                      return this.buyGroups.reduce((sum, g) =>
-                       sum + (($store.app.settings['score_weight_' + g.key] || 0) * 100), 0).toFixed(0);
+                       sum + ($store.app.settings['score_weight_' + g.key] || 0), 0);
                    },
                    get sellSum() {
                      return this.sellGroups.reduce((sum, g) =>
-                       sum + (($store.app.settings['sell_weight_' + g.key] || 0) * 100), 0).toFixed(0);
+                       sum + ($store.app.settings['sell_weight_' + g.key] || 0), 0);
+                   },
+                   buyPct(key) {
+                     const raw = $store.app.settings['score_weight_' + key] || 0;
+                     const sum = this.buySum;
+                     return sum > 0 ? ((raw / sum) * 100).toFixed(0) : '0';
+                   },
+                   sellPct(key) {
+                     const raw = $store.app.settings['sell_weight_' + key] || 0;
+                     const sum = this.sellSum;
+                     return sum > 0 ? ((raw / sum) * 100).toFixed(0) : '0';
                    }
                  }">
               <h3 class="text-sm font-medium text-gray-400 uppercase tracking-wide mb-3">Scoring Algorithm</h3>
-              <p class="text-xs text-gray-500 mb-4">Adjust how much each factor group contributes to stock ratings. Each section must total 100%.</p>
+              <p class="text-xs text-gray-500 mb-4">Adjust relative importance of each factor. Weights are normalized automatically.</p>
 
               <!-- Buy Score Weights -->
               <div class="mb-4">
                 <div class="flex items-center justify-between mb-2">
                   <span class="text-xs text-gray-500 uppercase tracking-wide">Buy Score Weights</span>
-                  <span :class="buySum == 100 ? 'text-green-400' : 'text-red-400'" class="text-xs font-mono">
-                    Total: <span x-text="buySum"></span>%
+                  <span class="text-xs text-gray-500 font-mono">
+                    Sum: <span x-text="buySum.toFixed(2)"></span>
                   </span>
                 </div>
                 <div class="space-y-2">
                   <template x-for="group in buyGroups" :key="group.key">
-                    <div class="grid grid-cols-[1fr_60px_40px] gap-2 items-center">
+                    <div class="grid grid-cols-[1fr_80px_50px] gap-2 items-center">
                       <div>
                         <span class="text-sm text-gray-300" x-text="group.label"></span>
                         <p class="text-xs text-gray-500" x-text="group.desc"></p>
                       </div>
-                      <input type="range" min="0" max="50" step="1"
-                             :value="($store.app.settings['score_weight_' + group.key] * 100).toFixed(0)"
-                             @input="$store.app.updateSetting('score_weight_' + group.key, $event.target.value / 100)"
+                      <input type="range" min="0" max="1" step="0.01"
+                             :value="$store.app.settings['score_weight_' + group.key]"
+                             @input="$store.app.updateSetting('score_weight_' + group.key, parseFloat($event.target.value))"
                              class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500">
                       <span class="text-sm text-gray-400 font-mono text-right"
-                            x-text="($store.app.settings['score_weight_' + group.key] * 100).toFixed(0) + '%'"></span>
+                            x-text="buyPct(group.key) + '%'"></span>
                     </div>
                   </template>
                 </div>
@@ -186,23 +196,23 @@ class SettingsModal extends HTMLElement {
               <div class="pt-3 border-t border-gray-700/50">
                 <div class="flex items-center justify-between mb-2">
                   <span class="text-xs text-gray-500 uppercase tracking-wide">Sell Score Weights</span>
-                  <span :class="sellSum == 100 ? 'text-green-400' : 'text-red-400'" class="text-xs font-mono">
-                    Total: <span x-text="sellSum"></span>%
+                  <span class="text-xs text-gray-500 font-mono">
+                    Sum: <span x-text="sellSum.toFixed(2)"></span>
                   </span>
                 </div>
                 <div class="space-y-2">
                   <template x-for="group in sellGroups" :key="group.key">
-                    <div class="grid grid-cols-[1fr_60px_40px] gap-2 items-center">
+                    <div class="grid grid-cols-[1fr_80px_50px] gap-2 items-center">
                       <div>
                         <span class="text-sm text-gray-300" x-text="group.label"></span>
                         <p class="text-xs text-gray-500" x-text="group.desc"></p>
                       </div>
-                      <input type="range" min="0" max="50" step="1"
-                             :value="($store.app.settings['sell_weight_' + group.key] * 100).toFixed(0)"
-                             @input="$store.app.updateSetting('sell_weight_' + group.key, $event.target.value / 100)"
+                      <input type="range" min="0" max="1" step="0.01"
+                             :value="$store.app.settings['sell_weight_' + group.key]"
+                             @input="$store.app.updateSetting('sell_weight_' + group.key, parseFloat($event.target.value))"
                              class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500">
                       <span class="text-sm text-gray-400 font-mono text-right"
-                            x-text="($store.app.settings['sell_weight_' + group.key] * 100).toFixed(0) + '%'"></span>
+                            x-text="sellPct(group.key) + '%'"></span>
                     </div>
                   </template>
                 </div>

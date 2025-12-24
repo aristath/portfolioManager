@@ -259,9 +259,19 @@ async def calculate_stock_score(
         scores["diversification"] = 0.5
         sub_scores["diversification"] = {"geography": 0.5, "industry": 0.5, "averaging": 0.5}
 
+    # Normalize weights so they sum to 1.0 (allows relative weight system)
+    weight_sum = sum(weights.get(group, DEFAULT_WEIGHTS[group]) for group in scores)
+    if weight_sum > 0:
+        normalized_weights = {
+            group: weights.get(group, DEFAULT_WEIGHTS[group]) / weight_sum
+            for group in scores
+        }
+    else:
+        normalized_weights = DEFAULT_WEIGHTS
+
     # Calculate weighted total
     total_score = sum(
-        scores[group] * weights.get(group, DEFAULT_WEIGHTS[group])
+        scores[group] * normalized_weights[group]
         for group in scores
     )
 

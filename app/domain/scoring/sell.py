@@ -531,15 +531,25 @@ async def calculate_sell_score(
         logger.debug(f"Could not calculate drawdown for {symbol}: {e}")
         drawdown_score = 0.3  # Neutral on error
 
-    # Calculate total score with all weighted components (sum to 1.0)
+    # Normalize weights so they sum to 1.0 (allows relative weight system)
+    sell_groups = ["underperformance", "time_held", "portfolio_balance", "instability", "drawdown"]
+    weight_sum = sum(weights.get(g, DEFAULT_SELL_WEIGHTS[g]) for g in sell_groups)
+    if weight_sum > 0:
+        normalized_weights = {
+            g: weights.get(g, DEFAULT_SELL_WEIGHTS[g]) / weight_sum
+            for g in sell_groups
+        }
+    else:
+        normalized_weights = DEFAULT_SELL_WEIGHTS
+
+    # Calculate total score with normalized weights
     total_score = (
-        (underperformance_score * weights.get("underperformance", 0.35)) +
-        (time_held_score * weights.get("time_held", 0.18)) +
-        (portfolio_balance_score * weights.get("portfolio_balance", 0.18)) +
-        (instability_score * weights.get("instability", 0.14)) +
-        (drawdown_score * weights.get("drawdown", 0.15))
+        (underperformance_score * normalized_weights["underperformance"]) +
+        (time_held_score * normalized_weights["time_held"]) +
+        (portfolio_balance_score * normalized_weights["portfolio_balance"]) +
+        (instability_score * normalized_weights["instability"]) +
+        (drawdown_score * normalized_weights["drawdown"])
     )
-    # Weights sum to 1.0, so no capping needed
 
     # Determine sell quantity
     sell_quantity, sell_pct = determine_sell_quantity(

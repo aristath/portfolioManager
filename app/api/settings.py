@@ -38,7 +38,7 @@ SETTING_DEFAULTS = {
     "job_cash_flow_sync_hour": 1.0,         # Cash flow sync hour (0-23)
     "job_historical_sync_hour": 20.0,       # Historical sync hour (0-23)
     "job_maintenance_hour": 3.0,            # Daily maintenance hour (0-23)
-    # Buy Score Group Weights (must sum to 1.0)
+    # Buy Score Group Weights (relative - normalized at scoring time)
     "score_weight_long_term": 0.20,         # CAGR, Sortino, Sharpe
     "score_weight_fundamentals": 0.15,      # Financial strength, Consistency
     "score_weight_opportunity": 0.15,       # 52W high, P/E ratio
@@ -47,7 +47,7 @@ SETTING_DEFAULTS = {
     "score_weight_technicals": 0.10,        # RSI, Bollinger, EMA
     "score_weight_opinion": 0.10,           # Analyst recs, Price targets
     "score_weight_diversification": 0.08,   # Geography, Industry, Averaging
-    # Sell Score Weights (must sum to 1.0)
+    # Sell Score Weights (relative - normalized at scoring time)
     "sell_weight_underperformance": 0.35,   # Return vs target
     "sell_weight_time_held": 0.18,          # Position age
     "sell_weight_portfolio_balance": 0.18,  # Overweight detection
@@ -115,7 +115,7 @@ async def get_job_settings() -> dict[str, float]:
 
 
 async def get_buy_score_weights() -> dict[str, float]:
-    """Get buy score group weights (8 groups, must sum to 1.0)."""
+    """Get buy score group weights (8 groups, normalized at scoring time)."""
     weight_keys = [k for k in SETTING_DEFAULTS if k.startswith("score_weight_")]
     db_values = await get_settings_batch(weight_keys)
     result = {}
@@ -130,7 +130,7 @@ async def get_buy_score_weights() -> dict[str, float]:
 
 
 async def get_sell_score_weights() -> dict[str, float]:
-    """Get sell score weights (5 groups, must sum to 1.0)."""
+    """Get sell score weights (5 groups, normalized at scoring time)."""
     weight_keys = [k for k in SETTING_DEFAULTS if k.startswith("sell_weight_")]
     db_values = await get_settings_batch(weight_keys)
     result = {}
