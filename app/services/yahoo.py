@@ -383,7 +383,8 @@ def get_batch_quotes(symbol_yahoo_map: dict[str, Optional[str]]) -> dict[str, fl
                 tickers=" ".join(yf_symbols),
                 period="5d",
                 progress=False,
-                threads=True
+                threads=True,
+                auto_adjust=True
             )
 
             if not data.empty:

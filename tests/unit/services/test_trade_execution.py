@@ -7,7 +7,7 @@ Wrong validation could cause trades that shouldn't happen (or block ones that sh
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from app.application.services.trade_execution_service import TradeExecutionService
-from app.services.allocator import TradeRecommendation
+from app.domain.models import TradeRecommendation
 
 
 class TestTradeValidation:

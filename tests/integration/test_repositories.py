@@ -3,7 +3,7 @@
 import pytest
 from datetime import datetime
 
-from app.domain.repositories import (
+from app.domain.models import (
     Stock,
     Position,
     PortfolioSnapshot,
@@ -110,13 +110,28 @@ async def test_portfolio_repository_create_and_get(portfolio_repo):
 
 
 @pytest.mark.asyncio
-async def test_allocation_repository_get_all(allocation_repo):
-    """Test getting all allocation targets."""
+async def test_allocation_repository_upsert_and_get(allocation_repo):
+    """Test creating and retrieving allocation targets."""
+    # Create allocation targets
+    target_eu = AllocationTarget(
+        type="geography",
+        name="EU",
+        target_pct=0.33,
+    )
+    target_us = AllocationTarget(
+        type="geography",
+        name="US",
+        target_pct=0.33,
+    )
+
+    await allocation_repo.upsert(target_eu)
+    await allocation_repo.upsert(target_us)
+
     targets = await allocation_repo.get_all()
-    # Should have default targets from schema
-    assert len(targets) > 0
+    assert len(targets) >= 2
     assert "geography:EU" in targets
     assert "geography:US" in targets
+    assert targets["geography:EU"] == 0.33
 
 
 @pytest.mark.asyncio
@@ -124,11 +139,10 @@ async def test_score_repository_upsert(score_repo):
     """Test upserting a score."""
     score = StockScore(
         symbol="AAPL",
-        technical_score=0.7,
-        analyst_score=0.8,
-        fundamental_score=0.6,
+        quality_score=0.8,
+        opportunity_score=0.7,
+        analyst_score=0.6,
         total_score=0.7,
-        volatility=0.20,
         calculated_at=datetime.now(),
     )
 
@@ -137,7 +151,7 @@ async def test_score_repository_upsert(score_repo):
     retrieved = await score_repo.get_by_symbol("AAPL")
     assert retrieved is not None
     assert retrieved.total_score == 0.7
-    assert retrieved.volatility == 0.20
+    assert retrieved.quality_score == 0.8
 
 
 @pytest.mark.asyncio
@@ -171,4 +185,3 @@ async def test_trade_repository_create(stock_repo, trade_repo):
     assert len(history) == 1
     assert history[0].symbol == "AAPL"
     assert history[0].side == "BUY"
-

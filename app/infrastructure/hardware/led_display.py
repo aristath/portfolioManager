@@ -5,7 +5,7 @@ This module manages the display state that gets polled by the Arduino App.
 - LED 3, 4 & Matrix: Controlled via Arduino App polling /api/status/led/display
 
 Display modes:
-- normal: Calm breathing wave (default)
+- normal: Scrolling ticker with portfolio info (default)
 - syncing: Faster wave during sync operations
 - trade: Expanding ring celebration
 - error: Scrolling error text

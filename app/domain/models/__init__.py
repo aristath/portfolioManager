@@ -1,2 +1,0 @@
-"""Domain models - core business entities."""
-

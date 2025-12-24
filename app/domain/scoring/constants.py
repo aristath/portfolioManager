@@ -1,0 +1,156 @@
+"""
+Scoring Constants - All thresholds and weights for scoring calculations.
+
+These values have been carefully tuned for long-term value investing.
+DO NOT change without understanding the impact on portfolio behavior.
+"""
+
+# =============================================================================
+# Quality Score Constants
+# =============================================================================
+
+# Bell curve target for total return (CAGR + dividend)
+# 11% is optimal for ~€1M retirement goal over 20 years
+OPTIMAL_CAGR = 0.11
+DEFAULT_TARGET_ANNUAL_RETURN = 0.11
+
+# Bell curve shape parameters (asymmetric Gaussian)
+BELL_CURVE_SIGMA_LEFT = 0.06   # Steeper rise (0% to peak)
+BELL_CURVE_SIGMA_RIGHT = 0.10  # Gentler fall (peak to high growth)
+BELL_CURVE_FLOOR = 0.15        # Minimum score for any positive return
+
+# Dividend thresholds for DRIP priority bonus
+HIGH_DIVIDEND_THRESHOLD = 0.06  # 6%+ yield gets max bonus (+0.10)
+MID_DIVIDEND_THRESHOLD = 0.03   # 3%+ yield gets mid bonus (+0.07)
+LOW_DIVIDEND_BONUS = 0.03       # Any dividend gets small bonus
+MID_DIVIDEND_BONUS = 0.07
+HIGH_DIVIDEND_BONUS = 0.10
+
+# Quality score component weights (must sum to 1.0)
+QUALITY_WEIGHT_TOTAL_RETURN = 0.40
+QUALITY_WEIGHT_CONSISTENCY = 0.20
+QUALITY_WEIGHT_FINANCIAL_STRENGTH = 0.20
+QUALITY_WEIGHT_SHARPE = 0.10
+QUALITY_WEIGHT_MAX_DRAWDOWN = 0.10
+
+# Sharpe ratio thresholds
+SHARPE_EXCELLENT = 2.0   # Score = 1.0
+SHARPE_GOOD = 1.0        # Score = 0.7
+SHARPE_OK = 0.5          # Score = 0.4
+
+# Max drawdown thresholds (as positive percentages)
+DRAWDOWN_EXCELLENT = 0.10  # <10% drawdown = 1.0
+DRAWDOWN_GOOD = 0.20       # <20% drawdown = 0.8+
+DRAWDOWN_OK = 0.30         # <30% drawdown = 0.6+
+DRAWDOWN_POOR = 0.50       # <50% drawdown = 0.2+
+
+# =============================================================================
+# Opportunity Score Constants
+# =============================================================================
+
+# Market average P/E for comparison
+DEFAULT_MARKET_AVG_PE = 22
+
+# 52-week high thresholds
+BELOW_HIGH_EXCELLENT = 0.30  # 30%+ below = 1.0
+BELOW_HIGH_GOOD = 0.20       # 20-30% below = 0.8-1.0
+BELOW_HIGH_OK = 0.10         # 10-20% below = 0.5-0.8
+
+# EMA distance thresholds
+EMA_VERY_BELOW = -0.10   # 10%+ below EMA = 1.0
+EMA_BELOW = -0.05        # 5-10% below = 0.7-1.0
+EMA_VERY_ABOVE = 0.10    # 10%+ above = 0.2
+
+# RSI thresholds
+RSI_OVERSOLD = 30    # Below = 1.0 (buy signal)
+RSI_OVERBOUGHT = 70  # Above = 0.0 (sell signal)
+
+# Opportunity score component weights (must sum to 1.0)
+OPPORTUNITY_WEIGHT_52W_HIGH = 0.30
+OPPORTUNITY_WEIGHT_EMA = 0.25
+OPPORTUNITY_WEIGHT_PE = 0.25
+OPPORTUNITY_WEIGHT_RSI = 0.10
+OPPORTUNITY_WEIGHT_BOLLINGER = 0.10
+
+# =============================================================================
+# Combined Score Weights
+# =============================================================================
+
+# Final score weights for BUY decisions (must sum to 1.0)
+SCORE_WEIGHT_QUALITY = 0.35
+SCORE_WEIGHT_OPPORTUNITY = 0.35
+SCORE_WEIGHT_ANALYST = 0.15
+SCORE_WEIGHT_ALLOCATION_FIT = 0.15
+
+# Without allocation fit, these 3 sum to 0.85, normalized to 1.0
+SCORE_WEIGHT_BASE = 0.85  # Quality + Opportunity + Analyst
+
+# =============================================================================
+# Allocation Fit Constants
+# =============================================================================
+
+# Allocation fit component weights (must sum to 1.0)
+ALLOCATION_WEIGHT_GEOGRAPHY = 0.40
+ALLOCATION_WEIGHT_INDUSTRY = 0.30
+ALLOCATION_WEIGHT_AVERAGING_DOWN = 0.30
+
+# Averaging down boost for positions underwater
+MAX_COST_BASIS_BOOST = 0.40       # Max boost at 20% loss
+COST_BASIS_BOOST_THRESHOLD = 0.20  # No boost beyond 20% loss
+
+# Concentration limits
+CONCENTRATION_HIGH = 0.10  # >10% = reduce enthusiasm
+CONCENTRATION_MED = 0.05   # 5-10% = slight reduction
+
+# =============================================================================
+# Sell Score Constants
+# =============================================================================
+
+# Hard blocks (NEVER sell if any apply)
+DEFAULT_MIN_HOLD_DAYS = 90         # 3 months minimum hold
+DEFAULT_SELL_COOLDOWN_DAYS = 180   # 6 months between sells
+DEFAULT_MAX_LOSS_THRESHOLD = -0.20 # Never sell if down more than 20%
+DEFAULT_MIN_SELL_VALUE_EUR = 100   # Minimum sell value in EUR
+
+# Sell quantity limits
+MIN_SELL_PCT = 0.10  # Minimum 10% of position
+MAX_SELL_PCT = 0.50  # Maximum 50% of position
+
+# Target annual return range (ideal performance)
+TARGET_RETURN_MIN = 0.08  # 8%
+TARGET_RETURN_MAX = 0.15  # 15%
+
+# Sell score component weights (must sum to 1.0)
+SELL_WEIGHT_UNDERPERFORMANCE = 0.35  # Primary factor
+SELL_WEIGHT_TIME_HELD = 0.18
+SELL_WEIGHT_PORTFOLIO_BALANCE = 0.18
+SELL_WEIGHT_INSTABILITY = 0.14
+SELL_WEIGHT_DRAWDOWN = 0.15  # PyFolio-based drawdown analysis
+
+# Instability detection thresholds
+INSTABILITY_RATE_VERY_HOT = 0.50  # >50% annualized = 1.0
+INSTABILITY_RATE_HOT = 0.30       # >30% = 0.7
+INSTABILITY_RATE_WARM = 0.20      # >20% = 0.4
+
+VOLATILITY_SPIKE_HIGH = 2.0   # Vol doubled = 1.0
+VOLATILITY_SPIKE_MED = 1.5    # Vol up 50% = 0.7
+VOLATILITY_SPIKE_LOW = 1.2    # Vol up 20% = 0.4
+
+VALUATION_STRETCH_HIGH = 0.30  # >30% above MA = 1.0
+VALUATION_STRETCH_MED = 0.20   # >20% = 0.7
+VALUATION_STRETCH_LOW = 0.10   # >10% = 0.4
+
+# =============================================================================
+# Technical Indicator Parameters
+# =============================================================================
+
+TRADING_DAYS_PER_YEAR = 252
+EMA_LENGTH = 200
+RSI_LENGTH = 14
+BOLLINGER_LENGTH = 20
+BOLLINGER_STD = 2
+
+# Minimum data requirements
+MIN_DAYS_FOR_OPPORTUNITY = 50
+MIN_MONTHS_FOR_CAGR = 12
+MIN_DAYS_FOR_VOLATILITY = 30

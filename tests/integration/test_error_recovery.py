@@ -4,21 +4,18 @@ import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from datetime import datetime
 
-from app.domain.repositories import Trade, Position
-from app.infrastructure.database.repositories import (
-    SQLiteTradeRepository,
-    SQLitePositionRepository,
-)
+from app.domain.models import Trade, Position
+from app.repositories import TradeRepository, PositionRepository
 from app.application.services.trade_execution_service import TradeExecutionService
 
 
 @pytest.mark.asyncio
 async def test_trade_execution_rollback_on_database_error(db):
     """Test that trade execution rolls back when database write fails."""
-    from app.infrastructure.database.repositories import SQLiteTradeRepository
-    from app.services.allocator import TradeRecommendation
-    
-    trade_repo = SQLiteTradeRepository(db)
+    from app.repositories import TradeRepository
+    from app.domain.models import TradeRecommendation
+
+    trade_repo = TradeRepository(db=db)
     
     # Create a trade recommendation (what TradeExecutionService expects)
     trade_rec = TradeRecommendation(
@@ -69,9 +66,9 @@ async def test_trade_execution_rollback_on_database_error(db):
 @pytest.mark.asyncio
 async def test_trade_execution_handles_external_failure(db):
     """Test that trade execution handles external API failures."""
-    from app.services.allocator import TradeRecommendation
-    
-    trade_repo = SQLiteTradeRepository(db)
+    from app.domain.models import TradeRecommendation
+
+    trade_repo = TradeRepository(db=db)
     
     trade_rec = TradeRecommendation(
         symbol="AAPL",
@@ -107,7 +104,7 @@ async def test_trade_execution_handles_external_failure(db):
 @pytest.mark.asyncio
 async def test_position_sync_recovery_after_partial_failure(db):
     """Test that position sync can recover after partial failure."""
-    position_repo = SQLitePositionRepository(db)
+    position_repo = PositionRepository(db=db)
     
     # Create initial position
     position1 = Position(
@@ -141,15 +138,15 @@ async def test_position_sync_recovery_after_partial_failure(db):
     )
     
     try:
-        from app.database import transaction
-        async with transaction(db):
+        # Use the database transaction context manager
+        async with db.transaction():
             # Delete all positions (simulating sync start)
             await position_repo.delete_all(auto_commit=False)
-            
+
             # Insert new positions
             await position_repo.upsert(position1, auto_commit=False)
             await position_repo.upsert(position2, auto_commit=False)
-            
+
             # Simulate error
             raise ValueError("Sync error")
     except ValueError:
@@ -209,10 +206,10 @@ def test_price_fetch_fails_after_max_retries():
 @pytest.mark.asyncio
 async def test_allocation_target_validation_error(db):
     """Test that invalid allocation targets are rejected."""
-    from app.infrastructure.database.repositories import SQLiteAllocationRepository
-    from app.domain.repositories import AllocationTarget
-    
-    allocation_repo = SQLiteAllocationRepository(db)
+    from app.repositories import AllocationRepository
+    from app.domain.models import AllocationTarget
+
+    allocation_repo = AllocationRepository(db=db)
     
     # Invalid: percentage > 1.0
     invalid_target = AllocationTarget(
