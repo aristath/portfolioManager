@@ -315,6 +315,7 @@ async def get_sell_recommendations(
     position_repo: PositionRepository = Depends(get_position_repository),
     allocation_repo: AllocationRepository = Depends(get_allocation_repository),
     portfolio_repo: PortfolioRepository = Depends(get_portfolio_repository),
+    trade_repo: TradeRepository = Depends(get_trade_repository),
 ):
     """
     Get top N sell recommendations based on sell scoring system.
@@ -335,6 +336,7 @@ async def get_sell_recommendations(
             position_repo,
             allocation_repo,
             portfolio_repo,
+            trade_repo,
         )
         recommendations = await rebalancing_service.calculate_sell_recommendations(
             limit=limit
@@ -474,6 +476,7 @@ async def get_funding_options(
     position_repo: PositionRepository = Depends(get_position_repository),
     allocation_repo: AllocationRepository = Depends(get_allocation_repository),
     portfolio_repo: PortfolioRepository = Depends(get_portfolio_repository),
+    trade_repo: TradeRepository = Depends(get_trade_repository),
 ):
     """
     Get funding options for a buy recommendation that can't be executed due to insufficient cash.
@@ -497,6 +500,7 @@ async def get_funding_options(
             position_repo,
             allocation_repo,
             portfolio_repo,
+            trade_repo,
         )
         recommendations = await rebalancing_service.get_recommendations(limit=10)
 
@@ -597,8 +601,17 @@ async def execute_funding(
     """
     from app.services.tradernet import get_tradernet_client
     from app.domain.repositories import Trade
+    from app.domain.constants import BUY_COOLDOWN_DAYS
 
     symbol = symbol.upper()
+
+    # Check cooldown before executing any trades
+    recently_bought = await trade_repo.get_recently_bought_symbols(BUY_COOLDOWN_DAYS)
+    if symbol in recently_bought:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot buy {symbol}: cooldown period active (bought within {BUY_COOLDOWN_DAYS} days)"
+        )
 
     try:
         client = get_tradernet_client()
