@@ -59,17 +59,30 @@ async def _sync_portfolio_internal():
             try:
                 position_repo = get_position_repository(db)
 
-                # Save tracking dates and Yahoo-derived prices before clearing
+                # Save Yahoo-derived prices before clearing (for price continuity)
                 cursor = await db.execute(
-                    "SELECT symbol, first_bought_at, last_sold_at, current_price, market_value_eur FROM positions"
+                    "SELECT symbol, current_price, market_value_eur FROM positions"
                 )
-                saved_position_data = {
+                saved_price_data = {
                     row[0]: {
-                        "first_bought_at": row[1],
-                        "last_sold_at": row[2],
-                        "current_price": row[3],
-                        "market_value_eur": row[4],
+                        "current_price": row[1],
+                        "market_value_eur": row[2],
                     }
+                    for row in await cursor.fetchall()
+                }
+
+                # Derive first_bought_at and last_sold_at from trades table
+                # This ensures dates reflect actual Tradernet trade history
+                cursor = await db.execute("""
+                    SELECT
+                        symbol,
+                        MIN(CASE WHEN UPPER(side) = 'BUY' THEN executed_at END) as first_buy,
+                        MAX(CASE WHEN UPPER(side) = 'SELL' THEN executed_at END) as last_sell
+                    FROM trades
+                    GROUP BY symbol
+                """)
+                trade_dates = {
+                    row[0]: {"first_bought_at": row[1], "last_sold_at": row[2]}
                     for row in await cursor.fetchall()
                 }
 
@@ -80,12 +93,13 @@ async def _sync_portfolio_internal():
                 geo_values = {"EU": 0.0, "ASIA": 0.0, "US": 0.0}
 
                 for pos in positions:
-                    saved_data = saved_position_data.get(pos.symbol, {})
+                    price_data = saved_price_data.get(pos.symbol, {})
+                    dates = trade_dates.get(pos.symbol, {})
 
                     # Use saved Yahoo prices if available, otherwise None
                     # sync_prices() will update these with fresh Yahoo data
-                    current_price = saved_data.get("current_price")
-                    market_value_eur = saved_data.get("market_value_eur")
+                    current_price = price_data.get("current_price")
+                    market_value_eur = price_data.get("market_value_eur")
 
                     # Recalculate market_value_eur if we have current_price but quantity changed
                     if current_price and pos.currency_rate:
@@ -100,8 +114,8 @@ async def _sync_portfolio_internal():
                         currency_rate=pos.currency_rate,
                         market_value_eur=market_value_eur,
                         last_updated=datetime.now().isoformat(),
-                        first_bought_at=saved_data.get("first_bought_at"),
-                        last_sold_at=saved_data.get("last_sold_at"),
+                        first_bought_at=dates.get("first_bought_at"),
+                        last_sold_at=dates.get("last_sold_at"),
                     )
                     await position_repo.upsert(position, auto_commit=False)
 

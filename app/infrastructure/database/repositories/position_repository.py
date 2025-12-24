@@ -63,22 +63,10 @@ class SQLitePositionRepository(PositionRepository):
             position: Position to upsert
             auto_commit: If True, commit immediately. If False, caller manages transaction.
         """
-        # Check if position exists to preserve first_bought_at
-        existing = await self.get_by_symbol(position.symbol)
-
-        # Preserve first_bought_at if it exists, otherwise use provided or set new
+        # Use provided dates (derived from trades table by sync_portfolio)
+        # Don't set defaults - let dates be NULL if no trade history exists
         first_bought_at = position.first_bought_at
         last_sold_at = position.last_sold_at
-        if existing:
-            # Keep existing first_bought_at if not provided
-            if first_bought_at is None and existing.first_bought_at:
-                first_bought_at = existing.first_bought_at
-            # Keep existing last_sold_at if not provided
-            if last_sold_at is None and existing.last_sold_at:
-                last_sold_at = existing.last_sold_at
-        elif first_bought_at is None:
-            # New position - set first_bought_at to now
-            first_bought_at = datetime.now().isoformat()
 
         await self.db.execute(
             """
