@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from app.config import settings
-from app.infrastructure.database.manager import get_db_manager
+from app.infrastructure.database.manager import init_databases, get_db_manager, shutdown_databases
 from app.api import portfolio, stocks, trades, status, allocation, cash_flows, charts, settings as settings_api
 from app.jobs.scheduler import init_scheduler, start_scheduler, stop_scheduler
 from app.services.tradernet import get_tradernet_client
@@ -71,8 +71,7 @@ async def lifespan(app: FastAPI):
         raise ValueError("Missing required Tradernet API credentials")
 
     # Initialize database manager (creates all databases with schemas)
-    db_manager = get_db_manager()
-    await db_manager.initialize()
+    db_manager = await init_databases(settings.data_dir)
 
     # Initialize and start scheduler
     await init_scheduler()
@@ -93,7 +92,7 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Shutting down Arduino Trader...")
     stop_scheduler()
-    await db_manager.close()
+    await shutdown_databases()
 
 
 app = FastAPI(
