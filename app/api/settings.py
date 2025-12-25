@@ -22,6 +22,7 @@ SETTING_DEFAULTS = {
     "market_avg_pe": 22.0,          # Reference P/E for valuation
     "recommendation_depth": 1.0,    # Number of steps in multi-step recommendations (1-5)
     "min_stock_score": 0.5,         # Minimum score for stock to be recommended (0-1)
+    "max_balance_worsening": -5.0,  # Max allowed portfolio score decrease for recommendations (-10 to 0)
     # LED Matrix settings
     "ticker_speed": 50.0,           # Ticker scroll speed in ms per frame (lower = faster)
     "led_brightness": 150.0,        # LED brightness (0-255)
@@ -206,7 +207,7 @@ async def update_setting_value(key: str, data: SettingUpdate):
     recommendation_settings = {
         "min_trade_size", "min_stock_score", "min_hold_days",
         "sell_cooldown_days", "max_loss_threshold", "target_annual_return",
-        "recommendation_depth"
+        "recommendation_depth", "max_balance_worsening"
     }
     if key in recommendation_settings:
         from app.infrastructure.recommendation_cache import get_recommendation_cache

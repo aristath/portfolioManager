@@ -17,29 +17,33 @@ class Settings:
     target_annual_return: float = 0.10
     recommendation_depth: int = 1
     min_stock_score: float = 0.5
-    
+    max_balance_worsening: float = -5.0
+
     def __post_init__(self):
         """Validate settings values."""
         if self.min_trade_size <= 0:
             raise ValueError("min_trade_size must be positive")
-        
+
         if self.min_hold_days < 0:
             raise ValueError("min_hold_days must be non-negative")
-        
+
         if self.sell_cooldown_days < 0:
             raise ValueError("sell_cooldown_days must be non-negative")
-        
+
         if self.max_loss_threshold >= 0:
             raise ValueError("max_loss_threshold must be negative")
-        
+
         if self.target_annual_return <= 0:
             raise ValueError("target_annual_return must be positive")
-        
+
         if self.recommendation_depth <= 0:
             raise ValueError("recommendation_depth must be positive")
 
         if not 0 <= self.min_stock_score <= 1:
             raise ValueError("min_stock_score must be between 0 and 1")
+
+        if self.max_balance_worsening > 0:
+            raise ValueError("max_balance_worsening must be negative or zero")
     
     @classmethod
     def from_dict(cls, data: Dict[str, str]) -> "Settings":
@@ -78,6 +82,7 @@ class Settings:
             target_annual_return=get_float("target_annual_return", 0.10),
             recommendation_depth=get_int("recommendation_depth", 1),
             min_stock_score=get_float("min_stock_score", 0.5),
+            max_balance_worsening=get_float("max_balance_worsening", -5.0),
         )
     
     def to_dict(self) -> Dict[str, Union[float, int]]:
@@ -94,6 +99,7 @@ class Settings:
             "target_annual_return": self.target_annual_return,
             "recommendation_depth": self.recommendation_depth,
             "min_stock_score": self.min_stock_score,
+            "max_balance_worsening": self.max_balance_worsening,
         }
 
 

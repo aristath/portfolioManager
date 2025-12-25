@@ -56,11 +56,6 @@ from app.infrastructure.recommendation_cache import get_recommendation_cache
 
 logger = logging.getLogger(__name__)
 
-# Threshold for filtering out stocks that worsen portfolio balance
-# A stock is skipped if buying it decreases portfolio score by more than this amount
-# (on a 0-100 scale). More negative = more lenient.
-MAX_BALANCE_WORSENING_THRESHOLD = -5.0
-
 
 def _determine_stock_currency(stock: dict) -> str:
     """
@@ -483,7 +478,7 @@ class RebalancingService:
             )
 
             # Skip stocks that worsen portfolio balance significantly
-            if score_change < MAX_BALANCE_WORSENING_THRESHOLD:
+            if score_change < settings.max_balance_worsening:
                 filter_stats["worsens_balance"] += 1
                 logger.debug(f"Skipping {symbol}: transaction worsens balance ({score_change:.2f})")
                 continue
@@ -693,7 +688,7 @@ class RebalancingService:
                     portfolio_context=portfolio_context,
                     portfolio_hash=cache_key,
                 )
-                if score_change < MAX_BALANCE_WORSENING_THRESHOLD:
+                if score_change < settings.max_balance_worsening:
                     filter_stats["worsens_balance"].append({
                         "symbol": symbol,
                         "geography": stock.geography,
@@ -1296,6 +1291,9 @@ class RebalancingService:
         steps = []
         current_context = await self._build_portfolio_context()
 
+        # Get settings for thresholds (fetch here since we skipped the strategic branch)
+        settings = await self._settings_service.get_settings()
+
         # Generate portfolio hash for caching
         from app.domain.portfolio_hash import generate_portfolio_hash
         positions = await self._position_repo.get_all()
@@ -1454,7 +1452,7 @@ class RebalancingService:
                     score_change = new_score.total - current_score.total
                     
                     # Skip if worsens portfolio significantly
-                    if score_change < MAX_BALANCE_WORSENING_THRESHOLD:
+                    if score_change < settings.max_balance_worsening:
                         continue
                     
                     # Prefer recommendations that improve portfolio score
