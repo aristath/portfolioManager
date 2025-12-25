@@ -280,6 +280,12 @@ class RebalancingService:
 
         # Build portfolio context
         portfolio_context = await self._build_portfolio_context()
+
+        # Generate portfolio hash from current positions
+        from app.domain.portfolio_hash import generate_portfolio_hash
+        positions = await self._position_repo.get_all()
+        position_dicts = [{"symbol": p.symbol, "quantity": p.quantity} for p in positions]
+        portfolio_hash = generate_portfolio_hash(position_dicts)
         
         # Get performance-adjusted allocation weights (PyFolio enhancement)
         adjusted_geo_weights, adjusted_ind_weights = await self._get_performance_adjusted_weights()
@@ -511,7 +517,9 @@ class RebalancingService:
             }
 
             # create_or_update returns UUID if not dismissed, None if dismissed
-            uuid = await self._recommendation_repo.create_or_update(recommendation_data)
+            uuid = await self._recommendation_repo.create_or_update(
+                recommendation_data, portfolio_hash=portfolio_hash
+            )
             if uuid:
                 # Only include if not dismissed
                 recommendations.append(rec)
@@ -583,6 +591,11 @@ class RebalancingService:
         if not positions:
             logger.info("No positions to evaluate for selling")
             return []
+
+        # Generate portfolio hash from current positions
+        from app.domain.portfolio_hash import generate_portfolio_hash
+        position_hash_dicts = [{"symbol": p.symbol, "quantity": p.quantity} for p in positions]
+        portfolio_hash = generate_portfolio_hash(position_hash_dicts)
 
         # Get stock info
         stocks = await self._stock_repo.get_all_active()
@@ -714,7 +727,9 @@ class RebalancingService:
             }
 
             # create_or_update returns UUID if not dismissed, None if dismissed
-            uuid = await self._recommendation_repo.create_or_update(recommendation_data)
+            uuid = await self._recommendation_repo.create_or_update(
+                recommendation_data, portfolio_hash=portfolio_hash
+            )
             if uuid:
                 # Only include if not dismissed
                 recommendations.append(rec)

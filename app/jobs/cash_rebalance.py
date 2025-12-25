@@ -106,6 +106,11 @@ async def _check_and_rebalance_internal():
         allocations = await allocation_repo.get_all()
         total_value = await position_repo.get_total_value()
 
+        # Generate portfolio hash for recommendation matching
+        from app.domain.portfolio_hash import generate_portfolio_hash
+        position_hash_dicts = [{"symbol": p.symbol, "quantity": p.quantity} for p in positions]
+        portfolio_hash = generate_portfolio_hash(position_hash_dicts)
+
         # Build portfolio context for scoring
         # get_all() returns Dict[str, float] with keys like "geography:name"
         geo_weights = {}
@@ -171,7 +176,7 @@ async def _check_and_rebalance_internal():
                 matching_recs = await recommendation_repo.find_matching_for_execution(
                     symbol=sell_trade.symbol,
                     side=TRADE_SIDE_SELL,
-                    amount=sell_trade.estimated_value,
+                    portfolio_hash=portfolio_hash,
                 )
                 for rec in matching_recs:
                     await recommendation_repo.mark_executed(rec["uuid"])
@@ -263,7 +268,7 @@ async def _check_and_rebalance_internal():
                     matching_recs = await recommendation_repo.find_matching_for_execution(
                         symbol=trade.symbol,
                         side=TRADE_SIDE_BUY,
-                        amount=trade.estimated_value,
+                        portfolio_hash=portfolio_hash,
                     )
                     for rec in matching_recs:
                         await recommendation_repo.mark_executed(rec["uuid"])

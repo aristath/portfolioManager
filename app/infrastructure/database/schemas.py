@@ -60,12 +60,13 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 
 -- Trade recommendations (stored with UUIDs for dismissal tracking)
+-- Uses portfolio_hash to identify same recommendations for same portfolio state
 CREATE TABLE IF NOT EXISTS recommendations (
     uuid TEXT PRIMARY KEY,
     symbol TEXT NOT NULL,
     name TEXT NOT NULL,
     side TEXT NOT NULL,  -- 'BUY' or 'SELL'
-    amount REAL NOT NULL,
+    amount REAL,  -- Display only, not part of uniqueness
     quantity INTEGER,
     estimated_price REAL,
     estimated_value REAL,
@@ -78,17 +79,19 @@ CREATE TABLE IF NOT EXISTS recommendations (
     new_portfolio_score REAL,
     score_change REAL,
     status TEXT DEFAULT 'pending',  -- 'pending', 'executed', 'dismissed'
+    portfolio_hash TEXT NOT NULL DEFAULT '',  -- Hash of portfolio state when recommendation was made
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,  -- Updated when recommendation is regenerated
     executed_at TEXT,
     dismissed_at TEXT,
-    UNIQUE(symbol, side, amount, reason)  -- Prevent duplicates, same rec = same params
+    UNIQUE(symbol, side, reason, portfolio_hash)  -- Same rec for same portfolio state
 );
 
 CREATE INDEX IF NOT EXISTS idx_recommendations_symbol ON recommendations(symbol);
 CREATE INDEX IF NOT EXISTS idx_recommendations_status ON recommendations(status);
 CREATE INDEX IF NOT EXISTS idx_recommendations_created_at ON recommendations(created_at);
-CREATE INDEX IF NOT EXISTS idx_recommendations_unique_match ON recommendations(symbol, side, amount, reason);
+CREATE INDEX IF NOT EXISTS idx_recommendations_portfolio_hash ON recommendations(portfolio_hash);
+CREATE INDEX IF NOT EXISTS idx_recommendations_unique_match ON recommendations(symbol, side, reason, portfolio_hash);
 
 -- Schema version tracking
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -160,11 +163,11 @@ async def init_config_schema(db):
         # Record schema version
         await db.execute(
             "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
-            (2, now, "Initial config schema with recommendations table")
+            (3, now, "Initial config schema with portfolio_hash recommendations")
         )
 
         await db.commit()
-        logger.info("Config database initialized with schema version 2 (includes recommendations table)")
+        logger.info("Config database initialized with schema version 3 (includes portfolio_hash recommendations)")
     elif current_version == 1:
         # Migration: Add recommendations table (version 1 -> 2)
         now = datetime.now().isoformat()
@@ -174,6 +177,86 @@ async def init_config_schema(db):
         )
         await db.commit()
         logger.info("Config database migrated to schema version 2 (recommendations table)")
+        current_version = 2  # Continue to next migration
+
+    if current_version == 2:
+        # Migration: Add portfolio_hash, change unique constraint (version 2 -> 3)
+        now = datetime.now().isoformat()
+        logger.info("Migrating config database to schema version 3 (portfolio_hash)...")
+
+        # Check if portfolio_hash column exists
+        cursor = await db.execute("PRAGMA table_info(recommendations)")
+        columns = [row[1] for row in await cursor.fetchall()]
+
+        if "portfolio_hash" not in columns:
+            # SQLite doesn't support DROP CONSTRAINT, need table recreation
+            # Create new table with correct schema
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS recommendations_new (
+                    uuid TEXT PRIMARY KEY,
+                    symbol TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    side TEXT NOT NULL,
+                    amount REAL,
+                    quantity INTEGER,
+                    estimated_price REAL,
+                    estimated_value REAL,
+                    reason TEXT NOT NULL,
+                    geography TEXT,
+                    industry TEXT,
+                    currency TEXT DEFAULT 'EUR',
+                    priority REAL,
+                    current_portfolio_score REAL,
+                    new_portfolio_score REAL,
+                    score_change REAL,
+                    status TEXT DEFAULT 'pending',
+                    portfolio_hash TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    executed_at TEXT,
+                    dismissed_at TEXT,
+                    UNIQUE(symbol, side, reason, portfolio_hash)
+                )
+            """)
+
+            # Copy data (old recommendations get empty hash, will be regenerated)
+            await db.execute("""
+                INSERT OR IGNORE INTO recommendations_new
+                SELECT uuid, symbol, name, side, amount, quantity, estimated_price,
+                       estimated_value, reason, geography, industry, currency, priority,
+                       current_portfolio_score, new_portfolio_score, score_change,
+                       status, '', created_at, updated_at, executed_at, dismissed_at
+                FROM recommendations
+            """)
+
+            # Swap tables
+            await db.execute("DROP TABLE recommendations")
+            await db.execute("ALTER TABLE recommendations_new RENAME TO recommendations")
+
+            # Recreate indexes
+            await db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_recommendations_symbol ON recommendations(symbol)"
+            )
+            await db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_recommendations_status ON recommendations(status)"
+            )
+            await db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_recommendations_created_at ON recommendations(created_at)"
+            )
+            await db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_recommendations_portfolio_hash ON recommendations(portfolio_hash)"
+            )
+            await db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_recommendations_unique_match "
+                "ON recommendations(symbol, side, reason, portfolio_hash)"
+            )
+
+        await db.execute(
+            "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
+            (3, now, "Added portfolio_hash, changed unique constraint to (symbol, side, reason, portfolio_hash)")
+        )
+        await db.commit()
+        logger.info("Config database migrated to schema version 3 (portfolio_hash)")
 
 
 # =============================================================================

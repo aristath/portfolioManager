@@ -14,31 +14,37 @@ class RecommendationRepository:
         self._db = get_db_manager().config
 
     async def find_existing(
-        self, symbol: str, side: str, amount: float, reason: str
+        self, symbol: str, side: str, reason: str, portfolio_hash: str
     ) -> Optional[dict]:
-        """Find existing recommendation by matching criteria."""
+        """Find existing recommendation by matching criteria (uses portfolio_hash)."""
         row = await self._db.fetchone(
             """
             SELECT * FROM recommendations
-            WHERE symbol = ? AND side = ? AND amount = ? AND reason = ?
+            WHERE symbol = ? AND side = ? AND reason = ? AND portfolio_hash = ?
             """,
-            (symbol.upper(), side.upper(), amount, reason),
+            (symbol.upper(), side.upper(), reason, portfolio_hash),
         )
         return dict(row) if row else None
 
-    async def create_or_update(self, recommendation_data: dict) -> Optional[str]:
+    async def create_or_update(
+        self, recommendation_data: dict, portfolio_hash: str
+    ) -> Optional[str]:
         """
         Create new or update existing recommendation.
+
+        Args:
+            recommendation_data: Dict with recommendation fields
+            portfolio_hash: Hash of current portfolio state
 
         Returns UUID if recommendation should be included, None if dismissed.
         """
         symbol = recommendation_data["symbol"].upper()
         side = recommendation_data["side"].upper()
-        amount = recommendation_data["amount"]
+        amount = recommendation_data.get("amount")  # Now optional, for display only
         reason = recommendation_data["reason"]
 
-        # Check if recommendation already exists
-        existing = await self.find_existing(symbol, side, amount, reason)
+        # Check if recommendation already exists (uses portfolio_hash for matching)
+        existing = await self.find_existing(symbol, side, reason, portfolio_hash)
 
         now = datetime.now().isoformat()
 
@@ -138,8 +144,8 @@ class RecommendationRepository:
                 (uuid, symbol, name, side, amount, quantity, estimated_price,
                  estimated_value, reason, geography, industry, currency, priority,
                  current_portfolio_score, new_portfolio_score, score_change,
-                 status, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 status, portfolio_hash, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     new_uuid,
@@ -159,6 +165,7 @@ class RecommendationRepository:
                     recommendation_data.get("new_portfolio_score"),
                     recommendation_data.get("score_change"),
                     "pending",
+                    portfolio_hash,
                     now,
                     now,
                 ),
@@ -229,39 +236,37 @@ class RecommendationRepository:
             )
 
     async def is_dismissed(
-        self, symbol: str, side: str, amount: float, reason: str
+        self, symbol: str, side: str, reason: str, portfolio_hash: str
     ) -> bool:
-        """Check if this exact recommendation was dismissed."""
+        """Check if this exact recommendation was dismissed (uses portfolio_hash)."""
         row = await self._db.fetchone(
             """
             SELECT status FROM recommendations
-            WHERE symbol = ? AND side = ? AND amount = ? AND reason = ?
+            WHERE symbol = ? AND side = ? AND reason = ? AND portfolio_hash = ?
             """,
-            (symbol.upper(), side.upper(), amount, reason),
+            (symbol.upper(), side.upper(), reason, portfolio_hash),
         )
         return row and row["status"] == "dismissed"
 
     async def find_matching_for_execution(
-        self, symbol: str, side: str, amount: float
+        self, symbol: str, side: str, portfolio_hash: str
     ) -> List[dict]:
         """
         Find pending recommendations that match execution criteria.
 
         Used to mark recommendations as executed after trade execution.
-        Matches on symbol, side, and approximate amount (within 1% tolerance).
+        Matches on symbol, side, and portfolio_hash (same portfolio state).
         """
-        # Match on symbol, side, and amount within 1% tolerance
         rows = await self._db.fetchall(
             """
             SELECT * FROM recommendations
             WHERE status = 'pending'
               AND symbol = ?
               AND side = ?
-              AND amount >= ? * 0.99
-              AND amount <= ? * 1.01
+              AND portfolio_hash = ?
             ORDER BY updated_at DESC
             """,
-            (symbol.upper(), side.upper(), amount, amount),
+            (symbol.upper(), side.upper(), portfolio_hash),
         )
         return [dict(row) for row in rows]
 
