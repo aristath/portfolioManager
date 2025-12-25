@@ -1001,10 +1001,10 @@ async def get_funding_options(symbol: str, exclude_signatures: str = ""):
         available_cash = client.get_total_cash_eur()
 
         # Check if funding is needed
-        if available_cash >= rec.amount:
+        if available_cash >= rec.estimated_value:
             return {
                 "buy_symbol": symbol,
-                "buy_amount": rec.amount,
+                "buy_amount": rec.estimated_value,
                 "cash_available": available_cash,
                 "cash_needed": 0,
                 "options": [],
@@ -1019,16 +1019,16 @@ async def get_funding_options(symbol: str, exclude_signatures: str = ""):
 
         options = await funding_service.get_funding_options(
             buy_symbol=symbol,
-            buy_amount_eur=rec.amount,
+            buy_amount_eur=rec.estimated_value,
             available_cash=available_cash,
             exclude_signatures=excluded,
         )
 
         return {
             "buy_symbol": symbol,
-            "buy_amount": rec.amount,
+            "buy_amount": rec.estimated_value,
             "cash_available": round(available_cash, 2),
-            "cash_needed": round(rec.amount - available_cash, 2),
+            "cash_needed": round(rec.estimated_value - available_cash, 2),
             "has_more": len(options) > 0,
             "options": [
                 {
