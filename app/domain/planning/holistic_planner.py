@@ -305,6 +305,14 @@ async def identify_opportunities(
     for category in opportunities:
         opportunities[category].sort(key=lambda x: x.priority, reverse=True)
 
+    # Log opportunities found
+    logger.info(f"Holistic planner identified opportunities: "
+                f"profit_taking={len(opportunities['profit_taking'])}, "
+                f"averaging_down={len(opportunities['averaging_down'])}, "
+                f"rebalance_sells={len(opportunities['rebalance_sells'])}, "
+                f"rebalance_buys={len(opportunities['rebalance_buys'])}, "
+                f"opportunity_buys={len(opportunities['opportunity_buys'])}")
+
     return opportunities
 
 
@@ -419,6 +427,12 @@ async def generate_action_sequences(
         if key not in seen:
             seen.add(key)
             unique_sequences.append(seq)
+
+    # Log sequences generated
+    logger.info(f"Holistic planner generated {len(unique_sequences)} unique sequences")
+    for i, seq in enumerate(unique_sequences[:3]):  # Log first 3
+        symbols = [f"{c.side.value}:{c.symbol}" for c in seq]
+        logger.info(f"  Sequence {i+1}: {symbols}")
 
     return unique_sequences
 
