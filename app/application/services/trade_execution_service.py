@@ -186,7 +186,20 @@ class TradeExecutionService:
                         continue
 
                 # Check for pending orders for this symbol (applies to both BUY and SELL)
-                if client.has_pending_order_for_symbol(trade.symbol):
+                # Check both broker API and local database for recent orders
+                has_pending = client.has_pending_order_for_symbol(trade.symbol)
+                
+                # Also check database for recent SELL orders (catches orders just placed)
+                if not has_pending and trade.side.upper() == "SELL":
+                    try:
+                        has_recent = await self._trade_repo.has_recent_sell_order(trade.symbol, hours=2)
+                        if has_recent:
+                            has_pending = True
+                            logger.info(f"Found recent SELL order in database for {trade.symbol}")
+                    except Exception as e:
+                        logger.warning(f"Failed to check database for recent sell orders: {e}")
+                
+                if has_pending:
                     logger.warning(f"SAFETY BLOCK: {trade.symbol} has pending order, refusing to execute")
                     results.append({
                         "symbol": trade.symbol,
@@ -208,9 +221,47 @@ class TradeExecutionService:
                 )
 
                 if result:
-                    # Note: Trade recording is handled by sync_trades job
-                    # which fetches executed trades from Tradernet API.
-                    # This prevents sync issues if user cancels orders externally.
+                    # Store order immediately in database to prevent duplicate submissions
+                    # The sync_trades job will still sync executed trades from the API,
+                    # but storing immediately allows us to check for recent orders locally.
+                    from app.domain.models import Trade
+                    try:
+                        # Check if order_id already exists (might have been stored by sync_trades)
+                        if result.order_id:
+                            exists = await self._trade_repo.exists(result.order_id)
+                            if exists:
+                                logger.debug(f"Order {result.order_id} already exists in database, skipping immediate store")
+                            else:
+                                trade_record = Trade(
+                                    symbol=trade.symbol,
+                                    side=trade.side.upper(),
+                                    quantity=trade.quantity,
+                                    price=result.price if result.price > 0 else trade.estimated_price,
+                                    executed_at=datetime.now(),
+                                    order_id=result.order_id,
+                                    currency=trade.currency,
+                                    source="tradernet",
+                                )
+                                await self._trade_repo.create(trade_record)
+                                logger.info(f"Stored order {result.order_id} for {trade.symbol} immediately")
+                        else:
+                            # No order_id returned, store anyway for tracking
+                            trade_record = Trade(
+                                symbol=trade.symbol,
+                                side=trade.side.upper(),
+                                quantity=trade.quantity,
+                                price=result.price if result.price > 0 else trade.estimated_price,
+                                executed_at=datetime.now(),
+                                order_id=None,
+                                currency=trade.currency,
+                                source="tradernet",
+                            )
+                            await self._trade_repo.create(trade_record)
+                            logger.info(f"Stored order (no order_id) for {trade.symbol} immediately")
+                    except Exception as e:
+                        # Log but don't fail - order was placed successfully
+                        # This might be a duplicate key error if sync_trades already inserted it
+                        logger.warning(f"Failed to store order immediately (may already exist): {e}")
 
                     # For successful SELL orders, update last_sold_at in positions
                     if trade.side.upper() == "SELL" and self._position_repo:

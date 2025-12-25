@@ -27,6 +27,9 @@ class TestTradeValidation:
         """Create mock trade repository."""
         repo = AsyncMock()
         repo.create = AsyncMock()
+        repo.has_recent_sell_order = AsyncMock(return_value=False)
+        repo.exists = AsyncMock(return_value=False)
+        repo.get_recently_bought_symbols = AsyncMock(return_value=set())
         return repo
 
     @pytest.fixture
@@ -41,6 +44,7 @@ class TestTradeValidation:
         client = MagicMock()
         client.is_connected = True
         client.connect.return_value = True
+        client.has_pending_order_for_symbol = MagicMock(return_value=False)
 
         # Simulate successful order
         order_result = MagicMock()
@@ -375,3 +379,82 @@ class TestTradeValidation:
 
             assert results[0]["status"] == "success"
             mock_client.place_order.assert_called_once()
+            
+            # Verify order was stored immediately
+            mock_trade_repo.create.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_sell_blocked_when_recent_order_in_database(
+        self, mock_trade_repo, mock_position_repo, mock_client
+    ):
+        """SELL order should be blocked if recent sell order exists in database.
+        
+        Bug caught: Duplicate sell orders being submitted.
+        """
+        with patch(
+            "app.application.services.trade_execution_service.get_tradernet_client",
+            return_value=mock_client
+        ):
+            # Position exists
+            position = MagicMock()
+            position.quantity = 20
+            mock_position_repo.get_by_symbol.return_value = position
+            
+            # Recent sell order exists in database
+            mock_trade_repo.has_recent_sell_order.return_value = True
+
+            service = TradeExecutionService(
+                mock_trade_repo,
+                position_repo=mock_position_repo
+            )
+
+            trade = self._make_trade(side="SELL", quantity=10)
+
+            results = await service.execute_trades(
+                [trade],
+                use_transaction=False
+            )
+
+            assert len(results) == 1
+            assert results[0]["status"] == "blocked"
+            assert "Pending order already exists" in results[0]["error"]
+
+            # Should NOT have placed order
+            mock_client.place_order.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_order_stored_immediately_after_placement(
+        self, mock_trade_repo, mock_position_repo, mock_client
+    ):
+        """Order should be stored in database immediately after successful placement.
+        
+        Bug caught: Orders not being tracked locally, causing duplicates.
+        """
+        with patch(
+            "app.application.services.trade_execution_service.get_tradernet_client",
+            return_value=mock_client
+        ):
+            service = TradeExecutionService(
+                mock_trade_repo,
+                position_repo=mock_position_repo
+            )
+
+            trade = self._make_trade(side="BUY")
+
+            results = await service.execute_trades(
+                [trade],
+                use_transaction=False,
+                currency_balances={"EUR": 2000}
+            )
+
+            assert len(results) == 1
+            assert results[0]["status"] == "success"
+            
+            # Verify order was stored immediately
+            mock_trade_repo.create.assert_called_once()
+            
+            # Verify the stored trade has correct order_id
+            call_args = mock_trade_repo.create.call_args[0][0]
+            assert call_args.order_id == "12345"
+            assert call_args.symbol == "TEST"
+            assert call_args.side == "BUY"

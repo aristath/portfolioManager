@@ -86,8 +86,16 @@ async def execute_trade(trade: TradeRequest):
     if not client.is_connected:
         raise HTTPException(status_code=503, detail="Tradernet not connected")
 
-    # Check for pending orders for this symbol
-    if client.has_pending_order_for_symbol(trade.symbol):
+    # Check for pending orders for this symbol (broker API and database)
+    has_pending = client.has_pending_order_for_symbol(trade.symbol)
+    
+    # Also check database for recent SELL orders if this is a SELL
+    if not has_pending and trade.side.upper() == "SELL":
+        has_recent = await trade_repo.has_recent_sell_order(trade.symbol, hours=2)
+        if has_recent:
+            has_pending = True
+    
+    if has_pending:
         raise HTTPException(
             status_code=409,
             detail=f"A pending order already exists for {trade.symbol}"
@@ -705,8 +713,16 @@ async def execute_multi_step_recommendation_step(step_number: int):
                     detail=f"Cannot buy {step['symbol']}: cooldown period active (bought within {BUY_COOLDOWN_DAYS} days)"
                 )
 
-        # Check for pending orders for this symbol
-        if client.has_pending_order_for_symbol(step["symbol"]):
+        # Check for pending orders for this symbol (broker API and database)
+        has_pending = client.has_pending_order_for_symbol(step["symbol"])
+        
+        # Also check database for recent SELL orders if this is a SELL
+        if not has_pending and step["side"].upper() == "SELL":
+            has_recent = await trade_repo.has_recent_sell_order(step["symbol"], hours=2)
+            if has_recent:
+                has_pending = True
+        
+        if has_pending:
             raise HTTPException(
                 status_code=409,
                 detail=f"A pending order already exists for {step['symbol']}"
@@ -829,8 +845,16 @@ async def execute_all_multi_step_recommendations():
         # Execute each step sequentially
         for idx, step in enumerate(steps, start=1):
             try:
-                # Check for pending orders for this symbol
-                if client.has_pending_order_for_symbol(step["symbol"]):
+                # Check for pending orders for this symbol (broker API and database)
+                has_pending = client.has_pending_order_for_symbol(step["symbol"])
+                
+                # Also check database for recent SELL orders if this is a SELL
+                if not has_pending and step["side"].upper() == "SELL":
+                    has_recent = await trade_repo.has_recent_sell_order(step["symbol"], hours=2)
+                    if has_recent:
+                        has_pending = True
+                
+                if has_pending:
                     results.append({
                         "step": idx,
                         "status": "blocked",
@@ -959,8 +983,16 @@ async def execute_sell_recommendation(symbol: str):
                     detail="Failed to connect to Tradernet"
                 )
 
-        # Check for pending orders for this symbol
-        if client.has_pending_order_for_symbol(rec.symbol):
+        # Check for pending orders for this symbol (broker API and database)
+        has_pending = client.has_pending_order_for_symbol(rec.symbol)
+        
+        # Also check database for recent SELL orders
+        if not has_pending:
+            has_recent = await trade_repo.has_recent_sell_order(rec.symbol, hours=2)
+            if has_recent:
+                has_pending = True
+        
+        if has_pending:
             raise HTTPException(
                 status_code=409,
                 detail=f"A pending order already exists for {rec.symbol}"
@@ -1168,8 +1200,16 @@ async def execute_funding(symbol: str, request: ExecuteFundingRequest):
         for sell in request.sells:
             sell_symbol = sell.symbol.upper()
 
-            # Check for pending orders for this symbol
-            if client.has_pending_order_for_symbol(sell_symbol):
+            # Check for pending orders for this symbol (broker API and database)
+            has_pending = client.has_pending_order_for_symbol(sell_symbol)
+            
+            # Also check database for recent SELL orders
+            if not has_pending:
+                has_recent = await trade_repo.has_recent_sell_order(sell_symbol, hours=2)
+                if has_recent:
+                    has_pending = True
+            
+            if has_pending:
                 sell_results.append({
                     "symbol": sell_symbol,
                     "status": "blocked",
@@ -1244,7 +1284,16 @@ async def execute_funding(symbol: str, request: ExecuteFundingRequest):
             )
 
         # Check for pending orders for the buy symbol
-        if client.has_pending_order_for_symbol(symbol):
+        # Check for pending orders for this symbol (broker API and database)
+        has_pending = client.has_pending_order_for_symbol(symbol)
+        
+        # Also check database for recent SELL orders (this is a BUY, but check anyway for safety)
+        if not has_pending:
+            has_recent = await trade_repo.has_recent_sell_order(symbol, hours=2)
+            if has_recent:
+                has_pending = True
+        
+        if has_pending:
             raise HTTPException(
                 status_code=409,
                 detail=f"A pending order already exists for {symbol}"

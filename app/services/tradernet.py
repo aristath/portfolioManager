@@ -399,7 +399,7 @@ class TradernetClient:
 
     def has_pending_order_for_symbol(self, symbol: str) -> bool:
         """
-        Check if a pending order exists for the given symbol.
+        Check if a pending order exists for the given symbol (broker API only).
 
         Args:
             symbol: Stock symbol to check (e.g., "AAPL.US")
