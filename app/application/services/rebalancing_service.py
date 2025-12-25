@@ -1452,9 +1452,11 @@ class RebalancingService:
                     score_change = new_score.total - current_score.total
                     
                     # Skip if worsens portfolio significantly
-                    if score_change < settings.max_balance_worsening:
+                    # For step 2+, use more lenient threshold since we're already committed to multi-step
+                    threshold = settings.max_balance_worsening * 2 if step_num > 1 else settings.max_balance_worsening
+                    if score_change < threshold:
                         continue
-                    
+
                     # Prefer recommendations that improve portfolio score
                     if score_change > best_score_change:
                         best_score_change = score_change
