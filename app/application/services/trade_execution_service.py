@@ -12,6 +12,7 @@ from app.domain.models import Recommendation, Trade
 from app.domain.value_objects.currency import Currency
 from app.domain.value_objects.trade_side import TradeSide
 from app.domain.factories.trade_factory import TradeFactory
+from app.domain.events import TradeExecutedEvent, get_event_bus
 from app.services.tradernet import get_tradernet_client
 from app.infrastructure.events import emit, SystemEvent
 from app.infrastructure.hardware.led_display import set_activity
@@ -106,6 +107,10 @@ class TradeExecutionService:
             
             await self._trade_repo.create(trade_record)
             logger.info(f"Stored order {order_id or '(no order_id)'} for {symbol} immediately")
+            
+            # Publish domain event
+            event_bus = get_event_bus()
+            event_bus.publish(TradeExecutedEvent(trade=trade_record))
             
             # For successful SELL orders, update last_sold_at in positions
             if trade_side.is_sell() and self._position_repo:
