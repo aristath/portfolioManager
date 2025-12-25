@@ -10,7 +10,7 @@ from app.domain.planning.strategies.base import RecommendationStrategy, Strategi
 from app.domain.scoring.models import PortfolioContext
 from app.domain.scoring.diversification import calculate_portfolio_score
 from app.domain.models import Stock, Position
-from app.domain.constants import TRADE_SIDE_BUY, TRADE_SIDE_SELL
+from app.domain.value_objects.trade_side import TradeSide
 
 logger = logging.getLogger(__name__)
 
@@ -157,7 +157,7 @@ async def create_strategic_plan(
         # Simulate sell transaction
         if simulate_portfolio_after_transaction:
             transaction = {
-                "side": TRADE_SIDE_SELL,
+                "side": TradeSide.SELL,
                 "symbol": symbol,
                 "value_eur": estimated_value,
                 "geography": geography,
@@ -204,7 +204,7 @@ async def create_strategic_plan(
         
         steps.append(PlanStep(
             step_number=step_num,
-            side=TRADE_SIDE_SELL,
+            side=TradeSide.SELL,
             symbol=symbol,
             name=sell_candidate.get("name", symbol),
             quantity=quantity,
@@ -250,7 +250,7 @@ async def create_strategic_plan(
         
         if simulate_portfolio_after_transaction:
             transaction = {
-                "side": TRADE_SIDE_BUY,
+                "side": TradeSide.BUY,
                 "symbol": symbol,
                 "value_eur": amount,
                 "geography": stock.geography,
@@ -306,7 +306,7 @@ async def create_strategic_plan(
 
         steps.append(PlanStep(
             step_number=step_num,
-            side=TRADE_SIDE_BUY,
+            side=TradeSide.BUY,
             symbol=symbol,
             name=buy_candidate.get("name", symbol),
             quantity=quantity,
@@ -331,8 +331,8 @@ async def create_strategic_plan(
     
     # Calculate totals
     total_score_improvement = sum(step.score_change for step in steps)
-    cash_required = sum(step.estimated_value for step in steps if step.side == TRADE_SIDE_BUY)
-    cash_generated = sum(step.estimated_value for step in steps if step.side == TRADE_SIDE_SELL)
+    cash_required = sum(step.estimated_value for step in steps if step.side == TradeSide.BUY)
+    cash_generated = sum(step.estimated_value for step in steps if step.side == TradeSide.SELL)
     
     return StrategicPlan(
         strategy_name=strategy.strategy_name,

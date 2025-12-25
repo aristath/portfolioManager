@@ -35,7 +35,8 @@ from app.domain.models import TradeRecommendation, StockPriority
 from app.services.allocator import calculate_position_size, get_max_trades
 from app.services import yahoo
 from app.services.tradernet import get_exchange_rate
-from app.domain.constants import TRADE_SIDE_BUY, TRADE_SIDE_SELL, BUY_COOLDOWN_DAYS
+from app.domain.value_objects.trade_side import TradeSide
+from app.domain.constants import BUY_COOLDOWN_DAYS
 from app.domain.analytics import (
     reconstruct_portfolio_values,
     calculate_portfolio_returns,
@@ -612,7 +613,7 @@ class RebalancingService:
             trades.append(TradeRecommendation(
                 symbol=rec.symbol,
                 name=rec.name,
-                side=TRADE_SIDE_BUY,
+                side=TradeSide.BUY,
                 quantity=rec.quantity,
                 estimated_price=rec.current_price,
                 estimated_value=rec.amount,
@@ -657,7 +658,7 @@ class RebalancingService:
                 recommendations.append(TradeRecommendation(
                     symbol=c["symbol"],
                     name=c["name"],
-                    side=TRADE_SIDE_SELL,
+                    side=TradeSide.SELL,
                     quantity=c["quantity"],
                     estimated_price=c["estimated_price"],
                     estimated_value=c["estimated_value"],
@@ -771,7 +772,7 @@ class RebalancingService:
             rec = TradeRecommendation(
                 symbol=score.symbol,
                 name=pos.get("name", score.symbol),
-                side=TRADE_SIDE_SELL,
+                side=TradeSide.SELL,
                 quantity=score.suggested_sell_quantity,
                 estimated_price=round(current_price, 2),
                 estimated_value=round(score.suggested_sell_value, 2),
@@ -968,7 +969,7 @@ class RebalancingService:
         new_positions = dict(portfolio_context.positions)
         
         # Update positions based on transaction side
-        if side == TRADE_SIDE_SELL:
+        if side == TradeSide.SELL:
             # Subtract from position value
             current_value = new_positions.get(symbol, 0)
             new_positions[symbol] = max(0, current_value - value_eur)
@@ -989,29 +990,29 @@ class RebalancingService:
         
         # Update geographies
         new_geographies = dict(portfolio_context.stock_geographies or {})
-        if side == TRADE_SIDE_BUY:
+        if side == TradeSide.BUY:
             new_geographies[symbol] = geography
-        elif side == TRADE_SIDE_SELL and new_positions.get(symbol, 0) <= 0:
+        elif side == TradeSide.SELL and new_positions.get(symbol, 0) <= 0:
             # Remove geography if position is gone
             new_geographies.pop(symbol, None)
         
         # Update industries
         new_industries = dict(portfolio_context.stock_industries or {})
-        if side == TRADE_SIDE_BUY and industry:
+        if side == TradeSide.BUY and industry:
             new_industries[symbol] = industry
-        elif side == TRADE_SIDE_SELL and new_positions.get(symbol, 0) <= 0:
+        elif side == TradeSide.SELL and new_positions.get(symbol, 0) <= 0:
             # Remove industry if position is gone
             new_industries.pop(symbol, None)
         
         # Update scores (only for buys - sells don't change stock quality)
         new_scores = dict(portfolio_context.stock_scores or {})
-        if side == TRADE_SIDE_BUY:
+        if side == TradeSide.BUY:
             stock_quality = transaction.get("stock_quality", 0.5)
             new_scores[symbol] = stock_quality
         
         # Update dividends (only for buys)
         new_dividends = dict(portfolio_context.stock_dividends or {})
-        if side == TRADE_SIDE_BUY:
+        if side == TradeSide.BUY:
             stock_dividend = transaction.get("stock_dividend", 0.0)
             new_dividends[symbol] = stock_dividend
         
@@ -1068,7 +1069,7 @@ class RebalancingService:
                 
                 return [MultiStepRecommendation(
                     step=1,
-                    side=TRADE_SIDE_BUY,
+                    side=TradeSide.BUY,
                     symbol=rec.symbol,
                     name=rec.name,
                     quantity=rec.quantity or 0,
@@ -1222,7 +1223,7 @@ class RebalancingService:
                     
                     # Simulate this sell
                     transaction = {
-                        "side": TRADE_SIDE_SELL,
+                        "side": TradeSide.SELL,
                         "symbol": sell_rec.symbol,
                         "value_eur": sell_value,
                         "geography": geography,
@@ -1287,7 +1288,7 @@ class RebalancingService:
                     stock_quality = score_row["quality_score"] if score_row else 0.5
                     
                     transaction = {
-                        "side": TRADE_SIDE_BUY,
+                        "side": TradeSide.BUY,
                         "symbol": buy_rec.symbol,
                         "value_eur": buy_rec.amount,
                         "geography": buy_rec.geography,
@@ -1345,7 +1346,7 @@ class RebalancingService:
                     # Sell recommendation
                     step_rec = MultiStepRecommendation(
                         step=step_num,
-                        side=TRADE_SIDE_SELL,
+                        side=TradeSide.SELL,
                         symbol=rec.symbol,
                         name=rec.name,
                         quantity=int(rec.quantity),
@@ -1363,7 +1364,7 @@ class RebalancingService:
                     # Buy recommendation
                     step_rec = MultiStepRecommendation(
                         step=step_num,
-                        side=TRADE_SIDE_BUY,
+                        side=TradeSide.BUY,
                         symbol=rec.symbol,
                         name=rec.name,
                         quantity=rec.quantity or 0,
