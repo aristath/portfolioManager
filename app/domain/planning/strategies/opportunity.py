@@ -242,7 +242,7 @@ class OpportunityStrategy(RecommendationStrategy):
             
             # Calculate portfolio score improvement
             quality_score = score_row["quality_score"] or 0.5
-            new_score, score_change = calculate_post_transaction_score(
+            new_score, score_change = await calculate_post_transaction_score(
                 symbol=symbol,
                 geography=stock.geography,
                 industry=stock.industry,

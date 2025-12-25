@@ -461,7 +461,7 @@ async def get_position_risk_metrics(
     """
     Calculate risk metrics for a specific position.
 
-    Uses 4-hour cache to reduce expensive calculations.
+    Uses 72-hour cache to reduce expensive calculations.
 
     Args:
         symbol: Stock symbol
@@ -471,7 +471,7 @@ async def get_position_risk_metrics(
     Returns:
         Dict with sortino_ratio, sharpe_ratio, volatility, max_drawdown
     """
-    # Check cache first (4-hour TTL for symbol-specific data)
+    # Check cache first (72-hour TTL for symbol-specific data)
     from app.infrastructure.recommendation_cache import get_recommendation_cache
 
     rec_cache = get_recommendation_cache()
@@ -518,8 +518,8 @@ async def get_position_risk_metrics(
             "max_drawdown": max_drawdown if np.isfinite(max_drawdown) else 0.0,
         }
 
-        # Cache the result (4-hour TTL for symbol-specific data)
-        await rec_cache.set_analytics(cache_key, result, ttl_hours=4)
+        # Cache the result (72-hour TTL for symbol-specific data - historical data changes slowly)
+        await rec_cache.set_analytics(cache_key, result, ttl_hours=72)
 
         return result
     except Exception as e:

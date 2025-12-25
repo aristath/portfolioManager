@@ -328,8 +328,8 @@ class RebalancingService:
         # Get all active stocks with scores
         stocks = await self._stock_repo.get_all_active()
 
-        # Calculate current portfolio score
-        current_portfolio_score = calculate_portfolio_score(portfolio_context)
+        # Calculate current portfolio score (with caching)
+        current_portfolio_score = await calculate_portfolio_score(portfolio_context, portfolio_hash=portfolio_hash)
 
         # BATCH FETCH ALL PRICES UPFRONT (performance optimization)
         # This replaces sequential get_current_price() calls which caused timeouts
@@ -445,9 +445,9 @@ class RebalancingService:
 
             trade_value_eur = trade_value_native / exchange_rate
 
-            # Calculate POST-TRANSACTION portfolio score
+            # Calculate POST-TRANSACTION portfolio score (with caching)
             dividend_yield = 0  # Could be enhanced later
-            new_score, score_change = calculate_post_transaction_score(
+            new_score, score_change = await calculate_post_transaction_score(
                 symbol=symbol,
                 geography=geography,
                 industry=industry,
@@ -455,6 +455,7 @@ class RebalancingService:
                 stock_quality=quality_score,
                 stock_dividend=dividend_yield,
                 portfolio_context=portfolio_context,
+                portfolio_hash=portfolio_hash,
             )
 
             # Skip stocks that worsen portfolio balance significantly
@@ -1181,7 +1182,7 @@ class RebalancingService:
 
         for step_num in range(1, depth + 1):
             # Calculate current portfolio score
-            current_score = calculate_portfolio_score(current_context)
+            current_score = await calculate_portfolio_score(current_context)
 
             # Multi-step logic:
             # Step 1: MUST be a sell (to generate cash and start the sequence)
@@ -1234,7 +1235,7 @@ class RebalancingService:
                     )
                     
                     # Calculate score change
-                    new_score = calculate_portfolio_score(sim_context)
+                    new_score = await calculate_portfolio_score(sim_context)
                     score_change = new_score.total - current_score.total
                     
                     # Prefer recommendations that improve portfolio score
@@ -1301,7 +1302,7 @@ class RebalancingService:
                     )
                     
                     # Calculate score change based on simulated context
-                    new_score = calculate_portfolio_score(sim_context)
+                    new_score = await calculate_portfolio_score(sim_context)
                     score_change = new_score.total - current_score.total
                     
                     # Skip if worsens portfolio significantly

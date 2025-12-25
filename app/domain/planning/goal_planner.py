@@ -120,7 +120,7 @@ async def create_strategic_plan(
     steps = []
     current_context = portfolio_context
     current_cash = available_cash
-    current_score = calculate_portfolio_score(current_context)
+    current_score = await calculate_portfolio_score(current_context)
     step_num = 1
     
     # Track used symbols to avoid duplicates
@@ -186,7 +186,7 @@ async def create_strategic_plan(
             )
             new_cash = current_cash + estimated_value
         
-        new_score = calculate_portfolio_score(new_context)
+        new_score = await calculate_portfolio_score(new_context)
         score_change = new_score.total - current_score.total
         
         # Build goal contribution
@@ -289,7 +289,7 @@ async def create_strategic_plan(
             )
             new_cash = max(0, current_cash - amount)
         
-        new_score = calculate_portfolio_score(new_context)
+        new_score = await calculate_portfolio_score(new_context)
         score_change = new_score.total - current_score.total
 
         # Strategic planners should only recommend buys that improve the portfolio

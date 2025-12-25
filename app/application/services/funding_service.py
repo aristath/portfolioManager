@@ -435,7 +435,7 @@ class FundingService:
             warnings=warnings,
         )
 
-    def _calculate_net_score_change(
+    async def _calculate_net_score_change(
         self,
         sells: List[FundingSell],
         buy_symbol: str,
@@ -449,7 +449,7 @@ class FundingService:
         Returns:
             (current_score, new_score, net_change)
         """
-        current_score = calculate_portfolio_score(portfolio_context)
+        current_score = await calculate_portfolio_score(portfolio_context)
 
         # Create modified context after sells
         modified_positions = dict(portfolio_context.positions)
@@ -481,7 +481,7 @@ class FundingService:
         buy_quality = portfolio_context.stock_scores.get(buy_symbol, 0.5)
         buy_dividend = portfolio_context.stock_dividends.get(buy_symbol, 0)
 
-        new_score, score_change = calculate_post_transaction_score(
+        new_score, score_change = await calculate_post_transaction_score(
             symbol=buy_symbol,
             geography=buy_geography,
             industry=buy_industry,
@@ -613,7 +613,7 @@ class FundingService:
         if not sells or total_value < cash_needed * 0.9:
             return None
 
-        current_score, new_score, net_change = self._calculate_net_score_change(
+        current_score, new_score, net_change = await self._calculate_net_score_change(
             sells, buy_symbol, buy_amount_eur, portfolio_context, buy_stock
         )
 

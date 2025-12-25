@@ -603,7 +603,7 @@ async def _get_buy_trades(
             # We could fetch dividend data, but for now use stored cagr as proxy
             pass
 
-        new_score, score_change = calculate_post_transaction_score(
+        new_score, score_change = await calculate_post_transaction_score(
             symbol=symbol,
             geography=stock.geography,
             industry=stock.industry,

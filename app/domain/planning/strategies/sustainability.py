@@ -197,7 +197,7 @@ class SustainabilityStrategy(RecommendationStrategy):
                 trade_value_eur = quantity * price / exchange_rate
             
             # Calculate portfolio score improvement
-            new_score, score_change = calculate_post_transaction_score(
+            new_score, score_change = await calculate_post_transaction_score(
                 symbol=symbol,
                 geography=stock.geography,
                 industry=stock.industry,

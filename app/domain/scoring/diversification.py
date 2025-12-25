@@ -124,7 +124,10 @@ def calculate_diversification_score(
     return round(min(1.0, total), 3), sub_components
 
 
-def calculate_portfolio_score(portfolio_context: PortfolioContext) -> PortfolioScore:
+async def calculate_portfolio_score(
+    portfolio_context: PortfolioContext,
+    portfolio_hash: Optional[str] = None
+) -> PortfolioScore:
     """
     Calculate overall portfolio health score.
 
@@ -133,17 +136,54 @@ def calculate_portfolio_score(portfolio_context: PortfolioContext) -> PortfolioS
     - Dividend (30%): Weighted average dividend yield across positions
     - Quality (30%): Weighted average stock quality scores
 
+    Args:
+        portfolio_context: Portfolio context with positions and weights
+        portfolio_hash: Optional portfolio hash for caching. If provided, will check cache first.
+
     Returns:
         PortfolioScore with component scores and total (0-100 scale)
     """
+    # Check cache if portfolio_hash is provided
+    if portfolio_hash:
+        from app.infrastructure.recommendation_cache import get_recommendation_cache
+        
+        rec_cache = get_recommendation_cache()
+        cache_key = f"portfolio_score:{portfolio_hash}"
+        cached = await rec_cache.get_analytics(cache_key)
+        if cached:
+            logger.debug(f"Using cached portfolio score for hash {portfolio_hash[:8]}...")
+            return PortfolioScore(
+                diversification_score=cached["diversification_score"],
+                dividend_score=cached["dividend_score"],
+                quality_score=cached["quality_score"],
+                total=cached["total"],
+            )
+    
     total_value = portfolio_context.total_value
     if total_value <= 0:
-        return PortfolioScore(
+        score = PortfolioScore(
             diversification_score=50.0,
             dividend_score=50.0,
             quality_score=50.0,
             total=50.0,
         )
+        # Cache the result if portfolio_hash provided
+        if portfolio_hash:
+            from app.infrastructure.recommendation_cache import get_recommendation_cache
+            
+            rec_cache = get_recommendation_cache()
+            cache_key = f"portfolio_score:{portfolio_hash}"
+            await rec_cache.set_analytics(
+                cache_key,
+                {
+                    "diversification_score": score.diversification_score,
+                    "dividend_score": score.dividend_score,
+                    "quality_score": score.quality_score,
+                    "total": score.total,
+                },
+                ttl_hours=24
+            )
+        return score
 
     # 1. Diversification Score (40%)
     geo_deviations = []
@@ -193,15 +233,34 @@ def calculate_portfolio_score(portfolio_context: PortfolioContext) -> PortfolioS
         quality_score * 0.30
     )
 
-    return PortfolioScore(
+    score = PortfolioScore(
         diversification_score=round(diversification_score, 1),
         dividend_score=round(dividend_score, 1),
         quality_score=round(quality_score, 1),
         total=round(total, 1),
     )
+    
+    # Cache the result if portfolio_hash provided
+    if portfolio_hash:
+        from app.infrastructure.recommendation_cache import get_recommendation_cache
+        
+        rec_cache = get_recommendation_cache()
+        cache_key = f"portfolio_score:{portfolio_hash}"
+        await rec_cache.set_analytics(
+            cache_key,
+            {
+                "diversification_score": score.diversification_score,
+                "dividend_score": score.dividend_score,
+                "quality_score": score.quality_score,
+                "total": score.total,
+            },
+            ttl_hours=24
+        )
+    
+    return score
 
 
-def calculate_post_transaction_score(
+async def calculate_post_transaction_score(
     symbol: str,
     geography: str,
     industry: Optional[str],
@@ -209,6 +268,7 @@ def calculate_post_transaction_score(
     stock_quality: float,
     stock_dividend: float,
     portfolio_context: PortfolioContext,
+    portfolio_hash: Optional[str] = None,
 ) -> tuple:
     """
     Calculate portfolio score AFTER a proposed transaction.
@@ -221,12 +281,35 @@ def calculate_post_transaction_score(
         stock_quality: Quality score of the stock (0-1)
         stock_dividend: Dividend yield of the stock (0-1)
         portfolio_context: Current portfolio context
+        portfolio_hash: Optional portfolio hash for caching. If provided, will check cache first.
 
     Returns:
         Tuple of (new_portfolio_score, score_change)
     """
+    # Round trade amount to nearest 10 EUR to increase cache hit rate
+    rounded_amount = round(proposed_value / 10) * 10
+    
+    # Check cache if portfolio_hash is provided
+    if portfolio_hash:
+        from app.infrastructure.recommendation_cache import get_recommendation_cache
+        
+        rec_cache = get_recommendation_cache()
+        cache_key = f"scenario:{portfolio_hash}:{symbol}:{rounded_amount}"
+        cached = await rec_cache.get_analytics(cache_key)
+        if cached:
+            logger.debug(f"Using cached scenario score for {symbol} with hash {portfolio_hash[:8]}...")
+            return (
+                PortfolioScore(
+                    diversification_score=cached["new_portfolio_score"]["diversification_score"],
+                    dividend_score=cached["new_portfolio_score"]["dividend_score"],
+                    quality_score=cached["new_portfolio_score"]["quality_score"],
+                    total=cached["new_portfolio_score"]["total"],
+                ),
+                cached["score_change"],
+            )
+    
     # Calculate current portfolio score
-    current_score = calculate_portfolio_score(portfolio_context)
+    current_score = await calculate_portfolio_score(portfolio_context, portfolio_hash=portfolio_hash)
 
     # Create modified context with proposed transaction
     new_positions = dict(portfolio_context.positions)
@@ -256,8 +339,28 @@ def calculate_post_transaction_score(
         stock_dividends=new_dividends,
     )
 
-    # Calculate new portfolio score
-    new_score = calculate_portfolio_score(new_context)
+    # Calculate new portfolio score (don't cache post-transaction portfolio score separately)
+    new_score = await calculate_portfolio_score(new_context, portfolio_hash=None)
     score_change = new_score.total - current_score.total
 
+    # Cache the scenario result if portfolio_hash provided
+    if portfolio_hash:
+        from app.infrastructure.recommendation_cache import get_recommendation_cache
+        
+        rec_cache = get_recommendation_cache()
+        cache_key = f"scenario:{portfolio_hash}:{symbol}:{rounded_amount}"
+        await rec_cache.set_analytics(
+            cache_key,
+            {
+                "new_portfolio_score": {
+                    "diversification_score": new_score.diversification_score,
+                    "dividend_score": new_score.dividend_score,
+                    "quality_score": new_score.quality_score,
+                    "total": new_score.total,
+                },
+                "score_change": score_change,
+            },
+            ttl_hours=96
+        )
+    
     return new_score, score_change
