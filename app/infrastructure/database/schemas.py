@@ -90,8 +90,8 @@ CREATE TABLE IF NOT EXISTS recommendations (
 CREATE INDEX IF NOT EXISTS idx_recommendations_symbol ON recommendations(symbol);
 CREATE INDEX IF NOT EXISTS idx_recommendations_status ON recommendations(status);
 CREATE INDEX IF NOT EXISTS idx_recommendations_created_at ON recommendations(created_at);
-CREATE INDEX IF NOT EXISTS idx_recommendations_portfolio_hash ON recommendations(portfolio_hash);
-CREATE INDEX IF NOT EXISTS idx_recommendations_unique_match ON recommendations(symbol, side, reason, portfolio_hash);
+-- Note: portfolio_hash indexes are created in migration v2->v3 for existing databases
+-- For new installs, they're created below after initial data setup
 
 -- Schema version tracking
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -159,6 +159,15 @@ async def init_config_schema(db):
                    VALUES (?, ?, ?, ?)""",
                 (key, value, desc, now)
             )
+
+        # Create portfolio_hash indexes for new installs
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_recommendations_portfolio_hash ON recommendations(portfolio_hash)"
+        )
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_recommendations_unique_match "
+            "ON recommendations(symbol, side, reason, portfolio_hash)"
+        )
 
         # Record schema version
         await db.execute(
