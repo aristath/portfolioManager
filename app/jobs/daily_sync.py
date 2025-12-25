@@ -12,6 +12,7 @@ from app.infrastructure.locking import file_lock
 from app.infrastructure.database.manager import get_db_manager
 from app.domain.value_objects.currency import Currency
 from app.domain.scoring.cache import get_score_cache
+from app.domain.events import PositionUpdatedEvent, get_event_bus
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +130,20 @@ async def _sync_portfolio_internal():
                         dates.get("last_sold_at"),
                     )
                 )
+                
+                # Publish domain event for position update
+                # Create Position object for event (with updated market_value_eur)
+                updated_position = Position(
+                    symbol=pos.symbol,
+                    quantity=pos.quantity,
+                    avg_price=pos.avg_price,
+                    currency=pos.currency or Currency.EUR,
+                    currency_rate=pos.currency_rate,
+                    current_price=current_price,
+                    market_value_eur=market_value_eur,
+                )
+                event_bus = get_event_bus()
+                event_bus.publish(PositionUpdatedEvent(position=updated_position))
 
                 market_value = market_value_eur or 0
                 total_value += market_value

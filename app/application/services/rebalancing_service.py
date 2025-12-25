@@ -32,6 +32,7 @@ from app.domain.repositories.protocols import (
     ISettingsRepository,
 )
 from app.domain.services.settings_service import SettingsService
+from app.domain.events import RecommendationCreatedEvent, get_event_bus
 from app.domain.scoring import (
     calculate_portfolio_score,
     calculate_post_transaction_score,
@@ -558,6 +559,9 @@ class RebalancingService:
             if uuid:
                 # Only include if not dismissed
                 recommendations.append(rec)
+                # Publish domain event for recommendations (new or updated)
+                event_bus = get_event_bus()
+                event_bus.publish(RecommendationCreatedEvent(recommendation=rec))
 
         # Cache the full recommendation list (not just the limited ones)
         # This allows returning different limit values from the same cache
@@ -806,6 +810,9 @@ class RebalancingService:
             if uuid:
                 # Only include if not dismissed
                 recommendations.append(rec)
+                # Publish domain event for recommendations (new or updated)
+                event_bus = get_event_bus()
+                event_bus.publish(RecommendationCreatedEvent(recommendation=rec))
 
         # Cache all eligible sell recommendations
         all_sells_for_cache = []

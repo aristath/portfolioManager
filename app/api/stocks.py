@@ -14,6 +14,7 @@ from app.repositories import (
 )
 from app.domain.models import Stock
 from app.domain.factories.stock_factory import StockFactory
+from app.domain.events import StockAddedEvent, get_event_bus
 from app.application.services.portfolio_service import PortfolioService
 from app.domain.services.priority_calculator import (
     PriorityCalculator,
@@ -205,6 +206,10 @@ async def create_stock(stock_data: StockCreate):
         new_stock = StockFactory.create_from_api_request(stock_dict)
 
     await stock_repo.create(new_stock)
+    
+    # Publish domain event
+    event_bus = get_event_bus()
+    event_bus.publish(StockAddedEvent(stock=new_stock))
 
     from app.application.services.scoring_service import ScoringService
     scoring_service = ScoringService(stock_repo, score_repo)
