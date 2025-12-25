@@ -243,6 +243,12 @@ async def refresh_all_scores():
     await recommendation_cache.invalidate_all_recommendations()
     logger.info("Invalidated recommendation cache for score refresh")
 
+    # Invalidate in-memory recommendation caches
+    cache.invalidate_prefix("recommendations")
+    cache.invalidate_prefix("sell_recommendations")
+    cache.invalidate_prefix("multi_step_recommendations")
+    logger.info("Invalidated in-memory recommendation caches")
+
     stock_repo = StockRepository()
     score_repo = ScoreRepository()
 
