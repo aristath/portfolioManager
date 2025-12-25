@@ -1452,9 +1452,10 @@ class RebalancingService:
                     score_change = new_score.total - current_score.total
                     
                     # Skip if worsens portfolio significantly
-                    # For step 2+, use more lenient threshold since we're already committed to multi-step
-                    threshold = settings.max_balance_worsening * 2 if step_num > 1 else settings.max_balance_worsening
-                    if score_change < threshold:
+                    # For step 2+, skip the threshold since we're committed to multi-step
+                    # The goal is to use the freed cash, even if it slightly worsens balance
+                    if step_num == 1 and score_change < settings.max_balance_worsening:
+                        logger.debug(f"Multi-step step 1: Skipping {buy_rec.symbol} - score_change {score_change:.2f}")
                         continue
 
                     # Prefer recommendations that improve portfolio score
