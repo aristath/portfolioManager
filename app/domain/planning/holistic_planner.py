@@ -557,7 +557,7 @@ async def create_holistic_plan(
     best_end_context = None
     best_breakdown = {}
 
-    for sequence in sequences:
+    for seq_idx, sequence in enumerate(sequences):
         # Simulate the sequence
         end_context, end_cash = await simulate_sequence(
             sequence, portfolio_context, available_cash, stocks
@@ -573,11 +573,22 @@ async def create_holistic_plan(
             diversification_score=div_score.total / 100,  # Normalize to 0-1
         )
 
+        # Log sequence evaluation
+        symbols = [f"{c.side.value}:{c.symbol}" for c in sequence]
+        logger.info(f"Sequence {seq_idx+1} evaluation: {symbols}")
+        logger.info(f"  End-state score: {end_score:.3f}, Diversification: {div_score.total:.1f}")
+        logger.info(f"  Breakdown: total_return={breakdown.get('total_return', 0):.3f}, "
+                    f"diversification={breakdown.get('diversification', 0):.3f}, "
+                    f"long_term={breakdown.get('long_term_promise', 0):.3f}, "
+                    f"stability={breakdown.get('stability', 0):.3f}")
+        logger.info(f"  End cash: €{end_cash:.2f}, Total value: €{end_context.total_value:.2f}")
+
         if end_score > best_end_score:
             best_end_score = end_score
             best_sequence = sequence
             best_end_context = end_context
             best_breakdown = breakdown
+            logger.info(f"  -> NEW BEST (score: {end_score:.3f})")
 
     if not best_sequence:
         return HolisticPlan(
