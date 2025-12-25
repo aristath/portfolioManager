@@ -103,7 +103,6 @@ class TestTradeValidation:
 
             results = await service.execute_trades(
                 [trade],
-                use_transaction=False,
                 currency_balances=currency_balances
             )
 
@@ -143,7 +142,6 @@ class TestTradeValidation:
 
             results = await service.execute_trades(
                 [trade],
-                use_transaction=False,
                 currency_balances=currency_balances
             )
 
@@ -175,10 +173,7 @@ class TestTradeValidation:
 
             trade = self._make_trade(side="SELL", quantity=10)
 
-            results = await service.execute_trades(
-                [trade],
-                use_transaction=False
-            )
+            results = await service.execute_trades([trade])
 
             assert len(results) == 1
             assert results[0]["status"] == "skipped"
@@ -211,10 +206,7 @@ class TestTradeValidation:
             # Trying to sell 10 shares
             trade = self._make_trade(side="SELL", quantity=10)
 
-            results = await service.execute_trades(
-                [trade],
-                use_transaction=False
-            )
+            results = await service.execute_trades([trade])
 
             assert len(results) == 1
             assert results[0]["status"] == "skipped"
@@ -247,10 +239,7 @@ class TestTradeValidation:
             # Selling 10 of 20 shares
             trade = self._make_trade(side="SELL", quantity=10)
 
-            results = await service.execute_trades(
-                [trade],
-                use_transaction=False
-            )
+            results = await service.execute_trades([trade])
 
             assert len(results) == 1
             assert results[0]["status"] == "success"
@@ -281,7 +270,7 @@ class TestTradeValidation:
             trade = self._make_trade()
 
             with pytest.raises(ConnectionError):
-                await service.execute_trades([trade], use_transaction=False)
+                await service.execute_trades([trade])
 
     @pytest.mark.asyncio
     async def test_multi_currency_validation(
@@ -310,7 +299,6 @@ class TestTradeValidation:
 
             results = await service.execute_trades(
                 trades,
-                use_transaction=False,
                 currency_balances=currency_balances
             )
 
@@ -341,10 +329,7 @@ class TestTradeValidation:
 
             trade = self._make_trade()
 
-            results = await service.execute_trades(
-                [trade],
-                use_transaction=False
-            )
+            results = await service.execute_trades([trade])
 
             assert len(results) == 1
             assert results[0]["status"] == "failed"
@@ -373,7 +358,6 @@ class TestTradeValidation:
             # No currency_balances provided
             results = await service.execute_trades(
                 [trade],
-                use_transaction=False,
                 currency_balances=None
             )
 
@@ -410,10 +394,7 @@ class TestTradeValidation:
 
             trade = self._make_trade(side="SELL", quantity=10)
 
-            results = await service.execute_trades(
-                [trade],
-                use_transaction=False
-            )
+            results = await service.execute_trades([trade])
 
             assert len(results) == 1
             assert results[0]["status"] == "blocked"
@@ -443,7 +424,6 @@ class TestTradeValidation:
 
             results = await service.execute_trades(
                 [trade],
-                use_transaction=False,
                 currency_balances={"EUR": 2000}
             )
 

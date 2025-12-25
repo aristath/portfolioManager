@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 from app.config import settings
 from app.services.tradernet import get_tradernet_client
+from app.application.services.trade_safety_service import TradeSafetyService
 from app.infrastructure.locking import file_lock
 from app.infrastructure.events import emit, SystemEvent
 from app.infrastructure.hardware.led_display import set_activity

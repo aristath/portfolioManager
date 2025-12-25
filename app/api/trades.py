@@ -1,13 +1,11 @@
 """Trade execution API endpoints."""
 
 import logging
-from datetime import datetime
 from typing import List
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
 from enum import Enum
 from app.domain.constants import TRADE_SIDE_BUY, TRADE_SIDE_SELL
-from app.domain.models import Trade
 from app.repositories import (
     StockRepository,
     PositionRepository,
@@ -17,6 +15,10 @@ from app.repositories import (
     RecommendationRepository,
 )
 from app.infrastructure.cache import cache
+from app.application.services.trade_safety_service import TradeSafetyService
+from app.infrastructure.cache_invalidation import get_cache_invalidation_service
+from app.services.tradernet_connection import ensure_tradernet_connected
+from app.application.services.trade_execution_service import TradeExecutionService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -74,32 +76,25 @@ async def execute_trade(trade: TradeRequest):
     """Execute a manual trade."""
     stock_repo = StockRepository()
     trade_repo = TradeRepository()
+    position_repo = PositionRepository()
 
     # Check stock exists
     stock = await stock_repo.get_by_symbol(trade.symbol)
     if not stock:
         raise HTTPException(status_code=404, detail="Stock not found")
 
-    from app.services.tradernet import get_tradernet_client
+    # Ensure connection
+    client = await ensure_tradernet_connected()
 
-    client = get_tradernet_client()
-    if not client.is_connected:
-        raise HTTPException(status_code=503, detail="Tradernet not connected")
-
-    # Check for pending orders for this symbol (broker API and database)
-    has_pending = client.has_pending_order_for_symbol(trade.symbol)
-    
-    # Also check database for recent SELL orders if this is a SELL
-    if not has_pending and trade.side.upper() == "SELL":
-        has_recent = await trade_repo.has_recent_sell_order(trade.symbol, hours=2)
-        if has_recent:
-            has_pending = True
-    
-    if has_pending:
-        raise HTTPException(
-            status_code=409,
-            detail=f"A pending order already exists for {trade.symbol}"
-        )
+    # Safety checks
+    safety_service = TradeSafetyService(trade_repo, position_repo)
+    await safety_service.validate_trade(
+        symbol=trade.symbol,
+        side=trade.side,
+        quantity=trade.quantity,
+        client=client,
+        raise_on_error=True
+    )
 
     result = client.place_order(
         symbol=trade.symbol,
@@ -108,16 +103,19 @@ async def execute_trade(trade: TradeRequest):
     )
 
     if result:
-        # Record trade using repository
-        trade_record = Trade(
+        # Record trade using service
+        execution_service = TradeExecutionService(trade_repo, position_repo)
+        await execution_service.record_trade(
             symbol=trade.symbol,
             side=trade.side,
             quantity=trade.quantity,
             price=result.price,
-            executed_at=datetime.now(),
             order_id=result.order_id,
         )
-        await trade_repo.create(trade_record)
+
+        # Invalidate caches
+        cache_service = get_cache_invalidation_service()
+        cache_service.invalidate_trade_caches()
 
         return {
             "status": "success",
@@ -254,9 +252,8 @@ async def dismiss_recommendation(uuid: str):
         await recommendation_repo.mark_dismissed(uuid)
 
         # Invalidate caches
-        cache.invalidate("recommendations")
-        for limit in [3, 10, 20]:
-            cache.invalidate(f"recommendations:{limit}")
+        cache_service = get_cache_invalidation_service()
+        cache_service.invalidate_recommendation_caches()
 
         return {"status": "success", "uuid": uuid, "message": "Recommendation dismissed"}
 
@@ -342,9 +339,8 @@ async def dismiss_sell_recommendation(uuid: str):
         await recommendation_repo.mark_dismissed(uuid)
 
         # Invalidate caches
-        cache.invalidate("sell_recommendations")
-        for limit in [3, 10, 20]:
-            cache.invalidate(f"sell_recommendations:{limit}")
+        cache_service = get_cache_invalidation_service()
+        cache_service.invalidate_recommendation_caches()
 
         return {"status": "success", "uuid": uuid, "message": "Sell recommendation dismissed"}
 
@@ -665,7 +661,6 @@ async def execute_multi_step_recommendation_step(step_number: int):
         Execution result for the step
     """
     from app.application.services.rebalancing_service import RebalancingService
-    from app.services.tradernet import get_tradernet_client
 
     if step_number < 1:
         raise HTTPException(status_code=400, detail="Step number must be >= 1")
@@ -694,39 +689,18 @@ async def execute_multi_step_recommendation_step(step_number: int):
 
         step = steps[step_number - 1]  # Convert to 0-indexed
 
-        # Connect to Tradernet
-        client = get_tradernet_client()
-        if not client.is_connected:
-            if not client.connect():
-                raise HTTPException(
-                    status_code=503,
-                    detail="Failed to connect to Tradernet"
-                )
+        # Ensure connection
+        client = await ensure_tradernet_connected()
 
-        # Check cooldown for BUY orders
-        if step["side"] == TRADE_SIDE_BUY:
-            from app.domain.constants import BUY_COOLDOWN_DAYS
-            recently_bought = await trade_repo.get_recently_bought_symbols(BUY_COOLDOWN_DAYS)
-            if step["symbol"] in recently_bought:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Cannot buy {step['symbol']}: cooldown period active (bought within {BUY_COOLDOWN_DAYS} days)"
-                )
-
-        # Check for pending orders for this symbol (broker API and database)
-        has_pending = client.has_pending_order_for_symbol(step["symbol"])
-        
-        # Also check database for recent SELL orders if this is a SELL
-        if not has_pending and step["side"].upper() == "SELL":
-            has_recent = await trade_repo.has_recent_sell_order(step["symbol"], hours=2)
-            if has_recent:
-                has_pending = True
-        
-        if has_pending:
-            raise HTTPException(
-                status_code=409,
-                detail=f"A pending order already exists for {step['symbol']}"
-            )
+        # Safety checks
+        safety_service = TradeSafetyService(trade_repo, position_repo)
+        await safety_service.validate_trade(
+            symbol=step["symbol"],
+            side=step["side"],
+            quantity=step["quantity"],
+            client=client,
+            raise_on_error=True
+        )
 
         # Execute the trade
         result = client.place_order(
@@ -737,34 +711,18 @@ async def execute_multi_step_recommendation_step(step_number: int):
 
         if result:
             # Record the trade
-            trade_record = Trade(
+            execution_service = TradeExecutionService(trade_repo, position_repo)
+            await execution_service.record_trade(
                 symbol=step["symbol"],
                 side=step["side"],
                 quantity=step["quantity"],
                 price=result.price,
-                executed_at=datetime.now(),
                 order_id=result.order_id,
             )
-            await trade_repo.create(trade_record)
 
-            # Update last_sold_at for SELL orders
-            if step["side"] == TRADE_SIDE_SELL and position_repo:
-                try:
-                    await position_repo.update_last_sold_at(step["symbol"])
-                except Exception as e:
-                    logger.warning(f"Failed to update last_sold_at: {e}")
-
-            # Invalidate cache to force refresh (including limit-specific keys)
-            cache.invalidate("multi_step_recommendations:diversification:default")
-            cache.invalidate("recommendations")
-            cache.invalidate("recommendations:3")
-            cache.invalidate("recommendations:10")
-            cache.invalidate("sell_recommendations")
-            cache.invalidate("sell_recommendations:3")
-            cache.invalidate("sell_recommendations:20")
-            # Invalidate all depth-specific caches
-            for depth in range(1, 6):
-                cache.invalidate(f"multi_step_recommendations:{depth}")
+            # Invalidate caches
+            cache_service = get_cache_invalidation_service()
+            cache_service.invalidate_trade_caches()
 
             return {
                 "status": "success",
@@ -797,7 +755,6 @@ async def execute_all_multi_step_recommendations():
         List of execution results for each step
     """
     from app.application.services.rebalancing_service import RebalancingService
-    from app.services.tradernet import get_tradernet_client
 
     trade_repo = TradeRepository()
     position_repo = PositionRepository()
@@ -819,25 +776,26 @@ async def execute_all_multi_step_recommendations():
                 detail="No steps available in multi-step recommendations"
             )
 
-        # Connect to Tradernet
-        client = get_tradernet_client()
-        if not client.is_connected:
-            if not client.connect():
-                raise HTTPException(
-                    status_code=503,
-                    detail="Failed to connect to Tradernet"
-                )
+        # Ensure connection
+        client = await ensure_tradernet_connected()
+
+        # Safety service for validation
+        safety_service = TradeSafetyService(trade_repo, position_repo)
+        execution_service = TradeExecutionService(trade_repo, position_repo)
 
         # Check cooldown for all BUY steps
-        from app.domain.constants import BUY_COOLDOWN_DAYS
-        recently_bought = await trade_repo.get_recently_bought_symbols(BUY_COOLDOWN_DAYS)
         buy_steps = [s for s in steps if s["side"] == TRADE_SIDE_BUY]
-        blocked_buys = [s for s in buy_steps if s["symbol"] in recently_bought]
+        blocked_buys = []
+        for step in buy_steps:
+            is_cooldown, error = await safety_service.check_cooldown(step["symbol"], step["side"])
+            if is_cooldown:
+                blocked_buys.append(step)
+        
         if blocked_buys:
             symbols = ", ".join([s["symbol"] for s in blocked_buys])
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot execute: {symbols} in cooldown period (bought within {BUY_COOLDOWN_DAYS} days)"
+                detail=f"Cannot execute: {symbols} in cooldown period"
             )
 
         results = []
@@ -845,14 +803,10 @@ async def execute_all_multi_step_recommendations():
         # Execute each step sequentially
         for idx, step in enumerate(steps, start=1):
             try:
-                # Check for pending orders for this symbol (broker API and database)
-                has_pending = client.has_pending_order_for_symbol(step["symbol"])
-                
-                # Also check database for recent SELL orders if this is a SELL
-                if not has_pending and step["side"].upper() == "SELL":
-                    has_recent = await trade_repo.has_recent_sell_order(step["symbol"], hours=2)
-                    if has_recent:
-                        has_pending = True
+                # Check for pending orders
+                has_pending = await safety_service.check_pending_orders(
+                    step["symbol"], step["side"], client
+                )
                 
                 if has_pending:
                     results.append({
@@ -872,22 +826,13 @@ async def execute_all_multi_step_recommendations():
 
                 if result:
                     # Record the trade
-                    trade_record = Trade(
+                    await execution_service.record_trade(
                         symbol=step["symbol"],
                         side=step["side"],
                         quantity=step["quantity"],
                         price=result.price,
-                        executed_at=datetime.now(),
                         order_id=result.order_id,
                     )
-                    await trade_repo.create(trade_record)
-
-                    # Update last_sold_at for SELL orders
-                    if step["side"] == TRADE_SIDE_SELL and position_repo:
-                        try:
-                            await position_repo.update_last_sold_at(step["symbol"])
-                        except Exception as e:
-                            logger.warning(f"Failed to update last_sold_at: {e}")
 
                     results.append({
                         "step": idx,
@@ -922,17 +867,9 @@ async def execute_all_multi_step_recommendations():
                 logger.warning(f"Step {idx} errored, continuing with remaining steps")
                 continue
 
-        # Invalidate cache to force refresh after all steps complete (including limit-specific keys)
-        cache.invalidate("multi_step_recommendations:diversification:default")
-        cache.invalidate("recommendations")
-        cache.invalidate("recommendations:3")
-        cache.invalidate("recommendations:10")
-        cache.invalidate("sell_recommendations")
-        cache.invalidate("sell_recommendations:3")
-        cache.invalidate("sell_recommendations:20")
-        # Invalidate all depth-specific caches
-        for depth in range(1, 6):
-            cache.invalidate(f"multi_step_recommendations:{depth}")
+        # Invalidate caches after all steps complete
+        cache_service = get_cache_invalidation_service()
+        cache_service.invalidate_trade_caches()
 
         return {
             "status": "completed",
@@ -956,7 +893,6 @@ async def execute_sell_recommendation(symbol: str):
     Gets the current sell recommendation and executes it via Tradernet.
     """
     from app.application.services.rebalancing_service import RebalancingService
-    from app.services.tradernet import get_tradernet_client
 
     symbol = symbol.upper()
     trade_repo = TradeRepository()
@@ -974,29 +910,18 @@ async def execute_sell_recommendation(symbol: str):
                 detail=f"No sell recommendation found for {symbol}"
             )
 
-        # Connect to Tradernet and execute
-        client = get_tradernet_client()
-        if not client.is_connected:
-            if not client.connect():
-                raise HTTPException(
-                    status_code=503,
-                    detail="Failed to connect to Tradernet"
-                )
+        # Ensure connection
+        client = await ensure_tradernet_connected()
 
-        # Check for pending orders for this symbol (broker API and database)
-        has_pending = client.has_pending_order_for_symbol(rec.symbol)
-        
-        # Also check database for recent SELL orders
-        if not has_pending:
-            has_recent = await trade_repo.has_recent_sell_order(rec.symbol, hours=2)
-            if has_recent:
-                has_pending = True
-        
-        if has_pending:
-            raise HTTPException(
-                status_code=409,
-                detail=f"A pending order already exists for {rec.symbol}"
-            )
+        # Safety checks
+        safety_service = TradeSafetyService(trade_repo, position_repo)
+        await safety_service.validate_trade(
+            symbol=rec.symbol,
+            side=TRADE_SIDE_SELL,
+            quantity=rec.quantity,
+            client=client,
+            raise_on_error=True
+        )
 
         result = client.place_order(
             symbol=rec.symbol,
@@ -1006,26 +931,18 @@ async def execute_sell_recommendation(symbol: str):
 
         if result:
             # Record the trade
-            trade_record = Trade(
+            execution_service = TradeExecutionService(trade_repo, position_repo)
+            await execution_service.record_trade(
                 symbol=symbol,
                 side=TRADE_SIDE_SELL,
                 quantity=rec.quantity,
                 price=result.price,
-                executed_at=datetime.now(),
                 order_id=result.order_id,
             )
-            await trade_repo.create(trade_record)
 
-            # Update last_sold_at
-            await position_repo.update_last_sold_at(symbol)
-
-            # Clear cache
-            cache.invalidate("sell_recommendations:3")
-            cache.invalidate("sell_recommendations:20")
-            cache.invalidate("multi_step_recommendations:diversification:default")
-            # Invalidate all depth-specific caches
-            for depth in range(1, 6):
-                cache.invalidate(f"multi_step_recommendations:{depth}")
+            # Invalidate caches
+            cache_service = get_cache_invalidation_service()
+            cache_service.invalidate_trade_caches()
 
             return {
                 "status": "success",
@@ -1070,7 +987,6 @@ async def get_funding_options(symbol: str, exclude_signatures: str = ""):
     """
     from app.application.services.funding_service import FundingService
     from app.application.services.rebalancing_service import RebalancingService
-    from app.services.tradernet import get_tradernet_client
 
     symbol = symbol.upper()
 
@@ -1087,14 +1003,7 @@ async def get_funding_options(symbol: str, exclude_signatures: str = ""):
             )
 
         # Get current cash balance
-        client = get_tradernet_client()
-        if not client.is_connected:
-            if not client.connect():
-                raise HTTPException(
-                    status_code=503,
-                    detail="Failed to connect to Tradernet"
-                )
-
+        client = await ensure_tradernet_connected()
         available_cash = client.get_total_cash_eur()
 
         # Check if funding is needed
@@ -1169,29 +1078,23 @@ async def execute_funding(symbol: str, request: ExecuteFundingRequest):
 
     Executes all sells first, then executes the buy with the newly available cash.
     """
-    from app.services.tradernet import get_tradernet_client
-    from app.domain.constants import BUY_COOLDOWN_DAYS
-
     symbol = symbol.upper()
     trade_repo = TradeRepository()
     stock_repo = StockRepository()
-
-    # Check cooldown before executing any trades
-    recently_bought = await trade_repo.get_recently_bought_symbols(BUY_COOLDOWN_DAYS)
-    if symbol in recently_bought:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot buy {symbol}: cooldown period active (bought within {BUY_COOLDOWN_DAYS} days)"
-        )
+    position_repo = PositionRepository()
 
     try:
-        client = get_tradernet_client()
-        if not client.is_connected:
-            if not client.connect():
-                raise HTTPException(
-                    status_code=503,
-                    detail="Failed to connect to Tradernet"
-                )
+        # Ensure connection
+        client = await ensure_tradernet_connected()
+
+        # Services
+        safety_service = TradeSafetyService(trade_repo, position_repo)
+        execution_service = TradeExecutionService(trade_repo, position_repo)
+
+        # Check cooldown before executing any trades
+        is_cooldown, cooldown_error = await safety_service.check_cooldown(symbol, TRADE_SIDE_BUY)
+        if is_cooldown:
+            raise HTTPException(status_code=400, detail=cooldown_error)
 
         # Execute all sells
         sell_results = []
@@ -1200,14 +1103,10 @@ async def execute_funding(symbol: str, request: ExecuteFundingRequest):
         for sell in request.sells:
             sell_symbol = sell.symbol.upper()
 
-            # Check for pending orders for this symbol (broker API and database)
-            has_pending = client.has_pending_order_for_symbol(sell_symbol)
-            
-            # Also check database for recent SELL orders
-            if not has_pending:
-                has_recent = await trade_repo.has_recent_sell_order(sell_symbol, hours=2)
-                if has_recent:
-                    has_pending = True
+            # Check for pending orders
+            has_pending = await safety_service.check_pending_orders(
+                sell_symbol, TRADE_SIDE_SELL, client
+            )
             
             if has_pending:
                 sell_results.append({
@@ -1225,15 +1124,13 @@ async def execute_funding(symbol: str, request: ExecuteFundingRequest):
 
             if result:
                 # Record the trade
-                trade_record = Trade(
+                await execution_service.record_trade(
                     symbol=sell_symbol,
                     side=TRADE_SIDE_SELL,
                     quantity=sell.quantity,
                     price=result.price,
-                    executed_at=datetime.now(),
                     order_id=result.order_id,
                 )
-                await trade_repo.create(trade_record)
 
                 sell_results.append({
                     "symbol": sell_symbol,
@@ -1284,14 +1181,9 @@ async def execute_funding(symbol: str, request: ExecuteFundingRequest):
             )
 
         # Check for pending orders for the buy symbol
-        # Check for pending orders for this symbol (broker API and database)
-        has_pending = client.has_pending_order_for_symbol(symbol)
-        
-        # Also check database for recent SELL orders (this is a BUY, but check anyway for safety)
-        if not has_pending:
-            has_recent = await trade_repo.has_recent_sell_order(symbol, hours=2)
-            if has_recent:
-                has_pending = True
+        has_pending = await safety_service.check_pending_orders(
+            symbol, TRADE_SIDE_BUY, client
+        )
         
         if has_pending:
             raise HTTPException(
@@ -1307,25 +1199,17 @@ async def execute_funding(symbol: str, request: ExecuteFundingRequest):
 
         if buy_result:
             # Record the buy trade
-            trade_record = Trade(
+            await execution_service.record_trade(
                 symbol=symbol,
                 side=TRADE_SIDE_BUY,
                 quantity=quantity,
                 price=buy_result.price,
-                executed_at=datetime.now(),
                 order_id=buy_result.order_id,
             )
-            await trade_repo.create(trade_record)
 
-            # Clear recommendation cache
-            cache.invalidate("recommendations:3")
-            cache.invalidate("recommendations:10")
-            cache.invalidate("sell_recommendations:3")
-            cache.invalidate("sell_recommendations:20")
-            cache.invalidate("multi_step_recommendations:diversification:default")
-            # Invalidate all depth-specific caches
-            for depth in range(1, 6):
-                cache.invalidate(f"multi_step_recommendations:{depth}")
+            # Invalidate caches
+            cache_service = get_cache_invalidation_service()
+            cache_service.invalidate_trade_caches()
 
             return {
                 "status": "success",

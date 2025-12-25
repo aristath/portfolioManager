@@ -3,7 +3,7 @@
 from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
 from app.repositories import CashFlowRepository
-from app.services.tradernet import get_tradernet_client
+from app.services.tradernet_connection import ensure_tradernet_connected
 
 router = APIRouter()
 
@@ -83,14 +83,7 @@ async def sync_cash_flows():
     Fetches all cash flow transactions from the API and upserts them into the database.
     """
     cash_flow_repo = CashFlowRepository()
-    client = get_tradernet_client()
-
-    if not client.is_connected:
-        if not client.connect():
-            raise HTTPException(
-                status_code=503,
-                detail="Not connected to Tradernet. Please check credentials."
-            )
+    client = await ensure_tradernet_connected()
 
     try:
         # Fetch all cash flows from API

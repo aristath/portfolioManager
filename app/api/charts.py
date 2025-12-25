@@ -6,7 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from app.infrastructure.database.manager import get_db_manager
 from app.infrastructure.cache import cache
-from app.services.tradernet import get_tradernet_client
+from app.services.tradernet_connection import ensure_tradernet_connected
 from app.services import yahoo
 
 logger = logging.getLogger(__name__)
@@ -201,11 +201,8 @@ async def get_stock_chart(
             # Try to fetch from API
             if source == "tradernet":
                 try:
-                    tradernet_client = get_tradernet_client()
-                    if not tradernet_client.is_connected:
-                        tradernet_client.connect()
-
-                    if tradernet_client.is_connected:
+                    tradernet_client = await ensure_tradernet_connected(raise_on_error=False)
+                    if tradernet_client:
                         ohlc_data = tradernet_client.get_historical_prices(
                             symbol,
                             start=fetch_start,
