@@ -764,7 +764,7 @@ async def _refresh_recommendation_cache():
         buy_recommendations = await rebalancing_service.get_recommendations(limit=3)
         buy_recs = {
             "recommendations": [
-                {"symbol": r.symbol, "amount": r.amount}
+                {"symbol": r.symbol, "amount": r.estimated_value}
                 for r in buy_recommendations
             ]
         }

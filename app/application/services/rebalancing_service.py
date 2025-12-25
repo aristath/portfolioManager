@@ -538,10 +538,10 @@ class RebalancingService:
                 "symbol": rec.symbol,
                 "name": rec.name,
                 "side": "BUY",
-                "amount": rec.amount,
+                "amount": rec.estimated_value,
                 "quantity": rec.quantity,
-                "estimated_price": rec.current_price,
-                "estimated_value": rec.amount,
+                "estimated_price": rec.estimated_price,
+                "estimated_value": rec.estimated_value,
                 "reason": rec.reason,
                 "geography": rec.geography,
                 "industry": rec.industry,
@@ -1084,15 +1084,15 @@ class RebalancingService:
                     symbol=rec.symbol,
                     name=rec.name,
                     quantity=rec.quantity or 0,
-                    estimated_price=rec.current_price or 0.0,
-                    estimated_value=rec.amount,
+                    estimated_price=rec.estimated_price or 0.0,
+                    estimated_value=rec.estimated_value,
                     currency=_determine_stock_currency({"symbol": rec.symbol, "geography": rec.geography}),
                     reason=rec.reason,
                     portfolio_score_before=rec.current_portfolio_score or 0.0,
                     portfolio_score_after=rec.new_portfolio_score or 0.0,
                     score_change=rec.score_change or 0.0,
                     available_cash_before=available_cash,
-                    available_cash_after=max(0, available_cash - rec.amount),
+                    available_cash_after=max(0, available_cash - rec.estimated_value),
                 )]
             return []
         
@@ -1286,24 +1286,24 @@ class RebalancingService:
                     if buy_rec.symbol in used_symbols or buy_rec.symbol in recently_bought:
                         continue
                     
-                    if buy_rec.amount > available_cash:
+                    if buy_rec.estimated_value > available_cash:
                         continue  # Can't afford this buy
-                    
+
                     # For step 2+, we need to recalculate the recommendation using simulated context
                     # to get accurate portfolio impact. However, the buy_rec already has the right
                     # amount and price, so we'll use it but simulate against current_context.
-                    
+
                     # Get stock quality score
                     score_row = await self._db_manager.state.fetchone(
                         "SELECT quality_score FROM scores WHERE symbol = ?",
                         (buy_rec.symbol,)
                     )
                     stock_quality = score_row["quality_score"] if score_row else 0.5
-                    
+
                     transaction = {
                         "side": TradeSide.BUY,
                         "symbol": buy_rec.symbol,
-                        "value_eur": buy_rec.amount,
+                        "value_eur": buy_rec.estimated_value,
                         "geography": buy_rec.geography,
                         "industry": buy_rec.industry,
                         "stock_quality": stock_quality,
@@ -1381,8 +1381,8 @@ class RebalancingService:
                         symbol=rec.symbol,
                         name=rec.name,
                         quantity=rec.quantity or 0,
-                        estimated_price=rec.current_price or 0.0,
-                        estimated_value=rec.amount,
+                        estimated_price=rec.estimated_price or 0.0,
+                        estimated_value=rec.estimated_value,
                         currency=currency,
                         reason=rec.reason,
                         portfolio_score_before=current_score.total,
