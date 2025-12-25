@@ -1292,7 +1292,8 @@ class RebalancingService:
         current_context = await self._build_portfolio_context()
 
         # Get settings for thresholds (fetch here since we skipped the strategic branch)
-        settings = await self._settings_service.get_settings()
+        # Use a different name to avoid shadowing the imported config settings
+        user_settings = await self._settings_service.get_settings()
 
         # Generate portfolio hash for caching
         from app.domain.portfolio_hash import generate_portfolio_hash
@@ -1461,7 +1462,7 @@ class RebalancingService:
                     # Skip if worsens portfolio significantly
                     # For step 2+, skip the threshold since we're committed to multi-step
                     # The goal is to use the freed cash, even if it slightly worsens balance
-                    if step_num == 1 and score_change < settings.max_balance_worsening:
+                    if step_num == 1 and score_change < user_settings.max_balance_worsening:
                         logger.debug(f"Multi-step step 1: Skipping {buy_rec.symbol} - score_change {score_change:.2f}")
                         continue
 
