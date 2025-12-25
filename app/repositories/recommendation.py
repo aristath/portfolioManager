@@ -194,15 +194,22 @@ class RecommendationRepository:
         return [dict(row) for row in rows]
 
     async def get_pending_by_side(self, side: str, limit: int = 10) -> List[dict]:
-        """Get pending recommendations by side (BUY or SELL)."""
+        """Get pending recommendations by side (BUY or SELL), one per symbol."""
+        # Use subquery to get only the most recent recommendation per symbol
         rows = await self._db.fetchall(
             """
-            SELECT * FROM recommendations
-            WHERE status = 'pending' AND side = ?
-            ORDER BY updated_at DESC
+            SELECT r.* FROM recommendations r
+            INNER JOIN (
+                SELECT symbol, MAX(updated_at) as max_updated
+                FROM recommendations
+                WHERE status = 'pending' AND side = ?
+                GROUP BY symbol
+            ) latest ON r.symbol = latest.symbol AND r.updated_at = latest.max_updated
+            WHERE r.status = 'pending' AND r.side = ?
+            ORDER BY r.priority DESC, r.updated_at DESC
             LIMIT ?
             """,
-            (side.upper(), limit),
+            (side.upper(), side.upper(), limit),
         )
         return [dict(row) for row in rows]
 
