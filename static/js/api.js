@@ -71,9 +71,12 @@ const API = {
   // Trades
   fetchTrades: () => fetch('/api/trades').then(r => r.json()),
   fetchRecommendations: () => fetch('/api/trades/recommendations?limit=10').then(r => r.json()),
-  executeRecommendation: (symbol) => API._post(`/api/trades/recommendations/${symbol}/execute`),
+  dismissRecommendation: (uuid) => API._post(`/api/trades/recommendations/${uuid}/dismiss`),
   fetchSellRecommendations: () => fetch('/api/trades/sell-recommendations').then(r => r.json()),
-  executeSellRecommendation: (symbol) => API._post(`/api/trades/sell-recommendations/${symbol}/execute`),
+  dismissSellRecommendation: (uuid) => API._post(`/api/trades/sell-recommendations/${uuid}/dismiss`),
+  // Deprecated - recommendations now execute automatically
+  // executeRecommendation: (symbol) => API._post(`/api/trades/recommendations/${symbol}/execute`),
+  // executeSellRecommendation: (symbol) => API._post(`/api/trades/sell-recommendations/${symbol}/execute`),
   fetchMultiStepRecommendations: (depth = null) => {
     const params = depth ? `?depth=${depth}` : '';
     return fetch(`/api/trades/multi-step-recommendations${params}`).then(r => r.json());

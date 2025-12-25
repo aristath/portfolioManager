@@ -59,6 +59,37 @@ CREATE TABLE IF NOT EXISTS settings (
     updated_at TEXT NOT NULL
 );
 
+-- Trade recommendations (stored with UUIDs for dismissal tracking)
+CREATE TABLE IF NOT EXISTS recommendations (
+    uuid TEXT PRIMARY KEY,
+    symbol TEXT NOT NULL,
+    name TEXT NOT NULL,
+    side TEXT NOT NULL,  -- 'BUY' or 'SELL'
+    amount REAL NOT NULL,
+    quantity INTEGER,
+    estimated_price REAL,
+    estimated_value REAL,
+    reason TEXT NOT NULL,
+    geography TEXT,
+    industry TEXT,
+    currency TEXT DEFAULT 'EUR',
+    priority REAL,
+    current_portfolio_score REAL,
+    new_portfolio_score REAL,
+    score_change REAL,
+    status TEXT DEFAULT 'pending',  -- 'pending', 'executed', 'dismissed'
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,  -- Updated when recommendation is regenerated
+    executed_at TEXT,
+    dismissed_at TEXT,
+    UNIQUE(symbol, side, amount, reason)  -- Prevent duplicates, same rec = same params
+);
+
+CREATE INDEX IF NOT EXISTS idx_recommendations_symbol ON recommendations(symbol);
+CREATE INDEX IF NOT EXISTS idx_recommendations_status ON recommendations(status);
+CREATE INDEX IF NOT EXISTS idx_recommendations_created_at ON recommendations(created_at);
+CREATE INDEX IF NOT EXISTS idx_recommendations_unique_match ON recommendations(symbol, side, amount, reason);
+
 -- Schema version tracking
 CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER PRIMARY KEY,
@@ -129,11 +160,20 @@ async def init_config_schema(db):
         # Record schema version
         await db.execute(
             "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
-            (1, now, "Initial config schema")
+            (2, now, "Initial config schema with recommendations table")
         )
 
         await db.commit()
-        logger.info("Config database initialized with schema version 1")
+        logger.info("Config database initialized with schema version 2 (includes recommendations table)")
+    elif current_version == 1:
+        # Migration: Add recommendations table (version 1 -> 2)
+        now = datetime.now().isoformat()
+        await db.execute(
+            "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
+            (2, now, "Added recommendations table for storage and dismissal tracking")
+        )
+        await db.commit()
+        logger.info("Config database migrated to schema version 2 (recommendations table)")
 
 
 # =============================================================================

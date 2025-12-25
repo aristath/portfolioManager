@@ -289,33 +289,54 @@ document.addEventListener('alpine:init', () => {
       }
     },
 
-    async executeRecommendation(symbol) {
-      this.loading.execute = true;
-      this.executingSymbol = symbol;
+    async dismissRecommendation(uuid) {
       try {
-        const result = await API.executeRecommendation(symbol);
-        this.showMessage(`Executed: ${result.quantity} ${symbol} @ €${result.price}`, 'success');
-        await this.fetchAll();
+        await API.dismissRecommendation(uuid);
+        this.showMessage('Recommendation dismissed', 'success');
+        await this.fetchRecommendations();
       } catch (e) {
-        this.showMessage('Failed to execute trade', 'error');
+        this.showMessage('Failed to dismiss recommendation', 'error');
       }
-      this.executingSymbol = null;
-      this.loading.execute = false;
     },
 
-    async executeSellRecommendation(symbol) {
-      this.loading.execute = true;
-      this.executingSellSymbol = symbol;
+    async dismissSellRecommendation(uuid) {
       try {
-        const result = await API.executeSellRecommendation(symbol);
-        this.showMessage(`Sold: ${result.quantity} ${symbol} @ €${result.price}`, 'success');
-        await this.fetchAll();
+        await API.dismissSellRecommendation(uuid);
+        this.showMessage('Sell recommendation dismissed', 'success');
+        await this.fetchSellRecommendations();
       } catch (e) {
-        this.showMessage('Failed to execute sell', 'error');
+        this.showMessage('Failed to dismiss sell recommendation', 'error');
       }
-      this.executingSellSymbol = null;
-      this.loading.execute = false;
     },
+
+    // Deprecated - recommendations now execute automatically
+    // async executeRecommendation(symbol) {
+    //   this.loading.execute = true;
+    //   this.executingSymbol = symbol;
+    //   try {
+    //     const result = await API.executeRecommendation(symbol);
+    //     this.showMessage(`Executed: ${result.quantity} ${symbol} @ €${result.price}`, 'success');
+    //     await this.fetchAll();
+    //   } catch (e) {
+    //     this.showMessage('Failed to execute trade', 'error');
+    //   }
+    //   this.executingSymbol = null;
+    //   this.loading.execute = false;
+    // },
+
+    // async executeSellRecommendation(symbol) {
+    //   this.loading.execute = true;
+    //   this.executingSellSymbol = symbol;
+    //   try {
+    //     const result = await API.executeSellRecommendation(symbol);
+    //     this.showMessage(`Sold: ${result.quantity} ${symbol} @ €${result.price}`, 'success');
+    //     await this.fetchAll();
+    //   } catch (e) {
+    //     this.showMessage('Failed to execute sell', 'error');
+    //   }
+    //   this.executingSellSymbol = null;
+    //   this.loading.execute = false;
+    // },
 
     async executeMultiStepStep(stepNumber) {
       this.loading.execute = true;

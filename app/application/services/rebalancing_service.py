@@ -22,6 +22,7 @@ from app.repositories import (
     PortfolioRepository,
     TradeRepository,
     SettingsRepository,
+    RecommendationRepository,
 )
 from app.domain.scoring import (
     calculate_portfolio_score,
@@ -119,6 +120,7 @@ class RebalancingService:
         portfolio_repo: Optional[PortfolioRepository] = None,
         trade_repo: Optional[TradeRepository] = None,
         settings_repo: Optional[SettingsRepository] = None,
+        recommendation_repo: Optional[RecommendationRepository] = None,
     ):
         # Use provided repos or create new ones
         self._stock_repo = stock_repo or StockRepository()
@@ -127,6 +129,7 @@ class RebalancingService:
         self._portfolio_repo = portfolio_repo or PortfolioRepository()
         self._trade_repo = trade_repo or TradeRepository()
         self._settings_repo = settings_repo or SettingsRepository()
+        self._recommendation_repo = recommendation_repo or RecommendationRepository()
         self._db_manager = get_db_manager()
 
     async def _get_technical_data_for_positions(
@@ -466,10 +469,10 @@ class RebalancingService:
         # Sort by final score
         candidates.sort(key=lambda x: x["final_score"], reverse=True)
 
-        # Build recommendations
+        # Build recommendations and store them
         recommendations = []
         for candidate in candidates[:limit]:
-            recommendations.append(Recommendation(
+            rec = Recommendation(
                 symbol=candidate["symbol"],
                 name=candidate["name"],
                 amount=round(candidate["trade_value"], 2),
@@ -482,7 +485,36 @@ class RebalancingService:
                 current_portfolio_score=round(candidate["current_portfolio_score"], 1),
                 new_portfolio_score=round(candidate["new_portfolio_score"], 1),
                 score_change=round(candidate["score_change"], 2),
-            ))
+            )
+
+            # Get currency from stock
+            stock = next((s for s in stocks if s.symbol == rec.symbol), None)
+            currency = stock.currency if stock else "EUR"
+            
+            # Store recommendation in database (create or update)
+            recommendation_data = {
+                "symbol": rec.symbol,
+                "name": rec.name,
+                "side": "BUY",
+                "amount": rec.amount,
+                "quantity": rec.quantity,
+                "estimated_price": rec.current_price,
+                "estimated_value": rec.amount,
+                "reason": rec.reason,
+                "geography": rec.geography,
+                "industry": rec.industry,
+                "currency": currency,
+                "priority": rec.priority,
+                "current_portfolio_score": rec.current_portfolio_score,
+                "new_portfolio_score": rec.new_portfolio_score,
+                "score_change": rec.score_change,
+            }
+
+            # create_or_update returns UUID if not dismissed, None if dismissed
+            uuid = await self._recommendation_repo.create_or_update(recommendation_data)
+            if uuid:
+                # Only include if not dismissed
+                recommendations.append(rec)
 
         return recommendations
 
@@ -654,7 +686,7 @@ class RebalancingService:
             reason_parts.append(f"sell score: {score.total_score:.2f}")
             reason = ", ".join(reason_parts) if reason_parts else "eligible for sell"
 
-            recommendations.append(TradeRecommendation(
+            rec = TradeRecommendation(
                 symbol=score.symbol,
                 name=pos.get("name", score.symbol),
                 side=TRADE_SIDE_SELL,
@@ -663,7 +695,29 @@ class RebalancingService:
                 estimated_value=round(score.suggested_sell_value, 2),
                 reason=reason,
                 currency=currency,
-            ))
+            )
+
+            # Store recommendation in database (create or update)
+            recommendation_data = {
+                "symbol": rec.symbol,
+                "name": rec.name,
+                "side": "SELL",
+                "amount": rec.estimated_value,
+                "quantity": rec.quantity,
+                "estimated_price": rec.estimated_price,
+                "estimated_value": rec.estimated_value,
+                "reason": rec.reason,
+                "geography": pos.get("geography"),
+                "industry": pos.get("industry"),
+                "currency": currency,
+                "priority": score.total_score,
+            }
+
+            # create_or_update returns UUID if not dismissed, None if dismissed
+            uuid = await self._recommendation_repo.create_or_update(recommendation_data)
+            if uuid:
+                # Only include if not dismissed
+                recommendations.append(rec)
 
         logger.info(f"Generated {len(recommendations)} sell recommendations")
 

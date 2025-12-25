@@ -32,13 +32,6 @@ class NextActionsCard extends HTMLElement {
               <span x-text="'Multi-Step Plan (' + $store.app.multiStepRecommendations.depth + ' steps)'"></span>
               <div class="flex items-center gap-2">
                 <span class="text-green-400" x-text="'↑' + $store.app.multiStepRecommendations.total_score_improvement.toFixed(1) + ' score'"></span>
-                <button
-                  @click="$store.app.executeAllMultiStep()"
-                  :disabled="$store.app.loading.execute"
-                  class="text-xs px-2 py-1 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded"
-                  title="Execute all steps in sequence">
-                  Execute All
-                </button>
               </div>
             </div>
             <div class="space-y-2">
@@ -70,17 +63,6 @@ class NextActionsCard extends HTMLElement {
                            x-text="(step.side === 'SELL' ? '-' : '+') + '€' + step.estimated_value.toLocaleString()"></div>
                       <div class="text-xs text-gray-400" x-text="step.quantity + ' @ €' + step.estimated_price"></div>
                       <div class="text-xs text-gray-500" x-text="'Cash: €' + step.available_cash_before.toLocaleString() + ' → €' + step.available_cash_after.toLocaleString()"></div>
-                      <button
-                        @click="$store.app.executeMultiStepStep(step.step)"
-                        :disabled="$store.app.loading.execute || $store.app.executingStep === step.step"
-                        class="text-xs px-2 py-0.5 mt-1 rounded"
-                        :class="step.side === 'SELL' 
-                          ? 'bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white' 
-                          : 'bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white'"
-                        :title="'Execute step ' + step.step">
-                        <span x-show="!$store.app.loading.execute || $store.app.executingStep !== step.step">Execute</span>
-                        <span x-show="$store.app.loading.execute && $store.app.executingStep === step.step">...</span>
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -96,7 +78,7 @@ class NextActionsCard extends HTMLElement {
         <template x-if="!$store.app.multiStepRecommendations?.steps?.length && $store.app.sellRecommendations.length > 0">
           <div class="mb-3">
             <div class="space-y-2">
-              <template x-for="rec in ($store.app.sellRecommendations || [])" :key="rec.symbol">
+              <template x-for="rec in ($store.app.sellRecommendations || [])" :key="rec.uuid || rec.symbol">
                 <div class="bg-gray-900 rounded p-2 border border-red-900/50">
                   <div class="flex items-start justify-between gap-2">
                     <div class="flex-1 min-w-0">
@@ -107,9 +89,16 @@ class NextActionsCard extends HTMLElement {
                       <div class="text-sm text-gray-300 truncate mt-0.5" x-text="rec.name"></div>
                       <div class="text-xs text-gray-500 mt-1" x-text="rec.reason"></div>
                     </div>
-                    <div class="text-right flex-shrink-0">
+                    <div class="text-right flex-shrink-0 flex flex-col items-end gap-1">
                       <div class="text-sm font-mono font-bold text-red-400" x-text="'-€' + rec.estimated_value.toLocaleString()"></div>
                       <div class="text-xs text-gray-400" x-text="rec.quantity + ' @ €' + rec.estimated_price"></div>
+                      <button
+                        x-show="rec.uuid"
+                        @click="$store.app.dismissSellRecommendation(rec.uuid)"
+                        class="mt-1 px-2 py-0.5 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors"
+                        title="Dismiss this recommendation">
+                        Dismiss
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -122,7 +111,7 @@ class NextActionsCard extends HTMLElement {
         <template x-if="!$store.app.multiStepRecommendations?.steps?.length && $store.app.recommendations.length > 0">
           <div>
             <div class="space-y-2">
-              <template x-for="(rec, index) in ($store.app.recommendations || [])" :key="rec.symbol">
+              <template x-for="(rec, index) in ($store.app.recommendations || [])" :key="rec.uuid || rec.symbol">
                 <div class="bg-gray-900 rounded p-2 border border-gray-700">
                   <div class="flex items-start justify-between gap-2">
                     <div class="flex-1 min-w-0">
@@ -136,7 +125,7 @@ class NextActionsCard extends HTMLElement {
                       <div class="text-sm text-gray-300 truncate mt-0.5" x-text="rec.name"></div>
                       <div class="text-xs text-gray-500 mt-1" x-text="rec.reason"></div>
                     </div>
-                    <div class="text-right flex-shrink-0">
+                    <div class="text-right flex-shrink-0 flex flex-col items-end gap-1">
                       <div class="text-sm font-mono font-bold text-green-400" x-text="'€' + rec.amount.toLocaleString()"></div>
                       <div class="text-xs text-gray-400" x-text="rec.quantity ? rec.quantity + ' @ €' + rec.current_price : ''"></div>
                       <!-- Fund this button - shows when cash is insufficient -->
@@ -144,6 +133,14 @@ class NextActionsCard extends HTMLElement {
                               @click.stop="$store.app.openFundingModal(rec)"
                               class="mt-1 px-2 py-0.5 text-xs bg-blue-900/50 text-blue-300 hover:bg-blue-800 rounded transition-colors">
                         Fund this
+                      </button>
+                      <!-- Dismiss button -->
+                      <button
+                        x-show="rec.uuid"
+                        @click="$store.app.dismissRecommendation(rec.uuid)"
+                        class="mt-1 px-2 py-0.5 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors"
+                        title="Dismiss this recommendation">
+                        Dismiss
                       </button>
                     </div>
                   </div>

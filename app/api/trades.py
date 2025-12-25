@@ -14,6 +14,7 @@ from app.repositories import (
     TradeRepository,
     AllocationRepository,
     PortfolioRepository,
+    RecommendationRepository,
 )
 from app.infrastructure.cache import cache
 
@@ -167,10 +168,11 @@ async def get_allocation():
 @router.get("/recommendations")
 async def get_recommendations(limit: int = 3):
     """
-    Get top N trade recommendations based on current portfolio state.
+    Get top N trade recommendations from database (status='pending').
 
     Returns prioritized list of stocks to buy next, with fixed trade amounts.
-    Independent of current cash balance - shows what to buy when cash is available.
+    Recommendations are generated and stored when this endpoint is called,
+    then filtered to exclude dismissed ones.
     Cached for 5 minutes.
     """
     # Check cache first
@@ -182,26 +184,32 @@ async def get_recommendations(limit: int = 3):
     from app.application.services.rebalancing_service import RebalancingService
 
     try:
+        # Generate recommendations (this will store them in the database)
         rebalancing_service = RebalancingService()
-        recommendations = await rebalancing_service.get_recommendations(limit=limit)
+        await rebalancing_service.get_recommendations(limit=limit)
+
+        # Get stored pending BUY recommendations from database
+        recommendation_repo = RecommendationRepository()
+        stored_recs = await recommendation_repo.get_pending_by_side("BUY", limit=limit)
 
         result = {
             "recommendations": [
                 {
-                    "symbol": r.symbol,
-                    "name": r.name,
-                    "amount": r.amount,
-                    "priority": r.priority,
-                    "reason": r.reason,
-                    "geography": r.geography,
-                    "industry": r.industry,
-                    "current_price": r.current_price,
-                    "quantity": r.quantity,
-                    "current_portfolio_score": r.current_portfolio_score,
-                    "new_portfolio_score": r.new_portfolio_score,
-                    "score_change": r.score_change,
+                    "uuid": rec["uuid"],
+                    "symbol": rec["symbol"],
+                    "name": rec["name"],
+                    "amount": rec["amount"],
+                    "priority": rec.get("priority"),
+                    "reason": rec["reason"],
+                    "geography": rec.get("geography"),
+                    "industry": rec.get("industry"),
+                    "current_price": rec.get("estimated_price"),
+                    "quantity": rec.get("quantity"),
+                    "current_portfolio_score": rec.get("current_portfolio_score"),
+                    "new_portfolio_score": rec.get("new_portfolio_score"),
+                    "score_change": rec.get("score_change"),
                 }
-                for r in recommendations
+                for rec in stored_recs
             ],
         }
 
@@ -209,101 +217,50 @@ async def get_recommendations(limit: int = 3):
         cache.set(cache_key, result, ttl_seconds=300)
         return result
     except Exception as e:
+        logger.error(f"Error getting recommendations: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/recommendations/{symbol}/execute")
-async def execute_recommendation(symbol: str):
+@router.post("/recommendations/{uuid}/dismiss")
+async def dismiss_recommendation(uuid: str):
     """
-    Execute a single recommendation by symbol.
+    Dismiss a recommendation by UUID.
 
-    Gets the current recommendation for the symbol and executes it.
+    Marks the recommendation as dismissed, preventing it from appearing again.
     """
-    from app.application.services.rebalancing_service import RebalancingService
-    from app.services.tradernet import get_tradernet_client
-
-    symbol = symbol.upper()
-    trade_repo = TradeRepository()
-
     try:
-        # Get recommendations to find this symbol
-        rebalancing_service = RebalancingService()
-        recommendations = await rebalancing_service.get_recommendations(limit=10)
-
-        # Find the recommendation for this symbol
-        rec = next((r for r in recommendations if r.symbol == symbol), None)
+        recommendation_repo = RecommendationRepository()
+        
+        # Check if recommendation exists
+        rec = await recommendation_repo.get_by_uuid(uuid)
         if not rec:
-            raise HTTPException(status_code=404, detail=f"No recommendation found for {symbol}")
+            raise HTTPException(status_code=404, detail=f"Recommendation {uuid} not found")
 
-        if not rec.quantity or not rec.current_price:
-            raise HTTPException(status_code=400, detail=f"Cannot execute: no valid price/quantity for {symbol}")
+        # Mark as dismissed
+        await recommendation_repo.mark_dismissed(uuid)
 
-        # Execute the trade
-        client = get_tradernet_client()
-        if not client.is_connected:
-            raise HTTPException(status_code=503, detail="Tradernet not connected")
+        # Invalidate caches
+        cache.invalidate("recommendations")
+        for limit in [3, 10, 20]:
+            cache.invalidate(f"recommendations:{limit}")
 
-        # Check for pending orders for this symbol
-        if client.has_pending_order_for_symbol(symbol):
-            raise HTTPException(
-                status_code=409,
-                detail=f"A pending order already exists for {symbol}"
-            )
-
-        result = client.place_order(
-            symbol=symbol,
-            side=TRADE_SIDE_BUY,
-            quantity=rec.quantity,
-        )
-
-        if result:
-            # Record trade
-            trade_record = Trade(
-                symbol=symbol,
-                side=TRADE_SIDE_BUY,
-                quantity=rec.quantity,
-                price=result.price,
-                executed_at=datetime.now(),
-                order_id=result.order_id,
-            )
-            await trade_repo.create(trade_record)
-
-            # Invalidate caches (including limit-specific keys)
-            cache.invalidate("recommendations")
-            cache.invalidate("recommendations:3")
-            cache.invalidate("recommendations:10")
-            cache.invalidate("sell_recommendations")
-            cache.invalidate("sell_recommendations:3")
-            cache.invalidate("sell_recommendations:20")
-            cache.invalidate("multi_step_recommendations:diversification:default")
-            # Invalidate all depth-specific caches
-            for depth in range(1, 6):
-                cache.invalidate(f"multi_step_recommendations:{depth}")
-
-            return {
-                "status": "success",
-                "order_id": result.order_id,
-                "symbol": symbol,
-                "side": TRADE_SIDE_BUY,
-                "quantity": rec.quantity,
-                "price": result.price,
-                "estimated_value": rec.amount,
-            }
-
-        raise HTTPException(status_code=500, detail="Trade execution failed")
+        return {"status": "success", "uuid": uuid, "message": "Recommendation dismissed"}
 
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Error dismissing recommendation {uuid}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/sell-recommendations")
 async def get_sell_recommendations(limit: int = 3):
     """
-    Get top N sell recommendations based on sell scoring system.
+    Get top N sell recommendations from database (status='pending').
 
     Returns prioritized list of positions to sell, with quantities and reasons.
+    Recommendations are generated and stored when this endpoint is called,
+    then filtered to exclude dismissed ones.
     Cached for 5 minutes.
     """
     cache_key = f"sell_recommendations:{limit}"
@@ -314,28 +271,67 @@ async def get_sell_recommendations(limit: int = 3):
     from app.application.services.rebalancing_service import RebalancingService
 
     try:
+        # Generate sell recommendations (this will store them in the database)
         rebalancing_service = RebalancingService()
-        recommendations = await rebalancing_service.calculate_sell_recommendations(limit=limit)
+        await rebalancing_service.calculate_sell_recommendations(limit=limit)
+
+        # Get stored pending SELL recommendations from database
+        recommendation_repo = RecommendationRepository()
+        stored_recs = await recommendation_repo.get_pending_by_side("SELL", limit=limit)
 
         result = {
             "recommendations": [
                 {
-                    "symbol": r.symbol,
-                    "name": r.name,
-                    "side": r.side,
-                    "quantity": r.quantity,
-                    "estimated_price": r.estimated_price,
-                    "estimated_value": r.estimated_value,
-                    "reason": r.reason,
-                    "currency": r.currency,
+                    "uuid": rec["uuid"],
+                    "symbol": rec["symbol"],
+                    "name": rec["name"],
+                    "side": rec["side"],
+                    "quantity": rec.get("quantity"),
+                    "estimated_price": rec.get("estimated_price"),
+                    "estimated_value": rec.get("estimated_value"),
+                    "reason": rec["reason"],
+                    "currency": rec.get("currency", "EUR"),
                 }
-                for r in recommendations
+                for rec in stored_recs
             ],
         }
 
         cache.set(cache_key, result, ttl_seconds=300)
         return result
     except Exception as e:
+        logger.error(f"Error getting sell recommendations: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/sell-recommendations/{uuid}/dismiss")
+async def dismiss_sell_recommendation(uuid: str):
+    """
+    Dismiss a sell recommendation by UUID.
+
+    Marks the recommendation as dismissed, preventing it from appearing again.
+    """
+    try:
+        recommendation_repo = RecommendationRepository()
+        
+        # Check if recommendation exists
+        rec = await recommendation_repo.get_by_uuid(uuid)
+        if not rec:
+            raise HTTPException(status_code=404, detail=f"Recommendation {uuid} not found")
+
+        # Mark as dismissed
+        await recommendation_repo.mark_dismissed(uuid)
+
+        # Invalidate caches
+        cache.invalidate("sell_recommendations")
+        for limit in [3, 10, 20]:
+            cache.invalidate(f"sell_recommendations:{limit}")
+
+        return {"status": "success", "uuid": uuid, "message": "Sell recommendation dismissed"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error dismissing sell recommendation {uuid}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

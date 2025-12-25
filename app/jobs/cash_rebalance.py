@@ -20,6 +20,7 @@ from app.repositories import (
     TradeRepository,
     AllocationRepository,
     SettingsRepository,
+    RecommendationRepository,
 )
 from app.domain.scoring import (
     calculate_all_sell_scores,
@@ -164,6 +165,17 @@ async def _check_and_rebalance_internal():
             if results and results[0]["status"] == "success":
                 logger.info(f"SELL executed successfully: {sell_trade.symbol}")
                 emit(SystemEvent.TRADE_EXECUTED, is_buy=False)
+                
+                # Mark matching stored recommendations as executed
+                recommendation_repo = RecommendationRepository()
+                matching_recs = await recommendation_repo.find_matching_for_execution(
+                    symbol=sell_trade.symbol,
+                    side=TRADE_SIDE_SELL,
+                    amount=sell_trade.estimated_value,
+                )
+                for rec in matching_recs:
+                    await recommendation_repo.mark_executed(rec["uuid"])
+                    logger.info(f"Marked recommendation {rec['uuid']} as executed")
             else:
                 error = results[0].get("error", "Unknown error") if results else "No result"
                 logger.error(f"SELL failed for {sell_trade.symbol}: {error}")
@@ -245,6 +257,18 @@ async def _check_and_rebalance_internal():
                 if results and results[0]["status"] == "success":
                     logger.info(f"BUY executed successfully: {trade.symbol}")
                     emit(SystemEvent.TRADE_EXECUTED, is_buy=True)
+                    
+                    # Mark matching stored recommendations as executed
+                    recommendation_repo = RecommendationRepository()
+                    matching_recs = await recommendation_repo.find_matching_for_execution(
+                        symbol=trade.symbol,
+                        side=TRADE_SIDE_BUY,
+                        amount=trade.estimated_value,
+                    )
+                    for rec in matching_recs:
+                        await recommendation_repo.mark_executed(rec["uuid"])
+                        logger.info(f"Marked recommendation {rec['uuid']} as executed")
+                    
                     executed = True
                     break
                 elif results and results[0]["status"] == "skipped":
