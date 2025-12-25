@@ -93,9 +93,10 @@ class NextActionsCard extends HTMLElement {
                       <div class="text-sm font-mono font-bold text-red-400" x-text="'-€' + rec.estimated_value.toLocaleString()"></div>
                       <div class="text-xs text-gray-400" x-text="rec.quantity + ' @ €' + rec.estimated_price"></div>
                       <button
-                        x-show="rec.uuid"
-                        @click="$store.app.dismissSellRecommendation(rec.uuid)"
-                        class="mt-1 px-2 py-0.5 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors"
+                        @click="if (rec.uuid) { $store.app.dismissSellRecommendation(rec.uuid); } else { $store.app.showMessage('Recommendation does not have UUID yet. Please refresh.', 'warning'); }"
+                        :disabled="!rec.uuid"
+                        class="mt-1 px-2 py-0.5 text-xs rounded transition-colors"
+                        :class="rec.uuid ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-800 text-gray-500 cursor-not-allowed'"
                         title="Dismiss this recommendation">
                         Dismiss
                       </button>
@@ -136,9 +137,10 @@ class NextActionsCard extends HTMLElement {
                       </button>
                       <!-- Dismiss button -->
                       <button
-                        x-show="rec.uuid"
-                        @click="$store.app.dismissRecommendation(rec.uuid)"
-                        class="mt-1 px-2 py-0.5 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors"
+                        @click="if (rec.uuid) { $store.app.dismissRecommendation(rec.uuid); } else { $store.app.showMessage('Recommendation does not have UUID yet. Please refresh.', 'warning'); }"
+                        :disabled="!rec.uuid"
+                        class="mt-1 px-2 py-0.5 text-xs rounded transition-colors"
+                        :class="rec.uuid ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-800 text-gray-500 cursor-not-allowed'"
                         title="Dismiss this recommendation">
                         Dismiss
                       </button>

@@ -175,11 +175,17 @@ async def get_recommendations(limit: int = 3):
     then filtered to exclude dismissed ones.
     Cached for 5 minutes.
     """
-    # Check cache first
+    # Check cache first, but validate it has UUIDs (invalidate if old format)
     cache_key = f"recommendations:{limit}"
     cached = cache.get(cache_key)
     if cached is not None:
-        return cached
+        # Validate cached data has UUIDs (new format)
+        if cached.get("recommendations") and len(cached.get("recommendations", [])) > 0:
+            first_rec = cached["recommendations"][0]
+            if "uuid" in first_rec:
+                return cached
+        # Cache is old format without UUIDs, invalidate it
+        cache.invalidate(cache_key)
 
     from app.application.services.rebalancing_service import RebalancingService
 
@@ -266,7 +272,13 @@ async def get_sell_recommendations(limit: int = 3):
     cache_key = f"sell_recommendations:{limit}"
     cached = cache.get(cache_key)
     if cached is not None:
-        return cached
+        # Validate cached data has UUIDs (invalidate if old format)
+        if cached.get("recommendations") and len(cached.get("recommendations", [])) > 0:
+            first_rec = cached["recommendations"][0]
+            if "uuid" in first_rec:
+                return cached
+        # Cache is old format without UUIDs, invalidate it
+        cache.invalidate(cache_key)
 
     from app.application.services.rebalancing_service import RebalancingService
 
