@@ -9,6 +9,8 @@ from datetime import datetime
 from typing import Optional
 
 from app.domain.value_objects.currency import Currency
+from app.domain.value_objects.trade_side import TradeSide
+from app.domain.value_objects.recommendation_status import RecommendationStatus
 
 
 @dataclass
@@ -188,16 +190,34 @@ class PortfolioSummary:
 
 
 @dataclass
-class TradeRecommendation:
-    """Recommended trade for rebalancing."""
+class Recommendation:
+    """Unified trade recommendation model.
+    
+    Replaces both TradeRecommendation and service-level Recommendation.
+    """
     symbol: str
     name: str
-    side: str  # BUY or SELL
+    side: TradeSide  # BUY or SELL
     quantity: float
     estimated_price: float
     estimated_value: float
     reason: str  # Why this trade is recommended
+    geography: str
     currency: Currency = Currency.EUR  # Stock's native currency
+    status: RecommendationStatus = RecommendationStatus.PENDING
+    industry: Optional[str] = None
+    priority: Optional[float] = None
+    current_portfolio_score: Optional[float] = None
+    new_portfolio_score: Optional[float] = None
+    score_change: Optional[float] = None
+    uuid: Optional[str] = None
+    portfolio_hash: Optional[str] = None
+    
+    def __post_init__(self):
+        """Calculate score_change if both portfolio scores are provided."""
+        if self.current_portfolio_score is not None and self.new_portfolio_score is not None:
+            if self.score_change is None:
+                self.score_change = self.new_portfolio_score - self.current_portfolio_score
 
 
 @dataclass
