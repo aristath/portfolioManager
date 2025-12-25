@@ -577,10 +577,7 @@ async def create_holistic_plan(
         symbols = [f"{c.side.value}:{c.symbol}" for c in sequence]
         logger.info(f"Sequence {seq_idx+1} evaluation: {symbols}")
         logger.info(f"  End-state score: {end_score:.3f}, Diversification: {div_score.total:.1f}")
-        logger.info(f"  Breakdown: total_return={breakdown.get('total_return', 0):.3f}, "
-                    f"diversification={breakdown.get('diversification', 0):.3f}, "
-                    f"long_term={breakdown.get('long_term_promise', 0):.3f}, "
-                    f"stability={breakdown.get('stability', 0):.3f}")
+        logger.info(f"  Breakdown: {breakdown}")
         logger.info(f"  End cash: €{end_cash:.2f}, Total value: €{end_context.total_value:.2f}")
 
         if end_score > best_end_score:
