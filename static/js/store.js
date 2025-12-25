@@ -19,6 +19,8 @@ document.addEventListener('alpine:init', () => {
     tradernet: { connected: false },
     recommendations: [],
     sellRecommendations: [],
+    multiStepRecommendations: null,  // {depth: int, steps: [], total_score_improvement: float, final_available_cash: float}
+    allStrategyRecommendations: null,  // {diversification: {...}, sustainability: {...}, opportunity: {...}}
     settings: { min_trade_size: 400 },
     sparklines: {},  // {symbol: [{time, value}, ...]}
 
@@ -38,6 +40,7 @@ document.addEventListener('alpine:init', () => {
     editingStock: null,
     executingSymbol: null,
     executingSellSymbol: null,
+    executingStep: null,
     message: '',
     messageType: 'success',
 
@@ -55,6 +58,8 @@ document.addEventListener('alpine:init', () => {
     loading: {
       recommendations: false,
       sellRecommendations: false,
+      multiStepRecommendations: false,
+      allStrategyRecommendations: false,
       scores: false,
       sync: false,
       historical: false,
@@ -87,6 +92,8 @@ document.addEventListener('alpine:init', () => {
         this.fetchGeographies(),
         this.fetchRecommendations(),
         this.fetchSellRecommendations(),
+        this.fetchMultiStepRecommendations(),
+        this.fetchAllStrategyRecommendations(),
         this.fetchSettings(),
         this.fetchSparklines()
       ]);
@@ -181,9 +188,51 @@ document.addEventListener('alpine:init', () => {
       this.loading.sellRecommendations = false;
     },
 
+    async fetchMultiStepRecommendations() {
+      this.loading.multiStepRecommendations = true;
+      try {
+        // Get depth from settings, default to 1
+        // Parse as integer since it may be stored as string in DB
+        const depth = parseInt(this.settings?.recommendation_depth || 1, 10);
+        // Only fetch multi-step if depth > 1
+        if (depth > 1) {
+          const data = await API.fetchMultiStepRecommendations(depth);
+          this.multiStepRecommendations = data;
+        } else {
+          this.multiStepRecommendations = null;
+        }
+      } catch (e) {
+        console.error('Failed to fetch multi-step recommendations:', e);
+        this.multiStepRecommendations = null;
+      }
+      this.loading.multiStepRecommendations = false;
+    },
+
+    async fetchAllStrategyRecommendations() {
+      this.loading.allStrategyRecommendations = true;
+      try {
+        // Get depth from settings, default to 1
+        const depth = parseInt(this.settings?.recommendation_depth || 1, 10);
+        // Only fetch all strategies if depth > 1
+        if (depth > 1) {
+          const data = await API.fetchAllStrategyRecommendations(depth);
+          this.allStrategyRecommendations = data;
+        } else {
+          this.allStrategyRecommendations = null;
+        }
+      } catch (e) {
+        console.error('Failed to fetch all-strategy recommendations:', e);
+        this.allStrategyRecommendations = null;
+      }
+      this.loading.allStrategyRecommendations = false;
+    },
+
     async fetchSettings() {
       try {
         this.settings = await API.fetchSettings();
+        // Always refresh multi-step recommendations when settings are loaded
+        // to ensure we have the correct depth
+        await this.fetchMultiStepRecommendations();
       } catch (e) {
         console.error('Failed to fetch settings:', e);
       }
@@ -217,6 +266,10 @@ document.addEventListener('alpine:init', () => {
         await API.updateSetting(key, numValue);
         this.settings[key] = numValue;
         this.showMessage(`Setting "${key}" updated`, 'success');
+        // If recommendation_depth was updated, refresh multi-step recommendations
+        if (key === 'recommendation_depth') {
+          await this.fetchMultiStepRecommendations();
+        }
       } catch (e) {
         this.showMessage(`Failed to update ${key}`, 'error');
       }
@@ -236,31 +289,84 @@ document.addEventListener('alpine:init', () => {
       }
     },
 
-    async executeRecommendation(symbol) {
-      this.loading.execute = true;
-      this.executingSymbol = symbol;
+    async dismissRecommendation(uuid) {
       try {
-        const result = await API.executeRecommendation(symbol);
-        this.showMessage(`Executed: ${result.quantity} ${symbol} @ €${result.price}`, 'success');
+        await API.dismissRecommendation(uuid);
+        this.showMessage('Recommendation dismissed', 'success');
+        await this.fetchRecommendations();
+      } catch (e) {
+        this.showMessage('Failed to dismiss recommendation', 'error');
+      }
+    },
+
+    async dismissSellRecommendation(uuid) {
+      try {
+        await API.dismissSellRecommendation(uuid);
+        this.showMessage('Sell recommendation dismissed', 'success');
+        await this.fetchSellRecommendations();
+      } catch (e) {
+        this.showMessage('Failed to dismiss sell recommendation', 'error');
+      }
+    },
+
+    // Deprecated - recommendations now execute automatically
+    // async executeRecommendation(symbol) {
+    //   this.loading.execute = true;
+    //   this.executingSymbol = symbol;
+    //   try {
+    //     const result = await API.executeRecommendation(symbol);
+    //     this.showMessage(`Executed: ${result.quantity} ${symbol} @ €${result.price}`, 'success');
+    //     await this.fetchAll();
+    //   } catch (e) {
+    //     this.showMessage('Failed to execute trade', 'error');
+    //   }
+    //   this.executingSymbol = null;
+    //   this.loading.execute = false;
+    // },
+
+    // async executeSellRecommendation(symbol) {
+    //   this.loading.execute = true;
+    //   this.executingSellSymbol = symbol;
+    //   try {
+    //     const result = await API.executeSellRecommendation(symbol);
+    //     this.showMessage(`Sold: ${result.quantity} ${symbol} @ €${result.price}`, 'success');
+    //     await this.fetchAll();
+    //   } catch (e) {
+    //     this.showMessage('Failed to execute sell', 'error');
+    //   }
+    //   this.executingSellSymbol = null;
+    //   this.loading.execute = false;
+    // },
+
+    async executeMultiStepStep(stepNumber) {
+      this.loading.execute = true;
+      this.executingStep = stepNumber;
+      try {
+        const result = await API.executeMultiStepStep(stepNumber);
+        this.showMessage(`Step ${stepNumber} executed: ${result.quantity} ${result.symbol} @ €${result.price}`, 'success');
         await this.fetchAll();
       } catch (e) {
-        this.showMessage('Failed to execute trade', 'error');
+        this.showMessage(`Failed to execute step ${stepNumber}: ${e.message}`, 'error');
       }
-      this.executingSymbol = null;
+      this.executingStep = null;
       this.loading.execute = false;
     },
 
-    async executeSellRecommendation(symbol) {
+    async executeAllMultiStep() {
       this.loading.execute = true;
-      this.executingSellSymbol = symbol;
       try {
-        const result = await API.executeSellRecommendation(symbol);
-        this.showMessage(`Sold: ${result.quantity} ${symbol} @ €${result.price}`, 'success');
+        const result = await API.executeAllMultiStep();
+        const successCount = result.executed_steps;
+        const totalCount = result.total_steps;
+        if (successCount === totalCount) {
+          this.showMessage(`All ${totalCount} steps executed successfully`, 'success');
+        } else {
+          this.showMessage(`Executed ${successCount} of ${totalCount} steps`, 'warning');
+        }
         await this.fetchAll();
       } catch (e) {
-        this.showMessage('Failed to execute sell', 'error');
+        this.showMessage(`Failed to execute plan: ${e.message}`, 'error');
       }
-      this.executingSellSymbol = null;
       this.loading.execute = false;
     },
 

@@ -5,6 +5,7 @@ Priority: SELL before BUY.
 """
 
 import logging
+from typing import TYPE_CHECKING
 
 from app.config import settings
 from app.services.tradernet import get_tradernet_client
@@ -19,6 +20,7 @@ from app.repositories import (
     TradeRepository,
     AllocationRepository,
     SettingsRepository,
+    RecommendationRepository,
 )
 from app.domain.scoring import (
     calculate_all_sell_scores,
@@ -26,6 +28,9 @@ from app.domain.scoring import (
     PortfolioContext,
     TechnicalData,
 )
+
+if TYPE_CHECKING:
+    from app.domain.models import TradeRecommendation
 
 logger = logging.getLogger(__name__)
 
@@ -160,6 +165,17 @@ async def _check_and_rebalance_internal():
             if results and results[0]["status"] == "success":
                 logger.info(f"SELL executed successfully: {sell_trade.symbol}")
                 emit(SystemEvent.TRADE_EXECUTED, is_buy=False)
+                
+                # Mark matching stored recommendations as executed
+                recommendation_repo = RecommendationRepository()
+                matching_recs = await recommendation_repo.find_matching_for_execution(
+                    symbol=sell_trade.symbol,
+                    side=TRADE_SIDE_SELL,
+                    amount=sell_trade.estimated_value,
+                )
+                for rec in matching_recs:
+                    await recommendation_repo.mark_executed(rec["uuid"])
+                    logger.info(f"Marked recommendation {rec['uuid']} as executed")
             else:
                 error = results[0].get("error", "Unknown error") if results else "No result"
                 logger.error(f"SELL failed for {sell_trade.symbol}: {error}")
@@ -241,6 +257,18 @@ async def _check_and_rebalance_internal():
                 if results and results[0]["status"] == "success":
                     logger.info(f"BUY executed successfully: {trade.symbol}")
                     emit(SystemEvent.TRADE_EXECUTED, is_buy=True)
+                    
+                    # Mark matching stored recommendations as executed
+                    recommendation_repo = RecommendationRepository()
+                    matching_recs = await recommendation_repo.find_matching_for_execution(
+                        symbol=trade.symbol,
+                        side=TRADE_SIDE_BUY,
+                        amount=trade.estimated_value,
+                    )
+                    for rec in matching_recs:
+                        await recommendation_repo.mark_executed(rec["uuid"])
+                        logger.info(f"Marked recommendation {rec['uuid']} as executed")
+                    
                     executed = True
                     break
                 elif results and results[0]["status"] == "skipped":
@@ -635,9 +663,53 @@ async def _refresh_recommendation_cache():
     from app.application.services.rebalancing_service import RebalancingService
 
     try:
-        rebalancing_service = RebalancingService()
+        # Create settings_repo once and reuse
+        settings_repo = SettingsRepository()
+        rebalancing_service = RebalancingService(settings_repo=settings_repo)
 
-        # Get buy recommendations
+        # Get recommendation depth setting
+        depth = await settings_repo.get_int("recommendation_depth", 1)
+
+        # Get multi-step recommendations if depth > 1
+        if depth > 1:
+            # Use diversification strategy by default for cache refresh
+            strategy = "diversification"
+            multi_step_steps = await rebalancing_service.get_multi_step_recommendations(depth=depth, strategy_type=strategy)
+            if multi_step_steps:
+                multi_step_data = {
+                    "strategy": strategy,
+                    "depth": depth,
+                    "steps": [
+                        {
+                            "step": step.step,
+                            "side": step.side,
+                            "symbol": step.symbol,
+                            "name": step.name,
+                            "quantity": step.quantity,
+                            "estimated_price": step.estimated_price,
+                            "estimated_value": step.estimated_value,
+                            "currency": step.currency,
+                            "reason": step.reason,
+                            "portfolio_score_before": step.portfolio_score_before,
+                            "portfolio_score_after": step.portfolio_score_after,
+                            "score_change": step.score_change,
+                            "available_cash_before": step.available_cash_before,
+                            "available_cash_after": step.available_cash_after,
+                        }
+                        for step in multi_step_steps
+                    ],
+                    "total_score_improvement": sum(step.score_change for step in multi_step_steps),
+                    "final_available_cash": multi_step_steps[-1].available_cash_after if multi_step_steps else 0.0,
+                }
+                default_cache_key = f"multi_step_recommendations:{strategy}:default"
+                cache.set(default_cache_key, multi_step_data, ttl_seconds=900)
+                cache.set(f"multi_step_recommendations:{strategy}:{depth}", multi_step_data, ttl_seconds=900)
+                logger.info(f"Multi-step recommendation cache refreshed: {len(multi_step_steps)} steps")
+        else:
+            # Clear multi-step cache if depth is 1
+            cache.invalidate("multi_step_recommendations:diversification:default")
+
+        # Always cache single recommendations (for fallback and depth=1)
         buy_recommendations = await rebalancing_service.get_recommendations(limit=3)
         buy_recs = {
             "recommendations": [

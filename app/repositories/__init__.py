@@ -14,6 +14,7 @@ from app.repositories.cash_flow import CashFlowRepository
 from app.repositories.portfolio import PortfolioRepository
 from app.repositories.history import HistoryRepository
 from app.repositories.settings import SettingsRepository
+from app.repositories.recommendation import RecommendationRepository
 
 __all__ = [
     "StockRepository",
@@ -25,4 +26,5 @@ __all__ = [
     "PortfolioRepository",
     "HistoryRepository",
     "SettingsRepository",
+    "RecommendationRepository",
 ]
