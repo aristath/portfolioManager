@@ -61,7 +61,8 @@ async def _check_and_rebalance_internal():
     from app.services.tradernet import get_exchange_rate
     from app.application.services.trade_execution_service import TradeExecutionService
     from app.domain.models import TradeRecommendation
-    from app.domain.constants import TRADE_SIDE_BUY, TRADE_SIDE_SELL, BUY_COOLDOWN_DAYS
+    from app.domain.value_objects.trade_side import TradeSide
+    from app.domain.constants import BUY_COOLDOWN_DAYS
 
     logger.info("Starting trade cycle check...")
 
@@ -192,7 +193,7 @@ async def _check_and_rebalance_internal():
                 recommendation_repo = RecommendationRepository()
                 matching_recs = await recommendation_repo.find_matching_for_execution(
                     symbol=sell_trade.symbol,
-                    side=TRADE_SIDE_SELL,
+                    side=TradeSide.SELL,
                     portfolio_hash=portfolio_hash,
                 )
                 for rec in matching_recs:
@@ -288,7 +289,7 @@ async def _check_and_rebalance_internal():
                     recommendation_repo = RecommendationRepository()
                     matching_recs = await recommendation_repo.find_matching_for_execution(
                         symbol=trade.symbol,
-                        side=TRADE_SIDE_BUY,
+                        side=TradeSide.BUY,
                         portfolio_hash=portfolio_hash,
                     )
                     for rec in matching_recs:
@@ -334,7 +335,7 @@ async def _get_best_sell_trade(
 ) -> "TradeRecommendation | None":
     """Calculate and return the best sell trade, if any."""
     from app.domain.models import TradeRecommendation
-    from app.domain.constants import TRADE_SIDE_SELL
+    from app.domain.value_objects.trade_side import TradeSide
     from app.domain.scoring import TechnicalData, calculate_all_sell_scores
     import numpy as np
     import pandas as pd
@@ -503,7 +504,7 @@ async def _get_best_sell_trade(
     return TradeRecommendation(
         symbol=best_sell.symbol,
         name=pos.get("name", best_sell.symbol),
-        side=TRADE_SIDE_SELL,
+        side=TradeSide.SELL,
         quantity=best_sell.suggested_sell_quantity,
         estimated_price=round(pos.get("current_price") or pos.get("avg_price", 0), 2),
         estimated_value=round(best_sell.suggested_sell_value, 2),
@@ -519,7 +520,7 @@ async def _get_buy_trades(
     from app.domain.models import TradeRecommendation
     from app.services import yahoo
     from app.services.tradernet import get_exchange_rate
-    from app.domain.constants import TRADE_SIDE_BUY
+    from app.domain.value_objects.trade_side import TradeSide
     from app.domain.scoring import (
         calculate_portfolio_score,
         calculate_post_transaction_score,
