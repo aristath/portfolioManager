@@ -8,7 +8,7 @@ from typing import List, Optional
 from datetime import datetime
 
 from app.repositories import TradeRepository, PositionRepository
-from app.domain.models import TradeRecommendation
+from app.domain.models import TradeRecommendation, Trade
 from app.services.tradernet import get_tradernet_client
 from app.infrastructure.events import emit, SystemEvent
 from app.infrastructure.hardware.led_display import set_activity
@@ -30,6 +30,76 @@ class TradeExecutionService:
     ):
         self._trade_repo = trade_repo
         self._position_repo = position_repo
+
+    async def record_trade(
+        self,
+        symbol: str,
+        side: str,
+        quantity: float,
+        price: float,
+        order_id: Optional[str] = None,
+        currency: Optional[str] = None,
+        estimated_price: Optional[float] = None,
+        source: str = "tradernet"
+    ) -> Optional[Trade]:
+        """
+        Record a trade in the database.
+        
+        Handles duplicate order_id checking and creates Trade record.
+        
+        Args:
+            symbol: Stock symbol
+            side: Trade side (BUY or SELL)
+            quantity: Trade quantity
+            price: Execution price (use estimated_price if price <= 0)
+            order_id: Broker order ID (optional)
+            currency: Trade currency (optional)
+            estimated_price: Estimated price to use if price <= 0 (optional)
+            source: Trade source (default: "tradernet")
+            
+        Returns:
+            Trade object if recorded successfully, None if duplicate or error
+        """
+        # Use estimated_price if actual price is invalid
+        final_price = price if price > 0 else (estimated_price or 0)
+        
+        try:
+            # Check if order_id already exists (might have been stored by sync_trades)
+            if order_id:
+                exists = await self._trade_repo.exists(order_id)
+                if exists:
+                    logger.debug(f"Order {order_id} already exists in database, skipping")
+                    return None
+            
+            trade_record = Trade(
+                symbol=symbol,
+                side=side.upper(),
+                quantity=quantity,
+                price=final_price,
+                executed_at=datetime.now(),
+                order_id=order_id,
+                currency=currency,
+                source=source,
+            )
+            
+            await self._trade_repo.create(trade_record)
+            logger.info(f"Stored order {order_id or '(no order_id)'} for {symbol} immediately")
+            
+            # For successful SELL orders, update last_sold_at in positions
+            if side.upper() == "SELL" and self._position_repo:
+                try:
+                    await self._position_repo.update_last_sold_at(symbol)
+                    logger.info(f"Updated last_sold_at for {symbol}")
+                except Exception as e:
+                    logger.warning(f"Failed to update last_sold_at: {e}")
+            
+            return trade_record
+            
+        except Exception as e:
+            # Log but don't fail - order was placed successfully
+            # This might be a duplicate key error if sync_trades already inserted it
+            logger.warning(f"Failed to store order immediately (may already exist): {e}")
+            return None
 
     async def execute_trades(
         self,
@@ -224,52 +294,16 @@ class TradeExecutionService:
                     # Store order immediately in database to prevent duplicate submissions
                     # The sync_trades job will still sync executed trades from the API,
                     # but storing immediately allows us to check for recent orders locally.
-                    from app.domain.models import Trade
-                    try:
-                        # Check if order_id already exists (might have been stored by sync_trades)
-                        if result.order_id:
-                            exists = await self._trade_repo.exists(result.order_id)
-                            if exists:
-                                logger.debug(f"Order {result.order_id} already exists in database, skipping immediate store")
-                            else:
-                                trade_record = Trade(
-                                    symbol=trade.symbol,
-                                    side=trade.side.upper(),
-                                    quantity=trade.quantity,
-                                    price=result.price if result.price > 0 else trade.estimated_price,
-                                    executed_at=datetime.now(),
-                                    order_id=result.order_id,
-                                    currency=trade.currency,
-                                    source="tradernet",
-                                )
-                                await self._trade_repo.create(trade_record)
-                                logger.info(f"Stored order {result.order_id} for {trade.symbol} immediately")
-                        else:
-                            # No order_id returned, store anyway for tracking
-                            trade_record = Trade(
-                                symbol=trade.symbol,
-                                side=trade.side.upper(),
-                                quantity=trade.quantity,
-                                price=result.price if result.price > 0 else trade.estimated_price,
-                                executed_at=datetime.now(),
-                                order_id=None,
-                                currency=trade.currency,
-                                source="tradernet",
-                            )
-                            await self._trade_repo.create(trade_record)
-                            logger.info(f"Stored order (no order_id) for {trade.symbol} immediately")
-                    except Exception as e:
-                        # Log but don't fail - order was placed successfully
-                        # This might be a duplicate key error if sync_trades already inserted it
-                        logger.warning(f"Failed to store order immediately (may already exist): {e}")
-
-                    # For successful SELL orders, update last_sold_at in positions
-                    if trade.side.upper() == "SELL" and self._position_repo:
-                        try:
-                            await self._position_repo.update_last_sold_at(trade.symbol)
-                            logger.info(f"Updated last_sold_at for {trade.symbol}")
-                        except Exception as e:
-                            logger.warning(f"Failed to update last_sold_at: {e}")
+                    await self.record_trade(
+                        symbol=trade.symbol,
+                        side=trade.side,
+                        quantity=trade.quantity,
+                        price=result.price,
+                        order_id=result.order_id,
+                        currency=trade.currency,
+                        estimated_price=trade.estimated_price,
+                        source="tradernet"
+                    )
 
                     results.append({
                         "symbol": trade.symbol,

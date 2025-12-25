@@ -9,6 +9,7 @@ from app.repositories import (
     StockRepository,
 )
 from app.application.services.portfolio_service import PortfolioService
+from app.services.tradernet_connection import ensure_tradernet_connected
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -102,12 +103,7 @@ async def get_transaction_history():
 
     Note: Only withdrawals are available via API. Deposits must be tracked manually.
     """
-    from app.services.tradernet import get_tradernet_client
-
-    client = get_tradernet_client()
-    if not client.is_connected:
-        if not client.connect():
-            raise HTTPException(status_code=503, detail="Not connected to Tradernet")
+    client = await ensure_tradernet_connected()
 
     try:
         cash_movements = client.get_cash_movements()
@@ -123,12 +119,12 @@ async def get_transaction_history():
 @router.get("/cash-breakdown")
 async def get_cash_breakdown():
     """Get cash balance breakdown by currency."""
-    from app.services.tradernet import get_tradernet_client
-
-    client = get_tradernet_client()
-    if not client.is_connected:
-        if not client.connect():
+    try:
+        client = await ensure_tradernet_connected(raise_on_error=False)
+        if not client:
             return {"balances": [], "total_eur": 0}
+    except Exception:
+        return {"balances": [], "total_eur": 0}
 
     try:
         balances = client.get_cash_balances()
