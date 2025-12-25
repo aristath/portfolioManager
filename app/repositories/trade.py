@@ -127,6 +127,28 @@ class TradeRepository:
         )
         return {row["symbol"] for row in rows}
 
+    async def has_recent_sell_order(self, symbol: str, hours: int = 2) -> bool:
+        """
+        Check if there's a recent SELL order for the given symbol.
+        
+        Args:
+            symbol: Stock symbol to check (e.g., "AAPL.US")
+            hours: Number of hours to look back (default: 2)
+            
+        Returns:
+            True if a SELL order exists for this symbol within the time window
+        """
+        cutoff = (datetime.now() - timedelta(hours=hours)).isoformat()
+        row = await self._db.fetchone(
+            """
+            SELECT 1 FROM trades
+            WHERE symbol = ? AND UPPER(side) = 'SELL' AND executed_at >= ?
+            LIMIT 1
+            """,
+            (symbol.upper(), cutoff)
+        )
+        return row is not None
+
     async def get_first_buy_date(self, symbol: str) -> Optional[str]:
         """Get the date of first buy for a symbol."""
         row = await self._db.fetchone(

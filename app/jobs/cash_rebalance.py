@@ -157,6 +157,17 @@ async def _check_and_rebalance_internal():
         )
 
         if sell_trade:
+            # Additional safety check: verify no recent sell order in database
+            has_recent = await trade_repo.has_recent_sell_order(sell_trade.symbol, hours=2)
+            if has_recent:
+                logger.warning(
+                    f"Skipping SELL {sell_trade.symbol}: recent sell order found in database "
+                    f"(within last 2 hours)"
+                )
+                emit(SystemEvent.REBALANCE_COMPLETE)
+                await _refresh_recommendation_cache()
+                return
+
             logger.info(
                 f"Executing SELL: {sell_trade.quantity} {sell_trade.symbol} "
                 f"@ €{sell_trade.estimated_price:.2f} = €{sell_trade.estimated_value:.2f} "
