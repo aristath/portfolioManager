@@ -375,16 +375,17 @@ async def list_recommendation_strategies():
 
 
 @router.get("/multi-step-recommendations/all")
-async def get_all_strategy_recommendations(depth: int = None):
+async def get_all_strategy_recommendations(depth: int = None, holistic: bool = True):
     """
     Get multi-step recommendations from ALL strategies.
-    
+
     Runs all available strategies in parallel and returns recommendations from each.
     This allows comparing different strategic approaches side-by-side.
-    
+
     Args:
         depth: Number of steps (1-5). If None, uses setting value (default: 1).
-    
+        holistic: If True, use holistic planner with end-state optimization.
+
     Returns:
         Dictionary with strategy names as keys and their recommendations as values.
         Format: {
@@ -401,8 +402,9 @@ async def get_all_strategy_recommendations(depth: int = None):
                 detail="Depth must be between 1 and 5"
             )
     
-    # Build cache key
-    cache_key = f"multi_step_recommendations:all:{depth or 'default'}"
+    # Build cache key (include holistic flag)
+    holistic_suffix = ":holistic" if holistic else ""
+    cache_key = f"multi_step_recommendations:all:{depth or 'default'}{holistic_suffix}"
     cached = cache.get(cache_key)
     if cached is not None:
         return cached
@@ -422,13 +424,15 @@ async def get_all_strategy_recommendations(depth: int = None):
             try:
                 steps = await rebalancing_service.get_multi_step_recommendations(
                     depth=depth,
-                    strategy_type=strategy_name
+                    strategy_type=strategy_name,
+                    use_holistic=holistic
                 )
                 
                 if not steps:
                     return {
                         "strategy": strategy_name,
                         "depth": depth or 1,
+                        "holistic": holistic,
                         "steps": [],
                         "total_score_improvement": 0.0,
                         "final_available_cash": 0.0,
@@ -437,10 +441,11 @@ async def get_all_strategy_recommendations(depth: int = None):
                 
                 total_score_improvement = sum(step.score_change for step in steps)
                 final_available_cash = steps[-1].available_cash_after if steps else 0.0
-                
+
                 return {
                     "strategy": strategy_name,
                     "depth": depth or len(steps),
+                    "holistic": holistic,
                     "steps": [
                         {
                             "step": step.step,
