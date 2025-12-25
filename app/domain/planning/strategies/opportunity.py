@@ -55,14 +55,26 @@ class OpportunityStrategy(RecommendationStrategy):
         from app.infrastructure.database.manager import get_db_manager
         db_manager = get_db_manager()
         
-        portfolio_opportunity_scores = []
-        for symbol in portfolio_context.positions.keys():
-            score_row = await db_manager.state.fetchone(
-                "SELECT opportunity_score FROM scores WHERE symbol = ?",
-                (symbol,)
-            )
-            if score_row and score_row.get("opportunity_score"):
-                portfolio_opportunity_scores.append(score_row["opportunity_score"])
+        # Batch query all opportunity scores at once (fixes N+1 query problem)
+        symbols = list(portfolio_context.positions.keys())
+        if not symbols:
+            return goals
+        
+        placeholders = ",".join("?" * len(symbols))
+        score_rows = await db_manager.state.fetchall(
+            f"SELECT symbol, opportunity_score FROM scores WHERE symbol IN ({placeholders})",
+            tuple(symbols)
+        )
+        
+        # Build score map
+        opportunity_scores = {row["symbol"]: row.get("opportunity_score") or 0.5 for row in score_rows}
+        
+        # Calculate average opportunity score
+        portfolio_opportunity_scores = [
+            opportunity_scores.get(symbol, 0.5)
+            for symbol in symbols
+            if opportunity_scores.get(symbol) is not None
+        ]
         
         avg_portfolio_opportunity = (
             sum(portfolio_opportunity_scores) / len(portfolio_opportunity_scores)
@@ -95,16 +107,11 @@ class OpportunityStrategy(RecommendationStrategy):
         recovered_count = 0
         
         for symbol, value in portfolio_context.positions.items():
-            score_row = await db_manager.state.fetchone(
-                "SELECT opportunity_score FROM scores WHERE symbol = ?",
-                (symbol,)
-            )
-            if score_row:
-                opp_score = score_row.get("opportunity_score") or 0.5
-                # Low opportunity score means near 52W high (recovered)
-                if opp_score < 0.30:
-                    recovered_value += value
-                    recovered_count += 1
+            opp_score = opportunity_scores.get(symbol, 0.5)
+            # Low opportunity score means near 52W high (recovered)
+            if opp_score < 0.30:
+                recovered_value += value
+                recovered_count += 1
         
         if recovered_count > 0 and recovered_value / total_value >= min_gap_threshold:
             priority_score = (recovered_value / total_value) * 6.0

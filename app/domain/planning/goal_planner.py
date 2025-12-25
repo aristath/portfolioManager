@@ -3,7 +3,7 @@ Goal-Driven Planner - Creates multi-step plans to achieve strategic goals.
 """
 
 import logging
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Callable, Awaitable, Tuple
 from dataclasses import dataclass
 
 from app.domain.planning.strategies.base import RecommendationStrategy, StrategicGoal
@@ -53,7 +53,7 @@ async def create_strategic_plan(
     stocks: List[Stock],
     positions: List[Position],
     max_steps: int = 5,
-    simulate_portfolio_after_transaction=None  # Function from RebalancingService
+    simulate_portfolio_after_transaction: Optional[Callable[[PortfolioContext, Dict, float], Awaitable[Tuple[PortfolioContext, float]]]] = None
 ) -> StrategicPlan:
     """
     Create a multi-step plan to achieve strategic goals using a specific strategy.
