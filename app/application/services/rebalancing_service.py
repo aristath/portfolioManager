@@ -41,6 +41,7 @@ from app.domain.analytics import (
     calculate_portfolio_returns,
     get_performance_attribution,
 )
+from app.infrastructure.recommendation_cache import get_recommendation_cache
 
 logger = logging.getLogger(__name__)
 
@@ -276,20 +277,45 @@ class RebalancingService:
         Each recommendation respects min_lot and shows the actual trade amount.
         Recommendations are scored by how much they IMPROVE portfolio balance.
         """
-        base_trade_amount = await self._settings_repo.get_float("min_trade_size", 150.0)
-
-        # Build portfolio context
-        portfolio_context = await self._build_portfolio_context()
-
         # Generate portfolio hash from current positions
         from app.domain.portfolio_hash import generate_portfolio_hash
         positions = await self._position_repo.get_all()
         position_dicts = [{"symbol": p.symbol, "quantity": p.quantity} for p in positions]
         portfolio_hash = generate_portfolio_hash(position_dicts)
+
+        # Check cache first (48h TTL)
+        rec_cache = get_recommendation_cache()
+        cached = await rec_cache.get_recommendations(portfolio_hash, "buy")
+        if cached:
+            logger.info(f"Using cached buy recommendations ({len(cached)} items)")
+            # Convert cached dicts back to Recommendation objects
+            recommendations = []
+            for c in cached[:limit]:
+                recommendations.append(Recommendation(
+                    symbol=c["symbol"],
+                    name=c["name"],
+                    amount=c["amount"],
+                    priority=c["priority"],
+                    reason=c["reason"],
+                    geography=c["geography"],
+                    industry=c["industry"],
+                    current_price=c.get("current_price"),
+                    quantity=c.get("quantity"),
+                    current_portfolio_score=c.get("current_portfolio_score"),
+                    new_portfolio_score=c.get("new_portfolio_score"),
+                    score_change=c.get("score_change"),
+                ))
+            return recommendations
+
+        base_trade_amount = await self._settings_repo.get_float("min_trade_size", 150.0)
+
+        # Build portfolio context
+        portfolio_context = await self._build_portfolio_context()
         
         # Get performance-adjusted allocation weights (PyFolio enhancement)
-        adjusted_geo_weights, adjusted_ind_weights = await self._get_performance_adjusted_weights()
-        
+        # Pass portfolio_hash for caching (saves ~27s on repeat calls)
+        adjusted_geo_weights, adjusted_ind_weights = await self._get_performance_adjusted_weights(portfolio_hash)
+
         # Update portfolio context with adjusted weights if available
         if adjusted_geo_weights:
             portfolio_context.geo_weights.update(adjusted_geo_weights)
@@ -524,6 +550,28 @@ class RebalancingService:
                 # Only include if not dismissed
                 recommendations.append(rec)
 
+        # Cache the full recommendation list (not just the limited ones)
+        # This allows returning different limit values from the same cache
+        all_recs_for_cache = []
+        for candidate in candidates:
+            all_recs_for_cache.append({
+                "symbol": candidate["symbol"],
+                "name": candidate["name"],
+                "amount": round(candidate["trade_value"], 2),
+                "priority": round(candidate["final_score"], 2),
+                "reason": candidate["reason"],
+                "geography": candidate["geography"],
+                "industry": candidate["industry"],
+                "current_price": round(candidate["price"], 2),
+                "quantity": candidate["quantity"],
+                "current_portfolio_score": round(candidate["current_portfolio_score"], 1),
+                "new_portfolio_score": round(candidate["new_portfolio_score"], 1),
+                "score_change": round(candidate["score_change"], 2),
+            })
+
+        if all_recs_for_cache:
+            await rec_cache.set_recommendations(portfolio_hash, "buy", all_recs_for_cache)
+
         return recommendations
 
     async def calculate_rebalance_trades(
@@ -596,6 +644,26 @@ class RebalancingService:
         from app.domain.portfolio_hash import generate_portfolio_hash
         position_hash_dicts = [{"symbol": p.symbol, "quantity": p.quantity} for p in positions]
         portfolio_hash = generate_portfolio_hash(position_hash_dicts)
+
+        # Check cache first (48h TTL)
+        rec_cache = get_recommendation_cache()
+        cached = await rec_cache.get_recommendations(portfolio_hash, "sell")
+        if cached:
+            logger.info(f"Using cached sell recommendations ({len(cached)} items)")
+            # Convert cached dicts back to TradeRecommendation objects
+            recommendations = []
+            for c in cached[:limit]:
+                recommendations.append(TradeRecommendation(
+                    symbol=c["symbol"],
+                    name=c["name"],
+                    side=TRADE_SIDE_SELL,
+                    quantity=c["quantity"],
+                    estimated_price=c["estimated_price"],
+                    estimated_value=c["estimated_value"],
+                    reason=c["reason"],
+                    currency=c.get("currency", "EUR"),
+                ))
+            return recommendations
 
         # Get stock info
         stocks = await self._stock_repo.get_all_active()
@@ -734,33 +802,68 @@ class RebalancingService:
                 # Only include if not dismissed
                 recommendations.append(rec)
 
+        # Cache all eligible sell recommendations
+        all_sells_for_cache = []
+        for score in eligible_sells:
+            pos = next((p for p in position_dicts if p["symbol"] == score.symbol), None)
+            if pos:
+                current_price = pos.get("current_price") or pos.get("avg_price", 0)
+                all_sells_for_cache.append({
+                    "symbol": score.symbol,
+                    "name": pos.get("name", score.symbol),
+                    "quantity": score.suggested_sell_quantity,
+                    "estimated_price": round(current_price, 2),
+                    "estimated_value": round(score.suggested_sell_value, 2),
+                    "reason": f"sell score: {score.total_score:.2f}",
+                    "currency": pos.get("currency", "EUR"),
+                    "priority": score.total_score,
+                })
+
+        if all_sells_for_cache:
+            await rec_cache.set_recommendations(portfolio_hash, "sell", all_sells_for_cache)
+
         logger.info(f"Generated {len(recommendations)} sell recommendations")
 
         return recommendations
 
-    async def _get_performance_adjusted_weights(self) -> Tuple[Dict[str, float], Dict[str, float]]:
+    async def _get_performance_adjusted_weights(
+        self,
+        portfolio_hash: Optional[str] = None
+    ) -> Tuple[Dict[str, float], Dict[str, float]]:
         """
         Get performance-adjusted allocation weights based on PyFolio attribution.
-        
+
+        Args:
+            portfolio_hash: Optional portfolio hash for caching (48h TTL)
+
         Returns:
             Tuple of (adjusted_geo_weights, adjusted_ind_weights)
         """
         try:
             from datetime import datetime, timedelta
-            
+
+            # Check cache first if we have a portfolio hash
+            rec_cache = get_recommendation_cache()
+            if portfolio_hash:
+                cache_key = f"perf:weights:{portfolio_hash}"
+                cached = await rec_cache.get_analytics(cache_key)
+                if cached:
+                    logger.debug("Using cached performance-adjusted weights")
+                    return cached.get("geo", {}), cached.get("ind", {})
+
             # Calculate date range (last 365 days)
             end_date = datetime.now().strftime("%Y-%m-%d")
             start_date = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
-            
+
             # Reconstruct portfolio and get returns
             portfolio_values = await reconstruct_portfolio_values(start_date, end_date)
             returns = calculate_portfolio_returns(portfolio_values)
-            
+
             if returns.empty or len(returns) < 30:
                 # Not enough data, return empty dicts (use base weights)
                 return {}, {}
-            
-            # Get performance attribution
+
+            # Get performance attribution (EXPENSIVE - ~27 seconds)
             attribution = await get_performance_attribution(returns, start_date, end_date)
             
             geo_attribution = attribution.get("geography", {})
@@ -814,9 +917,17 @@ class RebalancingService:
                     adjusted_ind[ind] = max(0.0, base_weight - adjustment)
                 else:
                     adjusted_ind[ind] = base_weight
-            
+
+            # Cache the result (48h TTL)
+            if portfolio_hash and (adjusted_geo or adjusted_ind):
+                await rec_cache.set_analytics(
+                    cache_key,
+                    {"geo": adjusted_geo, "ind": adjusted_ind},
+                    ttl_hours=48
+                )
+
             return adjusted_geo, adjusted_ind
-            
+
         except Exception as e:
             logger.debug(f"Could not calculate performance-adjusted weights: {e}")
             # Return empty dicts on error (use base weights)
@@ -983,22 +1094,27 @@ class RebalancingService:
                 if strategy:
                     # Build portfolio context
                     portfolio_context = await self._build_portfolio_context()
-                    
-                    # Get performance-adjusted weights
-                    adjusted_geo_weights, adjusted_ind_weights = await self._get_performance_adjusted_weights()
+
+                    # Get positions and stocks first (needed for portfolio hash)
+                    positions = await self._position_repo.get_all()
+                    stocks = await self._stock_repo.get_all_active()
+
+                    # Generate portfolio hash for caching
+                    from app.domain.portfolio_hash import generate_portfolio_hash
+                    position_dicts = [{"symbol": p.symbol, "quantity": p.quantity} for p in positions]
+                    portfolio_hash = generate_portfolio_hash(position_dicts)
+
+                    # Get performance-adjusted weights (with caching)
+                    adjusted_geo_weights, adjusted_ind_weights = await self._get_performance_adjusted_weights(portfolio_hash)
                     if adjusted_geo_weights:
                         portfolio_context.geo_weights.update(adjusted_geo_weights)
                     if adjusted_ind_weights:
                         portfolio_context.industry_weights.update(adjusted_ind_weights)
-                    
+
                     # Get current cash balance
                     from app.services.tradernet import get_tradernet_client
                     client = get_tradernet_client()
                     available_cash = client.get_total_cash_eur() if client.is_connected else 0.0
-                    
-                    # Get positions and stocks
-                    positions = await self._position_repo.get_all()
-                    stocks = await self._stock_repo.get_all_active()
                     
                     # Analyze goals using strategy
                     goals = await strategy.analyze_goals(
@@ -1033,8 +1149,14 @@ class RebalancingService:
         steps = []
         current_context = await self._build_portfolio_context()
 
-        # Get performance-adjusted weights
-        adjusted_geo_weights, adjusted_ind_weights = await self._get_performance_adjusted_weights()
+        # Generate portfolio hash for caching
+        from app.domain.portfolio_hash import generate_portfolio_hash
+        positions = await self._position_repo.get_all()
+        position_dicts = [{"symbol": p.symbol, "quantity": p.quantity} for p in positions]
+        portfolio_hash = generate_portfolio_hash(position_dicts)
+
+        # Get performance-adjusted weights (with caching)
+        adjusted_geo_weights, adjusted_ind_weights = await self._get_performance_adjusted_weights(portfolio_hash)
         if adjusted_geo_weights:
             current_context.geo_weights.update(adjusted_geo_weights)
         if adjusted_ind_weights:

@@ -460,15 +460,27 @@ async def get_position_risk_metrics(
 ) -> Dict[str, float]:
     """
     Calculate risk metrics for a specific position.
-    
+
+    Uses 4-hour cache to reduce expensive calculations.
+
     Args:
         symbol: Stock symbol
         start_date: Start date for analysis
         end_date: End date for analysis
-    
+
     Returns:
         Dict with sortino_ratio, sharpe_ratio, volatility, max_drawdown
     """
+    # Check cache first (4-hour TTL for symbol-specific data)
+    from app.infrastructure.recommendation_cache import get_recommendation_cache
+
+    rec_cache = get_recommendation_cache()
+    cache_key = f"risk:{symbol}"
+    cached = await rec_cache.get_analytics(cache_key)
+    if cached:
+        logger.debug(f"Using cached risk metrics for {symbol}")
+        return cached
+
     try:
         history_repo = HistoryRepository(symbol)
         prices = await history_repo.get_daily_range(start_date, end_date)
@@ -498,13 +510,18 @@ async def get_position_risk_metrics(
         sharpe_ratio = float(empyrical.sharpe_ratio(returns))
         sortino_ratio = float(empyrical.sortino_ratio(returns))
         max_drawdown = float(empyrical.max_drawdown(returns))
-        
-        return {
+
+        result = {
             "sortino_ratio": sortino_ratio if np.isfinite(sortino_ratio) else 0.0,
             "sharpe_ratio": sharpe_ratio if np.isfinite(sharpe_ratio) else 0.0,
             "volatility": volatility if np.isfinite(volatility) else 0.0,
             "max_drawdown": max_drawdown if np.isfinite(max_drawdown) else 0.0,
         }
+
+        # Cache the result (4-hour TTL for symbol-specific data)
+        await rec_cache.set_analytics(cache_key, result, ttl_hours=4)
+
+        return result
     except Exception as e:
         logger.debug(f"Error calculating risk metrics for {symbol}: {e}")
         return {

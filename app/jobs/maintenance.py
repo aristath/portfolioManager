@@ -278,6 +278,38 @@ async def _cleanup_old_daily_prices_internal():
         raise
 
 
+async def cleanup_expired_caches():
+    """
+    Clean up expired recommendation and analytics cache entries.
+
+    These caches have 48h (recommendation) and 4h (symbol data) TTLs.
+    """
+    async with file_lock("cleanup_caches", timeout=60.0):
+        await _cleanup_expired_caches_internal()
+
+
+async def _cleanup_expired_caches_internal():
+    """Internal cache cleanup implementation."""
+    logger.info("Cleaning up expired caches")
+
+    set_activity("CLEANING EXPIRED CACHES...", duration=30.0)
+
+    try:
+        from app.infrastructure.recommendation_cache import get_recommendation_cache
+
+        rec_cache = get_recommendation_cache()
+        removed_count = await rec_cache.cleanup_expired()
+
+        if removed_count > 0:
+            logger.info(f"Cleaned up {removed_count} expired cache entries")
+        else:
+            logger.info("No expired cache entries to clean up")
+
+    except Exception as e:
+        logger.error(f"Cache cleanup failed: {e}")
+        # Don't raise - cache cleanup is not critical
+
+
 async def cleanup_old_snapshots():
     """
     Remove portfolio snapshots older than retention period.
@@ -340,6 +372,7 @@ async def run_daily_maintenance():
         # 2. Clean up old data
         await cleanup_old_daily_prices()
         await cleanup_old_snapshots()
+        await cleanup_expired_caches()
 
         # 3. Checkpoint WAL (after cleanup for smaller file)
         await checkpoint_wal()

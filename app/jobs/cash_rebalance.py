@@ -14,6 +14,7 @@ from app.infrastructure.events import emit, SystemEvent
 from app.infrastructure.hardware.led_display import set_activity
 from app.infrastructure.database.manager import get_db_manager
 from app.infrastructure.cache import cache
+from app.infrastructure.recommendation_cache import get_recommendation_cache
 from app.repositories import (
     StockRepository,
     PositionRepository,
@@ -170,7 +171,11 @@ async def _check_and_rebalance_internal():
             if results and results[0]["status"] == "success":
                 logger.info(f"SELL executed successfully: {sell_trade.symbol}")
                 emit(SystemEvent.TRADE_EXECUTED, is_buy=False)
-                
+
+                # Invalidate portfolio-hash-based caches (old portfolio is now stale)
+                rec_cache = get_recommendation_cache()
+                await rec_cache.invalidate_portfolio_hash(portfolio_hash)
+
                 # Mark matching stored recommendations as executed
                 recommendation_repo = RecommendationRepository()
                 matching_recs = await recommendation_repo.find_matching_for_execution(
@@ -262,7 +267,11 @@ async def _check_and_rebalance_internal():
                 if results and results[0]["status"] == "success":
                     logger.info(f"BUY executed successfully: {trade.symbol}")
                     emit(SystemEvent.TRADE_EXECUTED, is_buy=True)
-                    
+
+                    # Invalidate portfolio-hash-based caches (old portfolio is now stale)
+                    rec_cache = get_recommendation_cache()
+                    await rec_cache.invalidate_portfolio_hash(portfolio_hash)
+
                     # Mark matching stored recommendations as executed
                     recommendation_repo = RecommendationRepository()
                     matching_recs = await recommendation_repo.find_matching_for_execution(
@@ -273,7 +282,7 @@ async def _check_and_rebalance_internal():
                     for rec in matching_recs:
                         await recommendation_repo.mark_executed(rec["uuid"])
                         logger.info(f"Marked recommendation {rec['uuid']} as executed")
-                    
+
                     executed = True
                     break
                 elif results and results[0]["status"] == "skipped":

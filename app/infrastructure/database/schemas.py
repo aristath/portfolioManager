@@ -465,6 +465,28 @@ CREATE TABLE IF NOT EXISTS yahoo_cache (
 
 CREATE INDEX IF NOT EXISTS idx_yahoo_cache_expires ON yahoo_cache(expires_at);
 
+-- Recommendation cache keyed by portfolio hash
+CREATE TABLE IF NOT EXISTS recommendation_cache (
+    portfolio_hash TEXT NOT NULL,
+    cache_type TEXT NOT NULL,  -- 'buy', 'sell', 'multi_step', 'strategic'
+    data TEXT NOT NULL,        -- JSON serialized
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (portfolio_hash, cache_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_rec_cache_expires ON recommendation_cache(expires_at);
+
+-- Analytics cache for expensive computations (performance weights, risk metrics)
+CREATE TABLE IF NOT EXISTS analytics_cache (
+    cache_key TEXT PRIMARY KEY,
+    data TEXT NOT NULL,        -- JSON serialized
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_analytics_cache_expires ON analytics_cache(expires_at);
+
 -- Schema version tracking
 CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER PRIMARY KEY,
@@ -485,10 +507,22 @@ async def init_cache_schema(db):
         now = datetime.now().isoformat()
         await db.execute(
             "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
-            (1, now, "Initial cache schema")
+            (2, now, "Initial cache schema with recommendation and analytics cache")
         )
         await db.commit()
-        logger.info("Cache database initialized with schema version 1")
+        logger.info("Cache database initialized with schema version 2")
+    elif current_version == 1:
+        # Migration: Add recommendation_cache and analytics_cache tables
+        now = datetime.now().isoformat()
+        logger.info("Migrating cache database to version 2 (recommendation cache)...")
+
+        # Tables are created by executescript above (CREATE IF NOT EXISTS)
+        await db.execute(
+            "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
+            (2, now, "Added recommendation_cache and analytics_cache tables")
+        )
+        await db.commit()
+        logger.info("Cache database migrated to schema version 2")
 
 
 # =============================================================================
