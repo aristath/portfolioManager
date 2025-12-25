@@ -112,12 +112,12 @@ class RebalancingService:
 
     def __init__(
         self,
-        stock_repo: Optional[StockRepository] = None,
-        position_repo: Optional[PositionRepository] = None,
-        allocation_repo: Optional[AllocationRepository] = None,
+        stock_repo: Optional[IStockRepository] = None,
+        position_repo: Optional[IPositionRepository] = None,
+        allocation_repo: Optional[IAllocationRepository] = None,
         portfolio_repo: Optional[PortfolioRepository] = None,
-        trade_repo: Optional[TradeRepository] = None,
-        settings_repo: Optional[SettingsRepository] = None,
+        trade_repo: Optional[ITradeRepository] = None,
+        settings_repo: Optional[ISettingsRepository] = None,
         recommendation_repo: Optional[RecommendationRepository] = None,
     ):
         # Use provided repos or create new ones
