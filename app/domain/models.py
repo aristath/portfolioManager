@@ -13,28 +13,6 @@ from app.domain.value_objects.trade_side import TradeSide
 from app.domain.value_objects.recommendation_status import RecommendationStatus
 from app.domain.exceptions import ValidationError
 
-# Geography normalization map (country/region -> standard region)
-GEOGRAPHY_NORMALIZATION = {
-    # Europe
-    "GREECE": "EU", "GERMANY": "EU", "FRANCE": "EU", "ITALY": "EU",
-    "SPAIN": "EU", "NETHERLANDS": "EU", "BELGIUM": "EU", "PORTUGAL": "EU",
-    "IRELAND": "EU", "AUSTRIA": "EU", "FINLAND": "EU", "UK": "EU",
-    "SWITZERLAND": "EU", "SWEDEN": "EU", "NORWAY": "EU", "DENMARK": "EU",
-    "EUROPE": "EU",
-    # Asia
-    "CHINA": "ASIA", "JAPAN": "ASIA", "HONG KONG": "ASIA", "HONGKONG": "ASIA",
-    "HK": "ASIA", "KOREA": "ASIA", "TAIWAN": "ASIA", "SINGAPORE": "ASIA",
-    "INDIA": "ASIA",
-    # US aliases
-    "USA": "US", "UNITED STATES": "US", "AMERICA": "US",
-}
-
-
-def normalize_geography(geography: str) -> str:
-    """Normalize geography to standard region (EU, US, ASIA)."""
-    geo_upper = geography.strip().upper()
-    return GEOGRAPHY_NORMALIZATION.get(geo_upper, geo_upper)
-
 
 @dataclass
 class Stock:
@@ -59,15 +37,9 @@ class Stock:
         if not self.name or not self.name.strip():
             raise ValidationError("Name cannot be empty")
         
-        # Normalize and validate geography
-        valid_geographies = {"US", "EU", "ASIA"}
-        normalized_geo = normalize_geography(self.geography)
-        if normalized_geo not in valid_geographies:
-            raise ValidationError(f"Invalid geography: {self.geography}. Must be one of {valid_geographies} (or a known country/region)")
-
-        # Normalize symbol and geography
+        # Normalize symbol and geography (any geography is valid)
         object.__setattr__(self, 'symbol', self.symbol.upper().strip())
-        object.__setattr__(self, 'geography', normalized_geo)
+        object.__setattr__(self, 'geography', self.geography.upper().strip())
         
         # Ensure min_lot is at least 1
         if self.min_lot < 1:

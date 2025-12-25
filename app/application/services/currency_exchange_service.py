@@ -389,7 +389,8 @@ def get_stock_currency(geography: str) -> str:
         "US": "USD",
         "ASIA": "HKD",
         "UK": "GBP",
-    }.get(geography.upper(), "EUR")
+        "GREECE": "EUR",
+    }.get(geography.upper(), "EUR")  # Default to EUR for unknown geographies
 
 
 # Singleton instance
