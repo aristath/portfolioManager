@@ -5,6 +5,7 @@ Provides type-safe access to application settings via Settings value object.
 
 from typing import Optional, Union
 from app.domain.value_objects.settings import Settings
+from app.domain.repositories.protocols import ISettingsRepository
 from app.repositories import SettingsRepository
 
 
@@ -15,11 +16,11 @@ class SettingsService:
     Caches the result for performance.
     """
     
-    def __init__(self, settings_repo: SettingsRepository):
+    def __init__(self, settings_repo: ISettingsRepository):
         """Initialize settings service.
         
         Args:
-            settings_repo: Settings repository instance
+            settings_repo: Settings repository instance (implements ISettingsRepository)
         """
         self._settings_repo = settings_repo
         self._cached_settings: Optional[Settings] = None

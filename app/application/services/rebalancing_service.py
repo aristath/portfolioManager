@@ -24,6 +24,13 @@ from app.repositories import (
     SettingsRepository,
     RecommendationRepository,
 )
+from app.domain.repositories.protocols import (
+    IStockRepository,
+    IPositionRepository,
+    IAllocationRepository,
+    ITradeRepository,
+    ISettingsRepository,
+)
 from app.domain.services.settings_service import SettingsService
 from app.domain.scoring import (
     calculate_portfolio_score,
