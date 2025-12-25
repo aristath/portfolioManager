@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime
 from typing import List, Optional
 
+from app.domain.value_objects.currency import Currency
 from app.infrastructure.database import get_db_manager
 
 
@@ -84,7 +85,7 @@ class RecommendationRepository:
                             recommendation_data.get("estimated_value"),
                             recommendation_data.get("geography"),
                             recommendation_data.get("industry"),
-                            recommendation_data.get("currency", "EUR"),
+                            recommendation_data.get("currency") or Currency.EUR,
                             recommendation_data.get("priority"),
                             recommendation_data.get("current_portfolio_score"),
                             recommendation_data.get("new_portfolio_score"),
@@ -125,7 +126,7 @@ class RecommendationRepository:
                             recommendation_data.get("estimated_value"),
                             recommendation_data.get("geography"),
                             recommendation_data.get("industry"),
-                            recommendation_data.get("currency", "EUR"),
+                            recommendation_data.get("currency") or Currency.EUR,
                             recommendation_data.get("priority"),
                             recommendation_data.get("current_portfolio_score"),
                             recommendation_data.get("new_portfolio_score"),

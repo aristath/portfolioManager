@@ -9,6 +9,7 @@ from datetime import datetime
 
 from app.repositories import TradeRepository, PositionRepository
 from app.domain.models import TradeRecommendation, Trade
+from app.domain.value_objects.currency import Currency
 from app.services.tradernet import get_tradernet_client
 from app.infrastructure.events import emit, SystemEvent
 from app.infrastructure.hardware.led_display import set_activity
@@ -106,7 +107,7 @@ class TradeExecutionService:
         trades: List[TradeRecommendation],
         currency_balances: Optional[dict[str, float]] = None,
         auto_convert_currency: bool = False,
-        source_currency: str = "EUR"
+        source_currency: str = Currency.EUR
     ) -> List[dict]:
         """
         Execute a list of trade recommendations via Tradernet.
@@ -141,7 +142,7 @@ class TradeExecutionService:
         client,
         currency_balances: Optional[dict[str, float]] = None,
         currency_service: Optional[CurrencyExchangeService] = None,
-        source_currency: str = "EUR"
+        source_currency: str = Currency.EUR
     ) -> List[dict]:
         """Internal method to execute trades."""
         results = []
@@ -175,7 +176,7 @@ class TradeExecutionService:
                         continue
 
                     required = trade.quantity * trade.estimated_price
-                    trade_currency = trade.currency or "EUR"
+                    trade_currency = trade.currency or Currency.EUR
 
                     # If auto-convert is enabled and currency differs from source
                     if currency_service and trade_currency != source_currency:

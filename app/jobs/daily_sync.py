@@ -10,7 +10,7 @@ from app.infrastructure.events import emit, SystemEvent
 from app.infrastructure.hardware.led_display import set_activity
 from app.infrastructure.locking import file_lock
 from app.infrastructure.database.manager import get_db_manager
-from app.domain.constants import DEFAULT_CURRENCY
+from app.domain.value_objects.currency import Currency
 from app.domain.scoring.cache import get_score_cache
 
 logger = logging.getLogger(__name__)
@@ -121,7 +121,7 @@ async def _sync_portfolio_internal():
                         pos.quantity,
                         pos.avg_price,
                         current_price,
-                        pos.currency or DEFAULT_CURRENCY,
+                        pos.currency or Currency.EUR,
                         pos.currency_rate,
                         market_value_eur,
                         datetime.now().isoformat(),

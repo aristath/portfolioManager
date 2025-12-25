@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import List, Optional, Dict
 
 from app.domain.models import Position
+from app.domain.value_objects.currency import Currency
 from app.infrastructure.database import get_db_manager
 
 
@@ -142,7 +143,8 @@ class PositionRepository:
             pos_dict["allow_sell"] = bool(stock.get("allow_sell", False))
             # Use stock currency if position doesn't have one
             if not pos_dict.get("currency"):
-                pos_dict["currency"] = stock.get("currency", "EUR")
+                from app.domain.value_objects.currency import Currency
+                pos_dict["currency"] = stock.get("currency") or Currency.EUR
             result.append(pos_dict)
 
         return result
@@ -154,7 +156,7 @@ class PositionRepository:
             quantity=row["quantity"],
             avg_price=row["avg_price"],
             current_price=row["current_price"],
-            currency=row["currency"] or "EUR",
+            currency=row["currency"] or Currency.EUR,
             currency_rate=row["currency_rate"] or 1.0,
             market_value_eur=row["market_value_eur"],
             cost_basis_eur=row["cost_basis_eur"] if "cost_basis_eur" in row.keys() else None,

@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
 
+from app.domain.value_objects.currency import Currency
+
 
 @dataclass
 class Stock:
@@ -22,7 +24,7 @@ class Stock:
     active: bool = True
     allow_buy: bool = True
     allow_sell: bool = False
-    currency: Optional[str] = None
+    currency: Optional[Currency] = None
 
 
 @dataclass
@@ -31,7 +33,7 @@ class Position:
     symbol: str
     quantity: float
     avg_price: float
-    currency: str = "EUR"
+    currency: Currency = Currency.EUR
     currency_rate: float = 1.0
     current_price: Optional[float] = None
     market_value_eur: Optional[float] = None
@@ -52,7 +54,7 @@ class Trade:
     price: float
     executed_at: datetime
     order_id: Optional[str] = None
-    currency: Optional[str] = None
+    currency: Optional[Currency] = None
     currency_rate: Optional[float] = None
     value_eur: Optional[float] = None
     source: str = "tradernet"
@@ -112,7 +114,7 @@ class CashFlow:
     type_doc_id: int
     date: str
     amount: float
-    currency: str
+    currency: Currency
     amount_eur: float
     transaction_type: Optional[str] = None
     status: Optional[str] = None
@@ -195,7 +197,7 @@ class TradeRecommendation:
     estimated_price: float
     estimated_value: float
     reason: str  # Why this trade is recommended
-    currency: str = "EUR"  # Stock's native currency
+    currency: Currency = Currency.EUR  # Stock's native currency
 
 
 @dataclass

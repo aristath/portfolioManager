@@ -8,12 +8,9 @@ MAX_PRIORITY_MULTIPLIER = 1.1
 MIN_VOLATILITY_MULTIPLIER = 0.7
 MAX_POSITION_SIZE_MULTIPLIER = 1.2
 
-# Currency codes
-DEFAULT_CURRENCY = "EUR"
+# Currency codes - Use Currency enum from app.domain.value_objects.currency
 
-# Trade sides
-TRADE_SIDE_BUY = "BUY"
-TRADE_SIDE_SELL = "SELL"
+# Trade sides - Use TradeSide enum from app.domain.value_objects.trade_side
 
 # Cooldown periods (days)
 BUY_COOLDOWN_DAYS = 30
@@ -22,4 +19,5 @@ BUY_COOLDOWN_DAYS = 30
 GEO_EU = "EU"
 GEO_ASIA = "ASIA"
 GEO_US = "US"
+
 

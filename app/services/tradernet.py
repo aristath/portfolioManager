@@ -37,12 +37,12 @@ _rates_lock = threading.Lock()
 
 def get_exchange_rate(from_currency: str, to_currency: str = None) -> float:
     """Get exchange rate from currency to target currency using real-time data (thread-safe)."""
-    from app.domain.constants import DEFAULT_CURRENCY
+    from app.domain.value_objects.currency import Currency
     
     global _exchange_rates, _rates_updated
     
     if to_currency is None:
-        to_currency = DEFAULT_CURRENCY
+        to_currency = Currency.EUR
 
     if from_currency == to_currency:
         return 1.0
@@ -200,7 +200,7 @@ class TradernetClient:
             ps_data = summary.get("result", {}).get("ps", {})
             pos_data = ps_data.get("pos", [])
 
-            from app.domain.constants import DEFAULT_CURRENCY
+            from app.domain.value_objects.currency import Currency
             
             for item in pos_data:
                 avg_price = float(item.get("bal_price_a", 0))
@@ -209,13 +209,13 @@ class TradernetClient:
                 # Calculate market_value ourselves - don't trust API's market_value
                 # (Tradernet sometimes returns wrong values, e.g., ETF's AUM instead of position value)
                 market_value = quantity * current_price
-                currency = item.get("curr", DEFAULT_CURRENCY)
+                currency = item.get("curr", Currency.EUR)
 
                 # Get real-time exchange rate instead of API's currval
-                currency_rate = get_exchange_rate(currency, DEFAULT_CURRENCY)
+                currency_rate = get_exchange_rate(currency, Currency.EUR)
 
                 # Convert market_value to default currency (EUR)
-                if currency == DEFAULT_CURRENCY:
+                if currency == Currency.EUR:
                     market_value_eur = market_value
                 else:
                     market_value_eur = market_value / currency_rate if currency_rate > 0 else market_value
@@ -286,17 +286,17 @@ class TradernetClient:
             ps_data = summary.get("result", {}).get("ps", {})
             acc_data = ps_data.get("acc", [])
 
-            from app.domain.constants import DEFAULT_CURRENCY
+            from app.domain.value_objects.currency import Currency
             
             for item in acc_data:
                 amount = float(item.get("s", 0))
-                currency = item.get("curr", DEFAULT_CURRENCY)
+                currency = item.get("curr", Currency.EUR)
 
-                if currency == DEFAULT_CURRENCY:
+                if currency == Currency.EUR:
                     total += amount
                 elif amount > 0:
                     # Convert to EUR using real-time exchange rate
-                    rate = get_exchange_rate(currency, DEFAULT_CURRENCY)
+                    rate = get_exchange_rate(currency, Currency.EUR)
                     total += amount / rate
 
             return total
@@ -727,13 +727,13 @@ class TradernetClient:
                 except json_lib.JSONDecodeError:
                     continue
 
-                from app.domain.constants import DEFAULT_CURRENCY
-                currency = params.get("currency", DEFAULT_CURRENCY)
+                from app.domain.value_objects.currency import Currency
+                currency = params.get("currency", Currency.EUR)
                 amount = float(params.get("totalMoneyOut", 0))
 
                 # Convert to default currency (EUR) if needed
-                if currency != DEFAULT_CURRENCY and amount > 0:
-                    rate = get_exchange_rate(currency, DEFAULT_CURRENCY)
+                if currency != Currency.EUR and amount > 0:
+                    rate = get_exchange_rate(currency, Currency.EUR)
                     if rate > 0:
                         amount = amount / rate
 

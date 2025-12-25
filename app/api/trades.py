@@ -5,7 +5,7 @@ from typing import List
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
 from enum import Enum
-from app.domain.constants import TRADE_SIDE_BUY, TRADE_SIDE_SELL
+from app.domain.value_objects.trade_side import TradeSide
 from app.repositories import (
     StockRepository,
     PositionRepository,
@@ -24,10 +24,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-class TradeSide(str, Enum):
-    """Trade side enumeration."""
-    BUY = TRADE_SIDE_BUY
-    SELL = TRADE_SIDE_SELL
+# TradeSide enum is now in app.domain.value_objects.trade_side
+# Import it directly instead of using this local enum
 
 
 class TradeRequest(BaseModel):
