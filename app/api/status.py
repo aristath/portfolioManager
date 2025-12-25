@@ -120,12 +120,20 @@ async def _build_ticker_text() -> str:
         # Add recommendations if enabled (cache-only, populated by Rebalance Check job)
         if show_actions:
             # Check for multi-step recommendations first (if depth > 1)
-            multi_step = cache.get("multi_step_recommendations:default")
-            if not multi_step:
-                # Try with explicit depth from settings (reuse settings_repo from above)
-                depth = await settings_repo.get_int("recommendation_depth", 1)
-                if depth > 1:
+            # Try holistic cache keys first (new format), then legacy format
+            depth = await settings_repo.get_int("recommendation_depth", 1)
+            multi_step = None
+
+            if depth > 1:
+                # Try holistic cache keys (new format)
+                multi_step = cache.get(f"multi_step_recommendations:diversification:{depth}:holistic")
+                if not multi_step:
+                    multi_step = cache.get("multi_step_recommendations:diversification:default:holistic")
+                # Fall back to legacy cache keys
+                if not multi_step:
                     multi_step = cache.get(f"multi_step_recommendations:{depth}")
+                if not multi_step:
+                    multi_step = cache.get("multi_step_recommendations:default")
             
             if multi_step and multi_step.get("steps"):
                 # Show multi-step recommendations - format: [step/total]
