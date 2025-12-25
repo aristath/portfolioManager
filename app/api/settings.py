@@ -171,6 +171,25 @@ async def update_setting_value(key: str, data: SettingUpdate):
     return {key: data.value}
 
 
+@router.post("/restart-service")
+async def restart_service():
+    """Restart the arduino-trader systemd service."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["sudo", "systemctl", "restart", "arduino-trader"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.returncode == 0:
+            return {"status": "ok", "message": "Service restart initiated"}
+        else:
+            return {"status": "error", "message": f"Failed to restart service: {result.stderr}"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
 @router.post("/restart")
 async def restart_system():
     """Trigger system reboot."""
