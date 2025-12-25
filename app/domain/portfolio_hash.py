@@ -43,3 +43,63 @@ def generate_portfolio_hash(positions: List[Dict[str, Any]]) -> str:
     # Generate hash and return first 8 characters
     full_hash = hashlib.md5(canonical.encode()).hexdigest()
     return full_hash[:8]
+
+
+def generate_settings_hash(settings_dict: Dict[str, Any]) -> str:
+    """
+    Generate a deterministic hash from settings that affect recommendations.
+
+    Args:
+        settings_dict: Dictionary of settings values
+
+    Returns:
+        8-character hex hash (first 8 chars of MD5)
+
+    Example:
+        settings = {"min_trade_size": 100, "min_stock_score": 0.5}
+        hash = generate_settings_hash(settings)  # e.g., "b1c2d3e4"
+    """
+    # Settings that affect recommendation calculations
+    relevant_keys = sorted([
+        "min_trade_size",
+        "min_stock_score",
+        "min_hold_days",
+        "sell_cooldown_days",
+        "max_loss_threshold",
+        "target_annual_return",
+        "recommendation_depth",
+    ])
+
+    # Build canonical string: "key:value,key:value,..."
+    parts = [f"{k}:{settings_dict.get(k, '')}" for k in relevant_keys]
+    canonical = ",".join(parts)
+
+    # Generate hash and return first 8 characters
+    full_hash = hashlib.md5(canonical.encode()).hexdigest()
+    return full_hash[:8]
+
+
+def generate_recommendation_cache_key(
+    positions: List[Dict[str, Any]], settings_dict: Dict[str, Any]
+) -> str:
+    """
+    Generate a cache key from both portfolio positions and settings.
+
+    This ensures that cache is invalidated when either positions or
+    relevant settings change.
+
+    Args:
+        positions: List of position dicts with 'symbol' and 'quantity' keys
+        settings_dict: Dictionary of settings values
+
+    Returns:
+        16-character combined hash (portfolio_hash:settings_hash)
+
+    Example:
+        positions = [{"symbol": "AAPL", "quantity": 10}]
+        settings = {"min_trade_size": 100}
+        key = generate_recommendation_cache_key(positions, settings)  # e.g., "a1b2c3d4:e5f6g7h8"
+    """
+    portfolio_hash = generate_portfolio_hash(positions)
+    settings_hash = generate_settings_hash(settings_dict)
+    return f"{portfolio_hash}:{settings_hash}"

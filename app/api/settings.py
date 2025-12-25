@@ -21,6 +21,7 @@ SETTING_DEFAULTS = {
     "target_annual_return": 0.11,   # Optimal CAGR for scoring (11%)
     "market_avg_pe": 22.0,          # Reference P/E for valuation
     "recommendation_depth": 1.0,    # Number of steps in multi-step recommendations (1-5)
+    "min_stock_score": 0.5,         # Minimum score for stock to be recommended (0-1)
     # LED Matrix settings
     "ticker_speed": 50.0,           # Ticker scroll speed in ms per frame (lower = faster)
     "led_brightness": 150.0,        # LED brightness (0-255)
@@ -198,8 +199,27 @@ async def update_setting_value(key: str, data: SettingUpdate):
             raise HTTPException(status_code=400, detail=f"Invalid trading mode: {mode}. Must be 'live' or 'research'")
         await set_trading_mode(mode)
         return {key: mode}
-    
+
     await set_setting(key, str(data.value))
+
+    # Invalidate recommendation caches when recommendation-affecting settings change
+    recommendation_settings = {
+        "min_trade_size", "min_stock_score", "min_hold_days",
+        "sell_cooldown_days", "max_loss_threshold", "target_annual_return",
+        "recommendation_depth"
+    }
+    if key in recommendation_settings:
+        from app.infrastructure.recommendation_cache import get_recommendation_cache
+
+        # Invalidate SQLite recommendation cache
+        rec_cache = get_recommendation_cache()
+        await rec_cache.invalidate_all_recommendations()
+
+        # Invalidate in-memory caches
+        cache.invalidate_prefix("recommendations")
+        cache.invalidate_prefix("sell_recommendations")
+        cache.invalidate_prefix("multi_step_recommendations")
+
     return {key: data.value}
 
 
