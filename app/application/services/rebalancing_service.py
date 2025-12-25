@@ -42,7 +42,15 @@ from app.domain.scoring import (
 )
 from app.domain.models import Recommendation, StockPriority
 from app.domain.value_objects.recommendation_status import RecommendationStatus
-from app.services.allocator import calculate_position_size, get_max_trades
+from app.services.allocator import calculate_position_size, calculate_position_size_risk_parity, get_max_trades
+from app.domain.constants import (
+    TARGET_PORTFOLIO_VOLATILITY,
+    DEFAULT_VOLATILITY,
+    MIN_VOL_WEIGHT,
+    MAX_VOL_WEIGHT,
+    MIN_VOLATILITY_FOR_SIZING,
+    REBALANCE_BAND_PCT,
+)
 from app.services import yahoo
 from app.services.tradernet import get_exchange_rate
 from app.domain.value_objects.trade_side import TradeSide
@@ -83,6 +91,29 @@ def _determine_stock_currency(stock: dict) -> str:
     symbol = stock.get("symbol", "unknown")
     logger.warning(f"No currency found for {symbol}, defaulting to EUR")
     return "EUR"
+
+
+def is_outside_rebalance_band(
+    current_weight: float,
+    target_weight: float,
+    band_pct: float = REBALANCE_BAND_PCT
+) -> bool:
+    """
+    Check if a position has drifted enough from target to warrant rebalancing.
+
+    Based on MOSEK Portfolio Cookbook principles: avoid frequent small trades
+    by only rebalancing when positions drift significantly from targets.
+
+    Args:
+        current_weight: Current allocation weight (0.0 to 1.0)
+        target_weight: Target allocation weight (0.0 to 1.0)
+        band_pct: Deviation threshold (default: 7%)
+
+    Returns:
+        True if position is outside the band and should be considered for rebalancing
+    """
+    deviation = abs(current_weight - target_weight)
+    return deviation > band_pct
 
 
 # Recommendation model moved to app.domain.models - use unified Recommendation
@@ -408,9 +439,8 @@ class RebalancingService:
                 if exchange_rate <= 0:
                     exchange_rate = 1.0
 
-            # Get Sortino ratio and correlation for risk-adjusted position sizing (PyFolio)
-            sortino_ratio = None
-            portfolio_correlation = 0.0
+            # Get volatility for risk parity position sizing
+            stock_vol = DEFAULT_VOLATILITY
             try:
                 from datetime import datetime, timedelta
                 from app.domain.analytics import get_position_risk_metrics
@@ -418,47 +448,31 @@ class RebalancingService:
                 end_date = datetime.now().strftime("%Y-%m-%d")
                 start_date = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
                 risk_metrics = await get_position_risk_metrics(symbol, start_date, end_date)
-                sortino_ratio = risk_metrics.get("sortino_ratio")
-
-                # Estimate correlation using volatility ratio (simplified approach)
-                stock_vol = risk_metrics.get("volatility", 0.20)
-                if portfolio_context.total_value > 0:
-                    # High-vol stocks tend to be more correlated in stress
-                    portfolio_correlation = min(0.9, stock_vol / 0.30)
+                stock_vol = risk_metrics.get("volatility", DEFAULT_VOLATILITY)
             except Exception as e:
                 logger.debug(f"Could not get risk metrics for {symbol}: {e}")
 
-            # Calculate base trade amount with risk adjustment (reduced influence)
-            risk_adjusted_amount = base_trade_amount
-            if sortino_ratio is not None:
-                # Dampen adjustment based on correlation (avoid concentration risk)
-                correlation_dampener = max(0.3, 1 - portfolio_correlation)
+            # Risk Parity Position Sizing (MOSEK Portfolio Cookbook principles)
+            # Size inversely to volatility so each position contributes equal risk
+            vol_weight = TARGET_PORTFOLIO_VOLATILITY / max(stock_vol, MIN_VOLATILITY_FOR_SIZING)
+            vol_weight = max(MIN_VOL_WEIGHT, min(MAX_VOL_WEIGHT, vol_weight))
 
-                if sortino_ratio > 2.0:
-                    # Excellent risk-adjusted returns - modest increase (+10% max)
-                    adjustment = 0.10 * correlation_dampener
-                    risk_adjusted_amount = base_trade_amount * (1 + adjustment)
-                elif sortino_ratio > 1.5:
-                    # Good risk-adjusted returns - small increase (+3% max)
-                    adjustment = 0.03 * correlation_dampener
-                    risk_adjusted_amount = base_trade_amount * (1 + adjustment)
-                elif sortino_ratio < 0.5:
-                    # Poor risk-adjusted returns - reduce by 10%
-                    risk_adjusted_amount = base_trade_amount * 0.9
-                elif sortino_ratio < 1.0:
-                    # Below average - reduce by 5%
-                    risk_adjusted_amount = base_trade_amount * 0.95
-            
+            # Small stock score adjustment (±10%)
+            score_adj = 1.0 + (total_score - 0.5) * 0.2
+            score_adj = max(0.9, min(1.1, score_adj))
+
+            risk_parity_amount = base_trade_amount * vol_weight * score_adj
+
             # Calculate actual transaction value (respecting min_lot)
             lot_cost_native = min_lot * price
             lot_cost_eur = lot_cost_native / exchange_rate
 
-            if lot_cost_eur > risk_adjusted_amount:
+            if lot_cost_eur > risk_parity_amount:
                 quantity = min_lot
                 trade_value_native = lot_cost_native
             else:
-                risk_adjusted_amount_native = risk_adjusted_amount * exchange_rate
-                num_lots = int(risk_adjusted_amount_native / lot_cost_native)
+                risk_parity_amount_native = risk_parity_amount * exchange_rate
+                num_lots = int(risk_parity_amount_native / lot_cost_native)
                 quantity = num_lots * min_lot
                 trade_value_native = quantity * price
 
@@ -875,7 +889,60 @@ class RebalancingService:
             logger.info("No positions eligible for selling")
             return []
 
-        logger.info(f"Found {len(eligible_sells)} positions eligible for selling")
+        # Get target allocations for band check
+        allocations = await self._allocation_repo.get_all()
+        target_geo_weights = {
+            key.split(":", 1)[1]: val
+            for key, val in allocations.items()
+            if key.startswith("geography:")
+        }
+        target_ind_weights = {
+            key.split(":", 1)[1]: val
+            for key, val in allocations.items()
+            if key.startswith("industry:")
+        }
+
+        # Apply rebalancing band filter: skip positions where BOTH geography AND industry
+        # are within 7% of target. Sell if EITHER is significantly overweight.
+        band_filtered_sells = []
+        for score in eligible_sells:
+            pos = next((p for p in position_dicts if p["symbol"] == score.symbol), None)
+            if not pos:
+                continue
+
+            geo = pos.get("geography")
+            ind = pos.get("industry")
+
+            # Check if geography is overweight beyond the band
+            geo_overweight = False
+            if geo:
+                current_geo_weight = geo_allocations.get(geo, 0)
+                target_geo_weight = target_geo_weights.get(geo, 0.33)
+                geo_overweight = current_geo_weight > target_geo_weight + REBALANCE_BAND_PCT
+
+            # Check if industry is overweight beyond the band
+            ind_overweight = False
+            if ind:
+                current_ind_weight = ind_allocations.get(ind, 0)
+                target_ind_weight = target_ind_weights.get(ind, 0.10)  # Default 10% per industry
+                ind_overweight = current_ind_weight > target_ind_weight + REBALANCE_BAND_PCT
+
+            # Include if EITHER geography OR industry is overweight
+            if not geo_overweight and not ind_overweight:
+                # Both are within band, skip this sell
+                logger.debug(
+                    f"Skipping sell {score.symbol}: both geo ({geo}) and ind ({ind}) within band"
+                )
+                continue
+
+            band_filtered_sells.append(score)
+
+        if not band_filtered_sells:
+            logger.info("No sells remain after rebalancing band filter")
+            return []
+
+        eligible_sells = band_filtered_sells
+        logger.info(f"Found {len(eligible_sells)} positions eligible for selling (after band filter)")
 
         # Build recommendations
         recommendations = []

@@ -11,6 +11,12 @@ from app.domain.constants import (
     MAX_PRIORITY_MULTIPLIER,
     MIN_VOLATILITY_MULTIPLIER,
     MAX_POSITION_SIZE_MULTIPLIER,
+    # Risk parity constants
+    TARGET_PORTFOLIO_VOLATILITY,
+    MIN_VOLATILITY_FOR_SIZING,
+    MAX_VOL_WEIGHT,
+    MIN_VOL_WEIGHT,
+    DEFAULT_VOLATILITY,
 )
 from app.domain.models import StockPriority
 
@@ -82,6 +88,44 @@ def calculate_position_size(
 
     size = base_size * conviction_mult * priority_mult * vol_mult * risk_mult
     return max(min_size, min(size, base_size * MAX_POSITION_SIZE_MULTIPLIER))
+
+
+def calculate_position_size_risk_parity(
+    candidate: StockPriority,
+    base_size: float,
+    min_size: float,
+) -> float:
+    """
+    Calculate position size using inverse-volatility weighting (risk parity).
+
+    Based on MOSEK Portfolio Cookbook principles: size positions so each
+    contributes roughly equal risk to the portfolio. Stock score provides
+    a small ±10% adjustment on top.
+
+    Args:
+        candidate: Stock priority data (must have volatility)
+        base_size: Base investment amount per trade
+        min_size: Minimum trade size
+
+    Returns:
+        Adjusted position size (0.5x to 2.0x of base, ±10% for score)
+    """
+    # Use stock volatility, or default if unknown
+    stock_vol = candidate.volatility if candidate.volatility else DEFAULT_VOLATILITY
+
+    # Inverse volatility weight
+    # If target is 15% and stock is 30%, position = base * (0.15/0.30) = 0.5x
+    # If target is 15% and stock is 10%, position = base * (0.15/0.10) = 1.5x
+    vol_weight = TARGET_PORTFOLIO_VOLATILITY / max(stock_vol, MIN_VOLATILITY_FOR_SIZING)
+    vol_weight = max(MIN_VOL_WEIGHT, min(MAX_VOL_WEIGHT, vol_weight))
+
+    # Small stock score adjustment (±10%)
+    # Score 1.0 = +10%, Score 0.5 = -10%
+    score_adj = 1.0 + (candidate.stock_score - 0.5) * 0.2
+    score_adj = max(0.9, min(1.1, score_adj))
+
+    size = base_size * vol_weight * score_adj
+    return max(min_size, size)
 
 
 def get_max_trades(cash: float) -> int:
