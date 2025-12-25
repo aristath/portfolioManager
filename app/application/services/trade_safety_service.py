@@ -6,7 +6,8 @@ from fastapi import HTTPException
 
 from app.repositories import TradeRepository, PositionRepository
 from app.services.tradernet import TradernetClient
-from app.domain.constants import TRADE_SIDE_BUY, TRADE_SIDE_SELL, BUY_COOLDOWN_DAYS
+from app.domain.value_objects.trade_side import TradeSide
+from app.domain.constants import BUY_COOLDOWN_DAYS
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,7 @@ class TradeSafetyService:
         has_pending = client.has_pending_order_for_symbol(symbol)
         
         # Also check database for recent SELL orders (catches orders just placed)
-        if not has_pending and side.upper() == TRADE_SIDE_SELL:
+        if not has_pending and TradeSide.from_string(side).is_sell():
             try:
                 has_recent = await self._trade_repo.has_recent_sell_order(symbol, hours=hours)
                 if has_recent:
@@ -75,7 +76,7 @@ class TradeSafetyService:
         Returns:
             Tuple of (is_in_cooldown: bool, error_message: Optional[str])
         """
-        if side.upper() != TRADE_SIDE_BUY:
+        if not TradeSide.from_string(side).is_buy():
             return False, None
         
         try:
@@ -161,7 +162,7 @@ class TradeSafetyService:
             return False, error_msg
         
         # Validate SELL position
-        if side.upper() == TRADE_SIDE_SELL:
+        if TradeSide.from_string(side).is_sell():
             is_valid, validation_error = await self.validate_sell_position(symbol, quantity)
             if not is_valid:
                 if raise_on_error:

@@ -4,7 +4,7 @@ import logging
 from typing import List
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
-from enum import Enum
+from app.domain.value_objects.trade_side import TradeSide
 from app.domain.value_objects.trade_side import TradeSide
 from app.repositories import (
     StockRepository,
@@ -22,10 +22,6 @@ from app.application.services.trade_execution_service import TradeExecutionServi
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-
-# TradeSide enum is now in app.domain.value_objects.trade_side
-# Import it directly instead of using this local enum
 
 
 class TradeRequest(BaseModel):
@@ -782,7 +778,7 @@ async def execute_all_multi_step_recommendations():
         execution_service = TradeExecutionService(trade_repo, position_repo)
 
         # Check cooldown for all BUY steps
-        buy_steps = [s for s in steps if s["side"] == TRADE_SIDE_BUY]
+        buy_steps = [s for s in steps if s["side"] == TradeSide.BUY]
         blocked_buys = []
         for step in buy_steps:
             is_cooldown, error = await safety_service.check_cooldown(step["symbol"], step["side"])
@@ -915,7 +911,7 @@ async def execute_sell_recommendation(symbol: str):
         safety_service = TradeSafetyService(trade_repo, position_repo)
         await safety_service.validate_trade(
             symbol=rec.symbol,
-            side=TRADE_SIDE_SELL,
+            side=TradeSide.SELL,
             quantity=rec.quantity,
             client=client,
             raise_on_error=True
@@ -923,7 +919,7 @@ async def execute_sell_recommendation(symbol: str):
 
         result = client.place_order(
             symbol=rec.symbol,
-            side=TRADE_SIDE_SELL,
+            side=TradeSide.SELL,
             quantity=rec.quantity,
         )
 
@@ -932,7 +928,7 @@ async def execute_sell_recommendation(symbol: str):
             execution_service = TradeExecutionService(trade_repo, position_repo)
             await execution_service.record_trade(
                 symbol=symbol,
-                side=TRADE_SIDE_SELL,
+                side=TradeSide.SELL,
                 quantity=rec.quantity,
                 price=result.price,
                 order_id=result.order_id,
@@ -946,7 +942,7 @@ async def execute_sell_recommendation(symbol: str):
                 "status": "success",
                 "order_id": result.order_id,
                 "symbol": symbol,
-                "side": TRADE_SIDE_SELL,
+                "side": TradeSide.SELL,
                 "quantity": rec.quantity,
                 "price": result.price,
                 "estimated_value": rec.estimated_value,
@@ -1090,7 +1086,7 @@ async def execute_funding(symbol: str, request: ExecuteFundingRequest):
         execution_service = TradeExecutionService(trade_repo, position_repo)
 
         # Check cooldown before executing any trades
-        is_cooldown, cooldown_error = await safety_service.check_cooldown(symbol, TRADE_SIDE_BUY)
+        is_cooldown, cooldown_error = await safety_service.check_cooldown(symbol, TradeSide.BUY)
         if is_cooldown:
             raise HTTPException(status_code=400, detail=cooldown_error)
 
@@ -1103,7 +1099,7 @@ async def execute_funding(symbol: str, request: ExecuteFundingRequest):
 
             # Check for pending orders
             has_pending = await safety_service.check_pending_orders(
-                sell_symbol, TRADE_SIDE_SELL, client
+                sell_symbol, TradeSide.SELL, client
             )
             
             if has_pending:
@@ -1116,7 +1112,7 @@ async def execute_funding(symbol: str, request: ExecuteFundingRequest):
 
             result = client.place_order(
                 symbol=sell_symbol,
-                side=TRADE_SIDE_SELL,
+                side=TradeSide.SELL,
                 quantity=sell.quantity,
             )
 
@@ -1124,7 +1120,7 @@ async def execute_funding(symbol: str, request: ExecuteFundingRequest):
                 # Record the trade
                 await execution_service.record_trade(
                     symbol=sell_symbol,
-                    side=TRADE_SIDE_SELL,
+                    side=TradeSide.SELL,
                     quantity=sell.quantity,
                     price=result.price,
                     order_id=result.order_id,
@@ -1180,7 +1176,7 @@ async def execute_funding(symbol: str, request: ExecuteFundingRequest):
 
         # Check for pending orders for the buy symbol
         has_pending = await safety_service.check_pending_orders(
-            symbol, TRADE_SIDE_BUY, client
+            symbol, TradeSide.BUY, client
         )
         
         if has_pending:
@@ -1191,7 +1187,7 @@ async def execute_funding(symbol: str, request: ExecuteFundingRequest):
 
         buy_result = client.place_order(
             symbol=symbol,
-            side=TRADE_SIDE_BUY,
+            side=TradeSide.BUY,
             quantity=quantity,
         )
 
@@ -1199,7 +1195,7 @@ async def execute_funding(symbol: str, request: ExecuteFundingRequest):
             # Record the buy trade
             await execution_service.record_trade(
                 symbol=symbol,
-                side=TRADE_SIDE_BUY,
+                side=TradeSide.BUY,
                 quantity=quantity,
                 price=buy_result.price,
                 order_id=buy_result.order_id,
