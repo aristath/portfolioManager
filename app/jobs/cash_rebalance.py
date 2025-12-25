@@ -648,9 +648,12 @@ async def _refresh_recommendation_cache():
 
         # Get multi-step recommendations if depth > 1
         if depth > 1:
-            multi_step_steps = await rebalancing_service.get_multi_step_recommendations(depth=depth)
+            # Use diversification strategy by default for cache refresh
+            strategy = "diversification"
+            multi_step_steps = await rebalancing_service.get_multi_step_recommendations(depth=depth, strategy_type=strategy)
             if multi_step_steps:
                 multi_step_data = {
+                    "strategy": strategy,
                     "depth": depth,
                     "steps": [
                         {
@@ -674,12 +677,13 @@ async def _refresh_recommendation_cache():
                     "total_score_improvement": sum(step.score_change for step in multi_step_steps),
                     "final_available_cash": multi_step_steps[-1].available_cash_after if multi_step_steps else 0.0,
                 }
-                cache.set("multi_step_recommendations:default", multi_step_data, ttl_seconds=900)
-                cache.set(f"multi_step_recommendations:{depth}", multi_step_data, ttl_seconds=900)
+                default_cache_key = f"multi_step_recommendations:{strategy}:default"
+                cache.set(default_cache_key, multi_step_data, ttl_seconds=900)
+                cache.set(f"multi_step_recommendations:{strategy}:{depth}", multi_step_data, ttl_seconds=900)
                 logger.info(f"Multi-step recommendation cache refreshed: {len(multi_step_steps)} steps")
         else:
             # Clear multi-step cache if depth is 1
-            cache.invalidate("multi_step_recommendations:default")
+            cache.invalidate("multi_step_recommendations:diversification:default")
 
         # Always cache single recommendations (for fallback and depth=1)
         buy_recommendations = await rebalancing_service.get_recommendations(limit=3)

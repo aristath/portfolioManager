@@ -78,6 +78,10 @@ const API = {
     const params = depth ? `?depth=${depth}` : '';
     return fetch(`/api/trades/multi-step-recommendations${params}`).then(r => r.json());
   },
+  fetchAllStrategyRecommendations: (depth = null) => {
+    const params = depth ? `?depth=${depth}` : '';
+    return fetch(`/api/trades/multi-step-recommendations/all${params}`).then(r => r.json());
+  },
   executeMultiStepStep: (stepNumber) => API._post(`/api/trades/multi-step-recommendations/execute-step/${stepNumber}`),
   executeAllMultiStep: () => API._post('/api/trades/multi-step-recommendations/execute-all'),
 

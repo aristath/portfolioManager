@@ -20,6 +20,7 @@ document.addEventListener('alpine:init', () => {
     recommendations: [],
     sellRecommendations: [],
     multiStepRecommendations: null,  // {depth: int, steps: [], total_score_improvement: float, final_available_cash: float}
+    allStrategyRecommendations: null,  // {diversification: {...}, sustainability: {...}, opportunity: {...}}
     settings: { min_trade_size: 400 },
     sparklines: {},  // {symbol: [{time, value}, ...]}
 
@@ -58,6 +59,7 @@ document.addEventListener('alpine:init', () => {
       recommendations: false,
       sellRecommendations: false,
       multiStepRecommendations: false,
+      allStrategyRecommendations: false,
       scores: false,
       sync: false,
       historical: false,
@@ -91,6 +93,7 @@ document.addEventListener('alpine:init', () => {
         this.fetchRecommendations(),
         this.fetchSellRecommendations(),
         this.fetchMultiStepRecommendations(),
+        this.fetchAllStrategyRecommendations(),
         this.fetchSettings(),
         this.fetchSparklines()
       ]);
@@ -203,6 +206,25 @@ document.addEventListener('alpine:init', () => {
         this.multiStepRecommendations = null;
       }
       this.loading.multiStepRecommendations = false;
+    },
+
+    async fetchAllStrategyRecommendations() {
+      this.loading.allStrategyRecommendations = true;
+      try {
+        // Get depth from settings, default to 1
+        const depth = parseInt(this.settings?.recommendation_depth || 1, 10);
+        // Only fetch all strategies if depth > 1
+        if (depth > 1) {
+          const data = await API.fetchAllStrategyRecommendations(depth);
+          this.allStrategyRecommendations = data;
+        } else {
+          this.allStrategyRecommendations = null;
+        }
+      } catch (e) {
+        console.error('Failed to fetch all-strategy recommendations:', e);
+        this.allStrategyRecommendations = null;
+      }
+      this.loading.allStrategyRecommendations = false;
     },
 
     async fetchSettings() {

@@ -852,16 +852,18 @@ class RebalancingService:
 
     async def get_multi_step_recommendations(
         self,
-        depth: Optional[int] = None
+        depth: Optional[int] = None,
+        strategy_type: str = "diversification"
     ) -> List[MultiStepRecommendation]:
         """
-        Generate multi-step recommendation sequence.
+        Generate multi-step recommendation sequence using specified strategy.
         
         Each step simulates the portfolio state after the previous transaction,
         enabling smarter recommendations that consider cumulative effects.
         
         Args:
             depth: Number of steps (1-5). If None, reads from settings (default: 1).
+            strategy_type: Strategy to use ("diversification", "sustainability", "opportunity")
         
         Returns:
             List of MultiStepRecommendation objects, one per step
@@ -901,6 +903,62 @@ class RebalancingService:
                 )]
             return []
         
+        # Try to use strategic planning if depth > 1
+        if depth > 1:
+            try:
+                from app.domain.planning.strategies import get_strategy
+                from app.domain.planning.goal_planner import create_strategic_plan, convert_plan_to_recommendations
+                
+                strategy = get_strategy(strategy_type)
+                
+                if strategy:
+                    # Build portfolio context
+                    portfolio_context = await self._build_portfolio_context()
+                    
+                    # Get performance-adjusted weights
+                    adjusted_geo_weights, adjusted_ind_weights = await self._get_performance_adjusted_weights()
+                    if adjusted_geo_weights:
+                        portfolio_context.geo_weights.update(adjusted_geo_weights)
+                    if adjusted_ind_weights:
+                        portfolio_context.industry_weights.update(adjusted_ind_weights)
+                    
+                    # Get current cash balance
+                    from app.services.tradernet import get_tradernet_client
+                    client = get_tradernet_client()
+                    available_cash = client.get_total_cash_eur() if client.is_connected else 0.0
+                    
+                    # Get positions and stocks
+                    positions = await self._position_repo.get_all()
+                    stocks = await self._stock_repo.get_all_active()
+                    
+                    # Analyze goals using strategy
+                    goals = await strategy.analyze_goals(
+                        portfolio_context, positions, stocks
+                    )
+                    
+                    if goals and len(goals) > 0:
+                        # Use goal-driven planner with strategy
+                        plan = await create_strategic_plan(
+                            strategy,
+                            goals,
+                            portfolio_context,
+                            available_cash,
+                            stocks,
+                            positions,
+                            max_steps=depth,
+                            simulate_portfolio_after_transaction=self._simulate_portfolio_after_transaction
+                        )
+                        
+                        # Convert PlanStep → MultiStepRecommendation
+                        recommendations = convert_plan_to_recommendations(plan)
+                        
+                        if recommendations:
+                            logger.info(f"Generated {len(recommendations)} strategic recommendations using {strategy_type} strategy")
+                            return recommendations
+            except Exception as e:
+                logger.warning(f"Strategic planning failed, falling back to forward-looking: {e}")
+        
+        # Fall back to existing forward-looking logic
         # Multi-step generation
         steps = []
         current_context = await self._build_portfolio_context()

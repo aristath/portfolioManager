@@ -261,7 +261,7 @@ async def execute_recommendation(symbol: str):
             cache.invalidate("sell_recommendations")
             cache.invalidate("sell_recommendations:3")
             cache.invalidate("sell_recommendations:20")
-            cache.invalidate("multi_step_recommendations:default")
+            cache.invalidate("multi_step_recommendations:diversification:default")
             # Invalidate all depth-specific caches
             for depth in range(1, 6):
                 cache.invalidate(f"multi_step_recommendations:{depth}")
@@ -325,8 +325,149 @@ async def get_sell_recommendations(limit: int = 3):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/multi-step-recommendations/strategies")
+async def list_recommendation_strategies():
+    """
+    List all available recommendation strategies.
+    
+    Returns:
+        Dictionary mapping strategy names to descriptions
+    """
+    try:
+        from app.domain.planning.strategies import list_strategies
+        strategies = list_strategies()
+        return {"strategies": strategies}
+    except Exception as e:
+        logger.error(f"Error listing strategies: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/multi-step-recommendations/all")
+async def get_all_strategy_recommendations(depth: int = None):
+    """
+    Get multi-step recommendations from ALL strategies.
+    
+    Runs all available strategies in parallel and returns recommendations from each.
+    This allows comparing different strategic approaches side-by-side.
+    
+    Args:
+        depth: Number of steps (1-5). If None, uses setting value (default: 1).
+    
+    Returns:
+        Dictionary with strategy names as keys and their recommendations as values.
+        Format: {
+            "diversification": {...},
+            "sustainability": {...},
+            "opportunity": {...}
+        }
+    """
+    # Validate depth parameter
+    if depth is not None:
+        if depth < 1 or depth > 5:
+            raise HTTPException(
+                status_code=400,
+                detail="Depth must be between 1 and 5"
+            )
+    
+    # Build cache key
+    cache_key = f"multi_step_recommendations:all:{depth or 'default'}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+    
+    from app.application.services.rebalancing_service import RebalancingService
+    from app.domain.planning.strategies import list_strategies
+    
+    try:
+        rebalancing_service = RebalancingService()
+        available_strategies = list_strategies()
+        
+        # Run all strategies in parallel
+        import asyncio
+        
+        async def get_strategy_recommendations(strategy_name: str):
+            """Get recommendations for a single strategy."""
+            try:
+                steps = await rebalancing_service.get_multi_step_recommendations(
+                    depth=depth,
+                    strategy_type=strategy_name
+                )
+                
+                if not steps:
+                    return {
+                        "strategy": strategy_name,
+                        "depth": depth or 1,
+                        "steps": [],
+                        "total_score_improvement": 0.0,
+                        "final_available_cash": 0.0,
+                        "error": None,
+                    }
+                
+                total_score_improvement = sum(step.score_change for step in steps)
+                final_available_cash = steps[-1].available_cash_after if steps else 0.0
+                
+                return {
+                    "strategy": strategy_name,
+                    "depth": depth or len(steps),
+                    "steps": [
+                        {
+                            "step": step.step,
+                            "side": step.side,
+                            "symbol": step.symbol,
+                            "name": step.name,
+                            "quantity": step.quantity,
+                            "estimated_price": round(step.estimated_price, 2),
+                            "estimated_value": round(step.estimated_value, 2),
+                            "currency": step.currency,
+                            "reason": step.reason,
+                            "portfolio_score_before": round(step.portfolio_score_before, 1),
+                            "portfolio_score_after": round(step.portfolio_score_after, 1),
+                            "score_change": round(step.score_change, 2),
+                            "available_cash_before": round(step.available_cash_before, 2),
+                            "available_cash_after": round(step.available_cash_after, 2),
+                        }
+                        for step in steps
+                    ],
+                    "total_score_improvement": round(total_score_improvement, 2),
+                    "final_available_cash": round(final_available_cash, 2),
+                    "error": None,
+                }
+            except Exception as e:
+                logger.error(f"Error generating recommendations for strategy {strategy_name}: {e}", exc_info=True)
+                return {
+                    "strategy": strategy_name,
+                    "depth": depth or 1,
+                    "steps": [],
+                    "total_score_improvement": 0.0,
+                    "final_available_cash": 0.0,
+                    "error": str(e),
+                }
+        
+        # Run all strategies concurrently
+        strategy_names = list(available_strategies.keys())
+        results = await asyncio.gather(*[
+            get_strategy_recommendations(name) for name in strategy_names
+        ])
+        
+        # Build result dictionary
+        result = {
+            strategy_result["strategy"]: strategy_result
+            for strategy_result in results
+        }
+        
+        # Cache for 5 minutes
+        cache.set(cache_key, result, ttl_seconds=300)
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating all-strategy recommendations: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/multi-step-recommendations")
-async def get_multi_step_recommendations(depth: int = None):
+async def get_multi_step_recommendations(depth: int = None, strategy: str = "diversification"):
     """
     Get multi-step recommendation sequence.
 
@@ -335,6 +476,7 @@ async def get_multi_step_recommendations(depth: int = None):
 
     Args:
         depth: Number of steps (1-5). If None, uses setting value (default: 1).
+        strategy: Strategy to use ("diversification", "sustainability", "opportunity"). Default: "diversification".
 
     Returns:
         Multi-step recommendation sequence with portfolio state at each step.
@@ -346,9 +488,18 @@ async def get_multi_step_recommendations(depth: int = None):
                 status_code=400,
                 detail="Depth must be between 1 and 5"
             )
+    
+    # Validate strategy parameter
+    from app.domain.planning.strategies import list_strategies
+    available_strategies = list_strategies()
+    if strategy not in available_strategies:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid strategy '{strategy}'. Available strategies: {', '.join(available_strategies.keys())}"
+        )
 
-    # Build cache key
-    cache_key = f"multi_step_recommendations:{depth or 'default'}"
+    # Build cache key (include strategy in cache key)
+    cache_key = f"multi_step_recommendations:{strategy}:{depth or 'default'}"
     cached = cache.get(cache_key)
     if cached is not None:
         return cached
@@ -357,10 +508,11 @@ async def get_multi_step_recommendations(depth: int = None):
 
     try:
         rebalancing_service = RebalancingService()
-        steps = await rebalancing_service.get_multi_step_recommendations(depth=depth)
+        steps = await rebalancing_service.get_multi_step_recommendations(depth=depth, strategy_type=strategy)
 
         if not steps:
             return {
+                "strategy": strategy,
                 "depth": depth or 1,
                 "steps": [],
                 "total_score_improvement": 0.0,
@@ -372,6 +524,7 @@ async def get_multi_step_recommendations(depth: int = None):
         final_available_cash = steps[-1].available_cash_after
 
         result = {
+            "strategy": strategy,
             "depth": depth or len(steps),
             "steps": [
                 {
@@ -399,8 +552,9 @@ async def get_multi_step_recommendations(depth: int = None):
         # Cache for 5 minutes (same as single recommendations)
         # Cache to both the specific key and :default to ensure execute endpoints can find it
         cache.set(cache_key, result, ttl_seconds=300)
-        if cache_key != "multi_step_recommendations:default":
-            cache.set("multi_step_recommendations:default", result, ttl_seconds=300)
+        default_cache_key = f"multi_step_recommendations:{strategy}:default"
+        if cache_key != default_cache_key:
+            cache.set(default_cache_key, result, ttl_seconds=300)
         return result
     except HTTPException:
         raise
@@ -409,12 +563,13 @@ async def get_multi_step_recommendations(depth: int = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-async def _regenerate_multi_step_cache(cache_key: str = "multi_step_recommendations:default") -> dict:
+async def _regenerate_multi_step_cache(cache_key: str = "multi_step_recommendations:diversification:default", strategy: str = "diversification") -> dict:
     """
     Regenerate multi-step recommendations cache if missing.
     
     Args:
-        cache_key: Cache key to use (default: "multi_step_recommendations:default")
+        cache_key: Cache key to use (default: "multi_step_recommendations:diversification:default")
+        strategy: Strategy to use (default: "diversification")
         
     Returns:
         Cached recommendations dict with steps, depth, totals, etc.
@@ -424,9 +579,9 @@ async def _regenerate_multi_step_cache(cache_key: str = "multi_step_recommendati
     """
     from app.application.services.rebalancing_service import RebalancingService
     
-    logger.info(f"Cache miss for multi-step recommendations, regenerating (key: {cache_key})...")
+    logger.info(f"Cache miss for multi-step recommendations, regenerating (key: {cache_key}, strategy: {strategy})...")
     rebalancing_service = RebalancingService()
-    steps_data = await rebalancing_service.get_multi_step_recommendations(depth=None)
+    steps_data = await rebalancing_service.get_multi_step_recommendations(depth=None, strategy_type=strategy)
     
     if not steps_data:
         raise HTTPException(
@@ -439,6 +594,7 @@ async def _regenerate_multi_step_cache(cache_key: str = "multi_step_recommendati
     final_available_cash = steps_data[-1].available_cash_after if steps_data and len(steps_data) > 0 else 0.0
     
     cached = {
+        "strategy": strategy,
         "depth": len(steps_data),
         "steps": [
             {
@@ -490,13 +646,14 @@ async def execute_multi_step_recommendation_step(step_number: int):
     position_repo = PositionRepository()
 
     try:
-        # Get the cached multi-step recommendations
-        cache_key = "multi_step_recommendations:default"
+        # Get the cached multi-step recommendations (default to diversification strategy)
+        strategy = "diversification"
+        cache_key = f"multi_step_recommendations:{strategy}:default"
         cached = cache.get(cache_key)
         
         # If cache miss, regenerate recommendations
         if not cached or not cached.get("steps"):
-            cached = await _regenerate_multi_step_cache(cache_key)
+            cached = await _regenerate_multi_step_cache(cache_key, strategy)
 
         steps = cached["steps"]
         if step_number > len(steps):
@@ -553,7 +710,7 @@ async def execute_multi_step_recommendation_step(step_number: int):
                     logger.warning(f"Failed to update last_sold_at: {e}")
 
             # Invalidate cache to force refresh (including limit-specific keys)
-            cache.invalidate("multi_step_recommendations:default")
+            cache.invalidate("multi_step_recommendations:diversification:default")
             cache.invalidate("recommendations")
             cache.invalidate("recommendations:3")
             cache.invalidate("recommendations:10")
@@ -601,13 +758,14 @@ async def execute_all_multi_step_recommendations():
     position_repo = PositionRepository()
 
     try:
-        # Get the cached multi-step recommendations
-        cache_key = "multi_step_recommendations:default"
+        # Get the cached multi-step recommendations (default to diversification strategy)
+        strategy = "diversification"
+        cache_key = f"multi_step_recommendations:{strategy}:default"
         cached = cache.get(cache_key)
         
         # If cache miss, regenerate recommendations
         if not cached or not cached.get("steps"):
-            cached = await _regenerate_multi_step_cache(cache_key)
+            cached = await _regenerate_multi_step_cache(cache_key, strategy)
 
         steps = cached["steps"]
         if not steps:
@@ -701,7 +859,7 @@ async def execute_all_multi_step_recommendations():
                 continue
 
         # Invalidate cache to force refresh after all steps complete (including limit-specific keys)
-        cache.invalidate("multi_step_recommendations:default")
+        cache.invalidate("multi_step_recommendations:diversification:default")
         cache.invalidate("recommendations")
         cache.invalidate("recommendations:3")
         cache.invalidate("recommendations:10")
@@ -785,7 +943,7 @@ async def execute_sell_recommendation(symbol: str):
             # Clear cache
             cache.invalidate("sell_recommendations:3")
             cache.invalidate("sell_recommendations:20")
-            cache.invalidate("multi_step_recommendations:default")
+            cache.invalidate("multi_step_recommendations:diversification:default")
             # Invalidate all depth-specific caches
             for depth in range(1, 6):
                 cache.invalidate(f"multi_step_recommendations:{depth}")
@@ -1052,7 +1210,7 @@ async def execute_funding(symbol: str, request: ExecuteFundingRequest):
             cache.invalidate("recommendations:10")
             cache.invalidate("sell_recommendations:3")
             cache.invalidate("sell_recommendations:20")
-            cache.invalidate("multi_step_recommendations:default")
+            cache.invalidate("multi_step_recommendations:diversification:default")
             # Invalidate all depth-specific caches
             for depth in range(1, 6):
                 cache.invalidate(f"multi_step_recommendations:{depth}")
