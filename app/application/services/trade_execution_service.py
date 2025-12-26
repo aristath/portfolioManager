@@ -19,6 +19,7 @@ from app.infrastructure.hardware.led_display import set_activity
 from app.application.services.currency_exchange_service import (
     CurrencyExchangeService,
 )
+from app.domain.services.exchange_rate_service import ExchangeRateService
 
 logger = logging.getLogger(__name__)
 
@@ -32,11 +33,13 @@ class TradeExecutionService:
         position_repo: IPositionRepository,
         tradernet_client: TradernetClient,
         currency_exchange_service: CurrencyExchangeService,
+        exchange_rate_service: ExchangeRateService,
     ):
         self._trade_repo = trade_repo
         self._position_repo = position_repo
         self._tradernet_client = tradernet_client
         self._currency_exchange_service = currency_exchange_service
+        self._exchange_rate_service = exchange_rate_service
 
     async def record_trade(
         self,
@@ -92,8 +95,7 @@ class TradeExecutionService:
                 
                 # Get exchange rate if not EUR
                 if trade_currency != Currency.EUR:
-                    from app.domain.services.exchange_rate_service import get_exchange_rate
-                    currency_rate = await get_exchange_rate(str(trade_currency), str(Currency.EUR))
+                    currency_rate = await self._exchange_rate_service.get_rate(str(trade_currency), str(Currency.EUR))
             
             # Use factory to create trade
             trade_record = TradeFactory.create_from_execution(

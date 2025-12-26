@@ -6,7 +6,8 @@ from datetime import datetime
 
 from app.infrastructure.external import yahoo_finance as yahoo
 from app.infrastructure.external.tradernet import get_tradernet_client
-from app.domain.services.exchange_rate_service import get_exchange_rate
+from app.domain.services.exchange_rate_service import ExchangeRateService
+from app.infrastructure.database.manager import get_db_manager
 from app.domain.models import Stock, Position
 from app.repositories import (
     StockRepository,
@@ -168,7 +169,8 @@ async def test_exchange_rate_cache_fallback():
         mock_client.return_value = mock_instance
 
         # Should use fallback rates
-        rate = await get_exchange_rate("USD", "EUR")
+        exchange_service = ExchangeRateService(get_db_manager())
+        rate = await exchange_service.get_rate("USD", "EUR")
 
         # Should return a valid rate (from fallback)
         assert rate > 0
@@ -225,3 +227,4 @@ async def test_portfolio_sync_handles_api_failure(db):
         except Exception as e:
             # Should log error but not crash
             assert isinstance(e, Exception)
+
