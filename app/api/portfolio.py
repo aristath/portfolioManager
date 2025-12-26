@@ -2,13 +2,13 @@
 
 import logging
 from fastapi import APIRouter, HTTPException
-from app.repositories import (
-    PortfolioRepository,
-    PositionRepository,
-    AllocationRepository,
-    StockRepository,
+from app.infrastructure.dependencies import (
+    PositionRepositoryDep,
+    StockRepositoryDep,
+    PortfolioRepositoryDep,
+    AllocationRepositoryDep,
+    PortfolioServiceDep,
 )
-from app.application.services.portfolio_service import PortfolioService
 from app.services.tradernet_connection import ensure_tradernet_connected
 
 logger = logging.getLogger(__name__)
@@ -16,10 +16,11 @@ router = APIRouter()
 
 
 @router.get("")
-async def get_portfolio():
+async def get_portfolio(
+    position_repo: PositionRepositoryDep,
+    stock_repo: StockRepositoryDep,
+):
     """Get current portfolio positions with values."""
-    position_repo = PositionRepository()
-    stock_repo = StockRepository()
 
     positions = await position_repo.get_all()
     result = []
@@ -50,17 +51,10 @@ async def get_portfolio():
 
 
 @router.get("/summary")
-async def get_portfolio_summary():
+async def get_portfolio_summary(
+    portfolio_service: PortfolioServiceDep,
+):
     """Get portfolio summary: total value, cash, allocation percentages."""
-    portfolio_repo = PortfolioRepository()
-    position_repo = PositionRepository()
-    allocation_repo = AllocationRepository()
-
-    portfolio_service = PortfolioService(
-        portfolio_repo,
-        position_repo,
-        allocation_repo,
-    )
     summary = await portfolio_service.get_portfolio_summary()
 
     # Calculate geographic percentages
@@ -78,9 +72,10 @@ async def get_portfolio_summary():
 
 
 @router.get("/history")
-async def get_portfolio_history():
+async def get_portfolio_history(
+    portfolio_repo: PortfolioRepositoryDep,
+):
     """Get historical portfolio snapshots."""
-    portfolio_repo = PortfolioRepository()
     snapshots = await portfolio_repo.get_history(days=90)
     return [
         {
