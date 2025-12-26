@@ -47,7 +47,7 @@ async def test_yahoo_finance_timeout_handling():
 @pytest.mark.asyncio
 async def test_tradernet_api_connection_failure():
     """Test handling of Tradernet API connection failures."""
-    with patch('app.services.tradernet.get_tradernet_client') as mock_get_client:
+    with patch('app.infrastructure.external.tradernet.get_tradernet_client') as mock_get_client:
         mock_client = MagicMock()
         mock_client.is_connected = False
         mock_client.connect.return_value = False
@@ -63,7 +63,7 @@ async def test_tradernet_api_connection_failure():
 @pytest.mark.asyncio
 async def test_tradernet_api_request_failure():
     """Test handling of Tradernet API request failures."""
-    with patch('app.services.tradernet.get_tradernet_client') as mock_get_client:
+    with patch('app.infrastructure.external.tradernet.get_tradernet_client') as mock_get_client:
         mock_client = MagicMock()
         mock_client.is_connected = True
         mock_client.get_portfolio.side_effect = Exception("API Request Failed")
@@ -127,7 +127,7 @@ async def test_rebalancing_service_handles_price_fetch_failure(db):
     mock_recommendation_repo.save = AsyncMock()
 
     # Mock price fetch to fail and db_manager
-    with patch('app.services.yahoo.get_current_price') as mock_get_price, \
+    with patch('app.infrastructure.external.yahoo_finance.get_current_price') as mock_get_price, \
          patch('app.application.services.rebalancing_service.get_db_manager') as mock_db_manager:
         mock_get_price.return_value = None  # Price fetch failed
         mock_db_manager.return_value = MagicMock()
@@ -209,7 +209,7 @@ async def test_portfolio_sync_handles_api_failure(db):
     from app.jobs.daily_sync import sync_portfolio
 
     # Mock tradernet client to fail
-    with patch('app.services.tradernet.get_tradernet_client') as mock_get_client:
+    with patch('app.infrastructure.external.tradernet.get_tradernet_client') as mock_get_client:
         mock_client = MagicMock()
         mock_client.is_connected = False
         mock_client.connect.return_value = False

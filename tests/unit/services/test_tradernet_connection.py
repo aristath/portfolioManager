@@ -68,7 +68,7 @@ async def test_ensure_tradernet_connected_uses_default_client(monkeypatch):
     def mock_get_client():
         return mock_client
     
-    monkeypatch.setattr("app.services.tradernet_connection.get_tradernet_client", mock_get_client)
+    monkeypatch.setattr("app.infrastructure.external.tradernet_connection.get_tradernet_client", mock_get_client)
     
     result = await ensure_tradernet_connected()
     
