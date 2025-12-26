@@ -5,7 +5,8 @@ from unittest.mock import patch, MagicMock, AsyncMock
 from datetime import datetime
 
 from app.services import yahoo
-from app.services.tradernet import get_tradernet_client, get_exchange_rate
+from app.services.tradernet import get_tradernet_client
+from app.domain.services.exchange_rate_service import get_exchange_rate
 from app.domain.models import Stock, Position
 from app.repositories import (
     StockRepository,
@@ -134,12 +135,16 @@ async def test_rebalancing_service_handles_price_fetch_failure(db):
 @pytest.mark.asyncio
 async def test_exchange_rate_cache_fallback():
     """Test that exchange rate cache falls back when API fails."""
-    # Mock requests.get to fail
-    with patch('requests.get') as mock_get:
-        mock_get.side_effect = Exception("Exchange rate API failed")
+    # Mock httpx to fail
+    with patch('httpx.AsyncClient') as mock_client:
+        mock_instance = MagicMock()
+        mock_instance.get = AsyncMock(side_effect=Exception("Exchange rate API failed"))
+        mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
+        mock_instance.__aexit__ = AsyncMock(return_value=None)
+        mock_client.return_value = mock_instance
 
         # Should use fallback rates
-        rate = get_exchange_rate("USD", "EUR")
+        rate = await get_exchange_rate("USD", "EUR")
 
         # Should return a valid rate (from fallback)
         assert rate > 0
@@ -155,7 +160,7 @@ async def test_exchange_rate_cache_thread_safety():
 
     async def fetch_rate(currency):
         # Simulate concurrent access
-        rate = get_exchange_rate(currency, "EUR")
+        rate = await get_exchange_rate(currency, "EUR")
         results.append((currency, rate))
 
     # Fetch rates concurrently

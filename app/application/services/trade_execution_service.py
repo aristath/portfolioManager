@@ -89,8 +89,8 @@ class TradeExecutionService:
                 
                 # Get exchange rate if not EUR
                 if trade_currency != Currency.EUR:
-                    from app.services.tradernet import get_exchange_rate
-                    currency_rate = get_exchange_rate(str(trade_currency), str(Currency.EUR))
+                    from app.domain.services.exchange_rate_service import get_exchange_rate
+                    currency_rate = await get_exchange_rate(str(trade_currency), str(Currency.EUR))
             
             # Use factory to create trade
             trade_record = TradeFactory.create_from_execution(
