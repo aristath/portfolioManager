@@ -4,7 +4,8 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
-from app.infrastructure.database.manager import get_db_manager
+from app.infrastructure.database.manager import DatabaseManager
+from app.infrastructure.dependencies import DatabaseManagerDep
 from app.infrastructure.cache import cache
 from app.infrastructure.external.tradernet_connection import ensure_tradernet_connected
 from app.infrastructure.external import yahoo_finance as yahoo
@@ -38,10 +39,10 @@ def _parse_date_range(range_str: str) -> Optional[datetime]:
 
 async def _get_cached_stock_prices(
     symbol: str,
-    start_date: Optional[datetime]
+    start_date: Optional[datetime],
+    db_manager: DatabaseManager
 ) -> list[dict]:
     """Get cached stock prices from per-symbol database."""
-    db_manager = get_db_manager()
 
     if start_date:
         start_date_str = start_date.strftime("%Y-%m-%d")
@@ -71,10 +72,10 @@ async def _get_cached_stock_prices(
 async def _store_stock_prices(
     symbol: str,
     prices: list,
-    source: str
+    source: str,
+    db_manager: DatabaseManager
 ):
     """Store stock prices in per-symbol database."""
-    db_manager = get_db_manager()
     now = datetime.now().isoformat()
 
     for price_data in prices:
@@ -110,7 +111,7 @@ async def _store_stock_prices(
 
 
 @router.get("/sparklines")
-async def get_all_stock_sparklines():
+async def get_all_stock_sparklines(db_manager: DatabaseManagerDep):
     """
     Get 1-year sparkline data for all active stocks.
     Returns dict: {symbol: [{time, value}, ...]}
@@ -122,7 +123,6 @@ async def get_all_stock_sparklines():
         return cached
 
     try:
-        db_manager = get_db_manager()
         start_date = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
 
         # Get all active stocks
@@ -162,6 +162,7 @@ async def get_all_stock_sparklines():
 @router.get("/stocks/{symbol}")
 async def get_stock_chart(
     symbol: str,
+    db_manager: DatabaseManagerDep,
     range: str = Query("1Y", description="Time range: 1M, 3M, 6M, 1Y, all"),
     source: str = Query("tradernet", description="Data source: tradernet or yahoo"),
 ):
@@ -175,7 +176,7 @@ async def get_stock_chart(
         start_date = _parse_date_range(range)
 
         # Check cache first
-        cached_data = await _get_cached_stock_prices(symbol, start_date)
+        cached_data = await _get_cached_stock_prices(symbol, start_date, db_manager)
 
         # Determine if we need to fetch more data
         need_fetch = False
@@ -214,7 +215,7 @@ async def get_stock_chart(
                                 for ohlc in ohlc_data
                             ]
                             # Store in cache
-                            await _store_stock_prices(symbol, ohlc_data, "tradernet")
+                            await _store_stock_prices(symbol, ohlc_data, "tradernet", db_manager)
                 except Exception as e:
                     logger.warning(f"Failed to fetch from Tradernet for {symbol}: {e}")
                     # Fallback to Yahoo
@@ -241,7 +242,7 @@ async def get_stock_chart(
                             for hp in historical_prices
                         ]
                         # Store in cache
-                        await _store_stock_prices(symbol, historical_prices, "yahoo")
+                        await _store_stock_prices(symbol, historical_prices, "yahoo", db_manager)
                 except Exception as e:
                     logger.error(f"Failed to fetch from Yahoo for {symbol}: {e}")
 
