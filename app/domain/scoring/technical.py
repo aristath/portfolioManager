@@ -1,25 +1,30 @@
 """
-Technical Indicators - EMA, RSI, Bollinger, Sharpe, Max Drawdown.
+Technical Indicators - Caching layer for technical calculations.
 
-Uses pandas-ta for technical indicators and empyrical for risk metrics.
-
-Functions check calculations.db cache first before calculating.
+This module provides caching wrappers around pure calculation functions.
+Calculation functions are in app.domain.scoring.calculations.
 """
 
 import logging
 from typing import Optional, Tuple
 
 import numpy as np
-import pandas as pd
-import pandas_ta as ta
-import empyrical
 
 from app.domain.scoring.constants import (
     EMA_LENGTH,
     RSI_LENGTH,
     BOLLINGER_LENGTH,
     BOLLINGER_STD,
-    TRADING_DAYS_PER_YEAR,
+)
+
+# Import pure calculation functions
+from app.domain.scoring.calculations import (
+    calculate_ema,
+    calculate_rsi,
+    calculate_bollinger_bands,
+    calculate_volatility,
+    calculate_sharpe_ratio,
+    calculate_max_drawdown,
 )
 
 logger = logging.getLogger(__name__)
@@ -55,10 +60,6 @@ async def get_ema(symbol: str, closes: np.ndarray, length: int = EMA_LENGTH) -> 
     return ema
 
 
-# Import from calculations module
-from app.domain.scoring.calculations import calculate_ema
-
-
 async def get_rsi(symbol: str, closes: np.ndarray, length: int = RSI_LENGTH) -> Optional[float]:
     """
     Get RSI value from cache or calculate it.
@@ -87,10 +88,6 @@ async def get_rsi(symbol: str, closes: np.ndarray, length: int = RSI_LENGTH) -> 
         await calc_repo.set_metric(symbol, metric_name, rsi)
 
     return rsi
-
-
-# Import from calculations module
-from app.domain.scoring.calculations import calculate_rsi
 
 
 async def get_bollinger_bands(
@@ -133,51 +130,6 @@ async def get_bollinger_bands(
     return bands
 
 
-def calculate_bollinger_bands(
-    closes: np.ndarray,
-    length: int = BOLLINGER_LENGTH,
-    std: float = BOLLINGER_STD
-) -> Optional[Tuple[float, float, float]]:
-    """
-    Calculate Bollinger Bands (internal function).
-
-    Args:
-        closes: Array of closing prices
-        length: BB period (default 20)
-        std: Standard deviation multiplier (default 2)
-
-    Returns:
-        Tuple of (lower, middle, upper) or None if insufficient data
-    """
-    if len(closes) < length:
-        return None
-
-    series = pd.Series(closes)
-    bbands = ta.bbands(series, length=length, std=std)
-
-    if bbands is None:
-        return None
-
-    # Dynamic column detection for version compatibility
-    bb_lower_cols = [c for c in bbands.columns if c.startswith('BBL_')]
-    bb_mid_cols = [c for c in bbands.columns if c.startswith('BBM_')]
-    bb_upper_cols = [c for c in bbands.columns if c.startswith('BBU_')]
-
-    if not (bb_lower_cols and bb_mid_cols and bb_upper_cols):
-        return None
-
-    lower = bbands[bb_lower_cols[0]].iloc[-1]
-    middle = bbands[bb_mid_cols[0]].iloc[-1]
-    upper = bbands[bb_upper_cols[0]].iloc[-1]
-
-    if pd.isna(lower) or pd.isna(middle) or pd.isna(upper):
-        return None
-
-    return float(lower), float(middle), float(upper)
-
-
-# Import from calculations module
-from app.domain.scoring.calculations import calculate_volatility
 
 
 async def get_sharpe_ratio(
@@ -213,10 +165,6 @@ async def get_sharpe_ratio(
     return sharpe
 
 
-# Import from calculations module
-from app.domain.scoring.calculations import calculate_sharpe_ratio
-
-
 async def get_max_drawdown(symbol: str, closes: np.ndarray) -> Optional[float]:
     """
     Get max drawdown from cache or calculate it.
@@ -244,37 +192,6 @@ async def get_max_drawdown(symbol: str, closes: np.ndarray) -> Optional[float]:
         await calc_repo.set_metric(symbol, "MAX_DRAWDOWN", mdd)
 
     return mdd
-
-
-def calculate_max_drawdown(closes: np.ndarray) -> Optional[float]:
-    """
-    Calculate maximum drawdown using empyrical (internal function).
-
-    Args:
-        closes: Array of closing prices
-
-    Returns:
-        Maximum drawdown as negative percentage (e.g., -0.20 = 20% drawdown)
-        or None if insufficient data
-    """
-    if len(closes) < 50:
-        return None
-
-    # Validate no zero/negative prices
-    if np.any(closes[:-1] <= 0):
-        logger.debug("Zero/negative prices detected, skipping max drawdown")
-        return None
-
-    returns = np.diff(closes) / closes[:-1]
-
-    try:
-        mdd = float(empyrical.max_drawdown(returns))
-        if not np.isfinite(mdd):
-            return None
-        return mdd  # Already negative
-    except Exception as e:
-        logger.debug(f"Max drawdown calculation failed: {e}")
-        return None
 
 
 async def get_52_week_high(symbol: str, highs: np.ndarray) -> float:
