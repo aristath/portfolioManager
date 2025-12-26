@@ -98,9 +98,9 @@ def _get_single_recommendations(max_actions: int, show_amounts: float) -> list[s
                 break
             symbol = rec.get("symbol", "")
             symbol_short = symbol.split(".")[0]
-            value = rec.get("estimated_value", 0)
+            amount = rec.get("amount", 0)
             if show_amounts > 0:
-                parts.append(f"SELL {symbol_short} EUR{int(value)}")
+                parts.append(f"SELL {symbol_short} EUR{int(amount)}")
             else:
                 parts.append(f"SELL {symbol_short}")
             action_count += 1
