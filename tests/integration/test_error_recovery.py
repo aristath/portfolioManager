@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.application.services.trade_execution_service import TradeExecutionService
-from app.domain.models import Position, Trade
+from app.domain.models import Position
 from app.repositories import PositionRepository, TradeRepository
 
 
