@@ -37,8 +37,6 @@ DEFAULT_SELL_WEIGHTS = {
 logger = logging.getLogger(__name__)
 
 # Import helper functions from dedicated modules
-
-# Import helper functions from dedicated modules
 from app.domain.scoring.groups.sell import (
     calculate_underperformance_score,
     calculate_time_held_score,
