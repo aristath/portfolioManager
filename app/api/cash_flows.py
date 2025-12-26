@@ -10,6 +10,70 @@ from app.infrastructure.external.tradernet_connection import ensure_tradernet_co
 router = APIRouter()
 
 
+def _validate_date_format(date_str: str) -> None:
+    """Validate date string is in YYYY-MM-DD format."""
+    from datetime import datetime
+
+    try:
+        datetime.strptime(date_str, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(
+            status_code=400, detail="Date must be in YYYY-MM-DD format"
+        )
+
+
+def _validate_date_range(start_date: Optional[str], end_date: Optional[str]) -> None:
+    """Validate date parameters."""
+    if start_date or end_date:
+        if start_date:
+            _validate_date_format(start_date)
+        if end_date:
+            _validate_date_format(end_date)
+        if start_date and end_date and start_date > end_date:
+            raise HTTPException(
+                status_code=400,
+                detail="start_date must be before or equal to end_date",
+            )
+
+
+def _format_cash_flow_response(cash_flows) -> list[dict]:
+    """Convert cash flow objects to dict format for JSON response."""
+    return [
+        {
+            "id": cf.id,
+            "transaction_id": cf.transaction_id,
+            "type_doc_id": cf.type_doc_id,
+            "transaction_type": cf.transaction_type,
+            "date": cf.date,
+            "amount": cf.amount,
+            "currency": cf.currency,
+            "amount_eur": cf.amount_eur,
+            "status": cf.status,
+            "status_c": cf.status_c,
+            "description": cf.description,
+            "created_at": cf.created_at,
+            "updated_at": cf.updated_at,
+        }
+        for cf in cash_flows
+    ]
+
+
+async def _fetch_cash_flows(
+    cash_flow_repo: CashFlowRepositoryDep,
+    start_date: Optional[str],
+    end_date: Optional[str],
+    transaction_type: Optional[str],
+    limit: Optional[int],
+) -> list:
+    """Fetch cash flows based on query parameters."""
+    if start_date and end_date:
+        return await cash_flow_repo.get_by_date_range(start_date, end_date)
+    elif transaction_type:
+        return await cash_flow_repo.get_by_type(transaction_type)
+    else:
+        return await cash_flow_repo.get_all(limit=limit)
+
+
 @router.get("")
 async def get_cash_flows(
     cash_flow_repo: CashFlowRepositoryDep,
@@ -27,53 +91,15 @@ async def get_cash_flows(
 
     Supports filtering by type, date range, and limiting results.
     """
-
-    # Validate date format if provided
-    if start_date or end_date:
-        from datetime import datetime
-
-        try:
-            if start_date:
-                datetime.strptime(start_date, "%Y-%m-%d")
-            if end_date:
-                datetime.strptime(end_date, "%Y-%m-%d")
-            if start_date and end_date and start_date > end_date:
-                raise HTTPException(
-                    status_code=400,
-                    detail="start_date must be before or equal to end_date",
-                )
-        except ValueError:
-            raise HTTPException(
-                status_code=400, detail="Date must be in YYYY-MM-DD format"
-            )
+    _validate_date_range(start_date, end_date)
 
     try:
-        if start_date and end_date:
-            cash_flows = await cash_flow_repo.get_by_date_range(start_date, end_date)
-        elif transaction_type:
-            cash_flows = await cash_flow_repo.get_by_type(transaction_type)
-        else:
-            cash_flows = await cash_flow_repo.get_all(limit=limit)
-
-        # Convert to dict for JSON response
-        return [
-            {
-                "id": cf.id,
-                "transaction_id": cf.transaction_id,
-                "type_doc_id": cf.type_doc_id,
-                "transaction_type": cf.transaction_type,
-                "date": cf.date,
-                "amount": cf.amount,
-                "currency": cf.currency,
-                "amount_eur": cf.amount_eur,
-                "status": cf.status,
-                "status_c": cf.status_c,
-                "description": cf.description,
-                "created_at": cf.created_at,
-                "updated_at": cf.updated_at,
-            }
-            for cf in cash_flows
-        ]
+        cash_flows = await _fetch_cash_flows(
+            cash_flow_repo, start_date, end_date, transaction_type, limit
+        )
+        return _format_cash_flow_response(cash_flows)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to retrieve cash flows: {str(e)}"
