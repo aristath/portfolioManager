@@ -445,13 +445,14 @@ async def _process_stocks_for_candidates(
             filter_stats["recently_bought"] += 1
             continue
 
-        score_row = await db_manager.state.fetchone(
+        score_row_raw = await db_manager.state.fetchone(
             "SELECT * FROM scores WHERE symbol = ?", (symbol,)
         )
-        if not score_row:
+        if not score_row_raw:
             filter_stats["no_score"] += 1
             continue
 
+        score_row = dict(score_row_raw)
         if (score_row.get("total_score") or 0.5) < settings.min_stock_score:
             filter_stats["low_score"] += 1
             continue
@@ -1310,3 +1311,5 @@ class RebalancingService:
             f"Holistic planner generated {len(recommendations)} recommendations"
         )
         return recommendations
+
+
