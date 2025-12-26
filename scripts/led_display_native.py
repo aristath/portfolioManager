@@ -169,29 +169,8 @@ def main_loop():
                 time.sleep(API_RETRY_DELAY)
                 continue
 
-            # Reset error counter on success
             consecutive_errors = 0
-
-            text = data.get("text", "")
-            speed = data.get("speed", 50)
-            brightness = data.get("brightness", 150)
-
-            # Update settings if changed
-            if speed != _last_speed:
-                if set_speed(speed):
-                    _last_speed = speed
-                    logger.debug(f"Speed updated to {speed}")
-
-            if brightness != _last_brightness:
-                if set_brightness(brightness):
-                    _last_brightness = brightness
-                    logger.debug(f"Brightness updated to {brightness}")
-
-            # Update text if changed
-            if text != _last_text:
-                if set_text(text):
-                    _last_text = text
-                    logger.debug(f"Text updated: {text[:50]}...")
+            _process_display_data(data)
 
             time.sleep(POLL_INTERVAL)
 

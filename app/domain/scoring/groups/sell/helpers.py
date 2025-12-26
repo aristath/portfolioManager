@@ -185,58 +185,17 @@ def calculate_instability_score(
     """
     score = 0.0
 
-    # 1. Rate of gain (40%)
-    if days_held > 30:
-        years = days_held / 365.0
-        try:
-            annualized = (
-                ((1 + profit_pct) ** (1 / years)) - 1 if years > 0 else profit_pct
-            )
-        except (ValueError, OverflowError):
-            annualized = profit_pct
-
-        if annualized > INSTABILITY_RATE_VERY_HOT:  # >50% annualized = very hot
-            rate_score = 1.0
-        elif annualized > INSTABILITY_RATE_HOT:  # >30% annualized = hot
-            rate_score = 0.7
-        elif annualized > INSTABILITY_RATE_WARM:  # >20% annualized = warm
-            rate_score = 0.4
-        else:
-            rate_score = 0.1  # Sustainable pace
-    else:
-        rate_score = 0.5  # Too early to tell
+    rate_score = _calculate_rate_of_gain_score(profit_pct, days_held)
     score += rate_score * 0.40
 
-    # 2. Volatility spike (30%)
-    if historical_volatility > 0:
-        vol_ratio = current_volatility / historical_volatility
-        if vol_ratio > VOLATILITY_SPIKE_HIGH:  # Vol doubled
-            vol_score = 1.0
-        elif vol_ratio > VOLATILITY_SPIKE_MED:  # Vol up 50%
-            vol_score = 0.7
-        elif vol_ratio > VOLATILITY_SPIKE_LOW:  # Vol up 20%
-            vol_score = 0.4
-        else:
-            vol_score = 0.1  # Normal volatility
-    else:
-        vol_score = 0.3  # No historical data - neutral
+    vol_score = _calculate_volatility_spike_score(
+        current_volatility, historical_volatility
+    )
     score += vol_score * 0.30
 
-    # 3. Valuation stretch (30%)
-    if distance_from_ma_200 > VALUATION_STRETCH_HIGH:  # >30% above MA
-        valuation_score = 1.0
-    elif distance_from_ma_200 > VALUATION_STRETCH_MED:  # >20% above MA
-        valuation_score = 0.7
-    elif distance_from_ma_200 > VALUATION_STRETCH_LOW:  # >10% above MA
-        valuation_score = 0.4
-    else:
-        valuation_score = 0.1  # Near or below MA
+    valuation_score = _calculate_valuation_stretch_score(distance_from_ma_200)
     score += valuation_score * 0.30
 
-    # Floor for extreme profits (safety net)
-    if profit_pct > 1.0:  # >100% gain
-        score = max(score, 0.2)
-    elif profit_pct > 0.75:  # >75% gain
-        score = max(score, 0.1)
+    score = _apply_profit_floor(score, profit_pct)
 
     return score
