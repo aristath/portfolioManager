@@ -158,6 +158,102 @@ async def get_all_stock_sparklines(db_manager: DatabaseManagerDep):
         )
 
 
+async def _should_fetch_data(
+    cached_data: list[dict], start_date: Optional[datetime]
+) -> bool:
+    """Determine if we need to fetch more data from API."""
+    if not cached_data:
+        return True
+    if start_date:
+        first_cached_date = datetime.strptime(cached_data[0]["time"], "%Y-%m-%d")
+        return first_cached_date > start_date
+    return False
+
+
+async def _fetch_from_tradernet(
+    symbol: str, fetch_start: datetime, fetch_end: datetime, db_manager: DatabaseManager
+) -> list[dict]:
+    """Fetch stock prices from Tradernet API."""
+    try:
+        tradernet_client = await ensure_tradernet_connected(raise_on_error=False)
+        if not tradernet_client:
+            return []
+
+        ohlc_data = tradernet_client.get_historical_prices(
+            symbol, start=fetch_start, end=fetch_end
+        )
+        if not ohlc_data:
+            return []
+
+        fetched_data = [
+            {"time": ohlc.timestamp.strftime("%Y-%m-%d"), "value": ohlc.close}
+            for ohlc in ohlc_data
+        ]
+        await _store_stock_prices(symbol, ohlc_data, "tradernet", db_manager)
+        return fetched_data
+    except Exception as e:
+        logger.warning(f"Failed to fetch from Tradernet for {symbol}: {e}")
+        return []
+
+
+async def _fetch_from_yahoo(
+    symbol: str, range_str: str, db_manager: DatabaseManager
+) -> list[dict]:
+    """Fetch stock prices from Yahoo Finance API."""
+    try:
+        period_map = {
+            "1M": "1mo",
+            "3M": "3mo",
+            "6M": "6mo",
+            "1Y": "1y",
+            "5Y": "5y",
+            "10Y": "10y",
+            "all": "max",
+        }
+        yahoo_period = period_map.get(range_str, "10y")
+
+        historical_prices = yahoo.get_historical_prices(symbol, period=yahoo_period)
+        if not historical_prices:
+            return []
+
+        fetched_data = [
+            {"time": hp.date.strftime("%Y-%m-%d"), "value": hp.close}
+            for hp in historical_prices
+        ]
+        await _store_stock_prices(symbol, historical_prices, "yahoo", db_manager)
+        return fetched_data
+    except Exception as e:
+        logger.error(f"Failed to fetch from Yahoo for {symbol}: {e}")
+        return []
+
+
+def _combine_and_filter_data(
+    cached_data: list[dict], fetched_data: list[dict], start_date: Optional[datetime]
+) -> list[dict]:
+    """Combine cached and fetched data, remove duplicates, and filter by date."""
+    # Combine data, removing duplicates (later entries override earlier)
+    all_data = {}
+    for item in cached_data:
+        all_data[item["time"]] = item["value"]
+    for item in fetched_data:
+        all_data[item["time"]] = item["value"]
+
+    # Convert to list and sort by date
+    result = [
+        {"time": date, "value": value} for date, value in sorted(all_data.items())
+    ]
+
+    # Filter by date range if specified
+    if start_date:
+        result = [
+            item
+            for item in result
+            if datetime.strptime(item["time"], "%Y-%m-%d") >= start_date
+        ]
+
+    return result
+
+
 @router.get("/stocks/{symbol}")
 async def get_stock_chart(
     symbol: str,
@@ -173,108 +269,26 @@ async def get_stock_chart(
     """
     try:
         start_date = _parse_date_range(range)
-
-        # Check cache first
         cached_data = await _get_cached_stock_prices(symbol, start_date, db_manager)
 
-        # Determine if we need to fetch more data
-        need_fetch = False
-        if not cached_data:
-            need_fetch = True
-        elif start_date:
-            # Check if we have data covering the full range
-            first_cached_date = datetime.strptime(cached_data[0]["time"], "%Y-%m-%d")
-            if first_cached_date > start_date:
-                need_fetch = True
-
+        need_fetch = await _should_fetch_data(cached_data, start_date)
         fetched_data = []
-        if need_fetch:
-            # Determine date range to fetch
-            if start_date:
-                fetch_start = start_date
-            else:
-                # For "all" range, fetch from 2010-01-01
-                fetch_start = datetime(2010, 1, 1)
 
+        if need_fetch:
+            fetch_start = start_date if start_date else datetime(2010, 1, 1)
             fetch_end = datetime.now()
 
-            # Try to fetch from API
             if source == "tradernet":
-                try:
-                    tradernet_client = await ensure_tradernet_connected(
-                        raise_on_error=False
-                    )
-                    if tradernet_client:
-                        ohlc_data = tradernet_client.get_historical_prices(
-                            symbol, start=fetch_start, end=fetch_end
-                        )
-                        if ohlc_data:
-                            fetched_data = [
-                                {
-                                    "time": ohlc.timestamp.strftime("%Y-%m-%d"),
-                                    "value": ohlc.close,
-                                }
-                                for ohlc in ohlc_data
-                            ]
-                            # Store in cache
-                            await _store_stock_prices(
-                                symbol, ohlc_data, "tradernet", db_manager
-                            )
-                except Exception as e:
-                    logger.warning(f"Failed to fetch from Tradernet for {symbol}: {e}")
-                    # Fallback to Yahoo
+                fetched_data = await _fetch_from_tradernet(
+                    symbol, fetch_start, fetch_end, db_manager
+                )
+                if not fetched_data:
                     source = "yahoo"
 
             if source == "yahoo" and not fetched_data:
-                try:
-                    # Map range to Yahoo period
-                    period_map = {
-                        "1M": "1mo",
-                        "3M": "3mo",
-                        "6M": "6mo",
-                        "1Y": "1y",
-                        "5Y": "5y",
-                        "10Y": "10y",
-                        "all": "max",
-                    }
-                    yahoo_period = period_map.get(range, "10y")
+                fetched_data = await _fetch_from_yahoo(symbol, range, db_manager)
 
-                    historical_prices = yahoo.get_historical_prices(
-                        symbol, period=yahoo_period
-                    )
-                    if historical_prices:
-                        fetched_data = [
-                            {"time": hp.date.strftime("%Y-%m-%d"), "value": hp.close}
-                            for hp in historical_prices
-                        ]
-                        # Store in cache
-                        await _store_stock_prices(
-                            symbol, historical_prices, "yahoo", db_manager
-                        )
-                except Exception as e:
-                    logger.error(f"Failed to fetch from Yahoo for {symbol}: {e}")
-
-        # Combine cached and fetched data, removing duplicates
-        all_data = {}
-        for item in cached_data:
-            all_data[item["time"]] = item["value"]
-        for item in fetched_data:
-            all_data[item["time"]] = item["value"]
-
-        # Convert to list and sort by date
-        result = [
-            {"time": date, "value": value} for date, value in sorted(all_data.items())
-        ]
-
-        # Filter by date range if specified
-        if start_date:
-            result = [
-                item
-                for item in result
-                if datetime.strptime(item["time"], "%Y-%m-%d") >= start_date
-            ]
-
-        return result
+        return _combine_and_filter_data(cached_data, fetched_data, start_date)
     except Exception as e:
         logger.error(f"Failed to get stock chart data for {symbol}: {e}")
         raise HTTPException(
