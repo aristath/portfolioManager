@@ -7,11 +7,6 @@ Uses long-term value scoring with portfolio-aware allocation fit.
 import logging
 from typing import List, Dict, Optional, Tuple
 
-import numpy as np
-import pandas as pd
-import empyrical
-import pandas_ta as ta
-
 from app.config import settings as app_settings
 from app.infrastructure.database.manager import DatabaseManager
 from app.repositories import (
