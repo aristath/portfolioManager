@@ -13,9 +13,12 @@ from app.infrastructure.dependencies import (
     AllocationRepositoryDep,
     PortfolioRepositoryDep,
     RecommendationRepositoryDep,
+    SettingsRepositoryDep,
+    SettingsServiceDep,
     TradeSafetyServiceDep,
     TradeExecutionServiceDep,
     PortfolioServiceDep,
+    RebalancingServiceDep,
 )
 from app.infrastructure.cache import cache
 from app.infrastructure.cache_invalidation import get_cache_invalidation_service
@@ -159,15 +162,16 @@ async def debug_recommendations():
     """
     Debug endpoint to see why recommendations are filtered out.
     """
-    from app.application.services.rebalancing_service import RebalancingService
-
-    rebalancing_service = RebalancingService()
     debug_info = await rebalancing_service.get_recommendations_debug()
     return debug_info
 
 
 @router.get("/recommendations")
-async def get_recommendations(limit: int = 3):
+async def get_recommendations(
+    rebalancing_service: RebalancingServiceDep,
+    recommendation_repo: RecommendationRepositoryDep,
+    limit: int = 3,
+):
     """
     Get top N trade recommendations from database (status='pending').
 
@@ -188,15 +192,11 @@ async def get_recommendations(limit: int = 3):
         # Cache is old format without UUIDs, invalidate it
         cache.invalidate(cache_key)
 
-    from app.application.services.rebalancing_service import RebalancingService
-
     try:
         # Generate recommendations (this will store them in the database)
-        rebalancing_service = RebalancingService()
         await rebalancing_service.get_recommendations(limit=limit)
 
         # Get stored pending BUY recommendations from database
-        recommendation_repo = RecommendationRepository()
         stored_recs = await recommendation_repo.get_pending_by_side("BUY", limit=limit)
 
         result = {
@@ -229,14 +229,16 @@ async def get_recommendations(limit: int = 3):
 
 
 @router.post("/recommendations/{uuid}/dismiss")
-async def dismiss_recommendation(uuid: str):
+async def dismiss_recommendation(
+    uuid: str,
+    recommendation_repo: RecommendationRepositoryDep,
+):
     """
     Dismiss a recommendation by UUID.
 
     Marks the recommendation as dismissed, preventing it from appearing again.
     """
     try:
-        recommendation_repo = RecommendationRepository()
         
         # Check if recommendation exists
         rec = await recommendation_repo.get_by_uuid(uuid)
@@ -260,7 +262,11 @@ async def dismiss_recommendation(uuid: str):
 
 
 @router.get("/sell-recommendations")
-async def get_sell_recommendations(limit: int = 3):
+async def get_sell_recommendations(
+    rebalancing_service: RebalancingServiceDep,
+    recommendation_repo: RecommendationRepositoryDep,
+    limit: int = 3,
+):
     """
     Get top N sell recommendations from database (status='pending').
 
@@ -280,15 +286,11 @@ async def get_sell_recommendations(limit: int = 3):
         # Cache is old format without UUIDs, invalidate it
         cache.invalidate(cache_key)
 
-    from app.application.services.rebalancing_service import RebalancingService
-
     try:
         # Generate sell recommendations (this will store them in the database)
-        rebalancing_service = RebalancingService()
         await rebalancing_service.calculate_sell_recommendations(limit=limit)
 
         # Get stored pending SELL recommendations from database
-        recommendation_repo = RecommendationRepository()
         stored_recs = await recommendation_repo.get_pending_by_side("SELL", limit=limit)
 
         result = {
@@ -316,14 +318,16 @@ async def get_sell_recommendations(limit: int = 3):
 
 
 @router.post("/sell-recommendations/{uuid}/dismiss")
-async def dismiss_sell_recommendation(uuid: str):
+async def dismiss_sell_recommendation(
+    uuid: str,
+    recommendation_repo: RecommendationRepositoryDep,
+):
     """
     Dismiss a sell recommendation by UUID.
 
     Marks the recommendation as dismissed, preventing it from appearing again.
     """
     try:
-        recommendation_repo = RecommendationRepository()
         
         # Check if recommendation exists
         rec = await recommendation_repo.get_by_uuid(uuid)
@@ -362,7 +366,11 @@ async def list_recommendation_strategies():
 
 
 @router.get("/multi-step-recommendations/all")
-async def get_all_strategy_recommendations():
+async def get_all_strategy_recommendations(
+    position_repo: PositionRepositoryDep,
+    settings_service: SettingsServiceDep,
+    rebalancing_service: RebalancingServiceDep,
+):
     """
     Get multi-step recommendations using the holistic planner.
 
@@ -372,15 +380,7 @@ async def get_all_strategy_recommendations():
     Returns:
         Dictionary with "holistic" as key containing the recommendations.
     """
-    from app.application.services.rebalancing_service import RebalancingService
     from app.domain.portfolio_hash import generate_recommendation_cache_key
-    from app.repositories import PositionRepository, SettingsRepository
-    from app.domain.services.settings_service import SettingsService
-
-    # Generate portfolio-aware cache key
-    position_repo = PositionRepository()
-    settings_repo = SettingsRepository()
-    settings_service = SettingsService(settings_repo)
 
     positions = await position_repo.get_all()
     settings = await settings_service.get_settings()
@@ -393,7 +393,6 @@ async def get_all_strategy_recommendations():
         return cached
 
     try:
-        rebalancing_service = RebalancingService()
         steps = await rebalancing_service.get_multi_step_recommendations()
 
         if not steps:
@@ -457,7 +456,11 @@ async def get_all_strategy_recommendations():
 
 
 @router.get("/multi-step-recommendations")
-async def get_multi_step_recommendations():
+async def get_multi_step_recommendations(
+    position_repo: PositionRepositoryDep,
+    settings_service: SettingsServiceDep,
+    rebalancing_service: RebalancingServiceDep,
+):
     """
     Get multi-step recommendation sequence using the holistic planner.
 
@@ -467,16 +470,9 @@ async def get_multi_step_recommendations():
     Returns:
         Multi-step recommendation sequence with portfolio state at each step.
     """
-    from app.application.services.rebalancing_service import RebalancingService
     from app.domain.portfolio_hash import generate_recommendation_cache_key
-    from app.repositories import PositionRepository, SettingsRepository
-    from app.domain.services.settings_service import SettingsService
 
     # Generate portfolio-aware cache key
-    position_repo = PositionRepository()
-    settings_repo = SettingsRepository()
-    settings_service = SettingsService(settings_repo)
-
     positions = await position_repo.get_all()
     settings = await settings_service.get_settings()
     position_dicts = [{"symbol": p.symbol, "quantity": p.quantity} for p in positions]
@@ -488,7 +484,6 @@ async def get_multi_step_recommendations():
         return cached
 
     try:
-        rebalancing_service = RebalancingService()
         steps = await rebalancing_service.get_multi_step_recommendations()
 
         if not steps:
@@ -538,7 +533,11 @@ async def get_multi_step_recommendations():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-async def _regenerate_multi_step_cache() -> tuple:
+async def _regenerate_multi_step_cache(
+    position_repo: PositionRepositoryDep,
+    settings_service: SettingsServiceDep,
+    rebalancing_service: RebalancingServiceDep,
+) -> tuple:
     """
     Regenerate multi-step recommendations cache if missing.
 
@@ -548,15 +547,7 @@ async def _regenerate_multi_step_cache() -> tuple:
     Raises:
         HTTPException: If no recommendations are available
     """
-    from app.application.services.rebalancing_service import RebalancingService
     from app.domain.portfolio_hash import generate_recommendation_cache_key
-    from app.repositories import PositionRepository, SettingsRepository
-    from app.domain.services.settings_service import SettingsService
-
-    # Generate portfolio-aware cache key
-    position_repo = PositionRepository()
-    settings_repo = SettingsRepository()
-    settings_service = SettingsService(settings_repo)
 
     positions = await position_repo.get_all()
     settings = await settings_service.get_settings()
@@ -565,7 +556,6 @@ async def _regenerate_multi_step_cache() -> tuple:
     cache_key = f"multi_step_recommendations:{portfolio_cache_key}"
 
     logger.info(f"Cache miss for multi-step recommendations, regenerating...")
-    rebalancing_service = RebalancingService()
     steps_data = await rebalancing_service.get_multi_step_recommendations()
 
     if not steps_data:
@@ -608,7 +598,14 @@ async def _regenerate_multi_step_cache() -> tuple:
 
 
 @router.post("/multi-step-recommendations/execute-step/{step_number}")
-async def execute_multi_step_recommendation_step(step_number: int):
+async def execute_multi_step_recommendation_step(
+    step_number: int,
+    trade_repo: TradeRepositoryDep,
+    position_repo: PositionRepositoryDep,
+    settings_service: SettingsServiceDep,
+    safety_service: TradeSafetyServiceDep,
+    trade_execution_service: TradeExecutionServiceDep,
+):
     """
     Execute a single step from the multi-step recommendation sequence.
 
@@ -618,19 +615,12 @@ async def execute_multi_step_recommendation_step(step_number: int):
     Returns:
         Execution result for the step
     """
-    from app.application.services.rebalancing_service import RebalancingService
     from app.domain.portfolio_hash import generate_recommendation_cache_key
-    from app.domain.services.settings_service import SettingsService
 
     if step_number < 1:
         raise HTTPException(status_code=400, detail="Step number must be >= 1")
     if step_number > 5:
         raise HTTPException(status_code=400, detail="Step number must be between 1 and 5")
-
-    trade_repo = TradeRepository()
-    position_repo = PositionRepository()
-    settings_repo = SettingsRepository()
-    settings_service = SettingsService(settings_repo)
 
     try:
         # Generate portfolio-aware cache key
@@ -644,7 +634,9 @@ async def execute_multi_step_recommendation_step(step_number: int):
 
         # If cache miss, regenerate recommendations
         if not cached or not cached.get("steps"):
-            cached, cache_key = await _regenerate_multi_step_cache()
+            cached, cache_key = await _regenerate_multi_step_cache(
+                position_repo, settings_service, rebalancing_service
+            )
 
         steps = cached["steps"]
         if step_number > len(steps):
@@ -677,8 +669,7 @@ async def execute_multi_step_recommendation_step(step_number: int):
 
         if result:
             # Record the trade
-            execution_service = TradeExecutionService(trade_repo, position_repo)
-            await execution_service.record_trade(
+            await trade_execution_service.record_trade(
                 symbol=step["symbol"],
                 side=step["side"],
                 quantity=step["quantity"],
@@ -711,7 +702,13 @@ async def execute_multi_step_recommendation_step(step_number: int):
 
 
 @router.post("/multi-step-recommendations/execute-all")
-async def execute_all_multi_step_recommendations():
+async def execute_all_multi_step_recommendations(
+    trade_repo: TradeRepositoryDep,
+    position_repo: PositionRepositoryDep,
+    settings_service: SettingsServiceDep,
+    safety_service: TradeSafetyServiceDep,
+    trade_execution_service: TradeExecutionServiceDep,
+):
     """
     Execute all steps in the multi-step recommendation sequence in order.
 
@@ -720,14 +717,7 @@ async def execute_all_multi_step_recommendations():
     Returns:
         List of execution results for each step
     """
-    from app.application.services.rebalancing_service import RebalancingService
     from app.domain.portfolio_hash import generate_recommendation_cache_key
-    from app.domain.services.settings_service import SettingsService
-
-    trade_repo = TradeRepository()
-    position_repo = PositionRepository()
-    settings_repo = SettingsRepository()
-    settings_service = SettingsService(settings_repo)
 
     try:
         # Generate portfolio-aware cache key
@@ -741,7 +731,9 @@ async def execute_all_multi_step_recommendations():
 
         # If cache miss, regenerate recommendations
         if not cached or not cached.get("steps"):
-            cached, cache_key = await _regenerate_multi_step_cache()
+            cached, cache_key = await _regenerate_multi_step_cache(
+                position_repo, settings_service, rebalancing_service
+            )
 
         steps = cached["steps"]
         if not steps:
@@ -752,10 +744,6 @@ async def execute_all_multi_step_recommendations():
 
         # Ensure connection
         client = await ensure_tradernet_connected()
-
-        # Safety service for validation
-        safety_service = TradeSafetyService(trade_repo, position_repo)
-        execution_service = TradeExecutionService(trade_repo, position_repo)
 
         # Check cooldown for all BUY steps
         buy_steps = [s for s in steps if s["side"] == TradeSide.BUY]
@@ -800,7 +788,7 @@ async def execute_all_multi_step_recommendations():
 
                 if result:
                     # Record the trade
-                    await execution_service.record_trade(
+                    await trade_execution_service.record_trade(
                         symbol=step["symbol"],
                         side=step["side"],
                         quantity=step["quantity"],
@@ -860,20 +848,22 @@ async def execute_all_multi_step_recommendations():
 
 
 @router.post("/sell-recommendations/{symbol}/execute")
-async def execute_sell_recommendation(symbol: str):
+async def execute_sell_recommendation(
+    symbol: str,
+    trade_repo: TradeRepositoryDep,
+    position_repo: PositionRepositoryDep,
+    rebalancing_service: RebalancingServiceDep,
+    safety_service: TradeSafetyServiceDep,
+    trade_execution_service: TradeExecutionServiceDep,
+):
     """
     Execute a sell recommendation for a specific symbol.
 
     Gets the current sell recommendation and executes it via Tradernet.
     """
-    from app.application.services.rebalancing_service import RebalancingService
-
     symbol = symbol.upper()
-    trade_repo = TradeRepository()
-    position_repo = PositionRepository()
 
     try:
-        rebalancing_service = RebalancingService()
         recommendations = await rebalancing_service.calculate_sell_recommendations(limit=20)
 
         # Find the recommendation for the requested symbol
@@ -905,8 +895,7 @@ async def execute_sell_recommendation(symbol: str):
 
         if result:
             # Record the trade
-            execution_service = TradeExecutionService(trade_repo, position_repo)
-            await execution_service.record_trade(
+            await trade_execution_service.record_trade(
                 symbol=symbol,
                 side=TradeSide.SELL,
                 quantity=rec.quantity,
@@ -949,7 +938,11 @@ class ExecuteFundingRequest(BaseModel):
 
 
 @router.get("/recommendations/{symbol}/funding-options")
-async def get_funding_options(symbol: str, exclude_signatures: str = ""):
+async def get_funding_options(
+    symbol: str,
+    rebalancing_service: RebalancingServiceDep,
+    exclude_signatures: str = "",
+):
     """
     Get funding options for a buy recommendation that can't be executed due to insufficient cash.
 
@@ -960,13 +953,11 @@ async def get_funding_options(symbol: str, exclude_signatures: str = ""):
     - currency_match: Prefer selling same-currency positions
     """
     from app.application.services.funding_service import FundingService
-    from app.application.services.rebalancing_service import RebalancingService
 
     symbol = symbol.upper()
 
     try:
         # Get current recommendation for this symbol
-        rebalancing_service = RebalancingService()
         recommendations = await rebalancing_service.get_recommendations(limit=10)
 
         rec = next((r for r in recommendations if r.symbol == symbol), None)
@@ -1046,24 +1037,25 @@ async def get_funding_options(symbol: str, exclude_signatures: str = ""):
 
 
 @router.post("/recommendations/{symbol}/execute-funding")
-async def execute_funding(symbol: str, request: ExecuteFundingRequest):
+async def execute_funding(
+    symbol: str,
+    request: ExecuteFundingRequest,
+    trade_repo: TradeRepositoryDep,
+    stock_repo: StockRepositoryDep,
+    position_repo: PositionRepositoryDep,
+    safety_service: TradeSafetyServiceDep,
+    trade_execution_service: TradeExecutionServiceDep,
+):
     """
     Execute a funding plan: sell specified positions then buy the target stock.
 
     Executes all sells first, then executes the buy with the newly available cash.
     """
     symbol = symbol.upper()
-    trade_repo = TradeRepository()
-    stock_repo = StockRepository()
-    position_repo = PositionRepository()
 
     try:
         # Ensure connection
         client = await ensure_tradernet_connected()
-
-        # Services
-        safety_service = TradeSafetyService(trade_repo, position_repo)
-        execution_service = TradeExecutionService(trade_repo, position_repo)
 
         # Check cooldown before executing any trades
         is_cooldown, cooldown_error = await safety_service.check_cooldown(symbol, TradeSide.BUY)
@@ -1098,7 +1090,7 @@ async def execute_funding(symbol: str, request: ExecuteFundingRequest):
 
             if result:
                 # Record the trade
-                await execution_service.record_trade(
+                await trade_execution_service.record_trade(
                     symbol=sell_symbol,
                     side=TradeSide.SELL,
                     quantity=sell.quantity,
@@ -1179,7 +1171,7 @@ async def execute_funding(symbol: str, request: ExecuteFundingRequest):
 
         if buy_result:
             # Record the buy trade
-            await execution_service.record_trade(
+            await trade_execution_service.record_trade(
                 symbol=symbol,
                 side=TradeSide.BUY,
                 quantity=quantity,
