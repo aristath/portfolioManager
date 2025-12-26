@@ -329,11 +329,17 @@ class TestUpdateSettingEndpoint:
         from app.api.settings import SettingUpdate, update_setting_value
 
         mock_repo = AsyncMock()
+        mock_rec_cache = AsyncMock()
 
         with patch("app.api.settings.set_setting", new_callable=AsyncMock):
-            result = await update_setting_value(
-                "min_hold_days", SettingUpdate(value=120), mock_repo
-            )
+            with patch("app.api.settings.cache") as mock_cache:
+                with patch(
+                    "app.infrastructure.recommendation_cache.get_recommendation_cache",
+                    return_value=mock_rec_cache,
+                ):
+                    result = await update_setting_value(
+                        "min_hold_days", SettingUpdate(value=120), mock_repo
+                    )
 
         assert result == {"min_hold_days": 120}
 
@@ -364,7 +370,7 @@ class TestUpdateSettingEndpoint:
         with patch("app.api.settings.set_setting", new_callable=AsyncMock):
             with patch("app.api.settings.cache") as mock_cache:
                 with patch(
-                    "app.api.settings.get_recommendation_cache",
+                    "app.infrastructure.recommendation_cache.get_recommendation_cache",
                     return_value=mock_rec_cache,
                 ):
                     await update_setting_value(
@@ -460,7 +466,7 @@ class TestRescheduleJobs:
         from app.api.settings import reschedule_jobs
 
         with patch(
-            "app.api.settings.reschedule_all_jobs", new_callable=AsyncMock
+            "app.jobs.scheduler.reschedule_all_jobs", new_callable=AsyncMock
         ) as mock_reschedule:
             result = await reschedule_jobs()
 

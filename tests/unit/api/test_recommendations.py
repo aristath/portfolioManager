@@ -169,7 +169,7 @@ class TestDismissRecommendation:
         mock_recommendation_repo.get_by_uuid.return_value = {"uuid": "test-uuid"}
 
         with patch(
-            "app.api.recommendations.get_cache_invalidation_service"
+            "app.infrastructure.cache_invalidation.get_cache_invalidation_service"
         ) as mock_cache_service:
             mock_service = MagicMock()
             mock_cache_service.return_value = mock_service
@@ -200,7 +200,7 @@ class TestDismissRecommendation:
         mock_recommendation_repo.get_by_uuid.return_value = {"uuid": "test-uuid"}
         mock_recommendation_repo.mark_dismissed.side_effect = Exception("DB error")
 
-        with patch("app.api.recommendations.get_cache_invalidation_service"):
+        with patch("app.infrastructure.cache_invalidation.get_cache_invalidation_service"):
             with pytest.raises(HTTPException) as exc_info:
                 await dismiss_recommendation("test-uuid", mock_recommendation_repo)
 
@@ -273,7 +273,7 @@ class TestDismissSellRecommendation:
         mock_recommendation_repo.get_by_uuid.return_value = {"uuid": "sell-uuid"}
 
         with patch(
-            "app.api.recommendations.get_cache_invalidation_service"
+            "app.infrastructure.cache_invalidation.get_cache_invalidation_service"
         ) as mock_cache_service:
             mock_service = MagicMock()
             mock_cache_service.return_value = mock_service
@@ -358,11 +358,13 @@ class TestExecuteSellRecommendation:
         mock_client.place_order.return_value = mock_order_result
 
         with patch(
-            "app.api.recommendations.ensure_tradernet_connected",
+            "app.infrastructure.external.tradernet_connection.ensure_tradernet_connected",
             new_callable=AsyncMock,
             return_value=mock_client,
         ):
-            with patch("app.api.recommendations.get_cache_invalidation_service"):
+            with patch(
+                "app.infrastructure.cache_invalidation.get_cache_invalidation_service"
+            ):
                 result = await execute_sell_recommendation(
                     "WEAK",
                     mock_rebalancing_service,
@@ -420,7 +422,7 @@ class TestExecuteSellRecommendation:
         mock_client = MagicMock()
 
         with patch(
-            "app.api.recommendations.ensure_tradernet_connected",
+            "app.infrastructure.external.tradernet_connection.ensure_tradernet_connected",
             new_callable=AsyncMock,
             return_value=mock_client,
         ):
@@ -456,7 +458,7 @@ class TestExecuteSellRecommendation:
         mock_client.place_order.return_value = None  # Order failed
 
         with patch(
-            "app.api.recommendations.ensure_tradernet_connected",
+            "app.infrastructure.external.tradernet_connection.ensure_tradernet_connected",
             new_callable=AsyncMock,
             return_value=mock_client,
         ):
@@ -496,11 +498,13 @@ class TestExecuteSellRecommendation:
         mock_client.place_order.return_value = mock_order_result
 
         with patch(
-            "app.api.recommendations.ensure_tradernet_connected",
+            "app.infrastructure.external.tradernet_connection.ensure_tradernet_connected",
             new_callable=AsyncMock,
             return_value=mock_client,
         ):
-            with patch("app.api.recommendations.get_cache_invalidation_service"):
+            with patch(
+                "app.infrastructure.cache_invalidation.get_cache_invalidation_service"
+            ):
                 result = await execute_sell_recommendation(
                     "weak",  # lowercase
                     mock_rebalancing_service,

@@ -491,16 +491,16 @@ class TestGetPortfolioAnalytics:
         )
 
         with patch(
-            "app.api.portfolio.reconstruct_portfolio_values",
+            "app.domain.analytics.reconstruct_portfolio_values",
             new_callable=AsyncMock,
             return_value=mock_values,
         ):
             with patch(
-                "app.api.portfolio.calculate_portfolio_returns",
+                "app.domain.analytics.calculate_portfolio_returns",
                 return_value=mock_returns,
             ):
                 with patch(
-                    "app.api.portfolio.get_portfolio_metrics",
+                    "app.domain.analytics.get_portfolio_metrics",
                     new_callable=AsyncMock,
                     return_value={
                         "annual_return": 0.15,
@@ -510,7 +510,7 @@ class TestGetPortfolioAnalytics:
                     },
                 ):
                     with patch(
-                        "app.api.portfolio.get_performance_attribution",
+                        "app.domain.analytics.get_performance_attribution",
                         new_callable=AsyncMock,
                         return_value={"geography": {}, "industry": {}},
                     ):
@@ -529,7 +529,7 @@ class TestGetPortfolioAnalytics:
         from app.api.portfolio import get_portfolio_analytics
 
         with patch(
-            "app.api.portfolio.reconstruct_portfolio_values",
+            "app.domain.analytics.reconstruct_portfolio_values",
             new_callable=AsyncMock,
             return_value=pd.Series(dtype=float),  # Empty series
         ):
@@ -544,7 +544,7 @@ class TestGetPortfolioAnalytics:
         from app.api.portfolio import get_portfolio_analytics
 
         with patch(
-            "app.api.portfolio.reconstruct_portfolio_values",
+            "app.domain.analytics.reconstruct_portfolio_values",
             new_callable=AsyncMock,
             side_effect=Exception("Calculation error"),
         ):

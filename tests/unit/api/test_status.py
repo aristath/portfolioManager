@@ -207,7 +207,10 @@ class TestGetDisplayText:
             "led_brightness": 200.0,
         }.get(key, default)
 
-        with patch("app.api.status.get_current_text", return_value="BUY AAPL +5"):
+        with patch(
+            "app.infrastructure.hardware.display_service.get_current_text",
+            return_value="BUY AAPL +5",
+        ):
             result = await get_display_text(mock_settings_repo)
 
         assert result["text"] == "BUY AAPL +5"
@@ -222,7 +225,10 @@ class TestGetDisplayText:
         # Return defaults
         mock_settings_repo.get_float.side_effect = lambda key, default: default
 
-        with patch("app.api.status.get_current_text", return_value=""):
+        with patch(
+            "app.infrastructure.hardware.display_service.get_current_text",
+            return_value="",
+        ):
             result = await get_display_text(mock_settings_repo)
 
         assert result["speed"] == 50
@@ -238,7 +244,7 @@ class TestSyncTriggers:
         from app.api.status import trigger_portfolio_sync
 
         with patch(
-            "app.api.status.sync_portfolio", new_callable=AsyncMock
+            "app.jobs.daily_sync.sync_portfolio", new_callable=AsyncMock
         ) as mock_sync:
             result = await trigger_portfolio_sync()
 
@@ -251,7 +257,7 @@ class TestSyncTriggers:
         from app.api.status import trigger_portfolio_sync
 
         with patch(
-            "app.api.status.sync_portfolio",
+            "app.jobs.daily_sync.sync_portfolio",
             new_callable=AsyncMock,
             side_effect=Exception("Sync failed"),
         ):
@@ -265,7 +271,9 @@ class TestSyncTriggers:
         """Test successful price sync trigger."""
         from app.api.status import trigger_price_sync
 
-        with patch("app.api.status.sync_prices", new_callable=AsyncMock) as mock_sync:
+        with patch(
+            "app.jobs.daily_sync.sync_prices", new_callable=AsyncMock
+        ) as mock_sync:
             result = await trigger_price_sync()
 
         assert result["status"] == "success"
@@ -277,7 +285,7 @@ class TestSyncTriggers:
         from app.api.status import trigger_price_sync
 
         with patch(
-            "app.api.status.sync_prices",
+            "app.jobs.daily_sync.sync_prices",
             new_callable=AsyncMock,
             side_effect=Exception("API timeout"),
         ):
@@ -292,7 +300,7 @@ class TestSyncTriggers:
         from app.api.status import trigger_historical_sync
 
         with patch(
-            "app.api.status.sync_historical_data", new_callable=AsyncMock
+            "app.jobs.historical_data_sync.sync_historical_data", new_callable=AsyncMock
         ) as mock_sync:
             result = await trigger_historical_sync()
 
@@ -305,7 +313,7 @@ class TestSyncTriggers:
         from app.api.status import trigger_daily_maintenance
 
         with patch(
-            "app.api.status.run_daily_maintenance", new_callable=AsyncMock
+            "app.jobs.maintenance.run_daily_maintenance", new_callable=AsyncMock
         ) as mock_maint:
             result = await trigger_daily_maintenance()
 
@@ -323,7 +331,7 @@ class TestTradernetStatus:
 
         mock_client = MagicMock()
         with patch(
-            "app.api.status.ensure_tradernet_connected",
+            "app.infrastructure.external.tradernet_connection.ensure_tradernet_connected",
             new_callable=AsyncMock,
             return_value=mock_client,
         ):
@@ -338,7 +346,7 @@ class TestTradernetStatus:
         from app.api.status import get_tradernet_status
 
         with patch(
-            "app.api.status.ensure_tradernet_connected",
+            "app.infrastructure.external.tradernet_connection.ensure_tradernet_connected",
             new_callable=AsyncMock,
             return_value=None,
         ):
@@ -352,7 +360,7 @@ class TestTradernetStatus:
         from app.api.status import get_tradernet_status
 
         with patch(
-            "app.api.status.ensure_tradernet_connected",
+            "app.infrastructure.external.tradernet_connection.ensure_tradernet_connected",
             new_callable=AsyncMock,
             side_effect=Exception("Connection refused"),
         ):
@@ -374,7 +382,9 @@ class TestJobStatus:
             "price_sync": {"last_run": "2024-01-15T10:05:00", "healthy": True},
         }
 
-        with patch("app.api.status.get_job_health_status", return_value=mock_status):
+        with patch(
+            "app.jobs.scheduler.get_job_health_status", return_value=mock_status
+        ):
             result = await get_job_status()
 
         assert result["status"] == "ok"
@@ -386,7 +396,7 @@ class TestJobStatus:
         from app.api.status import get_job_status
 
         with patch(
-            "app.api.status.get_job_health_status",
+            "app.jobs.scheduler.get_job_health_status",
             side_effect=Exception("Scheduler not running"),
         ):
             result = await get_job_status()
@@ -410,7 +420,7 @@ class TestDatabaseStats:
         }
 
         with patch(
-            "app.api.status.get_db_stats",
+            "app.jobs.health_check.get_database_stats",
             new_callable=AsyncMock,
             return_value=mock_stats,
         ):
@@ -425,7 +435,7 @@ class TestDatabaseStats:
         from app.api.status import get_database_stats
 
         with patch(
-            "app.api.status.get_db_stats",
+            "app.jobs.health_check.get_database_stats",
             new_callable=AsyncMock,
             side_effect=Exception("Database locked"),
         ):
