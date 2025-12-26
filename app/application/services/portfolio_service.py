@@ -34,8 +34,8 @@ class PortfolioService:
         self, positions: list[dict]
     ) -> tuple[dict[str, float], dict[str, float], float]:
         """Aggregate position values by geography and industry."""
-        geo_values = {}
-        industry_values = {}
+        geo_values: dict[str, float] = {}
+        industry_values: dict[str, float] = {}
         total_value = 0.0
 
         for pos in positions:

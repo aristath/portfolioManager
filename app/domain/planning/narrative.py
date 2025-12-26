@@ -294,7 +294,7 @@ def generate_plan_narrative(
 
     improvement = end_score - current_score
 
-    parts = []
+    parts: list[str] = []
     _add_strategy_summary(parts, windfall_sells, averaging_buys, sells, buys)
     _add_step_summary(parts, steps, sells, buys)
     _add_expected_outcome(parts, improvement, current_score, end_score)

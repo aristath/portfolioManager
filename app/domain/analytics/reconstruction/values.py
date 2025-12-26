@@ -25,7 +25,7 @@ async def _batch_load_prices(
     Returns:
         Dict[symbol][date] = price (with "_last" key for forward-fill)
     """
-    prices = {}
+    prices: dict[str, dict[str, float]] = {}
 
     for symbol in symbols:
         try:

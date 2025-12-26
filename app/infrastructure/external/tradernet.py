@@ -239,9 +239,7 @@ def _parse_candles_list(data: list) -> list[OHLC]:
 
 def _get_trading_mode() -> str:
     """Get trading mode from cache."""
-    from app.infrastructure.cache import get_cache
-
-    cache = get_cache()
+    from app.infrastructure.cache import cache
     trading_mode = "research"
     try:
         cached_settings = cache.get("settings:all")
@@ -706,7 +704,7 @@ class TradernetClient:
 
     def get_account_summary(self) -> dict:
         """Get full account summary including positions and cash."""
-        if not self.is_connected:
+        if not self.is_connected or self._client is None:
             raise ConnectionError("Not connected to Tradernet")
 
         try:
@@ -718,7 +716,7 @@ class TradernetClient:
 
     def get_portfolio(self) -> list[Position]:
         """Get current portfolio positions."""
-        if not self.is_connected:
+        if not self.is_connected or self._client is None:
             raise ConnectionError("Not connected to Tradernet")
 
         try:
@@ -776,7 +774,7 @@ class TradernetClient:
 
     def get_cash_balances(self) -> list[CashBalance]:
         """Get cash balances in all currencies."""
-        if not self.is_connected:
+        if not self.is_connected or self._client is None:
             raise ConnectionError("Not connected to Tradernet")
 
         try:
@@ -812,7 +810,7 @@ class TradernetClient:
 
     def get_total_cash_eur(self) -> float:
         """Get total cash balance converted to EUR."""
-        if not self.is_connected:
+        if not self.is_connected or self._client is None:
             raise ConnectionError("Not connected to Tradernet")
 
         try:
@@ -844,7 +842,7 @@ class TradernetClient:
 
     def get_quote(self, symbol: str) -> Optional[Quote]:
         """Get current quote for a symbol."""
-        if not self.is_connected:
+        if not self.is_connected or self._client is None:
             raise ConnectionError("Not connected to Tradernet")
 
         try:
@@ -872,7 +870,7 @@ class TradernetClient:
         Returns the raw API response including x_curr (trading currency).
         Useful for syncing currency information.
         """
-        if not self.is_connected:
+        if not self.is_connected or self._client is None:
             raise ConnectionError("Not connected to Tradernet")
 
         try:
@@ -888,7 +886,7 @@ class TradernetClient:
 
         Returns list of order dicts with keys: id, symbol, side, quantity, price, currency
         """
-        if not self.is_connected:
+        if not self.is_connected or self._client is None:
             raise ConnectionError("Not connected to Tradernet")
 
         try:
@@ -927,7 +925,7 @@ class TradernetClient:
         Returns dict like: {"EUR": 500.0, "USD": 200.0}
         """
         pending = self.get_pending_orders()
-        totals = {}
+        totals: dict[str, float] = {}
 
         for order in pending:
             if order["side"] and order["side"].lower() == "buy":
@@ -969,7 +967,7 @@ class TradernetClient:
             end: End date (defaults to now if not provided)
             days: Optional backward compatibility - calculates start date from days ago
         """
-        if not self.is_connected:
+        if not self.is_connected or self._client is None:
             raise ConnectionError("Not connected to Tradernet")
 
         # Handle backward compatibility with days parameter
@@ -1017,7 +1015,7 @@ class TradernetClient:
             Dict with security info including 'lot' (minimum lot size) if available,
             None if the request fails.
         """
-        if not self.is_connected:
+        if not self.is_connected or self._client is None:
             raise ConnectionError("Not connected to Tradernet")
 
         try:
@@ -1049,7 +1047,7 @@ class TradernetClient:
         Returns:
             OrderResult if successful, None otherwise
         """
-        if not self.is_connected:
+        if not self.is_connected or self._client is None:
             raise ConnectionError("Not connected to Tradernet")
 
         trading_mode = _get_trading_mode()
@@ -1073,7 +1071,7 @@ class TradernetClient:
 
     def cancel_order(self, order_id: str) -> bool:
         """Cancel an open order."""
-        if not self.is_connected:
+        if not self.is_connected or self._client is None:
             raise ConnectionError("Not connected to Tradernet")
 
         try:
@@ -1133,7 +1131,7 @@ class TradernetClient:
 
         Returns list of trade dicts with: order_id, symbol, side, quantity, price, executed_at
         """
-        if not self.is_connected:
+        if not self.is_connected or self._client is None:
             raise ConnectionError("Not connected to Tradernet")
 
         try:
@@ -1167,7 +1165,7 @@ class TradernetClient:
         - total_withdrawals: Sum of all completed withdrawals in EUR
         - withdrawals: List of individual withdrawal transactions
         """
-        if not self.is_connected:
+        if not self.is_connected or self._client is None:
             raise ConnectionError("Not connected to Tradernet")
 
         try:
