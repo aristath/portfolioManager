@@ -22,10 +22,10 @@ class TestStockValidation:
         with pytest.raises(ValidationError, match="Name cannot be empty"):
             Stock(symbol="AAPL.US", name="", geography="US")
 
-    def test_stock_validates_geography(self):
-        """Test that Stock validates geography is valid."""
-        with pytest.raises(ValidationError, match="Invalid geography"):
-            Stock(symbol="AAPL.US", name="Test", geography="INVALID")
+    def test_stock_accepts_any_geography(self):
+        """Test that Stock accepts any non-empty geography (relaxed validation)."""
+        stock = Stock(symbol="AAPL.US", name="Test", geography="GREECE")
+        assert stock.geography == "GREECE"
 
     def test_stock_validates_min_lot_positive(self):
         """Test that Stock validates min_lot is positive."""

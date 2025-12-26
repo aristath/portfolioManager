@@ -6,6 +6,7 @@ from typing import List, Optional, Dict
 from app.domain.models import Position
 from app.domain.value_objects.currency import Currency
 from app.infrastructure.database import get_db_manager
+from app.repositories.base import transaction_context
 
 
 class PositionRepository:

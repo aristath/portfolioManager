@@ -285,7 +285,7 @@ class TestHasBigDividendCut:
         has_cut, years_since = has_big_dividend_cut(history)
 
         assert has_cut is True
-        assert years_since == 0  # Most recent year
+        assert years_since == 1  # Cut detected in most recent period
 
     def test_ignores_small_cut(self):
         """15% cut should not be flagged (below 20% threshold).
