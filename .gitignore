@@ -30,6 +30,11 @@ Thumbs.db
 htmlcov/
 .env.aristath
 
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
 # Tailwind CLI binary
 tailwindcss
 
