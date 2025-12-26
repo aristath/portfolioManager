@@ -41,9 +41,9 @@ from app.domain.scoring import (
     PortfolioContext,
     TechnicalData,
 )
-from app.domain.models import Recommendation, StockPriority
+from app.domain.models import Recommendation
 from app.domain.value_objects.recommendation_status import RecommendationStatus
-from app.domain.services.allocation_calculator import calculate_position_size, calculate_position_size_risk_parity, get_max_trades
+from app.domain.services.allocation_calculator import get_max_trades
 from app.domain.constants import (
     TARGET_PORTFOLIO_VOLATILITY,
     DEFAULT_VOLATILITY,
@@ -51,7 +51,6 @@ from app.domain.constants import (
     MAX_VOL_WEIGHT,
     MIN_VOLATILITY_FOR_SIZING,
     REBALANCE_BAND_PCT,
-    MAX_PRICE_VS_52W_HIGH,
     MAX_POSITION_PCT,
 )
 from app.domain.scoring.opportunity import is_price_too_high
