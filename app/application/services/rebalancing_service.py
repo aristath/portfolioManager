@@ -32,6 +32,7 @@ from app.domain.repositories.protocols import (
     ISettingsRepository,
 )
 from app.domain.services.settings_service import SettingsService
+from app.domain.services.trade_sizing_service import TradeSizingService
 from app.domain.events import RecommendationCreatedEvent, get_event_bus
 from app.domain.scoring import (
     calculate_portfolio_score,
@@ -477,19 +478,14 @@ class RebalancingService:
             risk_parity_amount = base_trade_amount * vol_weight * score_adj
 
             # Calculate actual transaction value (respecting min_lot)
-            lot_cost_native = min_lot * price
-            lot_cost_eur = lot_cost_native / exchange_rate
-
-            if lot_cost_eur > risk_parity_amount:
-                quantity = min_lot
-                trade_value_native = lot_cost_native
-            else:
-                risk_parity_amount_native = risk_parity_amount * exchange_rate
-                num_lots = int(risk_parity_amount_native / lot_cost_native)
-                quantity = num_lots * min_lot
-                trade_value_native = quantity * price
-
-            trade_value_eur = trade_value_native / exchange_rate
+            sized = TradeSizingService.calculate_buy_quantity(
+                target_value_eur=risk_parity_amount,
+                price=price,
+                min_lot=min_lot,
+                exchange_rate=exchange_rate,
+            )
+            quantity = sized.quantity
+            trade_value_eur = sized.value_eur
 
             # GUARDRAIL: Position size cap - no single position > 15% of portfolio
             current_position_value = portfolio_context.positions.get(symbol, 0)

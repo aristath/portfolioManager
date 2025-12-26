@@ -19,6 +19,7 @@ from app.application.services.trade_safety_service import TradeSafetyService
 from app.infrastructure.cache_invalidation import get_cache_invalidation_service
 from app.services.tradernet_connection import ensure_tradernet_connected
 from app.application.services.trade_execution_service import TradeExecutionService
+from app.domain.services.trade_sizing_service import TradeSizingService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -1157,7 +1158,13 @@ async def execute_funding(symbol: str, request: ExecuteFundingRequest):
         # Calculate quantity based on available cash (including new sales)
         available_cash = client.get_total_cash_eur()
         min_lot = stock.min_lot or 1
-        quantity = int(available_cash / price / min_lot) * min_lot
+        sized = TradeSizingService.calculate_buy_quantity(
+            target_value_eur=available_cash,
+            price=price,
+            min_lot=min_lot,
+            exchange_rate=1.0,  # Already in EUR
+        )
+        quantity = sized.quantity
 
         if quantity <= 0:
             raise HTTPException(
