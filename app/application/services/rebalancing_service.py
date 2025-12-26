@@ -59,6 +59,7 @@ from app.domain.analytics import (
     get_performance_attribution,
 )
 from app.infrastructure.recommendation_cache import get_recommendation_cache
+from app.application.services.recommendation.portfolio_context_builder import build_portfolio_context
 
 logger = logging.getLogger(__name__)
 
@@ -213,48 +214,6 @@ class RebalancingService:
 
         return result
 
-    async def _build_portfolio_context(self) -> PortfolioContext:
-        """Build portfolio context for scoring."""
-        positions = await self._position_repo.get_all()
-        stocks = await self._stock_repo.get_all_active()
-        allocations = await self._allocation_repo.get_all()
-        total_value = await self._position_repo.get_total_value()
-
-        # Build allocation weight maps
-        geo_weights = {}
-        industry_weights = {}
-        for key, target_pct in allocations.items():
-            parts = key.split(":", 1)
-            if len(parts) == 2:
-                alloc_type, name = parts
-                if alloc_type == "geography":
-                    geo_weights[name] = target_pct
-                elif alloc_type == "industry":
-                    industry_weights[name] = target_pct
-
-        # Build stock metadata maps
-        position_map = {p.symbol: p.market_value_eur or 0 for p in positions}
-        stock_geographies = {s.symbol: s.geography for s in stocks}
-        stock_industries = {s.symbol: s.industry for s in stocks if s.industry}
-        stock_scores = {}
-
-        # Get existing scores
-        score_rows = await self._db_manager.state.fetchall(
-            "SELECT symbol, quality_score FROM scores"
-        )
-        for row in score_rows:
-            if row["quality_score"]:
-                stock_scores[row["symbol"]] = row["quality_score"]
-
-        return PortfolioContext(
-            geo_weights=geo_weights,
-            industry_weights=industry_weights,
-            positions=position_map,
-            total_value=total_value if total_value > 0 else 1.0,
-            stock_geographies=stock_geographies,
-            stock_industries=stock_industries,
-            stock_scores=stock_scores,
-        )
 
     async def get_recommendations(self, limit: int = 3) -> List[Recommendation]:
         """
@@ -305,7 +264,12 @@ class RebalancingService:
             return recommendations
 
         # Build portfolio context
-        portfolio_context = await self._build_portfolio_context()
+        portfolio_context = await build_portfolio_context(
+            position_repo=self._position_repo,
+            stock_repo=self._stock_repo,
+            allocation_repo=self._allocation_repo,
+            db_manager=self._db_manager,
+        )
         
         # Get performance-adjusted allocation weights (PyFolio enhancement)
         # Pass cache_key for caching (saves ~27s on repeat calls)
@@ -741,7 +705,12 @@ class RebalancingService:
         Calculate optimal SELL recommendations based on sell scoring system.
         """
         # Build portfolio context
-        portfolio_context = await self._build_portfolio_context()
+        portfolio_context = await build_portfolio_context(
+            position_repo=self._position_repo,
+            stock_repo=self._stock_repo,
+            allocation_repo=self._allocation_repo,
+            db_manager=self._db_manager,
+        )
         total_value = portfolio_context.total_value
 
         # Get all positions
@@ -1223,7 +1192,12 @@ class RebalancingService:
         from app.domain.planning.holistic_planner import create_holistic_plan
 
         # Build portfolio context
-        portfolio_context = await self._build_portfolio_context()
+        portfolio_context = await build_portfolio_context(
+            position_repo=self._position_repo,
+            stock_repo=self._stock_repo,
+            allocation_repo=self._allocation_repo,
+            db_manager=self._db_manager,
+        )
 
         # Get positions and stocks
         positions = await self._position_repo.get_all()
