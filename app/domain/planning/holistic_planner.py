@@ -22,7 +22,6 @@ from typing import List, Dict, Optional, Callable, Awaitable, Tuple
 from app.domain.scoring.models import PortfolioContext
 from app.domain.scoring.diversification import calculate_portfolio_score
 from app.domain.scoring.end_state import calculate_portfolio_end_state_score
-from app.domain.scoring.windfall import get_windfall_recommendation
 from app.domain.models import Stock, Position
 from app.domain.value_objects.trade_side import TradeSide
 
@@ -98,16 +97,22 @@ async def identify_opportunities(
         positions: Current positions
         stocks: Available stocks
         available_cash: Available cash in EUR
+        exchange_rate_service: Optional exchange rate service
 
     Returns:
         Dict mapping category to list of ActionCandidate
     """
     from app.repositories import SettingsRepository, TradeRepository
     from app.infrastructure.external import yahoo_finance as yahoo
-    from app.domain.services.exchange_rate_service import ExchangeRateService
-    from app.domain.services.trade_sizing_service import TradeSizingService
     from app.domain.constants import BUY_COOLDOWN_DAYS
     from app.config import settings as app_settings
+    from app.domain.planning.opportunities import (
+        identify_profit_taking_opportunities,
+        identify_rebalance_sell_opportunities,
+        identify_averaging_down_opportunities,
+        identify_rebalance_buy_opportunities,
+        identify_opportunity_buy_opportunities,
+    )
 
     settings_repo = SettingsRepository()
     trade_repo = TradeRepository()
@@ -140,195 +145,48 @@ async def identify_opportunities(
                 if ind:
                     ind_allocations[ind] = ind_allocations.get(ind, 0) + value / total_value
 
-    # Analyze positions for sell opportunities
-    for pos in positions:
-        stock = stocks_by_symbol.get(pos.symbol)
-        if not stock or not stock.allow_sell:
-            continue
+    # Identify profit-taking opportunities
+    opportunities["profit_taking"] = await identify_profit_taking_opportunities(
+        positions, stocks_by_symbol, exchange_rate_service
+    )
 
-        position_value = pos.market_value_eur or 0
-        if position_value <= 0:
-            continue
+    # Identify rebalance sell opportunities
+    opportunities["rebalance_sells"] = await identify_rebalance_sell_opportunities(
+        positions, stocks_by_symbol, portfolio_context, geo_allocations,
+        total_value, exchange_rate_service
+    )
 
-        # Check for windfall
-        windfall_rec = await get_windfall_recommendation(
-            symbol=pos.symbol,
-            current_price=pos.current_price or pos.avg_price,
-            avg_price=pos.avg_price,
-            first_bought_at=pos.first_bought_at if hasattr(pos, 'first_bought_at') else None,
-        )
-
-        if windfall_rec.get("recommendation", {}).get("take_profits"):
-            rec = windfall_rec["recommendation"]
-            sell_pct = rec["suggested_sell_pct"] / 100
-            sell_qty = int(pos.quantity * sell_pct)
-            sell_value = sell_qty * (pos.current_price or pos.avg_price)
-
-            # Convert to EUR
-            exchange_rate = 1.0
-            if pos.currency and pos.currency != "EUR":
-                if exchange_rate_service:
-                    exchange_rate = await exchange_rate_service.get_rate(pos.currency, "EUR")
-                else:
-                    exchange_rate = 1.0  # Fallback if service not provided
-            sell_value_eur = sell_value / exchange_rate if exchange_rate > 0 else sell_value
-
-            opportunities["profit_taking"].append(ActionCandidate(
-                side=TradeSide.SELL,
-                symbol=pos.symbol,
-                name=stock.name,
-                quantity=sell_qty,
-                price=pos.current_price or pos.avg_price,
-                value_eur=sell_value_eur,
-                currency=pos.currency or "EUR",
-                priority=windfall_rec.get("windfall_score", 0.5) + 0.5,  # High priority
-                reason=rec["reason"],
-                tags=["windfall", "profit_taking"],
-            ))
-
-        # Check for rebalance sells (overweight geography/industry)
-        geo = stock.geography
-        if geo in geo_allocations:
-            target = 0.33 + portfolio_context.geo_weights.get(geo, 0) * 0.15
-            if geo_allocations[geo] > target + 0.05:  # 5%+ overweight
-                overweight = geo_allocations[geo] - target
-                sell_value_eur = min(position_value * 0.3, overweight * total_value)
-
-                # Calculate quantity
-                exchange_rate = 1.0
-                if pos.currency and pos.currency != "EUR":
-                    if exchange_rate_service:
-                        exchange_rate = await exchange_rate_service.get_rate(pos.currency, "EUR")
-                    else:
-                        exchange_rate = 1.0  # Fallback if service not provided
-                sell_value_native = sell_value_eur * exchange_rate
-                sell_qty = int(sell_value_native / (pos.current_price or pos.avg_price))
-
-                if sell_qty > 0:
-                    opportunities["rebalance_sells"].append(ActionCandidate(
-                        side=TradeSide.SELL,
-                        symbol=pos.symbol,
-                        name=stock.name,
-                        quantity=sell_qty,
-                        price=pos.current_price or pos.avg_price,
-                        value_eur=sell_value_eur,
-                        currency=pos.currency or "EUR",
-                        priority=overweight * 2,  # Proportional to overweight
-                        reason=f"Overweight {geo} by {overweight*100:.1f}%",
-                        tags=["rebalance", f"overweight_{geo.lower()}"],
-                    ))
-
-    # Analyze stocks for buy opportunities
+    # Get base trade amount and batch prices for buy opportunities
     base_trade_amount = await settings_repo.get_float("min_trade_size", 150.0)
-
-    # Get batch prices for efficiency
     yahoo_symbols = {s.symbol: s.yahoo_symbol for s in stocks if s.yahoo_symbol and s.allow_buy}
     batch_prices = yahoo.get_batch_quotes(yahoo_symbols)
 
-    for stock in stocks:
-        if not stock.allow_buy:
-            continue
-        if stock.symbol in recently_bought:
-            continue
+    # Filter stocks for buy opportunities (exclude recently bought and low quality)
+    eligible_stocks = [
+        s for s in stocks
+        if s.allow_buy
+        and s.symbol not in recently_bought
+        and batch_prices.get(s.symbol, 0) > 0
+        and portfolio_context.stock_scores.get(s.symbol, 0.5) >= app_settings.min_stock_score
+    ]
 
-        price = batch_prices.get(stock.symbol)
-        if not price or price <= 0:
-            continue
+    # Identify averaging down opportunities
+    opportunities["averaging_down"] = await identify_averaging_down_opportunities(
+        eligible_stocks, portfolio_context, batch_prices,
+        base_trade_amount, exchange_rate_service
+    )
 
-        # Get quality score
-        quality_score = portfolio_context.stock_scores.get(stock.symbol, 0.5)
-        if quality_score < app_settings.min_stock_score:
-            continue
+    # Identify rebalance buy opportunities
+    opportunities["rebalance_buys"] = await identify_rebalance_buy_opportunities(
+        eligible_stocks, portfolio_context, geo_allocations,
+        batch_prices, base_trade_amount, exchange_rate_service
+    )
 
-        # Check if we own this and it's down (averaging down opportunity)
-        current_position = portfolio_context.positions.get(stock.symbol, 0)
-        current_price_data = portfolio_context.current_prices or {}
-        avg_price_data = portfolio_context.position_avg_prices or {}
-
-        if current_position > 0 and stock.symbol in avg_price_data:
-            avg_price = avg_price_data[stock.symbol]
-            if avg_price > 0:
-                loss_pct = (price - avg_price) / avg_price
-                if loss_pct < -0.20 and quality_score >= 0.6:  # Down 20%+ but quality
-                    # Calculate buy amount with lot-aware sizing
-                    exchange_rate = 1.0
-                    if stock.currency and stock.currency != "EUR" and exchange_rate_service:
-                        exchange_rate = await exchange_rate_service.get_rate(stock.currency or "EUR", "EUR")
-                    sized = TradeSizingService.calculate_buy_quantity(
-                        target_value_eur=base_trade_amount,
-                        price=price,
-                        min_lot=stock.min_lot,
-                        exchange_rate=exchange_rate,
-                    )
-
-                    opportunities["averaging_down"].append(ActionCandidate(
-                        side=TradeSide.BUY,
-                        symbol=stock.symbol,
-                        name=stock.name,
-                        quantity=sized.quantity,
-                        price=price,
-                        value_eur=sized.value_eur,
-                        currency=stock.currency or "EUR",
-                        priority=quality_score + abs(loss_pct),  # Higher quality + bigger dip = higher priority
-                        reason=f"Quality stock down {abs(loss_pct)*100:.0f}%, averaging down",
-                        tags=["averaging_down", "buy_low"],
-                    ))
-                    continue
-
-        # Check for rebalance buys (underweight geography/industry)
-        geo = stock.geography
-        if geo:
-            target = 0.33 + portfolio_context.geo_weights.get(geo, 0) * 0.15
-            current = geo_allocations.get(geo, 0)
-            if current < target - 0.05:  # 5%+ underweight
-                underweight = target - current
-                exchange_rate = 1.0
-                if stock.currency and stock.currency != "EUR" and exchange_rate_service:
-                    exchange_rate = await exchange_rate_service.get_rate(stock.currency or "EUR", "EUR")
-                sized = TradeSizingService.calculate_buy_quantity(
-                    target_value_eur=base_trade_amount,
-                    price=price,
-                    min_lot=stock.min_lot,
-                    exchange_rate=exchange_rate,
-                )
-
-                opportunities["rebalance_buys"].append(ActionCandidate(
-                    side=TradeSide.BUY,
-                    symbol=stock.symbol,
-                    name=stock.name,
-                    quantity=sized.quantity,
-                    price=price,
-                    value_eur=sized.value_eur,
-                    currency=stock.currency or "EUR",
-                    priority=underweight * 2 + quality_score * 0.5,
-                    reason=f"Underweight {geo} by {underweight*100:.1f}%",
-                    tags=["rebalance", f"underweight_{geo.lower()}"],
-                ))
-
-        # General opportunity buys (high quality at good price)
-        if quality_score >= 0.7:
-            exchange_rate = 1.0
-            if stock.currency and stock.currency != "EUR" and exchange_rate_service:
-                exchange_rate = await exchange_rate_service.get_rate(stock.currency or "EUR", "EUR")
-            sized = TradeSizingService.calculate_buy_quantity(
-                target_value_eur=base_trade_amount,
-                price=price,
-                min_lot=stock.min_lot,
-                exchange_rate=exchange_rate,
-            )
-
-            opportunities["opportunity_buys"].append(ActionCandidate(
-                side=TradeSide.BUY,
-                symbol=stock.symbol,
-                name=stock.name,
-                quantity=sized.quantity,
-                price=price,
-                value_eur=sized.value_eur,
-                currency=stock.currency or "EUR",
-                priority=quality_score,
-                reason=f"High quality (score: {quality_score:.2f})",
-                tags=["quality", "opportunity"],
-            ))
+    # Identify general opportunity buys
+    opportunities["opportunity_buys"] = await identify_opportunity_buy_opportunities(
+        eligible_stocks, portfolio_context, batch_prices,
+        base_trade_amount, min_quality_score=0.7, exchange_rate_service=exchange_rate_service
+    )
 
     # Sort each category by priority
     for category in opportunities:
