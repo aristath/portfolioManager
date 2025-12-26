@@ -62,7 +62,7 @@ def _calculate_weight_gaps(
                 }
             )
 
-    weight_gaps.sort(key=lambda x: abs(float(x["gap"])), reverse=True)
+    weight_gaps.sort(key=lambda x: abs(float(x.get("gap", 0.0))), reverse=True)
     return weight_gaps
 
 
@@ -147,7 +147,7 @@ def _process_sell_opportunity(
     if stock and stock.min_lot:
         remaining = position.quantity - quantity
         if remaining < stock.min_lot and remaining > 0:
-            quantity = position.quantity - stock.min_lot
+            quantity = int(position.quantity - stock.min_lot)
 
     if quantity <= 0:
         return
@@ -257,7 +257,7 @@ async def identify_opportunities_from_weights(
     positions_by_symbol = {p.symbol: p for p in positions}
     total_value = portfolio_context.total_value
 
-    opportunities = {
+    opportunities: dict[str, list] = {
         "profit_taking": [],
         "averaging_down": [],
         "rebalance_sells": [],
@@ -298,7 +298,8 @@ async def identify_opportunities_from_weights(
         if gap > 0:
             _process_buy_opportunity(gap_info, stock, position, price, opportunities)
         else:
-            _process_sell_opportunity(gap_info, stock, position, price, opportunities)
+            if position is not None:
+                _process_sell_opportunity(gap_info, stock, position, price, opportunities)
 
     # Sort each category by priority
     for category in opportunities:
@@ -357,7 +358,7 @@ async def identify_opportunities(
     settings_repo = SettingsRepository()
     trade_repo = TradeRepository()
 
-    opportunities = {
+    opportunities: dict[str, list] = {
         "profit_taking": [],
         "averaging_down": [],
         "rebalance_sells": [],
@@ -372,8 +373,8 @@ async def identify_opportunities(
     recently_bought = await trade_repo.get_recently_bought_symbols(BUY_COOLDOWN_DAYS)
 
     # Calculate current geography/industry allocations
-    geo_allocations = {}
-    ind_allocations = {}
+    geo_allocations: dict[str, float] = {}
+    ind_allocations: dict[str, float] = {}
     for symbol, value in portfolio_context.positions.items():
         geo = portfolio_context.stock_geographies.get(symbol, "OTHER")
         geo_allocations[geo] = geo_allocations.get(geo, 0) + value / total_value
