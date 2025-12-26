@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse
 from app.config import settings
 from app.infrastructure.database.manager import init_databases, get_db_manager, shutdown_databases
 from app.api import portfolio, stocks, trades, status, allocation, cash_flows, charts, settings as settings_api
-from app.api import recommendations, multi_step_recommendations
+from app.api import recommendations, multi_step_recommendations, optimizer
 from app.jobs.scheduler import init_scheduler, start_scheduler, stop_scheduler
 from app.infrastructure.external.tradernet import get_tradernet_client
 from app.infrastructure.events import emit, SystemEvent
@@ -138,6 +138,7 @@ app.include_router(allocation.router, prefix="/api/allocation", tags=["Allocatio
 app.include_router(cash_flows.router, prefix="/api/cash-flows", tags=["Cash Flows"])
 app.include_router(charts.router, prefix="/api/charts", tags=["Charts"])
 app.include_router(settings_api.router, prefix="/api/settings", tags=["Settings"])
+app.include_router(optimizer.router, prefix="/api/optimizer", tags=["Optimizer"])
 
 
 @app.get("/")

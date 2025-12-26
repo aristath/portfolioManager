@@ -32,7 +32,7 @@ class Settings(BaseSettings):
 
     # Investment / Rebalancing
     min_cash_threshold: float = 400.0  # EUR - minimum cash to trigger rebalance
-    min_trade_size: float = 400.0  # EUR - keeps commission at 0.5% (€2 fee)
+    # Note: min_trade_size removed - now calculated from transaction costs in DB settings
     max_trades_per_cycle: int = 5  # Maximum trades per rebalance cycle
     min_stock_score: float = 0.5  # Minimum score to consider buying a stock
     

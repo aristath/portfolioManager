@@ -21,7 +21,15 @@ document.addEventListener('alpine:init', () => {
     sellRecommendations: [],
     multiStepRecommendations: null,  // {depth: int, steps: [], total_score_improvement: float, final_available_cash: float}
     allStrategyRecommendations: null,  // {diversification: {...}, sustainability: {...}, opportunity: {...}}
-    settings: { min_trade_size: 400 },
+    optimizerStatus: null,  // {settings: {...}, last_run: {...}, status: 'ready'}
+    // Default settings - will be overwritten by fetchSettings()
+    settings: {
+      optimizer_blend: 0.5,
+      optimizer_target_return: 0.11,
+      transaction_cost_fixed: 2.0,
+      transaction_cost_percent: 0.002,
+      min_cash_reserve: 500.0,
+    },
     tradingMode: 'research',  // 'live' or 'research'
     sparklines: {},  // {symbol: [{time, value}, ...]}
 
@@ -85,7 +93,8 @@ document.addEventListener('alpine:init', () => {
         this.fetchMultiStepRecommendations(),
         this.fetchAllStrategyRecommendations(),
         this.fetchSettings(),
-        this.fetchSparklines()
+        this.fetchSparklines(),
+        this.fetchOptimizerStatus()
       ]);
     },
 
@@ -181,16 +190,9 @@ document.addEventListener('alpine:init', () => {
     async fetchMultiStepRecommendations() {
       this.loading.multiStepRecommendations = true;
       try {
-        // Get depth from settings, default to 1
-        // Parse as integer since it may be stored as string in DB
-        const depth = parseInt(this.settings?.recommendation_depth || 1, 10);
-        // Only fetch multi-step if depth > 1
-        if (depth > 1) {
-          const data = await API.fetchMultiStepRecommendations(depth);
-          this.multiStepRecommendations = data;
-        } else {
-          this.multiStepRecommendations = null;
-        }
+        // Optimizer-driven multi-step recommendations (always fetched)
+        const data = await API.fetchMultiStepRecommendations();
+        this.multiStepRecommendations = data;
       } catch (e) {
         console.error('Failed to fetch multi-step recommendations:', e);
         this.multiStepRecommendations = null;
@@ -201,15 +203,9 @@ document.addEventListener('alpine:init', () => {
     async fetchAllStrategyRecommendations() {
       this.loading.allStrategyRecommendations = true;
       try {
-        // Get depth from settings, default to 1
-        const depth = parseInt(this.settings?.recommendation_depth || 1, 10);
-        // Only fetch all strategies if depth > 1
-        if (depth > 1) {
-          const data = await API.fetchAllStrategyRecommendations(depth);
-          this.allStrategyRecommendations = data;
-        } else {
-          this.allStrategyRecommendations = null;
-        }
+        // Optimizer-driven strategy recommendations (always fetched)
+        const data = await API.fetchAllStrategyRecommendations();
+        this.allStrategyRecommendations = data;
       } catch (e) {
         console.error('Failed to fetch all-strategy recommendations:', e);
         this.allStrategyRecommendations = null;
@@ -224,9 +220,6 @@ document.addEventListener('alpine:init', () => {
         if (this.settings.trading_mode) {
           this.tradingMode = this.settings.trading_mode;
         }
-        // Always refresh multi-step recommendations when settings are loaded
-        // to ensure we have the correct depth
-        await this.fetchMultiStepRecommendations();
       } catch (e) {
         console.error('Failed to fetch settings:', e);
       }
@@ -240,16 +233,25 @@ document.addEventListener('alpine:init', () => {
       }
     },
 
-    async updateMinTradeSize(value) {
-      const numValue = parseFloat(value);
-      if (isNaN(numValue) || numValue <= 0) return;
+    async fetchOptimizerStatus() {
       try {
-        await API.updateMinTradeSize(numValue);
-        this.settings.min_trade_size = numValue;
-        this.showMessage('Min trade size updated', 'success');
-        await this.fetchRecommendations();
+        this.optimizerStatus = await API.fetchOptimizerStatus();
       } catch (e) {
-        this.showMessage('Failed to update min trade size', 'error');
+        console.error('Failed to fetch optimizer status:', e);
+      }
+    },
+
+    async runOptimizer() {
+      try {
+        const result = await API.runOptimizer();
+        if (result.success) {
+          this.showMessage('Optimization complete', 'success');
+          await this.fetchOptimizerStatus();
+        } else {
+          this.showMessage(`Optimization failed: ${result.result?.error || 'Unknown error'}`, 'error');
+        }
+      } catch (e) {
+        this.showMessage('Failed to run optimizer', 'error');
       }
     },
 
@@ -260,10 +262,6 @@ document.addEventListener('alpine:init', () => {
         await API.updateSetting(key, numValue);
         this.settings[key] = numValue;
         this.showMessage(`Setting "${key}" updated`, 'success');
-        // If recommendation_depth was updated, refresh multi-step recommendations
-        if (key === 'recommendation_depth') {
-          await this.fetchMultiStepRecommendations();
-        }
       } catch (e) {
         this.showMessage(`Failed to update ${key}`, 'error');
       }

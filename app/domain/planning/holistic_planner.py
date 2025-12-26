@@ -306,6 +306,7 @@ async def identify_opportunities(
         identify_rebalance_buy_opportunities,
         identify_opportunity_buy_opportunities,
     )
+    from app.application.services.rebalancing_service import calculate_min_trade_amount
 
     settings_repo = SettingsRepository()
     trade_repo = TradeRepository()
@@ -349,8 +350,10 @@ async def identify_opportunities(
         total_value, exchange_rate_service
     )
 
-    # Get base trade amount and batch prices for buy opportunities
-    base_trade_amount = await settings_repo.get_float("min_trade_size", 150.0)
+    # Calculate minimum worthwhile trade from transaction costs
+    transaction_cost_fixed = await settings_repo.get_float("transaction_cost_fixed", 2.0)
+    transaction_cost_percent = await settings_repo.get_float("transaction_cost_percent", 0.002)
+    base_trade_amount = calculate_min_trade_amount(transaction_cost_fixed, transaction_cost_percent)
     yahoo_symbols = {s.symbol: s.yahoo_symbol for s in stocks if s.yahoo_symbol and s.allow_buy}
     batch_prices = yahoo.get_batch_quotes(yahoo_symbols)
 
