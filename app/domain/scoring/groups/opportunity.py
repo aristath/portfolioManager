@@ -70,7 +70,7 @@ async def calculate_opportunity_score(
         sub_components_dict: {"below_52w_high": float, "pe_ratio": float}
     """
     from app.repositories.calculations import CalculationsRepository
-    from app.domain.scoring.technical import get_52_week_high
+    from app.domain.scoring.caching import get_52_week_high
 
     if len(daily_prices) < MIN_DAYS_FOR_OPPORTUNITY:
         logger.warning(f"Insufficient daily data: {len(daily_prices)} days")

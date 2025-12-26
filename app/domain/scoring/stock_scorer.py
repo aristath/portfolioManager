@@ -38,7 +38,7 @@ from app.domain.scoring.groups.short_term import calculate_short_term_score
 from app.domain.scoring.groups.technicals import calculate_technicals_score
 from app.domain.scoring.groups.opinion import calculate_opinion_score
 from app.domain.scoring.diversification import calculate_diversification_score
-from app.domain.scoring.technical import calculate_volatility
+from app.domain.scoring.calculations import calculate_volatility
 
 logger = logging.getLogger(__name__)
 

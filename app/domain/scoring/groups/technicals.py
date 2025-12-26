@@ -36,7 +36,7 @@ async def calculate_technicals_score(symbol: str, daily_prices: List[Dict]) -> t
         sub_components_dict: {"rsi": float, "bollinger": float, "ema": float}
     """
     from app.repositories.calculations import CalculationsRepository
-    from app.domain.scoring.technical import (
+    from app.domain.scoring.caching import (
         get_rsi,
         get_bollinger_bands,
         get_ema,

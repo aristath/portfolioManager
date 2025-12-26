@@ -53,7 +53,7 @@ async def calculate_long_term_score(
         sub_components_dict: {"cagr": float, "sortino": float, "sharpe": float}
     """
     from app.repositories.calculations import CalculationsRepository
-    from app.domain.scoring.technical import get_sharpe_ratio
+    from app.domain.scoring.caching import get_sharpe_ratio
 
     calc_repo = CalculationsRepository()
 

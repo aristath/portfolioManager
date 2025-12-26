@@ -72,7 +72,7 @@ async def calculate_short_term_score(
         sub_components_dict: {"momentum": float, "drawdown": float}
     """
     from app.repositories.calculations import CalculationsRepository
-    from app.domain.scoring.technical import get_max_drawdown
+    from app.domain.scoring.caching import get_max_drawdown
 
     calc_repo = CalculationsRepository()
 
