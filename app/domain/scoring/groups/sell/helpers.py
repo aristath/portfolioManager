@@ -12,8 +12,6 @@ from app.domain.scoring.constants import (
     DEFAULT_MAX_LOSS_THRESHOLD,
     TARGET_RETURN_MIN,
     TARGET_RETURN_MAX,
-    CONCENTRATION_HIGH,
-    CONCENTRATION_MED,
     INSTABILITY_RATE_VERY_HOT,
     INSTABILITY_RATE_HOT,
     INSTABILITY_RATE_WARM,
@@ -124,42 +122,50 @@ def calculate_portfolio_balance_score(
     ind_allocations: Dict[str, float],
 ) -> float:
     """
-    Calculate portfolio balance score based on overweight/underweight position.
+    Calculate portfolio balance score. Overweight positions score higher.
 
-    Higher score = position is overweight, more reason to trim.
-
-    Returns:
-        Score from 0.0 to 1.0
+    Args:
+        position_value: Current position value in EUR
+        total_portfolio_value: Total portfolio value in EUR
+        geography: Stock's geography (EU, US, ASIA)
+        industry: Stock's industry
+        geo_allocations: Current geography allocation percentages
+        ind_allocations: Current industry allocation percentages
     """
     if total_portfolio_value <= 0:
         return 0.5
 
-    position_pct = position_value / total_portfolio_value
+    score = 0.0
 
-    # Check geography concentration
-    target_geo = geo_allocations.get(geography, 0.33)  # Default 33% if no target
-    geo_excess = position_pct - target_geo if geography in geo_allocations else 0
+    # Geography overweight (50% of this component)
+    geo_current = geo_allocations.get(geography, 0)
+    # Higher allocation = more reason to sell from this region
+    geo_score = min(1.0, geo_current / 0.5)  # Normalize to ~1.0 at 50% allocation
+    score += geo_score * 0.5
 
-    # Check industry concentration (use first industry if multiple)
-    industries = [i.strip() for i in industry.split(',')] if industry else []
-    target_ind = ind_allocations.get(industries[0], 0.10) if industries else 0.10
-    ind_excess = position_pct - target_ind if industries and industries[0] in ind_allocations else 0
-
-    # Use maximum excess (geography or industry)
-    max_excess = max(geo_excess, ind_excess)
-
-    # Score based on concentration
-    if position_pct > CONCENTRATION_HIGH:  # >10% of portfolio
-        return 1.0
-    elif position_pct > CONCENTRATION_MED:  # >7% of portfolio
-        return 0.7 + (position_pct - CONCENTRATION_MED) * 10  # 0.7 to 1.0
-    elif max_excess > 0.03:  # >3% overweight
-        return 0.5 + (max_excess / 0.05) * 0.2  # 0.5 to 0.7
-    elif max_excess > 0:  # Slightly overweight
-        return 0.3 + (max_excess / 0.03) * 0.2  # 0.3 to 0.5
+    # Industry overweight (30% of this component)
+    # Handle multiple industries
+    if industry:
+        industries = [i.strip() for i in industry.split(',')]
+        ind_scores = []
+        for ind in industries:
+            ind_current = ind_allocations.get(ind, 0)
+            ind_scores.append(min(1.0, ind_current / 0.3))  # Normalize to ~1.0 at 30%
+        ind_score = sum(ind_scores) / len(ind_scores) if ind_scores else 0.5
     else:
-        # Underweight or balanced - don't sell
-        return 0.1
+        ind_score = 0.5
+    score += ind_score * 0.3
+
+    # Concentration risk (20% of this component)
+    position_pct = position_value / total_portfolio_value
+    if position_pct > 0.10:
+        # >10% in one position - high concentration
+        conc_score = min(1.0, position_pct / 0.15)
+    else:
+        conc_score = position_pct / 0.10
+    score += conc_score * 0.2
+
+    return score
 
 
 def calculate_instability_score(
