@@ -8,21 +8,18 @@ Components:
 """
 
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import numpy as np
 
 from app.domain.responses import ScoreResult
-
-logger = logging.getLogger(__name__)
-
-
-# Import scorers from dedicated module
 from app.domain.scoring.scorers.technicals import (
     score_bollinger,
     score_ema_distance,
     score_rsi,
 )
+
+logger = logging.getLogger(__name__)
 
 
 async def calculate_technicals_score(

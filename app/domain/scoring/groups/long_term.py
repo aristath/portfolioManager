@@ -15,6 +15,11 @@ import numpy as np
 from app.domain.responses import ScoreResult
 from app.domain.scoring.calculations import calculate_cagr
 from app.domain.scoring.constants import OPTIMAL_CAGR
+from app.domain.scoring.scorers.long_term import (
+    score_cagr,
+    score_sharpe,
+    score_sortino,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -22,14 +27,6 @@ logger = logging.getLogger(__name__)
 WEIGHT_CAGR = 0.40
 WEIGHT_SORTINO = 0.35
 WEIGHT_SHARPE = 0.25
-
-
-# Import scorers from dedicated module
-from app.domain.scoring.scorers.long_term import (
-    score_cagr,
-    score_sharpe,
-    score_sortino,
-)
 
 
 async def calculate_long_term_score(

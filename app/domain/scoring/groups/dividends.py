@@ -9,15 +9,12 @@ Components:
 import logging
 
 from app.domain.responses import ScoreResult
-
-logger = logging.getLogger(__name__)
-
-
-# Import scorers from dedicated module
 from app.domain.scoring.scorers.dividends import (
     score_dividend_consistency,
     score_dividend_yield,
 )
+
+logger = logging.getLogger(__name__)
 
 
 async def calculate_dividends_score(symbol: str, fundamentals) -> ScoreResult:

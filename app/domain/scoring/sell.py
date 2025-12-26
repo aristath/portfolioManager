@@ -36,10 +36,7 @@ SELL_WEIGHTS = {
     "drawdown": 0.15,  # Current drawdown from PyFolio
 }
 
-logger = logging.getLogger(__name__)
-
-# Import helper functions from dedicated modules
-from app.domain.scoring.groups.sell import (
+from app.domain.scoring.groups.sell import (  # noqa: E402
     calculate_instability_score,
     calculate_portfolio_balance_score,
     calculate_time_held_score,
@@ -47,6 +44,8 @@ from app.domain.scoring.groups.sell import (
     check_sell_eligibility,
     determine_sell_quantity,
 )
+
+logger = logging.getLogger(__name__)
 
 
 async def calculate_sell_score(

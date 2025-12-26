@@ -12,11 +12,9 @@ from typing import Dict, List, Optional
 import numpy as np
 
 from app.domain.responses import ScoreResult
-from app.domain.scoring.constants import (
-    DRAWDOWN_EXCELLENT,
-    DRAWDOWN_GOOD,
-    DRAWDOWN_OK,
-    DRAWDOWN_POOR,
+from app.domain.scoring.scorers.short_term import (
+    score_drawdown,
+    score_momentum,
 )
 
 logger = logging.getLogger(__name__)
@@ -47,13 +45,6 @@ def calculate_recent_momentum(daily_prices: List[Dict]) -> Optional[float]:
     blended = momentum_30d * 0.6 + momentum_90d * 0.4
 
     return blended
-
-
-# Import scorers from dedicated module
-from app.domain.scoring.scorers.short_term import (
-    score_drawdown,
-    score_momentum,
-)
 
 
 async def calculate_short_term_score(

@@ -9,18 +9,19 @@ Note: Technical indicators (RSI, Bollinger, EMA) moved to technicals.py
 """
 
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import numpy as np
 
 from app.domain.constants import MAX_PRICE_VS_52W_HIGH
 from app.domain.responses import ScoreResult
 from app.domain.scoring.constants import (
-    BELOW_HIGH_EXCELLENT,
-    BELOW_HIGH_GOOD,
-    BELOW_HIGH_OK,
     DEFAULT_MARKET_AVG_PE,
     MIN_DAYS_FOR_OPPORTUNITY,
+)
+from app.domain.scoring.scorers.opportunity import (
+    score_below_52w_high,
+    score_pe_ratio,
 )
 
 logger = logging.getLogger(__name__)
@@ -42,13 +43,6 @@ def is_price_too_high(current_price: float, high_52w: float) -> bool:
     if high_52w <= 0:
         return False  # No data, allow trade
     return current_price >= high_52w * MAX_PRICE_VS_52W_HIGH
-
-
-# Import scorers from dedicated module
-from app.domain.scoring.scorers.opportunity import (
-    score_below_52w_high,
-    score_pe_ratio,
-)
 
 
 async def calculate_opportunity_score(
