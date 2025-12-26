@@ -177,6 +177,45 @@ async def root():
     return FileResponse("static/index.html")
 
 
+async def _check_database_health() -> tuple[str, bool]:
+    """Check database connectivity."""
+    try:
+        db_manager = get_db_manager()
+        await db_manager.state.execute("SELECT 1")
+        return "connected", False
+    except Exception as e:
+        return f"error: {str(e)}", True
+
+
+def _check_tradernet_health() -> tuple[str, bool]:
+    """Check Tradernet API connectivity."""
+    try:
+        from app.infrastructure.external.tradernet import get_tradernet_client
+
+        client = get_tradernet_client()
+        if client.is_connected or client.connect():
+            return "connected", False
+        else:
+            return "disconnected", True
+    except Exception as e:
+        return f"error: {str(e)}", True
+
+
+def _check_yahoo_finance_health() -> tuple[str, bool]:
+    """Check Yahoo Finance API connectivity."""
+    try:
+        import yfinance as yf
+
+        ticker = yf.Ticker("AAPL")
+        info = ticker.info
+        if info:
+            return "available", False
+        else:
+            return "unavailable", True
+    except Exception as e:
+        return f"error: {str(e)}", True
+
+
 @app.get("/health")
 async def health():
     """
@@ -197,50 +236,23 @@ async def health():
         "yahoo_finance": "unknown",
     }
 
-    # Check database
-    try:
-        db_manager = get_db_manager()
-        await db_manager.state.execute("SELECT 1")
-        health_status["database"] = "connected"
-    except Exception as e:
-        health_status["database"] = f"error: {str(e)}"
+    db_status, db_degraded = await _check_database_health()
+    health_status["database"] = db_status
+    if db_degraded:
         health_status["status"] = "degraded"
 
-    # Check Tradernet
-    try:
-        from app.infrastructure.external.tradernet import get_tradernet_client
-
-        client = get_tradernet_client()
-        if client.is_connected:
-            health_status["tradernet"] = "connected"
-        elif client.connect():
-            health_status["tradernet"] = "connected"
-        else:
-            health_status["tradernet"] = "disconnected"
-            health_status["status"] = "degraded"
-    except Exception as e:
-        health_status["tradernet"] = f"error: {str(e)}"
+    tradernet_status, tradernet_degraded = _check_tradernet_health()
+    health_status["tradernet"] = tradernet_status
+    if tradernet_degraded:
         health_status["status"] = "degraded"
 
-    # Check Yahoo Finance (basic connectivity test)
-    try:
-        import yfinance as yf
-
-        # Quick test with a known symbol
-        ticker = yf.Ticker("AAPL")
-        info = ticker.info
-        if info:
-            health_status["yahoo_finance"] = "available"
-        else:
-            health_status["yahoo_finance"] = "unavailable"
-            health_status["status"] = "degraded"
-    except Exception as e:
-        health_status["yahoo_finance"] = f"error: {str(e)}"
+    yahoo_status, yahoo_degraded = _check_yahoo_finance_health()
+    health_status["yahoo_finance"] = yahoo_status
+    if yahoo_degraded:
         health_status["status"] = "degraded"
 
     from fastapi import status as http_status
 
-    # Return appropriate status code based on health
     if health_status["status"] == "healthy":
         return health_status
     else:

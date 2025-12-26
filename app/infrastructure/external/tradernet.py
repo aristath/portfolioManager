@@ -699,6 +699,43 @@ class TradernetClient:
             logger.error(f"Failed to cancel order {order_id}: {e}")
             return False
 
+    def _parse_trade_side(self, trade_type) -> str:
+        """Parse trade side from type field (1=BUY, 2=SELL)."""
+        if trade_type == "1" or trade_type == 1:
+            return "BUY"
+        elif trade_type == "2" or trade_type == 2:
+            return "SELL"
+        return ""
+
+    def _parse_trade(self, trade: dict) -> dict | None:
+        """Parse a single trade dict from Tradernet response."""
+        try:
+            order_id = str(trade.get("id") or trade.get("order_id") or "")
+            if not order_id:
+                return None
+
+            qty_str = trade.get("q") or trade.get("qty") or "0"
+            quantity = float(qty_str) if qty_str else 0
+
+            price_str = trade.get("price") or trade.get("p") or "0"
+            price = float(price_str) if price_str else 0
+
+            trade_date = trade.get("date") or trade.get("d") or ""
+            trade_type = trade.get("type") or ""
+            side = self._parse_trade_side(trade_type)
+
+            return {
+                "order_id": order_id,
+                "symbol": trade.get("instr_nm") or trade.get("i") or "",
+                "side": side,
+                "quantity": quantity,
+                "price": price,
+                "executed_at": trade_date,
+            }
+        except Exception as e:
+            logger.warning(f"Failed to parse trade: {e}")
+            return None
+
     def get_executed_trades(self, limit: int = 500) -> list[dict]:
         """
         Get executed trades from Tradernet.
@@ -712,54 +749,15 @@ class TradernetClient:
             with _led_api_call():
                 trades_data = self._client.get_trades_history()
 
-            # Parse trades - response format: {"trades": {"trade": [...]}}
             trade_list = trades_data.get("trades", {}).get("trade", [])
-
-            # Handle single trade (dict) vs multiple trades (list)
             if isinstance(trade_list, dict):
                 trade_list = [trade_list]
 
             executed = []
             for trade in trade_list[:limit]:
-                try:
-                    # Get order ID - try multiple possible fields
-                    order_id = str(trade.get("id") or trade.get("order_id") or "")
-                    if not order_id:
-                        continue
-
-                    # Parse quantity
-                    qty_str = trade.get("q") or trade.get("qty") or "0"
-                    quantity = float(qty_str) if qty_str else 0
-
-                    # Parse price
-                    price_str = trade.get("price") or trade.get("p") or "0"
-                    price = float(price_str) if price_str else 0
-
-                    # Parse date
-                    trade_date = trade.get("date") or trade.get("d") or ""
-
-                    # Parse side (BUY/SELL) - type field: 1=BUY, 2=SELL
-                    trade_type = trade.get("type") or ""
-                    if trade_type == "1" or trade_type == 1:
-                        side = "BUY"
-                    elif trade_type == "2" or trade_type == 2:
-                        side = "SELL"
-                    else:
-                        side = ""
-
-                    executed.append(
-                        {
-                            "order_id": order_id,
-                            "symbol": trade.get("instr_nm") or trade.get("i") or "",
-                            "side": side,
-                            "quantity": quantity,
-                            "price": price,
-                            "executed_at": trade_date,
-                        }
-                    )
-                except Exception as e:
-                    logger.warning(f"Failed to parse trade: {e}")
-                    continue
+                parsed = self._parse_trade(trade)
+                if parsed:
+                    executed.append(parsed)
 
             logger.info(f"Fetched {len(executed)} executed trades from Tradernet")
             return executed
