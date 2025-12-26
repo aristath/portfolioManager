@@ -13,7 +13,7 @@ import numpy as np
 from app.repositories.stock import StockRepository
 from app.repositories.history import HistoryRepository
 from app.repositories.calculations import CalculationsRepository
-from app.domain.scoring.technical import (
+from app.domain.scoring.caching import (
     get_rsi,
     get_ema,
     get_bollinger_bands,
