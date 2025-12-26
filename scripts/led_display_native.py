@@ -136,6 +136,30 @@ def fetch_display_data() -> Optional[dict]:
         return None
 
 
+def _process_display_data(data: dict) -> None:
+    """Process display data and update MCU if changed."""
+    global _last_text, _last_speed, _last_brightness
+
+    text = data.get("text", "")
+    speed = data.get("speed", 50)
+    brightness = data.get("brightness", 150)
+
+    if speed != _last_speed:
+        if set_speed(speed):
+            _last_speed = speed
+            logger.debug(f"Speed updated to {speed}")
+
+    if brightness != _last_brightness:
+        if set_brightness(brightness):
+            _last_brightness = brightness
+            logger.debug(f"Brightness updated to {brightness}")
+
+    if text != _last_text:
+        if set_text(text):
+            _last_text = text
+            logger.debug(f"Text updated: {text[:50]}...")
+
+
 def main_loop():
     """Main loop - fetch display text from API, update MCU if changed."""
     global _last_text, _last_speed, _last_brightness

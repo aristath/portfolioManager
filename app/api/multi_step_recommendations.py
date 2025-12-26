@@ -23,6 +23,73 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+async def _execute_single_step(
+    idx: int,
+    step: dict,
+    client,
+    safety_service,
+    trade_execution_service,
+) -> dict:
+    """Execute a single step in the multi-step recommendation sequence."""
+    try:
+        has_pending = await safety_service.check_pending_orders(
+            step["symbol"], step["side"], client
+        )
+
+        if has_pending:
+            logger.warning(
+                f"Step {idx} blocked: pending order exists for {step['symbol']}"
+            )
+            return {
+                "step": idx,
+                "status": "blocked",
+                "symbol": step["symbol"],
+                "error": f"A pending order already exists for {step['symbol']}",
+            }
+
+        result = client.place_order(
+            symbol=step["symbol"],
+            side=step["side"],
+            quantity=step["quantity"],
+        )
+
+        if result:
+            await trade_execution_service.record_trade(
+                symbol=step["symbol"],
+                side=step["side"],
+                quantity=step["quantity"],
+                price=result.price,
+                order_id=result.order_id,
+            )
+
+            return {
+                "step": idx,
+                "status": "success",
+                "order_id": result.order_id,
+                "symbol": step["symbol"],
+                "side": step["side"],
+                "quantity": step["quantity"],
+                "price": result.price,
+                "estimated_value": step["estimated_value"],
+            }
+        else:
+            return {
+                "step": idx,
+                "status": "failed",
+                "symbol": step["symbol"],
+                "error": "Trade execution failed",
+            }
+
+    except Exception as e:
+        logger.error(f"Error executing step {idx}: {e}", exc_info=True)
+        return {
+            "step": idx,
+            "status": "failed",
+            "symbol": step["symbol"],
+            "error": str(e),
+        }
+
+
 @router.get("")
 async def get_multi_step_recommendations(
     position_repo: PositionRepositoryDep,

@@ -167,6 +167,68 @@ def calculate_portfolio_balance_score(
     return score
 
 
+def _calculate_rate_of_gain_score(profit_pct: float, days_held: int) -> float:
+    """Calculate rate of gain component score (40% weight)."""
+    if days_held <= 30:
+        return 0.5  # Too early to tell
+
+    years = days_held / 365.0
+    try:
+        annualized = (
+            ((1 + profit_pct) ** (1 / years)) - 1 if years > 0 else profit_pct
+        )
+    except (ValueError, OverflowError):
+        annualized = profit_pct
+
+    if annualized > INSTABILITY_RATE_VERY_HOT:  # >50% annualized = very hot
+        return 1.0
+    elif annualized > INSTABILITY_RATE_HOT:  # >30% annualized = hot
+        return 0.7
+    elif annualized > INSTABILITY_RATE_WARM:  # >20% annualized = warm
+        return 0.4
+    else:
+        return 0.1  # Sustainable pace
+
+
+def _calculate_volatility_spike_score(
+    current_volatility: float, historical_volatility: float
+) -> float:
+    """Calculate volatility spike component score (30% weight)."""
+    if historical_volatility <= 0:
+        return 0.3  # No historical data - neutral
+
+    vol_ratio = current_volatility / historical_volatility
+    if vol_ratio > VOLATILITY_SPIKE_HIGH:  # Vol doubled
+        return 1.0
+    elif vol_ratio > VOLATILITY_SPIKE_MED:  # Vol up 50%
+        return 0.7
+    elif vol_ratio > VOLATILITY_SPIKE_LOW:  # Vol up 20%
+        return 0.4
+    else:
+        return 0.1  # Normal volatility
+
+
+def _calculate_valuation_stretch_score(distance_from_ma_200: float) -> float:
+    """Calculate valuation stretch component score (30% weight)."""
+    if distance_from_ma_200 > VALUATION_STRETCH_HIGH:  # >30% above MA
+        return 1.0
+    elif distance_from_ma_200 > VALUATION_STRETCH_MED:  # >20% above MA
+        return 0.7
+    elif distance_from_ma_200 > VALUATION_STRETCH_LOW:  # >10% above MA
+        return 0.4
+    else:
+        return 0.1  # Near or below MA
+
+
+def _apply_profit_floor(score: float, profit_pct: float) -> float:
+    """Apply floor for extreme profits (safety net)."""
+    if profit_pct > 1.0:  # >100% gain
+        return max(score, 0.2)
+    elif profit_pct > 0.75:  # >75% gain
+        return max(score, 0.1)
+    return score
+
+
 def calculate_instability_score(
     profit_pct: float,
     days_held: int,
