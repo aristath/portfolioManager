@@ -89,15 +89,15 @@ class TestSettingsService:
     async def test_update_setting_invalidates_cache(self):
         """Test that updating a setting invalidates the cache."""
         mock_repo = AsyncMock(spec=SettingsRepository)
-        mock_repo.get_all.return_value = {"min_hold_days": "120"}
+        mock_repo.get_all.return_value = {"optimizer_blend": "0.5"}
         mock_repo.set_float = AsyncMock()
 
         service = SettingsService(mock_repo)
 
         # Load settings (cached)
         await service.get_settings()
-        # Update setting
-        await service.update_setting("min_hold_days", 150)
+        # Update setting with float value
+        await service.update_setting("optimizer_blend", 0.7)
 
         # Cache should be invalidated, next call should reload
         settings = await service.get_settings()
