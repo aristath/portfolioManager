@@ -170,6 +170,13 @@ def get_exchange_rate_service(
     return ExchangeRateService(db_manager=db_manager)
 
 
+def get_currency_exchange_service_dep(
+    tradernet_client: TradernetClientDep,
+) -> CurrencyExchangeService:
+    """Get CurrencyExchangeService instance."""
+    return CurrencyExchangeService(tradernet_client)
+
+
 def get_rebalancing_service(
     stock_repo: StockRepositoryDep,
     position_repo: PositionRepositoryDep,
@@ -201,7 +208,7 @@ def get_trade_execution_service(
     trade_repo: TradeRepositoryDep,
     position_repo: PositionRepositoryDep,
     tradernet_client: TradernetClientDep,
-    currency_exchange_service: CurrencyExchangeServiceDep,
+    currency_exchange_service: Annotated[CurrencyExchangeService, Depends(get_currency_exchange_service_dep)],
     exchange_rate_service: Annotated[ExchangeRateService, Depends(get_exchange_rate_service)],
 ) -> TradeExecutionService:
     """Get TradeExecutionService instance."""
@@ -223,13 +230,6 @@ def get_trade_safety_service(
         trade_repo=trade_repo,
         position_repo=position_repo,
     )
-
-
-def get_currency_exchange_service_dep(
-    tradernet_client: TradernetClientDep,
-) -> CurrencyExchangeService:
-    """Get CurrencyExchangeService instance."""
-    return CurrencyExchangeService(tradernet_client)
 
 
 # Type aliases for services
