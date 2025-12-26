@@ -6,7 +6,6 @@ from app.infrastructure.dependencies import (
     PositionRepositoryDep,
     StockRepositoryDep,
     PortfolioRepositoryDep,
-    AllocationRepositoryDep,
     PortfolioServiceDep,
 )
 from app.infrastructure.external.tradernet_connection import ensure_tradernet_connected

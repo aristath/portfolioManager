@@ -4,8 +4,6 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from app.infrastructure.dependencies import (
     AllocationRepositoryDep,
-    PortfolioRepositoryDep,
-    PositionRepositoryDep,
     PortfolioServiceDep,
 )
 from app.domain.models import AllocationTarget
