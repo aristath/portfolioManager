@@ -112,13 +112,8 @@ async def get_all_stock_sparklines(db_manager: DatabaseManagerDep):
     """
     Get 1-year sparkline data for all active stocks.
     Returns dict: {symbol: [{time, value}, ...]}
-    Cached for 12 hours.
+    Per-stock caching for 12 hours - new stocks are fetched immediately.
     """
-    # Check cache first
-    cached = cache.get("sparklines")
-    if cached is not None:
-        return cached
-
     try:
         start_date = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
 
@@ -130,7 +125,15 @@ async def get_all_stock_sparklines(db_manager: DatabaseManagerDep):
         result = {}
         for stock in stocks:
             symbol = stock["symbol"]
-            # Get prices from per-symbol database
+            cache_key = f"sparkline:{symbol}"
+
+            # Check per-stock cache first
+            cached = cache.get(cache_key)
+            if cached is not None:
+                result[symbol] = cached
+                continue
+
+            # Fetch from database for this stock
             history_db = await db_manager.history(symbol)
             prices = await history_db.fetchall(
                 """
@@ -142,14 +145,15 @@ async def get_all_stock_sparklines(db_manager: DatabaseManagerDep):
                 (start_date,),
             )
             if prices:
-                result[symbol] = [
+                sparkline_data = [
                     {"time": row["date"], "value": row["close_price"]}
                     for row in prices
                     if row["date"] and row["close_price"]
                 ]
+                result[symbol] = sparkline_data
+                # Cache this stock's sparkline for 12 hours
+                cache.set(cache_key, sparkline_data, ttl_seconds=43200)
 
-        # Cache for 12 hours
-        cache.set("sparklines", result, ttl_seconds=43200)
         return result
     except Exception as e:
         logger.error(f"Failed to get sparklines data: {e}")
