@@ -119,6 +119,8 @@ async def get_transaction_history():
 @router.get("/cash-breakdown")
 async def get_cash_breakdown():
     """Get cash balance breakdown by currency."""
+    from app.domain.services.exchange_rate_service import get_exchange_rate
+
     try:
         client = await ensure_tradernet_connected(raise_on_error=False)
         if not client:
@@ -128,11 +130,19 @@ async def get_cash_breakdown():
 
     try:
         balances = client.get_cash_balances()
-        total_eur = client.get_total_cash_eur()
+
+        # Calculate total EUR using async exchange rate service
+        total_eur = 0.0
+        for b in balances:
+            if b.currency == "EUR":
+                total_eur += b.amount
+            elif b.amount > 0:
+                rate = await get_exchange_rate(b.currency, "EUR")
+                total_eur += b.amount / rate
 
         return {
             "balances": [{"currency": b.currency, "amount": b.amount} for b in balances],
-            "total_eur": total_eur,
+            "total_eur": round(total_eur, 2),
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get cash breakdown: {str(e)}")
