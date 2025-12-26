@@ -103,7 +103,7 @@ async def identify_opportunities(
     """
     from app.repositories import SettingsRepository, TradeRepository
     from app.services import yahoo
-    from app.services.tradernet import get_exchange_rate
+    from app.domain.services.exchange_rate_service import get_exchange_rate
     from app.domain.constants import BUY_COOLDOWN_DAYS
     from app.config import settings as app_settings
 
@@ -165,7 +165,7 @@ async def identify_opportunities(
             # Convert to EUR
             exchange_rate = 1.0
             if pos.currency and pos.currency != "EUR":
-                exchange_rate = get_exchange_rate(pos.currency, "EUR")
+                exchange_rate = await get_exchange_rate(pos.currency, "EUR")
             sell_value_eur = sell_value / exchange_rate if exchange_rate > 0 else sell_value
 
             opportunities["profit_taking"].append(ActionCandidate(
@@ -192,7 +192,7 @@ async def identify_opportunities(
                 # Calculate quantity
                 exchange_rate = 1.0
                 if pos.currency and pos.currency != "EUR":
-                    exchange_rate = get_exchange_rate(pos.currency, "EUR")
+                    exchange_rate = await get_exchange_rate(pos.currency, "EUR")
                 sell_value_native = sell_value_eur * exchange_rate
                 sell_qty = int(sell_value_native / (pos.current_price or pos.avg_price))
 
@@ -243,7 +243,7 @@ async def identify_opportunities(
                 loss_pct = (price - avg_price) / avg_price
                 if loss_pct < -0.20 and quality_score >= 0.6:  # Down 20%+ but quality
                     # Calculate buy amount
-                    exchange_rate = get_exchange_rate(stock.currency or "EUR", "EUR")
+                    exchange_rate = await get_exchange_rate(stock.currency or "EUR", "EUR")
                     trade_value_eur = base_trade_amount
 
                     opportunities["averaging_down"].append(ActionCandidate(
@@ -267,7 +267,7 @@ async def identify_opportunities(
             current = geo_allocations.get(geo, 0)
             if current < target - 0.05:  # 5%+ underweight
                 underweight = target - current
-                exchange_rate = get_exchange_rate(stock.currency or "EUR", "EUR")
+                exchange_rate = await get_exchange_rate(stock.currency or "EUR", "EUR")
                 trade_value_eur = base_trade_amount
 
                 opportunities["rebalance_buys"].append(ActionCandidate(
@@ -285,7 +285,7 @@ async def identify_opportunities(
 
         # General opportunity buys (high quality at good price)
         if quality_score >= 0.7:
-            exchange_rate = get_exchange_rate(stock.currency or "EUR", "EUR")
+            exchange_rate = await get_exchange_rate(stock.currency or "EUR", "EUR")
             trade_value_eur = base_trade_amount
 
             opportunities["opportunity_buys"].append(ActionCandidate(

@@ -55,7 +55,7 @@ from app.domain.constants import (
 )
 from app.domain.scoring.opportunity import is_price_too_high
 from app.services import yahoo
-from app.services.tradernet import get_exchange_rate
+from app.domain.services.exchange_rate_service import get_exchange_rate
 from app.domain.value_objects.trade_side import TradeSide
 from app.domain.constants import BUY_COOLDOWN_DAYS
 from app.domain.analytics import (
@@ -448,7 +448,7 @@ class RebalancingService:
             currency = stock.currency or "EUR"
             exchange_rate = 1.0
             if currency != "EUR":
-                exchange_rate = get_exchange_rate(currency, "EUR")
+                exchange_rate = await get_exchange_rate(currency, "EUR")
                 if exchange_rate <= 0:
                     exchange_rate = 1.0
 

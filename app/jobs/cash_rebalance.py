@@ -59,7 +59,6 @@ async def _check_and_rebalance_internal():
     from app.jobs.daily_sync import sync_portfolio
     from app.jobs.sync_trades import sync_trades
     from app.services import yahoo
-    from app.services.tradernet import get_exchange_rate
     from app.application.services.trade_execution_service import TradeExecutionService
     from app.domain.models import Recommendation
     from app.domain.value_objects.trade_side import TradeSide

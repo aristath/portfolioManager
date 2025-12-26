@@ -488,6 +488,18 @@ CREATE TABLE IF NOT EXISTS analytics_cache (
 
 CREATE INDEX IF NOT EXISTS idx_analytics_cache_expires ON analytics_cache(expires_at);
 
+-- Exchange rates cache (1 hour TTL, single source of truth for currency conversion)
+CREATE TABLE IF NOT EXISTS exchange_rates (
+    from_currency TEXT NOT NULL,
+    to_currency TEXT NOT NULL,
+    rate REAL NOT NULL,
+    fetched_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    PRIMARY KEY (from_currency, to_currency)
+);
+
+CREATE INDEX IF NOT EXISTS idx_exchange_rates_expires ON exchange_rates(expires_at);
+
 -- Schema version tracking
 CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER PRIMARY KEY,

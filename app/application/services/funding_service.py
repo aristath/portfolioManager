@@ -27,7 +27,7 @@ from app.domain.scoring import (
     DEFAULT_SELL_COOLDOWN_DAYS,
     DEFAULT_MAX_LOSS_THRESHOLD,
 )
-from app.services.tradernet import get_exchange_rate
+from app.domain.services.exchange_rate_service import get_exchange_rate
 
 logger = logging.getLogger(__name__)
 
@@ -400,7 +400,7 @@ class FundingService:
 
         return warnings
 
-    def _create_funding_sell(
+    async def _create_funding_sell(
         self,
         pos: dict,
         quantity: int,
@@ -414,7 +414,7 @@ class FundingService:
         # Calculate value in EUR
         value_native = quantity * current_price
         if currency != "EUR":
-            exchange_rate = get_exchange_rate(currency, "EUR")
+            exchange_rate = await get_exchange_rate(currency, "EUR")
             value_eur = value_native / exchange_rate if exchange_rate > 0 else value_native
         else:
             value_eur = value_native
@@ -493,7 +493,7 @@ class FundingService:
 
         return current_score.total, new_score.total, new_score.total - current_score.total
 
-    def _calculate_sell_quantity(
+    async def _calculate_sell_quantity(
         self,
         pos: dict,
         sell_scores: Dict[str, SellScore],
@@ -520,7 +520,7 @@ class FundingService:
                 # Dynamic calculation (for minimal_sells strategy)
                 currency = pos.get("currency", "EUR")
                 if currency != "EUR":
-                    exchange_rate = get_exchange_rate(currency, "EUR")
+                    exchange_rate = await get_exchange_rate(currency, "EUR")
                     price_eur = current_price / exchange_rate if exchange_rate > 0 else current_price
                 else:
                     price_eur = current_price
@@ -580,13 +580,13 @@ class FundingService:
             if total_value >= cash_needed:
                 break
 
-            sell_qty = self._calculate_sell_quantity(pos, sell_scores, config, cash_needed, total_value)
+            sell_qty = await self._calculate_sell_quantity(pos, sell_scores, config, cash_needed, total_value)
             if sell_qty is None:
                 continue
 
             quantity = pos.get("quantity", 0)
             sell_pct = sell_qty / quantity
-            funding_sell = self._create_funding_sell(pos, sell_qty, sell_pct)
+            funding_sell = await self._create_funding_sell(pos, sell_qty, sell_pct)
             sells.append(funding_sell)
             total_value += funding_sell.value_eur
 
@@ -600,13 +600,13 @@ class FundingService:
                 if total_value >= cash_needed:
                     break
 
-                sell_qty = self._calculate_sell_quantity(pos, sell_scores, config, cash_needed, total_value)
+                sell_qty = await self._calculate_sell_quantity(pos, sell_scores, config, cash_needed, total_value)
                 if sell_qty is None:
                     continue
 
                 quantity = pos.get("quantity", 0)
                 sell_pct = sell_qty / quantity
-                funding_sell = self._create_funding_sell(pos, sell_qty, sell_pct)
+                funding_sell = await self._create_funding_sell(pos, sell_qty, sell_pct)
                 sells.append(funding_sell)
                 total_value += funding_sell.value_eur
 
