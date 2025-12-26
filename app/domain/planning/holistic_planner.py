@@ -62,7 +62,13 @@ def _calculate_weight_gaps(
                 }
             )
 
-    weight_gaps.sort(key=lambda x: abs(float(x.get("gap", 0.0))), reverse=True)
+    def _get_gap_value(x: dict) -> float:
+        gap = x.get("gap", 0.0)
+        if isinstance(gap, (int, float)):
+            return abs(float(gap))
+        return 0.0
+
+    weight_gaps.sort(key=_get_gap_value, reverse=True)
     return weight_gaps
 
 
@@ -299,7 +305,9 @@ async def identify_opportunities_from_weights(
             _process_buy_opportunity(gap_info, stock, position, price, opportunities)
         else:
             if position is not None:
-                _process_sell_opportunity(gap_info, stock, position, price, opportunities)
+                _process_sell_opportunity(
+                    gap_info, stock, position, price, opportunities
+                )
 
     # Sort each category by priority
     for category in opportunities:
@@ -376,10 +384,18 @@ async def identify_opportunities(
     geo_allocations: dict[str, float] = {}
     ind_allocations: dict[str, float] = {}
     for symbol, value in portfolio_context.positions.items():
-        geo = portfolio_context.stock_geographies.get(symbol, "OTHER")
+        geo = (
+            portfolio_context.stock_geographies.get(symbol, "OTHER")
+            if portfolio_context.stock_geographies
+            else "OTHER"
+        )
         geo_allocations[geo] = geo_allocations.get(geo, 0) + value / total_value
 
-        industries = portfolio_context.stock_industries.get(symbol)
+        industries = (
+            portfolio_context.stock_industries.get(symbol)
+            if portfolio_context.stock_industries
+            else None
+        )
         if industries:
             for ind in industries.split(","):
                 ind = ind.strip()
@@ -413,7 +429,7 @@ async def identify_opportunities(
     base_trade_amount = calculate_min_trade_amount(
         transaction_cost_fixed, transaction_cost_percent
     )
-    yahoo_symbols = {
+    yahoo_symbols: Dict[str, Optional[str]] = {
         s.symbol: s.yahoo_symbol for s in stocks if s.yahoo_symbol and s.allow_buy
     }
     batch_prices = yahoo.get_batch_quotes(yahoo_symbols)
@@ -425,7 +441,11 @@ async def identify_opportunities(
         if s.allow_buy
         and s.symbol not in recently_bought
         and batch_prices.get(s.symbol, 0) > 0
-        and portfolio_context.stock_scores.get(s.symbol, 0.5)
+        and (
+            portfolio_context.stock_scores.get(s.symbol, 0.5)
+            if portfolio_context.stock_scores
+            else 0.5
+        )
         >= app_settings.min_stock_score
     ]
 
@@ -486,7 +506,7 @@ def _generate_direct_buy_pattern(
     if available_cash <= 0:
         return None
 
-    direct_buys = []
+    direct_buys: list = []
     remaining_cash = available_cash
     for candidate in top_averaging + top_rebalance_buys + top_opportunity:
         if candidate.value_eur <= remaining_cash and len(direct_buys) < max_steps:
@@ -701,7 +721,10 @@ async def generate_action_sequences(
         f"Holistic planner generated {len(unique_sequences)} unique sequences (testing depths 1-5)"
     )
     for i, seq in enumerate(unique_sequences[:5]):  # Log first 5
-        symbols = [f"{c.side.value}:{c.symbol}" for c in seq]
+        symbols = [
+            f"{c.side.value if isinstance(c.side, TradeSide) else str(c.side)}:{c.symbol}"
+            for c in seq
+        ]
         logger.info(f"  Sequence {i+1} (len={len(seq)}): {symbols}")
 
     return unique_sequences
@@ -876,7 +899,10 @@ async def create_holistic_plan(
 
         # Log sequence evaluation
         invested_value = sum(end_context.positions.values())
-        symbols = [f"{c.side.value}:{c.symbol}" for c in sequence]
+        symbols = [
+            f"{c.side.value if isinstance(c.side, TradeSide) else str(c.side)}:{c.symbol}"
+            for c in sequence
+        ]
         logger.info(f"Sequence {seq_idx+1} evaluation: {symbols}")
         logger.info(
             f"  End-state score: {end_score:.3f}, Diversification: {div_score.total:.1f}"

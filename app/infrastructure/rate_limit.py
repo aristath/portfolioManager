@@ -120,4 +120,3 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         for key in keys_to_remove:
             del self._request_history[key]
-

@@ -232,7 +232,8 @@ class TestGetSingleRecommendations:
                 if key == "sell_recommendations:3":
                     return {
                         "recommendations": [
-                            {"symbol": "MSFT.US", "estimated_value": 500},
+                            # Production code uses "amount" field (set in rebalancing_service.py)
+                            {"symbol": "MSFT.US", "amount": 500},
                         ]
                     }
                 return None

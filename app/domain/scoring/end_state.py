@@ -446,4 +446,4 @@ async def calculate_portfolio_end_state_score(
         "end_state_score": round(end_state_score, 3),
     }
 
-    return round(min(1.0, end_state_score), 3), detailed_breakdown
+    return round(min(1.0, end_state_score), 3), detailed_breakdown  # type: ignore[return-value]

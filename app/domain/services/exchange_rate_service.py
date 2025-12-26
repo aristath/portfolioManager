@@ -285,5 +285,3 @@ class ExchangeRateService:
         # Ultimate fallback: 1.0 (no conversion)
         logger.error(f"No fallback rate for {from_currency}/{to_currency}, using 1.0")
         return 1.0
-
-

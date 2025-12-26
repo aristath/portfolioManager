@@ -32,7 +32,9 @@ def _led_api_call():
         emit(SystemEvent.API_CALL_END)
 
 
-def get_analyst_data(symbol: str, yahoo_symbol: Optional[str] = None) -> Optional[AnalystData]:
+def get_analyst_data(
+    symbol: str, yahoo_symbol: Optional[str] = None
+) -> Optional[AnalystData]:
     """
     Get analyst recommendations and price targets.
 
@@ -226,7 +228,9 @@ def get_current_price(
     return None
 
 
-def get_stock_industry(symbol: str, yahoo_symbol: Optional[str] = None) -> Optional[str]:
+def get_stock_industry(
+    symbol: str, yahoo_symbol: Optional[str] = None
+) -> Optional[str]:
     """
     Get stock industry/sector from Yahoo Finance.
 
