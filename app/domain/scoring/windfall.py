@@ -103,9 +103,9 @@ async def calculate_windfall_score(
     # If we don't have current gain or years held, return neutral
     if current_gain is None or years_held is None:
         return 0.0, {
-            "status": "insufficient_data",
+            "status": "insufficient_data",  # type: ignore[dict-item]
             "historical_cagr": round(historical_cagr, 4),
-        }  # type: ignore[dict-item]
+        }
 
     # Calculate excess gain
     excess = calculate_excess_gain(current_gain, years_held, historical_cagr)

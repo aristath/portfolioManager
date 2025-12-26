@@ -150,7 +150,9 @@ class TestAddStepSummary:
             buys=[],
         )
 
-        assert any("Sell" in part and "€1000" in part or "1,000" in part for part in parts)
+        assert any(
+            "Sell" in part and "€1000" in part or "1,000" in part for part in parts
+        )
 
     def test_includes_buy_summary(self):
         """Test that buy summary is included."""
@@ -179,7 +181,9 @@ class TestAddExpectedOutcome:
         from app.domain.planning.narrative import _add_expected_outcome
 
         parts = []
-        _add_expected_outcome(parts, improvement=5.0, current_score=60.0, end_score=65.0)
+        _add_expected_outcome(
+            parts, improvement=5.0, current_score=60.0, end_score=65.0
+        )
 
         assert len(parts) == 1
         assert "+5.0" in parts[0]
@@ -191,7 +195,9 @@ class TestAddExpectedOutcome:
         from app.domain.planning.narrative import _add_expected_outcome
 
         parts = []
-        _add_expected_outcome(parts, improvement=-2.0, current_score=60.0, end_score=58.0)
+        _add_expected_outcome(
+            parts, improvement=-2.0, current_score=60.0, end_score=58.0
+        )
 
         assert len(parts) == 1
         assert "decrease" in parts[0].lower() or "long-term" in parts[0].lower()
@@ -201,7 +207,9 @@ class TestAddExpectedOutcome:
         from app.domain.planning.narrative import _add_expected_outcome
 
         parts = []
-        _add_expected_outcome(parts, improvement=0.0, current_score=60.0, end_score=60.0)
+        _add_expected_outcome(
+            parts, improvement=0.0, current_score=60.0, end_score=60.0
+        )
 
         assert len(parts) == 1
         assert "maintain" in parts[0].lower()

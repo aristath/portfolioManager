@@ -49,11 +49,12 @@ async def get_portfolio(
         result.append(pos_dict)
 
     # Sort by market value
-    result.sort(
-        key=lambda x: (x.get("quantity", 0) or 0)
-        * (x.get("current_price") or x.get("avg_price") or 0),
-        reverse=True,
-    )
+    def _get_market_value(x: dict) -> float:
+        qty = x.get("quantity", 0) or 0
+        price = x.get("current_price") or x.get("avg_price") or 0
+        return float(qty) * float(price)
+
+    result.sort(key=_get_market_value, reverse=True)
     return result
 
 

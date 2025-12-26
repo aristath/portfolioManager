@@ -15,7 +15,9 @@ from app.infrastructure.external import yahoo_finance as yahoo
 logger = logging.getLogger(__name__)
 
 
-async def calculate_opinion_score(symbol: str, yahoo_symbol: Optional[str] = None) -> ScoreResult:
+async def calculate_opinion_score(
+    symbol: str, yahoo_symbol: Optional[str] = None
+) -> ScoreResult:
     """
     Calculate opinion score from analyst recommendations and price targets.
 

@@ -118,7 +118,9 @@ async def _sync_stock_price_history():
     )
 
 
-async def _fetch_and_store_prices(history_db, symbol: str, yahoo_symbol: Optional[str] = None):
+async def _fetch_and_store_prices(
+    history_db, symbol: str, yahoo_symbol: Optional[str] = None
+):
     """Fetch historical prices from Yahoo Finance and store in per-symbol database."""
     try:
         # Check if we have monthly data (indicates initial seeding was done)

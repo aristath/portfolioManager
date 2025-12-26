@@ -154,9 +154,7 @@ class TestCalculateAveragingDownScore:
             total_value=10000,
         )
 
-        score = _calculate_averaging_down_score(
-            "AAPL.US", 0.7, 0.6, context
-        )
+        score = _calculate_averaging_down_score("AAPL.US", 0.7, 0.6, context)
 
         assert score == 0.5
 

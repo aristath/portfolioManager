@@ -1,7 +1,7 @@
 """Stock universe API endpoints."""
 
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -78,8 +78,8 @@ async def get_stocks(
         stock_score = stock_dict.get("total_score") or 0
         volatility = stock_dict.get("volatility")
         multiplier = stock_dict.get("priority_multiplier") or 1.0
-        geo = stock_dict.get("geography")
-        industry = stock_dict.get("industry")
+        geo = stock_dict.get("geography") or ""
+        industry = stock_dict.get("industry") or ""
         quality_score = stock_dict.get("quality_score")
         opportunity_score = stock_dict.get("opportunity_score")
         allocation_fit_score = stock_dict.get("allocation_fit_score")
@@ -132,7 +132,7 @@ async def get_stock(
     score = await score_repo.get_by_symbol(symbol)
     position = await position_repo.get_by_symbol(symbol)
 
-    result = {
+    result: dict[str, Any] = {
         "symbol": stock.symbol,
         "yahoo_symbol": stock.yahoo_symbol,
         "name": stock.name,
@@ -169,12 +169,13 @@ async def get_stock(
 
     if position:
         result["position"] = {
-            "symbol": position.symbol,
-            "quantity": position.quantity,
+            "symbol": str(position.symbol),
+            "quantity": float(position.quantity),
             "avg_price": position.avg_price,
             "current_price": position.current_price,
-            "currency": position.currency,
+            "currency": str(position.currency) if position.currency else None,
             "market_value_eur": position.market_value_eur,
+            "last_updated": position.last_updated,
         }
     else:
         result["position"] = None
@@ -269,7 +270,8 @@ async def refresh_all_scores(
                     stock.symbol, stock.yahoo_symbol
                 )
                 if detected_industry:
-                    await stock_repo.update(stock.symbol, industry=detected_industry)
+                    stock.industry = detected_industry
+                    await stock_repo.update(stock)
 
         scores = await scoring_service.score_all_stocks()
 
@@ -392,9 +394,11 @@ def _apply_boolean_update(updates: dict, field_name: str, value: bool | None) ->
         updates[field_name] = value
 
 
-def _build_update_dict(update: StockUpdate, new_symbol: str | None) -> dict:
+def _build_update_dict(
+    update: StockUpdate, new_symbol: str | None
+) -> dict[str, str | float | int | bool | None]:
     """Build dictionary of fields to update."""
-    updates = {}
+    updates: dict[str, str | float | int | bool | None] = {}
 
     _apply_string_update(updates, "name", update.name)
     _apply_string_update(
@@ -464,7 +468,11 @@ async def update_stock(
     if not updates:
         raise HTTPException(status_code=400, detail="No updates provided")
 
-    await stock_repo.update(old_symbol, **updates)
+    # Update stock object with new values
+    for key, value in updates.items():
+        setattr(stock, key, value)
+
+    await stock_repo.update(stock)
 
     final_symbol = new_symbol if new_symbol and new_symbol != old_symbol else old_symbol
     updated_stock = await stock_repo.get_by_symbol(final_symbol)

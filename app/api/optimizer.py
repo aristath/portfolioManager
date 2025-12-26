@@ -98,13 +98,15 @@ async def run_optimization() -> Dict[str, Any]:
     current_prices = yahoo.get_batch_quotes(yahoo_symbols)
 
     # Calculate portfolio value
-    portfolio_value = sum(
-        p.quantity
-        * current_prices.get(
-            p.symbol, p.market_value_eur / p.quantity if p.quantity > 0 else 0
-        )
-        for p in positions_list
-    )
+    def _get_position_value(p) -> float:
+        price = current_prices.get(p.symbol)
+        if price is not None:
+            return float(p.quantity) * float(price)
+        elif p.quantity > 0 and p.market_value_eur is not None:
+            return float(p.market_value_eur)
+        return 0.0
+
+    portfolio_value = sum(_get_position_value(p) for p in positions_list)
 
     # Get cash balance
     try:
@@ -159,14 +161,14 @@ def _optimization_result_to_dict(
     # Get top 5 weight changes
     top_changes = []
     for wc in result.weight_changes[:5]:
-        change_eur = wc.change * portfolio_value
+        change_eur_val = wc.change * portfolio_value
         top_changes.append(
             {
                 "symbol": wc.symbol,
                 "current_pct": round(wc.current_weight * 100, 1),
                 "target_pct": round(wc.target_weight * 100, 1),
                 "change_pct": round(wc.change * 100, 1),
-                "change_eur": round(change_eur, 0),
+                "change_eur": round(change_eur_val, 0),
                 "direction": "buy" if wc.change > 0 else "sell",
             }
         )
@@ -176,15 +178,19 @@ def _optimization_result_to_dict(
     if top_changes:
         top = top_changes[0]
         action = "Buy" if top["direction"] == "buy" else "Sell"
-        next_action = f"{action} {top['symbol']} ~€{abs(top['change_eur']):,.0f}"
+        change_eur_from_dict: Any = top.get("change_eur", 0.0)
+        change_value = (
+            float(change_eur_from_dict) if isinstance(change_eur_from_dict, (int, float)) else 0.0
+        )
+        next_action = f"{action} {top['symbol']} ~€{abs(change_value):,.0f}"
 
     return {
         "success": result.success,
         "error": result.error,
         "target_return_pct": round(result.target_return * 100, 1),
         "achieved_return_pct": (
-            round(result.achieved_expected_return * 100, 1)
-            if result.achieved_expected_return
+            round(float(result.achieved_expected_return) * 100, 1)
+            if result.achieved_expected_return is not None
             else None
         ),
         "blend_used": result.blend_used,

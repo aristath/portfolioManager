@@ -181,7 +181,9 @@ async def _build_portfolio_context(db_manager) -> PortfolioContext:
     )
 
 
-async def _get_daily_prices(db_manager, symbol: str, yahoo_symbol: Optional[str] = None) -> list:
+async def _get_daily_prices(
+    db_manager, symbol: str, yahoo_symbol: Optional[str] = None
+) -> list:
     """Get daily price data from history database or Yahoo."""
     history_db = await db_manager.history(symbol)
 

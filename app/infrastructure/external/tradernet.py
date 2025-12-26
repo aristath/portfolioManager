@@ -240,6 +240,7 @@ def _parse_candles_list(data: list) -> list[OHLC]:
 def _get_trading_mode() -> str:
     """Get trading mode from cache."""
     from app.infrastructure.cache import cache
+
     trading_mode = "research"
     try:
         cached_settings = cache.get("settings:all")

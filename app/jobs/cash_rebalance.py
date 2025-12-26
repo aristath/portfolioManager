@@ -122,16 +122,18 @@ async def _execute_trade(
     )
 
     emit(SystemEvent.SYNC_START)
-    from app.domain.services.exchange_rate_service import ExchangeRateService
+    from app.infrastructure.database.manager import get_db_manager
     from app.infrastructure.dependencies import (
-        get_currency_exchange_service_dep,
         get_exchange_rate_service,
         get_tradernet_client,
     )
 
+    db_manager = get_db_manager()
     tradernet_client = get_tradernet_client()
-    exchange_rate_service = get_exchange_rate_service()
-    currency_exchange_service = get_currency_exchange_service_dep()
+    exchange_rate_service = get_exchange_rate_service(db_manager)
+    from app.infrastructure.dependencies import get_currency_exchange_service_dep
+
+    currency_exchange_service = get_currency_exchange_service_dep(tradernet_client)
     trade_execution = TradeExecutionService(
         trade_repo,
         position_repo,
@@ -349,7 +351,40 @@ async def _get_next_holistic_action() -> "Recommendation | None":
 
     # Cache miss - call planner directly
     logger.info("Cache miss, calling holistic planner directly...")
-    service = RebalancingService()
+    from app.infrastructure.database.manager import get_db_manager
+    from app.infrastructure.dependencies import (
+        get_exchange_rate_service,
+        get_tradernet_client,
+    )
+    from app.repositories import (
+        AllocationRepository,
+        PortfolioRepository,
+        StockRepository,
+    )
+
+    stock_repo = StockRepository()
+    position_repo = PositionRepository()
+    allocation_repo = AllocationRepository()
+    portfolio_repo = PortfolioRepository()
+    trade_repo = TradeRepository()
+    settings_repo = SettingsRepository()
+    recommendation_repo = RecommendationRepository()
+    db_manager = get_db_manager()
+    tradernet_client = get_tradernet_client()
+    exchange_rate_service = get_exchange_rate_service(db_manager)
+
+    service = RebalancingService(
+        stock_repo=stock_repo,  # type: ignore[arg-type]
+        position_repo=position_repo,
+        allocation_repo=allocation_repo,
+        portfolio_repo=portfolio_repo,
+        trade_repo=trade_repo,  # type: ignore[arg-type]
+        settings_repo=settings_repo,
+        recommendation_repo=recommendation_repo,
+        db_manager=db_manager,
+        tradernet_client=tradernet_client,
+        exchange_rate_service=exchange_rate_service,
+    )
     steps = await service.get_multi_step_recommendations()
 
     if not steps:

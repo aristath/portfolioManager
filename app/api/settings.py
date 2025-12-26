@@ -1,6 +1,6 @@
 """Settings API endpoints."""
 
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -103,7 +103,8 @@ async def get_setting_value(key: str, settings_repo: SettingsRepositoryDep) -> f
     db_value = await get_setting(key, settings_repo)
     if db_value:
         return float(db_value)
-    return float(SETTING_DEFAULTS.get(key, 0))
+    default_val = SETTING_DEFAULTS.get(key, 0)
+    return float(default_val) if isinstance(default_val, (int, float)) else 0.0
 
 
 async def get_trading_mode(settings_repo: SettingsRepositoryDep) -> str:
@@ -130,9 +131,13 @@ async def get_job_settings(settings_repo: SettingsRepositoryDep) -> dict[str, fl
     result = {}
     for key in job_keys:
         if key in db_values:
-            result[key] = float(db_values[key])
+            val = db_values[key]
+            result[key] = float(val) if isinstance(val, (int, float, str)) else 0.0
         else:
-            result[key] = float(SETTING_DEFAULTS[key])
+            default_val = SETTING_DEFAULTS[key]
+            result[key] = (
+                float(default_val) if isinstance(default_val, (int, float)) else 0.0
+            )
     return result
 
 
@@ -143,19 +148,21 @@ async def get_all_settings(settings_repo: SettingsRepositoryDep):
     keys = list(SETTING_DEFAULTS.keys())
     db_values = await get_settings_batch(keys, settings_repo)
 
-    result = {}
+    result: dict[str, Any] = {}
     for key, default in SETTING_DEFAULTS.items():
         if key in db_values:
             # trading_mode is a string, all others are floats
             if key == "trading_mode":
                 result[key] = str(db_values[key])
             else:
-                result[key] = float(db_values[key])
+                val = db_values[key]
+                result[key] = float(val) if isinstance(val, (int, float, str)) else 0.0
         else:
             if key == "trading_mode":
-                result[key] = str(default)
+                result[key] = str(default) if default is not None else "research"
             else:
-                result[key] = float(default)
+                default_val = default if isinstance(default, (int, float)) else 0.0
+                result[key] = float(default_val)
     return result
 
 

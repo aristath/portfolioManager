@@ -470,7 +470,9 @@ class TradeExecutionService:
         """Internal method to execute trades."""
         results: list[dict] = []
         skipped_count = 0
-        converted_currencies: set[str] = set()  # Track which currencies we've converted to
+        converted_currencies: set[str] = (
+            set()
+        )  # Track which currencies we've converted to
 
         from app.domain.constants import BUY_COOLDOWN_DAYS
 

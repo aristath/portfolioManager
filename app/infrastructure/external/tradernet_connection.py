@@ -39,5 +39,3 @@ async def ensure_tradernet_connected(
             return None  # type: ignore[return-value]
 
     return client
-
-

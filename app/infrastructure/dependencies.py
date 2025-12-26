@@ -43,7 +43,7 @@ from app.repositories import (
 # Repository Dependencies
 
 
-def get_stock_repository() -> IStockRepository:
+def get_stock_repository() -> StockRepository:
     """Get StockRepository instance."""
     return StockRepository()
 
@@ -258,5 +258,3 @@ CurrencyExchangeServiceDep = Annotated[
 ExchangeRateServiceDep = Annotated[
     ExchangeRateService, Depends(get_exchange_rate_service)
 ]
-
-

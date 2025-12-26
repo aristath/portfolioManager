@@ -135,7 +135,9 @@ class ScoringService:
 
             # Fetch fundamentals from Yahoo
             yahoo_symbol_str = yahoo_symbol or symbol
-            fundamentals = yahoo.get_fundamental_data(symbol, yahoo_symbol=yahoo_symbol_str)
+            fundamentals = yahoo.get_fundamental_data(
+                symbol, yahoo_symbol=yahoo_symbol_str
+            )
 
             score = await calculate_stock_score(
                 symbol,
