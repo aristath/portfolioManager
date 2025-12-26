@@ -53,12 +53,6 @@ from app.infrastructure.external.tradernet import TradernetClient
 from app.domain.services.exchange_rate_service import ExchangeRateService
 from app.domain.value_objects.trade_side import TradeSide
 from app.domain.constants import BUY_COOLDOWN_DAYS
-from app.domain.analytics import (
-    reconstruct_portfolio_values,
-    calculate_portfolio_returns,
-    get_performance_attribution,
-)
-from app.infrastructure.recommendation_cache import get_recommendation_cache
 from app.application.services.recommendation.portfolio_context_builder import build_portfolio_context
 from app.application.services.recommendation.technical_data_calculator import get_technical_data_for_positions
 from app.application.services.recommendation.performance_adjustment_calculator import get_performance_adjusted_weights
