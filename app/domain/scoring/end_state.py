@@ -13,8 +13,6 @@ Used by the holistic planner to evaluate and compare action sequences.
 import logging
 from typing import Dict, Optional, Tuple
 
-from app.domain.scoring.constants import OPTIMAL_CAGR
-
 # Import scorer from dedicated module
 from app.domain.scoring.scorers.end_state import score_total_return
 

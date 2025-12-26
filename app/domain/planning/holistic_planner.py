@@ -107,10 +107,8 @@ async def identify_opportunities_from_weights(
     Returns:
         Dict mapping category to list of ActionCandidate
     """
-    from app.repositories import SettingsRepository
     from app.domain.constants import BUY_COOLDOWN_DAYS
 
-    settings_repo = SettingsRepository()
     stocks_by_symbol = {s.symbol: s for s in stocks}
     positions_by_symbol = {p.symbol: p for p in positions}
     total_value = portfolio_context.total_value

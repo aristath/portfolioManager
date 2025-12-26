@@ -6,7 +6,6 @@ from datetime import datetime
 
 from app.domain.models import Trade, Position
 from app.repositories import TradeRepository, PositionRepository
-from app.repositories.base import transaction_context
 from app.application.services.trade_execution_service import TradeExecutionService
 
 
@@ -65,7 +64,7 @@ async def test_trade_execution_rollback_on_database_error(db):
 
     # Try to execute trade - should handle error gracefully
     try:
-        results = await service.execute_trades([trade_rec], use_transaction=True)
+        results = await service.execute_trades([trade_rec])
         # Transaction should have rolled back
         assert len(results) > 0
         # Verify no trade was actually saved (transaction rolled back)

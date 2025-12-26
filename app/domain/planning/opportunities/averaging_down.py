@@ -34,7 +34,6 @@ async def identify_averaging_down_opportunities(
         List of ActionCandidate for averaging down opportunities
     """
     opportunities = []
-    current_price_data = portfolio_context.current_prices or {}
     avg_price_data = portfolio_context.position_avg_prices or {}
 
     for stock in stocks:

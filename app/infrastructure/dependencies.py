@@ -17,7 +17,6 @@ from app.repositories import (
     AllocationRepository,
     CashFlowRepository,
     PortfolioRepository,
-    HistoryRepository,
     SettingsRepository,
     RecommendationRepository,
     CalculationsRepository,
@@ -78,11 +77,6 @@ def get_portfolio_repository() -> PortfolioRepository:
     return PortfolioRepository()
 
 
-def get_history_repository() -> HistoryRepository:
-    """Get HistoryRepository instance."""
-    return HistoryRepository()
-
-
 def get_settings_repository() -> ISettingsRepository:
     """Get SettingsRepository instance."""
     return SettingsRepository()
@@ -118,7 +112,6 @@ ScoreRepositoryDep = Annotated[ScoreRepository, Depends(get_score_repository)]
 AllocationRepositoryDep = Annotated[IAllocationRepository, Depends(get_allocation_repository)]
 CashFlowRepositoryDep = Annotated[CashFlowRepository, Depends(get_cash_flow_repository)]
 PortfolioRepositoryDep = Annotated[PortfolioRepository, Depends(get_portfolio_repository)]
-HistoryRepositoryDep = Annotated[HistoryRepository, Depends(get_history_repository)]
 SettingsRepositoryDep = Annotated[ISettingsRepository, Depends(get_settings_repository)]
 RecommendationRepositoryDep = Annotated[RecommendationRepository, Depends(get_recommendation_repository)]
 CalculationsRepositoryDep = Annotated[CalculationsRepository, Depends(get_calculations_repository)]

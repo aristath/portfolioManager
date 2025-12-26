@@ -1,7 +1,6 @@
 """Tests for repository protocols."""
 
 import pytest
-from unittest.mock import MagicMock, patch
 from typing import Protocol
 from app.domain.repositories.protocols import (
     IStockRepository,

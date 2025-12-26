@@ -5,7 +5,7 @@ Handles currency conversions between EUR, USD, HKD, and GBP via Tradernet API.
 
 import logging
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 from app.infrastructure.external.tradernet import TradernetClient, OrderResult
 

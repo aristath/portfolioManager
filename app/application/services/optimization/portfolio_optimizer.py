@@ -6,7 +6,7 @@ Mean-Variance + Hierarchical Risk Parity approach.
 """
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
@@ -21,10 +21,7 @@ from app.domain.scoring.constants import (
 from app.domain.models import Stock, Position
 from app.application.services.optimization.expected_returns import ExpectedReturnsCalculator
 from app.application.services.optimization.risk_models import RiskModelBuilder
-from app.application.services.optimization.constraints_manager import (
-    ConstraintsManager,
-    SectorConstraint,
-)
+from app.application.services.optimization.constraints_manager import ConstraintsManager
 
 logger = logging.getLogger(__name__)
 
@@ -260,7 +257,7 @@ class PortfolioOptimizer:
         try:
             # Strategy 1: Target return
             ef = EfficientFrontier(mu, S, weight_bounds=weight_bounds)
-            weights = ef.efficient_return(target_return=target_return)
+            ef.efficient_return(target_return=target_return)
             cleaned = ef.clean_weights()
             logger.info(f"MV optimization succeeded with target return {target_return:.1%}")
             return dict(cleaned), None
@@ -271,7 +268,7 @@ class PortfolioOptimizer:
             try:
                 # Strategy 2: Max Sharpe
                 ef = EfficientFrontier(mu, S, weight_bounds=weight_bounds)
-                weights = ef.max_sharpe()
+                ef.max_sharpe()
                 cleaned = ef.clean_weights()
                 logger.info("MV optimization succeeded with max_sharpe fallback")
                 return dict(cleaned), "max_sharpe"
@@ -305,7 +302,7 @@ class PortfolioOptimizer:
             filtered_returns = returns_df[available]
 
             hrp = HRPOpt(filtered_returns)
-            weights = hrp.optimize()
+            hrp.optimize()
             cleaned = hrp.clean_weights()
 
             logger.info(f"HRP optimization succeeded for {len(available)} symbols")

@@ -3,7 +3,7 @@ Optimizer API - Provides portfolio optimization status and results.
 """
 
 from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Dict, Optional, Any
 
 from fastapi import APIRouter, HTTPException
 

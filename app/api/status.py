@@ -9,7 +9,6 @@ from app.infrastructure.dependencies import (
     StockRepositoryDep,
     PositionRepositoryDep,
     SettingsRepositoryDep,
-    PortfolioServiceDep,
 )
 
 router = APIRouter()

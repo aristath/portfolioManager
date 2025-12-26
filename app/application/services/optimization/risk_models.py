@@ -8,7 +8,6 @@ for robustness with limited sample sizes.
 import logging
 from typing import Dict, List, Optional, Tuple
 
-import numpy as np
 import pandas as pd
 from pypfopt import risk_models as pypfopt_risk
 

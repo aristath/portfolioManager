@@ -7,12 +7,7 @@ Components:
 """
 
 import logging
-from typing import Optional
 
-from app.domain.scoring.constants import (
-    HIGH_DIVIDEND_THRESHOLD,
-    MID_DIVIDEND_THRESHOLD,
-)
 from app.domain.responses import ScoreResult
 
 logger = logging.getLogger(__name__)

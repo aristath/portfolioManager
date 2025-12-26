@@ -32,7 +32,7 @@ from app.domain.scoring import (
 )
 from app.domain.models import Recommendation, MultiStepRecommendation
 from app.domain.value_objects.recommendation_status import RecommendationStatus
-from app.domain.services.allocation_calculator import get_max_trades, is_outside_rebalance_band
+from app.domain.services.allocation_calculator import get_max_trades
 from app.domain.constants import (
     TARGET_PORTFOLIO_VOLATILITY,
     DEFAULT_VOLATILITY,

@@ -6,7 +6,6 @@ Identifies windfall positions that should be trimmed for profit-taking.
 from typing import List, Optional
 
 from app.domain.models import Position, Stock
-from app.domain.scoring.models import PortfolioContext
 from app.domain.scoring.windfall import get_windfall_recommendation
 from app.domain.planning.holistic_planner import ActionCandidate
 from app.domain.value_objects.trade_side import TradeSide
