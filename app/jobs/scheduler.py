@@ -21,8 +21,10 @@ _job_failures: dict[str, list[datetime]] = defaultdict(list)
 async def _get_all_job_settings() -> dict[str, float]:
     """Get all job interval settings from database in one query."""
     from app.api.settings import get_job_settings
+    from app.infrastructure.dependencies import get_settings_repository
 
-    return await get_job_settings()
+    settings_repo = get_settings_repository()
+    return await get_job_settings(settings_repo)
 
 
 def job_listener(event):
