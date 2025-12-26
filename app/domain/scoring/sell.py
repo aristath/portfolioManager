@@ -48,6 +48,76 @@ from app.domain.scoring.groups.sell import (  # noqa: E402
 logger = logging.getLogger(__name__)
 
 
+async def _calculate_drawdown_score(symbol: str) -> float:
+    """Calculate drawdown score based on position drawdown severity and duration."""
+    try:
+        from datetime import datetime, timedelta
+
+        from app.domain.analytics import get_position_drawdown
+
+        end_date = datetime.now().strftime("%Y-%m-%d")
+        start_date = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
+
+        drawdown_data = await get_position_drawdown(symbol, start_date, end_date)
+
+        current_dd = drawdown_data.get("current_drawdown", 0) or 0
+        days_in_dd = drawdown_data.get("days_in_drawdown", 0) or 0
+
+        if current_dd < -0.25:  # >25% drawdown
+            return 1.0
+        elif current_dd < -0.15:  # >15% drawdown
+            if days_in_dd and days_in_dd > 180:  # 6+ months
+                return 0.9  # Extended deep drawdown
+            elif days_in_dd and days_in_dd > 90:  # 3+ months
+                return 0.7
+            else:
+                return 0.5
+        elif current_dd < -0.10:  # >10% drawdown
+            return 0.3
+        else:
+            return 0.1  # Minimal drawdown
+    except Exception as e:
+        logger.debug(f"Could not calculate drawdown for {symbol}: {e}")
+        return 0.3  # Neutral on error
+
+
+def _normalize_sell_weights(weights: Optional[Dict[str, float]]) -> Dict[str, float]:
+    """Normalize sell score weights so they sum to 1.0."""
+    if weights is None:
+        return SELL_WEIGHTS
+
+    sell_groups = [
+        "underperformance",
+        "time_held",
+        "portfolio_balance",
+        "instability",
+        "drawdown",
+    ]
+    weight_sum = sum(weights.get(g, SELL_WEIGHTS[g]) for g in sell_groups)
+    if weight_sum > 0:
+        return {g: weights.get(g, SELL_WEIGHTS[g]) / weight_sum for g in sell_groups}
+    else:
+        return SELL_WEIGHTS
+
+
+def _calculate_total_sell_score(
+    underperformance_score: float,
+    time_held_score: float,
+    portfolio_balance_score: float,
+    instability_score: float,
+    drawdown_score: float,
+    normalized_weights: Dict[str, float],
+) -> float:
+    """Calculate total sell score from component scores and weights."""
+    return (
+        (underperformance_score * normalized_weights["underperformance"])
+        + (time_held_score * normalized_weights["time_held"])
+        + (portfolio_balance_score * normalized_weights["portfolio_balance"])
+        + (instability_score * normalized_weights["instability"])
+        + (drawdown_score * normalized_weights["drawdown"])
+    )
+
+
 async def calculate_sell_score(
     symbol: str,
     quantity: float,
@@ -90,9 +160,6 @@ async def calculate_sell_score(
     Returns:
         SellScore with all components and recommendations
     """
-    # Use provided weights or defaults
-    if weights is None:
-        weights = SELL_WEIGHTS
     # Extract settings with defaults
     settings = settings or {}
     min_hold_days = settings.get("min_hold_days", DEFAULT_MIN_HOLD_DAYS)
@@ -191,62 +258,16 @@ async def calculate_sell_score(
         # No technical data - use neutral instability score
         instability_score = 0.3
 
-    # Calculate drawdown score as a weighted component (not additive penalty)
-    drawdown_score = 0.0
-    try:
-        from datetime import datetime, timedelta
+    drawdown_score = await _calculate_drawdown_score(symbol)
+    normalized_weights = _normalize_sell_weights(weights)
 
-        from app.domain.analytics import get_position_drawdown
-
-        end_date = datetime.now().strftime("%Y-%m-%d")
-        start_date = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
-
-        drawdown_data = await get_position_drawdown(symbol, start_date, end_date)
-
-        # Score based on drawdown severity and duration
-        current_dd = drawdown_data.get("current_drawdown", 0) or 0
-        days_in_dd = drawdown_data.get("days_in_drawdown", 0) or 0
-
-        if current_dd < -0.25:  # >25% drawdown
-            drawdown_score = 1.0
-        elif current_dd < -0.15:  # >15% drawdown
-            if days_in_dd and days_in_dd > 180:  # 6+ months
-                drawdown_score = 0.9  # Extended deep drawdown
-            elif days_in_dd and days_in_dd > 90:  # 3+ months
-                drawdown_score = 0.7
-            else:
-                drawdown_score = 0.5
-        elif current_dd < -0.10:  # >10% drawdown
-            drawdown_score = 0.3
-        else:
-            drawdown_score = 0.1  # Minimal drawdown
-    except Exception as e:
-        logger.debug(f"Could not calculate drawdown for {symbol}: {e}")
-        drawdown_score = 0.3  # Neutral on error
-
-    # Normalize weights so they sum to 1.0 (allows relative weight system)
-    sell_groups = [
-        "underperformance",
-        "time_held",
-        "portfolio_balance",
-        "instability",
-        "drawdown",
-    ]
-    weight_sum = sum(weights.get(g, SELL_WEIGHTS[g]) for g in sell_groups)
-    if weight_sum > 0:
-        normalized_weights = {
-            g: weights.get(g, SELL_WEIGHTS[g]) / weight_sum for g in sell_groups
-        }
-    else:
-        normalized_weights = SELL_WEIGHTS
-
-    # Calculate total score with normalized weights
-    total_score = (
-        (underperformance_score * normalized_weights["underperformance"])
-        + (time_held_score * normalized_weights["time_held"])
-        + (portfolio_balance_score * normalized_weights["portfolio_balance"])
-        + (instability_score * normalized_weights["instability"])
-        + (drawdown_score * normalized_weights["drawdown"])
+    total_score = _calculate_total_sell_score(
+        underperformance_score,
+        time_held_score,
+        portfolio_balance_score,
+        instability_score,
+        drawdown_score,
+        normalized_weights,
     )
 
     # Determine sell quantity

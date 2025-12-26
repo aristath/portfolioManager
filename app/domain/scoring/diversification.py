@@ -174,6 +174,93 @@ def calculate_diversification_score(
     return ScoreResult(score=round(min(1.0, total), 3), sub_scores=sub_components)
 
 
+async def _get_cached_portfolio_score(portfolio_hash: str) -> Optional[PortfolioScore]:
+    """Get cached portfolio score if available."""
+    from app.infrastructure.recommendation_cache import get_recommendation_cache
+
+    rec_cache = get_recommendation_cache()
+    cache_key = f"portfolio_score:{portfolio_hash}"
+    cached = await rec_cache.get_analytics(cache_key)
+    if cached:
+        logger.debug(f"Using cached portfolio score for hash {portfolio_hash[:8]}...")
+        return PortfolioScore(
+            diversification_score=cached["diversification_score"],
+            dividend_score=cached["dividend_score"],
+            quality_score=cached["quality_score"],
+            total=cached["total"],
+        )
+    return None
+
+
+async def _cache_portfolio_score(score: PortfolioScore, portfolio_hash: str) -> None:
+    """Cache portfolio score result."""
+    from app.infrastructure.recommendation_cache import get_recommendation_cache
+
+    rec_cache = get_recommendation_cache()
+    cache_key = f"portfolio_score:{portfolio_hash}"
+    await rec_cache.set_analytics(
+        cache_key,
+        {
+            "diversification_score": score.diversification_score,
+            "dividend_score": score.dividend_score,
+            "quality_score": score.quality_score,
+            "total": score.total,
+        },
+        ttl_hours=24,
+    )
+
+
+def _calculate_diversification_score(
+    portfolio_context: PortfolioContext, total_value: float
+) -> float:
+    """Calculate diversification score (40% weight)."""
+    geo_deviations = []
+    if portfolio_context.stock_geographies:
+        geo_values: Dict[str, float] = {}
+        for symbol, value in portfolio_context.positions.items():
+            geo = portfolio_context.stock_geographies.get(symbol, "OTHER")
+            geo_values[geo] = geo_values.get(geo, 0) + value
+
+        for geo, weight in portfolio_context.geo_weights.items():
+            target_pct = 0.33 + (weight * 0.15)  # Base 33% +/- 15%
+            current_pct = geo_values.get(geo, 0) / total_value if total_value > 0 else 0
+            deviation = abs(current_pct - target_pct)
+            geo_deviations.append(deviation)
+
+    avg_geo_deviation = (
+        sum(geo_deviations) / len(geo_deviations) if geo_deviations else 0.2
+    )
+    return max(0, 100 * (1 - avg_geo_deviation / 0.3))
+
+
+def _calculate_dividend_score(
+    portfolio_context: PortfolioContext, total_value: float
+) -> float:
+    """Calculate dividend score (30% weight)."""
+    if not portfolio_context.stock_dividends:
+        return 50.0
+
+    weighted_dividend = 0.0
+    for symbol, value in portfolio_context.positions.items():
+        div_yield = portfolio_context.stock_dividends.get(symbol, 0) or 0
+        weighted_dividend += div_yield * (value / total_value)
+    return min(100, 30 + weighted_dividend * 1000)
+
+
+def _calculate_quality_score(
+    portfolio_context: PortfolioContext, total_value: float
+) -> float:
+    """Calculate quality score (30% weight)."""
+    if not portfolio_context.stock_scores:
+        return 50.0
+
+    weighted_quality = 0.0
+    for symbol, value in portfolio_context.positions.items():
+        quality = portfolio_context.stock_scores.get(symbol, 0.5) or 0.5
+        weighted_quality += quality * (value / total_value)
+    return weighted_quality * 100
+
+
 async def calculate_portfolio_score(
     portfolio_context: PortfolioContext, portfolio_hash: Optional[str] = None
 ) -> PortfolioScore:
@@ -192,23 +279,10 @@ async def calculate_portfolio_score(
     Returns:
         PortfolioScore with component scores and total (0-100 scale)
     """
-    # Check cache if portfolio_hash is provided
     if portfolio_hash:
-        from app.infrastructure.recommendation_cache import get_recommendation_cache
-
-        rec_cache = get_recommendation_cache()
-        cache_key = f"portfolio_score:{portfolio_hash}"
-        cached = await rec_cache.get_analytics(cache_key)
+        cached = await _get_cached_portfolio_score(portfolio_hash)
         if cached:
-            logger.debug(
-                f"Using cached portfolio score for hash {portfolio_hash[:8]}..."
-            )
-            return PortfolioScore(
-                diversification_score=cached["diversification_score"],
-                dividend_score=cached["dividend_score"],
-                quality_score=cached["quality_score"],
-                total=cached["total"],
-            )
+            return cached
 
     total_value = portfolio_context.total_value
     if total_value <= 0:
@@ -218,68 +292,14 @@ async def calculate_portfolio_score(
             quality_score=50.0,
             total=50.0,
         )
-        # Cache the result if portfolio_hash provided
         if portfolio_hash:
-            from app.infrastructure.recommendation_cache import get_recommendation_cache
-
-            rec_cache = get_recommendation_cache()
-            cache_key = f"portfolio_score:{portfolio_hash}"
-            await rec_cache.set_analytics(
-                cache_key,
-                {
-                    "diversification_score": score.diversification_score,
-                    "dividend_score": score.dividend_score,
-                    "quality_score": score.quality_score,
-                    "total": score.total,
-                },
-                ttl_hours=24,
-            )
+            await _cache_portfolio_score(score, portfolio_hash)
         return score
 
-    # 1. Diversification Score (40%)
-    geo_deviations = []
-    if portfolio_context.stock_geographies:
-        # Calculate current geo allocations
-        geo_values: Dict[str, float] = {}
-        for symbol, value in portfolio_context.positions.items():
-            geo = portfolio_context.stock_geographies.get(symbol, "OTHER")
-            geo_values[geo] = geo_values.get(geo, 0) + value
+    diversification_score = _calculate_diversification_score(portfolio_context, total_value)
+    dividend_score = _calculate_dividend_score(portfolio_context, total_value)
+    quality_score = _calculate_quality_score(portfolio_context, total_value)
 
-        # Compare to targets
-        for geo, weight in portfolio_context.geo_weights.items():
-            target_pct = 0.33 + (weight * 0.15)  # Base 33% +/- 15%
-            current_pct = geo_values.get(geo, 0) / total_value if total_value > 0 else 0
-            deviation = abs(current_pct - target_pct)
-            geo_deviations.append(deviation)
-
-    avg_geo_deviation = (
-        sum(geo_deviations) / len(geo_deviations) if geo_deviations else 0.2
-    )
-    # Convert deviation to score: 0 deviation = 100, 0.3+ deviation = 0
-    diversification_score = max(0, 100 * (1 - avg_geo_deviation / 0.3))
-
-    # 2. Dividend Score (30%)
-    if portfolio_context.stock_dividends:
-        weighted_dividend = 0.0
-        for symbol, value in portfolio_context.positions.items():
-            div_yield = portfolio_context.stock_dividends.get(symbol, 0) or 0
-            weighted_dividend += div_yield * (value / total_value)
-        # Score: 0% yield = 30, 3% = 60, 6%+ = 100
-        dividend_score = min(100, 30 + weighted_dividend * 1000)
-    else:
-        dividend_score = 50.0
-
-    # 3. Quality Score (30%)
-    if portfolio_context.stock_scores:
-        weighted_quality = 0.0
-        for symbol, value in portfolio_context.positions.items():
-            quality = portfolio_context.stock_scores.get(symbol, 0.5) or 0.5
-            weighted_quality += quality * (value / total_value)
-        quality_score = weighted_quality * 100
-    else:
-        quality_score = 50.0
-
-    # Combined score
     total = diversification_score * 0.40 + dividend_score * 0.30 + quality_score * 0.30
 
     score = PortfolioScore(
@@ -289,22 +309,8 @@ async def calculate_portfolio_score(
         total=round(total, 1),
     )
 
-    # Cache the result if portfolio_hash provided
     if portfolio_hash:
-        from app.infrastructure.recommendation_cache import get_recommendation_cache
-
-        rec_cache = get_recommendation_cache()
-        cache_key = f"portfolio_score:{portfolio_hash}"
-        await rec_cache.set_analytics(
-            cache_key,
-            {
-                "diversification_score": score.diversification_score,
-                "dividend_score": score.dividend_score,
-                "quality_score": score.quality_score,
-                "total": score.total,
-            },
-            ttl_hours=24,
-        )
+        await _cache_portfolio_score(score, portfolio_hash)
 
     return score
 
