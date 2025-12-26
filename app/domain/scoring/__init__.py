@@ -41,37 +41,28 @@ from app.domain.scoring.constants import (
     DEFAULT_MAX_LOSS_THRESHOLD,
 )
 
-# === NEW 8-GROUP SCORING MODULES ===
+# === 8-GROUP SCORING MODULES ===
 
-# Long-term Performance scoring
-from app.domain.scoring.long_term import calculate_long_term_score
-
-# Fundamentals scoring
-from app.domain.scoring.fundamentals import calculate_fundamentals_score
-
-# Opportunity scoring (refactored - 52W high + P/E only)
-from app.domain.scoring.opportunity import (
+# Score group orchestrators
+from app.domain.scoring.groups import (
+    calculate_long_term_score,
+    calculate_fundamentals_score,
     calculate_opportunity_score,
-    score_below_52w_high,
-    score_pe_ratio,
+    calculate_dividends_score,
+    calculate_short_term_score,
+    calculate_technicals_score,
+    calculate_opinion_score,
+    is_price_too_high,
 )
 
-# Dividends scoring
-from app.domain.scoring.dividends import calculate_dividends_score
-
-# Short-term Performance scoring
-from app.domain.scoring.short_term import calculate_short_term_score
-
-# Technicals scoring (RSI, Bollinger, EMA)
-from app.domain.scoring.technicals import (
-    calculate_technicals_score,
+# Scorer functions (exported for convenience)
+from app.domain.scoring.scorers import (
+    score_below_52w_high,
+    score_pe_ratio,
     score_rsi,
     score_bollinger,
     score_ema_distance,
 )
-
-# Opinion scoring (renamed from analyst)
-from app.domain.scoring.opinion import calculate_opinion_score
 
 # Diversification scoring (renamed from allocation)
 from app.domain.scoring.diversification import (

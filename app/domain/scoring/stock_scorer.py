@@ -30,13 +30,13 @@ from app.domain.scoring.constants import (
     DEFAULT_TARGET_ANNUAL_RETURN,
     DEFAULT_MARKET_AVG_PE,
 )
-from app.domain.scoring.long_term import calculate_long_term_score
-from app.domain.scoring.fundamentals import calculate_fundamentals_score
-from app.domain.scoring.opportunity import calculate_opportunity_score
-from app.domain.scoring.dividends import calculate_dividends_score
-from app.domain.scoring.short_term import calculate_short_term_score
-from app.domain.scoring.technicals import calculate_technicals_score
-from app.domain.scoring.opinion import calculate_opinion_score
+from app.domain.scoring.groups.long_term import calculate_long_term_score
+from app.domain.scoring.groups.fundamentals import calculate_fundamentals_score
+from app.domain.scoring.groups.opportunity import calculate_opportunity_score
+from app.domain.scoring.groups.dividends import calculate_dividends_score
+from app.domain.scoring.groups.short_term import calculate_short_term_score
+from app.domain.scoring.groups.technicals import calculate_technicals_score
+from app.domain.scoring.groups.opinion import calculate_opinion_score
 from app.domain.scoring.diversification import calculate_diversification_score
 from app.domain.scoring.technical import calculate_volatility
 
