@@ -15,6 +15,7 @@ from app.infrastructure.dependencies import (
     RecommendationRepositoryDep,
     TradeSafetyServiceDep,
     TradeExecutionServiceDep,
+    PortfolioServiceDep,
 )
 from app.infrastructure.cache import cache
 from app.infrastructure.cache_invalidation import get_cache_invalidation_service
@@ -123,19 +124,8 @@ async def execute_trade(
 
 
 @router.get("/allocation")
-async def get_allocation():
+async def get_allocation(portfolio_service: PortfolioServiceDep):
     """Get current portfolio allocation vs targets."""
-    from app.application.services.portfolio_service import PortfolioService
-
-    portfolio_repo = PortfolioRepository()
-    position_repo = PositionRepository()
-    allocation_repo = AllocationRepository()
-
-    portfolio_service = PortfolioService(
-        portfolio_repo,
-        position_repo,
-        allocation_repo,
-    )
     summary = await portfolio_service.get_portfolio_summary()
 
     return {
