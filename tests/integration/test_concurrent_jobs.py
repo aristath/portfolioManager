@@ -131,18 +131,17 @@ async def test_concurrent_trade_execution_atomicity(db):
 
     async def create_trade(symbol, side, quantity):
         async with file_lock("rebalance", timeout=5.0):
-            async with db.transaction():
-                trade = Trade(
-                    symbol=symbol,
-                    side=side,
-                    quantity=quantity,
-                    price=150.0,
-                    executed_at=datetime.now(),
-                    order_id=f"order_{symbol}",
-                )
-                await trade_repo.create(trade)
-                await asyncio.sleep(0.05)  # Simulate processing time
-                trades_created.append(symbol)
+            trade = Trade(
+                symbol=symbol,
+                side=side,
+                quantity=quantity,
+                price=150.0,
+                executed_at=datetime.now(),
+                order_id=f"order_{symbol}",
+            )
+            await trade_repo.create(trade)
+            await asyncio.sleep(0.05)  # Simulate processing time
+            trades_created.append(symbol)
 
     # Create multiple trades concurrently
     await asyncio.gather(

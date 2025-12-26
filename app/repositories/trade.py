@@ -6,6 +6,7 @@ from typing import List, Optional, Set
 
 from app.domain.models import Trade
 from app.infrastructure.database import get_db_manager
+from app.repositories.base import transaction_context
 
 logger = logging.getLogger(__name__)
 

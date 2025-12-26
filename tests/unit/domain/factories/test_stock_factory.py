@@ -104,16 +104,16 @@ class TestStockFactory:
         with pytest.raises(ValidationError, match="Symbol cannot be empty"):
             StockFactory.create_from_api_request(data)
 
-    def test_create_from_api_request_validates_geography(self):
-        """Test that geography must be valid."""
+    def test_create_from_api_request_accepts_any_geography(self):
+        """Test that any non-empty geography is accepted (relaxed validation)."""
         data = {
             "symbol": "AAPL.US",
             "name": "Apple Inc.",
-            "geography": "INVALID",
+            "geography": "GREECE",
         }
-        
-        with pytest.raises(ValidationError, match="Invalid geography"):
-            StockFactory.create_from_api_request(data)
+
+        stock = StockFactory.create_from_api_request(data)
+        assert stock.geography == "GREECE"
 
     def test_create_with_industry_detection(self):
         """Test creating stock with industry detection."""

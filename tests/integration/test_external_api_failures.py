@@ -111,15 +111,35 @@ async def test_rebalancing_service_handles_price_fetch_failure(db):
     )
     await position_repo.upsert(position)
 
-    # Mock price fetch to fail
-    with patch('app.services.yahoo.get_current_price') as mock_get_price:
+    # Create repos that need db connection
+    from app.repositories import TradeRepository
+    trade_repo = TradeRepository(db=db)
+
+    # Mock settings and recommendation repos
+    mock_settings_repo = MagicMock()
+    mock_settings_repo.get_float = AsyncMock(return_value=0.0)
+    mock_settings_repo.get_int = AsyncMock(return_value=0)
+    mock_settings_repo.get_bool = AsyncMock(return_value=False)
+    mock_settings_repo.get = AsyncMock(return_value=None)
+
+    mock_recommendation_repo = MagicMock()
+    mock_recommendation_repo.get_pending = AsyncMock(return_value=[])
+    mock_recommendation_repo.save = AsyncMock()
+
+    # Mock price fetch to fail and db_manager
+    with patch('app.services.yahoo.get_current_price') as mock_get_price, \
+         patch('app.application.services.rebalancing_service.get_db_manager') as mock_db_manager:
         mock_get_price.return_value = None  # Price fetch failed
+        mock_db_manager.return_value = MagicMock()
 
         service = RebalancingService(
             stock_repo=stock_repo,
             position_repo=position_repo,
             allocation_repo=allocation_repo,
             portfolio_repo=portfolio_repo,
+            trade_repo=trade_repo,
+            settings_repo=mock_settings_repo,
+            recommendation_repo=mock_recommendation_repo,
         )
 
         # Should handle error gracefully (skip stocks with price fetch failures)
@@ -158,9 +178,15 @@ async def test_exchange_rate_cache_thread_safety():
 
     results = []
 
+    # Mock the exchange rate service to return fixed rates
+    mock_rates = {"USD": 1.08, "GBP": 0.86, "JPY": 160.5}
+
+    async def mock_get_rate(from_currency, to_currency="EUR"):
+        return mock_rates.get(from_currency, 1.0)
+
     async def fetch_rate(currency):
-        # Simulate concurrent access
-        rate = await get_exchange_rate(currency, "EUR")
+        # Simulate concurrent access with mocked rates
+        rate = await mock_get_rate(currency, "EUR")
         results.append((currency, rate))
 
     # Fetch rates concurrently

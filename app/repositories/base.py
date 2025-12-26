@@ -36,22 +36,26 @@ def safe_get(row: Any, key: str, default: Any = None) -> Any:
 async def transaction_context(db: Union[Any, aiosqlite.Connection]) -> AsyncIterator[aiosqlite.Connection]:
     """
     Transaction context manager that works with both Database instances and raw aiosqlite.Connection.
-    
+
     Args:
         db: Either a Database instance (from manager) or raw aiosqlite.Connection
-        
+
     Yields:
         aiosqlite.Connection for executing queries
     """
-    # Check if db has transaction method (Database instance)
+    # Check if db has transaction method (Database instance or DatabaseAdapter)
     if hasattr(db, 'transaction'):
         async with db.transaction() as conn:
             yield conn
     else:
-        # Raw aiosqlite.Connection - use its transaction support
-        # aiosqlite connections support async context manager for transactions
-        async with db:
+        # Raw aiosqlite.Connection - already open, just use it directly
+        # Don't re-enter with 'async with db:' as it's already entered
+        try:
             yield db
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
 
 
 def safe_get_datetime(row: Any, key: str) -> Optional[datetime]:
@@ -198,6 +202,11 @@ class DatabaseAdapter:
     @asynccontextmanager
     async def transaction(self) -> AsyncIterator[aiosqlite.Connection]:
         """Transaction context manager."""
-        async with self._conn:
+        # Connection is already open, don't re-enter
+        try:
             yield self._conn
+            await self._conn.commit()
+        except Exception:
+            await self._conn.rollback()
+            raise
 
