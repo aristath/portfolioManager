@@ -258,3 +258,5 @@ CurrencyExchangeServiceDep = Annotated[
 ExchangeRateServiceDep = Annotated[
     ExchangeRateService, Depends(get_exchange_rate_service)
 ]
+
+

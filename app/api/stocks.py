@@ -214,6 +214,7 @@ async def create_stock(
         industry = yahoo.get_stock_industry(stock_data.symbol, stock_data.yahoo_symbol)
         new_stock = StockFactory.create_with_industry_detection(stock_dict, industry)
     else:
+        industry = stock_data.industry
         new_stock = StockFactory.create_from_api_request(stock_dict)
 
     await stock_repo.create(new_stock)
