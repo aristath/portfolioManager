@@ -15,29 +15,14 @@ Hard Blocks (NEVER sell if any apply):
 """
 
 import logging
-from datetime import datetime
 from typing import Optional, Dict, List
 
 from app.domain.scoring.models import SellScore, TechnicalData
-from app.domain.services.trade_sizing_service import TradeSizingService
 from app.domain.scoring.constants import (
     DEFAULT_MIN_HOLD_DAYS,
     DEFAULT_SELL_COOLDOWN_DAYS,
     DEFAULT_MAX_LOSS_THRESHOLD,
     DEFAULT_MIN_SELL_VALUE_EUR,
-    MIN_SELL_PCT,
-    MAX_SELL_PCT,
-    TARGET_RETURN_MIN,
-    TARGET_RETURN_MAX,
-    INSTABILITY_RATE_VERY_HOT,
-    INSTABILITY_RATE_HOT,
-    INSTABILITY_RATE_WARM,
-    VOLATILITY_SPIKE_HIGH,
-    VOLATILITY_SPIKE_MED,
-    VOLATILITY_SPIKE_LOW,
-    VALUATION_STRETCH_HIGH,
-    VALUATION_STRETCH_MED,
-    VALUATION_STRETCH_LOW,
 )
 
 # Default sell weights (fallback if settings can't be loaded)
