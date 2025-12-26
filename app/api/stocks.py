@@ -9,13 +9,10 @@ from app.infrastructure.recommendation_cache import get_recommendation_cache
 from app.infrastructure.dependencies import (
     StockRepositoryDep,
     ScoreRepositoryDep,
-    AllocationRepositoryDep,
     PositionRepositoryDep,
-    PortfolioRepositoryDep,
     PortfolioServiceDep,
     ScoringServiceDep,
 )
-from app.domain.models import Stock
 from app.domain.factories.stock_factory import StockFactory
 from app.domain.events import StockAddedEvent, get_event_bus
 from app.domain.services.priority_calculator import (

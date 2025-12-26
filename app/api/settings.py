@@ -3,7 +3,6 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.config import settings
 from app.infrastructure.cache import cache
 from app.infrastructure.dependencies import SettingsRepositoryDep, CalculationsRepositoryDep, DatabaseManagerDep
 
