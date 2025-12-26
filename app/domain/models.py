@@ -307,3 +307,26 @@ class StockPriority:
     quality_score: Optional[float] = None
     opportunity_score: Optional[float] = None
     allocation_fit_score: Optional[float] = None
+
+
+@dataclass
+class MultiStepRecommendation:
+    """A single step in a multi-step recommendation sequence.
+
+    Multi-step recommendations show a planned sequence of trades
+    (e.g., SELL X then BUY Y) with portfolio score projections.
+    """
+    step: int  # 1-indexed step number
+    side: str  # "BUY" or "SELL"
+    symbol: str
+    name: str
+    quantity: int
+    estimated_price: float
+    estimated_value: float  # In EUR
+    currency: str
+    reason: str
+    portfolio_score_before: float
+    portfolio_score_after: float
+    score_change: float
+    available_cash_before: float
+    available_cash_after: float

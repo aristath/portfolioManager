@@ -41,17 +41,17 @@ from app.domain.scoring import (
     PortfolioContext,
     TechnicalData,
 )
-from app.domain.models import Recommendation
+from app.domain.models import Recommendation, MultiStepRecommendation
 from app.domain.value_objects.recommendation_status import RecommendationStatus
-from app.domain.services.allocation_calculator import get_max_trades
+from app.domain.services.allocation_calculator import get_max_trades, is_outside_rebalance_band
 from app.domain.constants import (
     TARGET_PORTFOLIO_VOLATILITY,
     DEFAULT_VOLATILITY,
     MIN_VOL_WEIGHT,
     MAX_VOL_WEIGHT,
     MIN_VOLATILITY_FOR_SIZING,
-    REBALANCE_BAND_PCT,
     MAX_POSITION_PCT,
+    REBALANCE_BAND_PCT,
 )
 from app.domain.scoring.opportunity import is_price_too_high
 from app.infrastructure.external import yahoo_finance as yahoo
@@ -95,52 +95,6 @@ def _determine_stock_currency(stock: dict) -> str:
     symbol = stock.get("symbol", "unknown")
     logger.warning(f"No currency found for {symbol}, defaulting to EUR")
     return "EUR"
-
-
-def is_outside_rebalance_band(
-    current_weight: float,
-    target_weight: float,
-    band_pct: float = REBALANCE_BAND_PCT
-) -> bool:
-    """
-    Check if a position has drifted enough from target to warrant rebalancing.
-
-    Based on MOSEK Portfolio Cookbook principles: avoid frequent small trades
-    by only rebalancing when positions drift significantly from targets.
-
-    Args:
-        current_weight: Current allocation weight (0.0 to 1.0)
-        target_weight: Target allocation weight (0.0 to 1.0)
-        band_pct: Deviation threshold (default: 7%)
-
-    Returns:
-        True if position is outside the band and should be considered for rebalancing
-    """
-    deviation = abs(current_weight - target_weight)
-    return deviation > band_pct
-
-
-# Recommendation model moved to app.domain.models - use unified Recommendation
-# Local Recommendation model removed - use domain model instead
-
-
-@dataclass
-class MultiStepRecommendation:
-    """A single step in a multi-step recommendation sequence."""
-    step: int  # 1-indexed step number
-    side: str  # "BUY" or "SELL"
-    symbol: str
-    name: str
-    quantity: int
-    estimated_price: float
-    estimated_value: float  # In EUR
-    currency: str
-    reason: str
-    portfolio_score_before: float
-    portfolio_score_after: float
-    score_change: float
-    available_cash_before: float
-    available_cash_after: float
 
 
 class RebalancingService:

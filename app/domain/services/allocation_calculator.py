@@ -17,10 +17,34 @@ from app.domain.constants import (
     MAX_VOL_WEIGHT,
     MIN_VOL_WEIGHT,
     DEFAULT_VOLATILITY,
+    REBALANCE_BAND_PCT,
 )
 from app.domain.models import StockPriority
 
 logger = logging.getLogger(__name__)
+
+
+def is_outside_rebalance_band(
+    current_weight: float,
+    target_weight: float,
+    band_pct: float = REBALANCE_BAND_PCT
+) -> bool:
+    """
+    Check if a position has drifted enough from target to warrant rebalancing.
+
+    Based on MOSEK Portfolio Cookbook principles: avoid frequent small trades
+    by only rebalancing when positions drift significantly from targets.
+
+    Args:
+        current_weight: Current allocation weight (0.0 to 1.0)
+        target_weight: Target allocation weight (0.0 to 1.0)
+        band_pct: Deviation threshold (default from constants)
+
+    Returns:
+        True if position is outside the band and should be considered for rebalancing
+    """
+    deviation = abs(current_weight - target_weight)
+    return deviation > band_pct
 
 
 def parse_industries(industry_str: str) -> list[str]:
