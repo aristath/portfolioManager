@@ -19,6 +19,7 @@ from datetime import datetime
 from typing import Optional, Dict, List
 
 from app.domain.scoring.models import SellScore, TechnicalData
+from app.domain.services.trade_sizing_service import TradeSizingService
 from app.domain.scoring.constants import (
     DEFAULT_MIN_HOLD_DAYS,
     DEFAULT_SELL_COOLDOWN_DAYS,
@@ -337,16 +338,13 @@ def determine_sell_quantity(
     # Calculate raw quantity
     raw_quantity = quantity * sell_pct
 
-    # Round to min_lot
-    if min_lot > 1:
-        sell_quantity = int(raw_quantity // min_lot) * min_lot
-    else:
-        sell_quantity = int(raw_quantity)
+    # Round to min_lot using TradeSizingService
+    sell_quantity = TradeSizingService.round_to_lots(raw_quantity, min_lot)
 
     # Ensure we don't sell everything (keep at least 1 lot)
     max_sell = quantity - min_lot
     if sell_quantity >= max_sell:
-        sell_quantity = int(max_sell // min_lot) * min_lot if min_lot > 1 else int(max_sell)
+        sell_quantity = TradeSizingService.round_to_lots(max_sell, min_lot)
 
     # Ensure minimum sell quantity
     if sell_quantity < min_lot:
