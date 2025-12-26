@@ -9,7 +9,7 @@ from typing import List, Optional
 from app.repositories import StockRepository, ScoreRepository
 from app.domain.models import StockScore
 from app.domain.scoring import calculate_stock_score, CalculatedStockScore
-from app.infrastructure.database.manager import get_db_manager
+from app.infrastructure.database.manager import DatabaseManager
 from app.infrastructure.external import yahoo_finance as yahoo
 
 logger = logging.getLogger(__name__)
@@ -67,16 +67,16 @@ class ScoringService:
         self,
         stock_repo: StockRepository,
         score_repo: ScoreRepository,
+        db_manager: DatabaseManager,
     ):
         self.stock_repo = stock_repo
         self.score_repo = score_repo
+        self._db_manager = db_manager
 
     async def _get_price_data(self, symbol: str, yahoo_symbol: str):
         """Fetch daily and monthly price data for a symbol."""
-        db_manager = get_db_manager()
-
         # Get history database for this symbol
-        history_db = await db_manager.history(symbol)
+        history_db = await self._db_manager.history(symbol)
 
         # Fetch daily prices
         rows = await history_db.fetchall(

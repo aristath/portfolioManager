@@ -126,11 +126,13 @@ async def test_rebalancing_service_handles_price_fetch_failure(db):
     mock_recommendation_repo.get_pending = AsyncMock(return_value=[])
     mock_recommendation_repo.save = AsyncMock()
 
-    # Mock price fetch to fail and db_manager
-    with patch('app.infrastructure.external.yahoo_finance.get_current_price') as mock_get_price, \
-         patch('app.application.services.rebalancing_service.get_db_manager') as mock_db_manager:
+    # Create mock db_manager and tradernet_client
+    mock_db_manager = MagicMock()
+    mock_tradernet_client = MagicMock()
+
+    # Mock price fetch to fail
+    with patch('app.infrastructure.external.yahoo_finance.get_current_price') as mock_get_price:
         mock_get_price.return_value = None  # Price fetch failed
-        mock_db_manager.return_value = MagicMock()
 
         service = RebalancingService(
             stock_repo=stock_repo,
@@ -140,6 +142,8 @@ async def test_rebalancing_service_handles_price_fetch_failure(db):
             trade_repo=trade_repo,
             settings_repo=mock_settings_repo,
             recommendation_repo=mock_recommendation_repo,
+            db_manager=mock_db_manager,
+            tradernet_client=mock_tradernet_client,
         )
 
         # Should handle error gracefully (skip stocks with price fetch failures)

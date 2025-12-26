@@ -14,7 +14,7 @@ import empyrical
 import pandas_ta as ta
 
 from app.config import settings as app_settings
-from app.infrastructure.database.manager import get_db_manager
+from app.infrastructure.database.manager import DatabaseManager
 from app.repositories import (
     StockRepository,
     PositionRepository,
@@ -56,6 +56,7 @@ from app.domain.constants import (
 )
 from app.domain.scoring.opportunity import is_price_too_high
 from app.infrastructure.external import yahoo_finance as yahoo
+from app.infrastructure.external.tradernet import TradernetClient
 from app.domain.services.exchange_rate_service import get_exchange_rate
 from app.domain.value_objects.trade_side import TradeSide
 from app.domain.constants import BUY_COOLDOWN_DAYS
@@ -155,6 +156,8 @@ class RebalancingService:
         trade_repo: ITradeRepository,
         settings_repo: ISettingsRepository,
         recommendation_repo: RecommendationRepository,
+        db_manager: DatabaseManager,
+        tradernet_client: TradernetClient,
     ):
         self._stock_repo = stock_repo
         self._position_repo = position_repo
@@ -164,7 +167,8 @@ class RebalancingService:
         self._settings_repo = settings_repo
         self._settings_service = SettingsService(self._settings_repo)
         self._recommendation_repo = recommendation_repo
-        self._db_manager = get_db_manager()
+        self._db_manager = db_manager
+        self._tradernet_client = tradernet_client
 
     async def _get_technical_data_for_positions(
         self,
@@ -1277,9 +1281,7 @@ class RebalancingService:
         stocks = await self._stock_repo.get_all_active()
 
         # Get current cash balance
-        from app.infrastructure.external.tradernet import get_tradernet_client
-        client = get_tradernet_client()
-        available_cash = client.get_total_cash_eur() if client.is_connected else 0.0
+        available_cash = self._tradernet_client.get_total_cash_eur() if self._tradernet_client.is_connected else 0.0
 
         # Create holistic plan (auto-tests depths 1-5)
         plan = await create_holistic_plan(

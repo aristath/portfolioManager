@@ -30,40 +30,42 @@ async def test_trade_execution_rollback_on_database_error(db):
         geography="US",
     )
     
-    # Mock external trade execution to succeed, but database write to fail
-    with patch('app.application.services.trade_execution_service.get_tradernet_client') as mock_get_client:
-        mock_client = MagicMock()
-        mock_client.is_connected = True
-        mock_client.place_order.return_value = MagicMock(
-            order_id="order1",
-            price=150.0,
-            status="filled"
-        )
-        mock_get_client.return_value = mock_client
+    # Create mock client for trade execution
+    mock_client = MagicMock()
+    mock_client.is_connected = True
+    mock_client.place_order.return_value = MagicMock(
+        order_id="order1",
+        price=150.0,
+        status="filled"
+    )
 
-        position_repo = PositionRepository(db=db)
-        service = TradeExecutionService(trade_repo=trade_repo, position_repo=position_repo)
-        
-        # Mock repository create to fail
-        original_create = trade_repo.create
-        async def failing_create(trade):
-            raise Exception("Database write failed")
-        
-        trade_repo.create = failing_create
-        
-        # Try to execute trade - should handle error gracefully
-        try:
-            results = await service.execute_trades([trade_rec], use_transaction=True)
-            # Transaction should have rolled back
-            assert len(results) > 0
-            # Verify no trade was actually saved (transaction rolled back)
-            history = await trade_repo.get_history(limit=10)
-            assert len(history) == 0, "Transaction should have rolled back"
-        except Exception:
-            # Expected - error should propagate
-            pass
-        finally:
-            trade_repo.create = original_create
+    position_repo = PositionRepository(db=db)
+    service = TradeExecutionService(
+        trade_repo=trade_repo,
+        position_repo=position_repo,
+        tradernet_client=mock_client,
+    )
+
+    # Mock repository create to fail
+    original_create = trade_repo.create
+    async def failing_create(trade):
+        raise Exception("Database write failed")
+
+    trade_repo.create = failing_create
+
+    # Try to execute trade - should handle error gracefully
+    try:
+        results = await service.execute_trades([trade_rec], use_transaction=True)
+        # Transaction should have rolled back
+        assert len(results) > 0
+        # Verify no trade was actually saved (transaction rolled back)
+        history = await trade_repo.get_history(limit=10)
+        assert len(history) == 0, "Transaction should have rolled back"
+    except Exception:
+        # Expected - error should propagate
+        pass
+    finally:
+        trade_repo.create = original_create
 
 
 @pytest.mark.asyncio
@@ -86,25 +88,27 @@ async def test_trade_execution_handles_external_failure(db):
     
     position_repo = PositionRepository(db=db)
 
-    # Mock external trade execution to fail
-    with patch('app.application.services.trade_execution_service.get_tradernet_client') as mock_get_client:
-        mock_client = MagicMock()
-        mock_client.is_connected = True
-        mock_client.place_order.side_effect = Exception("API Error")
-        mock_get_client.return_value = mock_client
+    # Create mock client that fails on order placement
+    mock_client = MagicMock()
+    mock_client.is_connected = True
+    mock_client.place_order.side_effect = Exception("API Error")
 
-        service = TradeExecutionService(trade_repo=trade_repo, position_repo=position_repo)
-        
-        # Should handle error gracefully, no trade should be recorded
-        results = await service.execute_trades([trade_rec])
-        
-        # Verify result indicates failure or blocked
-        assert len(results) == 1
-        assert results[0]["status"] in ["failed", "error", "blocked"]
-        
-        # Verify no trade was recorded
-        history = await trade_repo.get_history(limit=10)
-        assert len(history) == 0
+    service = TradeExecutionService(
+        trade_repo=trade_repo,
+        position_repo=position_repo,
+        tradernet_client=mock_client,
+    )
+
+    # Should handle error gracefully, no trade should be recorded
+    results = await service.execute_trades([trade_rec])
+
+    # Verify result indicates failure or blocked
+    assert len(results) == 1
+    assert results[0]["status"] in ["failed", "error", "blocked"]
+
+    # Verify no trade was recorded
+    history = await trade_repo.get_history(limit=10)
+    assert len(history) == 0
 
 
 @pytest.mark.asyncio

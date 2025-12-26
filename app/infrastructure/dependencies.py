@@ -7,6 +7,8 @@ enabling proper dependency injection throughout the application.
 from fastapi import Depends
 from typing import Annotated
 
+from app.infrastructure.database.manager import DatabaseManager, get_db_manager
+from app.infrastructure.external.tradernet import TradernetClient, get_tradernet_client
 from app.repositories import (
     StockRepository,
     PositionRepository,
@@ -96,6 +98,18 @@ def get_calculations_repository() -> CalculationsRepository:
     return CalculationsRepository()
 
 
+# Infrastructure Dependencies
+
+def get_database_manager() -> DatabaseManager:
+    """Get DatabaseManager singleton instance."""
+    return get_db_manager()
+
+
+def get_tradernet() -> TradernetClient:
+    """Get TradernetClient singleton instance."""
+    return get_tradernet_client()
+
+
 # Type aliases for use in function signatures
 StockRepositoryDep = Annotated[IStockRepository, Depends(get_stock_repository)]
 PositionRepositoryDep = Annotated[IPositionRepository, Depends(get_position_repository)]
@@ -108,6 +122,10 @@ HistoryRepositoryDep = Annotated[HistoryRepository, Depends(get_history_reposito
 SettingsRepositoryDep = Annotated[ISettingsRepository, Depends(get_settings_repository)]
 RecommendationRepositoryDep = Annotated[RecommendationRepository, Depends(get_recommendation_repository)]
 CalculationsRepositoryDep = Annotated[CalculationsRepository, Depends(get_calculations_repository)]
+
+# Infrastructure dependency type aliases
+DatabaseManagerDep = Annotated[DatabaseManager, Depends(get_database_manager)]
+TradernetClientDep = Annotated[TradernetClient, Depends(get_tradernet)]
 
 
 # Application Service Dependencies
@@ -128,11 +146,13 @@ def get_portfolio_service(
 def get_scoring_service(
     stock_repo: StockRepositoryDep,
     score_repo: ScoreRepositoryDep,
+    db_manager: DatabaseManagerDep,
 ) -> ScoringService:
     """Get ScoringService instance."""
     return ScoringService(
         stock_repo=stock_repo,
         score_repo=score_repo,
+        db_manager=db_manager,
     )
 
 
@@ -151,6 +171,8 @@ def get_rebalancing_service(
     trade_repo: TradeRepositoryDep,
     settings_repo: SettingsRepositoryDep,
     recommendation_repo: RecommendationRepositoryDep,
+    db_manager: DatabaseManagerDep,
+    tradernet_client: TradernetClientDep,
 ) -> RebalancingService:
     """Get RebalancingService instance."""
     return RebalancingService(
@@ -161,17 +183,21 @@ def get_rebalancing_service(
         trade_repo=trade_repo,
         settings_repo=settings_repo,
         recommendation_repo=recommendation_repo,
+        db_manager=db_manager,
+        tradernet_client=tradernet_client,
     )
 
 
 def get_trade_execution_service(
     trade_repo: TradeRepositoryDep,
     position_repo: PositionRepositoryDep,
+    tradernet_client: TradernetClientDep,
 ) -> TradeExecutionService:
     """Get TradeExecutionService instance."""
     return TradeExecutionService(
         trade_repo=trade_repo,
         position_repo=position_repo,
+        tradernet_client=tradernet_client,
     )
 
 

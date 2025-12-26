@@ -13,7 +13,7 @@ from app.domain.value_objects.currency import Currency
 from app.domain.value_objects.trade_side import TradeSide
 from app.domain.factories.trade_factory import TradeFactory
 from app.domain.events import TradeExecutedEvent, get_event_bus
-from app.infrastructure.external.tradernet import get_tradernet_client
+from app.infrastructure.external.tradernet import TradernetClient
 from app.infrastructure.events import emit, SystemEvent
 from app.infrastructure.hardware.led_display import set_activity
 from app.application.services.currency_exchange_service import (
@@ -31,9 +31,11 @@ class TradeExecutionService:
         self,
         trade_repo: TradeRepository,
         position_repo: PositionRepository,
+        tradernet_client: TradernetClient,
     ):
         self._trade_repo = trade_repo
         self._position_repo = position_repo
+        self._tradernet_client = tradernet_client
 
     async def record_trade(
         self,
@@ -147,7 +149,7 @@ class TradeExecutionService:
         Returns:
             List of execution results with status for each trade
         """
-        client = get_tradernet_client()
+        client = self._tradernet_client
 
         if not client.is_connected:
             if not client.connect():
