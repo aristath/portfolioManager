@@ -1,7 +1,7 @@
 """Settings value objects for application configuration."""
 
-from dataclasses import dataclass, field
-from typing import Dict, Optional, Union
+from dataclasses import dataclass
+from typing import Dict, Union
 
 
 @dataclass(frozen=True)
@@ -29,37 +29,38 @@ class Settings:
     # Cash management
     min_cash_reserve: float = 500.0
 
+    def _validate_non_negative(self, value: float, field_name: str) -> None:
+        """Validate that a value is non-negative."""
+        if value < 0:
+            raise ValueError(f"{field_name} must be non-negative")
+
+    def _validate_positive(self, value: float, field_name: str) -> None:
+        """Validate that a value is positive."""
+        if value <= 0:
+            raise ValueError(f"{field_name} must be positive")
+
+    def _validate_negative(self, value: float, field_name: str) -> None:
+        """Validate that a value is negative."""
+        if value >= 0:
+            raise ValueError(f"{field_name} must be negative")
+
+    def _validate_range(self, value: float, field_name: str, min_val: float, max_val: float) -> None:
+        """Validate that a value is within a range."""
+        if not min_val <= value <= max_val:
+            raise ValueError(f"{field_name} must be between {min_val} and {max_val}")
+
     def __post_init__(self):
         """Validate settings values."""
-        if self.min_hold_days < 0:
-            raise ValueError("min_hold_days must be non-negative")
-
-        if self.sell_cooldown_days < 0:
-            raise ValueError("sell_cooldown_days must be non-negative")
-
-        if self.max_loss_threshold >= 0:
-            raise ValueError("max_loss_threshold must be negative")
-
-        if self.target_annual_return <= 0:
-            raise ValueError("target_annual_return must be positive")
-
-        if not 0 <= self.min_stock_score <= 1:
-            raise ValueError("min_stock_score must be between 0 and 1")
-
-        if not 0 <= self.optimizer_blend <= 1:
-            raise ValueError("optimizer_blend must be between 0 and 1")
-
-        if self.optimizer_target_return <= 0:
-            raise ValueError("optimizer_target_return must be positive")
-
-        if self.transaction_cost_fixed < 0:
-            raise ValueError("transaction_cost_fixed must be non-negative")
-
-        if self.transaction_cost_percent < 0:
-            raise ValueError("transaction_cost_percent must be non-negative")
-
-        if self.min_cash_reserve < 0:
-            raise ValueError("min_cash_reserve must be non-negative")
+        self._validate_non_negative(self.min_hold_days, "min_hold_days")
+        self._validate_non_negative(self.sell_cooldown_days, "sell_cooldown_days")
+        self._validate_negative(self.max_loss_threshold, "max_loss_threshold")
+        self._validate_positive(self.target_annual_return, "target_annual_return")
+        self._validate_range(self.min_stock_score, "min_stock_score", 0, 1)
+        self._validate_range(self.optimizer_blend, "optimizer_blend", 0, 1)
+        self._validate_positive(self.optimizer_target_return, "optimizer_target_return")
+        self._validate_non_negative(self.transaction_cost_fixed, "transaction_cost_fixed")
+        self._validate_non_negative(self.transaction_cost_percent, "transaction_cost_percent")
+        self._validate_non_negative(self.min_cash_reserve, "min_cash_reserve")
 
     @classmethod
     def from_dict(cls, data: Dict[str, str]) -> "Settings":
