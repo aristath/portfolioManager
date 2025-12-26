@@ -54,6 +54,13 @@ class TestTradeValidation:
 
         return client
 
+    @pytest.fixture
+    def mock_currency_exchange_service(self):
+        """Create mock currency exchange service."""
+        from app.application.services.currency_exchange_service import CurrencyExchangeService
+        service = MagicMock(spec=CurrencyExchangeService)
+        return service
+
     def _make_trade(
         self,
         symbol: str = "TEST",
@@ -77,7 +84,7 @@ class TestTradeValidation:
 
     @pytest.mark.asyncio
     async def test_buy_blocked_when_insufficient_balance(
-        self, mock_trade_repo, mock_position_repo, mock_client
+        self, mock_trade_repo, mock_position_repo, mock_client, mock_currency_exchange_service
     ):
         """BUY order should be skipped if insufficient currency balance.
 
@@ -87,6 +94,7 @@ class TestTradeValidation:
             trade_repo=mock_trade_repo,
             position_repo=mock_position_repo,
             tradernet_client=mock_client,
+            currency_exchange_service=mock_currency_exchange_service,
         )
 
         trade = self._make_trade(
@@ -113,7 +121,7 @@ class TestTradeValidation:
 
     @pytest.mark.asyncio
     async def test_buy_allowed_when_sufficient_balance(
-        self, mock_trade_repo, mock_position_repo, mock_client
+        self, mock_trade_repo, mock_position_repo, mock_client, mock_currency_exchange_service
     ):
         """BUY order should proceed if sufficient currency balance.
 
@@ -123,6 +131,7 @@ class TestTradeValidation:
             trade_repo=mock_trade_repo,
             position_repo=mock_position_repo,
             tradernet_client=mock_client,
+            currency_exchange_service=mock_currency_exchange_service,
         )
 
         trade = self._make_trade(
@@ -148,7 +157,7 @@ class TestTradeValidation:
 
     @pytest.mark.asyncio
     async def test_sell_blocked_when_no_position(
-        self, mock_trade_repo, mock_position_repo, mock_client
+        self, mock_trade_repo, mock_position_repo, mock_client, mock_currency_exchange_service
     ):
         """SELL order should be skipped if no position exists.
 
@@ -161,6 +170,7 @@ class TestTradeValidation:
             trade_repo=mock_trade_repo,
             position_repo=mock_position_repo,
             tradernet_client=mock_client,
+            currency_exchange_service=mock_currency_exchange_service,
         )
 
         trade = self._make_trade(side="SELL", quantity=10)
@@ -175,7 +185,7 @@ class TestTradeValidation:
 
     @pytest.mark.asyncio
     async def test_sell_blocked_when_quantity_exceeds_position(
-        self, mock_trade_repo, mock_position_repo, mock_client
+        self, mock_trade_repo, mock_position_repo, mock_client, mock_currency_exchange_service
     ):
         """SELL order should be skipped if quantity > position.
 
@@ -190,6 +200,7 @@ class TestTradeValidation:
             trade_repo=mock_trade_repo,
             position_repo=mock_position_repo,
             tradernet_client=mock_client,
+            currency_exchange_service=mock_currency_exchange_service,
         )
 
         # Trying to sell 10 shares
@@ -205,7 +216,7 @@ class TestTradeValidation:
 
     @pytest.mark.asyncio
     async def test_sell_allowed_when_quantity_within_position(
-        self, mock_trade_repo, mock_position_repo, mock_client
+        self, mock_trade_repo, mock_position_repo, mock_client, mock_currency_exchange_service
     ):
         """SELL order should proceed if quantity <= position.
 
@@ -220,6 +231,7 @@ class TestTradeValidation:
             trade_repo=mock_trade_repo,
             position_repo=mock_position_repo,
             tradernet_client=mock_client,
+            currency_exchange_service=mock_currency_exchange_service,
         )
 
         # Selling 10 of 20 shares
@@ -234,7 +246,7 @@ class TestTradeValidation:
 
     @pytest.mark.asyncio
     async def test_broker_connection_failure_raises_error(
-        self, mock_trade_repo, mock_position_repo
+        self, mock_trade_repo, mock_position_repo, mock_currency_exchange_service
     ):
         """Should raise error if broker connection fails.
 
@@ -248,6 +260,7 @@ class TestTradeValidation:
             trade_repo=mock_trade_repo,
             position_repo=mock_position_repo,
             tradernet_client=mock_client,
+            currency_exchange_service=mock_currency_exchange_service,
         )
 
         trade = self._make_trade()
@@ -257,7 +270,7 @@ class TestTradeValidation:
 
     @pytest.mark.asyncio
     async def test_multi_currency_validation(
-        self, mock_trade_repo, mock_position_repo, mock_client
+        self, mock_trade_repo, mock_position_repo, mock_client, mock_currency_exchange_service
     ):
         """Should validate each trade against correct currency balance.
 
@@ -267,6 +280,7 @@ class TestTradeValidation:
             trade_repo=mock_trade_repo,
             position_repo=mock_position_repo,
             tradernet_client=mock_client,
+            currency_exchange_service=mock_currency_exchange_service,
         )
 
         trades = [
@@ -290,7 +304,7 @@ class TestTradeValidation:
 
     @pytest.mark.asyncio
     async def test_order_failure_recorded(
-        self, mock_trade_repo, mock_position_repo, mock_client
+        self, mock_trade_repo, mock_position_repo, mock_client, mock_currency_exchange_service
     ):
         """Failed order should be recorded in results.
 
@@ -302,6 +316,7 @@ class TestTradeValidation:
             trade_repo=mock_trade_repo,
             position_repo=mock_position_repo,
             tradernet_client=mock_client,
+            currency_exchange_service=mock_currency_exchange_service,
         )
 
         trade = self._make_trade()
@@ -313,7 +328,7 @@ class TestTradeValidation:
 
     @pytest.mark.asyncio
     async def test_no_validation_without_currency_balances(
-        self, mock_trade_repo, mock_position_repo, mock_client
+        self, mock_trade_repo, mock_position_repo, mock_client, mock_currency_exchange_service
     ):
         """BUY should proceed without validation if no balances provided.
 
@@ -325,6 +340,7 @@ class TestTradeValidation:
             trade_repo=mock_trade_repo,
             position_repo=mock_position_repo,
             tradernet_client=mock_client,
+            currency_exchange_service=mock_currency_exchange_service,
         )
 
         trade = self._make_trade(side="BUY")
@@ -343,7 +359,7 @@ class TestTradeValidation:
 
     @pytest.mark.asyncio
     async def test_sell_blocked_when_recent_order_in_database(
-        self, mock_trade_repo, mock_position_repo, mock_client
+        self, mock_trade_repo, mock_position_repo, mock_client, mock_currency_exchange_service
     ):
         """SELL order should be blocked if recent sell order exists in database.
         
@@ -361,6 +377,7 @@ class TestTradeValidation:
             trade_repo=mock_trade_repo,
             position_repo=mock_position_repo,
             tradernet_client=mock_client,
+            currency_exchange_service=mock_currency_exchange_service,
         )
 
         trade = self._make_trade(side="SELL", quantity=10)
@@ -376,7 +393,7 @@ class TestTradeValidation:
 
     @pytest.mark.asyncio
     async def test_order_stored_immediately_after_placement(
-        self, mock_trade_repo, mock_position_repo, mock_client
+        self, mock_trade_repo, mock_position_repo, mock_client, mock_currency_exchange_service
     ):
         """Order should be stored in database immediately after successful placement.
         
@@ -386,6 +403,7 @@ class TestTradeValidation:
             trade_repo=mock_trade_repo,
             position_repo=mock_position_repo,
             tradernet_client=mock_client,
+            currency_exchange_service=mock_currency_exchange_service,
         )
 
         trade = self._make_trade(side="BUY")

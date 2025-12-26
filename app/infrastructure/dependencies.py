@@ -36,7 +36,6 @@ from app.application.services.trade_execution_service import TradeExecutionServi
 from app.application.services.trade_safety_service import TradeSafetyService
 from app.application.services.currency_exchange_service import (
     CurrencyExchangeService,
-    get_currency_exchange_service,
 )
 from app.domain.services.settings_service import SettingsService
 
@@ -192,12 +191,14 @@ def get_trade_execution_service(
     trade_repo: TradeRepositoryDep,
     position_repo: PositionRepositoryDep,
     tradernet_client: TradernetClientDep,
+    currency_exchange_service: CurrencyExchangeServiceDep,
 ) -> TradeExecutionService:
     """Get TradeExecutionService instance."""
     return TradeExecutionService(
         trade_repo=trade_repo,
         position_repo=position_repo,
         tradernet_client=tradernet_client,
+        currency_exchange_service=currency_exchange_service,
     )
 
 
@@ -212,9 +213,11 @@ def get_trade_safety_service(
     )
 
 
-def get_currency_exchange_service_dep() -> CurrencyExchangeService:
+def get_currency_exchange_service_dep(
+    tradernet_client: TradernetClientDep,
+) -> CurrencyExchangeService:
     """Get CurrencyExchangeService instance."""
-    return get_currency_exchange_service()
+    return CurrencyExchangeService(tradernet_client)
 
 
 # Type aliases for services

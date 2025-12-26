@@ -40,10 +40,17 @@ async def test_trade_execution_rollback_on_database_error(db):
     )
 
     position_repo = PositionRepository(db=db)
+    
+    # Create mock currency exchange service
+    from app.application.services.currency_exchange_service import CurrencyExchangeService
+    from unittest.mock import MagicMock
+    mock_currency_service = MagicMock(spec=CurrencyExchangeService)
+    
     service = TradeExecutionService(
         trade_repo=trade_repo,
         position_repo=position_repo,
         tradernet_client=mock_client,
+        currency_exchange_service=mock_currency_service,
     )
 
     # Mock repository create to fail

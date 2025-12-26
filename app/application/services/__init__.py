@@ -7,7 +7,6 @@ from app.application.services.trade_execution_service import TradeExecutionServi
 from app.application.services.trade_safety_service import TradeSafetyService
 from app.application.services.currency_exchange_service import (
     CurrencyExchangeService,
-    get_currency_exchange_service,
     get_stock_currency,
 )
 
@@ -18,7 +17,6 @@ __all__ = [
     "TradeExecutionService",
     "TradeSafetyService",
     "CurrencyExchangeService",
-    "get_currency_exchange_service",
     "get_stock_currency",
 ]
 

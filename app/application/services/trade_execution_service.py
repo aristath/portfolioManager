@@ -18,7 +18,6 @@ from app.infrastructure.events import emit, SystemEvent
 from app.infrastructure.hardware.led_display import set_activity
 from app.application.services.currency_exchange_service import (
     CurrencyExchangeService,
-    get_currency_exchange_service,
 )
 
 logger = logging.getLogger(__name__)
@@ -32,10 +31,12 @@ class TradeExecutionService:
         trade_repo: ITradeRepository,
         position_repo: IPositionRepository,
         tradernet_client: TradernetClient,
+        currency_exchange_service: CurrencyExchangeService,
     ):
         self._trade_repo = trade_repo
         self._position_repo = position_repo
         self._tradernet_client = tradernet_client
+        self._currency_exchange_service = currency_exchange_service
 
     async def record_trade(
         self,
@@ -156,8 +157,8 @@ class TradeExecutionService:
                 emit(SystemEvent.ERROR_OCCURRED, message="TRADE EXECUTION FAILED")
                 raise ConnectionError("Failed to connect to Tradernet")
 
-        # Get currency exchange service if auto-convert is enabled
-        currency_service = get_currency_exchange_service() if auto_convert_currency else None
+        # Use currency exchange service if auto-convert is enabled
+        currency_service = self._currency_exchange_service if auto_convert_currency else None
 
         return await self._execute_trades_internal(
             trades, client, currency_balances=currency_balances,

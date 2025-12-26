@@ -5,7 +5,7 @@ automatically recover from corruption when possible.
 
 Self-healing capabilities:
 - Runs PRAGMA integrity_check on all databases
-- Notifies Matrix on any issues found
+    - Logs issues found
 - Per-symbol databases can be rebuilt from Yahoo API
 - Core databases trigger alerts for manual intervention
 """
@@ -194,32 +194,26 @@ async def _rebuild_symbol_history(db_path: Path, symbol: str):
 
 async def _report_issues(issues: list):
     """
-    Report health check issues to Matrix and logs.
+    Report health check issues to logs.
 
     Args:
         issues: List of issue dicts with database, description, error, recoverable
     """
-    from app.services.matrix_notifier import notify_matrix
-
     # Build message
-    lines = ["**Database Health Check Issues**", ""]
+    lines = ["Database Health Check Issues", ""]
 
     for issue in issues:
         status = "RECOVERED" if issue["recoverable"] else "CRITICAL"
-        lines.append(f"- **{issue['database']}** ({status})")
+        lines.append(f"- {issue['database']} ({status})")
         lines.append(f"  {issue['description']}")
-        lines.append(f"  Error: `{issue['error']}`")
+        lines.append(f"  Error: {issue['error']}")
         lines.append("")
 
     if any(not issue["recoverable"] for issue in issues):
-        lines.append("**Action Required:** Non-recoverable issues detected!")
+        lines.append("Action Required: Non-recoverable issues detected!")
 
     message = "\n".join(lines)
-
-    try:
-        await notify_matrix(message)
-    except Exception as e:
-        logger.error(f"Failed to send Matrix notification: {e}")
+    logger.error(message)
 
 
 async def check_wal_status():

@@ -5,9 +5,9 @@ Handles currency conversions between EUR, USD, HKD, and GBP via Tradernet API.
 
 import logging
 from dataclasses import dataclass
-from typing import Optional, List, Tuple
+from typing import List, Optional, Tuple
 
-from app.infrastructure.external.tradernet import TradernetClient, OrderResult, get_tradernet_client
+from app.infrastructure.external.tradernet import TradernetClient, OrderResult
 
 logger = logging.getLogger(__name__)
 
@@ -72,19 +72,17 @@ class CurrencyExchangeService:
         ("HKD", "USD"): "HKD/USD",
     }
 
-    def __init__(self, client: Optional[TradernetClient] = None):
+    def __init__(self, client: TradernetClient):
         """Initialize the currency exchange service.
 
         Args:
-            client: TradernetClient instance. If None, uses singleton.
+            client: TradernetClient instance (required).
         """
         self._client = client
 
     @property
     def client(self) -> TradernetClient:
-        """Get the Tradernet client, initializing if needed."""
-        if self._client is None:
-            self._client = get_tradernet_client()
+        """Get the Tradernet client."""
         return self._client
 
     def get_conversion_path(
@@ -393,13 +391,3 @@ def get_stock_currency(geography: str) -> str:
     }.get(geography.upper(), "EUR")  # Default to EUR for unknown geographies
 
 
-# Singleton instance
-_service: Optional[CurrencyExchangeService] = None
-
-
-def get_currency_exchange_service() -> CurrencyExchangeService:
-    """Get or create the CurrencyExchangeService singleton."""
-    global _service
-    if _service is None:
-        _service = CurrencyExchangeService()
-    return _service
