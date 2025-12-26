@@ -81,6 +81,7 @@ async def identify_opportunities(
     positions: List[Position],
     stocks: List[Stock],
     available_cash: float,
+    exchange_rate_service = None,
 ) -> Dict[str, List[ActionCandidate]]:
     """
     Identify all actionable opportunities in the portfolio.
@@ -103,7 +104,7 @@ async def identify_opportunities(
     """
     from app.repositories import SettingsRepository, TradeRepository
     from app.infrastructure.external import yahoo_finance as yahoo
-    from app.domain.services.exchange_rate_service import get_exchange_rate
+    from app.domain.services.exchange_rate_service import ExchangeRateService
     from app.domain.services.trade_sizing_service import TradeSizingService
     from app.domain.constants import BUY_COOLDOWN_DAYS
     from app.config import settings as app_settings
@@ -166,7 +167,10 @@ async def identify_opportunities(
             # Convert to EUR
             exchange_rate = 1.0
             if pos.currency and pos.currency != "EUR":
-                exchange_rate = await get_exchange_rate(pos.currency, "EUR")
+                if exchange_rate_service:
+                    exchange_rate = await exchange_rate_service.get_rate(pos.currency, "EUR")
+                else:
+                    exchange_rate = 1.0  # Fallback if service not provided
             sell_value_eur = sell_value / exchange_rate if exchange_rate > 0 else sell_value
 
             opportunities["profit_taking"].append(ActionCandidate(
@@ -193,7 +197,10 @@ async def identify_opportunities(
                 # Calculate quantity
                 exchange_rate = 1.0
                 if pos.currency and pos.currency != "EUR":
-                    exchange_rate = await get_exchange_rate(pos.currency, "EUR")
+                    if exchange_rate_service:
+                        exchange_rate = await exchange_rate_service.get_rate(pos.currency, "EUR")
+                    else:
+                        exchange_rate = 1.0  # Fallback if service not provided
                 sell_value_native = sell_value_eur * exchange_rate
                 sell_qty = int(sell_value_native / (pos.current_price or pos.avg_price))
 
@@ -244,7 +251,9 @@ async def identify_opportunities(
                 loss_pct = (price - avg_price) / avg_price
                 if loss_pct < -0.20 and quality_score >= 0.6:  # Down 20%+ but quality
                     # Calculate buy amount with lot-aware sizing
-                    exchange_rate = await get_exchange_rate(stock.currency or "EUR", "EUR")
+                    exchange_rate = 1.0
+                    if stock.currency and stock.currency != "EUR" and exchange_rate_service:
+                        exchange_rate = await exchange_rate_service.get_rate(stock.currency or "EUR", "EUR")
                     sized = TradeSizingService.calculate_buy_quantity(
                         target_value_eur=base_trade_amount,
                         price=price,
@@ -273,7 +282,9 @@ async def identify_opportunities(
             current = geo_allocations.get(geo, 0)
             if current < target - 0.05:  # 5%+ underweight
                 underweight = target - current
-                exchange_rate = await get_exchange_rate(stock.currency or "EUR", "EUR")
+                exchange_rate = 1.0
+                if stock.currency and stock.currency != "EUR" and exchange_rate_service:
+                    exchange_rate = await exchange_rate_service.get_rate(stock.currency or "EUR", "EUR")
                 sized = TradeSizingService.calculate_buy_quantity(
                     target_value_eur=base_trade_amount,
                     price=price,
@@ -296,7 +307,9 @@ async def identify_opportunities(
 
         # General opportunity buys (high quality at good price)
         if quality_score >= 0.7:
-            exchange_rate = await get_exchange_rate(stock.currency or "EUR", "EUR")
+            exchange_rate = 1.0
+            if stock.currency and stock.currency != "EUR" and exchange_rate_service:
+                exchange_rate = await exchange_rate_service.get_rate(stock.currency or "EUR", "EUR")
             sized = TradeSizingService.calculate_buy_quantity(
                 target_value_eur=base_trade_amount,
                 price=price,
@@ -541,6 +554,7 @@ async def create_holistic_plan(
     available_cash: float,
     stocks: List[Stock],
     positions: List[Position],
+    exchange_rate_service = None,
 ) -> HolisticPlan:
     """
     Create a holistic plan by evaluating action sequences and selecting the best.
@@ -564,7 +578,7 @@ async def create_holistic_plan(
 
     # Identify all opportunities
     opportunities = await identify_opportunities(
-        portfolio_context, positions, stocks, available_cash
+        portfolio_context, positions, stocks, available_cash, exchange_rate_service
     )
 
     # Generate candidate sequences at all depths (1-5)

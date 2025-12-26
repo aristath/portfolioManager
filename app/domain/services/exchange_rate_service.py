@@ -13,7 +13,7 @@ from typing import Dict, Optional, Tuple
 
 import httpx
 
-from app.infrastructure.database.manager import get_db_manager
+from app.infrastructure.database.manager import DatabaseManager
 
 logger = logging.getLogger(__name__)
 
@@ -43,12 +43,14 @@ class ExchangeRateService:
     - Batch conversion support
     """
 
-    def __init__(self, ttl_seconds: int = EXCHANGE_RATE_TTL_SECONDS):
+    def __init__(self, db_manager: DatabaseManager, ttl_seconds: int = EXCHANGE_RATE_TTL_SECONDS):
         """Initialize the exchange rate service.
 
         Args:
+            db_manager: Database manager for cache access
             ttl_seconds: Cache TTL in seconds (default: 1 hour)
         """
+        self._db_manager = db_manager
         self._ttl_seconds = ttl_seconds
         self._memory_cache: Dict[str, Tuple[float, datetime]] = {}
         self._lock = asyncio.Lock()
@@ -171,8 +173,7 @@ class ExchangeRateService:
     ) -> Optional[float]:
         """Get rate from database cache if not expired."""
         try:
-            db = get_db_manager()
-            row = await db.cache.fetchone(
+            row = await self._db_manager.cache.fetchone(
                 """
                 SELECT rate, expires_at FROM exchange_rates
                 WHERE from_currency = ? AND to_currency = ?
@@ -198,11 +199,10 @@ class ExchangeRateService:
     ) -> None:
         """Store rate in database cache."""
         try:
-            db = get_db_manager()
             now = datetime.now()
             expires_at = now + timedelta(seconds=self._ttl_seconds)
 
-            await db.cache.execute(
+            await self._db_manager.cache.execute(
                 """
                 INSERT OR REPLACE INTO exchange_rates
                 (from_currency, to_currency, rate, fetched_at, expires_at)
@@ -216,7 +216,7 @@ class ExchangeRateService:
                     expires_at.isoformat()
                 )
             )
-            await db.cache.commit()
+            await self._db_manager.cache.commit()
         except Exception as e:
             logger.warning(f"Failed to store rate in DB cache: {e}")
 
@@ -298,27 +298,3 @@ class ExchangeRateService:
         return 1.0
 
 
-# Singleton instance
-_service: Optional[ExchangeRateService] = None
-
-
-def get_exchange_rate_service() -> ExchangeRateService:
-    """Get or create the ExchangeRateService singleton."""
-    global _service
-    if _service is None:
-        _service = ExchangeRateService()
-    return _service
-
-
-# Async convenience function
-async def get_exchange_rate(from_currency: str, to_currency: str = "EUR") -> float:
-    """Get exchange rate (async convenience wrapper).
-
-    Args:
-        from_currency: Source currency code
-        to_currency: Target currency code (default: EUR)
-
-    Returns:
-        Exchange rate
-    """
-    return await get_exchange_rate_service().get_rate(from_currency, to_currency)

@@ -50,7 +50,7 @@ from app.domain.constants import (
 from app.domain.scoring.opportunity import is_price_too_high
 from app.infrastructure.external import yahoo_finance as yahoo
 from app.infrastructure.external.tradernet import TradernetClient
-from app.domain.services.exchange_rate_service import get_exchange_rate
+from app.domain.services.exchange_rate_service import ExchangeRateService
 from app.domain.value_objects.trade_side import TradeSide
 from app.domain.constants import BUY_COOLDOWN_DAYS
 from app.domain.analytics import (
@@ -105,6 +105,7 @@ class RebalancingService:
         recommendation_repo: RecommendationRepository,
         db_manager: DatabaseManager,
         tradernet_client: TradernetClient,
+        exchange_rate_service: ExchangeRateService,
     ):
         self._stock_repo = stock_repo
         self._position_repo = position_repo
@@ -116,6 +117,7 @@ class RebalancingService:
         self._recommendation_repo = recommendation_repo
         self._db_manager = db_manager
         self._tradernet_client = tradernet_client
+        self._exchange_rate_service = exchange_rate_service
 
     async def _get_technical_data_for_positions(
         self,
@@ -399,7 +401,7 @@ class RebalancingService:
             currency = stock.currency or "EUR"
             exchange_rate = 1.0
             if currency != "EUR":
-                exchange_rate = await get_exchange_rate(currency, "EUR")
+                exchange_rate = await self._exchange_rate_service.get_rate(currency, "EUR")
                 if exchange_rate <= 0:
                     exchange_rate = 1.0
 
@@ -1236,6 +1238,7 @@ class RebalancingService:
             available_cash=available_cash,
             stocks=stocks,
             positions=positions,
+            exchange_rate_service=self._exchange_rate_service,
         )
 
         # Convert HolisticPlan to MultiStepRecommendation list

@@ -38,6 +38,7 @@ from app.application.services.currency_exchange_service import (
     CurrencyExchangeService,
 )
 from app.domain.services.settings_service import SettingsService
+from app.domain.services.exchange_rate_service import ExchangeRateService
 
 
 # Repository Dependencies
@@ -162,6 +163,13 @@ def get_settings_service(
     return SettingsService(settings_repo=settings_repo)
 
 
+def get_exchange_rate_service(
+    db_manager: DatabaseManagerDep,
+) -> ExchangeRateService:
+    """Get ExchangeRateService instance."""
+    return ExchangeRateService(db_manager=db_manager)
+
+
 def get_rebalancing_service(
     stock_repo: StockRepositoryDep,
     position_repo: PositionRepositoryDep,
@@ -172,6 +180,7 @@ def get_rebalancing_service(
     recommendation_repo: RecommendationRepositoryDep,
     db_manager: DatabaseManagerDep,
     tradernet_client: TradernetClientDep,
+    exchange_rate_service: Annotated[ExchangeRateService, Depends(get_exchange_rate_service)],
 ) -> RebalancingService:
     """Get RebalancingService instance."""
     return RebalancingService(
@@ -184,6 +193,7 @@ def get_rebalancing_service(
         recommendation_repo=recommendation_repo,
         db_manager=db_manager,
         tradernet_client=tradernet_client,
+        exchange_rate_service=exchange_rate_service,
     )
 
 
@@ -192,6 +202,7 @@ def get_trade_execution_service(
     position_repo: PositionRepositoryDep,
     tradernet_client: TradernetClientDep,
     currency_exchange_service: CurrencyExchangeServiceDep,
+    exchange_rate_service: Annotated[ExchangeRateService, Depends(get_exchange_rate_service)],
 ) -> TradeExecutionService:
     """Get TradeExecutionService instance."""
     return TradeExecutionService(
@@ -199,6 +210,7 @@ def get_trade_execution_service(
         position_repo=position_repo,
         tradernet_client=tradernet_client,
         currency_exchange_service=currency_exchange_service,
+        exchange_rate_service=exchange_rate_service,
     )
 
 
@@ -228,4 +240,5 @@ RebalancingServiceDep = Annotated[RebalancingService, Depends(get_rebalancing_se
 TradeExecutionServiceDep = Annotated[TradeExecutionService, Depends(get_trade_execution_service)]
 TradeSafetyServiceDep = Annotated[TradeSafetyService, Depends(get_trade_safety_service)]
 CurrencyExchangeServiceDep = Annotated[CurrencyExchangeService, Depends(get_currency_exchange_service_dep)]
+ExchangeRateServiceDep = Annotated[ExchangeRateService, Depends(get_exchange_rate_service)]
 
