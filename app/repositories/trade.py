@@ -11,6 +11,68 @@ from app.repositories.base import transaction_context
 logger = logging.getLogger(__name__)
 
 
+def _process_pre_start_trades(pre_start_trades: list, cumulative_positions: dict) -> None:
+    """Process trades before start_date to build initial positions."""
+    for row in pre_start_trades:
+        symbol = row["symbol"]
+        side = row["side"].upper()
+        quantity = row["quantity"]
+
+        if symbol not in cumulative_positions:
+            cumulative_positions[symbol] = 0.0
+
+        if side == "BUY":
+            cumulative_positions[symbol] += quantity
+        elif side == "SELL":
+            cumulative_positions[symbol] -= quantity
+            if cumulative_positions[symbol] < 0:
+                cumulative_positions[symbol] = 0.0
+
+
+def _build_initial_positions(cumulative_positions: dict, start_date: str) -> list:
+    """Build initial position entries at start_date."""
+    result = []
+    for symbol, quantity in cumulative_positions.items():
+        if quantity > 0:
+            result.append({"date": start_date, "symbol": symbol, "quantity": quantity})
+    return result
+
+
+def _process_in_range_trades(
+    in_range_trades: list, cumulative_positions: dict, result: list
+) -> None:
+    """Process trades in date range and update result."""
+    positions_by_date = {}
+    for row in in_range_trades:
+        date = row["executed_at"][:10]
+        symbol = row["symbol"]
+        side = row["side"].upper()
+        quantity = row["quantity"]
+
+        if date not in positions_by_date:
+            positions_by_date[date] = {}
+
+        if symbol not in positions_by_date[date]:
+            positions_by_date[date][symbol] = 0.0
+
+        if side == "BUY":
+            positions_by_date[date][symbol] += quantity
+        elif side == "SELL":
+            positions_by_date[date][symbol] -= quantity
+
+    for date in sorted(positions_by_date.keys()):
+        for symbol, delta in positions_by_date[date].items():
+            if symbol not in cumulative_positions:
+                cumulative_positions[symbol] = 0.0
+            cumulative_positions[symbol] += delta
+            if cumulative_positions[symbol] < 0:
+                cumulative_positions[symbol] = 0.0
+
+        for symbol, quantity in cumulative_positions.items():
+            if quantity > 0:
+                result.append({"date": date, "symbol": symbol, "quantity": quantity})
+
+
 class TradeRepository:
     """Repository for trade history operations (append-only ledger)."""
 
