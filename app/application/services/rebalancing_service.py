@@ -568,9 +568,9 @@ def _build_allocation_maps(
     return geo_allocations, ind_allocations
 
 
-def _get_target_allocations(allocation_repo) -> tuple[dict, dict]:
+async def _get_target_allocations(allocation_repo) -> tuple[dict, dict]:
     """Get target geography and industry allocations."""
-    allocations = allocation_repo.get_all()
+    allocations = await allocation_repo.get_all()
     target_geo_weights = {
         key.split(":", 1)[1]: val
         for key, val in allocations.items()
