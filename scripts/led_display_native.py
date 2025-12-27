@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Native LED Display Script for Arduino Uno Q.
 
-Polls the FastAPI application for display text and sends it to the MCU via serial port.
+Polls the FastAPI application for display text and sends it to the MCU via Router Bridge.
 Runs as a systemd service, replacing the Docker-based Arduino App framework implementation.
 """
 
@@ -12,8 +12,6 @@ from pathlib import Path
 from typing import Optional
 
 import requests
-import serial
-from serial import SerialException
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -35,7 +33,7 @@ console_handler.setFormatter(
 )
 
 logging.basicConfig(
-    level=logging.DEBUG,  # Set to DEBUG to see text update logs
+    level=logging.INFO,
     handlers=[file_handler, console_handler],
 )
 
@@ -43,89 +41,65 @@ logger = logging.getLogger(__name__)
 
 # Configuration
 API_URL = "http://localhost:8000"
-SERIAL_PORT = settings.led_serial_port
-BAUD_RATE = settings.led_baud_rate
 POLL_INTERVAL = 2.0  # Poll every 2 seconds
-SERIAL_RETRY_DELAY = 5.0  # Retry serial connection after 5 seconds
 API_RETRY_DELAY = 5.0  # Retry API connection after 5 seconds
+DEFAULT_TICKER_SPEED = 50  # ms per scroll step
+
+# Try to import Router Bridge client
+try:
+    # Import from scripts directory
+    import importlib.util
+
+    router_bridge_path = Path(__file__).parent / "router_bridge_client.py"
+    spec = importlib.util.spec_from_file_location("router_bridge_client", router_bridge_path)
+    if spec and spec.loader:
+        router_bridge_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(router_bridge_module)
+        bridge_call = router_bridge_module.call
+        ROUTER_BRIDGE_AVAILABLE = True
+    else:
+        raise ImportError("Failed to load router_bridge_client module")
+except ImportError as e:
+    logger.warning(f"Router Bridge client not available: {e}")
+    ROUTER_BRIDGE_AVAILABLE = False
+    bridge_call = None
 
 _session = requests.Session()
-_serial_conn: Optional[serial.Serial] = None
 _last_text = ""
-_last_speed = 0
-_last_brightness = 0
 
 
-def connect_serial() -> bool:
-    """Connect to serial port. Returns True if successful."""
-    global _serial_conn
-    try:
-        if _serial_conn and _serial_conn.is_open:
-            return True
+def set_text(text: str, speed: int = DEFAULT_TICKER_SPEED) -> bool:
+    """Send text to MCU for scrolling via Router Bridge.
 
-        logger.info(f"Connecting to serial port {SERIAL_PORT} at {BAUD_RATE} baud...")
-        # Set DTR to reset the MCU, then clear it to allow normal operation
-        _serial_conn = serial.Serial(
-            SERIAL_PORT, BAUD_RATE, timeout=1, dsrdtr=False, rtscts=False
-        )
-        _serial_conn.dtr = True  # Assert DTR to reset
-        time.sleep(0.1)
-        _serial_conn.dtr = False  # Release DTR
-        time.sleep(2)  # Wait for MCU to reset and Serial to initialize
-        logger.info("Serial connection established")
-        return True
-    except SerialException as e:
-        logger.error(f"Failed to connect to serial port: {e}")
-        _serial_conn = None
-        return False
-    except Exception as e:
-        logger.error(f"Unexpected error connecting to serial: {e}")
-        _serial_conn = None
+    Args:
+        text: Text to scroll (ASCII only, Euro symbol will be replaced)
+        speed: Milliseconds per scroll step (lower = faster)
+
+    Returns:
+        True if successful, False otherwise
+    """
+    if not ROUTER_BRIDGE_AVAILABLE:
+        logger.error("Router Bridge client not available")
         return False
 
-
-def send_command(command: str) -> bool:
-    """Send a command to the MCU via serial. Returns True if successful."""
-    global _serial_conn
-
-    if not _serial_conn or not _serial_conn.is_open:
-        if not connect_serial():
-            return False
-
-    try:
-        _serial_conn.write(f"{command}\n".encode("utf-8"))
-        _serial_conn.flush()
-        return True
-    except SerialException as e:
-        logger.warning(f"Serial write failed: {e}, will retry connection")
-        _serial_conn = None
-        return False
-    except Exception as e:
-        logger.error(f"Unexpected error writing to serial: {e}")
-        return False
-
-
-def set_text(text: str) -> bool:
-    """Send text to MCU for scrolling."""
     if not text:
         return True  # Empty text is valid
-    return send_command(f"TEXT:{text}")
 
-
-def set_speed(speed: int) -> bool:
-    """Set scroll speed on MCU."""
-    return send_command(f"SPEED:{speed}")
-
-
-def set_brightness(brightness: int) -> bool:
-    """Set LED brightness on MCU."""
-    return send_command(f"BRIGHTNESS:{brightness}")
+    try:
+        # Replace Euro symbol with EUR (Font_5x7 only has ASCII 32-126)
+        text = text.replace("€", "EUR")
+        bridge_call("scrollText", text, speed, timeout=30)
+        return True
+    except Exception as e:
+        logger.error(f"Failed to set text via Router Bridge: {e}")
+        return False
 
 
 def fetch_display_data() -> Optional[dict]:
-    """Fetch display text and settings from API. Returns None on error."""
+    """Fetch display state from API. Returns None on error."""
     try:
-        response = _session.get(f"{API_URL}/api/status/display/text", timeout=10)
+        # Fetch full display state which includes ticker_text and ticker_speed
+        response = _session.get(f"{API_URL}/api/status/led/display", timeout=10)
         if response.status_code == 200:
             return response.json()
         else:
@@ -144,40 +118,54 @@ def fetch_display_data() -> Optional[dict]:
 
 def _process_display_data(data: dict) -> None:
     """Process display data and update MCU if changed."""
-    global _last_text, _last_speed, _last_brightness
+    global _last_text
 
-    text = data.get("text", "")
-    speed = data.get("speed", 50)
-    brightness = data.get("brightness", 150)
+    # Get ticker text from display state
+    ticker_text = data.get("ticker_text", "")
+    ticker_speed = data.get("ticker_speed", DEFAULT_TICKER_SPEED)
 
-    if speed != _last_speed:
-        if set_speed(speed):
-            _last_speed = speed
-            logger.debug(f"Speed updated to {speed}")
+    # Handle different display modes
+    mode = data.get("mode", "normal")
+    error_message = data.get("error_message")
+    activity_message = data.get("activity_message")
 
-    if brightness != _last_brightness:
-        if set_brightness(brightness):
-            _last_brightness = brightness
-            logger.debug(f"Brightness updated to {brightness}")
+    # Determine what text to display (priority: error > activity > ticker)
+    if mode == "error" and error_message:
+        display_text = error_message
+    elif activity_message:
+        display_text = activity_message
+    elif ticker_text:
+        display_text = ticker_text
+    else:
+        display_text = ""
 
-    if text != _last_text:
-        if set_text(text):
-            _last_text = text
-            logger.debug(f"Text updated: {text[:50]}...")
+    if display_text != _last_text:
+        logger.info(f"Updating display text: {display_text[:50]}...")
+        if set_text(display_text, speed=ticker_speed):
+            _last_text = display_text
+        else:
+            logger.error("Failed to update display text")
 
 
 def main_loop():
-    """Main loop - fetch display text from API, update MCU if changed."""
+    """Main loop - fetch display text from API, update MCU via Router Bridge."""
     global _last_text
 
     logger.info("Starting LED display native script")
     logger.info(f"API URL: {API_URL}")
-    logger.info(f"Serial port: {SERIAL_PORT}")
 
-    # Initial serial connection
-    if not connect_serial():
-        logger.error("Failed to establish initial serial connection")
-        logger.info("Will retry in main loop...")
+    if not ROUTER_BRIDGE_AVAILABLE:
+        logger.error("Router Bridge client not available. Exiting.")
+        sys.exit(1)
+
+    # Test Router Bridge connection
+    try:
+        bridge_call("scrollText", "TEST", 50, timeout=2)
+        logger.info("Router Bridge connection test successful")
+    except Exception as e:
+        logger.error(f"Router Bridge connection test failed: {e}")
+        logger.error("Make sure arduino-router service is running")
+        sys.exit(1)
 
     consecutive_errors = 0
     max_consecutive_errors = 10
@@ -190,7 +178,7 @@ def main_loop():
             if data is None:
                 # API unavailable - show error on display
                 if _last_text != "API OFFLINE":
-                    set_text("API OFFLINE")
+                    set_text("API OFFLINE", speed=DEFAULT_TICKER_SPEED)
                     _last_text = "API OFFLINE"
                 consecutive_errors += 1
                 if consecutive_errors >= max_consecutive_errors:
@@ -210,11 +198,6 @@ def main_loop():
         except Exception as e:
             logger.error(f"Unexpected error in main loop: {e}", exc_info=True)
             time.sleep(POLL_INTERVAL)
-
-    # Cleanup
-    if _serial_conn and _serial_conn.is_open:
-        logger.info("Closing serial connection...")
-        _serial_conn.close()
 
 
 if __name__ == "__main__":

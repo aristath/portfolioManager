@@ -1,81 +1,37 @@
 // Arduino Trader LED Display
 // Simple text scroller for 8x13 LED matrix on Arduino UNO Q
-// Uses serial communication instead of Router Bridge
+// Uses Router Bridge for communication with Linux MPU
 
+#include <Arduino_RouterBridge.h>
 #include "ArduinoGraphics.h"
 #include "Arduino_LED_Matrix.h"
 
 ArduinoLEDMatrix matrix;
-String currentText = "";
-int scrollSpeed = 50;
-int brightness = 150;
 
-void setText(String text) {
-  currentText = text;
-}
-
-void setSpeed(int speed) {
-  scrollSpeed = speed;
-}
-
-void setBrightness(int b) {
-  brightness = b;
+// Scroll text across LED matrix using native ArduinoGraphics
+// text: String to scroll, speed: ms per scroll step (lower = faster)
+void scrollText(String text, int speed) {
+  matrix.textScrollSpeed(speed);
+  matrix.textFont(Font_5x7);
+  // Convert speed to brightness (use default brightness)
+  uint32_t color = 0xFFFFFF;  // White (full brightness)
+  matrix.beginText(13, 1, color);  // Start at X=13 (matrix width) to scroll in from right
+  matrix.print(text);
+  matrix.endText(SCROLL_LEFT);
 }
 
 void setup() {
-  // Initialize serial communication
-  Serial.begin(115200);
-  // Note: On Arduino Uno Q, Serial is always available, don't wait for it
-
   // Initialize LED matrix
   matrix.begin();
   matrix.textFont(Font_5x7);
+  matrix.setGrayscaleBits(8);  // For 0-255 brightness values
+  matrix.clear();
+
+  // Setup Router Bridge
+  Bridge.begin();
+  Bridge.provide("scrollText", scrollText);
 }
 
 void loop() {
-  // Check for serial commands
-  if (Serial.available() > 0) {
-    String command = Serial.readStringUntil('\n');
-    command.trim();
-
-    // Debug: Echo received command (first 50 chars) back to serial
-    // This helps verify the MCU is receiving data
-    if (command.length() > 0) {
-      Serial.print("RX: ");
-      Serial.println(command.substring(0, 50));
-    }
-
-    if (command.startsWith("TEXT:")) {
-      String text = command.substring(5);
-      setText(text);
-      Serial.print("TEXT SET: ");
-      Serial.println(text.substring(0, 30));
-    } else if (command.startsWith("SPEED:")) {
-      int speed = command.substring(6).toInt();
-      if (speed > 0) {
-        setSpeed(speed);
-        Serial.print("SPEED SET: ");
-        Serial.println(speed);
-      }
-    } else if (command.startsWith("BRIGHTNESS:")) {
-      int b = command.substring(11).toInt();
-      if (b >= 0 && b <= 255) {
-        setBrightness(b);
-        Serial.print("BRIGHTNESS SET: ");
-        Serial.println(b);
-      }
-    }
-  }
-
-  // Display text if available
-  if (currentText.length() > 0) {
-    matrix.textScrollSpeed(scrollSpeed);
-    // Convert brightness (0-255) to grayscale color
-    uint32_t color = (brightness << 16) | (brightness << 8) | brightness;
-    matrix.beginText(13, 1, color);
-    matrix.print(currentText);
-    matrix.endText(SCROLL_LEFT);
-  } else {
-    delay(100);
-  }
+  delay(100);
 }
