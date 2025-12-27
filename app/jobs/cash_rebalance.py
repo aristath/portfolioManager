@@ -515,7 +515,7 @@ async def _refresh_recommendation_cache():
         )
         sell_recs = {
             "recommendations": [
-                {"symbol": r.symbol, "estimated_value": r.estimated_value}
+                {"symbol": r.symbol, "amount": r.estimated_value}
                 for r in sell_recommendations
             ]
         }
