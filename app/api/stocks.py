@@ -84,7 +84,7 @@ async def get_stocks(
             PriorityInput(
                 symbol=stock_dict["symbol"],
                 name=stock_dict["name"],
-                geography=country or "",  # TODO: Update PriorityInput to use country
+                country=country,
                 industry=industry,
                 stock_score=stock_score,
                 volatility=volatility,

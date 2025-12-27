@@ -72,6 +72,12 @@ input[type="range"]::-moz-range-thumb {
   @apply fixed inset-0 bg-black/60 backdrop-blur-sm z-40;
 }
 
+/* Modal content - scrollable with max height */
+.modal-content {
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
 /* Tabular numbers for financial data */
 .tabular-nums {
   font-variant-numeric: tabular-nums;

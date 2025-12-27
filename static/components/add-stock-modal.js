@@ -8,7 +8,7 @@ class AddStockModal extends HTMLElement {
       <div x-data x-show="$store.app.showAddStockModal"
            class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 flex items-center justify-center p-4"
            x-transition>
-        <div class="bg-gray-800 border border-gray-700 rounded-lg w-full max-w-md" @click.stop>
+        <div class="bg-gray-800 border border-gray-700 rounded-lg w-full max-w-md modal-content" @click.stop>
           <div class="flex items-center justify-between p-4 border-b border-gray-700">
             <h2 class="text-lg font-semibold text-gray-100">Add Stock to Universe</h2>
             <button @click="$store.app.showAddStockModal = false; $store.app.resetNewStock()"

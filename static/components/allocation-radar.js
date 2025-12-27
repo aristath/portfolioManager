@@ -54,7 +54,7 @@ class AllocationRadar extends HTMLElement {
         <!-- Edit Mode Overlays -->
         <div x-show="$store.app.editingCountry" x-transition
              class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div class="bg-gray-800 border border-gray-700 rounded-lg p-4 w-full max-w-md" @click.stop>
+          <div class="bg-gray-800 border border-gray-700 rounded-lg p-4 w-full max-w-md modal-content" @click.stop>
             <h3 class="text-sm font-medium text-gray-200 mb-3">Edit Country Weights</h3>
             <geo-chart></geo-chart>
           </div>
@@ -62,7 +62,7 @@ class AllocationRadar extends HTMLElement {
 
         <div x-show="$store.app.editingIndustry" x-transition
              class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div class="bg-gray-800 border border-gray-700 rounded-lg p-4 w-full max-w-md" @click.stop>
+          <div class="bg-gray-800 border border-gray-700 rounded-lg p-4 w-full max-w-md modal-content" @click.stop>
             <h3 class="text-sm font-medium text-gray-200 mb-3">Edit Industry Weights</h3>
             <industry-chart></industry-chart>
           </div>

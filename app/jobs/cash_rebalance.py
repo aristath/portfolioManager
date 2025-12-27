@@ -360,7 +360,7 @@ async def _get_next_holistic_action() -> "Recommendation | None":
             estimated_price=step["estimated_price"],
             estimated_value=step["estimated_value"],
             reason=step.get("reason", "holistic plan"),
-            geography="",
+            country=None,
             currency=currency,
             status=RecommendationStatus.PENDING,
         )

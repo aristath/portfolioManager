@@ -25,7 +25,7 @@ from app.infrastructure.hardware.display_service import (
 from app.infrastructure.locking import file_lock
 from app.infrastructure.market_hours import (
     get_open_markets,
-    group_stocks_by_geography,
+    group_stocks_by_exchange,
     is_market_open,
 )
 
@@ -407,7 +407,7 @@ async def _get_holistic_recommendation():
             estimated_price=step["estimated_price"],
             estimated_value=step["estimated_value"],
             reason=step.get("reason", "holistic plan"),
-            geography="",
+            country=None,
             currency=currency,
             status=RecommendationStatus.PENDING,
         )

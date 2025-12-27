@@ -18,7 +18,7 @@ class RecommendationFactory:
         estimated_price: float,
         estimated_value: float,
         reason: str,
-        geography: str,
+        country: Optional[str] = None,
         industry: Optional[str] = None,
         currency: Optional[Currency] = None,
         priority: Optional[float] = None,
@@ -35,7 +35,7 @@ class RecommendationFactory:
             estimated_price: Estimated price per share
             estimated_value: Total trade value in EUR
             reason: Reason for recommendation
-            geography: Stock geography (EU/US/ASIA)
+            country: Stock country (e.g., "United States", "Germany")
             industry: Stock industry (optional)
             currency: Stock currency (optional, defaults to EUR)
             priority: Priority score (optional)
@@ -63,7 +63,7 @@ class RecommendationFactory:
             "estimated_value": estimated_value,
             "amount": amount or estimated_value,  # For display
             "reason": reason,
-            "geography": geography.upper(),
+            "country": country,
             "industry": industry,
             "currency": currency,
             "priority": priority,
@@ -81,7 +81,7 @@ class RecommendationFactory:
         estimated_price: float,
         estimated_value: float,
         reason: str,
-        geography: str,
+        country: Optional[str] = None,
         industry: Optional[str] = None,
         currency: Optional[Currency] = None,
     ) -> dict:
@@ -94,7 +94,7 @@ class RecommendationFactory:
             estimated_price: Estimated price per share
             estimated_value: Total trade value in EUR
             reason: Reason for recommendation
-            geography: Stock geography (EU/US/ASIA)
+            country: Stock country (e.g., "United States", "Germany")
             industry: Stock industry (optional)
             currency: Stock currency (optional, defaults to EUR)
 
@@ -113,7 +113,7 @@ class RecommendationFactory:
             "estimated_value": estimated_value,
             "amount": estimated_value,  # For display
             "reason": reason,
-            "geography": geography.upper(),
+            "country": country,
             "industry": industry,
             "currency": currency,
         }
