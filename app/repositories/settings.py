@@ -1,7 +1,8 @@
 """Settings repository - key-value store for application settings."""
 
+import json
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 from app.infrastructure.database import get_db_manager
 
@@ -99,3 +100,17 @@ class SettingsRepository:
         """Delete a setting."""
         async with self._db.transaction() as conn:
             await conn.execute("DELETE FROM settings WHERE key = ?", (key,))
+
+    async def get_json(self, key: str, default: Any = None) -> Any:
+        """Get a setting value as JSON (parsed from string)."""
+        value = await self.get(key)
+        if value is None:
+            return default
+        try:
+            return json.loads(value)
+        except (json.JSONDecodeError, TypeError):
+            return default
+
+    async def set_json(self, key: str, value: Any) -> None:
+        """Set a setting value as JSON (serialized to string)."""
+        await self.set(key, json.dumps(value))
