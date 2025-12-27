@@ -19,13 +19,8 @@ from app.domain.scoring.dividend_history import (
     calculate_dividend_stability_score,
     has_big_dividend_cut,
 )
-from app.domain.scoring.end_state import (
-    score_total_return,
-)
-from app.domain.scoring.windfall import (
-    calculate_excess_gain,
-    should_take_profits,
-)
+from app.domain.scoring.end_state import score_total_return
+from app.domain.scoring.windfall import calculate_excess_gain, should_take_profits
 
 
 class TestScoreTotalReturn:

@@ -1,7 +1,7 @@
 /**
  * Reusable Radar Chart Component
  * SVG-based radar chart that displays Target and Current datasets
- * 
+ *
  * Attributes (via Alpine.js :bind):
  * - :labels - Array of label strings (required)
  * - :target-data - Array of target values (required)
@@ -28,12 +28,12 @@ class RadarChart extends HTMLElement {
         </svg>
       </div>
     `;
-    
+
     this.svg = this.querySelector('svg');
-    
+
     // Set up Alpine.js reactive bindings
     this.setupAlpineBindings();
-    
+
     // Initial render
     this.render();
   }
@@ -52,12 +52,12 @@ class RadarChart extends HTMLElement {
         this.updateFromAttributes();
       }
     });
-    
+
     observer.observe(this, {
       attributes: true,
       attributeFilter: ['data-labels', 'data-target-data', 'data-current-data', 'data-max-value']
     });
-    
+
     // Initial update after a short delay to allow Alpine to set initial values
     setTimeout(() => {
       this.updateFromAttributes();
@@ -72,7 +72,7 @@ class RadarChart extends HTMLElement {
     const maxAttr = this.getAttribute('data-max-value');
 
     let updated = false;
-    
+
     try {
       if (labelsAttr !== null && labelsAttr !== '') {
         const parsed = this.parseAttribute(labelsAttr);
@@ -102,7 +102,7 @@ class RadarChart extends HTMLElement {
           updated = true;
         }
       }
-      
+
       if (updated && this.labels.length > 0) {
         this.render();
       }
@@ -142,7 +142,7 @@ class RadarChart extends HTMLElement {
       return;
     }
 
-    if (this.targetData.length !== this.labels.length || 
+    if (this.targetData.length !== this.labels.length ||
         this.currentData.length !== this.labels.length) {
       console.warn('RadarChart: Data length mismatch');
       return;
@@ -172,19 +172,19 @@ class RadarChart extends HTMLElement {
     // Create groups for organization
     const gridGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     gridGroup.setAttribute('class', 'grid');
-    
+
     const radialGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     radialGroup.setAttribute('class', 'radial-lines');
-    
+
     const tickGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     tickGroup.setAttribute('class', 'ticks');
-    
+
     const dataGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     dataGroup.setAttribute('class', 'data');
-    
+
     const labelGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     labelGroup.setAttribute('class', 'labels');
-    
+
     const legendGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     legendGroup.setAttribute('class', 'legend');
 
@@ -205,13 +205,13 @@ class RadarChart extends HTMLElement {
     // Calculate angles and coordinates for each point
     const angles = [];
     const coordinates = [];
-    
+
     for (let i = 0; i < numPoints; i++) {
       // Start at top (90 degrees offset), go clockwise
       const angle = (360 / numPoints) * i - 90;
       const angleRad = (angle * Math.PI) / 180;
       angles.push(angleRad);
-      
+
       const x = centerX + radius * Math.cos(angleRad);
       const y = centerY + radius * Math.sin(angleRad);
       coordinates.push({ x, y, angle: angleRad });
@@ -233,12 +233,12 @@ class RadarChart extends HTMLElement {
     const tickLevels = [0, 0.25, 0.5, 0.75, 1.0];
     const tickLength = 5;
     const tickLabelOffset = 15;
-    
+
     tickLevels.forEach((level, i) => {
       const tickRadius = radius * level;
       const tickX = centerX + tickRadius;
       const tickY = centerY;
-      
+
       // Tick mark
       const tick = document.createElementNS('http://www.w3.org/2000/svg', 'line');
       tick.setAttribute('x1', tickX);
@@ -248,7 +248,7 @@ class RadarChart extends HTMLElement {
       tick.setAttribute('stroke', '#6B7280');
       tick.setAttribute('stroke-width', '1');
       tickGroup.appendChild(tick);
-      
+
       // Tick label
       const tickValue = Math.round(roundedMax * level);
       const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
@@ -265,20 +265,20 @@ class RadarChart extends HTMLElement {
     // Calculate data point coordinates
     const targetPoints = [];
     const currentPoints = [];
-    
+
     coordinates.forEach((coord, i) => {
       // Normalize values to 0-1 range based on roundedMax
       const targetValue = Math.max(0, Math.min(this.targetData[i] / roundedMax, 1));
       const currentValue = Math.max(0, Math.min(this.currentData[i] / roundedMax, 1));
-      
+
       const targetRadius = radius * targetValue;
       const currentRadius = radius * currentValue;
-      
+
       targetPoints.push({
         x: centerX + targetRadius * Math.cos(coord.angle),
         y: centerY + targetRadius * Math.sin(coord.angle)
       });
-      
+
       currentPoints.push({
         x: centerX + currentRadius * Math.cos(coord.angle),
         y: centerY + currentRadius * Math.sin(coord.angle)
@@ -294,7 +294,7 @@ class RadarChart extends HTMLElement {
       currentPolygon.setAttribute('fill', 'rgba(34, 197, 94, 0.2)');
       currentPolygon.setAttribute('stroke', 'none');
       dataGroup.appendChild(currentPolygon);
-      
+
       // Solid border
       const currentPolyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
       const currentPolylinePoints = [...currentPoints, currentPoints[0]].map(p => `${p.x},${p.y}`).join(' ');
@@ -303,7 +303,7 @@ class RadarChart extends HTMLElement {
       currentPolyline.setAttribute('stroke', 'rgba(34, 197, 94, 0.8)');
       currentPolyline.setAttribute('stroke-width', '2');
       dataGroup.appendChild(currentPolyline);
-      
+
       // Points
       currentPoints.forEach(point => {
         const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
@@ -325,7 +325,7 @@ class RadarChart extends HTMLElement {
       targetPolyline.setAttribute('stroke-width', '2');
       targetPolyline.setAttribute('stroke-dasharray', '5,5');
       dataGroup.appendChild(targetPolyline);
-      
+
       // Points
       targetPoints.forEach(point => {
         const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
@@ -342,7 +342,7 @@ class RadarChart extends HTMLElement {
     coordinates.forEach((coord, i) => {
       const labelX = coord.x + labelOffset * Math.cos(coord.angle);
       const labelY = coord.y + labelOffset * Math.sin(coord.angle);
-      
+
       const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
       label.setAttribute('x', labelX);
       label.setAttribute('y', labelY);
@@ -358,7 +358,7 @@ class RadarChart extends HTMLElement {
     // Draw legend at bottom
     const legendY = 480;
     const legendX = centerX;
-    
+
     // Target legend item
     const targetLegendLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     targetLegendLine.setAttribute('x1', legendX - 60);
@@ -369,7 +369,7 @@ class RadarChart extends HTMLElement {
     targetLegendLine.setAttribute('stroke-width', '2');
     targetLegendLine.setAttribute('stroke-dasharray', '5,5');
     legendGroup.appendChild(targetLegendLine);
-    
+
     const targetLegendText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
     targetLegendText.setAttribute('x', legendX - 35);
     targetLegendText.setAttribute('y', legendY);
@@ -379,7 +379,7 @@ class RadarChart extends HTMLElement {
     targetLegendText.setAttribute('font-family', 'system-ui, sans-serif');
     targetLegendText.textContent = 'Target';
     legendGroup.appendChild(targetLegendText);
-    
+
     // Current legend item
     const currentLegendLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     currentLegendLine.setAttribute('x1', legendX + 10);
@@ -389,7 +389,7 @@ class RadarChart extends HTMLElement {
     currentLegendLine.setAttribute('stroke', 'rgba(34, 197, 94, 0.8)');
     currentLegendLine.setAttribute('stroke-width', '2');
     legendGroup.appendChild(currentLegendLine);
-    
+
     const currentLegendText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
     currentLegendText.setAttribute('x', legendX + 35);
     currentLegendText.setAttribute('y', legendY);
@@ -422,4 +422,3 @@ class RadarChart extends HTMLElement {
 }
 
 customElements.define('radar-chart', RadarChart);
-

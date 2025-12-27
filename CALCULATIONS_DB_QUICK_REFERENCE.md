@@ -129,9 +129,9 @@ await calc_repo.set_metrics(symbol, {
 ```python
 # Use custom TTL instead of default
 await calc_repo.set_metric(
-    symbol, 
-    "CUSTOM_METRIC", 
-    value, 
+    symbol,
+    "CUSTOM_METRIC",
+    value,
     ttl_override=3600  # 1 hour
 )
 ```
@@ -185,5 +185,3 @@ python scripts/migrate_v5_remove_score_cache.py
 ```
 
 This removes old ScoreCache entries from `cache.db`.
-
-

@@ -106,10 +106,10 @@ class NewService:
         # Orchestrate repositories
         data1 = await self._repo1.get(param)
         data2 = await self._repo2.get(param)
-        
+
         # Business logic
         result = self._calculate(data1, data2)
-        
+
         return result
 ```
 
@@ -156,16 +156,14 @@ async def test_stock_repository(stock_repo):
 
 ## Benefits
 
-✅ **Testable** - Domain logic testable without database  
-✅ **Maintainable** - Clear where code belongs  
-✅ **Flexible** - Easy to swap implementations  
-✅ **Scalable** - Easy to add features  
-✅ **Clean** - No duplication, clear structure  
+✅ **Testable** - Domain logic testable without database
+✅ **Maintainable** - Clear where code belongs
+✅ **Flexible** - Easy to swap implementations
+✅ **Scalable** - Easy to add features
+✅ **Clean** - No duplication, clear structure
 
 ## Need Help?
 
 - See `ARCHITECTURE.md` for detailed architecture docs
 - See `MIGRATION_NOTES.md` for migrating existing code
 - See `README_ARCHITECTURE.md` for more examples
-
-

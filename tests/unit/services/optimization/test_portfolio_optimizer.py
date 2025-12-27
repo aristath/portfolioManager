@@ -10,9 +10,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from app.application.services.optimization.portfolio_optimizer import (
-    PortfolioOptimizer,
-)
+from app.application.services.optimization.portfolio_optimizer import PortfolioOptimizer
 from app.domain.models import Position, Stock
 
 

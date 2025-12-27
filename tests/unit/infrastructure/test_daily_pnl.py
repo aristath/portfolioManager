@@ -433,9 +433,7 @@ class TestGetDailyPnLTracker:
         """Test that same instance is returned."""
         # Reset the singleton
         import app.infrastructure.daily_pnl
-        from app.infrastructure.daily_pnl import (
-            get_daily_pnl_tracker,
-        )
+        from app.infrastructure.daily_pnl import get_daily_pnl_tracker
 
         app.infrastructure.daily_pnl._tracker = None
 

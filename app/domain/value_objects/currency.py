@@ -59,4 +59,3 @@ class Currency(str, Enum):
             EUR currency
         """
         return cls.EUR
-

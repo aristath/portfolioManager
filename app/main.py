@@ -18,11 +18,7 @@ from app.api import (
     recommendations,
 )
 from app.api import settings as settings_api
-from app.api import (
-    status,
-    stocks,
-    trades,
-)
+from app.api import status, stocks, trades
 from app.config import settings
 from app.infrastructure.database.manager import (
     get_db_manager,

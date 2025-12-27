@@ -129,7 +129,9 @@ class TestSyncCycle:
                 new_callable=AsyncMock,
                 side_effect=mock_check_conditions,
             ),
-            patch("app.jobs.sync_cycle._step_get_recommendation", new_callable=AsyncMock),
+            patch(
+                "app.jobs.sync_cycle._step_get_recommendation", new_callable=AsyncMock
+            ),
             patch(
                 "app.jobs.sync_cycle._step_execute_trade",
                 new_callable=AsyncMock,
@@ -191,7 +193,9 @@ class TestStepSyncPrices:
                 "app.jobs.sync_cycle.yahoo.get_batch_quotes",
                 side_effect=mock_get_batch_quotes,
             ),
-            patch("app.jobs.sync_cycle._update_position_prices", new_callable=AsyncMock),
+            patch(
+                "app.jobs.sync_cycle._update_position_prices", new_callable=AsyncMock
+            ),
         ):
             await _step_sync_prices()
 
@@ -312,11 +316,8 @@ class TestStepGetRecommendation:
         """Test that recommendations consider all markets, not just open ones."""
         from app.jobs.sync_cycle import _step_get_recommendation
 
-        # This test verifies that the planner is called without market filtering
-        planner_stocks = []
-
         async def mock_get_recommendations():
-            # The planner should receive all stocks
+            # The planner should receive all stocks (not filtered by market)
             return MagicMock(symbol="SAP.DE", side="BUY")
 
         with (

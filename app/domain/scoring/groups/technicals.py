@@ -72,12 +72,12 @@ async def calculate_technicals_score(
 
     # EMA distance - get from cache
     ema_value = await get_ema(symbol, closes)
-    if ema_value:
+    if ema_value is not None:
         distance_from_ema = calculate_distance_from_ma(current_price, ema_value)
         await calc_repo.set_metric(symbol, "DISTANCE_FROM_EMA_200", distance_from_ema)
+        ema_score = score_ema_distance(current_price, ema_value)
     else:
-        ema_value = current_price
-    ema_score = score_ema_distance(current_price, ema_value)
+        ema_score = score_ema_distance(current_price, current_price)
 
     # 35% RSI, 35% Bollinger, 30% EMA
     total = rsi_score * 0.35 + bb_score * 0.35 + ema_score * 0.30

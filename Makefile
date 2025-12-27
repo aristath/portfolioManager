@@ -55,4 +55,3 @@ help:
 	@echo "  make dead-code     - Find unused code with vulture"
 	@echo "  make check         - Run all checks (lint + type + security)"
 	@echo "  make all           - Format code and run all checks"
-

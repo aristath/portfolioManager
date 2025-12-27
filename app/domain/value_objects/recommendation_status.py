@@ -68,4 +68,3 @@ class RecommendationStatus(str, Enum):
 
         # EXECUTED and DISMISSED are terminal states (cannot transition)
         return False
-

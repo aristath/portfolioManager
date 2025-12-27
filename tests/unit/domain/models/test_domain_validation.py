@@ -183,4 +183,3 @@ class TestRecommendationValidation:
         )
         assert rec.quantity == 10
         assert rec.estimated_price == 150.0
-

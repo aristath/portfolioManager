@@ -51,10 +51,7 @@ from app.infrastructure.database.manager import DatabaseManager
 from app.infrastructure.external import yahoo_finance as yahoo
 from app.infrastructure.external.tradernet import TradernetClient
 from app.infrastructure.recommendation_cache import get_recommendation_cache
-from app.repositories import (
-    PortfolioRepository,
-    RecommendationRepository,
-)
+from app.repositories import PortfolioRepository, RecommendationRepository
 
 # Constants for heuristic path (optimizer path uses settings directly)
 # These replace the removed min_trade_size and max_balance_worsening settings

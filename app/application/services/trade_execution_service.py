@@ -6,9 +6,7 @@ Orchestrates trade execution via Tradernet and records trades.
 import logging
 from typing import List, Optional
 
-from app.application.services.currency_exchange_service import (
-    CurrencyExchangeService,
-)
+from app.application.services.currency_exchange_service import CurrencyExchangeService
 from app.application.services.trade_execution.trade_recorder import record_trade
 from app.domain.models import Recommendation, Trade
 from app.domain.repositories.protocols import IPositionRepository, ITradeRepository

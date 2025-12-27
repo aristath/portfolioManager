@@ -32,17 +32,17 @@ fi
 # Check if arduino-cli is installed
 if ! command -v arduino-cli &> /dev/null; then
     log "Arduino CLI not found, installing..."
-    
+
     # Install Arduino CLI
     curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh || {
         error_exit "Failed to install Arduino CLI"
     }
-    
+
     # Add to PATH if installed to ~/bin
     if [ -f "$HOME/bin/arduino-cli" ]; then
         export PATH="$HOME/bin:$PATH"
     fi
-    
+
     log "Arduino CLI installed"
 fi
 
@@ -86,4 +86,3 @@ if arduino-cli upload --fqbn "$FQBN" --port "$SERIAL_PORT" "$SKETCH_DIR" >> "$LO
 else
     error_exit "Upload failed - check $LOG_FILE for details"
 fi
-

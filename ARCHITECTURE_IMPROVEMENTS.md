@@ -126,5 +126,3 @@ The codebase now follows Clean Architecture and DDD principles with:
 - Validation in domain models
 
 The refactoring is **complete** and the codebase is **production-ready**.
-
-

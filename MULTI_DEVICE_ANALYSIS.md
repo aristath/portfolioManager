@@ -277,16 +277,16 @@ Device 1 (Publisher) → MQTT Broker → Device 2 (Subscriber)
 
 ### Multi-Device (Proposed)
 - **Complexity**: High
-- **Deployment**: 
+- **Deployment**:
   - Network configuration
   - IP address management
   - Service discovery
   - Database synchronization
-- **Maintenance**: 
+- **Maintenance**:
   - Two systems to manage
   - Network troubleshooting
   - State synchronization
-- **Debugging**: 
+- **Debugging**:
   - Distributed system debugging
   - Network latency issues
   - State consistency problems
@@ -440,5 +440,3 @@ The Arduino Trader system is already well-optimized for its workload:
 4. **Hardware Upgrade**: More powerful single device (if needed)
 
 **Recommendation**: Optimize the single-device system first. Only consider multi-device if you have a specific requirement (remote display, redundancy, or scaling to 100+ stocks).
-
-

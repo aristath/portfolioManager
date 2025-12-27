@@ -79,5 +79,3 @@ The codebase is ready for:
 - Installation of dependencies
 - Running tests
 - Deployment
-
-

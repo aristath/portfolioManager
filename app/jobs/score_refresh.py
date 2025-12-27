@@ -7,10 +7,7 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from app.domain.scoring import (
-    PortfolioContext,
-    calculate_stock_score,
-)
+from app.domain.scoring import PortfolioContext, calculate_stock_score
 from app.infrastructure.database.manager import get_db_manager
 from app.infrastructure.events import SystemEvent, emit
 from app.infrastructure.external import yahoo_finance as yahoo

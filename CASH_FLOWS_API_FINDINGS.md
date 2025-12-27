@@ -7,7 +7,7 @@ After thorough investigation of the Tradernet API, here's what we found regardin
 ## Available Cash Flow Data Sources
 
 ### 1. getClientCpsHistory (get_requests_history)
-**Endpoint**: `getClientCpsHistory`  
+**Endpoint**: `getClientCpsHistory`
 **Method**: `client.get_requests_history()` or `client.authorized_request('getClientCpsHistory', {...}, version=2)`
 
 **Findings**:
@@ -33,7 +33,7 @@ After thorough investigation of the Tradernet API, here's what we found regardin
 - **Now extracted as separate transactions** in our implementation
 
 ### 2. corporate_actions
-**Endpoint**: `corporate_actions`  
+**Endpoint**: `corporate_actions`
 **Method**: `client.corporate_actions()`
 
 **Findings**:
@@ -57,7 +57,7 @@ After thorough investigation of the Tradernet API, here's what we found regardin
 **Status**: ✅ **Now included in get_all_cash_flows()**
 
 ### 3. get_trades_history
-**Endpoint**: `get_trades_history`  
+**Endpoint**: `get_trades_history`
 **Method**: `client.get_trades_history()`
 
 **Findings**:

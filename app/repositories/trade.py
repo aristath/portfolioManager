@@ -285,6 +285,19 @@ class TradeRepository:
             for row in rows
         }
 
+    async def get_recent_trades(self, symbol: str, days: int = 30) -> List[Trade]:
+        """Get recent trades for a symbol within N days."""
+        cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+        rows = await self._db.fetchall(
+            """
+            SELECT * FROM trades
+            WHERE symbol = ? AND executed_at >= ?
+            ORDER BY executed_at DESC
+            """,
+            (symbol.upper(), cutoff),
+        )
+        return [self._row_to_trade(row) for row in rows]
+
     async def get_position_history(self, start_date: str, end_date: str) -> List[dict]:
         """
         Get historical position quantities by date for portfolio reconstruction.

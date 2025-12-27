@@ -68,9 +68,7 @@ async def _run_daily_pipeline_internal():
                 logger.error(f"Pipeline failed for {stock.symbol}: {e}")
                 errors += 1
 
-        logger.info(
-            f"Daily pipeline complete: {processed} processed, {errors} errors"
-        )
+        logger.info(f"Daily pipeline complete: {processed} processed, {errors} errors")
         emit(SystemEvent.SYNC_COMPLETE)
 
     except Exception as e:
@@ -289,10 +287,7 @@ async def _refresh_score_for_symbol(symbol: str):
     """
     from datetime import datetime
 
-    from app.domain.scoring import (
-        PortfolioContext,
-        calculate_stock_score,
-    )
+    from app.domain.scoring import calculate_stock_score
     from app.infrastructure.database.manager import get_db_manager
     from app.infrastructure.external import yahoo_finance as yahoo
 
@@ -356,7 +351,7 @@ async def _refresh_score_for_symbol(symbol: str):
         return
 
     # Get fundamentals from Yahoo
-    fundamentals = yahoo.get_fundamentals(symbol, yahoo_symbol=yahoo_symbol)
+    fundamentals = yahoo.get_fundamental_data(symbol, yahoo_symbol=yahoo_symbol)
 
     # Build portfolio context
     portfolio_context = await _build_portfolio_context(db_manager)
@@ -396,7 +391,7 @@ async def _refresh_score_for_symbol(symbol: str):
         await db_manager.state.commit()
 
 
-async def _build_portfolio_context(db_manager) -> "PortfolioContext":
+async def _build_portfolio_context(db_manager):
     """Build portfolio context for allocation fit calculations."""
     from app.domain.scoring import PortfolioContext
 

@@ -18,9 +18,7 @@ from app.application.services.optimization.portfolio_optimizer import (
     PortfolioOptimizer,
     WeightChange,
 )
-from app.application.services.optimization.risk_models import (
-    RiskModelBuilder,
-)
+from app.application.services.optimization.risk_models import RiskModelBuilder
 
 __all__ = [
     "PortfolioOptimizer",

@@ -8,11 +8,7 @@ from datetime import datetime
 
 import pytest
 
-from app.infrastructure.database.queue import (
-    Priority,
-    QueryQueue,
-    QueuedOperation,
-)
+from app.infrastructure.database.queue import Priority, QueryQueue, QueuedOperation
 
 
 class TestPriority:

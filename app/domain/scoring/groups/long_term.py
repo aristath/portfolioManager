@@ -15,11 +15,7 @@ import numpy as np
 from app.domain.responses import ScoreResult
 from app.domain.scoring.calculations import calculate_cagr
 from app.domain.scoring.constants import OPTIMAL_CAGR
-from app.domain.scoring.scorers.long_term import (
-    score_cagr,
-    score_sharpe,
-    score_sortino,
-)
+from app.domain.scoring.scorers.long_term import score_cagr, score_sharpe, score_sortino
 
 logger = logging.getLogger(__name__)
 

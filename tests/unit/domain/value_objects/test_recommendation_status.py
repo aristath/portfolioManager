@@ -94,4 +94,3 @@ class TestRecommendationStatus:
             )
             is False
         )
-

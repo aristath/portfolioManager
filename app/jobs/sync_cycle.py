@@ -81,10 +81,14 @@ async def _run_sync_cycle_internal():
 
         # Step 7: Execute trade (market-aware)
         if recommendation:
-            set_processing(f"EXECUTING {recommendation.side} {recommendation.symbol}...")
+            set_processing(
+                f"EXECUTING {recommendation.side} {recommendation.symbol}..."
+            )
             result = await _step_execute_trade(recommendation)
             if result.get("status") == "success":
-                logger.info(f"Trade executed: {recommendation.side} {recommendation.symbol}")
+                logger.info(
+                    f"Trade executed: {recommendation.side} {recommendation.symbol}"
+                )
                 # Re-sync portfolio after trade
                 set_processing("SYNCING PORTFOLIO...")
                 await _step_sync_portfolio()
@@ -196,9 +200,7 @@ async def _step_check_trading_conditions() -> tuple[bool, dict[str, Any]]:
         pnl_tracker = get_daily_pnl_tracker()
         pnl_status = await pnl_tracker.get_trading_status()
 
-        logger.info(
-            f"P&L status: {pnl_status['pnl_display']} ({pnl_status['status']})"
-        )
+        logger.info(f"P&L status: {pnl_status['pnl_display']} ({pnl_status['status']})")
 
         if pnl_status["status"] == "halted":
             return False, pnl_status
@@ -395,6 +397,12 @@ async def _get_holistic_recommendation():
     }
     cache.set(cache_key, multi_step_data, ttl_seconds=900)
 
+    # Also cache to fixed keys for LED ticker display
+    # LED ticker looks for: multi_step_recommendations:diversification:{depth}:holistic
+    depth = len(steps)
+    led_cache_key = f"multi_step_recommendations:diversification:{depth}:holistic"
+    cache.set(led_cache_key, multi_step_data, ttl_seconds=900)
+
     # Convert to Recommendation
     currency_val = step.currency
     if isinstance(currency_val, str):
@@ -519,7 +527,9 @@ async def _generate_ticker_text() -> str:
         if show_actions > 0:
             # Try multi-step cache first
             for depth in [5, 4, 3, 2, 1]:
-                cache_key = f"multi_step_recommendations:diversification:{depth}:holistic"
+                cache_key = (
+                    f"multi_step_recommendations:diversification:{depth}:holistic"
+                )
                 cached = cache.get(cache_key)
                 if cached and cached.get("steps"):
                     steps = cached["steps"][:max_actions]

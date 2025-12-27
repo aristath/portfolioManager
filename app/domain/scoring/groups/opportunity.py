@@ -15,14 +15,8 @@ import numpy as np
 
 from app.domain.constants import MAX_PRICE_VS_52W_HIGH
 from app.domain.responses import ScoreResult
-from app.domain.scoring.constants import (
-    DEFAULT_MARKET_AVG_PE,
-    MIN_DAYS_FOR_OPPORTUNITY,
-)
-from app.domain.scoring.scorers.opportunity import (
-    score_below_52w_high,
-    score_pe_ratio,
-)
+from app.domain.scoring.constants import DEFAULT_MARKET_AVG_PE, MIN_DAYS_FOR_OPPORTUNITY
+from app.domain.scoring.scorers.opportunity import score_below_52w_high, score_pe_ratio
 
 logger = logging.getLogger(__name__)
 
