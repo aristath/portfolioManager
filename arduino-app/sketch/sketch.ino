@@ -25,7 +25,7 @@ void setBrightness(int b) {
 void setup() {
   // Initialize serial communication
   Serial.begin(115200);
-  
+
   // Initialize LED matrix
   matrix.begin();
   matrix.textFont(Font_5x7);
@@ -36,7 +36,7 @@ void loop() {
   if (Serial.available() > 0) {
     String command = Serial.readStringUntil('\n');
     command.trim();
-    
+
     if (command.startsWith("TEXT:")) {
       String text = command.substring(5);
       setText(text);
@@ -52,7 +52,7 @@ void loop() {
       }
     }
   }
-  
+
   // Display text if available
   if (currentText.length() > 0) {
     matrix.textScrollSpeed(scrollSpeed);

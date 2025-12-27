@@ -5,10 +5,7 @@ from datetime import datetime
 import pytest
 
 from app.domain.models import Position, Stock, Trade
-from app.repositories import (
-    PositionRepository,
-    StockRepository,
-)
+from app.repositories import PositionRepository, StockRepository
 from app.repositories.base import transaction_context
 
 
@@ -171,4 +168,3 @@ async def test_auto_commit_behavior(db, stock_repo, trade_repo):
     # After transaction commits, should have 2 trades
     history = await trade_repo.get_history(limit=10)
     assert len(history) == 2
-

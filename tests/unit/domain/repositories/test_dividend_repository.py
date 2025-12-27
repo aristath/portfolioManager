@@ -21,11 +21,11 @@ def create_mock_dividend(
     amount_eur: float = 9.5,
     payment_date: str = "2024-01-15",
     reinvested: bool = False,
-    reinvested_at: str = None,
-    reinvested_quantity: int = None,
+    reinvested_at: str | None = None,
+    reinvested_quantity: int | None = None,
     pending_bonus: float = 0.0,
     bonus_cleared: bool = False,
-    cleared_at: str = None,
+    cleared_at: str | None = None,
     created_at: str = "2024-01-16T10:00:00",
 ) -> dict:
     """Create a mock dividend database row."""

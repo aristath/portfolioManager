@@ -2,7 +2,7 @@
  * Allocation Radar Chart Component
  * Displays geographic and industry allocations as radar charts
  * Shows target vs current allocation for easy deviation visualization
- * 
+ *
  * Attributes:
  * - type: "geographic" | "industry" | "both" (default: "both")
  */
@@ -11,7 +11,7 @@ class AllocationRadar extends HTMLElement {
     const type = this.getAttribute('type') || 'both';
 
     let html = `<div x-data="allocationRadarComponent('${type}')" x-init="init()">`;
-    
+
     // Geographic Radar
     if (type === 'geographic' || type === 'both') {
       html += `
@@ -68,7 +68,7 @@ class AllocationRadar extends HTMLElement {
           </div>
         </div>
       </div>`;
-    
+
     this.innerHTML = html;
   }
 }
@@ -91,7 +91,7 @@ function allocationRadarComponent(chartType) {
     get geoCurrentData() {
       const activeGeos = this.geoLabels;
       const allocation = this.$store.app.allocation?.geographic || [];
-      
+
       if (activeGeos.length === 0 || allocation.length === 0) {
         return [];
       }
@@ -105,7 +105,7 @@ function allocationRadarComponent(chartType) {
     get geoTargetData() {
       const activeGeos = this.geoLabels;
       const allocation = this.$store.app.allocation?.geographic || [];
-      
+
       if (activeGeos.length === 0 || allocation.length === 0) {
         return [];
       }
@@ -129,7 +129,7 @@ function allocationRadarComponent(chartType) {
     get industryCurrentData() {
       const activeIndustries = this.industryLabels;
       const allocation = this.$store.app.allocation?.industry || [];
-      
+
       if (activeIndustries.length === 0 || allocation.length === 0) {
         return [];
       }
@@ -143,7 +143,7 @@ function allocationRadarComponent(chartType) {
     get industryTargetData() {
       const activeIndustries = this.industryLabels;
       const allocation = this.$store.app.allocation?.industry || [];
-      
+
       if (activeIndustries.length === 0 || allocation.length === 0) {
         return [];
       }
@@ -204,7 +204,7 @@ function allocationRadarComponent(chartType) {
       if (this.chartType !== 'geographic' && this.chartType !== 'both') {
         return;
       }
-      
+
       this.$nextTick(() => {
         const chart = this.$refs.geoRadarChart;
         if (chart && typeof chart.updateData === 'function') {
@@ -212,7 +212,7 @@ function allocationRadarComponent(chartType) {
           const targetData = this.geoTargetData;
           const currentData = this.geoCurrentData;
           const maxValue = this.geoMaxValue;
-          
+
           if (labels.length > 0 && targetData.length > 0 && currentData.length > 0) {
             chart.updateData(labels, targetData, currentData, maxValue);
           }
@@ -225,7 +225,7 @@ function allocationRadarComponent(chartType) {
       if (this.chartType !== 'industry' && this.chartType !== 'both') {
         return;
       }
-      
+
       this.$nextTick(() => {
         const chart = this.$refs.industryRadarChart;
         if (chart && typeof chart.updateData === 'function') {
@@ -233,7 +233,7 @@ function allocationRadarComponent(chartType) {
           const targetData = this.industryTargetData;
           const currentData = this.industryCurrentData;
           const maxValue = this.industryMaxValue;
-          
+
           if (labels.length > 0 && targetData.length > 0 && currentData.length > 0) {
             chart.updateData(labels, targetData, currentData, maxValue);
           }

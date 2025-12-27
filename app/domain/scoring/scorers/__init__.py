@@ -8,22 +8,10 @@ from app.domain.scoring.scorers.dividends import (
     score_dividend_consistency,
     score_dividend_yield,
 )
-from app.domain.scoring.scorers.end_state import (
-    score_total_return,
-)
-from app.domain.scoring.scorers.long_term import (
-    score_cagr,
-    score_sharpe,
-    score_sortino,
-)
-from app.domain.scoring.scorers.opportunity import (
-    score_below_52w_high,
-    score_pe_ratio,
-)
-from app.domain.scoring.scorers.short_term import (
-    score_drawdown,
-    score_momentum,
-)
+from app.domain.scoring.scorers.end_state import score_total_return
+from app.domain.scoring.scorers.long_term import score_cagr, score_sharpe, score_sortino
+from app.domain.scoring.scorers.opportunity import score_below_52w_high, score_pe_ratio
+from app.domain.scoring.scorers.short_term import score_drawdown, score_momentum
 from app.domain.scoring.scorers.technicals import (
     score_bollinger,
     score_ema_distance,

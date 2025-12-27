@@ -125,7 +125,7 @@ while IFS= read -r file; do
             REQUIREMENTS_CHANGED=true
         fi
     fi
-    
+
     # Check for sketch changes
     if [[ "$file" == arduino-app/sketch/* ]]; then
         SKETCH_CHANGED=true
@@ -173,7 +173,7 @@ if [ "$MAIN_APP_CHANGED" = true ]; then
     find "$MAIN_APP_DIR" -name "*.pyc" -delete 2>/dev/null || true
 
     log "Main app files synced"
-    
+
     # Update Python dependencies if requirements.txt changed
     if [ "$REQUIREMENTS_CHANGED" = true ]; then
         log "Updating Python dependencies..."
@@ -191,7 +191,7 @@ if [ "$MAIN_APP_CHANGED" = true ]; then
             log "WARNING: Virtual environment not found at $VENV_DIR"
         fi
     fi
-    
+
     # Restart systemd service with retry logic
     restart_service
 fi
@@ -199,14 +199,14 @@ fi
 # Handle sketch changes (compile and upload)
 if [ "$SKETCH_CHANGED" = true ]; then
     log "Sketch files changed - compiling and uploading..."
-    
+
     # Stop LED display service during upload
     log "Stopping LED display service for sketch upload"
     sudo systemctl stop led-display >> "$LOG_FILE" 2>&1 || log "WARNING: Failed to stop LED display service"
-    
+
     # Wait a moment for service to stop
     sleep 2
-    
+
     # Compile and upload sketch using native script
     if [ -f "$MAIN_APP_DIR/scripts/compile_and_upload_sketch.sh" ]; then
         log "Running sketch compilation script..."
@@ -218,7 +218,7 @@ if [ "$SKETCH_CHANGED" = true ]; then
     else
         log "WARNING: compile_and_upload_sketch.sh not found"
     fi
-    
+
     # Restart LED display service
     log "Restarting LED display service"
     if sudo systemctl start led-display >> "$LOG_FILE" 2>&1; then

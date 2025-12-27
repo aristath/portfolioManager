@@ -685,11 +685,12 @@ class TradernetClient:
             return False
 
         try:
-            self._client = Tradernet(
+            client = Tradernet(
                 settings.tradernet_api_key, settings.tradernet_api_secret
             )
             # Test connection by fetching user info
-            self._client.user_info()
+            client.user_info()
+            self._client = client
             self._connected = True
             logger.info("Connected to Tradernet API")
             return True

@@ -84,16 +84,18 @@ class TestTradeValidation:
         currency: str = "EUR",
     ) -> Recommendation:
         """Helper to create test trades."""
+        from app.domain.value_objects import Currency, TradeSide
+
         return Recommendation(
             symbol=symbol,
             name="Test Stock",
-            side=side,
+            side=TradeSide(side),
             quantity=quantity,
             estimated_price=price,
             estimated_value=quantity * price,
             reason="Test",
             geography="US",
-            currency=currency,
+            currency=Currency(currency),
         )
 
     @pytest.mark.asyncio

@@ -12,10 +12,7 @@ from typing import Dict, List, Optional
 import numpy as np
 
 from app.domain.responses import ScoreResult
-from app.domain.scoring.scorers.short_term import (
-    score_drawdown,
-    score_momentum,
-)
+from app.domain.scoring.scorers.short_term import score_drawdown, score_momentum
 
 logger = logging.getLogger(__name__)
 

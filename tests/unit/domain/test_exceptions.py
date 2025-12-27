@@ -52,4 +52,3 @@ class TestDomainExceptions:
         """Test ValidationError."""
         error = ValidationError("Symbol cannot be empty")
         assert "Symbol cannot be empty" in str(error)
-

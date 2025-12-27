@@ -95,7 +95,7 @@ class CalculationResult:
     value: float
     sub_components: Dict[str, float]  # Breakdown of calculation
     metadata: Optional[Dict[str, Any]] = None  # Additional context
-    
+
 # Standard score result (for scoring functions)
 @dataclass
 class ScoreResult:
@@ -103,7 +103,7 @@ class ScoreResult:
     score: float  # Main score (0-1)
     sub_scores: Dict[str, float]  # Component scores
     confidence: Optional[float] = None  # How confident we are in this score
-    
+
 # Standard service result (for service operations)
 @dataclass
 class ServiceResult[T]:
@@ -112,7 +112,7 @@ class ServiceResult[T]:
     data: Optional[T] = None
     error: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
-    
+
 # Standard list result (for operations returning lists)
 @dataclass
 class ListResult[T]:
@@ -137,7 +137,7 @@ class ListResult[T]:
 async def calculate_long_term_score(...) -> tuple:
     return (total_score, {"cagr": 0.8, "sharpe": 0.7})
 
-# opportunity.py  
+# opportunity.py
 async def calculate_opportunity_score(...) -> tuple:
     return (total_score, {"below_52w": 0.9, "pe": 0.6})
 
@@ -196,7 +196,7 @@ def calculate_cagr(...) -> CalculationResult:
       # Before
       async def calculate_long_term_score(...) -> tuple:
           return (0.85, {"cagr": 0.8, "sharpe": 0.7})
-      
+
       # After
       async def calculate_long_term_score(...) -> ScoreResult:
           return ScoreResult(
@@ -216,7 +216,7 @@ def calculate_cagr(...) -> CalculationResult:
           if insufficient_data:
               return None
           return 0.11
-      
+
       # After
       def calculate_cagr(...) -> CalculationResult:
           if insufficient_data:
@@ -242,7 +242,7 @@ def calculate_cagr(...) -> CalculationResult:
           if error:
               return []  # or raise exception
           return recommendations
-      
+
       # After
       async def get_recommendations(...) -> ServiceResult[List[Recommendation]]:
           if error:
@@ -341,7 +341,7 @@ app/domain/scoring/
 # long_term.py
 def calculate_cagr(prices, months): ...
 
-# fundamentals.py  
+# fundamentals.py
 def calculate_cagr(prices, months): ...  # DUPLICATE!
 ```
 
@@ -915,7 +915,7 @@ cagr = calculate_cagr(monthly_prices, 60)
 - All tests pass
 - No references to funding remain in backend
 - Verify frontend still works (funding modal removed, no broken references)
-- **Files**: 
+- **Files**:
 - Remove from: `app/api/trades.py` (2 endpoints + 2 models)
 - Delete: `app/application/services/funding_service.py`
 - Remove from: `static/js/store.js` (funding modal state/methods)
@@ -1160,7 +1160,7 @@ GET /api/admin/currency/convert?from=USD&to=EUR&amount=100
 **Current API Structure** (already good):
 
 - `/api/portfolio/*` - Portfolio operations
-- `/api/stocks/*` - Stock operations  
+- `/api/stocks/*` - Stock operations
 - `/api/trades/*` - Trade operations
 - `/api/charts/*` - Chart data
 - `/api/settings/*` - Settings

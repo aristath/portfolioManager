@@ -5,10 +5,7 @@ Convert dividend yield and consistency metrics to normalized scores.
 
 from typing import Optional
 
-from app.domain.scoring.constants import (
-    HIGH_DIVIDEND_THRESHOLD,
-    MID_DIVIDEND_THRESHOLD,
-)
+from app.domain.scoring.constants import HIGH_DIVIDEND_THRESHOLD, MID_DIVIDEND_THRESHOLD
 
 
 def score_dividend_yield(dividend_yield: Optional[float]) -> float:

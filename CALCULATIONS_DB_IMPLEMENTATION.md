@@ -179,4 +179,3 @@ metrics = await calc_repo.get_metrics("AAPL", ["RSI_14", "EMA_200", "SHARPE"])
 2. Monitor metrics calculation job execution
 3. Verify cache hit rates and performance improvements
 4. After verification, delete `app/domain/scoring/cache.py`
-

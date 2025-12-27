@@ -81,4 +81,3 @@ class Price:
     def __repr__(self) -> str:
         """Developer representation of price."""
         return f"Price(amount={self.amount}, currency={self.currency})"
-

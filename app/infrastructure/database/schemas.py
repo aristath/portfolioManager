@@ -133,7 +133,11 @@ DEFAULT_SETTINGS = [
     # Cash management
     ("min_cash_reserve", "500.0", "Minimum cash to keep (never fully deploy)"),
     # Job scheduling (simplified - only 2 configurable settings)
-    ("job_sync_cycle_minutes", "15", "Sync cycle interval in minutes (trades, prices, recommendations)"),
+    (
+        "job_sync_cycle_minutes",
+        "15",
+        "Sync cycle interval in minutes (trades, prices, recommendations)",
+    ),
     ("job_maintenance_hour", "3", "Daily maintenance hour (0-23)"),
     ("max_actions", "5", "Maximum automated actions per cycle"),
     ("dry_run", "false", "Disable actual trading (simulation mode)"),
@@ -181,7 +185,11 @@ async def init_config_schema(db):
         # Record schema version
         await db.execute(
             "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
-            (4, now, "Initial config schema with portfolio_hash recommendations and last_synced"),
+            (
+                4,
+                now,
+                "Initial config schema with portfolio_hash recommendations and last_synced",
+            ),
         )
 
         await db.commit()

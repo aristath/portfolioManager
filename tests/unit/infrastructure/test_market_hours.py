@@ -7,11 +7,9 @@ These tests validate the market hours functionality including:
 - Grouping stocks by geography
 """
 
-from datetime import datetime, time
+from datetime import datetime
 from unittest.mock import MagicMock, patch
 from zoneinfo import ZoneInfo
-
-import pytest
 
 
 class TestGetCalendar:
@@ -68,7 +66,9 @@ class TestIsMarketOpen:
 
         # Saturday
         with patch("app.infrastructure.market_hours._get_current_time") as mock_time:
-            mock_time.return_value = datetime(2024, 1, 13, 12, 0, tzinfo=ZoneInfo("UTC"))
+            mock_time.return_value = datetime(
+                2024, 1, 13, 12, 0, tzinfo=ZoneInfo("UTC")
+            )
             assert is_market_open("US") is False
             assert is_market_open("EU") is False
             assert is_market_open("ASIA") is False
@@ -79,7 +79,9 @@ class TestIsMarketOpen:
 
         # Christmas Day 2024 (Wednesday)
         with patch("app.infrastructure.market_hours._get_current_time") as mock_time:
-            mock_time.return_value = datetime(2024, 12, 25, 15, 0, tzinfo=ZoneInfo("UTC"))
+            mock_time.return_value = datetime(
+                2024, 12, 25, 15, 0, tzinfo=ZoneInfo("UTC")
+            )
             assert is_market_open("US") is False
 
     def test_us_market_open_during_trading_hours(self):
@@ -88,7 +90,9 @@ class TestIsMarketOpen:
 
         # Tuesday at 10:00 AM EST = 15:00 UTC
         with patch("app.infrastructure.market_hours._get_current_time") as mock_time:
-            mock_time.return_value = datetime(2024, 1, 16, 15, 0, tzinfo=ZoneInfo("UTC"))
+            mock_time.return_value = datetime(
+                2024, 1, 16, 15, 0, tzinfo=ZoneInfo("UTC")
+            )
             assert is_market_open("US") is True
 
     def test_us_market_closed_before_open(self):
@@ -97,7 +101,9 @@ class TestIsMarketOpen:
 
         # Tuesday at 8:00 AM EST = 13:00 UTC (before 9:30 AM open)
         with patch("app.infrastructure.market_hours._get_current_time") as mock_time:
-            mock_time.return_value = datetime(2024, 1, 16, 13, 0, tzinfo=ZoneInfo("UTC"))
+            mock_time.return_value = datetime(
+                2024, 1, 16, 13, 0, tzinfo=ZoneInfo("UTC")
+            )
             assert is_market_open("US") is False
 
     def test_us_market_closed_after_close(self):
@@ -106,7 +112,9 @@ class TestIsMarketOpen:
 
         # Tuesday at 5:00 PM EST = 22:00 UTC (after 4:00 PM close)
         with patch("app.infrastructure.market_hours._get_current_time") as mock_time:
-            mock_time.return_value = datetime(2024, 1, 16, 22, 0, tzinfo=ZoneInfo("UTC"))
+            mock_time.return_value = datetime(
+                2024, 1, 16, 22, 0, tzinfo=ZoneInfo("UTC")
+            )
             assert is_market_open("US") is False
 
     def test_eu_market_open_during_trading_hours(self):
@@ -137,7 +145,9 @@ class TestGetOpenMarkets:
 
         # Saturday
         with patch("app.infrastructure.market_hours._get_current_time") as mock_time:
-            mock_time.return_value = datetime(2024, 1, 13, 12, 0, tzinfo=ZoneInfo("UTC"))
+            mock_time.return_value = datetime(
+                2024, 1, 13, 12, 0, tzinfo=ZoneInfo("UTC")
+            )
             open_markets = get_open_markets()
             assert open_markets == []
 
@@ -147,7 +157,9 @@ class TestGetOpenMarkets:
 
         # Tuesday at 15:00 UTC - US and EU should be open
         with patch("app.infrastructure.market_hours._get_current_time") as mock_time:
-            mock_time.return_value = datetime(2024, 1, 16, 15, 0, tzinfo=ZoneInfo("UTC"))
+            mock_time.return_value = datetime(
+                2024, 1, 16, 15, 0, tzinfo=ZoneInfo("UTC")
+            )
             open_markets = get_open_markets()
             assert "US" in open_markets
             # EU might be closed by 16:00 CET, check if it's in overlap
@@ -161,7 +173,9 @@ class TestGetMarketStatus:
         from app.infrastructure.market_hours import get_market_status
 
         with patch("app.infrastructure.market_hours._get_current_time") as mock_time:
-            mock_time.return_value = datetime(2024, 1, 16, 15, 0, tzinfo=ZoneInfo("UTC"))
+            mock_time.return_value = datetime(
+                2024, 1, 16, 15, 0, tzinfo=ZoneInfo("UTC")
+            )
             status = get_market_status()
 
             assert "EU" in status
@@ -178,7 +192,9 @@ class TestGetMarketStatus:
         from app.infrastructure.market_hours import get_market_status
 
         with patch("app.infrastructure.market_hours._get_current_time") as mock_time:
-            mock_time.return_value = datetime(2024, 1, 16, 15, 0, tzinfo=ZoneInfo("UTC"))
+            mock_time.return_value = datetime(
+                2024, 1, 16, 15, 0, tzinfo=ZoneInfo("UTC")
+            )
             status = get_market_status()
 
             for market in status.values():
@@ -212,7 +228,9 @@ class TestFilterStocksByOpenMarkets:
 
         # Saturday - all markets closed
         with patch("app.infrastructure.market_hours._get_current_time") as mock_time:
-            mock_time.return_value = datetime(2024, 1, 13, 12, 0, tzinfo=ZoneInfo("UTC"))
+            mock_time.return_value = datetime(
+                2024, 1, 13, 12, 0, tzinfo=ZoneInfo("UTC")
+            )
             filtered = filter_stocks_by_open_markets(stocks)
             assert len(filtered) == 0
 
@@ -228,7 +246,9 @@ class TestFilterStocksByOpenMarkets:
 
         # Tuesday at 15:00 UTC - US market open
         with patch("app.infrastructure.market_hours._get_current_time") as mock_time:
-            mock_time.return_value = datetime(2024, 1, 16, 15, 0, tzinfo=ZoneInfo("UTC"))
+            mock_time.return_value = datetime(
+                2024, 1, 16, 15, 0, tzinfo=ZoneInfo("UTC")
+            )
             filtered = filter_stocks_by_open_markets(stocks)
             assert len(filtered) == 1
             assert filtered[0].symbol == "AAPL.US"

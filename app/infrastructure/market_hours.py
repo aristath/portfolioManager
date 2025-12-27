@@ -10,10 +10,10 @@ import logging
 from datetime import datetime
 from functools import lru_cache
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import exchange_calendars as xcals
 import pandas as pd
-from zoneinfo import ZoneInfo
 
 logger = logging.getLogger(__name__)
 
@@ -195,9 +195,7 @@ def get_market_status() -> dict[str, dict[str, Any]]:
                                 market_info["opens_at"] = next_schedule[
                                     "open"
                                 ].strftime("%H:%M")
-                                market_info["opens_date"] = session.strftime(
-                                    "%Y-%m-%d"
-                                )
+                                market_info["opens_date"] = session.strftime("%Y-%m-%d")
                                 break
                 except Exception:
                     market_info["opens_at"] = "Unknown"

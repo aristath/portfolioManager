@@ -12,9 +12,7 @@ import pandas as pd
 import pytest
 
 from app.application.services.optimization.risk_models import RiskModelBuilder
-from app.domain.scoring.constants import (
-    COVARIANCE_MIN_HISTORY,
-)
+from app.domain.scoring.constants import COVARIANCE_MIN_HISTORY
 
 
 def create_mock_price_history(

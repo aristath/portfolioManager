@@ -14,4 +14,3 @@ class IndustryRadarCard extends HTMLElement {
 }
 
 customElements.define('industry-radar-card', IndustryRadarCard);
-

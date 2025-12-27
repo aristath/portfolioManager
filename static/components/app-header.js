@@ -33,8 +33,8 @@ class AppHeader extends HTMLElement {
           <!-- Trading Mode Toggle -->
           <button @click="$store.app.toggleTradingMode()"
                   class="flex items-center gap-2 px-3 py-1.5 rounded transition-colors border"
-                  :class="$store.app.tradingMode === 'research' 
-                    ? 'bg-yellow-900/30 border-yellow-600/50 text-yellow-400 hover:bg-yellow-900/40' 
+                  :class="$store.app.tradingMode === 'research'
+                    ? 'bg-yellow-900/30 border-yellow-600/50 text-yellow-400 hover:bg-yellow-900/40'
                     : 'bg-green-900/30 border-green-600/50 text-green-400 hover:bg-green-900/40'"
                   :title="$store.app.tradingMode === 'research' ? 'Research Mode: Trades are simulated' : 'Live Mode: Trades are executed'">
             <span class="w-2 h-2 rounded-full"

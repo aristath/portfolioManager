@@ -16,7 +16,7 @@ This document summarizes all PR review comments, their status, and fixes applied
 
 ### 3. Unused imports and variables
 - **File**: `app/jobs/cash_rebalance.py`
-- **Fix**: 
+- **Fix**:
   - Removed unused import `calculate_portfolio_score` from top-level imports
   - Removed unused variable `position_map` on line 466
   - Removed unused variable `current_portfolio_score` on line 556
@@ -163,5 +163,3 @@ This document summarizes all PR review comments, their status, and fixes applied
 - **Outdated**: 7 issues (files don't exist or comments refer to non-existent code)
 
 All fixes have been committed and pushed to the `db-refactor` branch.
-
-

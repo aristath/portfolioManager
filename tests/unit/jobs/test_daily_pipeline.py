@@ -151,7 +151,9 @@ class TestProcessSingleStock:
                 new_callable=AsyncMock,
                 side_effect=mock_refresh_score,
             ),
-            patch("app.jobs.daily_pipeline._update_last_synced", new_callable=AsyncMock),
+            patch(
+                "app.jobs.daily_pipeline._update_last_synced", new_callable=AsyncMock
+            ),
             patch("app.jobs.daily_pipeline.set_processing"),
             patch("app.jobs.daily_pipeline.clear_processing"),
         ):
@@ -270,7 +272,9 @@ class TestDisplayUpdates:
                 "app.jobs.daily_pipeline._refresh_score_for_symbol",
                 new_callable=AsyncMock,
             ),
-            patch("app.jobs.daily_pipeline._update_last_synced", new_callable=AsyncMock),
+            patch(
+                "app.jobs.daily_pipeline._update_last_synced", new_callable=AsyncMock
+            ),
             patch(
                 "app.jobs.daily_pipeline.set_processing",
                 side_effect=mock_set_processing,
@@ -308,7 +312,9 @@ class TestDisplayUpdates:
                 "app.jobs.daily_pipeline._refresh_score_for_symbol",
                 new_callable=AsyncMock,
             ),
-            patch("app.jobs.daily_pipeline._update_last_synced", new_callable=AsyncMock),
+            patch(
+                "app.jobs.daily_pipeline._update_last_synced", new_callable=AsyncMock
+            ),
             patch("app.jobs.daily_pipeline.set_processing"),
             patch(
                 "app.jobs.daily_pipeline.clear_processing",
@@ -356,7 +362,9 @@ class TestForceRefresh:
                 new_callable=AsyncMock,
                 side_effect=mock_refresh_score,
             ),
-            patch("app.jobs.daily_pipeline._update_last_synced", new_callable=AsyncMock),
+            patch(
+                "app.jobs.daily_pipeline._update_last_synced", new_callable=AsyncMock
+            ),
             patch("app.jobs.daily_pipeline.set_processing"),
             patch("app.jobs.daily_pipeline.clear_processing"),
         ):

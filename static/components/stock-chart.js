@@ -49,7 +49,7 @@ function stockChartComponent() {
 
       try {
         const data = await API.fetchStockChart(this.symbol, this.selectedRange, this.selectedSource);
-        
+
         if (!data || data.length === 0) {
           this.chartData = [];
           if (this.chart) {
@@ -151,7 +151,7 @@ function stockChartComponent() {
 class StockChartModal extends HTMLElement {
   connectedCallback() {
     this.innerHTML = `
-      <div x-data="stockChartComponent()" 
+      <div x-data="stockChartComponent()"
            x-show="$store.app.showStockChart"
            class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
            x-transition>
@@ -195,7 +195,7 @@ class StockChartModal extends HTMLElement {
             <div x-show="!loading && !error" id="stock-chart-container" class="h-96"></div>
 
             <!-- Empty state -->
-            <div x-show="!loading && !error && (!chartData || chartData.length === 0)" 
+            <div x-show="!loading && !error && (!chartData || chartData.length === 0)"
                  class="flex items-center justify-center h-96 text-gray-500 text-sm">
               No data available for this stock
             </div>

@@ -9,10 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
-from app.api.portfolio import (
-    _calculate_total_eur,
-    _fetch_exchange_rates,
-)
+from app.api.portfolio import _calculate_total_eur, _fetch_exchange_rates
 
 
 @pytest.fixture

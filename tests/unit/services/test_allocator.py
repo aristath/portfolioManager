@@ -4,9 +4,7 @@ These tests ensure trade sizes are calculated correctly. Wrong position
 sizes could lead to over-concentrated positions or wasted cash.
 """
 
-from app.domain.constants import (
-    MAX_POSITION_SIZE_MULTIPLIER,
-)
+from app.domain.constants import MAX_POSITION_SIZE_MULTIPLIER
 from app.domain.models import StockPriority
 from app.domain.services.allocation_calculator import (
     calculate_position_size,

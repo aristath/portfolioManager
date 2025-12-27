@@ -7,10 +7,7 @@ Allocation Fit scores. The priority calculator just applies the manual multiplie
 
 import pytest
 
-from app.domain.services.priority_calculator import (
-    PriorityCalculator,
-    PriorityInput,
-)
+from app.domain.services.priority_calculator import PriorityCalculator, PriorityInput
 
 
 class TestPriorityCalculator:
@@ -99,4 +96,3 @@ class TestPriorityCalculator:
         assert results[0].combined_priority > results[1].combined_priority
         assert results[0].combined_priority == pytest.approx(0.8, abs=0.01)
         assert results[1].combined_priority == pytest.approx(0.4, abs=0.01)
-

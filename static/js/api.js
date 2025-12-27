@@ -13,7 +13,7 @@ const API = {
         ...options.headers,
       },
     });
-    
+
     // Check if response is OK before parsing JSON
     if (!res.ok) {
       let errorMessage = `Request failed with status ${res.status}`;
@@ -26,7 +26,7 @@ const API = {
       }
       throw new Error(errorMessage);
     }
-    
+
     return res.json();
   },
 

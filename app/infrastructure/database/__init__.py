@@ -37,4 +37,3 @@ __all__ = [
     "shutdown_query_queue",
     "enqueue",
 ]
-

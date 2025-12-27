@@ -11,10 +11,7 @@ import pytest
 from app.application.services.optimization.expected_returns import (
     ExpectedReturnsCalculator,
 )
-from app.domain.scoring.constants import (
-    EXPECTED_RETURN_MAX,
-    EXPECTED_RETURN_MIN,
-)
+from app.domain.scoring.constants import EXPECTED_RETURN_MAX, EXPECTED_RETURN_MIN
 
 
 class TestExpectedReturnsFormula:
