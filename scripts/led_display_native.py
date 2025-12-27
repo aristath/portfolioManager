@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Native LED Display Script for Arduino Uno Q.
 
-Polls the FastAPI application for display text and sends it to the MCU via I2C.
-Runs as a systemd service, replacing the Docker-based Arduino App framework implementation.
-Bypasses Docker and Router Bridge by using direct I2C communication.
+Polls the FastAPI application for display text and sends it to the MCU via Router Bridge.
+Runs as a systemd service, using native arduino-router service (no Docker required).
 """
 
 import logging
@@ -46,34 +45,28 @@ POLL_INTERVAL = 1.0  # Poll every 1 second (optimized)
 API_RETRY_DELAY = 5.0  # Retry API connection after 5 seconds
 DEFAULT_TICKER_SPEED = 50  # ms per scroll step
 
-# Try to import I2C client
+# Try to import Router Bridge client
 try:
     # Import from scripts directory
     import importlib.util
 
-    i2c_client_path = Path(__file__).parent / "i2c_led_client.py"
-    spec = importlib.util.spec_from_file_location("i2c_led_client", i2c_client_path)
+    router_bridge_path = Path(__file__).parent / "router_bridge_client.py"
+    spec = importlib.util.spec_from_file_location("router_bridge_client", router_bridge_path)
     if spec and spec.loader:
-        i2c_client_module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(i2c_client_module)
-        scroll_text = i2c_client_module.scroll_text
-        set_rgb3 = i2c_client_module.set_rgb3
-        set_rgb4 = i2c_client_module.set_rgb4
-        I2C_AVAILABLE = True
+        router_bridge_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(router_bridge_module)
+        bridge_call = router_bridge_module.call
+        ROUTER_BRIDGE_AVAILABLE = True
     else:
-        raise ImportError("Failed to load i2c_led_client module")
+        raise ImportError("Failed to load router_bridge_client module")
 except ImportError as e:
-    logger.warning(f"I2C client not available: {e}")
-    I2C_AVAILABLE = False
-    scroll_text = None
-    set_rgb3 = None
-    set_rgb4 = None
+    logger.warning(f"Router Bridge client not available: {e}")
+    ROUTER_BRIDGE_AVAILABLE = False
+    bridge_call = None
 except Exception as e:
-    logger.error(f"Failed to initialize I2C client: {e}")
-    I2C_AVAILABLE = False
-    scroll_text = None
-    set_rgb3 = None
-    set_rgb4 = None
+    logger.error(f"Failed to initialize Router Bridge client: {e}")
+    ROUTER_BRIDGE_AVAILABLE = False
+    bridge_call = None
 
 _session = requests.Session()
 _last_text = ""
@@ -83,7 +76,7 @@ _last_led4 = None
 
 
 def set_text(text: str, speed: int = DEFAULT_TICKER_SPEED) -> bool:
-    """Send text to MCU for scrolling via I2C.
+    """Send text to MCU for scrolling via Router Bridge.
 
     Args:
         text: Text to scroll (ASCII only, Euro symbol will be replaced)
@@ -92,17 +85,64 @@ def set_text(text: str, speed: int = DEFAULT_TICKER_SPEED) -> bool:
     Returns:
         True if successful, False otherwise
     """
-    if not I2C_AVAILABLE:
-        logger.error("I2C client not available")
+    if not ROUTER_BRIDGE_AVAILABLE:
+        logger.error("Router Bridge client not available")
         return False
 
     if not text:
         return True  # Empty text is valid
 
     try:
-        return scroll_text(text, speed)
+        # Replace Euro symbol with EUR (Font_5x7 only has ASCII 32-126)
+        text = text.replace("€", "EUR")
+        bridge_call("scrollText", text, speed, timeout=30)
+        return True
     except Exception as e:
-        logger.error(f"Failed to set text via I2C: {e}")
+        logger.error(f"Failed to set text via Router Bridge: {e}")
+        return False
+
+
+def set_rgb3(r: int, g: int, b: int) -> bool:
+    """Set RGB LED 3 color via Router Bridge.
+
+    Args:
+        r: Red value (0-255, 0 = off, >0 = on)
+        g: Green value (0-255)
+        b: Blue value (0-255)
+
+    Returns:
+        True if successful, False otherwise
+    """
+    if not ROUTER_BRIDGE_AVAILABLE:
+        return False
+
+    try:
+        bridge_call("setRGB3", r, g, b, timeout=2)
+        return True
+    except Exception as e:
+        logger.debug(f"Failed to set RGB3 via Router Bridge: {e}")
+        return False
+
+
+def set_rgb4(r: int, g: int, b: int) -> bool:
+    """Set RGB LED 4 color via Router Bridge.
+
+    Args:
+        r: Red value (0-255, 0 = off, >0 = on)
+        g: Green value (0-255)
+        b: Blue value (0-255)
+
+    Returns:
+        True if successful, False otherwise
+    """
+    if not ROUTER_BRIDGE_AVAILABLE:
+        return False
+
+    try:
+        bridge_call("setRGB4", r, g, b, timeout=2)
+        return True
+    except Exception as e:
+        logger.debug(f"Failed to set RGB4 via Router Bridge: {e}")
         return False
 
 
@@ -144,12 +184,12 @@ def _process_display_data(data: dict) -> None:
 
     # Update RGB LEDs (only if changed - optimization)
     led3_tuple = tuple(led3)
-    if _last_led3 != led3_tuple and I2C_AVAILABLE and set_rgb3:
+    if _last_led3 != led3_tuple and ROUTER_BRIDGE_AVAILABLE:
         set_rgb3(led3[0], led3[1], led3[2])
         _last_led3 = led3_tuple
 
     led4_tuple = tuple(led4)
-    if _last_led4 != led4_tuple and I2C_AVAILABLE and set_rgb4:
+    if _last_led4 != led4_tuple and ROUTER_BRIDGE_AVAILABLE:
         set_rgb4(led4[0], led4[1], led4[2])
         _last_led4 = led4_tuple
 
@@ -174,28 +214,26 @@ def _process_display_data(data: dict) -> None:
 
 
 def main_loop():
-    """Main loop - fetch display text from API, update MCU via I2C."""
+    """Main loop - fetch display text from API, update MCU via Router Bridge."""
     global _last_text
 
-    logger.info("Starting LED display native script (I2C mode)")
+    logger.info("Starting LED display native script (Router Bridge mode)")
     logger.info(f"API URL: {API_URL}")
 
-    if not I2C_AVAILABLE:
-        logger.error("I2C client not available. Exiting.")
-        logger.error("Make sure smbus2 is installed: pip install smbus2")
-        logger.error("Make sure user is in i2c group: sudo usermod -aG i2c $USER")
+    if not ROUTER_BRIDGE_AVAILABLE:
+        logger.error("Router Bridge client not available. Exiting.")
+        logger.error("Make sure msgpack is installed: pip install msgpack")
+        logger.error("Make sure arduino-router service is running: sudo systemctl status arduino-router")
         sys.exit(1)
 
-    # Test I2C connection
+    # Test Router Bridge connection
     try:
-        if scroll_text("TEST", 50):
-            logger.info("I2C connection test successful")
-        else:
-            logger.error("I2C connection test failed")
-            sys.exit(1)
+        bridge_call("scrollText", "TEST", 50, timeout=2)
+        logger.info("Router Bridge connection test successful")
     except Exception as e:
-        logger.error(f"I2C connection test failed: {e}")
-        logger.error("Make sure the MCU sketch is uploaded and I2C is working")
+        logger.error(f"Router Bridge connection test failed: {e}")
+        logger.error("Make sure arduino-router service is running: sudo systemctl status arduino-router")
+        logger.error("Make sure the MCU sketch is uploaded with Router Bridge functions")
         sys.exit(1)
 
     consecutive_errors = 0
