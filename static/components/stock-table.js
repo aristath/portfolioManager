@@ -119,10 +119,10 @@ class StockTable extends HTMLElement {
                     </button>
                   </td>
                   <td class="py-1.5 px-1">
-                    <div class="sparkline-container"
-                         :data-symbol="stock.symbol"
-                         :data-has-position="stock.position_value > 0"
-                         style="width: 80px; height: 32px;"></div>
+                    <stock-sparkline
+                         :symbol="stock.symbol"
+                         :has-position="stock.position_value > 0 ? 'true' : 'false'">
+                    </stock-sparkline>
                   </td>
                   <td class="py-1.5 px-2 text-gray-300 truncate max-w-32" x-text="stock.name"></td>
                   <td class="py-1.5 px-2 text-center">

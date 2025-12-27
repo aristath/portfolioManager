@@ -503,11 +503,7 @@ async def update_stock(
     if not updates:
         raise HTTPException(status_code=400, detail="No updates provided")
 
-    # Update stock object with new values
-    for key, value in updates.items():
-        setattr(stock, key, value)
-
-    await stock_repo.update(stock)
+    await stock_repo.update(old_symbol, **updates)
 
     final_symbol = new_symbol if new_symbol and new_symbol != old_symbol else old_symbol
     updated_stock = await stock_repo.get_by_symbol(final_symbol)
