@@ -57,9 +57,6 @@ class RiskModelBuilder:
 
         prices_df = prices_df[valid_symbols]
 
-        # Forward-fill missing data (holidays, etc.)
-        prices_df = prices_df.ffill()
-
         # Calculate daily returns
         returns_df = prices_df.pct_change().dropna()
 
@@ -115,6 +112,10 @@ class RiskModelBuilder:
         df = pd.DataFrame(all_prices)
         df.index = pd.to_datetime(df.index)
         df = df.sort_index()
+
+        # Forward-fill then back-fill to handle different market holidays
+        # This is standard practice: use last known price when market closed
+        df = df.ffill().bfill()
 
         logger.debug(f"Fetched prices for {len(df.columns)} symbols, {len(df)} days")
         return df
