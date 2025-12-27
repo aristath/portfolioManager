@@ -318,6 +318,35 @@ async def _detect_and_update_industry(symbol: str):
         logger.warning(f"Failed to detect industry for {symbol}: {e}")
 
 
+# Fallback mapping: exchange name -> country (used only when Yahoo doesn't provide country)
+EXCHANGE_TO_COUNTRY = {
+    "Amsterdam": "Netherlands",
+    "Athens": "Greece",
+    "Brussels": "Belgium",
+    "Copenhagen": "Denmark",
+    "Frankfurt": "Germany",
+    "Helsinki": "Finland",
+    "Hong Kong": "Hong Kong",
+    "Lisbon": "Portugal",
+    "London": "United Kingdom",
+    "LSE": "United Kingdom",
+    "Madrid": "Spain",
+    "Milan": "Italy",
+    "NASDAQ": "United States",
+    "NYSE": "United States",
+    "NasdaqGS": "United States",
+    "NasdaqGM": "United States",
+    "Oslo": "Norway",
+    "Paris": "France",
+    "Stockholm": "Sweden",
+    "Swiss": "Switzerland",
+    "Tokyo": "Japan",
+    "Toronto": "Canada",
+    "Vienna": "Austria",
+    "XETRA": "Germany",
+}
+
+
 async def _detect_and_update_country_and_exchange(symbol: str):
     """
     Detect and update country and exchange from Yahoo Finance for a stock.
@@ -350,6 +379,15 @@ async def _detect_and_update_country_and_exchange(symbol: str):
         detected_country, detected_exchange = yahoo.get_stock_country_and_exchange(
             symbol, yahoo_symbol
         )
+
+        # Fallback: infer country from exchange if Yahoo didn't provide it
+        if not detected_country and detected_exchange:
+            detected_country = EXCHANGE_TO_COUNTRY.get(detected_exchange)
+            if detected_country:
+                logger.debug(
+                    f"Inferred country for {symbol} from exchange {detected_exchange}: {detected_country}"
+                )
+
         if detected_country or detected_exchange:
             # Update the stock's country and fullExchangeName in the database
             stock_repo = StockRepository()
