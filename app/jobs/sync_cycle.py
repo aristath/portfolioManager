@@ -318,7 +318,9 @@ async def _update_position_prices(quotes: dict[str, float]):
 
 async def _get_holistic_recommendation():
     """Get next recommendation from the holistic planner."""
-    from app.application.services.currency_exchange_service import CurrencyExchangeService
+    from app.application.services.currency_exchange_service import (
+        CurrencyExchangeService,
+    )
     from app.application.services.rebalancing_service import RebalancingService
     from app.domain.models import Recommendation
     from app.domain.portfolio_hash import generate_recommendation_cache_key
