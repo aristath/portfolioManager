@@ -35,7 +35,7 @@ class TestCalculatePositionSize:
         return StockPriority(
             symbol="TEST",
             name="Test Stock",
-            geography="US",
+            country="United States",
             industry="Consumer Electronics",
             stock_score=score,
             volatility=volatility,

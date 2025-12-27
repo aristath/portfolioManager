@@ -160,17 +160,17 @@ class TestStepSyncPrices:
         stock_eu = MagicMock()
         stock_eu.symbol = "SAP.DE"
         stock_eu.yahoo_symbol = "SAP.DE"
-        stock_eu.geography = "EU"
+        stock_eu.fullExchangeName = "XETR"
 
         stock_us = MagicMock()
         stock_us.symbol = "AAPL.US"
         stock_us.yahoo_symbol = "AAPL"
-        stock_us.geography = "US"
+        stock_us.fullExchangeName = "NYSE"
 
         stock_asia = MagicMock()
         stock_asia.symbol = "9988.HK"
         stock_asia.yahoo_symbol = "9988.HK"
-        stock_asia.geography = "ASIA"
+        stock_asia.fullExchangeName = "XHKG"
 
         stocks = [stock_eu, stock_us, stock_asia]
         fetched_symbols = []
@@ -182,11 +182,15 @@ class TestStepSyncPrices:
         with (
             patch(
                 "app.jobs.sync_cycle.get_open_markets",
-                return_value=["EU"],  # Only EU open
+                return_value=["XETR"],  # Only XETR open
             ),
             patch(
-                "app.jobs.sync_cycle.group_stocks_by_geography",
-                return_value={"EU": [stock_eu], "US": [stock_us], "ASIA": [stock_asia]},
+                "app.jobs.sync_cycle.group_stocks_by_exchange",
+                return_value={
+                    "XETR": [stock_eu],
+                    "NYSE": [stock_us],
+                    "XHKG": [stock_asia],
+                },
             ),
             patch("app.jobs.sync_cycle._get_active_stocks", return_value=stocks),
             patch(
@@ -241,9 +245,9 @@ class TestStepExecuteTrade:
         recommendation.symbol = "9988.HK"
         recommendation.side = "BUY"
 
-        # Mock stock with ASIA geography
+        # Mock stock with ASIA exchange
         mock_stock = MagicMock()
-        mock_stock.geography = "ASIA"
+        mock_stock.fullExchangeName = "XHKG"
 
         execute_called = False
 
@@ -285,7 +289,7 @@ class TestStepExecuteTrade:
         recommendation.estimated_price = 150.0
 
         mock_stock = MagicMock()
-        mock_stock.geography = "US"
+        mock_stock.fullExchangeName = "NYSE"
 
         with (
             patch(

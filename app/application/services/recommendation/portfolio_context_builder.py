@@ -46,7 +46,7 @@ async def build_portfolio_context(
         parts = key.split(":", 1)
         if len(parts) == 2:
             alloc_type, name = parts
-            if alloc_type == "geography":
+            if alloc_type == "country":
                 geo_weights[name] = target_pct
             elif alloc_type == "industry":
                 industry_weights[name] = target_pct

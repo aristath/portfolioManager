@@ -17,7 +17,7 @@ class TestRecommendationFactory:
             estimated_price=150.0,
             estimated_value=1500.0,
             reason="High priority score",
-            geography="US",
+            country="United States",
             industry="Consumer Electronics",
             currency=Currency.USD,
             priority=0.85,
@@ -32,7 +32,7 @@ class TestRecommendationFactory:
         assert data["estimated_price"] == 150.0
         assert data["estimated_value"] == 1500.0
         assert data["reason"] == "High priority score"
-        assert data["geography"] == "US"
+        assert data["country"] == "United States"
         assert data["industry"] == "Consumer Electronics"
         assert data["currency"] == Currency.USD
         assert data["priority"] == 0.85
@@ -49,7 +49,7 @@ class TestRecommendationFactory:
             estimated_price=300.0,
             estimated_value=1500.0,
             reason="Underperforming position",
-            geography="US",
+            country="United States",
             industry="Consumer Electronics",
             currency=Currency.USD,
         )
@@ -70,7 +70,7 @@ class TestRecommendationFactory:
             estimated_price=150.0,
             estimated_value=1500.0,
             reason="Test",
-            geography="US",
+            country="United States",
             current_portfolio_score=70.0,
             new_portfolio_score=72.5,
         )
@@ -86,7 +86,7 @@ class TestRecommendationFactory:
             estimated_price=150.0,
             estimated_value=1500.0,
             reason="Test",
-            geography="US",
+            country="United States",
         )
 
         assert data["current_portfolio_score"] is None
@@ -102,7 +102,7 @@ class TestRecommendationFactory:
             estimated_price=150.0,
             estimated_value=1500.0,
             reason="Test",
-            geography="US",
+            country="United States",
         )
 
         assert data["industry"] is None

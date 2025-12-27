@@ -121,7 +121,7 @@ async def test_concurrent_trade_execution_atomicity(db):
             yahoo_symbol=symbol,
             name=f"{symbol} Inc.",
             industry="Consumer Electronics",
-            geography="US",
+            country="United States",
             priority_multiplier=1.0,
             min_lot=1,
             active=True,

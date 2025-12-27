@@ -39,26 +39,28 @@ class TestIdentifyRebalanceSellOpportunities:
             allow_buy=True,
             allow_sell=True,
             currency="USD",
-            geography="US",
+            country="United States",
         )
 
     @pytest.fixture
     def portfolio_context(self):
         """Create a portfolio context."""
         return PortfolioContext(
-            geo_weights={"US": 0.0},  # Neutral weight
+            country_weights={"United States": 0.0},  # Neutral weight
             industry_weights={},
             positions={"AAPL.US": 16000},
             total_value=20000,
         )
 
     @pytest.mark.asyncio
-    async def test_identifies_overweight_geography(
+    async def test_identifies_overweight_country(
         self, sample_position, sample_stock, portfolio_context
     ):
-        """Test identifying overweight geography position."""
+        """Test identifying overweight country position."""
         stocks_by_symbol = {"AAPL.US": sample_stock}
-        geo_allocations = {"US": 0.80}  # 80% in US, target is ~33%
+        geo_allocations = {
+            "United States": 0.80
+        }  # 80% in United States, target is ~33%
 
         opportunities = await identify_rebalance_sell_opportunities(
             positions=[sample_position],
@@ -82,16 +84,16 @@ class TestIdentifyRebalanceSellOpportunities:
             allow_buy=True,
             allow_sell=False,
             currency="USD",
-            geography="US",
+            country="United States",
         )
         portfolio_context = PortfolioContext(
-            geo_weights={"US": 0.0},
+            country_weights={"United States": 0.0},
             industry_weights={},
             positions={},
             total_value=20000,
         )
         stocks_by_symbol = {"AAPL.US": stock}
-        geo_allocations = {"US": 0.80}
+        geo_allocations = {"United States": 0.80}
 
         opportunities = await identify_rebalance_sell_opportunities(
             positions=[sample_position],
@@ -115,7 +117,7 @@ class TestIdentifyRebalanceSellOpportunities:
             currency="USD",
         )
         stocks_by_symbol = {"AAPL.US": sample_stock}
-        geo_allocations = {"US": 0.80}
+        geo_allocations = {"United States": 0.80}
 
         opportunities = await identify_rebalance_sell_opportunities(
             positions=[position],
@@ -131,7 +133,7 @@ class TestIdentifyRebalanceSellOpportunities:
     async def test_skips_unknown_stock(self, sample_position, portfolio_context):
         """Test skipping positions for unknown stocks."""
         stocks_by_symbol = {}  # No stock info
-        geo_allocations = {"US": 0.80}
+        geo_allocations = {"United States": 0.80}
 
         opportunities = await identify_rebalance_sell_opportunities(
             positions=[sample_position],
@@ -144,12 +146,12 @@ class TestIdentifyRebalanceSellOpportunities:
         assert len(opportunities) == 0
 
     @pytest.mark.asyncio
-    async def test_skips_geography_not_in_allocations(
+    async def test_skips_country_not_in_allocations(
         self, sample_position, sample_stock, portfolio_context
     ):
-        """Test skipping when geography not in allocations."""
+        """Test skipping when country not in allocations."""
         stocks_by_symbol = {"AAPL.US": sample_stock}
-        geo_allocations = {"EU": 0.50}  # No US in allocations
+        geo_allocations = {"Germany": 0.50}  # No United States in allocations
 
         opportunities = await identify_rebalance_sell_opportunities(
             positions=[sample_position],
@@ -162,10 +164,10 @@ class TestIdentifyRebalanceSellOpportunities:
         assert len(opportunities) == 0
 
     @pytest.mark.asyncio
-    async def test_skips_balanced_geography(
+    async def test_skips_balanced_country(
         self, sample_position, sample_stock, portfolio_context
     ):
-        """Test skipping when geography is balanced."""
+        """Test skipping when country is balanced."""
         stocks_by_symbol = {"AAPL.US": sample_stock}
         geo_allocations = {"US": 0.35}  # Near target of 33%
 
@@ -185,7 +187,7 @@ class TestIdentifyRebalanceSellOpportunities:
     ):
         """Test using exchange rate service for non-EUR positions."""
         stocks_by_symbol = {"AAPL.US": sample_stock}
-        geo_allocations = {"US": 0.80}
+        geo_allocations = {"United States": 0.80}
 
         mock_exchange_service = AsyncMock()
         mock_exchange_service.get_rate.return_value = 1.1
@@ -208,7 +210,7 @@ class TestIdentifyRebalanceSellOpportunities:
     ):
         """Test that opportunities include appropriate tags."""
         stocks_by_symbol = {"AAPL.US": sample_stock}
-        geo_allocations = {"US": 0.80}
+        geo_allocations = {"United States": 0.80}
 
         opportunities = await identify_rebalance_sell_opportunities(
             positions=[sample_position],

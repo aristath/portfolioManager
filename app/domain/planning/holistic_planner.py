@@ -380,7 +380,7 @@ async def identify_opportunities(
     # Get recently bought symbols for cooldown
     recently_bought = await trade_repo.get_recently_bought_symbols(BUY_COOLDOWN_DAYS)
 
-    # Calculate current geography/industry allocations
+    # Calculate current country/industry allocations
     geo_allocations: dict[str, float] = {}
     ind_allocations: dict[str, float] = {}
     for symbol, value in portfolio_context.positions.items():

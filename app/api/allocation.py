@@ -29,14 +29,12 @@ async def get_allocation_targets(allocation_repo: AllocationRepositoryDep):
     country = {}
     industry = {}
 
-    # get_all() returns Dict[str, float] with keys like "country:name" or "geography:name" (legacy)
+    # get_all() returns Dict[str, float] with keys like "country:name" or "industry:name"
     for key, target_pct in targets.items():
         parts = key.split(":", 1)
         if len(parts) == 2:
             target_type, name = parts
-            if (
-                target_type == "country" or target_type == "geography"
-            ):  # Support both during transition
+            if target_type == "country":
                 country[name] = target_pct
             elif target_type == "industry":
                 industry[name] = target_pct

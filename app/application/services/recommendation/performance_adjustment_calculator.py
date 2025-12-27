@@ -88,7 +88,7 @@ async def get_performance_adjusted_weights(
         # Get performance attribution (EXPENSIVE - ~27 seconds)
         attribution = await get_performance_attribution(returns, start_date, end_date)
 
-        geo_attribution = attribution.get("geography", {})
+        geo_attribution = attribution.get("country", {})
         ind_attribution = attribution.get("industry", {})
 
         allocations = await allocation_repo.get_all()
@@ -96,7 +96,7 @@ async def get_performance_adjusted_weights(
         base_geo_weights = {
             key.split(":", 1)[1]: val
             for key, val in allocations.items()
-            if key.startswith("geography:")
+            if key.startswith("country:")
         }
         base_ind_weights = {
             key.split(":", 1)[1]: val

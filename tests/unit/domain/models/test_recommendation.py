@@ -19,7 +19,7 @@ class TestRecommendation:
             estimated_price=150.0,
             estimated_value=1500.0,
             reason="High priority score",
-            geography="US",
+            country="United States",
             industry="Consumer Electronics",
             currency=Currency.USD,
             status=RecommendationStatus.PENDING,
@@ -43,7 +43,7 @@ class TestRecommendation:
             estimated_price=300.0,
             estimated_value=1500.0,
             reason="Underperforming",
-            geography="US",
+            country="United States",
             currency=Currency.USD,
             status=RecommendationStatus.PENDING,
         )
@@ -61,7 +61,7 @@ class TestRecommendation:
             estimated_price=150.0,
             estimated_value=1500.0,
             reason="Test",
-            geography="US",
+            country="United States",
         )
 
         assert rec.status == RecommendationStatus.PENDING
@@ -76,7 +76,7 @@ class TestRecommendation:
             estimated_price=150.0,
             estimated_value=1500.0,
             reason="Test",
-            geography="US",
+            country="United States",
             status=RecommendationStatus.PENDING,
         )
 
@@ -99,7 +99,7 @@ class TestRecommendation:
             estimated_price=150.0,
             estimated_value=1500.0,
             reason="Test",
-            geography="US",
+            country="United States",
             current_portfolio_score=75.0,
             new_portfolio_score=77.5,
         )
@@ -118,7 +118,7 @@ class TestRecommendation:
             estimated_price=150.0,
             estimated_value=1500.0,
             reason="Test",
-            geography="US",
+            country="United States",
             current_portfolio_score=70.0,
             new_portfolio_score=72.5,
         )

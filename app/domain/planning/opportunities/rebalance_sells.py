@@ -27,7 +27,7 @@ async def identify_rebalance_sell_opportunities(
         positions: Current positions
         stocks_by_symbol: Dict mapping symbol to Stock
         portfolio_context: Portfolio context with weights
-        geo_allocations: Current geography allocation percentages
+        geo_allocations: Current country allocation percentages
         total_value: Total portfolio value
         exchange_rate_service: Optional exchange rate service for currency conversion
 

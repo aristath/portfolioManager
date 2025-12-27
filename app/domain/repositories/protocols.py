@@ -167,8 +167,8 @@ class IAllocationRepository(Protocol):
         """Get allocation targets by type (geography or industry)."""
         ...
 
-    async def get_geography_targets(self) -> Dict[str, float]:
-        """Get geography allocation targets."""
+    async def get_country_targets(self) -> Dict[str, float]:
+        """Get country allocation targets."""
         ...
 
     async def get_industry_targets(self) -> Dict[str, float]:

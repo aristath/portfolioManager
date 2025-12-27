@@ -26,7 +26,10 @@ class TestDomainEvents:
         from app.domain.value_objects.currency import Currency
 
         stock = Stock(
-            symbol="AAPL.US", name="Apple Inc.", geography="US", currency=Currency.USD
+            symbol="AAPL.US",
+            name="Apple Inc.",
+            country="United States",
+            currency=Currency.USD,
         )
         event = StockAddedEvent(stock=stock)
         assert event.occurred_at is not None
@@ -76,7 +79,7 @@ class TestDomainEvents:
             estimated_price=150.0,
             estimated_value=1500.0,
             reason="High score",
-            geography="US",
+            country="United States",
             currency=Currency.USD,
         )
 
@@ -91,7 +94,7 @@ class TestDomainEvents:
         stock = Stock(
             symbol="AAPL.US",
             name="Apple Inc.",
-            geography="US",
+            country="United States",
             currency=Currency.USD,
         )
 

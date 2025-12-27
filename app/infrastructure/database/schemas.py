@@ -27,7 +27,6 @@ CREATE TABLE IF NOT EXISTS stocks (
     yahoo_symbol TEXT,
     name TEXT NOT NULL,
     industry TEXT,
-    geography TEXT,              -- Deprecated: kept for backward compatibility during transition
     country TEXT,                -- Country name from Yahoo Finance (e.g., "United States", "Germany")
     fullExchangeName TEXT,       -- Exchange name from Yahoo Finance (e.g., "NASDAQ", "XETR")
     priority_multiplier REAL DEFAULT 1.0,
@@ -42,13 +41,12 @@ CREATE TABLE IF NOT EXISTS stocks (
 );
 
 CREATE INDEX IF NOT EXISTS idx_stocks_active ON stocks(active);
-CREATE INDEX IF NOT EXISTS idx_stocks_geography ON stocks(geography);
--- Note: idx_stocks_country is created in migration v4->v5 after country column is added
+CREATE INDEX IF NOT EXISTS idx_stocks_country ON stocks(country);
 
 -- Allocation targets (country and industry weightings)
 CREATE TABLE IF NOT EXISTS allocation_targets (
     id INTEGER PRIMARY KEY,
-    type TEXT NOT NULL,      -- 'country' or 'industry' (geography deprecated but supported during transition)
+    type TEXT NOT NULL,      -- 'country' or 'industry'
     name TEXT NOT NULL,
     target_pct REAL NOT NULL,
     created_at TEXT NOT NULL,
@@ -107,9 +105,9 @@ CREATE TABLE IF NOT EXISTS schema_version (
 """
 
 DEFAULT_ALLOCATION_TARGETS = [
-    ("geography", "EU", 0.50),
-    ("geography", "ASIA", 0.30),
-    ("geography", "US", 0.20),
+    ("country", "Germany", 0.50),
+    ("country", "Japan", 0.30),
+    ("country", "United States", 0.20),
 ]
 
 # Default settings for new database installations
@@ -231,7 +229,7 @@ async def init_config_schema(db):
                     estimated_price REAL,
                     estimated_value REAL,
                     reason TEXT NOT NULL,
-                    country TEXT,                -- Country name from Yahoo Finance (replaces geography)
+                    country TEXT,                -- Country name from Yahoo Finance
                     industry TEXT,
                     currency TEXT DEFAULT 'EUR',
                     priority REAL,
@@ -342,7 +340,7 @@ async def init_config_schema(db):
             "CREATE INDEX IF NOT EXISTS idx_stocks_country ON stocks(country)"
         )
 
-        # Update recommendations table: add country column, keep geography for backward compatibility
+        # Update recommendations table: add country column (migration from geography)
         cursor = await db.execute("PRAGMA table_info(recommendations)")
         rec_columns = [row[1] for row in await cursor.fetchall()]
 

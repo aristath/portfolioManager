@@ -26,9 +26,7 @@ def _attribute_return_by_category(
     """Attribute return by geography and industry categories."""
     for symbol, data in position_values.items():
         weight = data["value"] / total_value
-        country = data.get("country") or data.get(
-            "geography", "UNKNOWN"
-        )  # Support legacy
+        country = data.get("country", "UNKNOWN")
         ind = data["industry"]
         contribution = daily_return * weight
 
@@ -47,9 +45,9 @@ def _calculate_annualized_attribution(
 ) -> dict:
     """Calculate annualized attribution from daily contributions."""
     attribution: dict[str, dict[str, float]] = {
-        "geography": {},
+        "country": {},
         "industry": {},
-    }  # Keep "geography" key for backward compatibility
+    }
 
     for country, contributions in geo_returns.items():
         if contributions:
@@ -60,7 +58,7 @@ def _calculate_annualized_attribution(
                 annualized = (1 + total_return) ** (252 / len(contributions)) - 1
             else:
                 annualized = 0.0
-            attribution["geography"][country] = (
+            attribution["country"][country] = (
                 float(annualized) if pd.api.types.is_finite(annualized) else 0.0
             )
 
@@ -121,7 +119,7 @@ async def get_performance_attribution(
     returns: pd.Series, start_date: str, end_date: str
 ) -> Dict[str, Dict[str, float]]:
     """
-    Calculate performance attribution by geography and industry.
+    Calculate performance attribution by country and industry.
 
     Args:
         returns: Daily portfolio returns
@@ -129,17 +127,17 @@ async def get_performance_attribution(
         end_date: End date for analysis
 
     Returns:
-        Dict with 'geography' and 'industry' keys, each containing
-        attribution by category (e.g., {'EU': 0.08, 'ASIA': 0.15})
+        Dict with 'country' and 'industry' keys, each containing
+        attribution by category (e.g., {'United States': 0.08, 'Germany': 0.15})
     """
     if returns.empty:
-        return {"geography": {}, "industry": {}}
+        return {"country": {}, "industry": {}}
 
     # Get position history
     positions_df = await reconstruct_historical_positions(start_date, end_date)
 
     if positions_df.empty:
-        return {"geography": {}, "industry": {}}
+        return {"country": {}, "industry": {}}
 
     # Get stock info for country/industry
     stock_repo = StockRepository()

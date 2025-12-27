@@ -22,7 +22,7 @@ async def test_stock_repository_create_and_get(stock_repo):
         yahoo_symbol="AAPL",
         name="Apple Inc.",
         industry="Consumer Electronics",
-        geography="US",
+        country="United States",
         priority_multiplier=1.0,
         min_lot=1,
         active=True,
@@ -44,7 +44,7 @@ async def test_stock_repository_get_all_active(stock_repo):
         yahoo_symbol="AAPL",
         name="Apple Inc.",
         industry="Consumer Electronics",
-        geography="US",
+        country="United States",
         priority_multiplier=1.0,
         min_lot=1,
         active=True,
@@ -54,7 +54,7 @@ async def test_stock_repository_get_all_active(stock_repo):
         yahoo_symbol="MSFT",
         name="Microsoft Corp.",
         industry="Consumer Electronics",
-        geography="US",
+        country="United States",
         priority_multiplier=1.0,
         min_lot=1,
         active=False,  # Inactive
@@ -114,25 +114,25 @@ async def test_portfolio_repository_create_and_get(portfolio_repo):
 async def test_allocation_repository_upsert_and_get(allocation_repo):
     """Test creating and retrieving allocation targets."""
     # Create allocation targets
-    target_eu = AllocationTarget(
-        type="geography",
-        name="EU",
+    target_de = AllocationTarget(
+        type="country",
+        name="Germany",
         target_pct=0.33,
     )
     target_us = AllocationTarget(
-        type="geography",
-        name="US",
+        type="country",
+        name="United States",
         target_pct=0.33,
     )
 
-    await allocation_repo.upsert(target_eu)
+    await allocation_repo.upsert(target_de)
     await allocation_repo.upsert(target_us)
 
     targets = await allocation_repo.get_all()
     assert len(targets) >= 2
-    assert "geography:EU" in targets
-    assert "geography:US" in targets
-    assert targets["geography:EU"] == 0.33
+    assert "country:Germany" in targets
+    assert "country:United States" in targets
+    assert targets["country:Germany"] == 0.33
 
 
 @pytest.mark.asyncio
@@ -164,7 +164,7 @@ async def test_trade_repository_create(stock_repo, trade_repo):
         yahoo_symbol="AAPL",
         name="Apple Inc.",
         industry="Consumer Electronics",
-        geography="US",
+        country="United States",
         priority_multiplier=1.0,
         min_lot=1,
         active=True,

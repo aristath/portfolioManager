@@ -27,7 +27,7 @@ async def identify_rebalance_buy_opportunities(
     Args:
         stocks: Available stocks
         portfolio_context: Portfolio context with weights
-        geo_allocations: Current geography allocation percentages
+        geo_allocations: Current country allocation percentages
         batch_prices: Dict mapping symbol to current price
         base_trade_amount: Base trade amount in EUR
         exchange_rate_service: Optional exchange rate service for currency conversion

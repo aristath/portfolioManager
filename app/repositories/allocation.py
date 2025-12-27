@@ -50,9 +50,9 @@ class AllocationRepository:
             for row in rows
         ]
 
-    async def get_geography_targets(self) -> Dict[str, float]:
-        """Get geography allocation targets."""
-        targets = await self.get_by_type("geography")
+    async def get_country_targets(self) -> Dict[str, float]:
+        """Get country allocation targets."""
+        targets = await self.get_by_type("country")
         return {t.name: t.target_pct for t in targets}
 
     async def get_industry_targets(self) -> Dict[str, float]:

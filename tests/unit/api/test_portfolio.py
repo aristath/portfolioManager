@@ -63,7 +63,7 @@ class TestGetPortfolio:
         mock_stock = MagicMock()
         mock_stock.name = "Apple Inc."
         mock_stock.industry = "Consumer Electronics"
-        mock_stock.geography = "US"
+        mock_stock.country = "United States"
 
         mock_stock_repo.get_by_symbol.return_value = mock_stock
 
@@ -509,7 +509,7 @@ class TestGetPortfolioAnalytics:
                     with patch(
                         "app.domain.analytics.get_performance_attribution",
                         new_callable=AsyncMock,
-                        return_value={"geography": {}, "industry": {}},
+                        return_value={"country": {}, "industry": {}},
                     ):
                         result = await get_portfolio_analytics(days=365)
 

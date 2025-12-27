@@ -181,7 +181,7 @@ class TestRecommendationValidation:
             estimated_price=150.0,
             estimated_value=1500.0,
             reason="Test",
-            geography="US",
+            country="United States",
         )
         assert rec.quantity == 10
         assert rec.estimated_price == 150.0

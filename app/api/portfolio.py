@@ -280,9 +280,7 @@ async def get_portfolio_analytics(days: int = 365):
                 "max_drawdown": metrics.get("max_drawdown", 0.0),
             },
             "attribution": {
-                "country": attribution.get(
-                    "geography", {}
-                ),  # Attribution still uses "geography" key internally
+                "country": attribution.get("country", {}),
                 "industry": attribution.get("industry", {}),
             },
             "period": {

@@ -982,7 +982,7 @@ class TestCalculateStockScore:
 
         # Diversification should default to 0.5
         assert result.group_scores["diversification"] == 0.5
-        assert result.sub_scores["diversification"]["geography"] == 0.5
+        assert result.sub_scores["diversification"]["country"] == 0.5
         assert result.sub_scores["diversification"]["industry"] == 0.5
         assert result.sub_scores["diversification"]["averaging"] == 0.5
 

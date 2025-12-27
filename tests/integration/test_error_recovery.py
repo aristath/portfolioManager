@@ -27,7 +27,7 @@ async def test_trade_execution_rollback_on_database_error(db):
         estimated_price=150.0,
         estimated_value=1500.0,
         reason="Test trade",
-        geography="US",
+        country="United States",
     )
 
     # Create mock client for trade execution
@@ -95,7 +95,7 @@ async def test_trade_execution_handles_external_failure(db):
         estimated_price=150.0,
         estimated_value=1500.0,
         reason="Test trade",
-        geography="US",
+        country="United States",
     )
 
     position_repo = PositionRepository(db=db)
@@ -241,7 +241,7 @@ async def test_allocation_target_upsert(db):
 
     # Create a valid allocation target
     target = AllocationTarget(
-        type="geography",
+        type="country",
         name="US",
         target_pct=0.5,
     )
@@ -249,14 +249,14 @@ async def test_allocation_target_upsert(db):
     await allocation_repo.upsert(target)
 
     # Retrieve and verify using get_by_type (returns AllocationTarget objects)
-    targets = await allocation_repo.get_by_type("geography")
+    targets = await allocation_repo.get_by_type("country")
     us_target = next((t for t in targets if t.name == "US"), None)
     assert us_target is not None
     assert us_target.target_pct == 0.5
 
     # Valid target should work
     valid_target = AllocationTarget(
-        type="geography",
+        type="country",
         name="ASIA",
         target_pct=0.3,  # Valid: 30%
     )
@@ -264,7 +264,7 @@ async def test_allocation_target_upsert(db):
     await allocation_repo.upsert(valid_target)
 
     # Verify it was saved
-    targets = await allocation_repo.get_by_type("geography")
+    targets = await allocation_repo.get_by_type("country")
     asia_target = next((t for t in targets if t.name == "ASIA"), None)
     assert asia_target is not None
     assert asia_target.target_pct == 0.3

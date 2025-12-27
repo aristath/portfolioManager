@@ -106,7 +106,7 @@ class PortfolioOptimizer:
             cash_balance: Current cash balance in EUR
             blend: Blend factor (0.0 = pure MV, 1.0 = pure HRP)
             target_return: Target annual return for MV optimization
-            geo_targets: Geography allocation targets
+            geo_targets: Country allocation targets
             ind_targets: Industry allocation targets
             min_cash_reserve: Minimum cash to keep (not allocated)
             dividend_bonuses: Pending dividend bonuses per symbol

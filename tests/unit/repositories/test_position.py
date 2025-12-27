@@ -303,7 +303,7 @@ class TestPositionRepositoryGetWithStockInfo:
         mock_stock_row.__getitem__ = lambda self, key: {
             "symbol": "AAPL.US",
             "name": "Apple Inc",
-            "geography": "US",
+            "country": "United States",
             "industry": "Consumer Electronics",
             "min_lot": 1,
             "allow_sell": 1,
@@ -312,7 +312,7 @@ class TestPositionRepositoryGetWithStockInfo:
         mock_stock_row.keys = lambda: [
             "symbol",
             "name",
-            "geography",
+            "country",
             "industry",
             "min_lot",
             "allow_sell",
@@ -335,7 +335,7 @@ class TestPositionRepositoryGetWithStockInfo:
 
         assert len(result) == 1
         assert result[0]["name"] == "Apple Inc"
-        assert result[0]["geography"] == "US"
+        assert result[0]["country"] == "United States"
 
 
 class TestRowToPosition:

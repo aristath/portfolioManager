@@ -27,7 +27,7 @@ class TestIdentifyAveragingDownOpportunities:
             allow_buy=True,
             allow_sell=True,
             currency="USD",
-            geography="US",
+            country="United States",
         )
 
     @pytest.fixture
@@ -69,7 +69,7 @@ class TestIdentifyAveragingDownOpportunities:
             min_lot=1,
             allow_buy=False,
             allow_sell=True,
-            geography="US",
+            country="United States",
         )
         batch_prices = {"AAPL.US": 110.0}
 

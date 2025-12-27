@@ -257,7 +257,7 @@ class TestGenerateSellNarrative:
         assert "profit" in narrative.lower()
 
     def test_rebalance_overweight_narrative(self):
-        """Test rebalance with overweight geography."""
+        """Test rebalance with overweight country."""
         from app.domain.planning.narrative import _generate_sell_narrative
 
         context = MagicMock()
@@ -322,7 +322,7 @@ class TestGenerateBuyNarrative:
         assert "averaging down" in narrative.lower()
 
     def test_rebalance_underweight_narrative(self):
-        """Test rebalance with underweight geography."""
+        """Test rebalance with underweight country."""
         from app.domain.planning.narrative import _generate_buy_narrative
 
         context = MagicMock()

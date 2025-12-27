@@ -585,7 +585,7 @@ class TestConstraintSummary:
         assert summary["locked_positions"] == []
         assert summary["buy_only"] == []
         assert summary["sell_blocked"] == []
-        assert summary["geography_constraints"] == []
+        assert summary["country_constraints"] == []
         assert summary["industry_constraints"] == []
 
     def test_locked_position_identified(self):

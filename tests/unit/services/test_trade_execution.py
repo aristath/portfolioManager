@@ -95,7 +95,7 @@ class TestTradeValidation:
             estimated_price=price,
             estimated_value=quantity * price,
             reason="Test",
-            geography="US",
+            country="United States",
             currency=Currency(currency),
         )
 

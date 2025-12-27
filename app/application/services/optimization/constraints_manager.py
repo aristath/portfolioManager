@@ -5,7 +5,7 @@ Translates business rules into PyPortfolioOpt constraints:
 - allow_buy/allow_sell flags
 - min_lot constraints (can't partially sell if at min lot)
 - Concentration limits (20% max per stock)
-- Geography/Industry sector constraints
+- Country/Industry sector constraints
 """
 
 import logging
@@ -34,7 +34,7 @@ class WeightBounds:
 
 @dataclass
 class SectorConstraint:
-    """Constraint for a sector (geography or industry)."""
+    """Constraint for a sector (country or industry)."""
 
     name: str
     symbols: List[str]
@@ -147,15 +147,15 @@ class ConstraintsManager:
         ind_targets: Dict[str, float],
     ) -> Tuple[List[SectorConstraint], List[SectorConstraint]]:
         """
-        Build geography and industry sector constraints.
+        Build country and industry sector constraints.
 
         Args:
             stocks: List of Stock objects
-            geo_targets: Dict mapping geography name to target weight
+            geo_targets: Dict mapping country name to target weight
             ind_targets: Dict mapping industry name to target weight
 
         Returns:
-            Tuple of (geography_constraints, industry_constraints)
+            Tuple of (country_constraints, industry_constraints)
         """
         # Group stocks by country
         geo_groups: Dict[str, List[str]] = {}
@@ -173,7 +173,7 @@ class ConstraintsManager:
                 ind_groups[ind] = []
             ind_groups[ind].append(stock.symbol)
 
-        # Build geography constraints
+        # Build country constraints
         geo_constraints = []
         for geo, symbols in geo_groups.items():
             target = geo_targets.get(geo, 0.0)
@@ -204,7 +204,7 @@ class ConstraintsManager:
                 )
 
         logger.info(
-            f"Built {len(geo_constraints)} geography constraints, "
+            f"Built {len(geo_constraints)} country constraints, "
             f"{len(ind_constraints)} industry constraints"
         )
 
@@ -240,7 +240,7 @@ class ConstraintsManager:
             "locked_positions": locked,
             "buy_only": buy_only,
             "sell_blocked": sell_blocked,
-            "geography_constraints": [
+            "country_constraints": [
                 {"name": c.name, "target": c.target, "range": (c.lower, c.upper)}
                 for c in geo_constraints
             ],

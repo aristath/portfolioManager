@@ -76,9 +76,9 @@ class TestRefreshAllScoresInternal:
 
         mock_db = AsyncMock()
         mock_cursor = AsyncMock()
-        # One stock with symbol, yahoo_symbol, geography, industry
+        # One stock with symbol, yahoo_symbol, country, industry
         mock_cursor.fetchall.return_value = [
-            ("TEST.US", "TEST", "US", "Consumer Electronics")
+            ("TEST.US", "TEST", "United States", "Consumer Electronics")
         ]
         mock_db.config.execute.return_value = mock_cursor
         mock_db.state = AsyncMock()
@@ -110,7 +110,7 @@ class TestRefreshAllScoresInternal:
         mock_db = AsyncMock()
         mock_cursor = AsyncMock()
         mock_cursor.fetchall.return_value = [
-            ("TEST.US", "TEST", "US", "Consumer Electronics")
+            ("TEST.US", "TEST", "United States", "Consumer Electronics")
         ]
         mock_db.config.execute.return_value = mock_cursor
         mock_db.state = AsyncMock()
@@ -172,8 +172,8 @@ class TestBuildPortfolioContext:
         # Mock targets cursor
         mock_targets_cursor = AsyncMock()
         mock_targets_cursor.fetchall.return_value = [
-            ("US", 0.5, "geography"),
-            ("Europe", 0.3, "geography"),
+            ("United States", 0.5, "country"),
+            ("Germany", 0.3, "country"),
             ("Consumer Electronics", 0.2, "industry"),
         ]
 
@@ -208,7 +208,7 @@ class TestBuildPortfolioContext:
         context = await _build_portfolio_context(mock_db)
 
         # Should have processed allocation targets
-        assert hasattr(context, "geo_weights")
+        assert hasattr(context, "country_weights")
         assert hasattr(context, "industry_weights")
 
 
