@@ -221,7 +221,7 @@ async def calculate_metrics_for_all_stocks() -> dict:
         Dict with statistics: {"processed": int, "total_metrics": int, "errors": int}
     """
     stock_repo = StockRepository()
-    active_stocks = await stock_repo.get_active_stocks()
+    active_stocks = await stock_repo.get_all_active()
 
     stats = {
         "processed": 0,

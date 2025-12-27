@@ -339,7 +339,7 @@ class TestCalculateMetricsForAllStocks:
         mock_stock1.symbol = "AAPL.US"
         mock_stock2 = MagicMock()
         mock_stock2.symbol = "MSFT.US"
-        mock_stock_repo.get_active_stocks.return_value = [mock_stock1, mock_stock2]
+        mock_stock_repo.get_all_active.return_value = [mock_stock1, mock_stock2]
 
         with patch(
             "app.jobs.metrics_calculation.StockRepository",
@@ -365,7 +365,7 @@ class TestCalculateMetricsForAllStocks:
         mock_stock_repo = AsyncMock()
         mock_stock = MagicMock()
         mock_stock.symbol = "FAIL.US"
-        mock_stock_repo.get_active_stocks.return_value = [mock_stock]
+        mock_stock_repo.get_all_active.return_value = [mock_stock]
 
         with patch(
             "app.jobs.metrics_calculation.StockRepository",
@@ -387,7 +387,7 @@ class TestCalculateMetricsForAllStocks:
         from app.jobs.metrics_calculation import calculate_metrics_for_all_stocks
 
         mock_stock_repo = AsyncMock()
-        mock_stock_repo.get_active_stocks.return_value = []
+        mock_stock_repo.get_all_active.return_value = []
 
         with patch(
             "app.jobs.metrics_calculation.StockRepository",
