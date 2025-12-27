@@ -359,7 +359,7 @@ class TestCalculateAndSaveScore:
             result = await service.calculate_and_save_score(
                 "TEST",
                 yahoo_symbol="TEST.US",
-                geography="US",
+                country="United States",
                 industry="Consumer Electronics",
             )
 
@@ -567,8 +567,8 @@ class TestCalculateAndSaveScore:
         score_repo.upsert.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_uses_default_geography_and_industry(self, mock_services):
-        """Test that UNKNOWN is used when geography/industry not provided."""
+    async def test_uses_default_country_and_industry(self, mock_services):
+        """Test that UNKNOWN is used when country/industry not provided."""
         stock_repo, score_repo, db_manager = mock_services
 
         history_db = AsyncMock()
@@ -615,7 +615,7 @@ class TestCalculateAndSaveScore:
             # Verify calculate_stock_score was called with UNKNOWN defaults
             mock_calc.assert_called_once()
             call_kwargs = mock_calc.call_args[1]
-            assert call_kwargs["geography"] == "UNKNOWN"
+            assert call_kwargs["country"] == "UNKNOWN"
             assert call_kwargs["industry"] == "UNKNOWN"
 
 
@@ -639,13 +639,13 @@ class TestScoreAllStocks:
         mock_stock1 = MagicMock()
         mock_stock1.symbol = "STOCK1"
         mock_stock1.yahoo_symbol = "STOCK1.US"
-        mock_stock1.geography = "US"
+        mock_stock1.country = "United States"
         mock_stock1.industry = "Consumer Electronics"
 
         mock_stock2 = MagicMock()
         mock_stock2.symbol = "STOCK2"
         mock_stock2.yahoo_symbol = "STOCK2.US"
-        mock_stock2.geography = "EU"
+        mock_stock2.country = "Germany"
         mock_stock2.industry = "Banks - Diversified"
 
         stock_repo.get_all_active.return_value = [mock_stock1, mock_stock2]
@@ -682,13 +682,13 @@ class TestScoreAllStocks:
         service.calculate_and_save_score.assert_any_call(
             "STOCK1",
             yahoo_symbol="STOCK1.US",
-            geography="US",
+            country="United States",
             industry="Consumer Electronics",
         )
         service.calculate_and_save_score.assert_any_call(
             "STOCK2",
             yahoo_symbol="STOCK2.US",
-            geography="EU",
+            country="Germany",
             industry="Banks - Diversified",
         )
 
@@ -717,19 +717,19 @@ class TestScoreAllStocks:
         mock_stock1 = MagicMock()
         mock_stock1.symbol = "STOCK1"
         mock_stock1.yahoo_symbol = "STOCK1.US"
-        mock_stock1.geography = "US"
+        mock_stock1.country = "United States"
         mock_stock1.industry = "Consumer Electronics"
 
         mock_stock2 = MagicMock()
         mock_stock2.symbol = "STOCK2"
         mock_stock2.yahoo_symbol = "STOCK2.US"
-        mock_stock2.geography = "EU"
+        mock_stock2.country = "Germany"
         mock_stock2.industry = "Banks - Diversified"
 
         mock_stock3 = MagicMock()
         mock_stock3.symbol = "STOCK3"
         mock_stock3.yahoo_symbol = "STOCK3.US"
-        mock_stock3.geography = "US"
+        mock_stock3.country = "United States"
         mock_stock3.industry = "Drug Manufacturers"
 
         stock_repo.get_all_active.return_value = [
@@ -770,14 +770,14 @@ class TestScoreAllStocks:
 
     @pytest.mark.asyncio
     async def test_processes_stocks_with_none_attributes(self, mock_services):
-        """Test handling stocks with None yahoo_symbol, geography, or industry."""
+        """Test handling stocks with None yahoo_symbol, country, or industry."""
         stock_repo, score_repo, db_manager = mock_services
 
         # Mock stock with None attributes
         mock_stock = MagicMock()
         mock_stock.symbol = "TEST"
         mock_stock.yahoo_symbol = None
-        mock_stock.geography = None
+        mock_stock.country = None
         mock_stock.industry = None
 
         stock_repo.get_all_active.return_value = [mock_stock]
@@ -803,7 +803,7 @@ class TestScoreAllStocks:
         service.calculate_and_save_score.assert_called_once_with(
             "TEST",
             yahoo_symbol=None,
-            geography=None,
+            country=None,
             industry=None,
         )
 

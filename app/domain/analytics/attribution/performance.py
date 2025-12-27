@@ -26,13 +26,15 @@ def _attribute_return_by_category(
     """Attribute return by geography and industry categories."""
     for symbol, data in position_values.items():
         weight = data["value"] / total_value
-        geo = data["geography"]
+        country = data.get("country") or data.get(
+            "geography", "UNKNOWN"
+        )  # Support legacy
         ind = data["industry"]
         contribution = daily_return * weight
 
-        if geo not in geo_returns:
-            geo_returns[geo] = []
-        geo_returns[geo].append(contribution)
+        if country not in geo_returns:
+            geo_returns[country] = []
+        geo_returns[country].append(contribution)
 
         if ind:
             if ind not in industry_returns:
@@ -44,9 +46,12 @@ def _calculate_annualized_attribution(
     geo_returns: dict, industry_returns: dict
 ) -> dict:
     """Calculate annualized attribution from daily contributions."""
-    attribution: dict[str, dict[str, float]] = {"geography": {}, "industry": {}}
+    attribution: dict[str, dict[str, float]] = {
+        "geography": {},
+        "industry": {},
+    }  # Keep "geography" key for backward compatibility
 
-    for geo, contributions in geo_returns.items():
+    for country, contributions in geo_returns.items():
         if contributions:
             total_return = sum(contributions)
             if total_return <= -1:
@@ -55,7 +60,7 @@ def _calculate_annualized_attribution(
                 annualized = (1 + total_return) ** (252 / len(contributions)) - 1
             else:
                 annualized = 0.0
-            attribution["geography"][geo] = (
+            attribution["geography"][country] = (
                 float(annualized) if pd.api.types.is_finite(annualized) else 0.0
             )
 
@@ -88,7 +93,9 @@ async def _calculate_position_values(
             continue
 
         info = stock_info.get(symbol, {})
-        geography = info.get("geography", "UNKNOWN")
+        country = info.get("country") or info.get(
+            "geography", "UNKNOWN"
+        )  # Support legacy geography
         industry = info.get("industry")
 
         try:
@@ -101,7 +108,7 @@ async def _calculate_position_values(
                 total_value += value
                 position_values[symbol] = {
                     "value": value,
-                    "geography": geography,
+                    "country": country,
                     "industry": industry,
                 }
         except Exception:
@@ -134,11 +141,11 @@ async def get_performance_attribution(
     if positions_df.empty:
         return {"geography": {}, "industry": {}}
 
-    # Get stock info for geography/industry
+    # Get stock info for country/industry
     stock_repo = StockRepository()
     stocks = await stock_repo.get_all()
     stock_info = {
-        s.symbol: {"geography": s.geography, "industry": s.industry} for s in stocks
+        s.symbol: {"country": s.country, "industry": s.industry} for s in stocks
     }
 
     # Calculate returns by geography and industry

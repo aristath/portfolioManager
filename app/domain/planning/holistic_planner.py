@@ -385,8 +385,8 @@ async def identify_opportunities(
     ind_allocations: dict[str, float] = {}
     for symbol, value in portfolio_context.positions.items():
         geo = (
-            portfolio_context.stock_geographies.get(symbol, "OTHER")
-            if portfolio_context.stock_geographies
+            portfolio_context.stock_countries.get(symbol, "OTHER")
+            if portfolio_context.stock_countries
             else "OTHER"
         )
         geo_allocations[geo] = geo_allocations.get(geo, 0) + value / total_value
@@ -760,7 +760,7 @@ async def simulate_sequence(
         industry = stock.industry if stock else None
 
         new_positions = dict(current_context.positions)
-        new_geographies = dict(current_context.stock_geographies or {})
+        new_geographies = dict(current_context.stock_countries or {})
         new_industries = dict(current_context.stock_industries or {})
 
         if action.side == TradeSide.SELL:
@@ -787,11 +787,11 @@ async def simulate_sequence(
             new_total = current_context.total_value
 
         current_context = PortfolioContext(
-            geo_weights=current_context.geo_weights,
+            country_weights=current_context.country_weights,
             industry_weights=current_context.industry_weights,
             positions=new_positions,
             total_value=new_total,
-            stock_geographies=new_geographies,
+            stock_countries=new_geographies,
             stock_industries=new_industries,
             stock_scores=current_context.stock_scores,
             stock_dividends=current_context.stock_dividends,

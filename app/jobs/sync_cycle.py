@@ -164,14 +164,14 @@ async def _step_sync_prices():
 
         logger.info(f"Open markets: {open_markets}")
 
-        grouped = group_stocks_by_geography(stocks)
+        grouped = group_stocks_by_exchange(stocks)
 
-        for geography in open_markets:
-            market_stocks = grouped.get(geography, [])
+        for exchange in open_markets:
+            market_stocks = grouped.get(exchange, [])
             if not market_stocks:
                 continue
 
-            logger.info(f"Fetching prices for {len(market_stocks)} {geography} stocks")
+            logger.info(f"Fetching prices for {len(market_stocks)} {exchange} stocks")
 
             symbol_yahoo_map = {
                 s.symbol: s.yahoo_symbol for s in market_stocks if s.yahoo_symbol
@@ -180,7 +180,7 @@ async def _step_sync_prices():
             if symbol_yahoo_map:
                 quotes = yahoo.get_batch_quotes(symbol_yahoo_map)
                 await _update_position_prices(quotes)
-                logger.info(f"Updated {len(quotes)} prices for {geography}")
+                logger.info(f"Updated {len(quotes)} prices for {exchange}")
 
     except Exception as e:
         logger.error(f"Price sync failed: {e}")
@@ -240,20 +240,20 @@ async def _step_execute_trade(recommendation) -> dict[str, Any]:
         Dict with status and details
     """
     try:
-        # Get the stock to check its geography
+        # Get the stock to check its exchange
         stock = await _get_stock_by_symbol(recommendation.symbol)
         if not stock:
             return {"status": "skipped", "reason": "Stock not found"}
 
-        geography = getattr(stock, "geography", None)
-        if not geography:
-            logger.warning(f"Stock {recommendation.symbol} has no geography set")
-            # Allow trade anyway - geography might not be set
-        elif not is_market_open(geography):
+        exchange = getattr(stock, "fullExchangeName", None)
+        if not exchange:
+            logger.warning(f"Stock {recommendation.symbol} has no exchange set")
+            # Allow trade anyway - exchange might not be set
+        elif not is_market_open(exchange):
             return {
                 "status": "skipped",
-                "reason": f"Market closed for {geography}",
-                "geography": geography,
+                "reason": f"Market closed for {exchange}",
+                "exchange": exchange,
             }
 
         # Execute the trade
@@ -483,7 +483,7 @@ async def _get_holistic_recommendation():
         estimated_price=step.estimated_price,
         estimated_value=step.estimated_value,
         reason=step.reason,
-        geography="",
+        country=None,
         currency=currency,
         status=RecommendationStatus.PENDING,
     )

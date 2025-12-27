@@ -40,7 +40,7 @@ async def _refresh_all_scores_internal():
 
         # Get all active stocks
         cursor = await db_manager.config.execute(
-            "SELECT symbol, yahoo_symbol, geography, industry FROM stocks WHERE active = 1"
+            "SELECT symbol, yahoo_symbol, country, industry FROM stocks WHERE active = 1"
         )
         stocks = await cursor.fetchall()
 
@@ -55,7 +55,7 @@ async def _refresh_all_scores_internal():
 
         scores_updated = 0
         for row in stocks:
-            symbol, yahoo_symbol, geography, industry = row
+            symbol, yahoo_symbol, country, industry = row
             logger.info(f"Scoring {symbol}...")
 
             try:
@@ -81,7 +81,7 @@ async def _refresh_all_scores_internal():
                     daily_prices=daily_prices,
                     monthly_prices=monthly_prices,
                     fundamentals=fundamentals,
-                    geography=geography,
+                    country=country,
                     industry=industry,
                     portfolio_context=portfolio_context,
                     yahoo_symbol=yahoo_symbol,
@@ -145,22 +145,22 @@ async def _build_portfolio_context(db_manager) -> PortfolioContext:
     )
     targets = await cursor.fetchall()
 
-    geo_weights = {}
+    country_weights = {}
     industry_weights = {}
     for name, target_pct, alloc_type in targets:
-        if alloc_type == "geography":
+        if alloc_type == "country":
             # Convert target_pct to weight: 33% target = 0 weight, higher = positive
-            geo_weights[name] = (target_pct - 0.33) / 0.15 if target_pct else 0
+            country_weights[name] = (target_pct - 0.33) / 0.15 if target_pct else 0
         elif alloc_type == "industry":
             industry_weights[name] = (target_pct - 0.10) / 0.10 if target_pct else 0
 
     # Get stock metadata for scoring
     cursor = await db_manager.config.execute(
-        "SELECT symbol, geography, industry FROM stocks WHERE active = 1"
+        "SELECT symbol, country, industry FROM stocks WHERE active = 1"
     )
     stock_data = await cursor.fetchall()
 
-    stock_geographies = {row[0]: row[1] for row in stock_data if row[1]}
+    stock_countries = {row[0]: row[1] for row in stock_data if row[1]}
     stock_industries = {row[0]: row[2] for row in stock_data if row[2]}
 
     # Get scores for quality weighting
@@ -168,11 +168,11 @@ async def _build_portfolio_context(db_manager) -> PortfolioContext:
     stock_scores = {row[0]: row[1] for row in await cursor.fetchall() if row[1]}
 
     return PortfolioContext(
-        geo_weights=geo_weights,
+        country_weights=country_weights,
         industry_weights=industry_weights,
         positions=positions,
         total_value=total_value,
-        stock_geographies=stock_geographies,
+        stock_countries=stock_countries,
         stock_industries=stock_industries,
         stock_scores=stock_scores,
     )

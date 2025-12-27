@@ -66,11 +66,11 @@ async def build_portfolio_context(
             stock_scores[row["symbol"]] = row["quality_score"]
 
     return PortfolioContext(
-        geo_weights=geo_weights,
+        country_weights=geo_weights,
         industry_weights=industry_weights,
         positions=position_map,
         total_value=total_value if total_value > 0 else 1.0,
-        stock_geographies=stock_countries,  # TODO: Update PortfolioContext to use stock_countries
+        stock_countries=stock_countries,
         stock_industries=stock_industries,
         stock_scores=stock_scores,
     )

@@ -83,7 +83,7 @@ async def calculate_stock_score(
         daily_prices: List of daily price dicts
         monthly_prices: List of monthly price dicts
         fundamentals: Yahoo fundamentals data
-        geography: Stock geography (EU, ASIA, US)
+        country: Stock country (e.g., "United States", "Germany")
         industry: Stock industry
         portfolio_context: Portfolio context for diversification
         yahoo_symbol: Optional explicit Yahoo symbol override
@@ -183,7 +183,7 @@ async def calculate_stock_score(
     else:
         scores["diversification"] = 0.5
         sub_scores["diversification"] = {
-            "geography": 0.5,
+            "country": 0.5,
             "industry": 0.5,
             "averaging": 0.5,
         }
@@ -234,7 +234,7 @@ async def calculate_stock_score_from_prefetched(
     Args:
         symbol: Tradernet symbol
         prefetched: Pre-fetched data containing daily/monthly prices and fundamentals
-        geography: Stock geography (EU, ASIA, US)
+        country: Stock country (e.g., "United States", "Germany")
         industry: Stock industry
         portfolio_context: Portfolio context for diversification
         yahoo_symbol: Optional explicit Yahoo symbol override

@@ -115,29 +115,29 @@ class TestCalculateCashBalanceEur:
         assert result == 0.0
 
 
-class TestDetermineGeography:
-    """Tests for _determine_geography helper."""
+class TestDetermineCountry:
+    """Tests for _determine_country helper."""
 
     @pytest.mark.asyncio
-    async def test_returns_geography_from_db(self):
-        """Test returning geography from database."""
-        from app.jobs.daily_sync import _determine_geography
+    async def test_returns_country_from_db(self):
+        """Test returning country from database."""
+        from app.jobs.daily_sync import _determine_country
 
         mock_cursor = AsyncMock()
-        mock_cursor.fetchone.return_value = ("US",)
+        mock_cursor.fetchone.return_value = ("United States",)
 
         mock_db = MagicMock()
         mock_db.config = AsyncMock()
         mock_db.config.execute.return_value = mock_cursor
 
-        result = await _determine_geography("AAPL.US", mock_db)
+        result = await _determine_country("AAPL.US", mock_db)
 
-        assert result == "US"
+        assert result == "United States"
 
     @pytest.mark.asyncio
-    async def test_infers_eu_from_suffix(self):
-        """Test inferring EU geography from suffix."""
-        from app.jobs.daily_sync import _determine_geography
+    async def test_infers_country_from_suffix_legacy(self):
+        """Test inferring country from suffix (legacy fallback)."""
+        from app.jobs.daily_sync import _determine_country
 
         mock_cursor = AsyncMock()
         mock_cursor.fetchone.return_value = None
@@ -146,46 +146,22 @@ class TestDetermineGeography:
         mock_db.config = AsyncMock()
         mock_db.config.execute.return_value = mock_cursor
 
+        # Legacy suffixes still return legacy codes for backward compatibility
         for suffix in [".GR", ".DE", ".PA"]:
-            result = await _determine_geography(f"STOCK{suffix}", mock_db)
+            result = await _determine_country(f"STOCK{suffix}", mock_db)
             assert result == "EU", f"Failed for {suffix}"
 
-    @pytest.mark.asyncio
-    async def test_infers_asia_from_suffix(self):
-        """Test inferring ASIA geography from suffix."""
-        from app.jobs.daily_sync import _determine_geography
-
-        mock_cursor = AsyncMock()
-        mock_cursor.fetchone.return_value = None
-
-        mock_db = MagicMock()
-        mock_db.config = AsyncMock()
-        mock_db.config.execute.return_value = mock_cursor
-
         for suffix in [".AS", ".HK", ".T"]:
-            result = await _determine_geography(f"STOCK{suffix}", mock_db)
+            result = await _determine_country(f"STOCK{suffix}", mock_db)
             assert result == "ASIA", f"Failed for {suffix}"
 
-    @pytest.mark.asyncio
-    async def test_infers_us_from_suffix(self):
-        """Test inferring US geography from suffix."""
-        from app.jobs.daily_sync import _determine_geography
-
-        mock_cursor = AsyncMock()
-        mock_cursor.fetchone.return_value = None
-
-        mock_db = MagicMock()
-        mock_db.config = AsyncMock()
-        mock_db.config.execute.return_value = mock_cursor
-
-        result = await _determine_geography("AAPL.US", mock_db)
-
+        result = await _determine_country("AAPL.US", mock_db)
         assert result == "US"
 
     @pytest.mark.asyncio
     async def test_returns_none_for_unknown(self):
-        """Test returning None for unknown geography."""
-        from app.jobs.daily_sync import _determine_geography
+        """Test returning None for unknown country."""
+        from app.jobs.daily_sync import _determine_country
 
         mock_cursor = AsyncMock()
         mock_cursor.fetchone.return_value = None
@@ -194,7 +170,7 @@ class TestDetermineGeography:
         mock_db.config = AsyncMock()
         mock_db.config.execute.return_value = mock_cursor
 
-        result = await _determine_geography("UNKNOWN", mock_db)
+        result = await _determine_country("UNKNOWN", mock_db)
 
         assert result is None
 

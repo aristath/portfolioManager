@@ -127,7 +127,7 @@ async def calculate_sell_score(
     allow_sell: bool,
     first_bought_at: Optional[str],
     last_sold_at: Optional[str],
-    geography: str,
+    country: str,
     industry: str,
     total_portfolio_value: float,
     geo_allocations: Dict[str, float],
@@ -148,10 +148,10 @@ async def calculate_sell_score(
         allow_sell: Whether selling is enabled for this stock
         first_bought_at: When position was first opened
         last_sold_at: When position was last sold (for cooldown)
-        geography: Stock's geography
+        country: Stock's country (e.g., "United States", "Germany")
         industry: Stock's industry (comma-separated if multiple)
         total_portfolio_value: Total portfolio value in EUR
-        geo_allocations: Current geography allocation percentages
+        geo_allocations: Current country allocation percentages
         ind_allocations: Current industry allocation percentages
         technical_data: Technical indicators for instability detection
         settings: Optional settings dict for thresholds
@@ -239,7 +239,7 @@ async def calculate_sell_score(
     portfolio_balance_score = calculate_portfolio_balance_score(
         position_value,
         total_portfolio_value,
-        geography,
+        country,
         industry,
         geo_allocations,
         ind_allocations,
@@ -329,7 +329,7 @@ async def calculate_all_sell_scores(
     Args:
         positions: List of position dicts with stock info (from get_with_stock_info)
         total_portfolio_value: Total portfolio value in EUR
-        geo_allocations: Current geography allocation percentages
+        geo_allocations: Current country allocation percentages
         ind_allocations: Current industry allocation percentages
         technical_data: Dict mapping symbol to TechnicalData for instability detection
         settings: Optional settings dict with min_hold_days, sell_cooldown_days, etc.
@@ -356,7 +356,7 @@ async def calculate_all_sell_scores(
             allow_sell=bool(pos.get("allow_sell", False)),
             first_bought_at=pos.get("first_bought_at"),
             last_sold_at=pos.get("last_sold_at"),
-            geography=pos.get("geography", ""),
+            country=pos.get("country", ""),
             industry=pos.get("industry", ""),
             total_portfolio_value=total_portfolio_value,
             geo_allocations=geo_allocations,

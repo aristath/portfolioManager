@@ -1,7 +1,7 @@
 """Tests for diversification scoring.
 
 These tests validate portfolio-aware diversification scoring
-including geography gaps, industry gaps, and averaging down calculations.
+including country gaps, industry gaps, and averaging down calculations.
 """
 
 from unittest.mock import AsyncMock, patch
@@ -12,7 +12,7 @@ from app.domain.scoring.models import PortfolioContext
 
 
 class TestCalculateGeoGapScore:
-    """Test geography gap score calculation."""
+    """Test country gap score calculation."""
 
     def test_returns_base_score_when_no_weight(self):
         """Test that base score is returned when geo not in weights."""
@@ -320,7 +320,7 @@ class TestCalculateDiversificationScore:
 
         result = calculate_diversification_score(
             symbol="AAPL.US",
-            geography="US",
+            country="United States",
             industry="Consumer Electronics",
             quality_score=0.7,
             opportunity_score=0.6,
@@ -344,14 +344,14 @@ class TestCalculateDiversificationScore:
 
         result = calculate_diversification_score(
             symbol="AAPL.US",
-            geography="US",
+            country="United States",
             industry="Consumer Electronics",
             quality_score=0.7,
             opportunity_score=0.6,
             portfolio_context=context,
         )
 
-        assert "geography" in result.sub_scores
+        assert "country" in result.sub_scores
         assert "industry" in result.sub_scores
         assert "averaging" in result.sub_scores
 
@@ -451,7 +451,7 @@ class TestCalculatePostTransactionScore:
         # Buy an EU stock to improve diversification
         new_score, score_change = await calculate_post_transaction_score(
             symbol="SAP.EU",
-            geography="EU",
+            country="Germany",
             industry="Consumer Electronics",
             proposed_value=2000,
             stock_quality=0.8,
@@ -494,7 +494,7 @@ class TestCalculatePostTransactionScore:
         ):
             new_score, change = await calculate_post_transaction_score(
                 symbol="MSFT.US",
-                geography="US",
+                country="United States",
                 industry="Consumer Electronics",
                 proposed_value=500,
                 stock_quality=0.8,

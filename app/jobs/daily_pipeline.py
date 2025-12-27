@@ -510,11 +510,11 @@ async def _build_portfolio_context(db_manager):
     )
     targets = await cursor.fetchall()
 
-    geo_weights = {}
+    country_weights = {}
     industry_weights = {}
     for name, target_pct, alloc_type in targets:
-        if alloc_type == "geography":
-            geo_weights[name] = (target_pct - 0.33) / 0.15 if target_pct else 0
+        if alloc_type == "country":
+            country_weights[name] = (target_pct - 0.33) / 0.15 if target_pct else 0
         elif alloc_type == "industry":
             industry_weights[name] = (target_pct - 0.10) / 0.10 if target_pct else 0
 
@@ -532,11 +532,11 @@ async def _build_portfolio_context(db_manager):
     stock_scores = {row[0]: row[1] for row in await cursor.fetchall() if row[1]}
 
     return PortfolioContext(
-        geo_weights=geo_weights,
+        country_weights=country_weights,
         industry_weights=industry_weights,
         positions=positions,
         total_value=total_value,
-        stock_geographies=stock_countries,  # TODO: Update PortfolioContext to use stock_countries
+        stock_countries=stock_countries,
         stock_industries=stock_industries,
         stock_scores=stock_scores,
     )

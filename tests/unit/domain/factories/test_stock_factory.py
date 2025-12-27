@@ -15,7 +15,7 @@ class TestStockFactory:
         data = {
             "symbol": "AAPL.US",
             "name": "Apple Inc.",
-            "geography": "US",
+            "country": "United States",
             "industry": "Consumer Electronics",
             "min_lot": 1,
             "allow_buy": True,
@@ -26,7 +26,7 @@ class TestStockFactory:
 
         assert stock.symbol == "AAPL.US"
         assert stock.name == "Apple Inc."
-        assert stock.geography == "US"
+        assert stock.country == "United States"
         assert stock.industry == "Consumer Electronics"
         assert stock.min_lot == 1
         assert stock.allow_buy is True
@@ -39,50 +39,50 @@ class TestStockFactory:
         data = {
             "symbol": "aapl.us",
             "name": "Apple Inc.",
-            "geography": "US",
+            "country": "United States",
         }
 
         stock = StockFactory.create_from_api_request(data)
         assert stock.symbol == "AAPL.US"
 
-    def test_create_from_api_request_normalizes_geography(self):
-        """Test that geography is normalized to uppercase."""
+    def test_create_from_api_request_accepts_country(self):
+        """Test that country is accepted."""
         data = {
             "symbol": "AAPL.US",
             "name": "Apple Inc.",
-            "geography": "us",
+            "country": "United States",
         }
 
         stock = StockFactory.create_from_api_request(data)
-        assert stock.geography == "US"
+        assert stock.country == "United States"
 
-    def test_create_from_api_request_sets_currency_from_geography(self):
-        """Test that currency is set based on geography."""
-        # US geography -> USD currency
+    def test_create_from_api_request_sets_currency_from_country(self):
+        """Test that currency is set based on country (currency comes from stock data, not country)."""
+        # Currency is now synced from Tradernet, not derived from country
         data = {
             "symbol": "AAPL.US",
             "name": "Apple Inc.",
-            "geography": "US",
+            "country": "United States",
+            "currency": "USD",
         }
         stock = StockFactory.create_from_api_request(data)
         assert stock.currency == Currency.USD
 
-        # EU geography -> EUR currency
-        data["geography"] = "EU"
+        data = {
+            "symbol": "SAP.DE",
+            "name": "SAP SE",
+            "country": "Germany",
+            "currency": "EUR",
+        }
         stock = StockFactory.create_from_api_request(data)
         assert stock.currency == Currency.EUR
-
-        # ASIA geography -> HKD currency
-        data["geography"] = "ASIA"
-        stock = StockFactory.create_from_api_request(data)
-        assert stock.currency == Currency.HKD
 
     def test_create_from_api_request_validates_min_lot(self):
         """Test that min_lot is validated (must be >= 1)."""
         data = {
             "symbol": "AAPL.US",
             "name": "Apple Inc.",
-            "geography": "US",
+            "country": "United States",
             "min_lot": 0,  # Invalid
         }
 
@@ -98,22 +98,22 @@ class TestStockFactory:
         data = {
             "symbol": "",
             "name": "Apple Inc.",
-            "geography": "US",
+            "country": "United States",
         }
 
         with pytest.raises(ValidationError, match="Symbol cannot be empty"):
             StockFactory.create_from_api_request(data)
 
-    def test_create_from_api_request_accepts_any_geography(self):
-        """Test that any non-empty geography is accepted (relaxed validation)."""
+    def test_create_from_api_request_accepts_any_country(self):
+        """Test that any non-empty country is accepted."""
         data = {
             "symbol": "AAPL.US",
             "name": "Apple Inc.",
-            "geography": "GREECE",
+            "country": "Greece",
         }
 
         stock = StockFactory.create_from_api_request(data)
-        assert stock.geography == "GREECE"
+        assert stock.country == "Greece"
 
     def test_create_with_industry_detection(self):
         """Test creating stock with industry detection."""
@@ -122,7 +122,7 @@ class TestStockFactory:
         data = {
             "symbol": "AAPL.US",
             "name": "Apple Inc.",
-            "geography": "US",
+            "country": "United States",
             "industry": "Consumer Electronics",
         }
 
@@ -134,7 +134,7 @@ class TestStockFactory:
         data = {
             "symbol": "MSFT.US",
             "name": "Microsoft Corporation",
-            "geography": "US",
+            "country": "United States",
             "industry": "Consumer Electronics",
             "yahoo_symbol": "MSFT",
             "currency": "USD",
@@ -144,7 +144,7 @@ class TestStockFactory:
 
         assert stock.symbol == "MSFT.US"
         assert stock.name == "Microsoft Corporation"
-        assert stock.geography == "US"
+        assert stock.country == "United States"
         assert stock.industry == "Consumer Electronics"
         assert stock.yahoo_symbol == "MSFT"
         assert stock.currency == Currency.USD

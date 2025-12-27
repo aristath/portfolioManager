@@ -118,7 +118,11 @@ async def run_optimization() -> Dict[str, Any]:
     portfolio_value += cash_balance
 
     # Get allocation targets
-    geo_targets = await settings_repo.get_json("geography_targets", {})
+    geo_targets = await settings_repo.get_json(
+        "country_targets", {}
+    ) or await settings_repo.get_json(
+        "geography_targets", {}
+    )  # Support legacy key
     ind_targets = await settings_repo.get_json("industry_targets", {})
 
     # Get pending dividend bonuses (DRIP fallback)

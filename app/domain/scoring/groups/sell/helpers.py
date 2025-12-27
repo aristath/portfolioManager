@@ -115,7 +115,7 @@ def calculate_time_held_score(
 def calculate_portfolio_balance_score(
     position_value: float,
     total_portfolio_value: float,
-    geography: str,
+    country: str,
     industry: str,
     geo_allocations: Dict[str, float],
     ind_allocations: Dict[str, float],
@@ -126,9 +126,9 @@ def calculate_portfolio_balance_score(
     Args:
         position_value: Current position value in EUR
         total_portfolio_value: Total portfolio value in EUR
-        geography: Stock's geography (EU, US, ASIA)
+        country: Stock's country (e.g., "United States", "Germany")
         industry: Stock's industry
-        geo_allocations: Current geography allocation percentages
+        geo_allocations: Current country allocation percentages
         ind_allocations: Current industry allocation percentages
     """
     if total_portfolio_value <= 0:
@@ -136,8 +136,8 @@ def calculate_portfolio_balance_score(
 
     score = 0.0
 
-    # Geography overweight (50% of this component)
-    geo_current = geo_allocations.get(geography, 0)
+    # Country overweight (50% of this component)
+    geo_current = geo_allocations.get(country, 0)
     # Higher allocation = more reason to sell from this region
     geo_score = min(1.0, geo_current / 0.5)  # Normalize to ~1.0 at 50% allocation
     score += geo_score * 0.5

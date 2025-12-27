@@ -13,17 +13,13 @@ from typing import Dict, Optional
 class PortfolioContext:
     """Portfolio context for allocation fit calculations."""
 
-    geo_weights: Dict[
-        str, float
-    ]  # name -> weight (-1 to +1) (TODO: Rename to country_weights)
+    country_weights: Dict[str, float]  # name -> weight (-1 to +1)
     industry_weights: Dict[str, float]  # name -> weight (-1 to +1)
     positions: Dict[str, float]  # symbol -> position_value
     total_value: float
 
     # Additional data for portfolio scoring
-    stock_geographies: Optional[Dict[str, str]] = (
-        None  # symbol -> country (TODO: Rename to stock_countries)
-    )
+    stock_countries: Optional[Dict[str, str]] = None  # symbol -> country
     stock_industries: Optional[Dict[str, str]] = None  # symbol -> industry
     stock_scores: Optional[Dict[str, float]] = None  # symbol -> quality_score
     stock_dividends: Optional[Dict[str, float]] = None  # symbol -> dividend_yield

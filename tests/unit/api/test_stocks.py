@@ -52,7 +52,7 @@ class TestGetStocks:
             "total_score": 0.8,
             "volatility": 0.2,
             "priority_multiplier": 1.0,
-            "geography": "US",
+            "country": "United States",
             "industry": "Consumer Electronics",
             "quality_score": 0.7,
             "opportunity_score": 0.6,
@@ -89,7 +89,7 @@ class TestGetStock:
         mock_stock.yahoo_symbol = "AAPL"
         mock_stock.name = "Apple Inc."
         mock_stock.industry = "Consumer Electronics"
-        mock_stock.geography = "US"
+        mock_stock.country = "United States"
         mock_stock.priority_multiplier = 1.0
         mock_stock.min_lot = 1
         mock_stock.active = True
@@ -138,7 +138,7 @@ class TestGetStock:
         mock_stock.yahoo_symbol = "AAPL"
         mock_stock.name = "Apple"
         mock_stock.industry = "Consumer Electronics"
-        mock_stock.geography = "US"
+        mock_stock.country = "United States"
         mock_stock.priority_multiplier = 1.0
         mock_stock.min_lot = 1
         mock_stock.active = True
@@ -183,7 +183,7 @@ class TestGetStock:
         mock_stock.yahoo_symbol = "AAPL"
         mock_stock.name = "Apple"
         mock_stock.industry = "Consumer Electronics"
-        mock_stock.geography = "US"
+        mock_stock.country = "United States"
         mock_stock.priority_multiplier = 1.0
         mock_stock.min_lot = 1
         mock_stock.active = True
@@ -231,7 +231,7 @@ class TestCreateStock:
         stock_data = StockCreate(
             symbol="AAPL",
             name="Apple",
-            geography="US",
+            country="United States",
         )
 
         with pytest.raises(HTTPException) as exc_info:
@@ -258,7 +258,7 @@ class TestCreateStock:
         stock_data = StockCreate(
             symbol="AAPL",
             name="Apple",
-            geography="US",
+            country="United States",
             industry="Consumer Electronics",
         )
 
@@ -296,7 +296,7 @@ class TestCreateStock:
         stock_data = StockCreate(
             symbol="AAPL",
             name="Apple",
-            geography="US",
+            country="United States",
             # No industry provided
         )
 
@@ -409,7 +409,7 @@ class TestRefreshStockScore:
         """Test refreshing a single stock score."""
         mock_stock = MagicMock()
         mock_stock.yahoo_symbol = "AAPL"
-        mock_stock.geography = "US"
+        mock_stock.country = "United States"
         mock_stock.industry = "Consumer Electronics"
 
         mock_stock_repo = AsyncMock()
@@ -467,7 +467,7 @@ class TestRefreshStockScore:
         """Test when score calculation fails."""
         mock_stock = MagicMock()
         mock_stock.yahoo_symbol = "AAPL"
-        mock_stock.geography = "US"
+        mock_stock.country = "United States"
         mock_stock.industry = "Consumer Electronics"
 
         mock_stock_repo = AsyncMock()
@@ -496,7 +496,7 @@ class TestUpdateStock:
         mock_stock.yahoo_symbol = "AAPL"
         mock_stock.name = "Apple"
         mock_stock.industry = "Consumer Electronics"
-        mock_stock.geography = "US"
+        mock_stock.country = "United States"
         mock_stock.priority_multiplier = 1.0
         mock_stock.min_lot = 1
         mock_stock.active = True
@@ -562,7 +562,7 @@ class TestUpdateStock:
         mock_stock.yahoo_symbol = "AAPL"
         mock_stock.name = "Apple"
         mock_stock.industry = "Consumer Electronics"
-        mock_stock.geography = "US"
+        mock_stock.country = "United States"
         mock_stock.priority_multiplier = 1.0
         mock_stock.min_lot = 1
         mock_stock.active = True
@@ -663,8 +663,8 @@ class TestHelperFunctions:
     def test_apply_string_update_with_transform(self):
         """Test applying string update with transformation."""
         updates = {}
-        _apply_string_update(updates, "geography", "us", str.upper)
-        assert updates["geography"] == "US"
+        _apply_string_update(updates, "country", "united states", str.title)
+        assert updates["country"] == "United States"
 
     def test_apply_string_update_with_none(self):
         """Test applying string update with None."""
@@ -712,14 +712,14 @@ class TestHelperFunctions:
         """Test building update dictionary."""
         update = StockUpdate(
             name="Apple Inc.",
-            geography="us",
+            country="United States",  # Country is auto-detected, not in update dict
             active=True,
             min_lot=5,
         )
         result = _build_update_dict(update, None)
 
         assert result["name"] == "Apple Inc."
-        assert result["geography"] == "US"
+        assert "country" not in result  # Country is auto-detected from Yahoo Finance
         assert result["active"] is True
         assert result["min_lot"] == 5
 
@@ -738,7 +738,7 @@ class TestHelperFunctions:
         mock_stock.yahoo_symbol = "AAPL"
         mock_stock.name = "Apple"
         mock_stock.industry = "Consumer Electronics"
-        mock_stock.geography = "US"
+        mock_stock.country = "United States"
         mock_stock.priority_multiplier = 1.0
         mock_stock.min_lot = 1
         mock_stock.active = True
@@ -757,7 +757,7 @@ class TestHelperFunctions:
         mock_stock.yahoo_symbol = "AAPL"
         mock_stock.name = "Apple"
         mock_stock.industry = "Consumer Electronics"
-        mock_stock.geography = "US"
+        mock_stock.country = "United States"
         mock_stock.priority_multiplier = 1.0
         mock_stock.min_lot = 1
         mock_stock.active = True

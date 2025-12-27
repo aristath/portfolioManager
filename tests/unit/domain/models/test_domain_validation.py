@@ -16,24 +16,26 @@ class TestStockValidation:
     def test_stock_validates_symbol_not_empty(self):
         """Test that Stock validates symbol is not empty."""
         with pytest.raises(ValidationError, match="Symbol cannot be empty"):
-            Stock(symbol="", name="Test", geography="US")
+            Stock(symbol="", name="Test", country="United States")
 
     def test_stock_validates_name_not_empty(self):
         """Test that Stock validates name is not empty."""
         with pytest.raises(ValidationError, match="Name cannot be empty"):
-            Stock(symbol="AAPL.US", name="", geography="US")
+            Stock(symbol="AAPL.US", name="", country="United States")
 
-    def test_stock_accepts_any_geography(self):
-        """Test that Stock accepts any non-empty geography (relaxed validation)."""
-        stock = Stock(symbol="AAPL.US", name="Test", geography="GREECE")
-        assert stock.geography == "GREECE"
+    def test_stock_accepts_any_country(self):
+        """Test that Stock accepts any non-empty country."""
+        stock = Stock(symbol="AAPL.US", name="Test", country="Greece")
+        assert stock.country == "Greece"
 
     def test_stock_validates_min_lot_positive(self):
         """Test that Stock validates min_lot is positive."""
-        stock = Stock(symbol="AAPL.US", name="Test", geography="US", min_lot=0)
+        stock = Stock(symbol="AAPL.US", name="Test", country="United States", min_lot=0)
         assert stock.min_lot == 1  # Should default to 1
 
-        stock = Stock(symbol="AAPL.US", name="Test", geography="US", min_lot=-5)
+        stock = Stock(
+            symbol="AAPL.US", name="Test", country="United States", min_lot=-5
+        )
         assert stock.min_lot == 1  # Should default to 1
 
     def test_stock_valid_creation(self):
@@ -41,12 +43,12 @@ class TestStockValidation:
         stock = Stock(
             symbol="AAPL.US",
             name="Apple Inc.",
-            geography="US",
+            country="United States",
             currency=Currency.USD,
         )
         assert stock.symbol == "AAPL.US"
         assert stock.name == "Apple Inc."
-        assert stock.geography == "US"
+        assert stock.country == "United States"
 
 
 class TestPositionValidation:
@@ -138,7 +140,7 @@ class TestRecommendationValidation:
                 estimated_price=150.0,
                 estimated_value=1500.0,
                 reason="Test",
-                geography="US",
+                country="United States",
             )
 
     def test_recommendation_validates_estimated_price_positive(self):
@@ -152,7 +154,7 @@ class TestRecommendationValidation:
                 estimated_price=0.0,
                 estimated_value=1500.0,
                 reason="Test",
-                geography="US",
+                country="United States",
             )
 
     def test_recommendation_validates_estimated_value_positive(self):
@@ -166,7 +168,7 @@ class TestRecommendationValidation:
                 estimated_price=150.0,
                 estimated_value=0.0,
                 reason="Test",
-                geography="US",
+                country="United States",
             )
 
     def test_recommendation_valid_creation(self):

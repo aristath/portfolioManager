@@ -28,10 +28,10 @@ WEIGHT_AVERAGING = 0.30
 
 
 def _calculate_geo_gap_score(
-    geography: str, portfolio_context: PortfolioContext
+    country: str, portfolio_context: PortfolioContext
 ) -> float:
-    """Calculate geography gap score (40% weight)."""
-    geo_weight = portfolio_context.geo_weights.get(geography, 0)
+    """Calculate country gap score (40% weight)."""
+    geo_weight = portfolio_context.country_weights.get(country, 0)
     geo_gap_score = 0.5 + (geo_weight * 0.4)
     return max(0.1, min(0.9, geo_gap_score))
 
@@ -171,7 +171,7 @@ def calculate_diversification_score(
     )
 
     sub_components = {
-        "geography": round(geo_gap_score, 3),
+        "country": round(geo_gap_score, 3),
         "industry": round(industry_gap_score, 3),
         "averaging": round(averaging_down_score, 3),
     }
@@ -220,13 +220,13 @@ def _calculate_diversification_score(
 ) -> float:
     """Calculate diversification score (40% weight)."""
     geo_deviations = []
-    if portfolio_context.stock_geographies:
+    if portfolio_context.stock_countries:
         geo_values: Dict[str, float] = {}
         for symbol, value in portfolio_context.positions.items():
-            geo = portfolio_context.stock_geographies.get(symbol, "OTHER")
+            geo = portfolio_context.stock_countries.get(symbol, "OTHER")
             geo_values[geo] = geo_values.get(geo, 0) + value
 
-        for geo, weight in portfolio_context.geo_weights.items():
+        for geo, weight in portfolio_context.country_weights.items():
             target_pct = 0.33 + (weight * 0.15)  # Base 33% +/- 15%
             current_pct = geo_values.get(geo, 0) / total_value if total_value > 0 else 0
             deviation = abs(current_pct - target_pct)
@@ -324,7 +324,7 @@ async def calculate_portfolio_score(
 
 async def calculate_post_transaction_score(
     symbol: str,
-    geography: str,
+    country: str,
     industry: Optional[str],
     proposed_value: float,
     stock_quality: float,
@@ -337,7 +337,7 @@ async def calculate_post_transaction_score(
 
     Args:
         symbol: Stock symbol to buy
-        geography: Stock geography (EU, ASIA, US)
+        country: Stock country (e.g., "United States", "Germany")
         industry: Stock industry
         proposed_value: Transaction value (min_lot * price)
         stock_quality: Quality score of the stock (0-1)
@@ -383,8 +383,8 @@ async def calculate_post_transaction_score(
     new_positions = dict(portfolio_context.positions)
     new_positions[symbol] = new_positions.get(symbol, 0) + proposed_value
 
-    new_geographies = dict(portfolio_context.stock_geographies or {})
-    new_geographies[symbol] = geography
+    new_geographies = dict(portfolio_context.stock_countries or {})
+    new_geographies[symbol] = country
 
     new_industries = dict(portfolio_context.stock_industries or {})
     if industry:
@@ -397,11 +397,11 @@ async def calculate_post_transaction_score(
     new_dividends[symbol] = stock_dividend
 
     new_context = PortfolioContext(
-        geo_weights=portfolio_context.geo_weights,
+        country_weights=portfolio_context.country_weights,
         industry_weights=portfolio_context.industry_weights,
         positions=new_positions,
         total_value=portfolio_context.total_value + proposed_value,
-        stock_geographies=new_geographies,
+        stock_countries=new_geographies,
         stock_industries=new_industries,
         stock_scores=new_scores,
         stock_dividends=new_dividends,

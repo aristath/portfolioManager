@@ -15,7 +15,7 @@ class TestPortfolioServiceCalculations:
     """Tests for portfolio allocation calculations.
 
     The portfolio service aggregates positions and calculates:
-    - Geographic allocation percentages
+    - Country allocation percentages
     - Industry allocation percentages (with multi-industry splitting)
     - Deviation from targets
 
@@ -38,8 +38,8 @@ class TestPortfolioServiceCalculations:
         return portfolio_repo, position_repo, allocation_repo
 
     @pytest.mark.asyncio
-    async def test_single_geography_100_percent(self, mock_repos):
-        """Single geography should be 100% of portfolio.
+    async def test_single_country_100_percent(self, mock_repos):
+        """Single country should be 100% of portfolio.
 
         Bug caught: Division errors or wrong percentage calculation.
         """
@@ -49,7 +49,7 @@ class TestPortfolioServiceCalculations:
             {
                 "symbol": "TEST",
                 "market_value_eur": 1000,
-                "geography": "EU",
+                "country": "Germany",
                 "industry": "Consumer Electronics",
             }
         ]
@@ -59,12 +59,12 @@ class TestPortfolioServiceCalculations:
 
         assert summary.total_value == 1000
         assert len(summary.geographic_allocations) == 1
-        assert summary.geographic_allocations[0].name == "EU"
+        assert summary.geographic_allocations[0].name == "Germany"
         assert summary.geographic_allocations[0].current_pct == 1.0
 
     @pytest.mark.asyncio
-    async def test_multiple_geographies_split_correctly(self, mock_repos):
-        """Multiple geographies should split by value.
+    async def test_multiple_countries_split_correctly(self, mock_repos):
+        """Multiple countries should split by value.
 
         Bug caught: Aggregation errors across positions.
         """
@@ -74,13 +74,13 @@ class TestPortfolioServiceCalculations:
             {
                 "symbol": "EU1",
                 "market_value_eur": 600,
-                "geography": "EU",
+                "country": "Germany",
                 "industry": "Consumer Electronics",
             },
             {
                 "symbol": "US1",
                 "market_value_eur": 400,
-                "geography": "US",
+                "country": "United States",
                 "industry": "Consumer Electronics",
             },
         ]
@@ -90,11 +90,11 @@ class TestPortfolioServiceCalculations:
 
         assert summary.total_value == 1000
 
-        # Find EU and US allocations
+        # Find Germany and United States allocations
         geo_by_name = {g.name: g for g in summary.geographic_allocations}
 
-        assert geo_by_name["EU"].current_pct == pytest.approx(0.6, abs=0.01)
-        assert geo_by_name["US"].current_pct == pytest.approx(0.4, abs=0.01)
+        assert geo_by_name["Germany"].current_pct == pytest.approx(0.6, abs=0.01)
+        assert geo_by_name["United States"].current_pct == pytest.approx(0.4, abs=0.01)
 
     @pytest.mark.asyncio
     async def test_multi_industry_splits_value_equally(self, mock_repos):
@@ -110,7 +110,7 @@ class TestPortfolioServiceCalculations:
             {
                 "symbol": "MULTI",
                 "market_value_eur": 1000,
-                "geography": "US",
+                "country": "United States",
                 "industry": "Technology, Defense",
             },
         ]
@@ -147,8 +147,8 @@ class TestPortfolioServiceCalculations:
         # Should not crash with empty allocations
 
     @pytest.mark.asyncio
-    async def test_missing_geography_handled(self, mock_repos):
-        """Position with no geography should not crash.
+    async def test_missing_country_handled(self, mock_repos):
+        """Position with no country should not crash.
 
         Bug caught: NoneType errors when data is incomplete.
         """
@@ -156,9 +156,9 @@ class TestPortfolioServiceCalculations:
 
         position_repo.get_with_stock_info.return_value = [
             {
-                "symbol": "NO_GEO",
+                "symbol": "NO_COUNTRY",
                 "market_value_eur": 1000,
-                "geography": None,
+                "country": None,
                 "industry": "Consumer Electronics",
             },
         ]
@@ -166,9 +166,9 @@ class TestPortfolioServiceCalculations:
         service = PortfolioService(portfolio_repo, position_repo, allocation_repo)
         summary = await service.get_portfolio_summary()
 
-        # Should have value but no geography allocation
+        # Should have value but no country allocation
         assert summary.total_value == 1000
-        # No geography allocations since the only position has None
+        # No country allocations since the only position has None
 
     @pytest.mark.asyncio
     async def test_missing_industry_handled(self, mock_repos):
@@ -182,7 +182,7 @@ class TestPortfolioServiceCalculations:
             {
                 "symbol": "NO_IND",
                 "market_value_eur": 1000,
-                "geography": "EU",
+                "country": "Germany",
                 "industry": "",
             },
         ]
@@ -190,7 +190,7 @@ class TestPortfolioServiceCalculations:
         service = PortfolioService(portfolio_repo, position_repo, allocation_repo)
         summary = await service.get_portfolio_summary()
 
-        # Should have value and geography but no industry allocation
+        # Should have value and country but no industry allocation
         assert summary.total_value == 1000
         assert len(summary.geographic_allocations) > 0
 
@@ -208,7 +208,7 @@ class TestPortfolioServiceCalculations:
                 "market_value_eur": None,
                 "quantity": 10,
                 "current_price": 50,
-                "geography": "US",
+                "country": "United States",
                 "industry": "Consumer Electronics",
             },
         ]
@@ -232,7 +232,7 @@ class TestPortfolioServiceCalculations:
             {
                 "symbol": "TEST",
                 "market_value_eur": 1000,
-                "geography": "EU",
+                "country": "Germany",
                 "industry": "Consumer Electronics",
             },
         ]
@@ -251,20 +251,20 @@ class TestPortfolioServiceCalculations:
         """
         portfolio_repo, position_repo, allocation_repo = mock_repos
 
-        # Target weight 0.5 for EU
-        allocation_repo.get_all.return_value = {"geography:EU": 0.5}
+        # Target weight 0.5 for Germany
+        allocation_repo.get_all.return_value = {"country:Germany": 0.5}
 
         position_repo.get_with_stock_info.return_value = [
             {
                 "symbol": "EU1",
                 "market_value_eur": 700,
-                "geography": "EU",
+                "country": "Germany",
                 "industry": "Consumer Electronics",
             },
             {
                 "symbol": "US1",
                 "market_value_eur": 300,
-                "geography": "US",
+                "country": "United States",
                 "industry": "Consumer Electronics",
             },
         ]
@@ -274,10 +274,10 @@ class TestPortfolioServiceCalculations:
 
         geo_by_name = {g.name: g for g in summary.geographic_allocations}
 
-        # EU is at 70%, target weight is 0.5
+        # Germany is at 70%, target weight is 0.5
         # Deviation = 0.7 - 0.5 = 0.2 (overweight)
-        assert geo_by_name["EU"].current_pct == pytest.approx(0.7, abs=0.01)
-        assert geo_by_name["EU"].deviation == pytest.approx(0.2, abs=0.01)
+        assert geo_by_name["Germany"].current_pct == pytest.approx(0.7, abs=0.01)
+        assert geo_by_name["Germany"].deviation == pytest.approx(0.2, abs=0.01)
 
     @pytest.mark.asyncio
     async def test_values_rounded_correctly(self, mock_repos):
@@ -292,13 +292,13 @@ class TestPortfolioServiceCalculations:
             {
                 "symbol": "TEST1",
                 "market_value_eur": 333.333333,
-                "geography": "EU",
+                "country": "Germany",
                 "industry": "Consumer Electronics",
             },
             {
                 "symbol": "TEST2",
                 "market_value_eur": 666.666667,
-                "geography": "EU",
+                "country": "Germany",
                 "industry": "Consumer Electronics",
             },
         ]

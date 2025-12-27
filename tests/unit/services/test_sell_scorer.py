@@ -210,46 +210,46 @@ class TestCalculatePortfolioBalanceScore:
     maintain diversification.
     """
 
-    def test_overweight_geography_increases_score(self):
-        """High allocation to one geography should increase sell score.
+    def test_overweight_country_increases_score(self):
+        """High allocation to one country should increase sell score.
 
         Bug caught: If concentration isn't penalized, portfolio could
         become dangerously undiversified.
         """
-        geo_allocations = {"EU": 0.60, "US": 0.20, "ASIA": 0.20}
+        geo_allocations = {"Germany": 0.60, "United States": 0.20, "Japan": 0.20}
         ind_allocations = {"Consumer Electronics": 0.30}
 
         score = calculate_portfolio_balance_score(
             position_value=1000,
             total_portfolio_value=10000,
-            geography="EU",  # Already at 60%
+            country="Germany",  # Already at 60%
             industry="Consumer Electronics",
             geo_allocations=geo_allocations,
             ind_allocations=ind_allocations,
         )
 
-        # EU is overweight, should have higher score
+        # Germany is overweight, should have higher score
         assert score > 0.5
 
-    def test_underweight_geography_decreases_score(self):
-        """Low allocation to a geography should decrease sell score.
+    def test_underweight_country_decreases_score(self):
+        """Low allocation to a country should decrease sell score.
 
         Bug caught: If underweight positions get high scores,
         system would sell what it should be buying.
         """
-        geo_allocations = {"EU": 0.60, "US": 0.10, "ASIA": 0.30}
+        geo_allocations = {"Germany": 0.60, "United States": 0.10, "Japan": 0.30}
         ind_allocations = {"Consumer Electronics": 0.20}
 
         score = calculate_portfolio_balance_score(
             position_value=500,
             total_portfolio_value=10000,
-            geography="US",  # Only at 10%
+            country="United States",  # Only at 10%
             industry="Consumer Electronics",
             geo_allocations=geo_allocations,
             ind_allocations=ind_allocations,
         )
 
-        # US is underweight, should have lower score
+        # United States is underweight, should have lower score
         assert score < 0.6
 
     def test_high_concentration_single_position(self):
@@ -263,7 +263,7 @@ class TestCalculatePortfolioBalanceScore:
         score = calculate_portfolio_balance_score(
             position_value=2000,  # 20% of portfolio
             total_portfolio_value=10000,
-            geography="EU",
+            country="Germany",
             industry="Consumer Electronics",
             geo_allocations=geo_allocations,
             ind_allocations=ind_allocations,
@@ -280,7 +280,7 @@ class TestCalculatePortfolioBalanceScore:
         score = calculate_portfolio_balance_score(
             position_value=1000,
             total_portfolio_value=0,
-            geography="EU",
+            country="Germany",
             industry="Consumer Electronics",
             geo_allocations={},
             ind_allocations={},
@@ -298,7 +298,7 @@ class TestCalculatePortfolioBalanceScore:
         score = calculate_portfolio_balance_score(
             position_value=1000,
             total_portfolio_value=10000,
-            geography="US",
+            country="United States",
             industry="Technology, Defense",  # Both industries
             geo_allocations={"US": 0.30},
             ind_allocations=ind_allocations,
@@ -315,7 +315,7 @@ class TestCalculatePortfolioBalanceScore:
         score = calculate_portfolio_balance_score(
             position_value=1000,
             total_portfolio_value=10000,
-            geography="EU",
+            country="Germany",
             industry="",  # Empty
             geo_allocations={"EU": 0.30},
             ind_allocations={},

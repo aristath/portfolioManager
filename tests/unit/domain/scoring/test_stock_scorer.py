@@ -356,7 +356,7 @@ class TestCalculateStockScore:
                 daily_prices=[{"close": 100.0}] * 100,
                 monthly_prices=[{"avg_adj_close": 100.0}] * 24,
                 fundamentals=MagicMock(),
-                geography="US",
+                country="United States",
                 portfolio_context=PortfolioContext(
                     geo_weights={},
                     industry_weights={},
@@ -854,7 +854,7 @@ class TestCalculateStockScore:
         mock_diversification = MagicMock()
         mock_diversification.score = 0.85
         mock_diversification.sub_scores = {
-            "geography": 0.8,
+            "country": 0.8,
             "industry": 0.9,
             "averaging": 0.85,
         }
@@ -912,7 +912,7 @@ class TestCalculateStockScore:
                 daily_prices=[{"close": 100.0}] * 100,
                 monthly_prices=[{"avg_adj_close": 100.0}] * 24,
                 fundamentals=MagicMock(),
-                geography="US",
+                country="United States",
                 industry="Consumer Electronics",
                 portfolio_context=portfolio_context,
             )
@@ -921,7 +921,7 @@ class TestCalculateStockScore:
         mock_div.assert_called_once()
         call_kwargs = mock_div.call_args[1]
         assert call_kwargs["symbol"] == "AAPL.US"
-        assert call_kwargs["geography"] == "US"
+        assert call_kwargs["country"] == "United States"
         assert call_kwargs["industry"] == "Consumer Electronics"
         assert call_kwargs["portfolio_context"] == portfolio_context
 
@@ -1043,7 +1043,7 @@ class TestCalculateStockScore:
                 monthly_prices=[{"avg_adj_close": 100.0}] * 24,
                 fundamentals=MagicMock(),
                 portfolio_context=portfolio_context,
-                # No geography provided
+                # No country provided
             )
 
         # Diversification should default to 0.5
@@ -1369,7 +1369,7 @@ class TestCalculateStockScoreFromPrefetched:
             await calculate_stock_score_from_prefetched(
                 symbol="AAPL.US",
                 prefetched=prefetched,
-                geography="US",
+                country="United States",
                 industry="Consumer Electronics",
                 portfolio_context=portfolio_context,
                 yahoo_symbol="AAPL",

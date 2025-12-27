@@ -92,8 +92,8 @@ def _calculate_cash_balance_eur(cash_balances: list, exchange_rates: dict) -> fl
     return cash_balance
 
 
-async def _determine_geography(symbol: str, db_manager) -> Optional[str]:
-    """Determine country for a symbol (legacy function name, returns country)."""
+async def _determine_country(symbol: str, db_manager) -> Optional[str]:
+    """Determine country for a symbol."""
     cursor = await db_manager.config.execute(
         "SELECT country FROM stocks WHERE symbol = ?", (symbol,)
     )
@@ -208,9 +208,9 @@ async def _process_positions(
         )
         total_value += market_value
 
-        geo = await _determine_geography(pos.symbol, db_manager)
-        if geo:
-            geo_values[geo] = geo_values.get(geo, 0) + market_value
+        country = await _determine_country(pos.symbol, db_manager)
+        if country:
+            geo_values[country] = geo_values.get(country, 0) + market_value
 
     return total_value, invested_value, unrealized_pnl, geo_values
 

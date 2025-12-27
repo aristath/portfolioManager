@@ -26,7 +26,7 @@ def create_stock(
     allow_buy: bool = True,
     allow_sell: bool = True,
     min_lot: int = 0,
-    geography: str = "US",
+    country: str = "United States",
     industry: str = "Consumer Electronics",
 ) -> Stock:
     """Create a mock Stock object for testing."""
@@ -35,7 +35,7 @@ def create_stock(
     stock.allow_buy = allow_buy
     stock.allow_sell = allow_sell
     stock.min_lot = min_lot
-    stock.geography = geography
+    stock.country = country
     stock.industry = industry
     return stock
 
@@ -319,28 +319,28 @@ class TestWeightBoundsCalculation:
 
 
 class TestSectorConstraintsBuilding:
-    """Test building geography and industry sector constraints."""
+    """Test building country and industry sector constraints."""
 
     def test_geography_constraints_basic(self):
-        """Test basic geography constraint building."""
+        """Test basic country constraint building."""
         manager = ConstraintsManager()
         stocks = [
-            create_stock("AAPL", geography="US"),
-            create_stock("SAP", geography="EU"),
+            create_stock("AAPL", country="United States"),
+            create_stock("SAP", country="Germany"),
         ]
-        geo_targets = {"US": 0.60, "EU": 0.40}
+        geo_targets = {"United States": 0.60, "Germany": 0.40}
         ind_targets = {}
 
         geo_constraints, ind_constraints = manager.build_sector_constraints(
             stocks, geo_targets, ind_targets
         )
 
-        # Should have 2 geography constraints
+        # Should have 2 country constraints
         assert len(geo_constraints) == 2
         assert len(ind_constraints) == 0
 
-        # Find US constraint
-        us_constraint = next(c for c in geo_constraints if c.name == "US")
+        # Find United States constraint
+        us_constraint = next(c for c in geo_constraints if c.name == "United States")
         assert us_constraint.target == 0.60
         assert us_constraint.lower == pytest.approx(
             0.60 - GEO_ALLOCATION_TOLERANCE, abs=0.001
@@ -381,12 +381,12 @@ class TestSectorConstraintsBuilding:
         )
         assert "AAPL" in tech_constraint.symbols
 
-    def test_none_geography_grouped_as_other(self):
-        """Test stocks with None geography are grouped as OTHER."""
+    def test_none_country_grouped_as_other(self):
+        """Test stocks with None country are grouped as OTHER."""
         manager = ConstraintsManager()
         stocks = [
-            create_stock("AAPL", geography="US"),
-            create_stock("UNKNOWN", geography=None),
+            create_stock("AAPL", country="United States"),
+            create_stock("UNKNOWN", country=None),
         ]
         geo_targets = {"US": 0.60, "OTHER": 0.40}
         ind_targets = {}
@@ -433,8 +433,8 @@ class TestSectorConstraintsBuilding:
         """Test sectors with zero target weight are excluded."""
         manager = ConstraintsManager()
         stocks = [
-            create_stock("AAPL", geography="US"),
-            create_stock("SAP", geography="EU"),
+            create_stock("AAPL", country="United States"),
+            create_stock("SAP", country="Germany"),
         ]
         # EU has zero target, should be excluded
         geo_targets = {"US": 1.0, "EU": 0.0}
@@ -452,8 +452,8 @@ class TestSectorConstraintsBuilding:
         """Test sectors not in targets are excluded from constraints."""
         manager = ConstraintsManager()
         stocks = [
-            create_stock("AAPL", geography="US"),
-            create_stock("SAP", geography="EU"),
+            create_stock("AAPL", country="United States"),
+            create_stock("SAP", country="Germany"),
         ]
         # EU not in targets
         geo_targets = {"US": 0.60}
@@ -470,7 +470,7 @@ class TestSectorConstraintsBuilding:
     def test_bounds_clamped_to_zero_and_one(self):
         """Test constraint bounds are clamped to [0, 1]."""
         manager = ConstraintsManager(geo_tolerance=0.30)
-        stocks = [create_stock("AAPL", geography="US")]
+        stocks = [create_stock("AAPL", country="United States")]
         # High target that would exceed 1.0 with tolerance
         geo_targets = {"US": 0.95}
         ind_targets = {}
@@ -488,7 +488,7 @@ class TestSectorConstraintsBuilding:
     def test_lower_bound_not_negative(self):
         """Test lower bound doesn't go negative."""
         manager = ConstraintsManager(geo_tolerance=0.30)
-        stocks = [create_stock("AAPL", geography="US")]
+        stocks = [create_stock("AAPL", country="United States")]
         # Low target that would go negative with tolerance
         geo_targets = {"US": 0.10}
         ind_targets = {}
@@ -507,9 +507,15 @@ class TestSectorConstraintsBuilding:
         """Test multiple stocks in same sector are grouped correctly."""
         manager = ConstraintsManager()
         stocks = [
-            create_stock("AAPL", geography="US", industry="Consumer Electronics"),
-            create_stock("GOOGL", geography="US", industry="Consumer Electronics"),
-            create_stock("MSFT", geography="US", industry="Consumer Electronics"),
+            create_stock(
+                "AAPL", country="United States", industry="Consumer Electronics"
+            ),
+            create_stock(
+                "GOOGL", country="United States", industry="Consumer Electronics"
+            ),
+            create_stock(
+                "MSFT", country="United States", industry="Consumer Electronics"
+            ),
         ]
         geo_targets = {"US": 1.0}
         ind_targets = {"Consumer Electronics": 1.0}
@@ -532,9 +538,13 @@ class TestSectorConstraintsBuilding:
         """Test building constraints with mixed sectors."""
         manager = ConstraintsManager()
         stocks = [
-            create_stock("AAPL", geography="US", industry="Consumer Electronics"),
-            create_stock("SAP", geography="EU", industry="Consumer Electronics"),
-            create_stock("JPM", geography="US", industry="Banks - Diversified"),
+            create_stock(
+                "AAPL", country="United States", industry="Consumer Electronics"
+            ),
+            create_stock("SAP", country="Germany", industry="Consumer Electronics"),
+            create_stock(
+                "JPM", country="United States", industry="Banks - Diversified"
+            ),
         ]
         geo_targets = {"US": 0.60, "EU": 0.40}
         ind_targets = {"Consumer Electronics": 0.70, "Banks - Diversified": 0.30}
@@ -674,7 +684,7 @@ class TestConstraintSummary:
         )
 
         assert len(summary["geography_constraints"]) == 1
-        assert summary["geography_constraints"][0]["name"] == "US"
+        assert summary["geography_constraints"][0]["name"] == "United States"
         assert summary["geography_constraints"][0]["target"] == 0.60
         assert summary["geography_constraints"][0]["range"] == (0.50, 0.70)
 
@@ -831,7 +841,7 @@ class TestEdgeCases:
     def test_target_exceeds_one(self):
         """Test target weight > 1.0 is handled."""
         manager = ConstraintsManager()
-        stocks = [create_stock("AAPL", geography="US")]
+        stocks = [create_stock("AAPL", country="United States")]
         # Invalid target > 1.0
         geo_targets = {"US": 1.5}
         ind_targets = {}

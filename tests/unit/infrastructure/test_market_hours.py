@@ -4,7 +4,7 @@ These tests validate the market hours functionality including:
 - Checking if markets are currently open
 - Getting list of open markets
 - Filtering stocks by open markets
-- Grouping stocks by geography
+- Grouping stocks by exchange
 """
 
 from datetime import datetime
@@ -15,32 +15,37 @@ from zoneinfo import ZoneInfo
 class TestGetCalendar:
     """Test getting exchange calendars."""
 
-    def test_returns_calendar_for_eu(self):
-        """Test returning XETR calendar for EU geography."""
+    def test_returns_calendar_for_exchange(self):
+        """Test returning calendar for exchange name."""
         from app.infrastructure.market_hours import get_calendar
 
+        calendar = get_calendar("NYSE")
+        assert calendar is not None
+        assert calendar.name == "XNYS"
+
+    def test_returns_calendar_for_nasdaq(self):
+        """Test returning calendar for NASDAQ."""
+        from app.infrastructure.market_hours import get_calendar
+
+        calendar = get_calendar("NASDAQ")
+        assert calendar is not None
+        assert calendar.name == "XNYS"  # NASDAQ uses same calendar as NYSE
+
+    def test_returns_calendar_for_legacy_geography(self):
+        """Test returning calendar for legacy geography codes (backward compatibility)."""
+        from app.infrastructure.market_hours import get_calendar
+
+        # Legacy codes still work as fallback
         calendar = get_calendar("EU")
         assert calendar is not None
         assert calendar.name == "XETR"
-
-    def test_returns_calendar_for_us(self):
-        """Test returning XNYS calendar for US geography."""
-        from app.infrastructure.market_hours import get_calendar
 
         calendar = get_calendar("US")
         assert calendar is not None
         assert calendar.name == "XNYS"
 
-    def test_returns_calendar_for_asia(self):
-        """Test returning XHKG calendar for ASIA geography."""
-        from app.infrastructure.market_hours import get_calendar
-
-        calendar = get_calendar("ASIA")
-        assert calendar is not None
-        assert calendar.name == "XHKG"
-
-    def test_returns_default_for_unknown_geography(self):
-        """Test returning default calendar for unknown geography."""
+    def test_returns_default_for_unknown(self):
+        """Test returning default calendar for unknown exchange."""
         from app.infrastructure.market_hours import get_calendar
 
         calendar = get_calendar("UNKNOWN")
@@ -52,8 +57,8 @@ class TestGetCalendar:
         """Test that calendars are cached."""
         from app.infrastructure.market_hours import get_calendar
 
-        calendar1 = get_calendar("EU")
-        calendar2 = get_calendar("EU")
+        calendar1 = get_calendar("NYSE")
+        calendar2 = get_calendar("NYSE")
         assert calendar1 is calendar2
 
 
@@ -69,9 +74,9 @@ class TestIsMarketOpen:
             mock_time.return_value = datetime(
                 2024, 1, 13, 12, 0, tzinfo=ZoneInfo("UTC")
             )
-            assert is_market_open("US") is False
-            assert is_market_open("EU") is False
-            assert is_market_open("ASIA") is False
+            assert is_market_open("NYSE") is False
+            assert is_market_open("XETR") is False
+            assert is_market_open("XHKG") is False
 
     def test_market_closed_on_holiday(self):
         """Test that markets are closed on holidays."""
@@ -82,7 +87,7 @@ class TestIsMarketOpen:
             mock_time.return_value = datetime(
                 2024, 12, 25, 15, 0, tzinfo=ZoneInfo("UTC")
             )
-            assert is_market_open("US") is False
+            assert is_market_open("NYSE") is False
 
     def test_us_market_open_during_trading_hours(self):
         """Test US market open during regular trading hours."""
@@ -93,7 +98,7 @@ class TestIsMarketOpen:
             mock_time.return_value = datetime(
                 2024, 1, 16, 15, 0, tzinfo=ZoneInfo("UTC")
             )
-            assert is_market_open("US") is True
+            assert is_market_open("NYSE") is True
 
     def test_us_market_closed_before_open(self):
         """Test US market closed before opening time."""
@@ -104,7 +109,7 @@ class TestIsMarketOpen:
             mock_time.return_value = datetime(
                 2024, 1, 16, 13, 0, tzinfo=ZoneInfo("UTC")
             )
-            assert is_market_open("US") is False
+            assert is_market_open("NYSE") is False
 
     def test_us_market_closed_after_close(self):
         """Test US market closed after closing time."""
@@ -115,7 +120,7 @@ class TestIsMarketOpen:
             mock_time.return_value = datetime(
                 2024, 1, 16, 22, 0, tzinfo=ZoneInfo("UTC")
             )
-            assert is_market_open("US") is False
+            assert is_market_open("NYSE") is False
 
     def test_eu_market_open_during_trading_hours(self):
         """Test EU market open during regular trading hours."""
@@ -124,7 +129,7 @@ class TestIsMarketOpen:
         # Tuesday at 10:00 AM CET = 09:00 UTC
         with patch("app.infrastructure.market_hours._get_current_time") as mock_time:
             mock_time.return_value = datetime(2024, 1, 16, 9, 0, tzinfo=ZoneInfo("UTC"))
-            assert is_market_open("EU") is True
+            assert is_market_open("XETR") is True
 
     def test_asia_market_open_during_trading_hours(self):
         """Test ASIA market open during regular trading hours."""
@@ -133,7 +138,7 @@ class TestIsMarketOpen:
         # Tuesday at 10:00 AM HKT = 02:00 UTC
         with patch("app.infrastructure.market_hours._get_current_time") as mock_time:
             mock_time.return_value = datetime(2024, 1, 16, 2, 0, tzinfo=ZoneInfo("UTC"))
-            assert is_market_open("ASIA") is True
+            assert is_market_open("XHKG") is True
 
 
 class TestGetOpenMarkets:
@@ -161,7 +166,7 @@ class TestGetOpenMarkets:
                 2024, 1, 16, 15, 0, tzinfo=ZoneInfo("UTC")
             )
             open_markets = get_open_markets()
-            assert "US" in open_markets
+            assert "NYSE" in open_markets or "NASDAQ" in open_markets
             # EU might be closed by 16:00 CET, check if it's in overlap
 
 
@@ -178,9 +183,10 @@ class TestGetMarketStatus:
             )
             status = get_market_status()
 
-            assert "EU" in status
-            assert "US" in status
-            assert "ASIA" in status
+            # Check for exchange names in status
+            assert "NYSE" in status or "NASDAQ" in status
+            assert "XETR" in status
+            assert "XHKG" in status
 
             for market in status.values():
                 assert "open" in market
@@ -213,15 +219,15 @@ class TestFilterStocksByOpenMarkets:
 
         # Create mock stocks
         stock_eu = MagicMock()
-        stock_eu.geography = "EU"
+        stock_eu.fullExchangeName = "XETR"
         stock_eu.symbol = "SAP.DE"
 
         stock_us = MagicMock()
-        stock_us.geography = "US"
+        stock_us.fullExchangeName = "NYSE"
         stock_us.symbol = "AAPL.US"
 
         stock_asia = MagicMock()
-        stock_asia.geography = "ASIA"
+        stock_asia.fullExchangeName = "XHKG"
         stock_asia.symbol = "9988.HK"
 
         stocks = [stock_eu, stock_us, stock_asia]
@@ -239,7 +245,7 @@ class TestFilterStocksByOpenMarkets:
         from app.infrastructure.market_hours import filter_stocks_by_open_markets
 
         stock_us = MagicMock()
-        stock_us.geography = "US"
+        stock_us.fullExchangeName = "NYSE"
         stock_us.symbol = "AAPL.US"
 
         stocks = [stock_us]
@@ -254,58 +260,54 @@ class TestFilterStocksByOpenMarkets:
             assert filtered[0].symbol == "AAPL.US"
 
 
-class TestGroupStocksByGeography:
-    """Test grouping stocks by geography."""
+class TestGroupStocksByExchange:
+    """Test grouping stocks by exchange."""
 
     def test_groups_stocks_correctly(self):
-        """Test grouping stocks by their geography."""
-        from app.infrastructure.market_hours import group_stocks_by_geography
+        """Test grouping stocks by their exchange."""
+        from app.infrastructure.market_hours import group_stocks_by_exchange
 
         stock_eu1 = MagicMock()
-        stock_eu1.geography = "EU"
+        stock_eu1.fullExchangeName = "XETR"
         stock_eu1.symbol = "SAP.DE"
 
         stock_eu2 = MagicMock()
-        stock_eu2.geography = "EU"
+        stock_eu2.fullExchangeName = "XETR"
         stock_eu2.symbol = "ASML.NL"
 
         stock_us = MagicMock()
-        stock_us.geography = "US"
+        stock_us.fullExchangeName = "NYSE"
         stock_us.symbol = "AAPL.US"
 
         stock_asia = MagicMock()
-        stock_asia.geography = "ASIA"
+        stock_asia.fullExchangeName = "XHKG"
         stock_asia.symbol = "9988.HK"
 
         stocks = [stock_eu1, stock_eu2, stock_us, stock_asia]
 
-        grouped = group_stocks_by_geography(stocks)
+        grouped = group_stocks_by_exchange(stocks)
 
-        assert len(grouped["EU"]) == 2
-        assert len(grouped["US"]) == 1
-        assert len(grouped["ASIA"]) == 1
+        assert len(grouped["XETR"]) == 2
+        assert len(grouped["NYSE"]) == 1
+        assert len(grouped["XHKG"]) == 1
 
     def test_handles_empty_list(self):
         """Test handling empty stock list."""
-        from app.infrastructure.market_hours import group_stocks_by_geography
+        from app.infrastructure.market_hours import group_stocks_by_exchange
 
-        grouped = group_stocks_by_geography([])
+        grouped = group_stocks_by_exchange([])
 
-        assert grouped["EU"] == []
-        assert grouped["US"] == []
-        assert grouped["ASIA"] == []
+        assert grouped == {}
 
-    def test_handles_unknown_geography(self):
-        """Test handling stocks with unknown geography."""
-        from app.infrastructure.market_hours import group_stocks_by_geography
+    def test_handles_unknown_exchange(self):
+        """Test handling stocks with unknown or missing exchange."""
+        from app.infrastructure.market_hours import group_stocks_by_exchange
 
         stock = MagicMock()
-        stock.geography = "UNKNOWN"
+        stock.fullExchangeName = None
         stock.symbol = "XXX.XX"
 
-        grouped = group_stocks_by_geography([stock])
+        grouped = group_stocks_by_exchange([stock])
 
         # Should not appear in any group
-        assert stock not in grouped["EU"]
-        assert stock not in grouped["US"]
-        assert stock not in grouped["ASIA"]
+        assert len(grouped) == 0
