@@ -100,6 +100,7 @@ async def refresh_single_stock(symbol: str) -> dict[str, Any]:
 
         # Run the full pipeline for this stock
         await _sync_historical_for_symbol(symbol)
+        await _detect_and_update_industry(symbol)
         await _calculate_metrics_for_symbol(symbol)
         await _refresh_score_for_symbol(symbol)
         await _update_last_synced(symbol)
@@ -159,8 +160,9 @@ async def _process_single_stock(symbol: str):
 
     Steps:
     1. Sync historical prices from Yahoo
-    2. Calculate technical metrics (RSI, EMA, CAGR, etc.)
-    3. Refresh stock score
+    2. Detect and update industry from Yahoo Finance
+    3. Calculate technical metrics (RSI, EMA, CAGR, etc.)
+    4. Refresh stock score
 
     Args:
         symbol: The stock symbol to process
@@ -172,11 +174,14 @@ async def _process_single_stock(symbol: str):
         # Step 1: Sync historical prices
         await _sync_historical_for_symbol(symbol)
 
-        # Step 2: Calculate metrics
+        # Step 2: Detect and update industry from Yahoo Finance
+        await _detect_and_update_industry(symbol)
+
+        # Step 3: Calculate metrics
         metrics_count = await _calculate_metrics_for_symbol(symbol)
         logger.debug(f"Calculated {metrics_count} metrics for {symbol}")
 
-        # Step 3: Refresh score
+        # Step 4: Refresh score
         await _refresh_score_for_symbol(symbol)
 
         # Mark as synced
@@ -265,6 +270,48 @@ async def _sync_historical_for_symbol(symbol: str):
     import asyncio
 
     await asyncio.sleep(settings.external_api_rate_limit_delay)
+
+
+async def _detect_and_update_industry(symbol: str):
+    """
+    Detect and update industry from Yahoo Finance for a stock.
+
+    This runs automatically during the daily pipeline to keep industry
+    data up to date from Yahoo Finance.
+
+    Args:
+        symbol: The stock symbol to update
+    """
+    from app.infrastructure.database.manager import get_db_manager
+    from app.infrastructure.external import yahoo_finance as yahoo
+    from app.repositories import StockRepository
+
+    db_manager = get_db_manager()
+
+    # Get the stock's yahoo_symbol
+    cursor = await db_manager.config.execute(
+        "SELECT yahoo_symbol FROM stocks WHERE symbol = ?", (symbol,)
+    )
+    row = await cursor.fetchone()
+    if not row:
+        logger.warning(f"Stock {symbol} not found for industry detection")
+        return
+
+    yahoo_symbol = row[0]
+
+    # Detect industry from Yahoo Finance
+    try:
+        detected_industry = yahoo.get_stock_industry(symbol, yahoo_symbol)
+        if detected_industry:
+            # Update the stock's industry in the database
+            stock_repo = StockRepository()
+            await stock_repo.update(symbol, industry=detected_industry)
+            logger.info(f"Updated industry for {symbol}: {detected_industry}")
+        else:
+            logger.debug(f"No industry detected for {symbol} from Yahoo Finance")
+    except Exception as e:
+        # Don't fail the entire pipeline if industry detection fails
+        logger.warning(f"Failed to detect industry for {symbol}: {e}")
 
 
 async def _calculate_metrics_for_symbol(symbol: str) -> int:
