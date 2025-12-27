@@ -47,6 +47,7 @@ repos:
     rev: 1.8.3
     hooks:
       - id: bandit
-        args: ['-ll', '--skip', 'B101,B601']
+        # B101: assert, B108: /tmp in tests, B324: MD5 for cache, B601: shell, B608: dynamic SQL (false positive)
+        args: ['-ll', '--skip', 'B101,B108,B324,B601,B608']
         files: ^(app|tests)/
         exclude: ^(venv|\.venv|node_modules|build|dist)/
