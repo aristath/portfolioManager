@@ -100,6 +100,7 @@ async def refresh_single_stock(symbol: str) -> dict[str, Any]:
 
         # Run the full pipeline for this stock
         await _sync_historical_for_symbol(symbol)
+        await _detect_and_update_country_and_exchange(symbol)
         await _detect_and_update_industry(symbol)
         await _calculate_metrics_for_symbol(symbol)
         await _refresh_score_for_symbol(symbol)
@@ -174,10 +175,13 @@ async def _process_single_stock(symbol: str):
         # Step 1: Sync historical prices
         await _sync_historical_for_symbol(symbol)
 
-        # Step 2: Detect and update industry from Yahoo Finance
+        # Step 2: Detect and update country/exchange from Yahoo Finance
+        await _detect_and_update_country_and_exchange(symbol)
+
+        # Step 3: Detect and update industry from Yahoo Finance
         await _detect_and_update_industry(symbol)
 
-        # Step 3: Calculate metrics
+        # Step 4: Calculate metrics
         metrics_count = await _calculate_metrics_for_symbol(symbol)
         logger.debug(f"Calculated {metrics_count} metrics for {symbol}")
 
