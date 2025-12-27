@@ -257,6 +257,35 @@ def get_stock_industry(
         return None
 
 
+def get_stock_country_and_exchange(
+    symbol: str, yahoo_symbol: Optional[str] = None
+) -> tuple[Optional[str], Optional[str]]:
+    """
+    Get stock country and exchange from Yahoo Finance.
+
+    Args:
+        symbol: Stock symbol (Tradernet format)
+        yahoo_symbol: Optional explicit Yahoo symbol override
+
+    Returns:
+        Tuple of (country, fullExchangeName) or (None, None) if unavailable
+    """
+    yf_symbol = get_yahoo_symbol(symbol, yahoo_symbol)
+
+    try:
+        ticker = yf.Ticker(yf_symbol)
+        info = ticker.info
+
+        country = info.get("country")
+        full_exchange_name = info.get("fullExchangeName")
+
+        return country, full_exchange_name
+
+    except Exception as e:
+        logger.error(f"Failed to get country and exchange for {symbol}: {e}")
+        return None, None
+
+
 def get_batch_quotes(symbol_yahoo_map: dict[str, Optional[str]]) -> dict[str, float]:
     """
     Get current prices for multiple symbols efficiently.
