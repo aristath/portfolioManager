@@ -274,9 +274,7 @@ class TestRootEndpoint:
 
         from app.main import root
 
-        with patch(
-            "app.main.FileResponse", return_value=MagicMock(spec=FileResponse)
-        ) as mock_response:
+        with patch("app.main.FileResponse", return_value=MagicMock(spec=FileResponse)):
             result = await root()
 
         # The function returns FileResponse directly

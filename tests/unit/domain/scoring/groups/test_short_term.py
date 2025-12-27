@@ -120,9 +120,7 @@ class TestCalculateShortTermScore:
             "app.repositories.calculations.CalculationsRepository",
             return_value=mock_repo,
         ):
-            result = await calculate_short_term_score(
-                "AAPL.US", prices, pyfolio_drawdown=-0.15
-            )
+            await calculate_short_term_score("AAPL.US", prices, pyfolio_drawdown=-0.15)
 
         # Should have used the provided drawdown
         mock_repo.set_metric.assert_any_call("AAPL.US", "MAX_DRAWDOWN", -0.15)

@@ -73,7 +73,7 @@ class TestInitScheduler:
             mock_scheduler = MagicMock()
             mock_scheduler_class.return_value = mock_scheduler
 
-            result = await init_scheduler()
+            await init_scheduler()
 
             mock_scheduler_class.assert_called_once()
             # Should add listener and multiple jobs

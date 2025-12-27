@@ -64,7 +64,7 @@ class TestSyncHistoricalDataInternal:
                 "app.jobs.historical_data_sync._sync_stock_price_history",
                 side_effect=Exception("Sync failed"),
             ),
-            patch("app.jobs.historical_data_sync.emit") as mock_emit,
+            patch("app.jobs.historical_data_sync.emit"),
             patch("app.jobs.historical_data_sync.set_error") as mock_set_error,
             patch("app.jobs.historical_data_sync.clear_processing"),
         ):

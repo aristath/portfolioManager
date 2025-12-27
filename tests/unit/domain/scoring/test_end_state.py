@@ -4,7 +4,7 @@ These tests validate portfolio-level scoring for holistic planning,
 including total return, long-term promise, and stability calculations.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 

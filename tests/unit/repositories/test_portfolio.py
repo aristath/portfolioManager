@@ -3,7 +3,6 @@
 These tests validate portfolio snapshot storage and retrieval.
 """
 
-from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest

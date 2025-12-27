@@ -3,7 +3,7 @@
 These tests validate trade CRUD operations and position history calculations.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest

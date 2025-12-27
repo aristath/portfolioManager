@@ -5,7 +5,7 @@ These tests validate the distributed locking mechanism.
 
 import asyncio
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -26,7 +26,7 @@ class TestFileLock:
 
             async with file_lock("test_lock"):
                 acquired = True
-                lock_file = LOCK_DIR / "test_lock.lock"
+                LOCK_DIR / "test_lock.lock"
                 # Lock file should exist during operation
                 # Note: May be cleaned up immediately
 

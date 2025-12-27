@@ -4,7 +4,7 @@ These tests validate the currency exchange service logic including
 rate lookups, conversion paths, and exchange operations.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
