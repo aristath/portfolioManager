@@ -9,8 +9,8 @@ from app.infrastructure.dependencies import AllocationRepositoryDep, PortfolioSe
 router = APIRouter()
 
 
-class GeographyTargets(BaseModel):
-    """Dynamic geography allocation weights."""
+class CountryTargets(BaseModel):
+    """Dynamic country allocation weights."""
 
     targets: dict[str, float]
 
@@ -23,33 +23,35 @@ class IndustryTargets(BaseModel):
 
 @router.get("/targets")
 async def get_allocation_targets(allocation_repo: AllocationRepositoryDep):
-    """Get all allocation targets (geography and industry)."""
+    """Get all allocation targets (country and industry)."""
     targets = await allocation_repo.get_all()
 
-    geography = {}
+    country = {}
     industry = {}
 
-    # get_all() returns Dict[str, float] with keys like "geography:name"
+    # get_all() returns Dict[str, float] with keys like "country:name" or "geography:name" (legacy)
     for key, target_pct in targets.items():
         parts = key.split(":", 1)
         if len(parts) == 2:
             target_type, name = parts
-            if target_type == "geography":
-                geography[name] = target_pct
+            if (
+                target_type == "country" or target_type == "geography"
+            ):  # Support both during transition
+                country[name] = target_pct
             elif target_type == "industry":
                 industry[name] = target_pct
 
     return {
-        "geography": geography,
+        "country": country,
         "industry": industry,
     }
 
 
-@router.put("/targets/geography")
-async def update_geography_targets(
-    targets: GeographyTargets, allocation_repo: AllocationRepositoryDep
+@router.put("/targets/country")
+async def update_country_targets(
+    targets: CountryTargets, allocation_repo: AllocationRepositoryDep
 ):
-    """Update geography allocation weights."""
+    """Update country allocation weights."""
     updates = targets.targets
 
     if not updates:
@@ -63,14 +65,14 @@ async def update_geography_targets(
 
     for name, weight in updates.items():
         target = AllocationTarget(
-            type="geography",
+            type="country",
             name=name,
             target_pct=weight,
         )
         await allocation_repo.upsert(target)
 
-    geo_targets = await allocation_repo.get_by_type("geography")
-    result = {t.name: t.target_pct for t in geo_targets}
+    country_targets = await allocation_repo.get_by_type("country")
+    result = {t.name: t.target_pct for t in country_targets}
 
     return {
         "weights": result,
@@ -113,13 +115,13 @@ async def update_industry_targets(
 
 @router.get("/current")
 async def get_current_allocation(portfolio_service: PortfolioServiceDep):
-    """Get current allocation vs targets for both geography and industry."""
+    """Get current allocation vs targets for both country and industry."""
     summary = await portfolio_service.get_portfolio_summary()
 
     return {
         "total_value": summary.total_value,
         "cash_balance": summary.cash_balance,
-        "geography": [
+        "country": [
             {
                 "name": a.name,
                 "target_pct": a.target_pct,
@@ -127,7 +129,7 @@ async def get_current_allocation(portfolio_service: PortfolioServiceDep):
                 "current_value": a.current_value,
                 "deviation": a.deviation,
             }
-            for a in summary.geographic_allocations
+            for a in summary.geographic_allocations  # TODO: Rename to country_allocations
         ],
         "industry": [
             {
@@ -147,7 +149,7 @@ async def get_allocation_deviations(portfolio_service: PortfolioServiceDep):
     """Get allocation deviation scores for rebalancing decisions."""
     summary = await portfolio_service.get_portfolio_summary()
 
-    geo_deviations = {
+    country_deviations = {
         a.name: {
             "deviation": a.deviation,
             "need": max(0, -a.deviation),
@@ -157,7 +159,7 @@ async def get_allocation_deviations(portfolio_service: PortfolioServiceDep):
                 else ("overweight" if a.deviation > 0.02 else "balanced")
             ),
         }
-        for a in summary.geographic_allocations
+        for a in summary.geographic_allocations  # TODO: Rename to country_allocations
     }
 
     industry_deviations = {
@@ -174,6 +176,6 @@ async def get_allocation_deviations(portfolio_service: PortfolioServiceDep):
     }
 
     return {
-        "geography": geo_deviations,
+        "country": country_deviations,
         "industry": industry_deviations,
     }
