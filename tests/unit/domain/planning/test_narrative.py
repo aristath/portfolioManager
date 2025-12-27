@@ -6,8 +6,6 @@ for trading actions and plans.
 
 from unittest.mock import MagicMock
 
-import pytest
-
 
 class TestAddStrategySummary:
     """Test strategy summary generation."""

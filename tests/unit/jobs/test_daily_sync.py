@@ -5,7 +5,6 @@ from Tradernet to local database.
 """
 
 from contextlib import asynccontextmanager
-from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest

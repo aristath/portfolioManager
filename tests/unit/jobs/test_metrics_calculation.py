@@ -297,9 +297,7 @@ class TestCalculateAllMetricsForSymbol:
         mock_history_repo = AsyncMock()
         mock_history_repo.get_daily_prices.return_value = []
 
-        with patch(
-            "app.jobs.metrics_calculation.CalculationsRepository"
-        ) as mock_calc_cls:
+        with patch("app.jobs.metrics_calculation.CalculationsRepository"):
             with patch(
                 "app.jobs.metrics_calculation.HistoryRepository",
                 return_value=mock_history_repo,

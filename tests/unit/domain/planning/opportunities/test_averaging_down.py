@@ -3,7 +3,7 @@
 These tests validate the averaging down opportunity logic.
 """
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 

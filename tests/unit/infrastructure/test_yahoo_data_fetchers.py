@@ -3,7 +3,6 @@
 These tests validate the Yahoo Finance API integration functions.
 """
 
-from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import pandas as pd

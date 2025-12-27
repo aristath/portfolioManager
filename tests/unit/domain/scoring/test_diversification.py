@@ -4,7 +4,7 @@ These tests validate portfolio-aware diversification scoring
 including geography gaps, industry gaps, and averaging down calculations.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 

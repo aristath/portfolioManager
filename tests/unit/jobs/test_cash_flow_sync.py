@@ -155,7 +155,7 @@ class TestSyncCashFlowsInternal:
 
         with (
             patch("app.jobs.cash_flow_sync.get_tradernet_client") as mock_get_client,
-            patch("app.jobs.cash_flow_sync.get_db_manager") as mock_get_db,
+            patch("app.jobs.cash_flow_sync.get_db_manager"),
             patch("app.jobs.cash_flow_sync.set_processing"),
             patch("app.jobs.cash_flow_sync.set_error") as mock_set_error,
             patch("app.jobs.cash_flow_sync.clear_processing") as mock_clear,

@@ -4,7 +4,6 @@ These tests validate the tiered circuit breaker for trading decisions
 based on daily portfolio performance.
 """
 
-from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -435,7 +434,6 @@ class TestGetDailyPnLTracker:
         # Reset the singleton
         import app.infrastructure.daily_pnl
         from app.infrastructure.daily_pnl import (
-            _tracker,
             get_daily_pnl_tracker,
         )
 

@@ -3,7 +3,7 @@
 These tests validate position CRUD operations.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
