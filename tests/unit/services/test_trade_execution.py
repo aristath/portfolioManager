@@ -84,7 +84,8 @@ class TestTradeValidation:
         currency: str = "EUR",
     ) -> Recommendation:
         """Helper to create test trades."""
-        from app.domain.value_objects import Currency, TradeSide
+        from app.domain.value_objects.currency import Currency
+        from app.domain.value_objects.trade_side import TradeSide
 
         return Recommendation(
             symbol=symbol,
