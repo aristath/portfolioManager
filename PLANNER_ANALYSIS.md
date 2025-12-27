@@ -4,6 +4,45 @@
 
 After analyzing the codebase, there is **ONE planner implementation** (the holistic planner), but **THREE separate recommendation systems** that serve different purposes. The holistic planner is only used for multi-step recommendations.
 
+**⚠️ CRITICAL INSIGHT**: There is **NO conceptual difference** between "planner" and "recommendations". The holistic planner already evaluates sequences of length 1-5, so it should handle ALL recommendations (single and multi-step). The current separation is unnecessary and should be unified.
+
+---
+
+## Conceptual Analysis: Why Separate "Planner" and "Recommendations"?
+
+### The User's Question
+
+> "Why is there a separation between 'planner' and 'recommendation'? What is the conceptual difference? If the 'holistic planner' evaluates sequences of actions and also evaluates single-action sequences, then that should cover the single buy and single sell recommendations. Correct?"
+
+### Answer: **There is NO conceptual difference. The separation is unnecessary.**
+
+The holistic planner:
+1. ✅ Evaluates sequences of length **1-5** (already handles single actions)
+2. ✅ Scores **end-states** (better than post-transaction scoring)
+3. ✅ Handles both **buys and sells**
+4. ✅ Can work with or without **optimizer target weights**
+
+**Therefore**: The holistic planner should be the **single source of truth** for ALL recommendations.
+
+### Current Unnecessary Separation
+
+| System | Uses Holistic Planner? | Scoring Method | Why Separate? |
+|--------|------------------------|----------------|---------------|
+| Single Buy | ❌ No | `calculate_post_transaction_score()` | **No good reason** |
+| Single Sell | ❌ No | Sell-specific scoring | **No good reason** |
+| Multi-Step | ✅ Yes | `calculate_portfolio_end_state_score()` | **This is correct** |
+
+**The Problem**:
+- Post-transaction score: Only evaluates diversification impact
+- End-state score: Evaluates total return, promise, stability, diversification, opinion (weighted across entire portfolio)
+- **End-state scoring is superior** - why use inferior scoring for single recommendations?
+
+**The Solution**:
+- Use holistic planner for **everything**
+- If optimal sequence is 1 step → return as single recommendation
+- If optimal sequence is 2-5 steps → return as multi-step recommendation
+- **No conceptual difference needed**
+
 ---
 
 ## Current Architecture
@@ -276,20 +315,52 @@ Return List[Recommendation]
 
 ## Recommendations
 
-### 1. Update Documentation
+### 1. **UNIFY EVERYTHING UNDER HOLISTIC PLANNER** ⚠️ **CRITICAL**
+
+**The user is absolutely correct**: There is no conceptual difference between "planner" and "recommendations". The holistic planner already:
+- Evaluates sequences of length 1-5
+- Scores end-states (which is better than post-transaction scoring)
+- Handles both buys and sells
+- Can work with or without optimizer target weights
+
+**Why the current separation exists (but shouldn't)**:
+- `get_recommendations()` uses `calculate_post_transaction_score()` - simpler, faster, but less comprehensive
+- `calculate_sell_recommendations()` uses sell-specific scoring - different logic
+- `get_multi_step_recommendations()` uses holistic planner - more comprehensive end-state scoring
+
+**The problem**: 
+- Post-transaction score only evaluates diversification impact
+- End-state score evaluates: total return, promise, stability, diversification, opinion (weighted across entire portfolio)
+- **End-state scoring is superior** - why use inferior scoring for single recommendations?
+
+**The solution**:
+1. **Remove `get_recommendations()` and `calculate_sell_recommendations()`**
+2. **Use `get_multi_step_recommendations()` for everything**
+3. **If optimal sequence is 1 step → single recommendation**
+4. **If optimal sequence is 2-5 steps → multi-step recommendation**
+
+**Benefits**:
+- Single source of truth (holistic planner)
+- Consistent scoring methodology
+- Better recommendations (end-state scoring is more comprehensive)
+- Simpler codebase (remove duplicate logic)
+- No conceptual confusion
+
+**Implementation**:
+- `GET /api/trades/recommendations` → Call `get_multi_step_recommendations()`, return first step if sequence length = 1
+- `GET /api/trades/recommendations/sell` → Same, filter for sells
+- Keep `GET /api/trades/multi-step-recommendations` as-is (returns full sequence)
+
+### 2. Update Documentation
 - Remove reference to "standard goal planner" in `holistic_planner.py:4`
-- Update comment to reflect that this is the only planner implementation
+- Document that holistic planner is the single source of truth for ALL recommendations
+- Remove documentation about "three recommendation systems"
 
-### 2. Clarify Architecture
-- Document that there are three recommendation systems, not three planners
-- Explain when to use each system:
-  - Single buy/sell: Individual trade decisions
-  - Multi-step: Strategic sequences (uses holistic planner)
-
-### 3. Consider Unification (Optional)
-- Could single buy/sell recommendations also use holistic planner?
-- Would require evaluating 1-step sequences (might be overkill)
-- Current separation is reasonable (different use cases)
+### 3. Clean Up Dead Code
+- Remove `calculate_post_transaction_score()` (or keep for backward compatibility during migration)
+- Remove `get_recommendations()` implementation
+- Remove `calculate_sell_recommendations()` implementation
+- Remove sell-specific scoring if not needed by holistic planner
 
 ---
 

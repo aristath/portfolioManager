@@ -217,7 +217,8 @@ async def _sync_historical_for_symbol(symbol: str):
 
     # Check if we have monthly data (indicates initial seeding was done)
     cursor = await history_db.execute("SELECT COUNT(*) FROM monthly_prices")
-    has_monthly = (await cursor.fetchone())[0] > 0
+    row = await cursor.fetchone()
+    has_monthly = row[0] > 0 if row else False
 
     # Initial seed: 10 years for CAGR calculations
     # Ongoing updates: 1 year for daily charts
@@ -326,7 +327,7 @@ async def _refresh_score_for_symbol(symbol: str):
             "close": r[4],
             "volume": r[5],
         }
-        for r in reversed(rows)
+        for r in list(reversed(list(rows)))
     ]
 
     cursor = await history_db.execute(
@@ -339,7 +340,7 @@ async def _refresh_score_for_symbol(symbol: str):
     )
     rows = await cursor.fetchall()
     monthly_prices = [
-        {"year_month": r[0], "avg_adj_close": r[1]} for r in reversed(rows)
+        {"year_month": r[0], "avg_adj_close": r[1]} for r in list(reversed(list(rows)))
     ]
 
     if not daily_prices or len(daily_prices) < 50:

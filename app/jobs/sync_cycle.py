@@ -318,6 +318,7 @@ async def _update_position_prices(quotes: dict[str, float]):
 
 async def _get_holistic_recommendation():
     """Get next recommendation from the holistic planner."""
+    from app.application.services.currency_exchange_service import ExchangeRateService
     from app.application.services.rebalancing_service import RebalancingService
     from app.domain.models import Recommendation
     from app.domain.portfolio_hash import generate_recommendation_cache_key
@@ -326,7 +327,17 @@ async def _get_holistic_recommendation():
     from app.domain.value_objects.recommendation_status import RecommendationStatus
     from app.domain.value_objects.trade_side import TradeSide
     from app.infrastructure.cache import cache
-    from app.repositories import PositionRepository, SettingsRepository
+    from app.infrastructure.database import get_db_manager
+    from app.infrastructure.external.tradernet import TradernetClient
+    from app.repositories import (
+        AllocationRepository,
+        PortfolioRepository,
+        PositionRepository,
+        RecommendationRepository,
+        SettingsRepository,
+        StockRepository,
+        TradeRepository,
+    )
 
     position_repo = PositionRepository()
     settings_repo = SettingsRepository()
@@ -368,7 +379,29 @@ async def _get_holistic_recommendation():
 
     # Cache miss - call planner
     logger.info("Cache miss, calling holistic planner...")
-    rebalancing_service = RebalancingService(settings_repo=settings_repo)
+
+    # Instantiate all required dependencies
+    stock_repo = StockRepository()
+    allocation_repo = AllocationRepository()
+    portfolio_repo = PortfolioRepository()
+    trade_repo = TradeRepository()
+    recommendation_repo = RecommendationRepository()
+    db_manager = get_db_manager()
+    tradernet_client = TradernetClient.shared()
+    exchange_rate_service = ExchangeRateService()
+
+    rebalancing_service = RebalancingService(
+        stock_repo=stock_repo,
+        position_repo=position_repo,
+        allocation_repo=allocation_repo,
+        portfolio_repo=portfolio_repo,
+        trade_repo=trade_repo,
+        settings_repo=settings_repo,
+        recommendation_repo=recommendation_repo,
+        db_manager=db_manager,
+        tradernet_client=tradernet_client,
+        exchange_rate_service=exchange_rate_service,
+    )
     steps = await rebalancing_service.get_multi_step_recommendations()
 
     if not steps:
