@@ -19,7 +19,7 @@ class GeoChart extends HTMLElement {
 
         <!-- View Mode - Show deviation from target allocation -->
         <div x-show="!$store.app.editingCountry" class="space-y-2">
-          <template x-for="country in (countryAllocations || []).filter(c => $store.app.activeCountries && $store.app.activeCountries.includes(c.name))" :key="country.name">
+          <template x-for="country in (countryAllocations || [])" :key="country.name">
             <div>
               <div class="flex items-center justify-between text-sm mb-1">
                 <span class="flex items-center gap-2">
