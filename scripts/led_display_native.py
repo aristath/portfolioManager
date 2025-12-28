@@ -290,8 +290,9 @@ def main_loop():
         sys.exit(1)
 
     # Test Router Bridge connection
+    # Use longer timeout (10s) to allow MCU to respond if it's busy
     try:
-        bridge_call("scrollText", "READY", 50, timeout=2)
+        bridge_call("scrollText", "READY", 50, timeout=10)
         logger.info("Router Bridge connection test successful")
     except Exception as e:
         logger.error(f"Router Bridge connection test failed: {e}")
