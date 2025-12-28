@@ -298,7 +298,7 @@ class RebalancingService:
             cash_balance=available_cash,
             blend=optimizer_blend,
             target_return=optimizer_target,
-            geo_targets=geo_targets,
+            country_targets=geo_targets,
             ind_targets=ind_targets,
             min_cash_reserve=min_cash,
             dividend_bonuses=dividend_bonuses,
