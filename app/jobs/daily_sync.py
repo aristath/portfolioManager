@@ -19,6 +19,7 @@ from app.infrastructure.hardware.display_service import (
     set_processing,
 )
 from app.infrastructure.locking import file_lock
+from app.repositories.stock import StockRepository
 
 logger = logging.getLogger(__name__)
 
@@ -342,13 +343,16 @@ async def _sync_prices_internal():
     emit(SystemEvent.SYNC_START)
 
     try:
-        db_manager = get_db_manager()
+        # Note: Direct DB access here is a known architecture violation.
+        # This could use StockRepository.get_all_active() but needs yahoo_symbol field.
+        # See ARCHITECTURE.md for details.
+        stock_repo = StockRepository()
+        stocks = await stock_repo.get_all_active()
 
-        # Get active stocks from config
-        cursor = await db_manager.config.execute(
-            "SELECT symbol, yahoo_symbol FROM stocks WHERE active = 1"
-        )
-        rows = await cursor.fetchall()
+        # Extract symbols and yahoo_symbols
+        rows = [
+            (stock.symbol, stock.yahoo_symbol) for stock in stocks if stock.yahoo_symbol
+        ]
 
         if not rows:
             logger.info("No stocks to sync")
@@ -362,6 +366,9 @@ async def _sync_prices_internal():
         updated = 0
         now = datetime.now().isoformat()
 
+        # Note: Direct DB access here is a known architecture violation.
+        # This job needs to update positions directly. See ARCHITECTURE.md for details.
+        db_manager = get_db_manager()
         async with db_manager.state.transaction():
             for symbol, price in quotes.items():
                 result = await db_manager.state.execute(
@@ -412,13 +419,10 @@ async def sync_stock_currencies():
             return
 
     try:
-        db_manager = get_db_manager()
-
-        # Get all active stock symbols from config
-        cursor = await db_manager.config.execute(
-            "SELECT symbol FROM stocks WHERE active = 1"
-        )
-        symbols = [row[0] for row in await cursor.fetchall()]
+        # Note: Using StockRepository instead of direct DB access
+        stock_repo = StockRepository()
+        stocks = await stock_repo.get_all_active()
+        symbols = [stock.symbol for stock in stocks]
 
         if not symbols:
             logger.info("No stocks to sync currencies for")
@@ -428,6 +432,9 @@ async def sync_stock_currencies():
         q_list = _extract_quotes_list(quotes_response)
 
         updated = 0
+        # Note: Direct DB access here is a known architecture violation.
+        # This job needs to update stock currency directly. See ARCHITECTURE.md for details.
+        db_manager = get_db_manager()
         async with db_manager.config.transaction():
             for q in q_list:
                 if isinstance(q, dict):

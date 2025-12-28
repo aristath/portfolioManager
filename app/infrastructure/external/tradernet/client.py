@@ -389,7 +389,7 @@ class TradernetClient:
             logger.error(f"Failed to get historical prices for {symbol}: {e}")
             return []
 
-    def get_security_info(self, symbol: str) -> dict | None:
+    def get_security_info(self, symbol: str) -> Optional[dict]:
         """
         Get security info including lot size from Tradernet API.
 
@@ -481,7 +481,7 @@ class TradernetClient:
             return "SELL"
         return ""
 
-    def _parse_trade(self, trade: dict) -> dict | None:
+    def _parse_trade(self, trade: dict) -> Optional[dict]:
         """Parse a single trade dict from Tradernet response."""
         try:
             order_id = str(trade.get("id") or trade.get("order_id") or "")
