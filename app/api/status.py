@@ -251,6 +251,66 @@ async def trigger_recommendation_sync():
         return {"status": "error", "message": str(e)}
 
 
+@router.post("/jobs/sync-cycle")
+async def trigger_sync_cycle():
+    """Manually trigger sync cycle (trades, cash flows, portfolio, prices, recommendations, trade execution)."""
+    from app.jobs.sync_cycle import run_sync_cycle
+
+    try:
+        await run_sync_cycle()
+        return {"status": "success", "message": "Sync cycle completed"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@router.post("/jobs/weekly-maintenance")
+async def trigger_weekly_maintenance():
+    """Manually trigger weekly maintenance (integrity checks, old backup cleanup)."""
+    from app.jobs.maintenance import run_weekly_maintenance
+
+    try:
+        await run_weekly_maintenance()
+        return {"status": "success", "message": "Weekly maintenance completed"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@router.post("/jobs/dividend-reinvestment")
+async def trigger_dividend_reinvestment():
+    """Manually trigger dividend reinvestment."""
+    from app.jobs.dividend_reinvestment import auto_reinvest_dividends
+
+    try:
+        await auto_reinvest_dividends()
+        return {"status": "success", "message": "Dividend reinvestment completed"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@router.post("/jobs/universe-pruning")
+async def trigger_universe_pruning():
+    """Manually trigger universe pruning (removal of low-quality stocks)."""
+    from app.jobs.universe_pruning import prune_universe
+
+    try:
+        await prune_universe()
+        return {"status": "success", "message": "Universe pruning completed"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@router.post("/jobs/stock-discovery")
+async def trigger_stock_discovery():
+    """Manually trigger stock discovery (addition of high-quality stocks)."""
+    from app.jobs.stock_discovery import discover_new_stocks
+
+    try:
+        await discover_new_stocks()
+        return {"status": "success", "message": "Stock discovery completed"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
 @router.get("/tradernet")
 async def get_tradernet_status():
     """Get Tradernet connection status."""

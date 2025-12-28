@@ -54,6 +54,15 @@ const API = {
   syncPrices: () => API._post('/api/status/sync/prices'),
   syncHistorical: () => API._post('/api/status/sync/historical'),
 
+  // Jobs
+  triggerSyncCycle: () => API._post('/api/status/jobs/sync-cycle'),
+  triggerDailyPipeline: () => API._post('/api/status/sync/daily-pipeline'),
+  triggerDailyMaintenance: () => API._post('/api/status/maintenance/daily'),
+  triggerWeeklyMaintenance: () => API._post('/api/status/jobs/weekly-maintenance'),
+  triggerDividendReinvestment: () => API._post('/api/status/jobs/dividend-reinvestment'),
+  triggerUniversePruning: () => API._post('/api/status/jobs/universe-pruning'),
+  triggerStockDiscovery: () => API._post('/api/status/jobs/stock-discovery'),
+
   // Allocation
   fetchAllocation: () => fetch('/api/trades/allocation').then(r => r.json()),
   fetchTargets: () => fetch('/api/allocation/targets').then(r => r.json()),
