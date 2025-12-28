@@ -83,14 +83,14 @@ class TestAllocationRepository:
         assert result[0].name == "tech"
 
     @pytest.mark.asyncio
-    async def test_get_geography_targets(self, repo, mock_db):
-        """Test getting geography targets as dict."""
+    async def test_get_country_targets(self, repo, mock_db):
+        """Test getting country targets as dict."""
         mock_db.fetchall.return_value = [
             {"type": "country", "name": "United States", "target_pct": 0.4},
             {"type": "country", "name": "Germany", "target_pct": 0.3},
         ]
 
-        result = await repo.get_geography_targets()
+        result = await repo.get_country_targets()
 
         assert result == {"United States": 0.4, "Germany": 0.3}
 
