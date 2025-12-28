@@ -281,14 +281,19 @@ async def update_setting_value(
             )
         await set_setting(key, str(data.value), settings_repo)
         # Reschedule job if scheduler is running
-        from app.jobs.scheduler import scheduler
+        from app.jobs.scheduler import get_scheduler
 
-        if scheduler:
-            from apscheduler.triggers.interval import IntervalTrigger
+        try:
+            scheduler = get_scheduler()
+            if scheduler and scheduler.running:
+                from apscheduler.triggers.interval import IntervalTrigger
 
-            scheduler.reschedule_job(
-                "planner_batch", trigger=IntervalTrigger(seconds=int(data.value))
-            )
+                scheduler.reschedule_job(
+                    "planner_batch", trigger=IntervalTrigger(seconds=int(data.value))
+                )
+        except Exception:
+            # Scheduler not initialized yet, that's okay
+            pass
         return {key: data.value}
     elif key == "planner_batch_size":
         # Validate range (10-1000)
