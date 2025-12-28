@@ -5,7 +5,7 @@ Translates business rules into PyPortfolioOpt constraints:
 - allow_buy/allow_sell flags
 - min_lot constraints (can't partially sell if at min lot)
 - Concentration limits (20% max per stock)
-- Country/Industry sector constraints
+- Country/Industry sector constraints (grouped into territories/industry groups)
 """
 
 import logging
@@ -22,6 +22,106 @@ from app.domain.scoring.constants import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Territory mapping: group countries into larger regions
+TERRITORY_MAPPING = {
+    # EU countries
+    "Germany": "EU",
+    "France": "EU",
+    "Italy": "EU",
+    "Spain": "EU",
+    "Netherlands": "EU",
+    "Belgium": "EU",
+    "Austria": "EU",
+    "Sweden": "EU",
+    "Denmark": "EU",
+    "Finland": "EU",
+    "Ireland": "EU",
+    "Portugal": "EU",
+    "Poland": "EU",
+    "Greece": "EU",
+    "Czech Republic": "EU",
+    "Romania": "EU",
+    "Hungary": "EU",
+    "Bulgaria": "EU",
+    "Croatia": "EU",
+    "Slovakia": "EU",
+    "Slovenia": "EU",
+    "Lithuania": "EU",
+    "Latvia": "EU",
+    "Estonia": "EU",
+    "Luxembourg": "EU",
+    "Malta": "EU",
+    "Cyprus": "EU",
+    # US
+    "United States": "US",
+    "USA": "US",
+    # ASIA (major markets)
+    "China": "ASIA",
+    "Japan": "ASIA",
+    "South Korea": "ASIA",
+    "India": "ASIA",
+    "Singapore": "ASIA",
+    "Hong Kong": "ASIA",
+    "Taiwan": "ASIA",
+    "Thailand": "ASIA",
+    "Malaysia": "ASIA",
+    "Indonesia": "ASIA",
+    "Philippines": "ASIA",
+    "Vietnam": "ASIA",
+    # Other regions can be added as needed
+}
+
+# Industry grouping: group industries into larger categories
+INDUSTRY_GROUP_MAPPING = {
+    # Technology
+    "Technology": "Technology",
+    "Software": "Technology",
+    "Semiconductors": "Technology",
+    "Internet Content & Information": "Technology",
+    "Electronic Components": "Technology",
+    "Consumer Electronics": "Technology",
+    # Industrials
+    "Industrials": "Industrials",
+    "Aerospace & Defense": "Industrials",
+    "Industrial Machinery": "Industrials",
+    "Electrical Equipment": "Industrials",
+    "Engineering & Construction": "Industrials",
+    "Specialty Industrial Machinery": "Industrials",
+    # Energy
+    "Energy": "Energy",
+    "Oil & Gas": "Energy",
+    "Renewable Energy": "Energy",
+    "Utilities - Renewable": "Energy",
+    "Utilities": "Energy",
+    # Healthcare
+    "Healthcare": "Healthcare",
+    "Biotechnology": "Healthcare",
+    "Pharmaceuticals": "Healthcare",
+    "Medical Devices": "Healthcare",
+    # Financials
+    "Financial Services": "Financials",
+    "Banks": "Financials",
+    "Insurance": "Financials",
+    "Capital Markets": "Financials",
+    # Consumer
+    "Consumer Cyclical": "Consumer",
+    "Consumer Defensive": "Consumer",
+    "Consumer Staples": "Consumer",
+    "Retail": "Consumer",
+    # Materials
+    "Materials": "Materials",
+    "Chemicals": "Materials",
+    "Metals & Mining": "Materials",
+    "Steel": "Materials",
+    # Real Estate
+    "Real Estate": "Real Estate",
+    "REITs": "Real Estate",
+    # Communication
+    "Communication Services": "Communication",
+    "Telecom": "Communication",
+    "Media": "Communication",
+}
 
 
 @dataclass
