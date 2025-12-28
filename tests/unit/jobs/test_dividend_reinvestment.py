@@ -169,7 +169,8 @@ class TestDividendGrouping:
         )
         mock_dividend_repo.mark_reinvested = AsyncMock()
 
-        mock_quote = MagicMock(price=150.0)
+        # Use price=50 so quantity = int(100/50) = 2 shares
+        mock_quote = MagicMock(price=50.0)
         mock_tradernet_client = MagicMock()
         mock_tradernet_client.is_connected = True
         mock_tradernet_client.get_quote = MagicMock(return_value=mock_quote)
@@ -177,8 +178,8 @@ class TestDividendGrouping:
         mock_trade_execution_service = AsyncMock()
         mock_trade_execution_service.execute_trades = AsyncMock(
             return_value=[
-                {"symbol": "AAPL", "status": "success", "quantity": 1},
-                {"symbol": "MSFT", "status": "success", "quantity": 1},
+                {"symbol": "AAPL", "status": "success", "quantity": 2},
+                {"symbol": "MSFT", "status": "success", "quantity": 2},
             ]
         )
 
@@ -202,11 +203,11 @@ class TestDividendGrouping:
         call_args = mock_trade_execution_service.execute_trades.call_args[0][0]
         assert len(call_args) == 2  # Only 2 recommendations (grouped)
 
-        # Verify AAPL recommendation has correct total
+        # Verify AAPL recommendation: quantity * price = 2 * 50 = 100
         aapl_rec = next(r for r in call_args if r.symbol == "AAPL")
-        assert aapl_rec.estimated_value == pytest.approx(100.0, abs=0.01)  # 50+30+20
+        assert aapl_rec.estimated_value == pytest.approx(100.0, abs=0.01)
 
-        # Verify MSFT recommendation
+        # Verify MSFT recommendation: quantity * price = 2 * 50 = 100
         msft_rec = next(r for r in call_args if r.symbol == "MSFT")
         assert msft_rec.estimated_value == pytest.approx(100.0, abs=0.01)
 
@@ -234,7 +235,7 @@ class TestDividendGrouping:
 
         mock_tradernet_client = MagicMock()
         mock_tradernet_client.is_connected = True
-        mock_tradernet_client.get_quote = MagicMock(return_value=MagicMock(price=150.0))
+        mock_tradernet_client.get_quote = MagicMock(return_value=MagicMock(price=50.0))
 
         mock_trade_execution_service = AsyncMock()
         mock_trade_execution_service.execute_trades = AsyncMock(
@@ -278,7 +279,7 @@ class TestReinvestmentExecution:
 
         mock_tradernet_client = MagicMock()
         mock_tradernet_client.is_connected = True
-        mock_tradernet_client.get_quote = MagicMock(return_value=MagicMock(price=150.0))
+        mock_tradernet_client.get_quote = MagicMock(return_value=MagicMock(price=50.0))
 
         mock_trade_execution_service = AsyncMock()
         mock_trade_execution_service.execute_trades = AsyncMock(
@@ -353,7 +354,7 @@ class TestReinvestmentExecution:
 
         mock_tradernet_client = MagicMock()
         mock_tradernet_client.is_connected = True
-        mock_tradernet_client.get_quote = MagicMock(return_value=MagicMock(price=150.0))
+        mock_tradernet_client.get_quote = MagicMock(return_value=MagicMock(price=50.0))
 
         mock_trade_execution_service = AsyncMock()
         mock_trade_execution_service.execute_trades = AsyncMock(
@@ -399,7 +400,7 @@ class TestDividendMarking:
 
         mock_tradernet_client = MagicMock()
         mock_tradernet_client.is_connected = True
-        mock_tradernet_client.get_quote = MagicMock(return_value=MagicMock(price=150.0))
+        mock_tradernet_client.get_quote = MagicMock(return_value=MagicMock(price=50.0))
 
         mock_trade_execution_service = AsyncMock()
         mock_trade_execution_service.execute_trades = AsyncMock(
@@ -600,7 +601,7 @@ class TestErrorHandling:
 
         mock_tradernet_client = MagicMock()
         mock_tradernet_client.is_connected = True
-        mock_tradernet_client.get_quote = MagicMock(return_value=MagicMock(price=150.0))
+        mock_tradernet_client.get_quote = MagicMock(return_value=MagicMock(price=50.0))
 
         mock_trade_execution_service = AsyncMock()
         mock_trade_execution_service.execute_trades = AsyncMock(
@@ -644,7 +645,7 @@ class TestStateVerification:
 
         mock_tradernet_client = MagicMock()
         mock_tradernet_client.is_connected = True
-        mock_tradernet_client.get_quote = MagicMock(return_value=MagicMock(price=150.0))
+        mock_tradernet_client.get_quote = MagicMock(return_value=MagicMock(price=50.0))
 
         mock_trade_execution_service = AsyncMock()
         mock_trade_execution_service.execute_trades = AsyncMock(
