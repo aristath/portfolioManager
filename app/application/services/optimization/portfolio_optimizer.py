@@ -48,7 +48,9 @@ class OptimizationResult:
     target_return: float
     achieved_expected_return: Optional[float]
     blend_used: float
-    fallback_used: Optional[str]  # None, "max_sharpe", or "hrp"
+    fallback_used: Optional[
+        str
+    ]  # None, "min_volatility", "efficient_risk", "max_sharpe", or "hrp"
     target_weights: Dict[str, float]
     weight_changes: List[WeightChange]
     high_correlations: List[Dict]  # Pairs with correlation > 0.80
@@ -66,10 +68,12 @@ class PortfolioOptimizer:
     2. Running Hierarchical Risk Parity for robustness
     3. Blending the two based on the blend parameter (0-1)
 
-    Fallback strategy:
-    1. Try efficient_return(target=0.11)
-    2. If fails, try max_sharpe()
-    3. If fails, use pure HRP
+    Fallback strategy (retirement-appropriate for 15-20 year horizon):
+    1. Try efficient_return(target=0.11) - Primary strategy
+    2. If fails, try min_volatility() - Lower risk for retirement
+    3. If fails, try efficient_risk(target_volatility=0.15) - Target 15% volatility
+    4. If fails, try max_sharpe() - Final MV fallback
+    5. If all fail, use pure HRP
     """
 
     def __init__(
