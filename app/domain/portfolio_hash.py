@@ -8,15 +8,18 @@ The hash includes:
 - All positions (including zero quantities for stocks in universe)
 - Cash balances as pseudo-positions (CASH.EUR, CASH.USD, etc.)
 - The full stocks universe to detect when new stocks are added
+- Per-symbol configuration: allow_buy, allow_sell, min_portfolio_target, max_portfolio_target, country, industry
 """
 
 import hashlib
 from typing import Any, Dict, List, Optional
 
+from app.domain.models import Stock
+
 
 def generate_portfolio_hash(
     positions: List[Dict[str, Any]],
-    stocks: Optional[List[str]] = None,
+    stocks: Optional[List[Stock]] = None,
     cash_balances: Optional[Dict[str, float]] = None,
 ) -> str:
     """
@@ -24,7 +27,7 @@ def generate_portfolio_hash(
 
     Args:
         positions: List of position dicts with 'symbol' and 'quantity' keys
-        stocks: Optional list of all stock symbols in universe (to detect new stocks)
+        stocks: Optional list of Stock objects in universe (to detect new stocks and include config)
         cash_balances: Optional dict of currency -> amount (e.g., {"EUR": 1500.0})
 
     Returns:
@@ -32,22 +35,35 @@ def generate_portfolio_hash(
 
     Example:
         positions = [{"symbol": "AAPL", "quantity": 10}]
-        stocks = ["AAPL", "MSFT", "GOOGL"]
+        stocks = [Stock(symbol="AAPL", ...), Stock(symbol="MSFT", ...)]
         cash = {"EUR": 1500.0, "USD": 200.0}
         hash = generate_portfolio_hash(positions, stocks, cash)
     """
     # Build a dict of symbol -> quantity from positions
-    # Use Union[int, float] to handle both stock quantities (int) and cash (float)
+    # Use float | int to handle both stock quantities (int) and cash (float)
     position_map: Dict[str, float | int] = {
         p["symbol"].upper(): int(p.get("quantity", 0) or 0) for p in positions
     }
 
-    # If stocks universe provided, ensure all stocks are included (with 0 if not held)
+    # Build a dict of symbol -> stock config data
+    stock_config_map: Dict[str, Dict[str, Any]] = {}
+
     if stocks:
-        for symbol in stocks:
-            symbol_upper = symbol.upper()
+        for stock in stocks:
+            symbol_upper = stock.symbol.upper()
+            # Ensure stock is in position_map (with 0 if not held)
             if symbol_upper not in position_map:
                 position_map[symbol_upper] = 0
+
+            # Extract config fields
+            stock_config_map[symbol_upper] = {
+                "allow_buy": stock.allow_buy,
+                "allow_sell": stock.allow_sell,
+                "min_portfolio_target": stock.min_portfolio_target,
+                "max_portfolio_target": stock.max_portfolio_target,
+                "country": stock.country or "",
+                "industry": stock.industry or "",
+            }
 
     # Add cash balances as pseudo-positions (filter out zero balances)
     if cash_balances:
@@ -59,7 +75,7 @@ def generate_portfolio_hash(
     # Sort by symbol for deterministic ordering
     sorted_symbols = sorted(position_map.keys())
 
-    # Build canonical string: "SYMBOL:QUANTITY,SYMBOL:QUANTITY,..."
+    # Build canonical string: "SYMBOL:QUANTITY:allow_buy:allow_sell:min_target:max_target:country:industry"
     parts = []
     for symbol in sorted_symbols:
         quantity = position_map[symbol]
@@ -67,7 +83,22 @@ def generate_portfolio_hash(
         if symbol.startswith("CASH."):
             parts.append(f"{symbol}:{quantity}")
         else:
-            parts.append(f"{symbol}:{int(quantity)}")
+            # Get config for this symbol (use defaults if not in stocks list)
+            config = stock_config_map.get(symbol, {})
+            allow_buy = config.get("allow_buy", True)
+            allow_sell = config.get("allow_sell", False)
+            min_target = config.get("min_portfolio_target")
+            max_target = config.get("max_portfolio_target")
+            country = config.get("country", "")
+            industry = config.get("industry", "")
+
+            # Format config fields
+            min_target_str = "" if min_target is None else str(min_target)
+            max_target_str = "" if max_target is None else str(max_target)
+
+            parts.append(
+                f"{symbol}:{int(quantity)}:{allow_buy}:{allow_sell}:{min_target_str}:{max_target_str}:{country}:{industry}"
+            )
 
     canonical = ",".join(parts)
 
@@ -120,19 +151,19 @@ def generate_settings_hash(settings_dict: Dict[str, Any]) -> str:
 def generate_recommendation_cache_key(
     positions: List[Dict[str, Any]],
     settings_dict: Dict[str, Any],
-    stocks: Optional[List[str]] = None,
+    stocks: Optional[List[Stock]] = None,
     cash_balances: Optional[Dict[str, float]] = None,
 ) -> str:
     """
     Generate a cache key from portfolio state and settings.
 
     This ensures that cache is invalidated when positions, settings,
-    stocks universe, or cash balances change.
+    stocks universe, cash balances, or per-symbol configuration changes.
 
     Args:
         positions: List of position dicts with 'symbol' and 'quantity' keys
         settings_dict: Dictionary of settings values
-        stocks: Optional list of all stock symbols in universe
+        stocks: Optional list of Stock objects in universe
         cash_balances: Optional dict of currency -> amount
 
     Returns:
@@ -141,7 +172,7 @@ def generate_recommendation_cache_key(
     Example:
         positions = [{"symbol": "AAPL", "quantity": 10}]
         settings = {"min_stock_score": 0.5}
-        stocks = ["AAPL", "MSFT"]
+        stocks = [Stock(symbol="AAPL", ...), Stock(symbol="MSFT", ...)]
         cash = {"EUR": 1500.0}
         key = generate_recommendation_cache_key(positions, settings, stocks, cash)
     """

@@ -259,7 +259,9 @@ async def _check_and_rebalance_internal():
             "event_driven_rebalancing_enabled", 1.0
         )
         if event_driven_enabled == 1.0:
-            from app.domain.services.rebalancing_triggers import check_rebalance_triggers
+            from app.domain.services.rebalancing_triggers import (
+                check_rebalance_triggers,
+            )
 
             # Calculate total portfolio value
             total_position_value = sum(
@@ -297,10 +299,9 @@ async def _check_and_rebalance_internal():
         position_hash_dicts = [
             {"symbol": p.symbol, "quantity": p.quantity} for p in positions
         ]
-        stock_symbols = [s.symbol for s in stocks]
         cash_balances = {b.currency: b.amount for b in client.get_cash_balances()}
         portfolio_hash = generate_portfolio_hash(
-            position_hash_dicts, stock_symbols, cash_balances
+            position_hash_dicts, stocks, cash_balances
         )
 
         logger.info("Step 3: Getting recommendation from holistic planner...")
@@ -364,14 +365,13 @@ async def _get_next_holistic_action() -> "Recommendation | None":
     stocks = await stock_repo.get_all_active()
     settings = await settings_service.get_settings()
     position_dicts = [{"symbol": p.symbol, "quantity": p.quantity} for p in positions]
-    stock_symbols = [s.symbol for s in stocks]
     cash_balances = (
         {b.currency: b.amount for b in client.get_cash_balances()}
         if client.is_connected
         else {}
     )
     portfolio_cache_key = generate_recommendation_cache_key(
-        position_dicts, settings.to_dict(), stock_symbols, cash_balances
+        position_dicts, settings.to_dict(), stocks, cash_balances
     )
     cache_key = f"recommendations:{portfolio_cache_key}"
 
@@ -491,14 +491,13 @@ async def _refresh_recommendation_cache():
         position_dicts = [
             {"symbol": p.symbol, "quantity": p.quantity} for p in positions
         ]
-        stock_symbols = [s.symbol for s in stocks]
         cash_balances = (
             {b.currency: b.amount for b in client.get_cash_balances()}
             if client.is_connected
             else {}
         )
         portfolio_cache_key = generate_recommendation_cache_key(
-            position_dicts, settings.to_dict(), stock_symbols, cash_balances
+            position_dicts, settings.to_dict(), stocks, cash_balances
         )
         cache_key = f"recommendations:{portfolio_cache_key}"
 
