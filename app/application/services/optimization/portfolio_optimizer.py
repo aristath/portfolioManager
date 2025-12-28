@@ -486,8 +486,9 @@ class PortfolioOptimizer:
                     f"{total_all_min:.2%}) exceed 100%, scaling down sector constraints"
                 )
                 # Scale sector constraints to leave room for individual stock minimums
-                # Target: sector minimums + stock minimums = 95% (leaves 5% slack)
-                target_sector_min = max(0.0, 0.95 - total_stock_min)
+                # Target: sector minimums + stock minimums = 90% (leaves 10% slack for optimizer)
+                # Lower target improves feasibility when constraints are complex
+                target_sector_min = max(0.0, 0.90 - total_stock_min)
                 current_sector_min = country_min_sum + ind_min_sum
 
                 if current_sector_min > 0 and target_sector_min < current_sector_min:
@@ -501,7 +502,8 @@ class PortfolioOptimizer:
 
                     logger.info(
                         f"Scaled sector minimums by {scale_factor:.2%} to "
-                        f"{target_sector_min:.2%} (leaving {total_stock_min:.2%} for stocks)"
+                        f"{target_sector_min:.2%} (leaving {total_stock_min:.2%} for stocks, "
+                        f"total={target_sector_min + total_stock_min:.2%})"
                     )
 
         def _apply_sector_constraints(ef: EfficientFrontier) -> None:
