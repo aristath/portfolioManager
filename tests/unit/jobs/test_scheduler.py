@@ -457,7 +457,7 @@ class TestInitScheduler:
         mock_logger.info.assert_called_once()
         log_message = mock_logger.info.call_args[0][0]
         assert "Scheduler initialized" in log_message
-        assert "4 jobs" in log_message
+        assert "7 jobs" in log_message
 
     @pytest.mark.asyncio
     async def test_replaces_existing_jobs(self):
@@ -488,9 +488,9 @@ class TestInitScheduler:
             await init_scheduler()
             second_jobs_count = len(scheduler_module.scheduler.get_jobs())
 
-        # Should still have 4 jobs (replaced, not duplicated)
-        assert first_jobs_count == 4
-        assert second_jobs_count == 4
+        # Should still have 7 jobs (replaced, not duplicated)
+        assert first_jobs_count == 7
+        assert second_jobs_count == 7
 
     @pytest.mark.asyncio
     async def test_handles_maintenance_hour_overflow(self):
@@ -553,7 +553,7 @@ class TestRescheduleAllJobs:
 
         # Verify the job was rescheduled
         jobs = scheduler_module.scheduler.get_jobs()
-        assert len(jobs) == 4
+        assert len(jobs) == 7
 
     @pytest.mark.asyncio
     async def test_reschedules_maintenance_jobs(self):
@@ -582,7 +582,7 @@ class TestRescheduleAllJobs:
             await reschedule_all_jobs()
 
         jobs = scheduler_module.scheduler.get_jobs()
-        assert len(jobs) == 4
+        assert len(jobs) == 7
 
     @pytest.mark.asyncio
     async def test_logs_reschedule_info(self):
@@ -975,9 +975,9 @@ class TestEdgeCases:
             await reschedule_all_jobs()
             await reschedule_all_jobs()
 
-        # Should still have 4 jobs
+        # Should still have 7 jobs
         jobs = scheduler_module.scheduler.get_jobs()
-        assert len(jobs) == 4
+        assert len(jobs) == 7
 
     def test_job_listener_with_no_exception_attribute(self):
         """Test job listener handles events without exception attribute."""
