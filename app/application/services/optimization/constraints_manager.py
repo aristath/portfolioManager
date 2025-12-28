@@ -284,18 +284,26 @@ class ConstraintsManager:
                     )
                 )
 
-        # Log country constraint summary for debugging
+        # Scale down country constraint upper bounds if they sum to > 100%
+        # This prevents optimization infeasibility when many countries are constrained
         if country_constraints:
-            country_min_sum = sum(c.lower for c in country_constraints)
             country_max_sum = sum(c.upper for c in country_constraints)
             if country_max_sum > 1.0:
                 logger.warning(
-                    f"Country constraint upper bounds sum to {country_max_sum:.2%} > 100%. "
-                    f"This may cause optimization infeasibility. Consider reducing "
-                    f"country targets or geo_tolerance."
+                    f"Country constraint upper bounds sum to {country_max_sum:.2%} > 100%, "
+                    f"scaling down proportionally to 100%"
                 )
+                # Scale all upper bounds proportionally
+                scale_factor = 1.0 / country_max_sum
+                for constraint in country_constraints:
+                    constraint.upper = constraint.upper * scale_factor
+                    # Ensure upper is still >= lower
+                    constraint.upper = max(constraint.upper, constraint.lower)
+
+            country_min_sum = sum(c.lower for c in country_constraints)
+            country_max_sum_final = sum(c.upper for c in country_constraints)
             logger.debug(
-                f"Country constraints sum: min={country_min_sum:.2%}, max={country_max_sum:.2%}"
+                f"Country constraints sum: min={country_min_sum:.2%}, max={country_max_sum_final:.2%}"
             )
 
         # Normalize industry targets to sum to 100% (if they sum to more)
