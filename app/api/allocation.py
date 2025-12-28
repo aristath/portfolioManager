@@ -261,8 +261,11 @@ async def update_country_group(
     """Create or update a country group."""
     if not group.group_name or not group.group_name.strip():
         raise HTTPException(status_code=400, detail="Group name is required")
-    if not group.country_names:
-        raise HTTPException(status_code=400, detail="At least one country is required")
+    # Allow empty country_names for new groups (user can add countries after creation)
+    # Filter out empty strings and duplicates
+    country_names = list(
+        dict.fromkeys([c for c in group.country_names if c and c.strip()])
+    )
     # Filter out empty strings and duplicates
     country_names = list(
         dict.fromkeys([c for c in group.country_names if c and c.strip()])
@@ -283,16 +286,11 @@ async def update_industry_group(
     """Create or update an industry group."""
     if not group.group_name or not group.group_name.strip():
         raise HTTPException(status_code=400, detail="Group name is required")
-    if not group.industry_names:
-        raise HTTPException(status_code=400, detail="At least one industry is required")
     # Filter out empty strings and duplicates
+    # Allow empty groups to be created (user can add industries after creation)
     industry_names = list(
         dict.fromkeys([i for i in group.industry_names if i and i.strip()])
     )
-    if not industry_names:
-        raise HTTPException(
-            status_code=400, detail="At least one valid industry is required"
-        )
 
     await grouping_repo.set_industry_group(group.group_name.strip(), industry_names)
     return {"group_name": group.group_name.strip(), "industry_names": industry_names}
