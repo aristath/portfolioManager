@@ -179,7 +179,9 @@ async def discover_new_stocks() -> None:
 
                 # Add to universe
                 await stock_repo.create(stock)
-                logger.info(f"Added stock {symbol} ({name}) with score {score:.3f}")
+                logger.info(
+                    f"Added stock {symbol} ({name}) with score {candidate_score:.3f}"
+                )
                 added_count += 1
 
             except Exception as e:
