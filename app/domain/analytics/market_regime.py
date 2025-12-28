@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from app.infrastructure.external.tradernet import TradernetClient, get_tradernet_client
+from app.infrastructure.recommendation_cache import get_recommendation_cache
 from app.repositories import SettingsRepository
 
 logger = logging.getLogger(__name__)
@@ -19,6 +20,10 @@ QQQ_SYMBOL = "QQQ.US"
 
 # Number of days for moving average calculation
 MA_PERIOD = 200
+
+# Cache key for regime detection
+REGIME_CACHE_KEY = "market_regime"
+REGIME_CACHE_TTL_HOURS = 24  # Update daily
 
 
 def _calculate_200_day_ma(historical_data: list) -> Optional[float]:
@@ -63,7 +68,9 @@ def _calculate_distance_from_ma(current_price: float, ma: float) -> Optional[flo
     return (current_price - ma) / ma
 
 
-async def detect_market_regime(client: Optional[TradernetClient] = None) -> str:
+async def detect_market_regime(
+    client: Optional[TradernetClient] = None, use_cache: bool = True
+) -> str:
     """
     Detect current market regime based on SPY and QQQ 200-day moving averages.
 
@@ -74,6 +81,7 @@ async def detect_market_regime(client: Optional[TradernetClient] = None) -> str:
 
     Args:
         client: Optional TradernetClient (uses singleton if not provided)
+        use_cache: Whether to use cached result (default: True)
 
     Returns:
         Market regime string: "bull", "bear", or "sideways"
@@ -88,6 +96,14 @@ async def detect_market_regime(client: Optional[TradernetClient] = None) -> str:
         if enabled == 0.0:
             logger.info("Market regime detection is disabled, returning sideways as default")
             return "sideways"
+
+        # Check cache first (if enabled)
+        if use_cache:
+            cache = get_recommendation_cache()
+            cached_regime = await cache.get_analytics(REGIME_CACHE_KEY)
+            if cached_regime is not None:
+                logger.debug(f"Market regime cache HIT: {cached_regime}")
+                return cached_regime
 
         bull_threshold = await settings_repo.get_float("market_regime_bull_threshold", 0.05)
         bear_threshold = await settings_repo.get_float("market_regime_bear_threshold", -0.05)
@@ -159,6 +175,17 @@ async def detect_market_regime(client: Optional[TradernetClient] = None) -> str:
             f"Market regime detected: {regime} (avg_distance={avg_distance:.3f}, "
             f"SPY={spy_distance:.3f}, QQQ={qqq_distance:.3f if qqq_distance is not None else 'N/A'})"
         )
+
+        # Cache the result (if caching enabled)
+        if use_cache:
+            try:
+                cache = get_recommendation_cache()
+                await cache.set_analytics(
+                    REGIME_CACHE_KEY, regime, ttl_hours=REGIME_CACHE_TTL_HOURS
+                )
+                logger.debug(f"Cached market regime: {regime}")
+            except Exception as e:
+                logger.warning(f"Failed to cache market regime: {e}")
 
         return regime
 
