@@ -542,3 +542,382 @@ class TestPortfolioOptimizerBoundsClamping:
         assert result["GOOGL"] <= 0.6
         # Total may be less than investable_fraction after clamping (acceptable)
         assert sum(result.values()) <= investable_fraction
+
+
+class TestPortfolioOptimizerSectorConstraints:
+    """Test that sector constraints are applied to EfficientFrontier."""
+
+    @pytest.mark.asyncio
+    async def test_add_sector_constraints_called_with_country_constraints(
+        self,
+    ):
+        """Test that add_sector_constraints() is called with country constraints."""
+        from unittest.mock import patch
+
+        from app.application.services.optimization.constraints_manager import (
+            SectorConstraint,
+        )
+
+        optimizer = create_optimizer()
+
+        # Create sample constraints
+        country_constraints = [
+            SectorConstraint(
+                name="United States",
+                symbols=["AAPL", "GOOGL"],
+                target=0.5,
+                lower=0.4,
+                upper=0.6,
+            ),
+            SectorConstraint(
+                name="Germany",
+                symbols=["SAP"],
+                target=0.3,
+                lower=0.2,
+                upper=0.4,
+            ),
+        ]
+        ind_constraints = []
+
+        expected_returns = {"AAPL": 0.10, "GOOGL": 0.12, "SAP": 0.08}
+        cov_matrix = pd.DataFrame(
+            np.eye(3),
+            index=["AAPL", "GOOGL", "SAP"],
+            columns=["AAPL", "GOOGL", "SAP"],
+        )
+        bounds = {
+            "AAPL": (0.0, 0.3),
+            "GOOGL": (0.0, 0.3),
+            "SAP": (0.0, 0.3),
+        }
+        target_return = 0.11
+
+        with patch("pypfopt.EfficientFrontier") as mock_ef_class:
+            mock_ef = MagicMock()
+            mock_ef_class.return_value = mock_ef
+            mock_ef.efficient_return.return_value = None
+            mock_ef.clean_weights.return_value = {"AAPL": 0.3, "GOOGL": 0.3, "SAP": 0.2}
+
+            await optimizer._run_mean_variance(
+                expected_returns=expected_returns,
+                cov_matrix=cov_matrix,
+                bounds=bounds,
+                target_return=target_return,
+                country_constraints=country_constraints,
+                ind_constraints=ind_constraints,
+            )
+
+            # Verify EfficientFrontier was created
+            assert mock_ef_class.called
+
+            # Verify add_sector_constraints was called with country constraints
+            add_sector_calls = [
+                call
+                for call in mock_ef.method_calls
+                if call[0] == "add_sector_constraints"
+            ]
+            assert len(add_sector_calls) >= 1
+
+            # Check first call (country constraints)
+            country_call = add_sector_calls[0]
+            country_mapper = country_call[1][0]  # First positional arg
+            country_lower = country_call[1][1]  # Second positional arg
+            country_upper = country_call[1][2]  # Third positional arg
+
+            # Verify mapper maps symbols to country names
+            assert country_mapper["AAPL"] == "United States"
+            assert country_mapper["GOOGL"] == "United States"
+            assert country_mapper["SAP"] == "Germany"
+
+            # Verify bounds
+            assert country_lower["United States"] == 0.4
+            assert country_upper["United States"] == 0.6
+            assert country_lower["Germany"] == 0.2
+            assert country_upper["Germany"] == 0.4
+
+    @pytest.mark.asyncio
+    async def test_add_sector_constraints_called_with_industry_constraints(
+        self,
+    ):
+        """Test that add_sector_constraints() is called with industry constraints."""
+        from unittest.mock import patch
+
+        from app.application.services.optimization.constraints_manager import (
+            SectorConstraint,
+        )
+
+        optimizer = create_optimizer()
+
+        country_constraints = []
+        ind_constraints = [
+            SectorConstraint(
+                name="Technology",
+                symbols=["AAPL", "GOOGL"],
+                target=0.6,
+                lower=0.5,
+                upper=0.7,
+            ),
+            SectorConstraint(
+                name="Finance",
+                symbols=["JPM"],
+                target=0.2,
+                lower=0.1,
+                upper=0.3,
+            ),
+        ]
+
+        expected_returns = {"AAPL": 0.10, "GOOGL": 0.12, "JPM": 0.08}
+        cov_matrix = pd.DataFrame(
+            np.eye(3),
+            index=["AAPL", "GOOGL", "JPM"],
+            columns=["AAPL", "GOOGL", "JPM"],
+        )
+        bounds = {
+            "AAPL": (0.0, 0.3),
+            "GOOGL": (0.0, 0.3),
+            "JPM": (0.0, 0.3),
+        }
+        target_return = 0.11
+
+        with patch("pypfopt.EfficientFrontier") as mock_ef_class:
+            mock_ef = MagicMock()
+            mock_ef_class.return_value = mock_ef
+            mock_ef.efficient_return.return_value = None
+            mock_ef.clean_weights.return_value = {"AAPL": 0.3, "GOOGL": 0.3, "JPM": 0.2}
+
+            await optimizer._run_mean_variance(
+                expected_returns=expected_returns,
+                cov_matrix=cov_matrix,
+                bounds=bounds,
+                target_return=target_return,
+                country_constraints=country_constraints,
+                ind_constraints=ind_constraints,
+            )
+
+            # Verify add_sector_constraints was called with industry constraints
+            add_sector_calls = [
+                call
+                for call in mock_ef.method_calls
+                if call[0] == "add_sector_constraints"
+            ]
+            assert len(add_sector_calls) >= 1
+
+            # Check industry constraints call
+            ind_call = add_sector_calls[0]
+            ind_mapper = ind_call[1][0]
+            ind_lower = ind_call[1][1]
+            ind_upper = ind_call[1][2]
+
+            # Verify mapper maps symbols to industry names
+            assert ind_mapper["AAPL"] == "Technology"
+            assert ind_mapper["GOOGL"] == "Technology"
+            assert ind_mapper["JPM"] == "Finance"
+
+            # Verify bounds
+            assert ind_lower["Technology"] == 0.5
+            assert ind_upper["Technology"] == 0.7
+            assert ind_lower["Finance"] == 0.1
+            assert ind_upper["Finance"] == 0.3
+
+    @pytest.mark.asyncio
+    async def test_sector_constraints_applied_to_both_optimization_attempts(
+        self,
+    ):
+        """Test that constraints are applied to both efficient_return and max_sharpe attempts."""
+        from unittest.mock import patch
+
+        from pypfopt.exceptions import OptimizationError
+
+        from app.application.services.optimization.constraints_manager import (
+            SectorConstraint,
+        )
+
+        optimizer = create_optimizer()
+
+        country_constraints = [
+            SectorConstraint(
+                name="United States",
+                symbols=["AAPL"],
+                target=0.5,
+                lower=0.4,
+                upper=0.6,
+            ),
+        ]
+        ind_constraints = []
+
+        expected_returns = {"AAPL": 0.10}
+        cov_matrix = pd.DataFrame(np.array([[0.04]]), index=["AAPL"], columns=["AAPL"])
+        bounds = {"AAPL": (0.0, 1.0)}
+        target_return = 0.11
+
+        with patch("pypfopt.EfficientFrontier") as mock_ef_class:
+            mock_ef = MagicMock()
+            mock_ef_class.return_value = mock_ef
+
+            # First attempt (efficient_return) fails
+            mock_ef.efficient_return.side_effect = OptimizationError("Failed")
+            # Second attempt (max_sharpe) succeeds
+            mock_ef.max_sharpe.return_value = None
+            mock_ef.clean_weights.return_value = {"AAPL": 0.5}
+
+            await optimizer._run_mean_variance(
+                expected_returns=expected_returns,
+                cov_matrix=cov_matrix,
+                bounds=bounds,
+                target_return=target_return,
+                country_constraints=country_constraints,
+                ind_constraints=ind_constraints,
+            )
+
+            # Verify EfficientFrontier was created (may be created twice)
+            assert mock_ef_class.call_count >= 1
+
+            # Verify add_sector_constraints was called
+            # (should be called for each EfficientFrontier instance)
+            add_sector_calls = [
+                call
+                for call in mock_ef.method_calls
+                if call[0] == "add_sector_constraints"
+            ]
+            # Should be called at least once (for efficient_return attempt)
+            assert len(add_sector_calls) >= 1
+
+    @pytest.mark.asyncio
+    async def test_sector_mappers_built_correctly_from_constraints(self):
+        """Test that sector mappers are built correctly from constraints."""
+        from unittest.mock import patch
+
+        from app.application.services.optimization.constraints_manager import (
+            SectorConstraint,
+        )
+
+        optimizer = create_optimizer()
+
+        # Multiple symbols per constraint
+        country_constraints = [
+            SectorConstraint(
+                name="United States",
+                symbols=["AAPL", "GOOGL", "MSFT"],
+                target=0.6,
+                lower=0.5,
+                upper=0.7,
+            ),
+        ]
+        ind_constraints = []
+
+        expected_returns = {"AAPL": 0.10, "GOOGL": 0.12, "MSFT": 0.11}
+        cov_matrix = pd.DataFrame(
+            np.eye(3),
+            index=["AAPL", "GOOGL", "MSFT"],
+            columns=["AAPL", "GOOGL", "MSFT"],
+        )
+        bounds = {
+            "AAPL": (0.0, 0.3),
+            "GOOGL": (0.0, 0.3),
+            "MSFT": (0.0, 0.3),
+        }
+        target_return = 0.11
+
+        with patch("pypfopt.EfficientFrontier") as mock_ef_class:
+            mock_ef = MagicMock()
+            mock_ef_class.return_value = mock_ef
+            mock_ef.efficient_return.return_value = None
+            mock_ef.clean_weights.return_value = {
+                "AAPL": 0.2,
+                "GOOGL": 0.2,
+                "MSFT": 0.2,
+            }
+
+            await optimizer._run_mean_variance(
+                expected_returns=expected_returns,
+                cov_matrix=cov_matrix,
+                bounds=bounds,
+                target_return=target_return,
+                country_constraints=country_constraints,
+                ind_constraints=ind_constraints,
+            )
+
+            # Verify mapper includes all symbols
+            add_sector_calls = [
+                call
+                for call in mock_ef.method_calls
+                if call[0] == "add_sector_constraints"
+            ]
+            assert len(add_sector_calls) >= 1
+
+            country_call = add_sector_calls[0]
+            country_mapper = country_call[1][0]
+
+            # All three symbols should map to "United States"
+            assert country_mapper["AAPL"] == "United States"
+            assert country_mapper["GOOGL"] == "United States"
+            assert country_mapper["MSFT"] == "United States"
+
+    @pytest.mark.asyncio
+    async def test_sector_bounds_built_correctly_from_constraints(self):
+        """Test that sector bounds (lower/upper) are built correctly from constraints."""
+        from unittest.mock import patch
+
+        from app.application.services.optimization.constraints_manager import (
+            SectorConstraint,
+        )
+
+        optimizer = create_optimizer()
+
+        country_constraints = [
+            SectorConstraint(
+                name="United States",
+                symbols=["AAPL"],
+                target=0.5,
+                lower=0.4,
+                upper=0.6,
+            ),
+            SectorConstraint(
+                name="Germany",
+                symbols=["SAP"],
+                target=0.3,
+                lower=0.2,
+                upper=0.4,
+            ),
+        ]
+        ind_constraints = []
+
+        expected_returns = {"AAPL": 0.10, "SAP": 0.08}
+        cov_matrix = pd.DataFrame(
+            np.eye(2), index=["AAPL", "SAP"], columns=["AAPL", "SAP"]
+        )
+        bounds = {"AAPL": (0.0, 0.6), "SAP": (0.0, 0.4)}
+        target_return = 0.11
+
+        with patch("pypfopt.EfficientFrontier") as mock_ef_class:
+            mock_ef = MagicMock()
+            mock_ef_class.return_value = mock_ef
+            mock_ef.efficient_return.return_value = None
+            mock_ef.clean_weights.return_value = {"AAPL": 0.5, "SAP": 0.3}
+
+            await optimizer._run_mean_variance(
+                expected_returns=expected_returns,
+                cov_matrix=cov_matrix,
+                bounds=bounds,
+                target_return=target_return,
+                country_constraints=country_constraints,
+                ind_constraints=ind_constraints,
+            )
+
+            # Verify bounds are correct
+            add_sector_calls = [
+                call
+                for call in mock_ef.method_calls
+                if call[0] == "add_sector_constraints"
+            ]
+            assert len(add_sector_calls) >= 1
+
+            country_call = add_sector_calls[0]
+            country_lower = country_call[1][1]
+            country_upper = country_call[1][2]
+
+            # Verify bounds match constraint values
+            assert country_lower["United States"] == 0.4
+            assert country_upper["United States"] == 0.6
+            assert country_lower["Germany"] == 0.2
+            assert country_upper["Germany"] == 0.4
