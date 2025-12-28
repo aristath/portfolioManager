@@ -4,7 +4,7 @@ These tests ensure trade sizes are calculated correctly. Wrong position
 sizes could lead to over-concentrated positions or wasted cash.
 """
 
-from app.domain.constants import MAX_POSITION_SIZE_MULTIPLIER
+from app.domain.constants import MAX_VOL_WEIGHT, MIN_VOL_WEIGHT
 from app.domain.models import StockPriority
 from app.domain.services.allocation_calculator import (
     calculate_position_size,
@@ -16,10 +16,9 @@ from app.domain.services.allocation_calculator import (
 class TestCalculatePositionSize:
     """Tests for position size calculation.
 
-    Position sizing uses three multipliers:
-    - Conviction: Based on stock score (higher score = larger position)
-    - Priority: Based on combined priority (higher = larger)
-    - Volatility: Reduces size for volatile stocks
+    Position sizing uses risk parity (inverse volatility weighting):
+    - Volatility: Low vol stocks get larger positions (up to 2x), high vol get smaller (down to 0.5x)
+    - Score adjustment: ±10% based on stock score
 
     Bug this catches: Wrong position sizes could cause overexposure
     to risky stocks or underinvestment in good opportunities.
@@ -45,24 +44,28 @@ class TestCalculatePositionSize:
         )
 
     def test_high_score_gets_larger_position(self):
-        """High stock score should result in larger position.
+        """High stock score should result in slightly larger position (±10% adjustment).
 
         Bug caught: If score doesn't affect size, all trades would
         be the same size regardless of conviction.
         """
         base = 1000
         min_size = 100
+        vol = 0.20  # Same volatility for fair comparison
 
-        low_score = self._make_candidate(score=0.3)
-        high_score = self._make_candidate(score=0.9)
+        low_score = self._make_candidate(score=0.3, volatility=vol)
+        high_score = self._make_candidate(score=0.9, volatility=vol)
 
         low_size = calculate_position_size(low_score, base, min_size)
         high_size = calculate_position_size(high_score, base, min_size)
 
+        # High score should get ~10% larger position (score adjustment)
         assert high_size > low_size
+        # But difference should be small (score adjustment is ±10%)
+        assert (high_size - low_size) / base < 0.15
 
     def test_high_volatility_reduces_position(self):
-        """High volatility should reduce position size.
+        """High volatility should reduce position size (risk parity).
 
         Bug caught: If volatility isn't considered, system would
         take same-sized bets on stable and volatile stocks.
@@ -70,16 +73,25 @@ class TestCalculatePositionSize:
         base = 1000
         min_size = 100
 
-        low_vol = self._make_candidate(volatility=0.15)  # 15% annual vol
-        high_vol = self._make_candidate(volatility=0.40)  # 40% annual vol
+        low_vol = self._make_candidate(
+            volatility=0.10
+        )  # 10% annual vol -> larger position
+        high_vol = self._make_candidate(
+            volatility=0.30
+        )  # 30% annual vol -> smaller position
 
         low_vol_size = calculate_position_size(low_vol, base, min_size)
         high_vol_size = calculate_position_size(high_vol, base, min_size)
 
+        # Low vol should get significantly larger position (risk parity)
         assert low_vol_size > high_vol_size
+        # Low vol (10%) should get close to 2x base (15%/10% = 1.5x, capped at 2x)
+        assert low_vol_size >= base * 1.4
+        # High vol (30%) should get around 0.5x base (15%/30% = 0.5x)
+        assert high_vol_size <= base * 0.6
 
-    def test_none_volatility_uses_neutral_multiplier(self):
-        """None volatility should not crash or reduce size.
+    def test_none_volatility_uses_default(self):
+        """None volatility should use default volatility (0.20).
 
         Bug caught: Missing data shouldn't break calculations.
         """
@@ -90,24 +102,26 @@ class TestCalculatePositionSize:
 
         size = calculate_position_size(no_vol, base, min_size)
 
-        # Should use neutral multiplier (1.0), so size based only on score/priority
+        # Should use default volatility (0.20), so vol_weight = 15%/20% = 0.75x
         assert size >= min_size
-        assert size <= base * MAX_POSITION_SIZE_MULTIPLIER
+        assert size <= base * MAX_VOL_WEIGHT
 
     def test_never_exceeds_maximum(self):
-        """Position should never exceed MAX_POSITION_SIZE_MULTIPLIER * base.
+        """Position should never exceed MAX_VOL_WEIGHT * base.
 
         Bug caught: Unbounded position sizes could cause over-concentration.
         """
         base = 1000
         min_size = 100
 
-        # Perfect stock: high score, high priority, low vol
-        perfect = self._make_candidate(score=1.0, priority=3.0, volatility=0.10)
+        # Perfect stock: high score, very low vol (gets max vol weight)
+        perfect = self._make_candidate(
+            score=1.0, volatility=0.05
+        )  # 5% vol -> max weight
 
         size = calculate_position_size(perfect, base, min_size)
 
-        max_allowed = base * MAX_POSITION_SIZE_MULTIPLIER
+        max_allowed = base * MAX_VOL_WEIGHT  # 2.0x
         assert size <= max_allowed
 
     def test_never_below_minimum(self):
@@ -118,40 +132,39 @@ class TestCalculatePositionSize:
         base = 1000
         min_size = 200
 
-        # Terrible stock: low score, low priority, high vol
-        terrible = self._make_candidate(score=0.1, priority=0.1, volatility=0.60)
+        # Terrible stock: low score, very high vol
+        terrible = self._make_candidate(
+            score=0.1, volatility=0.60
+        )  # 60% vol -> min weight
 
         size = calculate_position_size(terrible, base, min_size)
 
         assert size >= min_size
 
-    def test_minimum_score_gets_minimum_multiplier(self):
-        """Score of 0.5 is actually minimum conviction - gets smallest position.
-
-        The conviction formula: MIN + (score - 0.5) * 0.8
-        At score=0.5, conviction = MIN (0.8)
-        Only scores ABOVE 0.5 get larger positions.
+    def test_score_adjustment_is_small(self):
+        """Score adjustment is ±10% on top of volatility weighting.
 
         Bug caught: Misunderstanding the scoring scale could cause wrong positions.
         """
         base = 1000
         min_size = 100
+        vol = 0.20  # Same volatility for fair comparison
 
-        # Score 0.5 = minimum conviction (0.8x)
-        min_score = self._make_candidate(score=0.5, priority=1.0, volatility=0.15)
-        # Score 0.9 = high conviction (1.12x)
-        high_score = self._make_candidate(score=0.9, priority=1.0, volatility=0.15)
+        # Score 0.5 = neutral (no adjustment)
+        neutral_score = self._make_candidate(score=0.5, volatility=vol)
+        # Score 1.0 = +10% adjustment
+        high_score = self._make_candidate(score=1.0, volatility=vol)
 
-        min_size_result = calculate_position_size(min_score, base, min_size)
-        high_size_result = calculate_position_size(high_score, base, min_size)
+        neutral_result = calculate_position_size(neutral_score, base, min_size)
+        high_result = calculate_position_size(high_score, base, min_size)
 
-        # High score should get larger position
-        assert high_size_result > min_size_result
-        # Min score should get around 0.8x base (times priority and vol multipliers)
-        assert min_size_result < base
+        # High score should get slightly larger position
+        assert high_result > neutral_result
+        # But difference should be ~10% (score adjustment)
+        assert (high_result - neutral_result) / neutral_result < 0.12
 
     def test_extreme_volatility_respects_floor(self):
-        """Even extreme volatility should not reduce below MIN_VOLATILITY_MULTIPLIER.
+        """Even extreme volatility should not reduce below MIN_VOL_WEIGHT.
 
         Bug caught: Extreme volatility causing near-zero positions.
         """
@@ -162,8 +175,9 @@ class TestCalculatePositionSize:
 
         size = calculate_position_size(extreme, base, min_size)
 
-        # Should respect both volatility floor and min_size
+        # Should respect both volatility floor (MIN_VOL_WEIGHT = 0.5x) and min_size
         assert size >= min_size
+        assert size >= base * MIN_VOL_WEIGHT
 
 
 class TestParseIndustries:

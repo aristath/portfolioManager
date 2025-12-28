@@ -1,20 +1,13 @@
 """Portfolio allocation and rebalancing logic."""
 
 import logging
-from typing import Optional
 
 from app.config import settings
-from app.domain.constants import (  # Risk parity constants
+from app.domain.constants import (
     DEFAULT_VOLATILITY,
-    MAX_CONVICTION_MULTIPLIER,
-    MAX_POSITION_SIZE_MULTIPLIER,
-    MAX_PRIORITY_MULTIPLIER,
     MAX_VOL_WEIGHT,
-    MIN_CONVICTION_MULTIPLIER,
-    MIN_PRIORITY_MULTIPLIER,
     MIN_VOL_WEIGHT,
     MIN_VOLATILITY_FOR_SIZING,
-    MIN_VOLATILITY_MULTIPLIER,
     REBALANCE_BAND_PCT,
     TARGET_PORTFOLIO_VOLATILITY,
 )
@@ -60,64 +53,6 @@ def parse_industries(industry_str: str) -> list[str]:
 
 
 def calculate_position_size(
-    candidate: StockPriority,
-    base_size: float,
-    min_size: float,
-    sortino_ratio: Optional[float] = None,
-) -> float:
-    """
-    Calculate position size based on conviction, risk, and risk-adjusted returns.
-
-    Args:
-        candidate: Stock priority data
-        base_size: Base investment amount per trade
-        min_size: Minimum trade size
-        sortino_ratio: Optional Sortino ratio for risk-adjusted sizing
-
-    Returns:
-        Adjusted position size (0.8x to 1.2x of base)
-    """
-    # Conviction multiplier based on stock score
-    conviction_mult = MIN_CONVICTION_MULTIPLIER + (candidate.stock_score - 0.5) * 0.8
-    conviction_mult = max(
-        MIN_CONVICTION_MULTIPLIER, min(MAX_CONVICTION_MULTIPLIER, conviction_mult)
-    )
-
-    # Priority multiplier based on combined priority
-    priority_mult = MIN_PRIORITY_MULTIPLIER + (candidate.combined_priority / 3.0) * 0.2
-    priority_mult = max(
-        MIN_PRIORITY_MULTIPLIER, min(MAX_PRIORITY_MULTIPLIER, priority_mult)
-    )
-
-    # Volatility penalty (if available)
-    if candidate.volatility is not None:
-        vol_mult = max(
-            MIN_VOLATILITY_MULTIPLIER, 1.0 - (candidate.volatility - 0.15) * 0.5
-        )
-    else:
-        vol_mult = 1.0
-
-    # Risk-adjusted multiplier based on Sortino ratio (PyFolio enhancement)
-    risk_mult = 1.0
-    if sortino_ratio is not None:
-        if sortino_ratio > 2.0:
-            # Excellent risk-adjusted returns - increase size
-            risk_mult = 1.15
-        elif sortino_ratio > 1.5:
-            # Good risk-adjusted returns - slight increase
-            risk_mult = 1.05
-        elif sortino_ratio < 0.5:
-            # Poor risk-adjusted returns - reduce size
-            risk_mult = 0.8
-        elif sortino_ratio < 1.0:
-            # Below average - slight reduction
-            risk_mult = 0.9
-
-    size = base_size * conviction_mult * priority_mult * vol_mult * risk_mult
-    return max(min_size, min(size, base_size * MAX_POSITION_SIZE_MULTIPLIER))
-
-
-def calculate_position_size_risk_parity(
     candidate: StockPriority,
     base_size: float,
     min_size: float,

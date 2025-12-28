@@ -1,13 +1,5 @@
 """Domain constants for business logic."""
 
-# Position sizing multipliers (legacy conviction-based)
-MIN_CONVICTION_MULTIPLIER = 0.8
-MAX_CONVICTION_MULTIPLIER = 1.2
-MIN_PRIORITY_MULTIPLIER = 0.9
-MAX_PRIORITY_MULTIPLIER = 1.1
-MIN_VOLATILITY_MULTIPLIER = 0.7
-MAX_POSITION_SIZE_MULTIPLIER = 1.2
-
 # Risk Parity Position Sizing
 # Based on MOSEK Portfolio Cookbook principles - inverse volatility weighting
 TARGET_PORTFOLIO_VOLATILITY = 0.15  # 15% annual target volatility
@@ -39,8 +31,3 @@ DAILY_LOSS_FULL_HALT = 0.05  # Block ALL trading if down 5%+
 
 # Cooldown periods (days)
 BUY_COOLDOWN_DAYS = 30
-
-# Geography codes
-GEO_EU = "EU"
-GEO_ASIA = "ASIA"
-GEO_US = "US"
