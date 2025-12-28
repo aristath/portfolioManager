@@ -5,11 +5,19 @@ CRITICAL: Tests catch real bugs that would cause wrong strategy adjustments.
 """
 
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from app.infrastructure.external.tradernet import OHLC, Quote
+
+
+def create_mock_cache():
+    """Create a mock cache that returns None (cache miss)."""
+    mock_cache = MagicMock()
+    mock_cache.get_analytics = AsyncMock(return_value=None)
+    mock_cache.set_analytics = AsyncMock()
+    return mock_cache
 
 
 def create_ohlc(timestamp: datetime, close: float) -> OHLC:
@@ -48,14 +56,14 @@ class TestRegimeClassification:
         """
         from app.domain.analytics.market_regime import detect_market_regime
 
-        # Create data where current price is 10% above 200-day MA
-        historical = create_historical_data(250, start_price=100.0, trend=0.1)
-        current_price = 110.0  # 10% above average
+        # Create flat data where MA will be exactly 100.0
+        historical = create_historical_data(250, start_price=100.0, trend=0.0)
+        current_price = 110.0  # 10% above 100.0 MA (clearly above 5% threshold)
 
         mock_client = MagicMock()
         # Mock SPY data
         mock_client.get_historical_prices = MagicMock(
-            side_effect=lambda symbol, start, end, days: (
+            side_effect=lambda symbol, start=None, end=None: (
                 historical if symbol == "SPY.US" else []
             )
         )
@@ -90,6 +98,10 @@ class TestRegimeClassification:
                 "app.domain.analytics.market_regime.get_tradernet_client",
                 return_value=mock_client,
             ),
+            patch(
+                "app.domain.analytics.market_regime.get_recommendation_cache",
+                return_value=create_mock_cache(),
+            ),
         ):
             regime = await detect_market_regime()
 
@@ -104,13 +116,13 @@ class TestRegimeClassification:
         """
         from app.domain.analytics.market_regime import detect_market_regime
 
-        # Create data where current price is 10% below 200-day MA
-        historical = create_historical_data(250, start_price=100.0, trend=-0.1)
-        current_price = 90.0  # 10% below average
+        # Create flat data where MA will be exactly 100.0
+        historical = create_historical_data(250, start_price=100.0, trend=0.0)
+        current_price = 90.0  # 10% below 100.0 MA (clearly below -5% threshold)
 
         mock_client = MagicMock()
         mock_client.get_historical_prices = MagicMock(
-            side_effect=lambda symbol, start, end, days: (
+            side_effect=lambda symbol, start=None, end=None: (
                 historical if symbol in ("SPY.US", "QQQ.US") else []
             )
         )
@@ -144,6 +156,10 @@ class TestRegimeClassification:
             patch(
                 "app.domain.analytics.market_regime.get_tradernet_client",
                 return_value=mock_client,
+            ),
+            patch(
+                "app.domain.analytics.market_regime.get_recommendation_cache",
+                return_value=create_mock_cache(),
             ),
         ):
             regime = await detect_market_regime()
@@ -165,7 +181,7 @@ class TestRegimeClassification:
 
         mock_client = MagicMock()
         mock_client.get_historical_prices = MagicMock(
-            side_effect=lambda symbol, start, end, days: (
+            side_effect=lambda symbol, start=None, end=None: (
                 historical if symbol in ("SPY.US", "QQQ.US") else []
             )
         )
@@ -200,6 +216,10 @@ class TestRegimeClassification:
                 "app.domain.analytics.market_regime.get_tradernet_client",
                 return_value=mock_client,
             ),
+            patch(
+                "app.domain.analytics.market_regime.get_recommendation_cache",
+                return_value=create_mock_cache(),
+            ),
         ):
             regime = await detect_market_regime()
 
@@ -220,7 +240,7 @@ class TestRegimeClassification:
 
         mock_client = MagicMock()
         mock_client.get_historical_prices = MagicMock(
-            side_effect=lambda symbol, start, end, days: (
+            side_effect=lambda symbol, start=None, end=None: (
                 historical if symbol in ("SPY.US", "QQQ.US") else []
             )
         )
@@ -254,6 +274,10 @@ class TestRegimeClassification:
             patch(
                 "app.domain.analytics.market_regime.get_tradernet_client",
                 return_value=mock_client,
+            ),
+            patch(
+                "app.domain.analytics.market_regime.get_recommendation_cache",
+                return_value=create_mock_cache(),
             ),
         ):
             regime = await detect_market_regime()
@@ -366,6 +390,10 @@ class TestErrorHandling:
             patch(
                 "app.domain.analytics.market_regime.get_tradernet_client",
                 return_value=mock_client,
+            ),
+            patch(
+                "app.domain.analytics.market_regime.get_recommendation_cache",
+                return_value=create_mock_cache(),
             ),
         ):
             # Should not raise exception, return default regime

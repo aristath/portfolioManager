@@ -179,17 +179,18 @@ async def detect_market_regime(
             avg_distance = spy_distance
             logger.info("Using SPY only for regime detection (QQQ unavailable)")
 
-        # Classify regime
-        if avg_distance > bull_threshold:
+        # Classify regime (>= for bull, <= for bear ensures boundary values classify correctly)
+        if avg_distance >= bull_threshold:
             regime = "bull"
-        elif avg_distance < bear_threshold:
+        elif avg_distance <= bear_threshold:
             regime = "bear"
         else:
             regime = "sideways"
 
+        qqq_str = f"{qqq_distance:.3f}" if qqq_distance is not None else "N/A"
         logger.info(
             f"Market regime detected: {regime} (avg_distance={avg_distance:.3f}, "
-            f"SPY={spy_distance:.3f}, QQQ={qqq_distance:.3f if qqq_distance is not None else 'N/A'})"
+            f"SPY={spy_distance:.3f}, QQQ={qqq_str})"
         )
 
         # Cache the result (if caching enabled)

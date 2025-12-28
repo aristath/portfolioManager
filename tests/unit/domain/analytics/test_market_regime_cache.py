@@ -80,13 +80,13 @@ class TestRegimeCache:
         """
         from app.domain.analytics.market_regime import detect_market_regime
 
-        historical = create_historical_data(250, start_price=100.0, trend=0.1)
+        historical = create_historical_data(250, start_price=100.0, trend=0.0)
         current_price = 110.0
 
         mock_client = MagicMock()
         mock_client.is_connected = True
         mock_client.get_historical_prices = MagicMock(
-            side_effect=lambda symbol, start, end, days: (
+            side_effect=lambda symbol, start=None, end=None: (
                 historical if symbol in ("SPY.US", "QQQ.US") else []
             )
         )
@@ -153,7 +153,7 @@ class TestRegimeCache:
         mock_client = MagicMock()
         mock_client.is_connected = True
         mock_client.get_historical_prices = MagicMock(
-            side_effect=lambda symbol, start, end, days: (
+            side_effect=lambda symbol, start=None, end=None: (
                 historical if symbol in ("SPY.US", "QQQ.US") else []
             )
         )
@@ -215,7 +215,7 @@ class TestRegimeCache:
         mock_client = MagicMock()
         mock_client.is_connected = True
         mock_client.get_historical_prices = MagicMock(
-            side_effect=lambda symbol, start, end, days: (
+            side_effect=lambda symbol, start=None, end=None: (
                 historical if symbol in ("SPY.US", "QQQ.US") else []
             )
         )
