@@ -222,7 +222,8 @@ async def _check_and_rebalance_internal():
         )
         from app.domain.services.settings_service import SettingsService
 
-        settings_service = SettingsService(SettingsRepository())
+        settings_repo = SettingsRepository()
+        settings_service = SettingsService(settings_repo)
         settings = await settings_service.get_settings()
         min_trade_size = calculate_min_trade_amount(
             settings.transaction_cost_fixed,
@@ -252,6 +253,44 @@ async def _check_and_rebalance_internal():
 
         positions = await position_repo.get_all()
         stocks = await stock_repo.get_all_active()
+
+        # Check event-driven rebalancing triggers
+        event_driven_enabled = await settings_repo.get_float(
+            "event_driven_rebalancing_enabled", 1.0
+        )
+        if event_driven_enabled == 1.0:
+            from app.domain.services.rebalancing_triggers import check_rebalance_triggers
+
+            # Calculate total portfolio value
+            total_position_value = sum(
+                p.market_value_eur or 0.0 for p in positions if p.market_value_eur
+            )
+            total_portfolio_value = total_position_value + cash_balance
+
+            # Get target allocations (empty dict = skip drift check, only check cash)
+            # TODO: Could get from cached optimizer result or run lightweight optimizer
+            target_allocations = {}
+
+            should_rebalance, trigger_reason = await check_rebalance_triggers(
+                positions=positions,
+                target_allocations=target_allocations,
+                total_portfolio_value=total_portfolio_value,
+                cash_balance=cash_balance,
+                settings_repo=settings_repo,
+            )
+
+            if not should_rebalance:
+                logger.info(
+                    f"Event-driven rebalancing: skipping cycle ({trigger_reason})"
+                )
+                emit(SystemEvent.REBALANCE_COMPLETE)
+                await _refresh_recommendation_cache()
+                clear_processing()
+                return
+
+            logger.info(
+                f"Event-driven rebalancing: triggers met ({trigger_reason}), proceeding"
+            )
 
         from app.domain.portfolio_hash import generate_portfolio_hash
 
