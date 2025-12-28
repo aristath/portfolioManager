@@ -128,6 +128,66 @@ app/
 - `app/services/allocator.py` - Still used by some jobs (backward compatible)
 - `app/services/tradernet.py` and `app/services/yahoo.py` - Legacy clients, prefer `infrastructure/external/`
 
+### Known Architecture Violations
+
+The codebase has some pragmatic violations of Clean Architecture principles. These are documented here for transparency and future refactoring:
+
+#### 1. Domain Layer Importing Infrastructure/Repositories
+
+**Violation:** Some domain services import repositories or infrastructure directly.
+
+**Affected Files:**
+- `domain/services/rebalancing_triggers.py` - Imports `SettingsRepository`
+- `domain/analytics/market_regime.py` - Imports `TradernetClient`, `get_recommendation_cache`
+- `domain/services/stock_discovery.py` - Imports `TradernetClient`
+- `domain/services/ticker_content_service.py` - Imports `cache`, `TradernetClient`
+- `domain/planning/holistic_planner.py` - Imports `yahoo_finance`, `SettingsRepository`, `TradeRepository`
+- `domain/scoring/*` (multiple files) - Import `CalculationsRepository`
+- `domain/services/exchange_rate_service.py` - Imports `DatabaseManager`
+
+**Justification:**
+- These violations exist for pragmatic reasons (performance, convenience)
+- Domain logic needs access to cached calculations and external data
+- Full dependency injection would require significant refactoring
+
+**Migration Path:**
+1. Short-term: Document violations and add comments to affected files
+2. Medium-term: Use dependency injection for repositories in domain services
+3. Long-term: Refactor to pass data/context objects instead of repositories
+
+#### 2. Direct Database Access Outside Repositories
+
+**Violation:** Some code calls `get_db_manager()` directly instead of using repositories.
+
+**Affected Areas:**
+- `app/jobs/*` - Multiple jobs call `get_db_manager()` directly
+- `app/repositories/stock.py:111` - `get_with_scores()` method accesses multiple databases
+- `app/infrastructure/recommendation_cache.py` - Direct database access
+
+**Justification:**
+- Jobs need to coordinate multiple repositories
+- Some operations span multiple databases
+- Repository pattern would require composite repositories
+
+**Migration Path:**
+1. Create composite repositories for multi-database operations
+2. Inject repositories into jobs via dependency injection
+3. Create repository for recommendation cache operations
+
+#### 3. Repository Pattern Inconsistency
+
+**Violation:** Some repositories access multiple databases directly.
+
+**Example:** `StockRepository.get_with_scores()` accesses both `config.db` and `state.db`.
+
+**Justification:**
+- Composite queries need data from multiple databases
+- Creating separate repositories for each database would complicate queries
+
+**Migration Path:**
+- Create composite repository or service that orchestrates multiple repositories
+- Or inject multiple repositories as dependencies
+
 ## Benefits
 
 1. **Testability**: Domain logic can be tested without database
