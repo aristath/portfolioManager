@@ -19,7 +19,7 @@ class TestCalculateGeoGapScore:
         from app.domain.scoring.diversification import _calculate_geo_gap_score
 
         context = PortfolioContext(
-            geo_weights={},
+            country_weights={},
             industry_weights={},
             positions={},
             total_value=0,
@@ -34,7 +34,7 @@ class TestCalculateGeoGapScore:
         from app.domain.scoring.diversification import _calculate_geo_gap_score
 
         context = PortfolioContext(
-            geo_weights={"US": 0.5},  # Underweight, should boost
+            country_weights={"US": 0.5},  # Underweight, should boost
             industry_weights={},
             positions={},
             total_value=0,
@@ -49,7 +49,7 @@ class TestCalculateGeoGapScore:
         from app.domain.scoring.diversification import _calculate_geo_gap_score
 
         context = PortfolioContext(
-            geo_weights={"US": -0.5},  # Overweight, should reduce
+            country_weights={"US": -0.5},  # Overweight, should reduce
             industry_weights={},
             positions={},
             total_value=0,
@@ -64,7 +64,7 @@ class TestCalculateGeoGapScore:
         from app.domain.scoring.diversification import _calculate_geo_gap_score
 
         context = PortfolioContext(
-            geo_weights={"US": 10.0},  # Extreme value
+            country_weights={"US": 10.0},  # Extreme value
             industry_weights={},
             positions={},
             total_value=0,
@@ -83,7 +83,7 @@ class TestCalculateIndustryGapScore:
         from app.domain.scoring.diversification import _calculate_industry_gap_score
 
         context = PortfolioContext(
-            geo_weights={},
+            country_weights={},
             industry_weights={},
             positions={},
             total_value=0,
@@ -98,7 +98,7 @@ class TestCalculateIndustryGapScore:
         from app.domain.scoring.diversification import _calculate_industry_gap_score
 
         context = PortfolioContext(
-            geo_weights={},
+            country_weights={},
             industry_weights={},
             positions={},
             total_value=0,
@@ -113,7 +113,7 @@ class TestCalculateIndustryGapScore:
         from app.domain.scoring.diversification import _calculate_industry_gap_score
 
         context = PortfolioContext(
-            geo_weights={},
+            country_weights={},
             industry_weights={"Consumer Electronics": 0.5},
             positions={},
             total_value=0,
@@ -128,7 +128,7 @@ class TestCalculateIndustryGapScore:
         from app.domain.scoring.diversification import _calculate_industry_gap_score
 
         context = PortfolioContext(
-            geo_weights={},
+            country_weights={},
             industry_weights={"Consumer Electronics": 0.5, "Drug Manufacturers": -0.5},
             positions={},
             total_value=0,
@@ -148,7 +148,7 @@ class TestCalculateAveragingDownScore:
         from app.domain.scoring.diversification import _calculate_averaging_down_score
 
         context = PortfolioContext(
-            geo_weights={},
+            country_weights={},
             industry_weights={},
             positions={},
             total_value=10000,
@@ -163,7 +163,7 @@ class TestCalculateAveragingDownScore:
         from app.domain.scoring.diversification import _calculate_averaging_down_score
 
         context = PortfolioContext(
-            geo_weights={},
+            country_weights={},
             industry_weights={},
             positions={"AAPL.US": 1000},
             total_value=10000,
@@ -186,7 +186,7 @@ class TestCalculateAveragingDownScore:
         from app.domain.scoring.diversification import _calculate_averaging_down_score
 
         context = PortfolioContext(
-            geo_weights={},
+            country_weights={},
             industry_weights={},
             positions={"AAPL.US": 1000},
             total_value=10000,
@@ -208,7 +208,7 @@ class TestApplyCostBasisBonus:
         from app.domain.scoring.diversification import _apply_cost_basis_bonus
 
         context = PortfolioContext(
-            geo_weights={},
+            country_weights={},
             industry_weights={},
             positions={},
             total_value=0,
@@ -223,7 +223,7 @@ class TestApplyCostBasisBonus:
         from app.domain.scoring.diversification import _apply_cost_basis_bonus
 
         context = PortfolioContext(
-            geo_weights={},
+            country_weights={},
             industry_weights={},
             positions={"AAPL.US": 1000},
             total_value=10000,
@@ -240,7 +240,7 @@ class TestApplyCostBasisBonus:
         from app.domain.scoring.diversification import _apply_cost_basis_bonus
 
         context = PortfolioContext(
-            geo_weights={},
+            country_weights={},
             industry_weights={},
             positions={"AAPL.US": 1000},
             total_value=10000,
@@ -261,7 +261,7 @@ class TestApplyConcentrationPenalty:
         from app.domain.scoring.diversification import _apply_concentration_penalty
 
         context = PortfolioContext(
-            geo_weights={},
+            country_weights={},
             industry_weights={},
             positions={},
             total_value=0,
@@ -276,7 +276,7 @@ class TestApplyConcentrationPenalty:
         from app.domain.scoring.diversification import _apply_concentration_penalty
 
         context = PortfolioContext(
-            geo_weights={},
+            country_weights={},
             industry_weights={},
             positions={},
             total_value=10000,
@@ -292,7 +292,7 @@ class TestApplyConcentrationPenalty:
         from app.domain.scoring.diversification import _apply_concentration_penalty
 
         context = PortfolioContext(
-            geo_weights={},
+            country_weights={},
             industry_weights={},
             positions={},
             total_value=100000,
@@ -312,7 +312,7 @@ class TestCalculateDiversificationScore:
         from app.domain.scoring.diversification import calculate_diversification_score
 
         context = PortfolioContext(
-            geo_weights={"US": 0.1},
+            country_weights={"US": 0.1},
             industry_weights={"Consumer Electronics": 0.1},
             positions={},
             total_value=10000,
@@ -336,7 +336,7 @@ class TestCalculateDiversificationScore:
         from app.domain.scoring.diversification import calculate_diversification_score
 
         context = PortfolioContext(
-            geo_weights={},
+            country_weights={},
             industry_weights={},
             positions={},
             total_value=10000,
@@ -365,7 +365,7 @@ class TestCalculatePortfolioScore:
         from app.domain.scoring.diversification import calculate_portfolio_score
 
         context = PortfolioContext(
-            geo_weights={},
+            country_weights={},
             industry_weights={},
             positions={},
             total_value=0,
@@ -384,11 +384,11 @@ class TestCalculatePortfolioScore:
         from app.domain.scoring.diversification import calculate_portfolio_score
 
         context = PortfolioContext(
-            geo_weights={"US": 0.1, "EU": -0.1},
+            country_weights={"US": 0.1, "EU": -0.1},
             industry_weights={},
             positions={"AAPL.US": 5000, "SAP.EU": 5000},
             total_value=10000,
-            stock_geographies={"AAPL.US": "US", "SAP.EU": "EU"},
+            stock_countries={"AAPL.US": "US", "SAP.EU": "EU"},
             stock_scores={"AAPL.US": 0.8, "SAP.EU": 0.7},
             stock_dividends={"AAPL.US": 0.01, "SAP.EU": 0.02},
         )
@@ -414,7 +414,7 @@ class TestCalculatePortfolioScore:
         }
 
         context = PortfolioContext(
-            geo_weights={},
+            country_weights={},
             industry_weights={},
             positions={"AAPL.US": 1000},
             total_value=1000,
@@ -439,11 +439,11 @@ class TestCalculatePostTransactionScore:
         from app.domain.scoring.diversification import calculate_post_transaction_score
 
         context = PortfolioContext(
-            geo_weights={"EU": 0.5},  # Underweight EU
+            country_weights={"EU": 0.5},  # Underweight EU
             industry_weights={},
             positions={"AAPL.US": 8000},
             total_value=10000,
-            stock_geographies={"AAPL.US": "US"},
+            stock_countries={"AAPL.US": "US"},
             stock_scores={"AAPL.US": 0.7},
             stock_dividends={"AAPL.US": 0.01},
         )
@@ -481,7 +481,7 @@ class TestCalculatePostTransactionScore:
         }
 
         context = PortfolioContext(
-            geo_weights={},
+            country_weights={},
             industry_weights={},
             positions={"AAPL.US": 1000},
             total_value=1000,
