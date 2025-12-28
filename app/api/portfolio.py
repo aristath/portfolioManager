@@ -2,15 +2,18 @@
 
 import logging
 from datetime import datetime, timedelta
+from typing import List
 
 from fastapi import APIRouter, HTTPException
 
 from app.api.models import (
     AttributionData,
+    CashBalance,
     CashBreakdownResponse,
     PeriodInfo,
     PortfolioAnalyticsErrorResponse,
     PortfolioAnalyticsResponse,
+    PortfolioPosition,
     ReturnsData,
     RiskMetrics,
 )
@@ -92,7 +95,7 @@ def _format_risk_metrics(metrics: dict) -> dict:
     }
 
 
-@router.get("")
+@router.get("", response_model=List[PortfolioPosition])
 async def get_portfolio(
     position_repo: PositionRepositoryDep,
     stock_repo: StockRepositoryDep,
@@ -206,9 +209,9 @@ async def get_cash_breakdown(
     try:
         client = await ensure_tradernet_connected(raise_on_error=False)
         if not client:
-            return {"balances": [], "total_eur": 0}
+            return CashBreakdownResponse(balances=[], total_eur=0)
     except Exception:
-        return {"balances": [], "total_eur": 0}
+        return CashBreakdownResponse(balances=[], total_eur=0)
 
     try:
         balances = client.get_cash_balances()
@@ -220,12 +223,12 @@ async def get_cash_breakdown(
         )
         total_eur = sum(amounts_in_eur.values())
 
-        return {
-            "balances": [
-                {"currency": b.currency, "amount": b.amount} for b in balances
+        return CashBreakdownResponse(
+            balances=[
+                CashBalance(currency=b.currency, amount=b.amount) for b in balances
             ],
-            "total_eur": round(total_eur, 2),
-        }
+            total_eur=round(total_eur, 2),
+        )
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to get cash breakdown: {str(e)}"
