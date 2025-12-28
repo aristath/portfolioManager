@@ -290,15 +290,39 @@ async def update_industry_group(
 
 @router.delete("/groups/country/{group_name}")
 async def delete_country_group(group_name: str, grouping_repo: GroupingRepositoryDep):
-    """Delete a country group."""
-    await grouping_repo.delete_country_group(group_name)
+    """Delete a country group.
+
+    For hardcoded default groups, creates an empty override in DB to hide them.
+    For custom groups, deletes from DB.
+    """
+    # Check if group exists in DB
+    db_groups = await grouping_repo.get_country_groups()
+    if group_name in db_groups:
+        # Custom group - delete from DB
+        await grouping_repo.delete_country_group(group_name)
+    else:
+        # Hardcoded group - create empty override to hide it
+        # This works because custom groups take precedence over hardcoded ones
+        await grouping_repo.set_country_group(group_name, [])
     return {"deleted": group_name}
 
 
 @router.delete("/groups/industry/{group_name}")
 async def delete_industry_group(group_name: str, grouping_repo: GroupingRepositoryDep):
-    """Delete an industry group."""
-    await grouping_repo.delete_industry_group(group_name)
+    """Delete an industry group.
+
+    For hardcoded default groups, creates an empty override in DB to hide them.
+    For custom groups, deletes from DB.
+    """
+    # Check if group exists in DB
+    db_groups = await grouping_repo.get_industry_groups()
+    if group_name in db_groups:
+        # Custom group - delete from DB
+        await grouping_repo.delete_industry_group(group_name)
+    else:
+        # Hardcoded group - create empty override to hide it
+        # This works because custom groups take precedence over hardcoded ones
+        await grouping_repo.set_industry_group(group_name, [])
     return {"deleted": group_name}
 
 
