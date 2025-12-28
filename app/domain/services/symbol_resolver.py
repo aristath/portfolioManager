@@ -212,7 +212,9 @@ class SymbolResolver:
         return self._fetch_isin_from_tradernet(tradernet_symbol)
 
     def _fetch_isin_from_tradernet(self, tradernet_symbol: str) -> Optional[str]:
-        """Fetch ISIN from Tradernet's security_info API.
+        """Fetch ISIN from Tradernet's quotes API.
+
+        The ISIN is returned in the `issue_nb` field of get_quotes_raw().
 
         Args:
             tradernet_symbol: Symbol in Tradernet format
@@ -225,20 +227,20 @@ class SymbolResolver:
             return None
 
         try:
-            security_info = self._tradernet.get_security_info(tradernet_symbol)
-            if security_info:
-                isin = security_info.get("isin")
+            quotes = self._tradernet.get_quotes_raw([tradernet_symbol])
+            if quotes and len(quotes) > 0:
+                # quotes is a list of dicts, find our symbol
+                quote_data = quotes[0] if isinstance(quotes, list) else quotes
+                isin = quote_data.get("issue_nb")
                 if isin and is_isin(isin):
                     logger.info(f"Fetched ISIN for {tradernet_symbol}: {isin}")
                     return isin
                 else:
-                    logger.debug(
-                        f"No valid ISIN in security_info for {tradernet_symbol}"
-                    )
+                    logger.debug(f"No valid ISIN in quote data for {tradernet_symbol}")
             else:
-                logger.warning(f"No security_info returned for {tradernet_symbol}")
+                logger.warning(f"No quote data returned for {tradernet_symbol}")
         except Exception as e:
-            logger.error(f"Failed to fetch security_info for {tradernet_symbol}: {e}")
+            logger.error(f"Failed to fetch quote data for {tradernet_symbol}: {e}")
 
         return None
 

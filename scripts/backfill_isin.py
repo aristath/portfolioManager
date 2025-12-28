@@ -60,17 +60,18 @@ async def backfill_isin():
             logger.info("All stocks already have ISIN, nothing to do")
             return
 
-        # Fetch ISIN for each stock
+        # Fetch ISIN for each stock using get_quotes_raw (ISIN is in issue_nb field)
         success_count = 0
         failure_count = 0
 
         for stock in stocks_without_isin:
             try:
                 logger.info(f"Fetching ISIN for {stock.symbol}...")
-                security_info = tradernet.get_security_info(stock.symbol)
+                quotes = tradernet.get_quotes_raw([stock.symbol])
 
-                if security_info:
-                    isin = security_info.get("isin")
+                if quotes and len(quotes) > 0:
+                    quote_data = quotes[0] if isinstance(quotes, list) else quotes
+                    isin = quote_data.get("issue_nb")
                     if isin and is_isin(isin):
                         # Update stock with ISIN
                         await stock_repo.update(stock.symbol, isin=isin)
@@ -80,7 +81,7 @@ async def backfill_isin():
                         logger.warning(f"  {stock.symbol}: No valid ISIN in response")
                         failure_count += 1
                 else:
-                    logger.warning(f"  {stock.symbol}: No security_info returned")
+                    logger.warning(f"  {stock.symbol}: No quote data returned")
                     failure_count += 1
 
             except Exception as e:
