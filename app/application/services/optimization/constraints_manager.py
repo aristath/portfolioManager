@@ -371,6 +371,40 @@ class ConstraintsManager:
                 f"industry constraint(s)"
             )
 
+        # Scale down industry constraint minimum bounds if they sum to > 100%
+        # Also scale down if combined with country minimums they exceed 80% (too restrictive)
+        # This prevents optimization infeasibility when minimum bounds are too restrictive
+        if ind_constraints:
+            ind_min_sum = sum(c.lower for c in ind_constraints)
+            country_min_sum = sum(c.lower for c in country_constraints)
+            total_min_sum = country_min_sum + ind_min_sum
+
+            # Scale down if industry minimums alone exceed 100%
+            if ind_min_sum > 1.0:
+                logger.warning(
+                    f"Industry constraint minimum bounds sum to {ind_min_sum:.2%} > 100%, "
+                    f"scaling down proportionally to 100%"
+                )
+                scale_factor = 1.0 / ind_min_sum
+                for constraint in ind_constraints:
+                    constraint.lower = constraint.lower * scale_factor
+                    constraint.lower = min(constraint.lower, constraint.upper)
+            # Scale down if combined minimums exceed 80% (too restrictive for optimizer)
+            elif total_min_sum > 0.80:
+                logger.warning(
+                    f"Combined minimum bounds (country={country_min_sum:.2%} + "
+                    f"industry={ind_min_sum:.2%} = {total_min_sum:.2%}) exceed 80%, "
+                    f"scaling down industry minimums proportionally"
+                )
+                # Scale industry minimums so total doesn't exceed 80%
+                target_total = 0.80
+                available_for_industry = max(0.0, target_total - country_min_sum)
+                if available_for_industry > 0 and ind_min_sum > 0:
+                    scale_factor = available_for_industry / ind_min_sum
+                    for constraint in ind_constraints:
+                        constraint.lower = constraint.lower * scale_factor
+                        constraint.lower = min(constraint.lower, constraint.upper)
+
         logger.info(
             f"Built {len(country_constraints)} country constraints, "
             f"{len(ind_constraints)} industry constraints"

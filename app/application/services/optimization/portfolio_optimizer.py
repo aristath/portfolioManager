@@ -341,6 +341,21 @@ class PortfolioOptimizer:
                 f"min_sum={ind_min_sum:.2%}, max_sum={ind_max_sum:.2%}"
             )
 
+        # Check total minimum sum across all constraints
+        # This is critical - if country + industry minimums exceed 100%, it's infeasible
+        # Note: Individual stock minimums are already accounted for in bounds
+        total_min_sum = country_min_sum + ind_min_sum
+        if total_min_sum > 1.0:
+            warnings.append(
+                f"Total minimum constraints sum ({total_min_sum:.2%}) > 100% "
+                f"(country={country_min_sum:.2%}, industry={ind_min_sum:.2%}). "
+                f"This will cause optimization infeasibility."
+            )
+            is_feasible = False
+            logger.warning(
+                f"Constraint infeasibility detected: total minimum sum = {total_min_sum:.2%} > 100%"
+            )
+
         # Check if any symbols are missing from sector constraints
         country_symbols = set()
         for constraint in country_constraints:
