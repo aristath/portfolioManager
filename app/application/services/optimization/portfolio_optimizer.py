@@ -81,10 +81,13 @@ class PortfolioOptimizer:
         expected_returns_calc: Optional[ExpectedReturnsCalculator] = None,
         risk_model_builder: Optional[RiskModelBuilder] = None,
         constraints_manager: Optional[ConstraintsManager] = None,
+        grouping_repo=None,
     ):
         self._returns_calc = expected_returns_calc or ExpectedReturnsCalculator()
         self._risk_builder = risk_model_builder or RiskModelBuilder()
-        self._constraints_manager = constraints_manager or ConstraintsManager()
+        self._constraints_manager = constraints_manager or ConstraintsManager(
+            grouping_repo=grouping_repo
+        )
 
     async def optimize(
         self,
@@ -183,10 +186,11 @@ class PortfolioOptimizer:
         )
 
         # Build sector constraints
-        country_constraints, ind_constraints = (
-            self._constraints_manager.build_sector_constraints(
-                valid_stocks, country_targets, ind_targets
-            )
+        (
+            country_constraints,
+            ind_constraints,
+        ) = await self._constraints_manager.build_sector_constraints(
+            valid_stocks, country_targets, ind_targets
         )
 
         # Get high correlations for reporting
@@ -238,6 +242,12 @@ class PortfolioOptimizer:
         # Clamp weights to bounds (respect portfolio targets)
         # Normalization can push weights above max_portfolio_target bounds
         target_weights = self._clamp_weights_to_bounds(target_weights, bounds)
+
+        # Gradual adjustment: If portfolio is very unbalanced, move toward targets incrementally
+        # This prevents failures when the portfolio needs radical changes
+        target_weights = self._apply_gradual_adjustment(
+            target_weights, positions, portfolio_value, current_prices
+        )
 
         # Calculate weight changes
         weight_changes = self._calculate_weight_changes(
@@ -830,6 +840,108 @@ class PortfolioOptimizer:
             )
 
         return adjusted
+
+    def _apply_gradual_adjustment(
+        self,
+        target_weights: Dict[str, float],
+        positions: Dict[str, Position],
+        portfolio_value: float,
+        current_prices: Dict[str, float],
+    ) -> Dict[str, float]:
+        """
+        Apply gradual adjustment toward targets when portfolio is very unbalanced.
+
+        When the portfolio is far from targets, make incremental moves rather than
+        requiring full rebalancing. This prevents optimizer failures and allows
+        the system to gradually converge toward desired allocations.
+
+        Args:
+            target_weights: Ideal target weights from optimizer
+            positions: Current positions
+            portfolio_value: Total portfolio value
+            current_prices: Current stock prices
+
+        Returns:
+            Adjusted target weights that move incrementally toward ideal targets
+        """
+        # Calculate current weights
+        # Prefer market_value_eur if available (more accurate), otherwise calculate from quantity * price
+        current_weights: Dict[str, float] = {}
+        for symbol, position in positions.items():
+            if portfolio_value > 0:
+                if position.market_value_eur is not None:
+                    # Use stored market value (most accurate)
+                    current_weights[symbol] = (
+                        position.market_value_eur / portfolio_value
+                    )
+                elif symbol in current_prices and current_prices[symbol] is not None:
+                    # Calculate from quantity * price
+                    position_value = float(position.quantity) * float(
+                        current_prices[symbol]
+                    )
+                    current_weights[symbol] = position_value / portfolio_value
+                else:
+                    current_weights[symbol] = 0.0
+            else:
+                current_weights[symbol] = 0.0
+
+        # Calculate maximum deviation from current to target
+        max_deviation = 0.0
+        for symbol in set(list(target_weights.keys()) + list(current_weights.keys())):
+            current = current_weights.get(symbol, 0.0)
+            target = target_weights.get(symbol, 0.0)
+            max_deviation = max(max_deviation, abs(target - current))
+
+        # If maximum deviation is very large (>30%), apply gradual adjustment
+        # Move only 50% of the way toward targets per optimization cycle
+        # This allows gradual convergence over multiple cycles
+        GRADUAL_ADJUSTMENT_THRESHOLD = 0.30  # 30% max deviation
+        GRADUAL_ADJUSTMENT_STEP = 0.50  # Move 50% toward target per cycle
+
+        if max_deviation > GRADUAL_ADJUSTMENT_THRESHOLD:
+            logger.info(
+                f"Portfolio is very unbalanced (max deviation={max_deviation:.1%}), "
+                f"applying gradual adjustment (moving {GRADUAL_ADJUSTMENT_STEP:.0%} toward targets)"
+            )
+
+            adjusted_weights: Dict[str, float] = {}
+            for symbol in set(
+                list(target_weights.keys()) + list(current_weights.keys())
+            ):
+                current = current_weights.get(symbol, 0.0)
+                target = target_weights.get(symbol, 0.0)
+
+                # Move incrementally toward target
+                adjustment = (target - current) * GRADUAL_ADJUSTMENT_STEP
+                adjusted_weights[symbol] = current + adjustment
+
+                # Only include if weight is significant
+                if adjusted_weights[symbol] >= OPTIMIZER_WEIGHT_CUTOFF:
+                    adjusted_weights[symbol] = max(0.0, adjusted_weights[symbol])
+                else:
+                    adjusted_weights[symbol] = 0.0
+
+            # Normalize to maintain portfolio sum (target_weights already normalized to investable_fraction)
+            # This ensures adjusted weights also sum to the same investable_fraction
+            total = sum(adjusted_weights.values())
+            if total > 0:
+                target_sum = sum(
+                    target_weights.values()
+                )  # Should equal investable_fraction
+                adjusted_weights = {
+                    s: w / total * target_sum for s, w in adjusted_weights.items()
+                }
+            else:
+                # If all weights were filtered out, return empty dict
+                logger.warning(
+                    "All adjusted weights were filtered out, returning empty weights"
+                )
+                adjusted_weights = {}
+
+            return adjusted_weights
+
+        # Portfolio is reasonably balanced, use full targets
+        return target_weights
 
     def _calculate_weight_changes(
         self,

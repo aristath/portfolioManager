@@ -62,6 +62,32 @@ CREATE TABLE IF NOT EXISTS allocation_targets (
     UNIQUE(type, name)
 );
 
+-- Custom grouping for countries (e.g., EU, US, ASIA)
+CREATE TABLE IF NOT EXISTS country_groups (
+    id INTEGER PRIMARY KEY,
+    group_name TEXT NOT NULL,  -- e.g., 'EU', 'US', 'ASIA'
+    country_name TEXT NOT NULL,  -- e.g., 'Germany', 'France'
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(group_name, country_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_country_groups_group ON country_groups(group_name);
+CREATE INDEX IF NOT EXISTS idx_country_groups_country ON country_groups(country_name);
+
+-- Custom grouping for industries (e.g., Technology, Industrials, Energy)
+CREATE TABLE IF NOT EXISTS industry_groups (
+    id INTEGER PRIMARY KEY,
+    group_name TEXT NOT NULL,  -- e.g., 'Technology', 'Industrials'
+    industry_name TEXT NOT NULL,  -- e.g., 'Software', 'Semiconductors'
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(group_name, industry_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_industry_groups_group ON industry_groups(group_name);
+CREATE INDEX IF NOT EXISTS idx_industry_groups_industry ON industry_groups(industry_name);
+
 -- Application settings (key-value store)
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
@@ -190,15 +216,15 @@ async def init_config_schema(db):
         await db.execute(
             "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
             (
-                6,
+                7,
                 now,
-                "Initial config schema with portfolio_hash recommendations, last_synced, country, fullExchangeName, and portfolio targets",
+                "Initial config schema with portfolio_hash recommendations, last_synced, country, fullExchangeName, portfolio targets, and custom grouping",
             ),
         )
 
         await db.commit()
         logger.info(
-            "Config database initialized with schema version 4 (includes portfolio_hash and last_synced)"
+            "Config database initialized with schema version 7 (includes portfolio_hash, last_synced, portfolio targets, and custom grouping)"
         )
     elif current_version == 1:
         # Migration: Add recommendations table (version 1 -> 2)
@@ -399,6 +425,75 @@ async def init_config_schema(db):
         )
         await db.commit()
         logger.info("Config database migrated to schema version 6 (portfolio targets)")
+        current_version = 6
+
+    if current_version == 6:
+        # Migration: Add country_groups and industry_groups tables (version 6 -> 7)
+        now = datetime.now().isoformat()
+        logger.info(
+            "Migrating config database to schema version 7 (custom grouping)..."
+        )
+
+        # Check if country_groups table exists
+        cursor = await db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='country_groups'"
+        )
+        if not await cursor.fetchone():
+            await db.execute(
+                """
+                CREATE TABLE country_groups (
+                    id INTEGER PRIMARY KEY,
+                    group_name TEXT NOT NULL,
+                    country_name TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE(group_name, country_name)
+                )
+                """
+            )
+            await db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_country_groups_group ON country_groups(group_name)"
+            )
+            await db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_country_groups_country ON country_groups(country_name)"
+            )
+            logger.info("Created country_groups table")
+
+        # Check if industry_groups table exists
+        cursor = await db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='industry_groups'"
+        )
+        if not await cursor.fetchone():
+            await db.execute(
+                """
+                CREATE TABLE industry_groups (
+                    id INTEGER PRIMARY KEY,
+                    group_name TEXT NOT NULL,
+                    industry_name TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE(group_name, industry_name)
+                )
+                """
+            )
+            await db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_industry_groups_group ON industry_groups(group_name)"
+            )
+            await db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_industry_groups_industry ON industry_groups(industry_name)"
+            )
+            logger.info("Created industry_groups table")
+
+        await db.execute(
+            "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
+            (
+                7,
+                now,
+                "Added country_groups and industry_groups tables for custom grouping",
+            ),
+        )
+        await db.commit()
+        logger.info("Config database migrated to schema version 7 (custom grouping)")
 
 
 # =============================================================================

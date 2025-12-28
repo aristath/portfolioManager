@@ -9,6 +9,7 @@ from app.repositories.allocation import AllocationRepository
 from app.repositories.calculations import CalculationsRepository
 from app.repositories.cash_flow import CashFlowRepository
 from app.repositories.dividend import DividendRepository
+from app.repositories.grouping import GroupingRepository
 from app.repositories.history import HistoryRepository
 from app.repositories.portfolio import PortfolioRepository
 from app.repositories.position import PositionRepository
@@ -31,4 +32,5 @@ __all__ = [
     "RecommendationRepository",
     "CalculationsRepository",
     "DividendRepository",
+    "GroupingRepository",
 ]

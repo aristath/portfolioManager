@@ -36,6 +36,7 @@ from app.repositories import (
     AllocationRepository,
     CalculationsRepository,
     CashFlowRepository,
+    GroupingRepository,
     PortfolioRepository,
     PositionRepository,
     RecommendationRepository,
@@ -99,6 +100,11 @@ def get_calculations_repository() -> CalculationsRepository:
     return CalculationsRepository()
 
 
+def get_grouping_repository() -> GroupingRepository:
+    """Get GroupingRepository instance."""
+    return GroupingRepository()
+
+
 # Infrastructure Dependencies
 
 
@@ -136,6 +142,7 @@ RecommendationRepositoryDep = Annotated[
 CalculationsRepositoryDep = Annotated[
     CalculationsRepository, Depends(get_calculations_repository)
 ]
+GroupingRepositoryDep = Annotated[GroupingRepository, Depends(get_grouping_repository)]
 
 # Infrastructure dependency type aliases
 DatabaseManagerDep = Annotated[DatabaseManager, Depends(get_database_manager)]

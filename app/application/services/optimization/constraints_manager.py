@@ -153,10 +153,12 @@ class ConstraintsManager:
         max_concentration: float = MAX_CONCENTRATION,
         geo_tolerance: float = GEO_ALLOCATION_TOLERANCE,
         ind_tolerance: float = IND_ALLOCATION_TOLERANCE,
+        grouping_repo=None,
     ):
         self.max_concentration = max_concentration
         self.geo_tolerance = geo_tolerance
         self.ind_tolerance = ind_tolerance
+        self._grouping_repo = grouping_repo
 
     def calculate_weight_bounds(
         self,
@@ -306,7 +308,51 @@ class ConstraintsManager:
 
         return bounds
 
-    def build_sector_constraints(
+    async def _get_country_group_mapping(self) -> Dict[str, str]:
+        """Get country to group mapping from DB or fallback to hardcoded."""
+        if self._grouping_repo:
+            try:
+                db_groups = await self._grouping_repo.get_country_groups()
+                # Build reverse mapping: country -> group
+                mapping: Dict[str, str] = {}
+                for group_name, country_names in db_groups.items():
+                    for country_name in country_names:
+                        mapping[country_name] = group_name
+                if mapping:
+                    logger.info(
+                        f"Using custom country groups from DB: {len(db_groups)} groups"
+                    )
+                    return mapping
+            except Exception as e:
+                logger.warning(f"Failed to load custom country groups: {e}")
+
+        # Fallback to hardcoded mapping
+        logger.debug("Using hardcoded country group mapping")
+        return TERRITORY_MAPPING
+
+    async def _get_industry_group_mapping(self) -> Dict[str, str]:
+        """Get industry to group mapping from DB or fallback to hardcoded."""
+        if self._grouping_repo:
+            try:
+                db_groups = await self._grouping_repo.get_industry_groups()
+                # Build reverse mapping: industry -> group
+                mapping: Dict[str, str] = {}
+                for group_name, industry_names in db_groups.items():
+                    for industry_name in industry_names:
+                        mapping[industry_name] = group_name
+                if mapping:
+                    logger.info(
+                        f"Using custom industry groups from DB: {len(db_groups)} groups"
+                    )
+                    return mapping
+            except Exception as e:
+                logger.warning(f"Failed to load custom industry groups: {e}")
+
+        # Fallback to hardcoded mapping
+        logger.debug("Using hardcoded industry group mapping")
+        return INDUSTRY_GROUP_MAPPING
+
+    async def build_sector_constraints(
         self,
         stocks: List[Stock],
         country_targets: Dict[str, float],
@@ -314,6 +360,9 @@ class ConstraintsManager:
     ) -> Tuple[List[SectorConstraint], List[SectorConstraint]]:
         """
         Build country and industry sector constraints.
+
+        Uses custom groups from DB if available, otherwise falls back to hardcoded mappings.
+        This reduces constraint complexity and improves optimizer feasibility.
 
         Args:
             stocks: List of Stock objects
@@ -323,40 +372,44 @@ class ConstraintsManager:
         Returns:
             Tuple of (country_constraints, industry_constraints)
         """
-        # Group stocks by territory (EU/US/ASIA/OTHER) instead of individual countries
-        # This reduces constraint complexity and improves optimizer feasibility
+        # Get country to group mapping (custom from DB or hardcoded fallback)
+        country_to_group = await self._get_country_group_mapping()
+
+        # Group stocks by territory/group instead of individual countries
         territory_groups: Dict[str, List[str]] = {}
 
         for stock in stocks:
             country = stock.country or "OTHER"
-            # Map country to territory
-            territory = TERRITORY_MAPPING.get(country, "OTHER")
+            # Map country to group
+            territory = country_to_group.get(country, "OTHER")
 
             if territory not in territory_groups:
                 territory_groups[territory] = []
             territory_groups[territory].append(stock.symbol)
 
-        # Aggregate country targets to territory targets
+        # Aggregate country targets to territory/group targets
         territory_targets: Dict[str, float] = {}
         for country, target in country_targets.items():
-            territory = TERRITORY_MAPPING.get(country, "OTHER")
+            territory = country_to_group.get(country, "OTHER")
             territory_targets[territory] = (
                 territory_targets.get(territory, 0.0) + target
             )
 
         logger.info(
-            f"Grouped {len(country_targets)} country targets into {len(territory_targets)} territories: "
+            f"Grouped {len(country_targets)} country targets into {len(territory_targets)} groups: "
             f"{', '.join(f'{t}={v:.1%}' for t, v in sorted(territory_targets.items()) if v > 0)}"
         )
 
+        # Get industry to group mapping (custom from DB or hardcoded fallback)
+        industry_to_group = await self._get_industry_group_mapping()
+
         # Group stocks by industry group instead of individual industries
-        # This reduces constraint complexity
         industry_group_groups: Dict[str, List[str]] = {}
 
         for stock in stocks:
             industry = stock.industry or "OTHER"
-            # Map industry to industry group
-            industry_group = INDUSTRY_GROUP_MAPPING.get(industry, "OTHER")
+            # Map industry to group
+            industry_group = industry_to_group.get(industry, "OTHER")
 
             if industry_group not in industry_group_groups:
                 industry_group_groups[industry_group] = []
@@ -365,7 +418,7 @@ class ConstraintsManager:
         # Aggregate industry targets to industry group targets
         industry_group_targets: Dict[str, float] = {}
         for industry, target in ind_targets.items():
-            industry_group = INDUSTRY_GROUP_MAPPING.get(industry, "OTHER")
+            industry_group = industry_to_group.get(industry, "OTHER")
             industry_group_targets[industry_group] = (
                 industry_group_targets.get(industry_group, 0.0) + target
             )

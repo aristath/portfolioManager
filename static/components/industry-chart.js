@@ -9,7 +9,7 @@ class IndustryChart extends HTMLElement {
     this.innerHTML = `
       <div class="pt-4 mt-2 border-t border-gray-700" x-data="industryChartComponent()">
         <div class="flex items-center justify-between mb-2">
-          <h3 class="text-xs text-gray-500 font-medium">Industry</h3>
+          <h3 class="text-xs text-gray-500 font-medium">Industry Groups</h3>
           <button x-show="!$store.app.editingIndustry"
                   @click="$store.app.startEditIndustry()"
                   class="text-xs text-purple-400 hover:text-purple-300 transition-colors">

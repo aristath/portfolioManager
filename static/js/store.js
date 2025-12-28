@@ -317,11 +317,21 @@ document.addEventListener('alpine:init', () => {
     },
 
     get activeCountries() {
+      // Return group names from allocation data (groups are what the optimizer uses)
+      if (this.allocation && this.allocation.country) {
+        return this.allocation.country.map(c => c.name).sort();
+      }
+      // Fallback: return individual countries if no group data
       const countries = new Set(this.stocks.map(s => s.country).filter(Boolean));
       return Array.from(countries).sort();
     },
 
     get activeIndustries() {
+      // Return group names from allocation data (groups are what the optimizer uses)
+      if (this.allocation && this.allocation.industry) {
+        return this.allocation.industry.map(i => i.name).sort();
+      }
+      // Fallback: return individual industries if no group data
       const inds = new Set();
       this.stocks.forEach(s => {
         if (s.industry) {

@@ -18,7 +18,7 @@ class AllocationRadar extends HTMLElement {
         <!-- Country Radar -->
         <div ${type === 'both' ? 'class="mb-4"' : ''}>
           <div class="flex items-center justify-between mb-2">
-            <h3 class="text-xs text-gray-500 font-medium">Country</h3>
+            <h3 class="text-xs text-gray-500 font-medium">Country Groups</h3>
             <button @click="$store.app.startEditCountry()"
                     class="text-xs text-blue-400 hover:text-blue-300 transition-colors">
               Edit Weights
@@ -37,7 +37,7 @@ class AllocationRadar extends HTMLElement {
         <!-- Industry Radar -->
         <div>
           <div class="flex items-center justify-between mb-2">
-            <h3 class="text-xs text-gray-500 font-medium">Industry</h3>
+            <h3 class="text-xs text-gray-500 font-medium">Industry Groups</h3>
             <button @click="$store.app.startEditIndustry()"
                     class="text-xs text-blue-400 hover:text-blue-300 transition-colors">
               Edit Weights
@@ -55,7 +55,7 @@ class AllocationRadar extends HTMLElement {
         <div x-show="$store.app.editingCountry" x-transition
              class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div class="bg-gray-800 border border-gray-700 rounded-lg p-4 w-full max-w-md modal-content" @click.stop>
-            <h3 class="text-sm font-medium text-gray-200 mb-3">Edit Country Weights</h3>
+            <h3 class="text-sm font-medium text-gray-200 mb-3">Edit Country Group Weights</h3>
             <geo-chart></geo-chart>
           </div>
         </div>
@@ -63,7 +63,7 @@ class AllocationRadar extends HTMLElement {
         <div x-show="$store.app.editingIndustry" x-transition
              class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div class="bg-gray-800 border border-gray-700 rounded-lg p-4 w-full max-w-md modal-content" @click.stop>
-            <h3 class="text-sm font-medium text-gray-200 mb-3">Edit Industry Weights</h3>
+            <h3 class="text-sm font-medium text-gray-200 mb-3">Edit Industry Group Weights</h3>
             <industry-chart></industry-chart>
           </div>
         </div>

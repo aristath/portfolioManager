@@ -64,10 +64,10 @@ const API = {
   triggerStockDiscovery: () => API._post('/api/status/jobs/stock-discovery'),
 
   // Allocation
-  fetchAllocation: () => fetch('/api/trades/allocation').then(r => r.json()),
+  fetchAllocation: () => fetch('/api/allocation/groups/allocation').then(r => r.json()),
   fetchTargets: () => fetch('/api/allocation/targets').then(r => r.json()),
-  saveCountryTargets: (targets) => API._put('/api/allocation/targets/country', { targets }),
-  saveIndustryTargets: (targets) => API._put('/api/allocation/targets/industry', { targets }),
+  saveCountryTargets: (targets) => API._put('/api/allocation/groups/targets/country', { targets }),
+  saveIndustryTargets: (targets) => API._put('/api/allocation/groups/targets/industry', { targets }),
 
   // Stocks
   fetchStocks: () => fetch('/api/stocks').then(r => r.json()),

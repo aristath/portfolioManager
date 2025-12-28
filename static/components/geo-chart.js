@@ -9,7 +9,7 @@ class GeoChart extends HTMLElement {
     this.innerHTML = `
       <div x-data="geoChartComponent()">
         <div class="flex items-center justify-between mb-2">
-          <h3 class="text-xs text-gray-500 font-medium">Country</h3>
+          <h3 class="text-xs text-gray-500 font-medium">Country Groups</h3>
           <button x-show="!$store.app.editingCountry"
                   @click="$store.app.startEditCountry()"
                   class="text-xs text-blue-400 hover:text-blue-300 transition-colors">

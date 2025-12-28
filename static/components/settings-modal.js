@@ -465,6 +465,13 @@ class SettingsModal extends HTMLElement {
                 </div>
               </div>
 
+              <!-- Custom Grouping Card -->
+              <div class="bg-gray-800 border border-gray-700 rounded p-4">
+                <h3 class="text-sm font-medium text-gray-400 uppercase tracking-wide mb-3">Custom Grouping</h3>
+                <p class="text-xs text-gray-500 mb-4">Create custom groups for countries and industries to simplify constraints and improve optimizer performance.</p>
+                <grouping-manager></grouping-manager>
+              </div>
+
             </div>
           </div>
         </div>

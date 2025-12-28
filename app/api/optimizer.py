@@ -17,6 +17,7 @@ from app.infrastructure.external.tradernet import TradernetClient
 from app.repositories import (
     AllocationRepository,
     DividendRepository,
+    GroupingRepository,
     PositionRepository,
     SettingsRepository,
     StockRepository,
@@ -129,7 +130,8 @@ async def run_optimization() -> Dict[str, Any]:
     dividend_bonuses = await dividend_repo.get_pending_bonuses()
 
     # Run optimization
-    optimizer = PortfolioOptimizer()
+    grouping_repo = GroupingRepository()
+    optimizer = PortfolioOptimizer(grouping_repo=grouping_repo)
     result = await optimizer.optimize(
         stocks=stocks,
         positions=positions,

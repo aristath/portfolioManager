@@ -315,7 +315,10 @@ class RebalancingService:
         # Regime already detected above for cash reserves, reuse for expected returns
 
         # Run portfolio optimizer
-        optimizer = PortfolioOptimizer()
+        from app.repositories import GroupingRepository
+
+        grouping_repo = GroupingRepository()
+        optimizer = PortfolioOptimizer(grouping_repo=grouping_repo)
         optimization_result = await optimizer.optimize(
             stocks=stocks,
             positions=positions_dict,
