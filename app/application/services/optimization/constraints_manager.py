@@ -17,6 +17,8 @@ from app.domain.scoring.constants import (
     GEO_ALLOCATION_TOLERANCE,
     IND_ALLOCATION_TOLERANCE,
     MAX_CONCENTRATION,
+    MAX_COUNTRY_CONCENTRATION,
+    MAX_SECTOR_CONCENTRATION,
 )
 
 logger = logging.getLogger(__name__)
@@ -193,13 +195,17 @@ class ConstraintsManager:
         for country, symbols in country_groups.items():
             target = country_targets.get(country, 0.0)
             if target > 0:
+                # Calculate tolerance-based bounds
+                tolerance_upper = min(1.0, target + self.geo_tolerance)
+                # Enforce hard limit: cap at MAX_COUNTRY_CONCENTRATION
+                hard_upper = min(tolerance_upper, MAX_COUNTRY_CONCENTRATION)
                 country_constraints.append(
                     SectorConstraint(
                         name=country,
                         symbols=symbols,
                         target=target,
                         lower=max(0.0, target - self.geo_tolerance),
-                        upper=min(1.0, target + self.geo_tolerance),
+                        upper=hard_upper,
                     )
                 )
 
@@ -208,13 +214,17 @@ class ConstraintsManager:
         for ind, symbols in ind_groups.items():
             target = ind_targets.get(ind, 0.0)
             if target > 0:
+                # Calculate tolerance-based bounds
+                tolerance_upper = min(1.0, target + self.ind_tolerance)
+                # Enforce hard limit: cap at MAX_SECTOR_CONCENTRATION
+                hard_upper = min(tolerance_upper, MAX_SECTOR_CONCENTRATION)
                 ind_constraints.append(
                     SectorConstraint(
                         name=ind,
                         symbols=symbols,
                         target=target,
                         lower=max(0.0, target - self.ind_tolerance),
-                        upper=min(1.0, target + self.ind_tolerance),
+                        upper=hard_upper,
                     )
                 )
 
