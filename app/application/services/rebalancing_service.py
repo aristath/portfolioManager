@@ -328,6 +328,8 @@ class RebalancingService:
             min_cash_reserve=min_cash,
             regime=regime,
             dividend_bonuses=dividend_bonuses,
+            transaction_cost_fixed=transaction_fixed,
+            transaction_cost_percent=transaction_pct,
         )
 
         # Log optimizer result

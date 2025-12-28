@@ -145,6 +145,8 @@ async def run_optimization() -> Dict[str, Any]:
         ind_targets=ind_targets,
         min_cash_reserve=settings.min_cash_reserve,
         dividend_bonuses=dividend_bonuses,
+        transaction_cost_fixed=settings.transaction_cost_fixed,
+        transaction_cost_percent=settings.transaction_cost_percent,
     )
 
     # Convert result to dict for caching and response

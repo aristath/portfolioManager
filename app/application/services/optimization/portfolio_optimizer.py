@@ -100,6 +100,8 @@ class PortfolioOptimizer:
         min_cash_reserve: float = 500.0,
         dividend_bonuses: Optional[Dict[str, float]] = None,
         regime: Optional[str] = None,
+        transaction_cost_fixed: float = 2.0,
+        transaction_cost_percent: float = 0.002,
     ) -> OptimizationResult:
         """
         Optimize portfolio allocation.
@@ -117,6 +119,8 @@ class PortfolioOptimizer:
             min_cash_reserve: Minimum cash to keep (not allocated)
             dividend_bonuses: Pending dividend bonuses per symbol
             regime: Market regime ("bull", "bear", "sideways") for expected returns adjustment
+            transaction_cost_fixed: Fixed transaction cost per trade (EUR)
+            transaction_cost_percent: Variable transaction cost as fraction (e.g., 0.002 = 0.2%)
 
         Returns:
             OptimizationResult with target weights and diagnostics
@@ -142,6 +146,16 @@ class PortfolioOptimizer:
 
         if not expected_returns:
             return self._error_result(timestamp, blend, "No expected returns data")
+
+        # Adjust expected returns for transaction costs
+        # This naturally prefers larger positions and fewer trades
+        expected_returns = self._adjust_returns_for_transaction_costs(
+            expected_returns,
+            positions,
+            portfolio_value,
+            transaction_cost_fixed,
+            transaction_cost_percent,
+        )
 
         # Filter to symbols with expected returns
         valid_symbols = list(expected_returns.keys())
@@ -469,6 +483,78 @@ class PortfolioOptimizer:
 
         factor = target_sum / total
         return {s: w * factor for s, w in weights.items()}
+
+    def _adjust_returns_for_transaction_costs(
+        self,
+        expected_returns: Dict[str, float],
+        positions: Dict[str, Position],
+        portfolio_value: float,
+        transaction_cost_fixed: float,
+        transaction_cost_percent: float,
+    ) -> Dict[str, float]:
+        """
+        Adjust expected returns to account for transaction costs.
+
+        This naturally prefers larger positions and fewer trades by reducing
+        expected returns more for positions that would require small trades.
+
+        Args:
+            expected_returns: Dict mapping symbol to expected return
+            positions: Dict mapping symbol to current Position
+            portfolio_value: Total portfolio value in EUR
+            transaction_cost_fixed: Fixed cost per trade (EUR)
+            transaction_cost_percent: Variable cost as fraction
+
+        Returns:
+            Adjusted expected returns dict
+        """
+        adjusted = {}
+        min_trade_value = transaction_cost_fixed / (
+            0.01 - transaction_cost_percent
+        )  # Trade where cost = 1% of value
+
+        for symbol, exp_return in expected_returns.items():
+            # Get current position value
+            pos = positions.get(symbol)
+            current_value = (
+                pos.market_value_eur if pos and pos.market_value_eur else 0.0
+            )
+
+            # Estimate potential trade value
+            # For new positions, assume minimum trade size
+            # For existing positions, assume rebalancing trade (estimate as 5% of portfolio)
+            if current_value == 0:
+                # New position: assume minimum trade size
+                estimated_trade_value = min_trade_value
+            else:
+                # Existing position: assume rebalancing trade
+                # Use a reasonable estimate (5% of portfolio or current position, whichever is smaller)
+                estimated_trade_value = min(portfolio_value * 0.05, current_value * 0.5)
+
+            # Calculate transaction cost as percentage of trade value
+            if estimated_trade_value > 0:
+                cost = (
+                    transaction_cost_fixed
+                    + estimated_trade_value * transaction_cost_percent
+                )
+                cost_ratio = cost / estimated_trade_value
+            else:
+                cost_ratio = 0.01  # Default 1% if we can't estimate
+
+            # Reduce expected return by transaction cost
+            # Cap reduction at 2% to avoid over-penalizing
+            cost_reduction = min(cost_ratio, 0.02)
+            adjusted_return = exp_return - cost_reduction
+
+            adjusted[symbol] = adjusted_return
+
+            logger.debug(
+                f"{symbol}: exp_return={exp_return:.2%}, "
+                f"cost_ratio={cost_ratio:.2%}, "
+                f"adjusted={adjusted_return:.2%}"
+            )
+
+        return adjusted
 
     def _calculate_weight_changes(
         self,

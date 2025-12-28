@@ -262,6 +262,7 @@ class TestSyncPortfolioInternal:
 
         mock_exchange_service = AsyncMock()
         mock_exchange_service.batch_convert_to_eur.return_value = {"EUR": 1000.0}
+        mock_exchange_service.get_rate.return_value = 1.0
 
         with (
             patch("app.jobs.daily_sync.get_tradernet_client") as mock_get_client,
@@ -409,24 +410,18 @@ class TestSyncStockCurrencies:
         """Test that sync is skipped when no stocks."""
         from app.jobs.daily_sync import sync_stock_currencies
 
-        mock_cursor = AsyncMock()
-        mock_cursor.fetchall.return_value = []
-
-        mock_config = AsyncMock()
-        mock_config.execute.return_value = mock_cursor
-
-        mock_db = MagicMock()
-        mock_db.config = mock_config
+        mock_stock_repo = AsyncMock()
+        mock_stock_repo.get_all_active.return_value = []
 
         with (
             patch("app.jobs.daily_sync.get_tradernet_client") as mock_get_client,
-            patch("app.jobs.daily_sync.get_db_manager") as mock_get_db,
+            patch("app.jobs.daily_sync.StockRepository") as mock_stock_class,
             patch("app.jobs.daily_sync.set_processing"),
         ):
             mock_client = MagicMock()
             mock_client.is_connected = True
             mock_get_client.return_value = mock_client
-            mock_get_db.return_value = mock_db
+            mock_stock_class.return_value = mock_stock_repo
 
             await sync_stock_currencies()
 
@@ -441,11 +436,13 @@ class TestSyncStockCurrencies:
         async def mock_transaction():
             yield
 
-        mock_cursor = AsyncMock()
-        mock_cursor.fetchall.return_value = [("AAPL.US",)]
+        mock_stock = MagicMock()
+        mock_stock.symbol = "AAPL.US"
+
+        mock_stock_repo = AsyncMock()
+        mock_stock_repo.get_all_active.return_value = [mock_stock]
 
         mock_config = AsyncMock()
-        mock_config.execute.return_value = mock_cursor
         mock_config.transaction = mock_transaction
 
         mock_db = MagicMock()
@@ -453,6 +450,7 @@ class TestSyncStockCurrencies:
 
         with (
             patch("app.jobs.daily_sync.get_tradernet_client") as mock_get_client,
+            patch("app.jobs.daily_sync.StockRepository") as mock_stock_class,
             patch("app.jobs.daily_sync.get_db_manager") as mock_get_db,
             patch("app.jobs.daily_sync.set_processing"),
         ):
@@ -462,6 +460,7 @@ class TestSyncStockCurrencies:
                 {"c": "AAPL.US", "x_curr": "USD"}
             ]
             mock_get_client.return_value = mock_client
+            mock_stock_class.return_value = mock_stock_repo
             mock_get_db.return_value = mock_db
 
             await sync_stock_currencies()
