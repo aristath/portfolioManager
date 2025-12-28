@@ -376,14 +376,13 @@ async def _get_holistic_recommendation():
     stocks = await stock_repo.get_all_active()
     settings = await settings_service.get_settings()
     position_dicts = [{"symbol": p.symbol, "quantity": p.quantity} for p in positions]
-    stock_symbols = [s.symbol for s in stocks]
     cash_balances = (
         {b.currency: b.amount for b in tradernet_client.get_cash_balances()}
         if tradernet_client.is_connected
         else {}
     )
     portfolio_cache_key = generate_recommendation_cache_key(
-        position_dicts, settings.to_dict(), stock_symbols, cash_balances
+        position_dicts, settings.to_dict(), stocks, cash_balances
     )
     cache_key = f"recommendations:{portfolio_cache_key}"
 
