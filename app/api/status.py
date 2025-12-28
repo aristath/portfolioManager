@@ -2,7 +2,6 @@
 
 import json
 import shutil
-from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter
@@ -42,10 +41,12 @@ async def get_status(
         )
         if latest:
             # Parse ISO format and reformat to "YYYY-MM-DD HH:MM"
-            try:
-                dt = datetime.fromisoformat(latest)
+            from app.repositories.base import safe_parse_datetime_string
+
+            dt = safe_parse_datetime_string(latest)
+            if dt:
                 last_sync = dt.strftime("%Y-%m-%d %H:%M")
-            except (ValueError, TypeError):
+            else:
                 last_sync = latest[:16] if len(latest) >= 16 else latest
 
     # Get stock count
