@@ -35,8 +35,8 @@ class NextActionsCard extends HTMLElement {
           </button>
         </div>
 
-        <!-- Scrollable content area -->
-        <div class="max-h-[500px] overflow-y-auto">
+        <!-- Content area -->
+        <div>
 
         <!-- Empty state - only shown when no recommendations -->
         <template x-if="!$store.app.loading.recommendations && (!$store.app.recommendations || !$store.app.recommendations.steps || $store.app.recommendations.steps.length === 0)">
