@@ -442,6 +442,35 @@ class PortfolioOptimizer:
         if warnings:
             logger.warning(f"Constraint validation warnings: {'; '.join(warnings)}")
 
+        # Check for constraint overlap (stocks in both country and industry constraints)
+        country_symbols = set()
+        for constraint in country_constraints:
+            country_symbols.update(constraint.symbols)
+
+        ind_symbols = set()
+        for constraint in ind_constraints:
+            ind_symbols.update(constraint.symbols)
+
+        overlapping_symbols = country_symbols & ind_symbols
+        if overlapping_symbols:
+            logger.debug(
+                f"{len(overlapping_symbols)} symbols appear in both country and industry constraints: "
+                f"{', '.join(sorted(overlapping_symbols)[:10])}"
+            )
+
+        # Log individual stock bound summary for debugging
+        if bounds:
+            total_stock_min = sum(lower for lower, _ in bounds.values())
+            total_stock_max = sum(upper for _, upper in bounds.values())
+            locked_count = sum(
+                1 for lower, upper in bounds.values() if lower == upper and lower > 0
+            )
+            logger.debug(
+                f"Individual stock bounds: {len(bounds)} stocks, "
+                f"min_sum={total_stock_min:.2%}, max_sum={total_stock_max:.2%}, "
+                f"locked={locked_count}"
+            )
+
         def _apply_sector_constraints(ef: EfficientFrontier) -> None:
             """Apply sector constraints to EfficientFrontier."""
             if country_mapper:
