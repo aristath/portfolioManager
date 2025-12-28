@@ -15,6 +15,7 @@ The planner works by:
 5. Selecting the sequence with the best end-state score
 """
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
@@ -927,13 +928,14 @@ async def create_holistic_plan(
         f"Pre-fetched metrics for {len(metrics_cache)} symbols ({len(required_metrics)} metrics each)"
     )
 
-    # Evaluate each sequence by its end-state score
-    best_sequence = None
-    best_end_score = 0.0
-    best_breakdown = {}
-
-    for seq_idx, (sequence, end_context, end_cash) in enumerate(sequence_results):
-
+    # Define async helper to evaluate a single sequence
+    async def _evaluate_sequence(
+        seq_idx: int,
+        sequence: List[ActionCandidate],
+        end_context: PortfolioContext,
+        end_cash: float,
+    ) -> Tuple[int, List[ActionCandidate], float, Dict]:
+        """Evaluate a single sequence and return results."""
         # Calculate diversification score for end state
         div_score = await calculate_portfolio_score(end_context)
 
@@ -960,11 +962,27 @@ async def create_holistic_plan(
             f"  Cash: €{end_cash:.2f}, Invested: €{invested_value:.2f}, Total: €{end_context.total_value:.2f}"
         )
 
+        return (seq_idx, sequence, end_score, breakdown)
+
+    # Evaluate all sequences in parallel
+    evaluation_tasks = [
+        _evaluate_sequence(seq_idx, sequence, end_context, end_cash)
+        for seq_idx, (sequence, end_context, end_cash) in enumerate(sequence_results)
+    ]
+
+    evaluation_results = await asyncio.gather(*evaluation_tasks)
+
+    # Find the best sequence
+    best_sequence = None
+    best_end_score = 0.0
+    best_breakdown = {}
+
+    for seq_idx, sequence, end_score, breakdown in evaluation_results:
         if end_score > best_end_score:
             best_end_score = end_score
             best_sequence = sequence
             best_breakdown = breakdown
-            logger.info(f"  -> NEW BEST (score: {end_score:.3f})")
+            logger.info(f"Sequence {seq_idx+1} -> NEW BEST (score: {end_score:.3f})")
 
     if not best_sequence:
         return HolisticPlan(
