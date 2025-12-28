@@ -61,11 +61,6 @@ app/
 │   ├── settings.py
 │   └── status.py
 │
-├── services/            # Legacy services (backward compatibility)
-│   ├── allocator.py     # Position sizing, priority calculation
-│   ├── tradernet.py     # Tradernet API client (legacy, use infrastructure/external)
-│   └── yahoo.py         # Yahoo Finance integration (legacy, use infrastructure/external)
-│
 └── jobs/               # Background jobs (APScheduler)
     ├── scheduler.py
     ├── daily_sync.py
@@ -123,10 +118,6 @@ app/
 - Holistic planner for rebalancing recommendations
 - Event-driven architecture with domain events
 - Comprehensive test suite (unit and integration tests)
-
-### Legacy Code
-- `app/services/allocator.py` - Still used by some jobs (backward compatible)
-- `app/services/tradernet.py` and `app/services/yahoo.py` - Legacy clients, prefer `infrastructure/external/`
 
 ### Known Architecture Violations
 
