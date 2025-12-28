@@ -82,6 +82,7 @@ async def init_scheduler() -> AsyncIOScheduler:
     from app.jobs.daily_pipeline import run_daily_pipeline
     from app.jobs.dividend_reinvestment import auto_reinvest_dividends
     from app.jobs.maintenance import run_daily_maintenance, run_weekly_maintenance
+    from app.jobs.stock_discovery import discover_new_stocks
     from app.jobs.sync_cycle import run_sync_cycle
     from app.jobs.universe_pruning import prune_universe
 
