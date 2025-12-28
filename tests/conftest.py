@@ -104,3 +104,29 @@ def setup_test_environment(monkeypatch, tmp_path):
 
     locking.LOCK_DIR = lock_dir
     locking.LOCK_DIR.mkdir(parents=True, exist_ok=True)
+
+
+@pytest.fixture
+async def db_manager(tmp_path):
+    """Create a temporary database manager for integration tests.
+
+    This fixture initializes the global database manager with temporary databases,
+    allowing tests that use get_db_manager() internally to work correctly.
+    """
+    from app.infrastructure.database import manager as db_manager_module
+    from app.infrastructure.database.manager import init_databases
+
+    # Save original manager
+    original_manager = db_manager_module._db_manager
+
+    try:
+        # Initialize database manager with temp directory
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        manager = await init_databases(data_dir)
+        yield manager
+    finally:
+        # Close databases and restore original manager
+        if db_manager_module._db_manager is not None:
+            await db_manager_module._db_manager.close_all()
+        db_manager_module._db_manager = original_manager
