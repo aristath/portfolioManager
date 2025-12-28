@@ -885,16 +885,54 @@ async def create_holistic_plan(
             feasible=True,
         )
 
+    # Pre-fetch all metrics for all symbols that will be evaluated
+    # First, collect all symbols from all sequence end states by simulating them
+    all_symbols = set()
+    sequence_results = []  # Store (sequence, end_context, end_cash) tuples
+
+    for sequence in sequences:
+        end_context, end_cash = await simulate_sequence(
+            sequence, portfolio_context, available_cash, stocks
+        )
+        all_symbols.update(end_context.positions.keys())
+        sequence_results.append((sequence, end_context, end_cash))
+
+    # Batch fetch all required metrics for all symbols
+    from app.repositories.calculations import CalculationsRepository
+
+    calc_repo = CalculationsRepository()
+    metrics_cache: Dict[str, Dict[str, float]] = {}
+
+    required_metrics = [
+        "CAGR_5Y",
+        "DIVIDEND_YIELD",
+        "CONSISTENCY_SCORE",
+        "FINANCIAL_STRENGTH",
+        "DIVIDEND_CONSISTENCY",
+        "PAYOUT_RATIO",  # Used as fallback for dividend consistency
+        "SORTINO",
+        "VOLATILITY_ANNUAL",
+        "MAX_DRAWDOWN",
+        "SHARPE",
+    ]
+
+    for symbol in all_symbols:
+        metrics = await calc_repo.get_metrics(symbol, required_metrics)
+        # Convert None values to 0.0 for easier handling
+        metrics_cache[symbol] = {
+            k: (v if v is not None else 0.0) for k, v in metrics.items()
+        }
+
+    logger.info(
+        f"Pre-fetched metrics for {len(metrics_cache)} symbols ({len(required_metrics)} metrics each)"
+    )
+
     # Evaluate each sequence by its end-state score
     best_sequence = None
     best_end_score = 0.0
     best_breakdown = {}
 
-    for seq_idx, sequence in enumerate(sequences):
-        # Simulate the sequence
-        end_context, end_cash = await simulate_sequence(
-            sequence, portfolio_context, available_cash, stocks
-        )
+    for seq_idx, (sequence, end_context, end_cash) in enumerate(sequence_results):
 
         # Calculate diversification score for end state
         div_score = await calculate_portfolio_score(end_context)
@@ -904,6 +942,7 @@ async def create_holistic_plan(
             positions=end_context.positions,
             total_value=end_context.total_value,
             diversification_score=div_score.total / 100,  # Normalize to 0-1
+            metrics_cache=metrics_cache,
         )
 
         # Log sequence evaluation
