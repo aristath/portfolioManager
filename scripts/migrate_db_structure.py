@@ -44,9 +44,14 @@ async def migrate_table(
     table_name: str,
     source_name: str,
     target_name: str,
+    column_mapping: dict[str, str] | None = None,
 ) -> tuple[int, int]:
     """
     Migrate a table from source to target database.
+
+    Args:
+        column_mapping: Optional dict mapping source column names to target column names.
+                        e.g., {"geography": "country"} renames geography to country.
 
     Returns (source_count, target_count) for verification.
     """
@@ -66,17 +71,22 @@ async def migrate_table(
     if not rows:
         return source_count, 0
 
-    # Get column names from first row
-    columns = list(rows[0].keys())
-    placeholders = ", ".join(["?"] * len(columns))
-    column_names = ", ".join(columns)
+    # Get column names from first row, applying mapping
+    column_mapping = column_mapping or {}
+    source_columns = list(rows[0].keys())
+    target_columns = [column_mapping.get(col, col) for col in source_columns]
+
+    placeholders = ", ".join(["?"] * len(target_columns))
+    column_names = ", ".join(target_columns)
 
     # Insert into target (using INSERT OR IGNORE to handle duplicates)
-    insert_sql = f"INSERT OR IGNORE INTO {table_name} ({column_names}) VALUES ({placeholders})"
+    insert_sql = (
+        f"INSERT OR IGNORE INTO {table_name} ({column_names}) VALUES ({placeholders})"
+    )
 
     inserted = 0
     for row in rows:
-        values = tuple(row[col] for col in columns)
+        values = tuple(row[col] for col in source_columns)
         try:
             await target_db.execute(insert_sql, values)
             inserted += 1
@@ -113,21 +123,28 @@ async def main():
     logger.info("")
 
     migrations = [
-        # (source_db, target_db, table_name, source_name, target_name)
-        (db_manager.config, db_manager.recommendations, "recommendations", "config.db", "recommendations.db"),
-        (db_manager.ledger, db_manager.dividends, "dividend_history", "ledger.db", "dividends.db"),
-        (db_manager.cache, db_manager.rates, "exchange_rates", "cache.db", "rates.db"),
-        (db_manager.state, db_manager.snapshots, "portfolio_snapshots", "state.db", "snapshots.db"),
-        (db_manager.state, db_manager.calculations, "scores", "state.db", "calculations.db"),
+        # (source_db, target_db, table_name, source_name, target_name, column_mapping)
+        (
+            db_manager.config,
+            db_manager.recommendations,
+            "recommendations",
+            "config.db",
+            "recommendations.db",
+            {"geography": "country"},  # Old column was named 'geography'
+        ),
+        (db_manager.ledger, db_manager.dividends, "dividend_history", "ledger.db", "dividends.db", None),
+        (db_manager.cache, db_manager.rates, "exchange_rates", "cache.db", "rates.db", None),
+        (db_manager.state, db_manager.snapshots, "portfolio_snapshots", "state.db", "snapshots.db", None),
+        (db_manager.state, db_manager.calculations, "scores", "state.db", "calculations.db", None),
     ]
 
     results = []
     all_success = True
 
-    for source_db, target_db, table_name, source_name, target_name in migrations:
+    for source_db, target_db, table_name, source_name, target_name, column_mapping in migrations:
         try:
             source_count, target_count = await migrate_table(
-                source_db, target_db, table_name, source_name, target_name
+                source_db, target_db, table_name, source_name, target_name, column_mapping
             )
             success = source_count == 0 or target_count >= source_count
             results.append((table_name, source_name, target_name, source_count, target_count, success))
