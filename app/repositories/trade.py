@@ -6,7 +6,7 @@ from typing import List, Optional, Set
 
 from app.domain.models import Trade
 from app.infrastructure.database import get_db_manager
-from app.repositories.base import transaction_context
+from app.repositories.base import safe_get_datetime, transaction_context
 
 logger = logging.getLogger(__name__)
 
@@ -339,11 +339,8 @@ class TradeRepository:
         """Convert database row to Trade model."""
         executed_at: datetime
         if row["executed_at"]:
-            try:
-                executed_at = datetime.fromisoformat(str(row["executed_at"]))
-            except (ValueError, TypeError) as e:
-                logger.warning(f"Failed to parse executed_at: {e}")
-                executed_at = datetime.now()
+            parsed = safe_get_datetime(row, "executed_at")
+            executed_at = parsed if parsed else datetime.now()
         else:
             executed_at = datetime.now()
 

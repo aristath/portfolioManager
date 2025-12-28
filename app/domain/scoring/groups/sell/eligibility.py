@@ -14,14 +14,14 @@ from app.domain.scoring.constants import (
 
 
 def _parse_date_string(date_str: str) -> Optional[datetime]:
-    """Parse ISO date string, handling timezone."""
-    try:
-        date = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
-        if date.tzinfo:
-            date = date.replace(tzinfo=None)
-        return date
-    except (ValueError, TypeError):
-        return None
+    """Parse ISO date string, handling timezone.
+
+    Note: This function is kept for backward compatibility but should be replaced
+    with safe_parse_datetime_string() from app.repositories.base in the future.
+    """
+    from app.repositories.base import safe_parse_datetime_string
+
+    return safe_parse_datetime_string(date_str)
 
 
 def _check_min_hold_time(
