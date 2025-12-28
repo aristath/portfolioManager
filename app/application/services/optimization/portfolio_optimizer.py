@@ -479,9 +479,10 @@ class PortfolioOptimizer:
             ind_min_sum = sum(c.lower for c in ind_constraints)
             total_all_min = total_stock_min + country_min_sum + ind_min_sum
 
-            # Target: total minimums = 85% (leaves 15% slack for optimizer)
-            # This is more conservative than 90% to handle complex constraint interactions
-            target_total_min = 0.85
+            # Target: total minimums = 80% (leaves 20% slack for optimizer)
+            # Lower target needed when constraints overlap (same stocks in multiple sectors)
+            # and when individual stock bounds are restrictive
+            target_total_min = 0.80
 
             if total_all_min > target_total_min:
                 logger.warning(
