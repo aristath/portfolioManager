@@ -96,11 +96,16 @@ class ExchangeRateService:
                 return rate
 
             # Fetch fresh rate from API
+            logger.info(f"Fetching rate from API for {from_curr}/{to_curr}...")
             fetched_rate = await self._fetch_rate_from_api(from_curr, to_curr)
             if fetched_rate is not None:
+                logger.info(f"Fetched rate {from_curr}/{to_curr}: {fetched_rate}")
                 rate = fetched_rate
+                logger.info("Storing rate in DB cache...")
                 await self._store_in_db_cache(from_curr, to_curr, rate)
+                logger.info("Rate stored, updating memory cache...")
                 self._memory_cache[cache_key] = (rate, datetime.now())
+                logger.info(f"Returning rate {rate} for {from_curr}/{to_curr}")
                 return rate
 
             # Use fallback rate
@@ -144,7 +149,11 @@ class ExchangeRateService:
         """
         result = {}
         for currency, amount in amounts.items():
-            result[currency] = await self.convert(amount, currency, "EUR")
+            logger.info(f"Converting {amount} {currency} to EUR...")
+            converted = await self.convert(amount, currency, "EUR")
+            logger.info(f"Converted {amount} {currency} = {converted} EUR")
+            result[currency] = converted
+        logger.info(f"Batch conversion complete: {result}")
         return result
 
     async def refresh_rates(self, currencies: Optional[list] = None) -> None:
@@ -233,8 +242,11 @@ class ExchangeRateService:
                     rate = float(rates[from_currency])
                     logger.debug(f"Fetched rate {from_currency}/{to_currency}: {rate}")
 
-                    # Also cache other rates while we have them
-                    await self._cache_all_rates_from_response(to_currency, rates)
+                    # Cache other rates asynchronously (don't block on this)
+                    # This prevents hanging if database writes are slow
+                    asyncio.create_task(
+                        self._cache_all_rates_from_response(to_currency, rates)
+                    )
 
                     return rate
 
