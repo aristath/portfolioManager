@@ -103,14 +103,22 @@ async def subscribe_display_events(
         yield initial_state
 
         # Listen for events
+        heartbeat_counter = 0
         while True:
             try:
                 # Wait for event with timeout to allow graceful shutdown
-                state = await asyncio.wait_for(queue.get(), timeout=1.0)
+                state = await asyncio.wait_for(queue.get(), timeout=5.0)
                 yield state
+                heartbeat_counter = 0  # Reset on actual event
             except asyncio.TimeoutError:
-                # Timeout is normal, continue listening
-                continue
+                # Send heartbeat every 5 seconds to keep connection alive
+                heartbeat_counter += 1
+                # Re-send current state as heartbeat
+                heartbeat_state = _get_display_state_data(
+                    _display_state_manager, ticker_speed
+                )
+                heartbeat_state["heartbeat"] = heartbeat_counter
+                yield heartbeat_state
     finally:
         # Remove from subscribers on exit
         async with _subscribers_lock:
