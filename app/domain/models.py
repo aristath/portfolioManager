@@ -23,6 +23,7 @@ class Stock:
     country: Optional[str] = None
     fullExchangeName: Optional[str] = None
     yahoo_symbol: Optional[str] = None
+    isin: Optional[str] = None  # International Securities Identification Number
     industry: Optional[str] = None
     priority_multiplier: float = 1.0
     min_lot: int = 1

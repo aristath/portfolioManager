@@ -25,6 +25,7 @@ CONFIG_SCHEMA = """
 CREATE TABLE IF NOT EXISTS stocks (
     symbol TEXT PRIMARY KEY,
     yahoo_symbol TEXT,
+    isin TEXT,                   -- International Securities Identification Number (12 chars)
     name TEXT NOT NULL,
     industry TEXT,
     country TEXT,                -- Country name from Yahoo Finance (e.g., "United States", "Germany")

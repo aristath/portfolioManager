@@ -55,15 +55,16 @@ class StockRepository:
             await conn.execute(
                 """
                 INSERT INTO stocks
-                (symbol, yahoo_symbol, name, industry, country, fullExchangeName,
+                (symbol, yahoo_symbol, isin, name, industry, country, fullExchangeName,
                  priority_multiplier, min_lot, active, allow_buy, allow_sell,
                  currency, min_portfolio_target, max_portfolio_target,
                  created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     stock.symbol.upper(),
                     stock.yahoo_symbol,
+                    stock.isin,
                     stock.name,
                     stock.industry,
                     stock.country,
@@ -114,6 +115,7 @@ class StockRepository:
             "52w_low",
             "min_portfolio_target",
             "max_portfolio_target",
+            "isin",
         }
 
         # Validate all keys are in whitelist
@@ -214,6 +216,7 @@ class StockRepository:
         return Stock(
             symbol=row["symbol"],
             yahoo_symbol=row["yahoo_symbol"],
+            isin=row["isin"] if "isin" in keys else None,
             name=row["name"],
             industry=row["industry"],
             country=row["country"] if "country" in keys else None,
