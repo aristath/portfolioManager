@@ -395,11 +395,11 @@ class ConstraintsManager:
             elif total_min_sum > 0.70:
                 logger.warning(
                     f"Combined minimum bounds (country={country_min_sum:.2%} + "
-                    f"industry={ind_min_sum:.2%} = {total_min_sum:.2%}) exceed 70%, "
-                    f"scaling down both proportionally to 70% total"
+                    f"industry={ind_min_sum:.2%} = {total_min_sum:.2%}) exceed 60%, "
+                    f"scaling down both proportionally to 60% total"
                 )
                 # Scale both country and industry minimums proportionally
-                scale_factor = 0.70 / total_min_sum
+                scale_factor = 0.60 / total_min_sum
                 for constraint in country_constraints:
                     constraint.lower = constraint.lower * scale_factor
                     constraint.lower = min(constraint.lower, constraint.upper)
