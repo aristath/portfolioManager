@@ -5,8 +5,9 @@ import logging
 import shutil
 from collections.abc import AsyncIterator
 from pathlib import Path
+from typing import Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
 
 from app.api.models import (
@@ -521,4 +522,104 @@ async def get_disk_usage():
         return {
             "status": "error",
             "message": str(e),
+        }
+
+
+@router.get("/logs")
+async def get_logs(
+    lines: int = Query(100, ge=1, le=1000, description="Number of lines to return"),
+    level: Optional[str] = Query(
+        None, description="Filter by log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)"
+    ),
+    search: Optional[str] = Query(None, description="Search for text in logs"),
+):
+    """Get recent application logs.
+
+    Returns logs from the application log file with optional filtering.
+    """
+    try:
+        log_file = settings.data_dir / "logs" / "arduino-trader.log"
+
+        if not log_file.exists():
+            return {
+                "status": "error",
+                "message": "Log file not found",
+                "logs": [],
+            }
+
+        # Read log file
+        with open(log_file, "r", encoding="utf-8") as f:
+            all_lines = f.readlines()
+
+        # Filter by level if specified
+        if level:
+            level_upper = level.upper()
+            all_lines = [line for line in all_lines if f" - {level_upper} - " in line]
+
+        # Filter by search term if specified
+        if search:
+            search_lower = search.lower()
+            all_lines = [line for line in all_lines if search_lower in line.lower()]
+
+        # Get last N lines
+        recent_lines = all_lines[-lines:] if len(all_lines) > lines else all_lines
+
+        return {
+            "status": "ok",
+            "total_lines": len(all_lines),
+            "returned_lines": len(recent_lines),
+            "log_file": str(log_file),
+            "logs": [line.rstrip("\n") for line in recent_lines],
+        }
+    except Exception as e:
+        logger.error(f"Failed to read logs: {e}")
+        return {
+            "status": "error",
+            "message": str(e),
+            "logs": [],
+        }
+
+
+@router.get("/logs/errors")
+async def get_error_logs(
+    lines: int = Query(50, ge=1, le=500, description="Number of lines to return"),
+):
+    """Get recent error logs only (ERROR and CRITICAL levels)."""
+    try:
+        log_file = settings.data_dir / "logs" / "arduino-trader.log"
+
+        if not log_file.exists():
+            return {
+                "status": "error",
+                "message": "Log file not found",
+                "logs": [],
+            }
+
+        # Read log file
+        with open(log_file, "r", encoding="utf-8") as f:
+            all_lines = f.readlines()
+
+        # Filter for ERROR and CRITICAL only
+        error_lines = [
+            line
+            for line in all_lines
+            if " - ERROR - " in line or " - CRITICAL - " in line
+        ]
+
+        # Get last N lines
+        recent_lines = error_lines[-lines:] if len(error_lines) > lines else error_lines
+
+        return {
+            "status": "ok",
+            "total_error_lines": len(error_lines),
+            "returned_lines": len(recent_lines),
+            "log_file": str(log_file),
+            "logs": [line.rstrip("\n") for line in recent_lines],
+        }
+    except Exception as e:
+        logger.error(f"Failed to read error logs: {e}")
+        return {
+            "status": "error",
+            "message": str(e),
+            "logs": [],
         }
