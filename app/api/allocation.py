@@ -301,14 +301,23 @@ async def delete_country_group(group_name: str, grouping_repo: GroupingRepositor
     For hardcoded default groups, creates an empty override in DB to hide them.
     For custom groups, deletes from DB.
     """
+    # Check if it's a hardcoded group name
+    from app.application.services.optimization.constraints_manager import (
+        TERRITORY_MAPPING,
+    )
+
+    hardcoded_groups = set(TERRITORY_MAPPING.values())
+    is_hardcoded = group_name in hardcoded_groups
+
     # Check if group exists in DB
     db_groups = await grouping_repo.get_country_groups()
     if group_name in db_groups:
         # Custom group - delete from DB
         await grouping_repo.delete_country_group(group_name)
-    else:
+    elif is_hardcoded:
         # Hardcoded group - create empty override to hide it
-        # This works because custom groups take precedence over hardcoded ones
+        # Use a special marker: create group with a placeholder that we'll filter out
+        # Actually, just create it with empty list - the getter will return empty dict entry
         await grouping_repo.set_country_group(group_name, [])
     return {"deleted": group_name}
 
@@ -320,14 +329,23 @@ async def delete_industry_group(group_name: str, grouping_repo: GroupingReposito
     For hardcoded default groups, creates an empty override in DB to hide them.
     For custom groups, deletes from DB.
     """
+    # Check if it's a hardcoded group name
+    from app.application.services.optimization.constraints_manager import (
+        INDUSTRY_GROUP_MAPPING,
+    )
+
+    hardcoded_groups = set(INDUSTRY_GROUP_MAPPING.values())
+    is_hardcoded = group_name in hardcoded_groups
+
     # Check if group exists in DB
     db_groups = await grouping_repo.get_industry_groups()
     if group_name in db_groups:
         # Custom group - delete from DB
         await grouping_repo.delete_industry_group(group_name)
-    else:
+    elif is_hardcoded:
         # Hardcoded group - create empty override to hide it
-        # This works because custom groups take precedence over hardcoded ones
+        # Use a special marker: create group with a placeholder that we'll filter out
+        # Actually, just create it with empty list - the getter will return empty dict entry
         await grouping_repo.set_industry_group(group_name, [])
     return {"deleted": group_name}
 

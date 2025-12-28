@@ -47,9 +47,12 @@ class GroupingRepository:
         groups: Dict[str, List[str]] = {}
         for row in rows:
             group_name = row["group_name"]
+            industry_name = row["industry_name"]
             if group_name not in groups:
                 groups[group_name] = []
-            groups[group_name].append(row["industry_name"])
+            # Filter out the special __EMPTY__ marker
+            if industry_name != "__EMPTY__":
+                groups[group_name].append(industry_name)
         return groups
 
     async def set_country_group(
@@ -65,14 +68,25 @@ class GroupingRepository:
             )
 
             # Insert new mappings
-            for country_name in country_names:
+            # If empty list, insert a special marker to indicate group exists but is empty
+            # This allows us to distinguish "deleted hardcoded group" from "never existed"
+            if not country_names:
                 await conn.execute(
                     """
                     INSERT INTO country_groups (group_name, country_name, created_at, updated_at)
                     VALUES (?, ?, ?, ?)
                     """,
-                    (group_name, country_name, now, now),
+                    (group_name, "__EMPTY__", now, now),
                 )
+            else:
+                for country_name in country_names:
+                    await conn.execute(
+                        """
+                        INSERT INTO country_groups (group_name, country_name, created_at, updated_at)
+                        VALUES (?, ?, ?, ?)
+                        """,
+                        (group_name, country_name, now, now),
+                    )
 
     async def set_industry_group(
         self, group_name: str, industry_names: List[str]
@@ -87,14 +101,25 @@ class GroupingRepository:
             )
 
             # Insert new mappings
-            for industry_name in industry_names:
+            # If empty list, insert a special marker to indicate group exists but is empty
+            # This allows us to distinguish "deleted hardcoded group" from "never existed"
+            if not industry_names:
                 await conn.execute(
                     """
                     INSERT INTO industry_groups (group_name, industry_name, created_at, updated_at)
                     VALUES (?, ?, ?, ?)
                     """,
-                    (group_name, industry_name, now, now),
+                    (group_name, "__EMPTY__", now, now),
                 )
+            else:
+                for industry_name in industry_names:
+                    await conn.execute(
+                        """
+                        INSERT INTO industry_groups (group_name, industry_name, created_at, updated_at)
+                        VALUES (?, ?, ?, ?)
+                        """,
+                        (group_name, industry_name, now, now),
+                    )
 
     async def delete_country_group(self, group_name: str) -> None:
         """Delete a country group."""
