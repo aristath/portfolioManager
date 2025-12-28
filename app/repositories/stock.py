@@ -82,9 +82,42 @@ class StockRepository:
             )
 
     async def update(self, symbol: str, **updates) -> None:
-        """Update stock fields."""
+        """Update stock fields.
+
+        Args:
+            symbol: Stock symbol to update
+            **updates: Field name -> value mappings to update
+
+        Raises:
+            ValueError: If any update key is not in allowed fields
+        """
         if not updates:
             return
+
+        # Whitelist of allowed update fields for security
+        ALLOWED_UPDATE_FIELDS = {
+            "active",
+            "allow_buy",
+            "allow_sell",
+            "updated_at",
+            "name",
+            "sector",
+            "industry",
+            "country",
+            "currency",
+            "exchange",
+            "market_cap",
+            "pe_ratio",
+            "dividend_yield",
+            "beta",
+            "52w_high",
+            "52w_low",
+        }
+
+        # Validate all keys are in whitelist
+        invalid_keys = set(updates.keys()) - ALLOWED_UPDATE_FIELDS
+        if invalid_keys:
+            raise ValueError(f"Invalid update fields: {invalid_keys}")
 
         now = datetime.now().isoformat()
         updates["updated_at"] = now

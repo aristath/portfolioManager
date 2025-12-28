@@ -103,6 +103,8 @@ class CalculationsRepository:
         now = datetime.now().isoformat()
 
         # Build query with placeholders
+        # Note: This is safe because metrics come from internal code, not user input.
+        # All values are parameterized, only the number of placeholders is interpolated.
         placeholders = ",".join(["?"] * len(metrics))
         query = f"""SELECT metric, value FROM calculated_metrics
                     WHERE symbol = ? AND metric IN ({placeholders})
