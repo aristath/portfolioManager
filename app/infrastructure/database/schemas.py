@@ -424,7 +424,6 @@ CREATE TABLE IF NOT EXISTS trades (
 );
 
 CREATE INDEX IF NOT EXISTS idx_trades_symbol ON trades(symbol);
-CREATE INDEX IF NOT EXISTS idx_trades_isin ON trades(isin);
 CREATE INDEX IF NOT EXISTS idx_trades_executed_at ON trades(executed_at);
 CREATE INDEX IF NOT EXISTS idx_trades_order_id ON trades(order_id);
 CREATE INDEX IF NOT EXISTS idx_trades_symbol_side ON trades(symbol, side);
@@ -493,6 +492,8 @@ async def init_ledger_schema(db):
 
     if current_version == 0:
         now = datetime.now().isoformat()
+        # Create ISIN index for new databases
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_trades_isin ON trades(isin)")
         await db.execute(
             "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
             (3, now, "Initial ledger schema with ISIN column"),
@@ -561,7 +562,7 @@ CREATE TABLE IF NOT EXISTS positions (
     last_sold_at TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_positions_isin ON positions(isin);
+-- Note: idx_positions_isin is created in migration or init_state_schema for new databases
 
 -- Stock scores (cached calculations)
 CREATE TABLE IF NOT EXISTS scores (
@@ -631,6 +632,10 @@ async def init_state_schema(db):
 
     if current_version == 0:
         now = datetime.now().isoformat()
+        # Create ISIN index for new databases
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_positions_isin ON positions(isin)"
+        )
         await db.execute(
             "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
             (2, now, "Initial state schema with ISIN column"),
@@ -833,9 +838,9 @@ CREATE TABLE IF NOT EXISTS calculated_metrics (
 );
 
 CREATE INDEX IF NOT EXISTS idx_calculations_symbol ON calculated_metrics(symbol);
-CREATE INDEX IF NOT EXISTS idx_calculations_isin ON calculated_metrics(isin);
 CREATE INDEX IF NOT EXISTS idx_calculations_metric ON calculated_metrics(metric);
 CREATE INDEX IF NOT EXISTS idx_calculations_expires ON calculated_metrics(expires_at);
+-- Note: idx_calculations_isin is created in migration or init_calculations_schema
 
 -- Stock scores (cached composite calculations)
 -- Moved from state.db as these are calculated values, not state
@@ -872,7 +877,7 @@ CREATE TABLE IF NOT EXISTS scores (
 );
 
 CREATE INDEX IF NOT EXISTS idx_scores_total ON scores(total_score);
-CREATE INDEX IF NOT EXISTS idx_scores_isin ON scores(isin);
+-- Note: idx_scores_isin is created in migration or init_calculations_schema
 
 -- Schema version tracking
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -892,6 +897,11 @@ async def init_calculations_schema(db):
 
     if current_version == 0:
         now = datetime.now().isoformat()
+        # Create ISIN indexes for new databases
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_calculations_isin ON calculated_metrics(isin)"
+        )
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_scores_isin ON scores(isin)")
         await db.execute(
             "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
             (3, now, "Initial calculations schema with ISIN columns"),
@@ -980,7 +990,7 @@ CREATE TABLE IF NOT EXISTS recommendations (
 );
 
 CREATE INDEX IF NOT EXISTS idx_recommendations_symbol ON recommendations(symbol);
-CREATE INDEX IF NOT EXISTS idx_recommendations_isin ON recommendations(isin);
+-- Note: idx_recommendations_isin is created in migration or init_recommendations_schema
 CREATE INDEX IF NOT EXISTS idx_recommendations_status ON recommendations(status);
 CREATE INDEX IF NOT EXISTS idx_recommendations_created_at ON recommendations(created_at);
 CREATE INDEX IF NOT EXISTS idx_recommendations_portfolio_hash ON recommendations(portfolio_hash);
@@ -1005,6 +1015,10 @@ async def init_recommendations_schema(db):
 
     if current_version == 0:
         now = datetime.now().isoformat()
+        # Create ISIN index for new databases
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_recommendations_isin ON recommendations(isin)"
+        )
         await db.execute(
             "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
             (2, now, "Initial recommendations schema with ISIN column"),
@@ -1062,7 +1076,7 @@ CREATE TABLE IF NOT EXISTS dividend_history (
 );
 
 CREATE INDEX IF NOT EXISTS idx_dividend_history_symbol ON dividend_history(symbol);
-CREATE INDEX IF NOT EXISTS idx_dividend_history_isin ON dividend_history(isin);
+-- Note: idx_dividend_history_isin is created in migration or init_dividends_schema
 CREATE INDEX IF NOT EXISTS idx_dividend_history_date ON dividend_history(payment_date);
 CREATE INDEX IF NOT EXISTS idx_dividend_history_pending ON dividend_history(pending_bonus)
     WHERE pending_bonus > 0;
@@ -1085,6 +1099,10 @@ async def init_dividends_schema(db):
 
     if current_version == 0:
         now = datetime.now().isoformat()
+        # Create ISIN index for new databases
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_dividend_history_isin ON dividend_history(isin)"
+        )
         await db.execute(
             "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
             (2, now, "Initial dividends schema with ISIN column"),
