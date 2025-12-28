@@ -9,28 +9,41 @@ This project follows **Clean Architecture** principles with clear separation of 
 ```
 app/
 ├── domain/              # Pure business logic (no infrastructure dependencies)
-│   ├── repositories/    # Repository interfaces (contracts)
-│   ├── services/       # Domain services (PriorityCalculator)
-│   ├── utils/          # Shared utilities (priority_helpers)
-│   └── exceptions.py   # Domain exceptions
+│   ├── repositories/    # Repository interfaces (Protocol-based)
+│   ├── services/        # Domain services (PriorityCalculator, SettingsService)
+│   ├── scoring/         # Stock scoring system (8 groups)
+│   ├── analytics/       # Portfolio analytics
+│   ├── planning/        # Rebalancing strategies
+│   ├── events/          # Domain events
+│   └── value_objects/   # Value objects (Currency, Money, etc.)
 │
 ├── infrastructure/      # External concerns
-│   ├── database/       # SQLite repository implementations
-│   ├── hardware/       # LED display
-│   └── dependencies.py # FastAPI dependency injection
+│   ├── database/        # Database manager, schemas
+│   ├── external/        # API clients (Tradernet, Yahoo Finance)
+│   ├── hardware/        # LED display
+│   └── dependencies.py  # FastAPI dependency injection
 │
 ├── application/         # Orchestration layer
-│   └── services/       # Application services
+│   └── services/        # Application services
+│       ├── optimization/    # Portfolio optimizer
+│       ├── recommendation/  # Recommendation services
 │       ├── PortfolioService
 │       ├── RebalancingService
 │       ├── ScoringService
 │       └── TradeExecutionService
+│
+├── repositories/        # Repository implementations (SQLite)
 │
 └── api/                 # Thin controllers (delegation only)
     ├── stocks.py
     ├── portfolio.py
     ├── trades.py
     ├── allocation.py
+    ├── cash_flows.py
+    ├── charts.py
+    ├── optimizer.py
+    ├── recommendations.py
+    ├── settings.py
     └── status.py
 ```
 
@@ -40,22 +53,25 @@ app/
 All database access goes through repository interfaces:
 
 ```python
-# Domain layer defines interface
-class StockRepository(ABC):
-    @abstractmethod
-    async def get_by_symbol(self, symbol: str) -> Optional[Stock]:
-        pass
+# Domain layer defines interface (Protocol-based)
+from typing import Protocol
 
-# Infrastructure implements it
-class SQLiteStockRepository(StockRepository):
+class StockRepository(Protocol):
+    async def get_by_symbol(self, symbol: str) -> Optional[Stock]:
+        ...
+
+# Implementation in app/repositories/stock.py
+class StockRepository:
     async def get_by_symbol(self, symbol: str) -> Optional[Stock]:
         # SQLite implementation
         pass
 
 # API uses it via dependency injection
+from app.infrastructure.dependencies import StockRepositoryDep
+
 @router.get("/stocks/{symbol}")
 async def get_stock(
-    stock_repo: StockRepository = Depends(get_stock_repository)
+    stock_repo: StockRepositoryDep,
 ):
     return await stock_repo.get_by_symbol(symbol)
 ```
@@ -64,16 +80,15 @@ async def get_stock(
 FastAPI dependencies provide repository instances:
 
 ```python
-# infrastructure/dependencies.py
-def get_stock_repository(
-    db: aiosqlite.Connection = Depends(get_db)
-) -> StockRepository:
-    return SQLiteStockRepository(db)
+# infrastructure/dependencies.py defines dependency types
+# Repositories are injected via FastAPI Depends()
 
 # Usage in API
+from app.infrastructure.dependencies import StockRepositoryDep
+
 @router.get("/stocks")
 async def get_stocks(
-    stock_repo: StockRepository = Depends(get_stock_repository)
+    stock_repo: StockRepositoryDep,
 ):
     return await stock_repo.get_all_active()
 ```
@@ -122,17 +137,18 @@ class PriorityCalculator:
 
 ### Adding a New Repository
 
-1. **Define interface** in `domain/repositories/`:
+1. **Define interface** in `domain/repositories/protocols.py`:
 ```python
-class NewRepository(ABC):
-    @abstractmethod
+from typing import Protocol
+
+class NewRepository(Protocol):
     async def get_by_id(self, id: int) -> Optional[NewEntity]:
-        pass
+        ...
 ```
 
-2. **Implement** in `infrastructure/database/repositories/`:
+2. **Implement** in `app/repositories/new.py`:
 ```python
-class SQLiteNewRepository(NewRepository):
+class NewRepository:
     async def get_by_id(self, id: int) -> Optional[NewEntity]:
         # SQLite implementation
         pass
@@ -140,17 +156,16 @@ class SQLiteNewRepository(NewRepository):
 
 3. **Add dependency** in `infrastructure/dependencies.py`:
 ```python
-def get_new_repository(
-    db: aiosqlite.Connection = Depends(get_db)
-) -> NewRepository:
-    return SQLiteNewRepository(db)
+NewRepositoryDep = Annotated[NewRepository, Depends(get_new_repository)]
 ```
 
 4. **Use in API**:
 ```python
+from app.infrastructure.dependencies import NewRepositoryDep
+
 @router.get("/new/{id}")
 async def get_new(
-    new_repo: NewRepository = Depends(get_new_repository)
+    new_repo: NewRepositoryDep,
 ):
     return await new_repo.get_by_id(id)
 ```
@@ -213,6 +228,5 @@ See `MIGRATION_NOTES.md` for details on migrating existing code to use the new a
 ## Documentation
 
 - `ARCHITECTURE.md` - Detailed architecture documentation
-- `REFACTORING_SUMMARY.md` - What was changed and why
 - `MIGRATION_NOTES.md` - How to migrate existing code
-- `ARCHITECTURE_COMPLETE.md` - Completion status
+- `QUICK_START.md` - Quick start guide with examples

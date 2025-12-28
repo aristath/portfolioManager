@@ -6,7 +6,6 @@ via Router Bridge (msgpack RPC over Unix socket).
 
 import logging
 import socket
-import struct
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)

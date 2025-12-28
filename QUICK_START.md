@@ -11,9 +11,11 @@ All database access goes through repository interfaces:
 
 ```python
 # ✅ Good - Use repository
+from app.infrastructure.dependencies import StockRepositoryDep
+
 @router.get("/stocks/{symbol}")
 async def get_stock(
-    stock_repo: StockRepository = Depends(get_stock_repository)
+    stock_repo: StockRepositoryDep,
 ):
     return await stock_repo.get_by_symbol(symbol)
 
@@ -57,9 +59,11 @@ result = PriorityCalculator.calculate_priority(input, geo_weights, industry_weig
 3. **Create thin controller** - Just delegate to service/repository
 
 ```python
+from app.infrastructure.dependencies import StockRepositoryDep
+
 @router.get("/new-endpoint")
 async def new_endpoint(
-    stock_repo: StockRepository = Depends(get_stock_repository),
+    stock_repo: StockRepositoryDep,
 ):
     # Simple delegation
     stocks = await stock_repo.get_all_active()
@@ -68,17 +72,16 @@ async def new_endpoint(
 
 ### Adding a New Repository Method
 
-1. **Add to interface** (`domain/repositories/`):
+1. **Add to interface** (`domain/repositories/protocols.py`):
 ```python
-class StockRepository(ABC):
-    @abstractmethod
+class StockRepository(Protocol):
     async def get_by_industry(self, industry: str) -> List[Stock]:
-        pass
+        ...
 ```
 
-2. **Implement** (`infrastructure/database/repositories/`):
+2. **Implement** (`app/repositories/stock.py`):
 ```python
-class SQLiteStockRepository(StockRepository):
+class StockRepository:
     async def get_by_industry(self, industry: str) -> List[Stock]:
         # SQLite implementation
         pass
@@ -120,8 +123,8 @@ class NewService:
 | What | Where |
 |------|-------|
 | Business logic (no DB) | `app/domain/services/` |
-| Data access interface | `app/domain/repositories/` |
-| Database implementation | `app/infrastructure/database/repositories/` |
+| Data access interface | `app/domain/repositories/protocols.py` |
+| Database implementation | `app/repositories/` |
 | Orchestration logic | `app/application/services/` |
 | API endpoints | `app/api/` |
 | Hardware/External | `app/infrastructure/` |
@@ -129,8 +132,8 @@ class NewService:
 ### Examples
 
 - **Priority calculation** → `app/domain/services/priority_calculator.py`
-- **Stock repository interface** → `app/domain/repositories/stock_repository.py`
-- **SQLite stock repository** → `app/infrastructure/database/repositories/stock_repository.py`
+- **Stock repository interface** → `app/domain/repositories/protocols.py` (StockRepository protocol)
+- **SQLite stock repository** → `app/repositories/stock.py`
 - **Portfolio operations** → `app/application/services/portfolio_service.py`
 - **Stock API endpoints** → `app/api/stocks.py`
 

@@ -161,25 +161,78 @@ DAILY_SYNC_HOUR=18
 ## API Endpoints
 
 ### Portfolio
-- `GET /api/portfolio` - Current positions
+- `GET /api/portfolio` - Current positions with values
 - `GET /api/portfolio/summary` - Total value and allocations
+- `GET /api/portfolio/history` - Historical portfolio snapshots
+- `GET /api/portfolio/transactions` - Portfolio transaction history
+- `GET /api/portfolio/cash-breakdown` - Cash balance breakdown
+- `GET /api/portfolio/analytics` - Portfolio analytics and metrics
 
 ### Stocks
-- `GET /api/stocks` - Stock universe with scores
-- `POST /api/stocks/refresh-all` - Recalculate all scores
-- `POST /api/stocks/{symbol}/refresh` - Refresh single stock
+- `GET /api/stocks` - Stock universe with scores and priorities
+- `GET /api/stocks/{symbol}` - Get single stock details
+- `POST /api/stocks` - Add new stock to universe
+- `PUT /api/stocks/{symbol}` - Update stock settings
+- `DELETE /api/stocks/{symbol}` - Remove stock from universe
+- `POST /api/stocks/refresh-all` - Recalculate all stock scores
+- `POST /api/stocks/{symbol}/refresh` - Refresh single stock score
+- `POST /api/stocks/{symbol}/refresh-data` - Refresh stock data from APIs
 
 ### Trades
 - `GET /api/trades` - Trade history
+- `POST /api/trades/execute` - Execute manual trade
 - `GET /api/trades/allocation` - Current vs target allocation
-- `POST /api/trades/rebalance/preview` - Preview rebalance trades
-- `POST /api/trades/rebalance/execute` - Execute rebalance
+
+### Recommendations
+- `GET /api/trades/recommendations` - Get trading recommendations (holistic planner)
+- `POST /api/trades/recommendations/execute` - Execute recommendation sequence
+
+### Allocation
+- `GET /api/allocation/targets` - Get allocation targets (country/industry)
+- `PUT /api/allocation/targets/country` - Update country allocation weights
+- `PUT /api/allocation/targets/industry` - Update industry allocation weights
+- `GET /api/allocation/current` - Current allocation vs targets
+- `GET /api/allocation/deviations` - Allocation deviation scores
+
+### Cash Flows
+- `GET /api/cash-flows` - Cash flow transactions (with filters)
+- `GET /api/cash-flows/sync` - Sync cash flows from Tradernet
+- `GET /api/cash-flows/summary` - Cash flow summary statistics
+
+### Charts
+- `GET /api/charts/sparklines` - Stock price sparklines
+- `GET /api/charts/stocks/{symbol}` - Historical price chart data
+
+### Optimizer
+- `GET /api/optimizer` - Portfolio optimizer status and last results
+- `POST /api/optimizer/run` - Run portfolio optimization
+
+### Settings
+- `GET /api/settings` - Get all settings
+- `PUT /api/settings/{key}` - Update a setting value
+- `GET /api/settings/trading-mode` - Get trading mode (live/research)
+- `POST /api/settings/trading-mode` - Set trading mode
+- `POST /api/settings/restart-service` - Restart main service
+- `POST /api/settings/restart` - Restart application
+- `POST /api/settings/reset-cache` - Clear all caches
+- `GET /api/settings/cache-stats` - Cache statistics
+- `POST /api/settings/reschedule-jobs` - Reschedule background jobs
 
 ### Status
-- `GET /api/status` - System health
-- `GET /api/status/tradernet` - Tradernet connection
-- `GET /api/status/led` - LED display state
+- `GET /api/status` - System health and status
+- `GET /api/status/display/text` - LED display text (for native script)
+- `GET /api/status/led/display` - LED display state (for Arduino App)
+- `GET /api/status/tradernet` - Tradernet connection status
+- `GET /api/status/jobs` - Background job health monitoring
+- `GET /api/status/database/stats` - Database statistics
+- `GET /api/status/markets` - Market hours and status
+- `GET /api/status/disk` - Disk usage information
+- `POST /api/status/sync/portfolio` - Manual portfolio sync
 - `POST /api/status/sync/prices` - Manual price sync
+- `POST /api/status/sync/historical` - Sync historical data
+- `POST /api/status/sync/daily-pipeline` - Run daily sync pipeline
+- `POST /api/status/sync/recommendations` - Refresh recommendations
+- `POST /api/status/maintenance/daily` - Run daily maintenance tasks
 
 ## Stock Universe
 

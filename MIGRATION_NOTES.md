@@ -23,41 +23,36 @@ results = await execute_trades(db, trades)
 ### Future (Using Application Services)
 ```python
 from app.infrastructure.dependencies import (
-    get_stock_repository,
-    get_position_repository,
-    get_allocation_repository,
-    get_portfolio_repository,
-    get_trade_repository,
+    StockRepositoryDep,
+    PositionRepositoryDep,
+    AllocationRepositoryDep,
+    PortfolioRepositoryDep,
+    TradeRepositoryDep,
+    RebalancingServiceDep,
+    TradeExecutionServiceDep,
 )
-from app.application.services.rebalancing_service import RebalancingService
-from app.application.services.trade_execution_service import TradeExecutionService
 
-# Get repositories
-stock_repo = await get_stock_repository()
-position_repo = await get_position_repository()
-allocation_repo = await get_allocation_repository()
-portfolio_repo = await get_portfolio_repository()
-trade_repo = await get_trade_repository()
-
-# Use application services
-rebalancing_service = RebalancingService(
-    stock_repo, position_repo, allocation_repo, portfolio_repo
-)
-trades = await rebalancing_service.calculate_rebalance_trades(cash_balance)
-
-trade_execution_service = TradeExecutionService(trade_repo)
-results = await trade_execution_service.execute_trades(trades)
+# In API endpoints, use dependency injection
+@router.post("/rebalance")
+async def rebalance(
+    rebalancing_service: RebalancingServiceDep,
+    trade_execution_service: TradeExecutionServiceDep,
+    cash_balance: float,
+):
+    trades = await rebalancing_service.calculate_rebalance_trades(cash_balance)
+    results = await trade_execution_service.execute_trades(trades)
+    return results
 ```
 
 ## What's New
 
 ### Using Repositories Directly
 ```python
-from app.infrastructure.dependencies import get_stock_repository
+from app.infrastructure.dependencies import StockRepositoryDep
 
 @router.get("/stocks")
 async def get_stocks(
-    stock_repo: StockRepository = Depends(get_stock_repository)
+    stock_repo: StockRepositoryDep,
 ):
     stocks = await stock_repo.get_all_active()
     return stocks
@@ -65,12 +60,14 @@ async def get_stocks(
 
 ### Using Application Services
 ```python
-from app.application.services.portfolio_service import PortfolioService
+from app.infrastructure.dependencies import PortfolioServiceDep
 
-portfolio_service = PortfolioService(
-    portfolio_repo, position_repo, allocation_repo
-)
-summary = await portfolio_service.get_portfolio_summary()
+@router.get("/portfolio/summary")
+async def get_summary(
+    portfolio_service: PortfolioServiceDep,
+):
+    summary = await portfolio_service.get_portfolio_summary()
+    return summary
 ```
 
 ### Using Domain Services

@@ -39,19 +39,30 @@ pytest tests/integration/test_transactions.py
 - `GET /api/status/jobs` - Job health monitoring
 
 ### Portfolio
+- `GET /api/portfolio` - Current positions
 - `GET /api/portfolio/summary` - Portfolio summary
 - `GET /api/portfolio/history` - Portfolio history
-- `GET /api/portfolio/cash` - Cash balance
+- `GET /api/portfolio/transactions` - Transaction history
+- `GET /api/portfolio/cash-breakdown` - Cash breakdown
+- `GET /api/portfolio/analytics` - Portfolio analytics
 
 ### Trades
-- `POST /api/trades` - Execute manual trade
-- `POST /api/trades/rebalance/preview` - Preview rebalance
-- `POST /api/trades/rebalance/execute` - Execute rebalance
+- `GET /api/trades` - Trade history
+- `POST /api/trades/execute` - Execute manual trade
+- `GET /api/trades/allocation` - Current vs target allocation
+
+### Recommendations
+- `GET /api/trades/recommendations` - Get trading recommendations
+- `POST /api/trades/recommendations/execute` - Execute recommendations
 
 ### Stocks
-- `GET /api/stocks` - List all stocks
+- `GET /api/stocks` - List all stocks with scores
+- `GET /api/stocks/{symbol}` - Get single stock
 - `POST /api/stocks` - Add new stock
 - `PUT /api/stocks/{symbol}` - Update stock
+- `DELETE /api/stocks/{symbol}` - Remove stock
+- `POST /api/stocks/refresh-all` - Refresh all scores
+- `POST /api/stocks/{symbol}/refresh` - Refresh single stock
 
 ## Configuration
 
@@ -59,7 +70,6 @@ pytest tests/integration/test_transactions.py
 ```bash
 TRADERNET_API_KEY=your_api_key
 TRADERNET_API_SECRET=your_api_secret
-DATABASE_PATH=data/trader.db
 ```
 
 ### Optional Configuration
@@ -204,9 +214,10 @@ pytest
 3. Review correlation ID in logs
 4. Check health endpoint for service status
 
-## Support Files
+## Documentation
 
-- `BUG_FIXES_SUMMARY.md` - Detailed bug fixes
-- `IMPLEMENTATION_COMPLETE.md` - Implementation overview
-- `COMPLETE_IMPLEMENTATION_SUMMARY.md` - Complete summary
+- `README.md` - Main project documentation
+- `ARCHITECTURE.md` - Architecture overview
+- `DEPLOY.md` - Deployment guide
+- `QUICK_START.md` - Quick start guide
 - `tests/integration/README.md` - Test documentation

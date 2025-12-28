@@ -35,6 +35,12 @@ Tests external API failure handling:
 - Portfolio sync with API failures
 - Health check with degraded services
 
+### `test_repositories.py`
+Tests repository implementations:
+- Repository CRUD operations
+- Query methods and filtering
+- Data consistency and integrity
+
 ## Running Tests
 
 ```bash
@@ -58,6 +64,7 @@ These tests cover:
 - ✅ Transaction rollback scenarios
 - ✅ Error recovery paths
 - ✅ External API failure handling
+- ✅ Repository implementations
 
 ## Dependencies
 
