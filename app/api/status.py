@@ -115,8 +115,14 @@ async def stream_display_state(
                         await settings_repo.get_float("ticker_speed", 50.0)
                     )
                     state_data["ticker_speed"] = ticker_speed
-                except Exception:
-                    pass  # Keep previous value if settings unavailable
+                except Exception as e:
+                    import logging
+
+                    logger = logging.getLogger(__name__)
+                    logger.debug(
+                        f"Failed to update ticker_speed from settings, keeping previous value: {e}"
+                    )
+                    # Keep previous value if settings unavailable
 
                 # Format as SSE event: data: {json}\n\n
                 event_data = json.dumps(state_data)
