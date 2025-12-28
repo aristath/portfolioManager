@@ -79,6 +79,11 @@ class ConstraintsManager:
         """
         bounds = {}
 
+        logger.debug(
+            f"Calculating weight bounds for {len(stocks)} stocks, "
+            f"portfolio_value={portfolio_value:.2f} EUR"
+        )
+
         for stock in stocks:
             symbol = stock.symbol
             position = positions.get(symbol)
@@ -94,46 +99,55 @@ class ConstraintsManager:
             else:
                 current_weight = 0.0
 
+            # Track constraint application for diagnostics
+            constraint_steps = []
+
             # Default bounds
             lower = 0.0
             upper = self.max_concentration
+            constraint_steps.append(f"initial: lower={lower:.2%}, upper={upper:.2%}")
 
             # Apply user-defined portfolio targets (convert percentage to fraction)
             if stock.min_portfolio_target is not None:
                 lower = stock.min_portfolio_target / 100.0
-                logger.debug(
-                    f"{symbol}: min_portfolio_target={stock.min_portfolio_target}%, "
-                    f"lower={lower:.2%}"
+                constraint_steps.append(
+                    f"min_portfolio_target={stock.min_portfolio_target}% → lower={lower:.2%}"
                 )
 
             if stock.max_portfolio_target is not None:
                 upper = stock.max_portfolio_target / 100.0
-                logger.debug(
-                    f"{symbol}: max_portfolio_target={stock.max_portfolio_target}%, "
-                    f"upper={upper:.2%}"
+                constraint_steps.append(
+                    f"max_portfolio_target={stock.max_portfolio_target}% → upper={upper:.2%}"
                 )
 
             # Check allow_buy constraint
             if not stock.allow_buy:
                 # Can't buy more, so upper bound = current weight
+                old_upper = upper
                 upper = min(upper, current_weight)
-                logger.debug(f"{symbol}: allow_buy=False, upper={upper:.2%}")
+                constraint_steps.append(
+                    f"allow_buy=False → upper=min({old_upper:.2%}, {current_weight:.2%})={upper:.2%}"
+                )
 
             # Check allow_sell constraint
             if not stock.allow_sell:
                 # Can't sell, so lower bound = current weight
+                old_lower = lower
                 lower = max(lower, current_weight)
-                logger.debug(f"{symbol}: allow_sell=False, lower={lower:.2%}")
+                constraint_steps.append(
+                    f"allow_sell=False → lower=max({old_lower:.2%}, {current_weight:.2%})={lower:.2%}"
+                )
 
             # Check min_lot constraint
             if position and stock.min_lot > 0 and current_price > 0:
                 if position.quantity <= stock.min_lot:
                     # Can't partially sell - it's all or nothing
                     # Set lower bound to current weight (can't reduce)
+                    old_lower = lower
                     lower = max(lower, current_weight)
-                    logger.debug(
-                        f"{symbol}: at min_lot ({position.quantity} <= {stock.min_lot}), "
-                        f"lower={lower:.2%}"
+                    constraint_steps.append(
+                        f"at min_lot (qty={position.quantity} <= {stock.min_lot}) → "
+                        f"lower=max({old_lower:.2%}, {current_weight:.2%})={lower:.2%}"
                     )
                 else:
                     # Can sell down to min_lot worth
@@ -141,17 +155,38 @@ class ConstraintsManager:
                     min_weight = (
                         min_lot_value / portfolio_value if portfolio_value > 0 else 0
                     )
+                    old_lower = lower
                     lower = max(lower, min_weight)
+                    constraint_steps.append(
+                        f"min_lot constraint (min_lot_value={min_lot_value:.2f} EUR) → "
+                        f"lower=max({old_lower:.2%}, {min_weight:.2%})={lower:.2%}"
+                    )
 
             # Ensure lower <= upper
             if lower > upper:
                 # Constraint conflict - keep current weight
                 logger.warning(
-                    f"{symbol}: constraint conflict (lower={lower:.2%} > upper={upper:.2%}), "
-                    f"using current weight {current_weight:.2%}"
+                    f"{symbol}: constraint conflict detected! "
+                    f"lower={lower:.2%} > upper={upper:.2%}, "
+                    f"current_weight={current_weight:.2%}, "
+                    f"portfolio_value={portfolio_value:.2f} EUR, "
+                    f"position_value={position.market_value_eur if position and position.market_value_eur else 0:.2f} EUR, "
+                    f"min_portfolio_target={stock.min_portfolio_target}, "
+                    f"max_portfolio_target={stock.max_portfolio_target}, "
+                    f"allow_sell={stock.allow_sell}, allow_buy={stock.allow_buy}, "
+                    f"min_lot={stock.min_lot}, position_qty={position.quantity if position else 0}, "
+                    f"current_price={current_price:.2f}. "
+                    f"Constraint steps: {'; '.join(constraint_steps)}. "
+                    f"Using current weight {current_weight:.2%} for both bounds."
                 )
                 lower = current_weight
                 upper = current_weight
+            elif lower == upper and lower > 0:
+                # Locked position - log for diagnostics
+                logger.debug(
+                    f"{symbol}: locked position (lower=upper={lower:.2%}), "
+                    f"constraint steps: {'; '.join(constraint_steps)}"
+                )
 
             bounds[symbol] = (lower, upper)
 
