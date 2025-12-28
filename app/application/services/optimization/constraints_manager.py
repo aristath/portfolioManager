@@ -389,15 +389,16 @@ class ConstraintsManager:
                 for constraint in ind_constraints:
                     constraint.lower = constraint.lower * scale_factor
                     constraint.lower = min(constraint.lower, constraint.upper)
-            # Scale down if combined minimums exceed 80% (too restrictive for optimizer)
-            elif total_min_sum > 0.80:
+            # Scale down if combined minimums exceed 70% (too restrictive for optimizer)
+            # This leaves 30% slack for individual stock bounds and optimization flexibility
+            elif total_min_sum > 0.70:
                 logger.warning(
                     f"Combined minimum bounds (country={country_min_sum:.2%} + "
-                    f"industry={ind_min_sum:.2%} = {total_min_sum:.2%}) exceed 80%, "
-                    f"scaling down industry minimums proportionally"
+                    f"industry={ind_min_sum:.2%} = {total_min_sum:.2%}) exceed 70%, "
+                    f"scaling down industry minimums proportionally to 70% total"
                 )
-                # Scale industry minimums so total doesn't exceed 80%
-                target_total = 0.80
+                # Scale industry minimums so total doesn't exceed 70%
+                target_total = 0.70
                 available_for_industry = max(0.0, target_total - country_min_sum)
                 if available_for_industry > 0 and ind_min_sum > 0:
                     scale_factor = available_for_industry / ind_min_sum
