@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, field_validator
 from app.domain.value_objects.trade_side import TradeSide
 from app.infrastructure.cache_invalidation import get_cache_invalidation_service
 from app.infrastructure.dependencies import (
+    ConcentrationAlertServiceDep,
     PortfolioServiceDep,
     PositionRepositoryDep,
     StockRepositoryDep,
@@ -121,9 +122,13 @@ async def execute_trade(
 
 
 @router.get("/allocation")
-async def get_allocation(portfolio_service: PortfolioServiceDep):
+async def get_allocation(
+    portfolio_service: PortfolioServiceDep,
+    alert_service: ConcentrationAlertServiceDep,
+):
     """Get current portfolio allocation vs targets."""
     summary = await portfolio_service.get_portfolio_summary()
+    alerts = await alert_service.detect_alerts(summary)
 
     return {
         "total_value": summary.total_value,
@@ -147,5 +152,16 @@ async def get_allocation(portfolio_service: PortfolioServiceDep):
                 "deviation": a.deviation,
             }
             for a in summary.industry_allocations
+        ],
+        "alerts": [
+            {
+                "type": alert.type,
+                "name": alert.name,
+                "current_pct": alert.current_pct,
+                "limit_pct": alert.limit_pct,
+                "alert_threshold_pct": alert.alert_threshold_pct,
+                "severity": alert.severity,
+            }
+            for alert in alerts
         ],
     }

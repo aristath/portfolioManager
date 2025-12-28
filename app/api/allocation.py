@@ -4,7 +4,11 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.domain.models import AllocationTarget
-from app.infrastructure.dependencies import AllocationRepositoryDep, PortfolioServiceDep
+from app.infrastructure.dependencies import (
+    AllocationRepositoryDep,
+    ConcentrationAlertServiceDep,
+    PortfolioServiceDep,
+)
 
 router = APIRouter()
 
@@ -112,9 +116,13 @@ async def update_industry_targets(
 
 
 @router.get("/current")
-async def get_current_allocation(portfolio_service: PortfolioServiceDep):
+async def get_current_allocation(
+    portfolio_service: PortfolioServiceDep,
+    alert_service: ConcentrationAlertServiceDep,
+):
     """Get current allocation vs targets for both country and industry."""
     summary = await portfolio_service.get_portfolio_summary()
+    alerts = await alert_service.detect_alerts(summary)
 
     return {
         "total_value": summary.total_value,
@@ -138,6 +146,17 @@ async def get_current_allocation(portfolio_service: PortfolioServiceDep):
                 "deviation": a.deviation,
             }
             for a in summary.industry_allocations
+        ],
+        "alerts": [
+            {
+                "type": alert.type,
+                "name": alert.name,
+                "current_pct": alert.current_pct,
+                "limit_pct": alert.limit_pct,
+                "alert_threshold_pct": alert.alert_threshold_pct,
+                "severity": alert.severity,
+            }
+            for alert in alerts
         ],
     }
 
