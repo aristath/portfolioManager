@@ -391,10 +391,77 @@ async def _get_holistic_recommendation():
     )
     cache_key = f"recommendations:{portfolio_cache_key}"
 
+    # Check planner database first (incremental mode takes priority)
+    from app.domain.portfolio_hash import generate_portfolio_hash
+    from app.repositories.planner_repository import PlannerRepository
+
+    planner_repo = PlannerRepository()
+    portfolio_hash = generate_portfolio_hash(position_dicts, stocks)
+    best_result = await planner_repo.get_best_result(portfolio_hash)
+
+    if best_result:
+        # We have a result from incremental planner - use it (ignore cache)
+        logger.info("Using best result from planner database (incremental mode)")
+        best_sequence = await planner_repo.get_best_sequence_from_hash(
+            portfolio_hash, best_result["best_sequence_hash"]
+        )
+
+        if best_sequence and len(best_sequence) > 0:
+            # Use first step from best sequence
+            step_action = best_sequence[0]
+            logger.info(
+                f"Best result from database: {step_action.side} {step_action.symbol}"
+            )
+
+            # Update cache with new result
+            multi_step_data = {
+                "depth": len(best_sequence),
+                "steps": [
+                    {
+                        "step": i + 1,
+                        "side": action.side,
+                        "symbol": action.symbol,
+                        "name": action.name,
+                        "quantity": action.quantity,
+                        "estimated_price": action.price,
+                        "estimated_value": action.value_eur,
+                        "currency": action.currency,
+                        "reason": action.reason,
+                    }
+                    for i, action in enumerate(best_sequence)
+                ],
+            }
+            cache.set(cache_key, multi_step_data, ttl_seconds=900)
+
+            # Convert to Recommendation
+            currency_val = step_action.currency
+            if isinstance(currency_val, str):
+                currency = Currency.from_string(currency_val)
+            else:
+                currency = Currency.from_string("EUR")
+
+            side = TradeSide.BUY if step_action.side == "BUY" else TradeSide.SELL
+
+            return Recommendation(
+                symbol=step_action.symbol,
+                name=step_action.name,
+                side=side,
+                quantity=step_action.quantity,
+                estimated_price=step_action.price,
+                estimated_value=step_action.value_eur,
+                reason=step_action.reason,
+                country=None,
+                currency=currency,
+                status=RecommendationStatus.PENDING,
+            )
+
+    # No result in database yet - check cache (fallback to old recommendations)
     cached = cache.get(cache_key)
     if cached and cached.get("steps"):
         step = cached["steps"][0]
-        logger.info(f"Using cached recommendation: {step['side']} {step['symbol']}")
+        logger.info(
+            f"Using cached recommendation (no database result yet): {step['side']} {step['symbol']}"
+        )
 
         side = TradeSide.BUY if step["side"] == "BUY" else TradeSide.SELL
         currency_val = step.get("currency", "EUR")
@@ -416,8 +483,8 @@ async def _get_holistic_recommendation():
             status=RecommendationStatus.PENDING,
         )
 
-    # Cache miss - try to get best result from database (incremental mode)
-    logger.info("Cache miss, checking planner database for best result...")
+    # Cache miss and no database result - try to get best result from database (incremental mode)
+    logger.info("No cache or database result, checking planner database...")
 
     from app.domain.portfolio_hash import generate_portfolio_hash
     from app.repositories.planner_repository import PlannerRepository

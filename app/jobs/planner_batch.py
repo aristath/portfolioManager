@@ -29,13 +29,16 @@ async def process_planner_batch_job():
     """
     try:
         # Get dependencies
+        from app.infrastructure.database.manager import get_db_manager
+
+        db_manager = get_db_manager()
         position_repo = PositionRepository()
         stock_repo = StockRepository()
         settings_repo = SettingsRepository()
         allocation_repo = AllocationRepository()
         settings_service = SettingsService(settings_repo)
         tradernet_client = TradernetClient()
-        exchange_rate_service = ExchangeRateService()
+        exchange_rate_service = ExchangeRateService(db_manager)
 
         # Get settings
         batch_size = int(await settings_repo.get_float("planner_batch_size", 100.0))
