@@ -178,6 +178,8 @@ class PortfolioOptimizer:
             cov_matrix,
             bounds,
             target_return,
+            country_constraints,
+            ind_constraints,
         )
 
         # Run HRP
@@ -249,9 +251,19 @@ class PortfolioOptimizer:
         cov_matrix: pd.DataFrame,
         bounds: Dict[str, Tuple[float, float]],
         target_return: float,
+        country_constraints: List,
+        ind_constraints: List,
     ) -> Tuple[Optional[Dict[str, float]], Optional[str]]:
         """
         Run Mean-Variance optimization with fallback strategy.
+
+        Args:
+            expected_returns: Dict mapping symbol to expected return
+            cov_matrix: Covariance matrix DataFrame
+            bounds: Dict mapping symbol to (lower, upper) weight bounds
+            target_return: Target annual return
+            country_constraints: List of SectorConstraint for countries
+            ind_constraints: List of SectorConstraint for industries
 
         Returns:
             Tuple of (weights_dict, fallback_used)
@@ -272,9 +284,41 @@ class PortfolioOptimizer:
             else:
                 weight_bounds.append((0, 0.20))  # Default
 
+        # Build sector mappers and bounds from country constraints
+        country_mapper = {}
+        country_lower = {}
+        country_upper = {}
+        for constraint in country_constraints:
+            for symbol in constraint.symbols:
+                if symbol in common_symbols:
+                    country_mapper[symbol] = constraint.name
+            country_lower[constraint.name] = constraint.lower
+            country_upper[constraint.name] = constraint.upper
+
+        # Build sector mappers and bounds from industry constraints
+        industry_mapper = {}
+        industry_lower = {}
+        industry_upper = {}
+        for constraint in ind_constraints:
+            for symbol in constraint.symbols:
+                if symbol in common_symbols:
+                    industry_mapper[symbol] = constraint.name
+            industry_lower[constraint.name] = constraint.lower
+            industry_upper[constraint.name] = constraint.upper
+
+        def _apply_sector_constraints(ef: EfficientFrontier) -> None:
+            """Apply sector constraints to EfficientFrontier."""
+            if country_mapper:
+                ef.add_sector_constraints(country_mapper, country_lower, country_upper)
+            if industry_mapper:
+                ef.add_sector_constraints(
+                    industry_mapper, industry_lower, industry_upper
+                )
+
         try:
             # Strategy 1: Target return
             ef = EfficientFrontier(mu, S, weight_bounds=weight_bounds)
+            _apply_sector_constraints(ef)
             ef.efficient_return(target_return=target_return)
             cleaned = ef.clean_weights()
             logger.info(
@@ -288,6 +332,7 @@ class PortfolioOptimizer:
             try:
                 # Strategy 2: Max Sharpe
                 ef = EfficientFrontier(mu, S, weight_bounds=weight_bounds)
+                _apply_sector_constraints(ef)
                 ef.max_sharpe()
                 cleaned = ef.clean_weights()
                 logger.info("MV optimization succeeded with max_sharpe fallback")
