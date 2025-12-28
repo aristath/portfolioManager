@@ -88,9 +88,11 @@ def calculate_time_held_score(
         return 0.6, 365
 
     try:
-        bought_date = datetime.fromisoformat(first_bought_at.replace("Z", "+00:00"))
-        if bought_date.tzinfo:
-            bought_date = bought_date.replace(tzinfo=None)
+        from app.repositories.base import safe_parse_datetime_string
+
+        bought_date = safe_parse_datetime_string(first_bought_at)
+        if bought_date is None:
+            return 0.6, 365
         days_held = (datetime.now() - bought_date).days
     except (ValueError, TypeError):
         return 0.6, 365

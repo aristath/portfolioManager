@@ -1,6 +1,7 @@
 """System status API endpoints."""
 
 import json
+import logging
 import shutil
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -22,6 +23,8 @@ from app.infrastructure.dependencies import (
     SettingsRepositoryDep,
     StockRepositoryDep,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -262,8 +265,8 @@ async def get_tradernet_status():
                 "connected": True,
                 "message": "Connected to Tradernet",
             }
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Failed to check Tradernet connection: {e}")
 
     return {
         "connected": False,

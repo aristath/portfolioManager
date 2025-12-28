@@ -144,7 +144,9 @@ class ScoreRepository:
         calculated_at = None
         if row["calculated_at"]:
             try:
-                calculated_at = datetime.fromisoformat(str(row["calculated_at"]))
+                from app.repositories.base import safe_parse_datetime_string
+
+                calculated_at = safe_parse_datetime_string(str(row["calculated_at"]))
             except (ValueError, TypeError):
                 pass
 
