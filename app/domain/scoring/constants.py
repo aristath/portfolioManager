@@ -252,3 +252,15 @@ EXPECTED_RETURN_MAX = 0.30  # +30% ceiling
 # Allocation tolerance bands for sector constraints
 GEO_ALLOCATION_TOLERANCE = 0.10  # +/- 10% from target
 IND_ALLOCATION_TOLERANCE = 0.15  # +/- 15% from target
+
+# Hard concentration limits (safety guardrails)
+MAX_COUNTRY_CONCENTRATION = 0.35  # 35% max per country
+MAX_SECTOR_CONCENTRATION = 0.30  # 30% max per sector
+MAX_POSITION_CONCENTRATION = (
+    0.15  # 15% max per position (matches MAX_POSITION_PCT in domain/constants.py)
+)
+
+# Alert thresholds (80% of caps)
+COUNTRY_ALERT_THRESHOLD = 0.28  # Alert at 28% (80% of 35%)
+SECTOR_ALERT_THRESHOLD = 0.24  # Alert at 24% (80% of 30%)
+POSITION_ALERT_THRESHOLD = 0.12  # Alert at 12% (80% of 15%)
