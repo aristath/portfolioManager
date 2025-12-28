@@ -178,32 +178,91 @@ class DatabaseManager:
         self._history: dict[str, Database] = {}
         self._history_lock = asyncio.Lock()
 
-    async def history(self, symbol: str) -> Database:
+    async def history(self, identifier: str) -> Database:
         """
-        Get or create per-symbol history database.
+        Get or create per-stock history database.
 
-        Each symbol gets its own database for:
-        - Corruption isolation (one symbol's corruption doesn't affect others)
+        Accepts either symbol or ISIN as identifier.
+        Files are named by ISIN (if available) or sanitized symbol.
+
+        Each stock gets its own database for:
+        - Corruption isolation (one stock's corruption doesn't affect others)
         - Independent recovery (can re-fetch from Yahoo if corrupted)
         - Smaller files (easier backup/restore)
         """
         from app.infrastructure.database.schemas import init_history_schema
 
-        # Sanitize symbol for filename (replace dots with underscores)
-        safe_symbol = symbol.replace(".", "_").replace("-", "_")
+        # Normalize identifier
+        identifier = identifier.strip().upper()
 
         async with self._history_lock:
-            if symbol not in self._history:
-                self.history_dir.mkdir(parents=True, exist_ok=True)
+            # Check if already cached
+            if identifier in self._history:
+                return self._history[identifier]
+
+            self.history_dir.mkdir(parents=True, exist_ok=True)
+
+            # Determine file path - prefer ISIN-based filename
+            isin = await self._resolve_to_isin(identifier)
+
+            if isin:
+                # ISIN is alphanumeric, no sanitization needed
+                db_path = self.history_dir / f"{isin}.db"
+                cache_key = isin
+            else:
+                # Fall back to sanitized symbol
+                safe_symbol = identifier.replace(".", "_").replace("-", "_")
                 db_path = self.history_dir / f"{safe_symbol}.db"
-                db = Database(db_path)
-                self._history[symbol] = db
+                cache_key = identifier
 
-                # Initialize schema for new history database
-                await init_history_schema(db)
-                logger.debug(f"Initialized history database for {symbol}")
+            # Check for backwards compatibility - look for old symbol-based file
+            if not db_path.exists() and isin:
+                # ISIN-based file doesn't exist, check for old symbol-based file
+                old_path = await self._find_legacy_history_file(identifier)
+                if old_path and old_path.exists():
+                    db_path = old_path
 
-            return self._history[symbol]
+            db = Database(db_path)
+            self._history[cache_key] = db
+
+            # Also cache under original identifier for faster lookup
+            if cache_key != identifier:
+                self._history[identifier] = db
+
+            # Initialize schema for new history database
+            await init_history_schema(db)
+            logger.debug(f"Initialized history database for {identifier} at {db_path}")
+
+            return db
+
+    async def _resolve_to_isin(self, identifier: str) -> Optional[str]:
+        """Resolve identifier to ISIN if possible."""
+        from app.domain.services.symbol_resolver import is_isin
+
+        # If already an ISIN, return it
+        if is_isin(identifier):
+            return identifier
+
+        # Look up ISIN from stocks table
+        try:
+            row = await self.config.fetchone(
+                "SELECT isin FROM stocks WHERE symbol = ?", (identifier,)
+            )
+            if row and row["isin"]:
+                return row["isin"]
+        except Exception:
+            pass
+
+        return None
+
+    async def _find_legacy_history_file(self, identifier: str) -> Optional[Path]:
+        """Find legacy symbol-based history file for backwards compatibility."""
+        # Try various sanitization patterns
+        safe_symbol = identifier.replace(".", "_").replace("-", "_")
+        legacy_path = self.history_dir / f"{safe_symbol}.db"
+        if legacy_path.exists():
+            return legacy_path
+        return None
 
     async def close_all(self):
         """Close all database connections."""
