@@ -345,10 +345,11 @@ class ConstraintsManager:
                 f"{c.name}: target={c.target:.2%}, range=[{c.lower:.2%}, {c.upper:.2%}]"
                 for c in ind_constraints
             ]
-            logger.debug(f"Industry constraints: {', '.join(ind_details)}")
-            logger.debug(
-                f"Industry constraints sum: min={sum(c.lower for c in ind_constraints):.2%}, "
-                f"max={sum(c.upper for c in ind_constraints):.2%}"
+            logger.info(f"Industry constraints: {', '.join(ind_details)}")
+            ind_min_sum = sum(c.lower for c in ind_constraints)
+            ind_max_sum = sum(c.upper for c in ind_constraints)
+            logger.info(
+                f"Industry constraints sum: min={ind_min_sum:.2%}, max={ind_max_sum:.2%}"
             )
 
         return country_constraints, ind_constraints
