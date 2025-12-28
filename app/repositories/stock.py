@@ -168,8 +168,8 @@ class StockRepository:
             row["symbol"]: {key: row[key] for key in row.keys()} for row in stock_rows
         }
 
-        # Fetch scores from state.db
-        score_rows = await db_manager.state.fetchall("SELECT * FROM scores")
+        # Fetch scores from calculations.db
+        score_rows = await db_manager.calculations.fetchall("SELECT * FROM scores")
         scores = {
             row["symbol"]: {key: row[key] for key in row.keys()} for row in score_rows
         }

@@ -147,10 +147,14 @@ class DatabaseManager:
     Databases:
     - config: Stock universe, allocation targets, settings (rarely changes)
     - ledger: Trades, cash flows (append-only audit trail)
-    - state: Positions, scores, snapshots (current state, rebuildable)
-    - cache: Computed aggregates (ephemeral, can be rebuilt)
-    - calculations: Pre-computed raw metrics (RSI, EMA, Sharpe, CAGR, etc.)
-    - history: Per-symbol price databases (isolated for corruption containment)
+    - state: Positions (current state, rebuildable from ledger)
+    - cache: Ephemeral computed aggregates (can be deleted)
+    - calculations: Pre-computed metrics and scores
+    - recommendations: Trade recommendations (operational)
+    - dividends: Dividend history with DRIP tracking
+    - rates: Exchange rates
+    - snapshots: Portfolio snapshots (daily time-series)
+    - history: Per-stock price databases (keyed by ISIN)
     """
 
     def __init__(self, data_dir: Path):
@@ -164,7 +168,13 @@ class DatabaseManager:
         self.cache = Database(data_dir / "cache.db")
         self.calculations = Database(data_dir / "calculations.db")
 
-        # Per-symbol history databases (lazy loaded)
+        # New dedicated databases
+        self.recommendations = Database(data_dir / "recommendations.db")
+        self.dividends = Database(data_dir / "dividends.db")
+        self.rates = Database(data_dir / "rates.db")
+        self.snapshots = Database(data_dir / "snapshots.db")
+
+        # Per-stock history databases (lazy loaded, keyed by ISIN)
         self._history: dict[str, Database] = {}
         self._history_lock = asyncio.Lock()
 
@@ -202,6 +212,10 @@ class DatabaseManager:
         await self.state.close()
         await self.cache.close()
         await self.calculations.close()
+        await self.recommendations.close()
+        await self.dividends.close()
+        await self.rates.close()
+        await self.snapshots.close()
 
         for db in self._history.values():
             await db.close()
@@ -223,6 +237,10 @@ class DatabaseManager:
             ("state", self.state),
             ("cache", self.cache),
             ("calculations", self.calculations),
+            ("recommendations", self.recommendations),
+            ("dividends", self.dividends),
+            ("rates", self.rates),
+            ("snapshots", self.snapshots),
         ]:
             try:
                 results[name] = await db.integrity_check()
@@ -240,7 +258,17 @@ class DatabaseManager:
 
     async def checkpoint_all(self):
         """Run WAL checkpoint on all databases."""
-        for db in [self.config, self.ledger, self.state, self.cache, self.calculations]:
+        for db in [
+            self.config,
+            self.ledger,
+            self.state,
+            self.cache,
+            self.calculations,
+            self.recommendations,
+            self.dividends,
+            self.rates,
+            self.snapshots,
+        ]:
             await db.checkpoint()
 
         for db in self._history.values():
@@ -289,18 +317,28 @@ async def init_databases(data_dir: Path) -> DatabaseManager:
         init_cache_schema,
         init_calculations_schema,
         init_config_schema,
+        init_dividends_schema,
         init_ledger_schema,
+        init_rates_schema,
+        init_recommendations_schema,
+        init_snapshots_schema,
         init_state_schema,
     )
 
     _db_manager = DatabaseManager(data_dir)
 
-    # Initialize schemas
+    # Initialize schemas for core databases
     await init_config_schema(_db_manager.config)
     await init_ledger_schema(_db_manager.ledger)
     await init_state_schema(_db_manager.state)
     await init_cache_schema(_db_manager.cache)
     await init_calculations_schema(_db_manager.calculations)
+
+    # Initialize schemas for new dedicated databases
+    await init_recommendations_schema(_db_manager.recommendations)
+    await init_dividends_schema(_db_manager.dividends)
+    await init_rates_schema(_db_manager.rates)
+    await init_snapshots_schema(_db_manager.snapshots)
 
     logger.info(f"Database manager initialized with data directory: {data_dir}")
 

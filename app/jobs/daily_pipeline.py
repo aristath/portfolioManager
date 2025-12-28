@@ -569,8 +569,10 @@ async def _build_portfolio_context(db_manager):
     stock_countries = {row[0]: row[1] for row in stock_data if row[1]}
     stock_industries = {row[0]: row[2] for row in stock_data if row[2]}
 
-    # Get scores for quality weighting
-    cursor = await db_manager.state.execute("SELECT symbol, quality_score FROM scores")
+    # Get scores for quality weighting (from calculations.db)
+    cursor = await db_manager.calculations.execute(
+        "SELECT symbol, quality_score FROM scores"
+    )
     stock_scores = {row[0]: row[1] for row in await cursor.fetchall() if row[1]}
 
     return PortfolioContext(

@@ -1,7 +1,7 @@
 """Exchange rate service - single source of truth for currency conversion.
 
 This service handles all exchange rate lookups and conversions, with:
-- Database-backed caching (1 hour TTL)
+- Database-backed storage (rates.db) with configurable TTL
 - Fallback rates when API is unavailable
 - Async implementation using existing database infrastructure
 """
@@ -167,9 +167,9 @@ class ExchangeRateService:
     async def _get_from_db_cache(
         self, from_currency: str, to_currency: str
     ) -> Optional[float]:
-        """Get rate from database cache if not expired."""
+        """Get rate from database if not expired."""
         try:
-            row = await self._db_manager.cache.fetchone(
+            row = await self._db_manager.rates.fetchone(
                 """
                 SELECT rate, expires_at FROM exchange_rates
                 WHERE from_currency = ? AND to_currency = ?
@@ -190,12 +190,12 @@ class ExchangeRateService:
     async def _store_in_db_cache(
         self, from_currency: str, to_currency: str, rate: float
     ) -> None:
-        """Store rate in database cache."""
+        """Store rate in database."""
         try:
             now = datetime.now()
             expires_at = now + timedelta(seconds=self._ttl_seconds)
 
-            await self._db_manager.cache.execute(
+            await self._db_manager.rates.execute(
                 """
                 INSERT OR REPLACE INTO exchange_rates
                 (from_currency, to_currency, rate, fetched_at, expires_at)
@@ -209,9 +209,9 @@ class ExchangeRateService:
                     expires_at.isoformat(),
                 ),
             )
-            await self._db_manager.cache.commit()
+            await self._db_manager.rates.commit()
         except Exception as e:
-            logger.warning(f"Failed to store rate in DB cache: {e}")
+            logger.warning(f"Failed to store rate in DB: {e}")
 
     async def _fetch_rate_from_api(
         self, from_currency: str, to_currency: str

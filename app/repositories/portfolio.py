@@ -1,4 +1,4 @@
-"""Portfolio repository - operations for portfolio_snapshots table."""
+"""Portfolio repository - operations for portfolio_snapshots table (snapshots.db)."""
 
 from datetime import datetime
 from typing import List, Optional
@@ -15,7 +15,7 @@ class PortfolioRepository:
         """Initialize repository.
 
         Args:
-            db: Optional database connection for testing. If None, uses get_db_manager().state
+            db: Optional database connection for testing. If None, uses get_db_manager().snapshots
                 Can be a Database instance or raw aiosqlite.Connection (will be wrapped)
         """
         if db is not None:
@@ -27,7 +27,7 @@ class PortfolioRepository:
             else:
                 self._db = db
         else:
-            self._db = get_db_manager().state
+            self._db = get_db_manager().snapshots
 
     async def get_by_date(self, date: str) -> Optional[PortfolioSnapshot]:
         """Get snapshot for a specific date."""

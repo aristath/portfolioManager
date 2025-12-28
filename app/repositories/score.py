@@ -9,13 +9,13 @@ from app.repositories.base import transaction_context
 
 
 class ScoreRepository:
-    """Repository for stock score operations."""
+    """Repository for stock score operations (calculations.db)."""
 
     def __init__(self, db=None):
         """Initialize repository.
 
         Args:
-            db: Optional database connection for testing. If None, uses get_db_manager().state
+            db: Optional database connection for testing. If None, uses get_db_manager().calculations
                 Can be a Database instance or raw aiosqlite.Connection (will be wrapped)
         """
         if db is not None:
@@ -27,7 +27,7 @@ class ScoreRepository:
             else:
                 self._db = db
         else:
-            self._db = get_db_manager().state
+            self._db = get_db_manager().calculations
 
     async def get_by_symbol(self, symbol: str) -> Optional[StockScore]:
         """Get score by symbol."""

@@ -4,10 +4,14 @@ Database Schemas - CREATE TABLE statements for all databases.
 This module contains schema definitions for:
 - config.db: Stock universe, allocation targets, settings
 - ledger.db: Trades, cash flows (append-only)
-- state.db: Positions, scores, snapshots (current state)
-- cache.db: Computed aggregates
-- calculations.db: Pre-computed raw metrics (RSI, EMA, Sharpe, CAGR, etc.)
-- history/{symbol}.db: Per-symbol price data
+- state.db: Positions (current state, rebuildable from ledger)
+- cache.db: Ephemeral computed aggregates (can be deleted)
+- calculations.db: Pre-computed metrics and scores
+- recommendations.db: Trade recommendations (operational)
+- dividends.db: Dividend history with DRIP tracking
+- rates.db: Exchange rates
+- snapshots.db: Portfolio snapshots (daily time-series)
+- history/{isin}.db: Per-stock price data (keyed by ISIN)
 """
 
 import logging
@@ -783,6 +787,41 @@ CREATE INDEX IF NOT EXISTS idx_calculations_symbol ON calculated_metrics(symbol)
 CREATE INDEX IF NOT EXISTS idx_calculations_metric ON calculated_metrics(metric);
 CREATE INDEX IF NOT EXISTS idx_calculations_expires ON calculated_metrics(expires_at);
 
+-- Stock scores (cached composite calculations)
+-- Moved from state.db as these are calculated values, not state
+CREATE TABLE IF NOT EXISTS scores (
+    symbol TEXT PRIMARY KEY,
+
+    -- Component scores (0-1 range)
+    quality_score REAL,
+    opportunity_score REAL,
+    analyst_score REAL,
+    allocation_fit_score REAL,
+
+    -- Sub-components for debugging
+    cagr_score REAL,
+    consistency_score REAL,
+    financial_strength_score REAL,
+    sharpe_score REAL,
+    drawdown_score REAL,
+    dividend_bonus REAL,
+
+    -- Technical indicators
+    rsi REAL,
+    ema_200 REAL,
+    below_52w_high_pct REAL,
+
+    -- Combined scores
+    total_score REAL,
+    sell_score REAL,
+
+    -- Metadata
+    history_years REAL,
+    calculated_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_scores_total ON scores(total_score);
+
 -- Schema version tracking
 CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER PRIMARY KEY,
@@ -803,7 +842,232 @@ async def init_calculations_schema(db):
         now = datetime.now().isoformat()
         await db.execute(
             "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
-            (1, now, "Initial calculations schema"),
+            (2, now, "Initial calculations schema with scores table"),
         )
         await db.commit()
-        logger.info("Calculations database initialized with schema version 1")
+        logger.info("Calculations database initialized with schema version 2")
+    elif current_version == 1:
+        # Migration: Add scores table (version 1 -> 2)
+        now = datetime.now().isoformat()
+        logger.info("Migrating calculations database to schema version 2 (scores)...")
+
+        # Table is created by executescript above (CREATE IF NOT EXISTS)
+        await db.execute(
+            "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
+            (2, now, "Added scores table (moved from state.db)"),
+        )
+        await db.commit()
+        logger.info("Calculations database migrated to schema version 2")
+
+
+# =============================================================================
+# RECOMMENDATIONS.DB - Trade recommendations (operational data)
+# =============================================================================
+
+RECOMMENDATIONS_SCHEMA = """
+-- Trade recommendations (stored with UUIDs for dismissal tracking)
+-- Uses portfolio_hash to identify same recommendations for same portfolio state
+CREATE TABLE IF NOT EXISTS recommendations (
+    uuid TEXT PRIMARY KEY,
+    symbol TEXT NOT NULL,
+    name TEXT NOT NULL,
+    side TEXT NOT NULL,  -- 'BUY' or 'SELL'
+    amount REAL,  -- Display only, not part of uniqueness
+    quantity INTEGER,
+    estimated_price REAL,
+    estimated_value REAL,
+    reason TEXT NOT NULL,
+    country TEXT,
+    industry TEXT,
+    currency TEXT DEFAULT 'EUR',
+    priority REAL,
+    current_portfolio_score REAL,
+    new_portfolio_score REAL,
+    score_change REAL,
+    status TEXT DEFAULT 'pending',  -- 'pending', 'executed', 'dismissed'
+    portfolio_hash TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    executed_at TEXT,
+    dismissed_at TEXT,
+    UNIQUE(symbol, side, reason, portfolio_hash)
+);
+
+CREATE INDEX IF NOT EXISTS idx_recommendations_symbol ON recommendations(symbol);
+CREATE INDEX IF NOT EXISTS idx_recommendations_status ON recommendations(status);
+CREATE INDEX IF NOT EXISTS idx_recommendations_created_at ON recommendations(created_at);
+CREATE INDEX IF NOT EXISTS idx_recommendations_portfolio_hash ON recommendations(portfolio_hash);
+CREATE INDEX IF NOT EXISTS idx_recommendations_unique_match
+    ON recommendations(symbol, side, reason, portfolio_hash);
+
+-- Schema version tracking
+CREATE TABLE IF NOT EXISTS schema_version (
+    version INTEGER PRIMARY KEY,
+    applied_at TEXT NOT NULL,
+    description TEXT
+);
+"""
+
+
+async def init_recommendations_schema(db):
+    """Initialize recommendations database schema."""
+    await db.executescript(RECOMMENDATIONS_SCHEMA)
+
+    row = await db.fetchone("SELECT MAX(version) as v FROM schema_version")
+    current_version = row["v"] if row and row["v"] else 0
+
+    if current_version == 0:
+        now = datetime.now().isoformat()
+        await db.execute(
+            "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
+            (1, now, "Initial recommendations schema"),
+        )
+        await db.commit()
+        logger.info("Recommendations database initialized with schema version 1")
+
+
+# =============================================================================
+# DIVIDENDS.DB - Dividend history with DRIP tracking
+# =============================================================================
+
+DIVIDENDS_SCHEMA = """
+-- Dividend history with DRIP tracking
+-- Tracks dividend payments and whether they were reinvested.
+-- pending_bonus: If dividend couldn't be reinvested (too small), store a bonus
+-- that the optimizer will apply to that stock's expected return.
+CREATE TABLE IF NOT EXISTS dividend_history (
+    id INTEGER PRIMARY KEY,
+    symbol TEXT NOT NULL,
+    cash_flow_id INTEGER,            -- Link to cash_flows table in ledger.db (optional)
+    amount REAL NOT NULL,            -- Original dividend amount
+    currency TEXT NOT NULL,
+    amount_eur REAL NOT NULL,        -- Converted amount in EUR
+    payment_date TEXT NOT NULL,
+    reinvested INTEGER DEFAULT 0,    -- 0 = not reinvested, 1 = reinvested
+    reinvested_at TEXT,              -- When reinvestment trade executed
+    reinvested_quantity INTEGER,     -- Shares bought with dividend
+    pending_bonus REAL DEFAULT 0,    -- Bonus to apply to expected return (0.0 to 1.0)
+    bonus_cleared INTEGER DEFAULT 0, -- 1 when bonus has been used
+    cleared_at TEXT,                 -- When bonus was cleared
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_dividend_history_symbol ON dividend_history(symbol);
+CREATE INDEX IF NOT EXISTS idx_dividend_history_date ON dividend_history(payment_date);
+CREATE INDEX IF NOT EXISTS idx_dividend_history_pending ON dividend_history(pending_bonus)
+    WHERE pending_bonus > 0;
+
+-- Schema version tracking
+CREATE TABLE IF NOT EXISTS schema_version (
+    version INTEGER PRIMARY KEY,
+    applied_at TEXT NOT NULL,
+    description TEXT
+);
+"""
+
+
+async def init_dividends_schema(db):
+    """Initialize dividends database schema."""
+    await db.executescript(DIVIDENDS_SCHEMA)
+
+    row = await db.fetchone("SELECT MAX(version) as v FROM schema_version")
+    current_version = row["v"] if row and row["v"] else 0
+
+    if current_version == 0:
+        now = datetime.now().isoformat()
+        await db.execute(
+            "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
+            (1, now, "Initial dividends schema"),
+        )
+        await db.commit()
+        logger.info("Dividends database initialized with schema version 1")
+
+
+# =============================================================================
+# RATES.DB - Exchange rates (persistent, not ephemeral cache)
+# =============================================================================
+
+RATES_SCHEMA = """
+-- Exchange rates (single source of truth for currency conversion)
+CREATE TABLE IF NOT EXISTS exchange_rates (
+    from_currency TEXT NOT NULL,
+    to_currency TEXT NOT NULL,
+    rate REAL NOT NULL,
+    fetched_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    PRIMARY KEY (from_currency, to_currency)
+);
+
+CREATE INDEX IF NOT EXISTS idx_exchange_rates_expires ON exchange_rates(expires_at);
+
+-- Schema version tracking
+CREATE TABLE IF NOT EXISTS schema_version (
+    version INTEGER PRIMARY KEY,
+    applied_at TEXT NOT NULL,
+    description TEXT
+);
+"""
+
+
+async def init_rates_schema(db):
+    """Initialize rates database schema."""
+    await db.executescript(RATES_SCHEMA)
+
+    row = await db.fetchone("SELECT MAX(version) as v FROM schema_version")
+    current_version = row["v"] if row and row["v"] else 0
+
+    if current_version == 0:
+        now = datetime.now().isoformat()
+        await db.execute(
+            "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
+            (1, now, "Initial rates schema"),
+        )
+        await db.commit()
+        logger.info("Rates database initialized with schema version 1")
+
+
+# =============================================================================
+# SNAPSHOTS.DB - Portfolio snapshots (daily time-series)
+# =============================================================================
+
+SNAPSHOTS_SCHEMA = """
+-- Portfolio snapshots (daily summary)
+CREATE TABLE IF NOT EXISTS portfolio_snapshots (
+    date TEXT PRIMARY KEY,
+    total_value REAL NOT NULL,
+    cash_balance REAL NOT NULL,
+    invested_value REAL,
+    unrealized_pnl REAL,
+    geo_eu_pct REAL,
+    geo_asia_pct REAL,
+    geo_us_pct REAL,
+    position_count INTEGER,
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_snapshots_date ON portfolio_snapshots(date);
+
+-- Schema version tracking
+CREATE TABLE IF NOT EXISTS schema_version (
+    version INTEGER PRIMARY KEY,
+    applied_at TEXT NOT NULL,
+    description TEXT
+);
+"""
+
+
+async def init_snapshots_schema(db):
+    """Initialize snapshots database schema."""
+    await db.executescript(SNAPSHOTS_SCHEMA)
+
+    row = await db.fetchone("SELECT MAX(version) as v FROM schema_version")
+    current_version = row["v"] if row and row["v"] else 0
+
+    if current_version == 0:
+        now = datetime.now().isoformat()
+        await db.execute(
+            "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
+            (1, now, "Initial snapshots schema"),
+        )
+        await db.commit()
+        logger.info("Snapshots database initialized with schema version 1")

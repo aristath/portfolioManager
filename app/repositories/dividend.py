@@ -1,4 +1,4 @@
-"""Dividend repository - operations for dividend_history table (ledger)."""
+"""Dividend repository - operations for dividend_history table (dividends.db)."""
 
 from datetime import datetime
 from typing import Dict, List, Optional
@@ -15,7 +15,7 @@ class DividendRepository:
     """
 
     def __init__(self):
-        self._db = get_db_manager().ledger
+        self._db = get_db_manager().dividends
 
     async def create(self, dividend: DividendRecord) -> DividendRecord:
         """Create a new dividend record."""

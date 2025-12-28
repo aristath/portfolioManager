@@ -34,8 +34,8 @@ class DailyPnLTracker:
         """
         today = datetime.now().strftime("%Y-%m-%d")
 
-        # Get the most recent snapshot before today
-        row = await self._db_manager.state.fetchone(
+        # Get the most recent snapshot before today (snapshots.db)
+        row = await self._db_manager.snapshots.fetchone(
             """
             SELECT total_value, date
             FROM portfolio_snapshots
@@ -50,7 +50,7 @@ class DailyPnLTracker:
             return row["total_value"]
 
         # Fallback: get today's earliest snapshot if no previous day exists
-        row = await self._db_manager.state.fetchone(
+        row = await self._db_manager.snapshots.fetchone(
             """
             SELECT total_value
             FROM portfolio_snapshots

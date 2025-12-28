@@ -12,7 +12,7 @@ class RecommendationRepository:
     """Repository for recommendation operations."""
 
     def __init__(self):
-        self._db = get_db_manager().config
+        self._db = get_db_manager().recommendations
 
     async def find_existing(
         self, symbol: str, side: str, reason: str, portfolio_hash: str
