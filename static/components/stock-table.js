@@ -116,7 +116,8 @@ class StockTable extends HTMLElement {
             </thead>
             <tbody class="divide-y divide-gray-800">
               <template x-for="stock in ($store.app.filteredStocks || [])" :key="stock.symbol">
-                <tr class="hover:bg-gray-800/50">
+                <tr class="hover:bg-gray-800/50"
+                    :class="getPositionAlert(stock.symbol) ? (getPositionAlert(stock.symbol).severity === 'critical' ? 'border-l-4 border-red-500' : 'border-l-4 border-yellow-500') : ''">
                   <td class="py-1.5 px-2 font-mono text-blue-400 sticky left-0 bg-gray-800">
                     <button @click.stop="$store.app.showStockChart = true; $store.app.selectedStockSymbol = stock.symbol"
                             class="hover:underline cursor-pointer"
@@ -135,8 +136,17 @@ class StockTable extends HTMLElement {
                   <td class="py-1.5 px-2 text-gray-500 truncate max-w-24" x-text="stock.fullExchangeName || '-'"></td>
                   <td class="py-1.5 px-2 text-gray-500 truncate max-w-24" x-text="stock.industry || '-'"></td>
                   <td class="py-1.5 px-2 text-right font-mono"
-                      :class="stock.position_value ? 'text-green-400' : 'text-gray-600'"
-                      x-text="stock.position_value ? formatCurrency(stock.position_value) : '-'"></td>
+                      :class="getPositionAlertClass(stock.symbol)">
+                    <div class="flex items-center justify-end gap-2">
+                      <span x-text="stock.position_value ? formatCurrency(stock.position_value) : '-'"></span>
+                      <template x-if="getPositionAlert(stock.symbol)">
+                        <span class="text-xs"
+                              :class="getPositionAlert(stock.symbol).severity === 'critical' ? 'text-red-400' : 'text-yellow-400'"
+                              :title="'Position concentration: ' + (getPositionAlert(stock.symbol).current_pct * 100).toFixed(1) + '% (Limit: ' + (getPositionAlert(stock.symbol).limit_pct * 100).toFixed(0) + '%)'"
+                              x-text="getPositionAlert(stock.symbol).severity === 'critical' ? '🔴' : '⚠️'"></span>
+                      </template>
+                    </div>
+                  </td>
                   <td class="py-1.5 px-2 text-right">
                     <span class="font-mono px-1.5 py-0.5 rounded"
                           :class="getScoreClass(stock.total_score)"
@@ -233,5 +243,33 @@ function stockTableComponent() {
     }
   };
 }
+
+/**
+ * Helper functions for position alerts
+ */
+function getPositionAlert(symbol) {
+  if (!window.Alpine || !window.Alpine.store || !window.Alpine.store('app')) {
+    return null;
+  }
+  const alerts = window.Alpine.store('app').alerts || [];
+  return alerts.find(a => a.type === 'position' && a.name === symbol) || null;
+}
+
+function getPositionAlertClass(symbol) {
+  const alert = getPositionAlert(symbol);
+  if (!alert) {
+    // Default: check if stock has position value
+    const stock = (window.Alpine?.store('app')?.stocks || []).find(s => s.symbol === symbol);
+    return stock?.position_value ? 'text-green-400' : 'text-gray-600';
+  }
+  // Highlight row with border color based on severity
+  return alert.severity === 'critical'
+    ? 'text-red-400'
+    : 'text-yellow-400';
+}
+
+// Make available globally
+window.getPositionAlert = getPositionAlert;
+window.getPositionAlertClass = getPositionAlertClass;
 
 customElements.define('stock-table', StockTable);
