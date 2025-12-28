@@ -188,6 +188,23 @@ The codebase has some pragmatic violations of Clean Architecture principles. The
 - Create composite repository or service that orchestrates multiple repositories
 - Or inject multiple repositories as dependencies
 
+## Code Style Guidelines
+
+### Type Hints
+- **Preferred style**: Use `Optional[T]` for nullable types (not `T | None`)
+- **Rationale**: Consistent with existing codebase, better IDE support, clearer intent
+- **Example**: `def get_stock(symbol: str) -> Optional[Stock]:`
+
+### Error Handling
+- Use `ServiceResult[T]` for service methods that need graceful error handling
+- Use `CalculationResult` for calculation functions
+- Avoid returning `None` for errors - use result objects instead
+
+### Documentation
+- All public functions should have docstrings
+- Document architecture violations inline with reference to `ARCHITECTURE.md`
+- Use type hints for all function parameters and return values
+
 ## Benefits
 
 1. **Testability**: Domain logic can be tested without database
