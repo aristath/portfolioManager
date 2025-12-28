@@ -141,7 +141,7 @@ async def run_optimization() -> Dict[str, Any]:
         cash_balance=cash_balance,
         blend=settings.optimizer_blend,
         target_return=settings.optimizer_target_return,
-        geo_targets=country_targets,  # Will be renamed to country_targets in Commit 3
+        country_targets=country_targets,
         ind_targets=ind_targets,
         min_cash_reserve=settings.min_cash_reserve,
         dividend_bonuses=dividend_bonuses,

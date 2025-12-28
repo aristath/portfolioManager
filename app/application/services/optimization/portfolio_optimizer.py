@@ -90,7 +90,7 @@ class PortfolioOptimizer:
         cash_balance: float,
         blend: float = 0.5,
         target_return: float = OPTIMIZER_TARGET_RETURN,
-        geo_targets: Optional[Dict[str, float]] = None,
+        country_targets: Optional[Dict[str, float]] = None,
         ind_targets: Optional[Dict[str, float]] = None,
         min_cash_reserve: float = 500.0,
         dividend_bonuses: Optional[Dict[str, float]] = None,
@@ -106,7 +106,7 @@ class PortfolioOptimizer:
             cash_balance: Current cash balance in EUR
             blend: Blend factor (0.0 = pure MV, 1.0 = pure HRP)
             target_return: Target annual return for MV optimization
-            geo_targets: Country allocation targets
+            country_targets: Country allocation targets
             ind_targets: Industry allocation targets
             min_cash_reserve: Minimum cash to keep (not allocated)
             dividend_bonuses: Pending dividend bonuses per symbol
@@ -115,7 +115,7 @@ class PortfolioOptimizer:
             OptimizationResult with target weights and diagnostics
         """
         timestamp = datetime.now()
-        geo_targets = geo_targets or {}
+        country_targets = country_targets or {}
         ind_targets = ind_targets or {}
         dividend_bonuses = dividend_bonuses or {}
 
@@ -161,9 +161,9 @@ class PortfolioOptimizer:
         )
 
         # Build sector constraints
-        geo_constraints, ind_constraints = (
+        country_constraints, ind_constraints = (
             self._constraints_manager.build_sector_constraints(
-                valid_stocks, geo_targets, ind_targets
+                valid_stocks, country_targets, ind_targets
             )
         )
 
@@ -227,7 +227,7 @@ class PortfolioOptimizer:
 
         # Build constraints summary
         constraints_summary = self._constraints_manager.get_constraint_summary(
-            bounds, geo_constraints, ind_constraints
+            bounds, country_constraints, ind_constraints
         )
 
         return OptimizationResult(

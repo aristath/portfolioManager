@@ -1631,14 +1631,14 @@ class TestOptimizerUsesAllocationRepo:
 
                                             await run_optimization()
 
-                                            # Verify geo_targets is passed (will be renamed to country_targets in Commit 3)
-                                            # but the value comes from allocation_repo
+                                            # Verify country_targets is passed and the value comes from allocation_repo
                                             call_kwargs = (
                                                 mock_optimizer.optimize.call_args.kwargs
                                             )
-                                            # For now, still passes as geo_targets (will change in Commit 3
-                                            assert "geo_targets" in call_kwargs
+                                            # Verify parameter name is country_targets
+                                            assert "country_targets" in call_kwargs
+                                            assert "geo_targets" not in call_kwargs
                                             # Verify the value was converted from percentage
-                                            assert call_kwargs["geo_targets"] == {
+                                            assert call_kwargs["country_targets"] == {
                                                 "United States": 0.5
                                             }
