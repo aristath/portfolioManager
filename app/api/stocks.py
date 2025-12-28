@@ -48,6 +48,8 @@ class StockUpdate(BaseModel):
     active: Optional[bool] = None
     allow_buy: Optional[bool] = None
     allow_sell: Optional[bool] = None
+    min_portfolio_target: Optional[float] = None
+    max_portfolio_target: Optional[float] = None
 
 
 @router.get("")
@@ -140,6 +142,8 @@ async def get_stock(
         "active": stock.active,
         "allow_buy": stock.allow_buy,
         "allow_sell": stock.allow_sell,
+        "min_portfolio_target": stock.min_portfolio_target,
+        "max_portfolio_target": stock.max_portfolio_target,
     }
 
     if score:
@@ -469,6 +473,28 @@ def _build_update_dict(
     _apply_boolean_update(updates, "active", update.active)
     _apply_boolean_update(updates, "allow_buy", update.allow_buy)
     _apply_boolean_update(updates, "allow_sell", update.allow_sell)
+
+    # Portfolio target validation
+    if update.min_portfolio_target is not None:
+        clamped_min = max(0.0, min(20.0, update.min_portfolio_target))
+        updates["min_portfolio_target"] = clamped_min
+
+    if update.max_portfolio_target is not None:
+        clamped_max = max(0.0, min(30.0, update.max_portfolio_target))
+        updates["max_portfolio_target"] = clamped_max
+
+    # Validate that max >= min when both are provided
+    min_target = updates.get("min_portfolio_target")
+    max_target = updates.get("max_portfolio_target")
+    if min_target is not None and max_target is not None:
+        if isinstance(min_target, (int, float)) and isinstance(
+            max_target, (int, float)
+        ):
+            if max_target < min_target:
+                raise HTTPException(
+                    status_code=400,
+                    detail="max_portfolio_target must be >= min_portfolio_target",
+                )
 
     if new_symbol:
         updates["symbol"] = new_symbol

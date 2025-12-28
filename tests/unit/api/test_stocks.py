@@ -594,6 +594,179 @@ class TestUpdateStock:
 
             assert "symbol" in result
 
+    @pytest.mark.asyncio
+    async def test_update_stock_with_portfolio_targets(self):
+        """Test updating stock with min/max portfolio targets."""
+        mock_stock = MagicMock()
+        mock_stock.symbol = "AAPL"
+        mock_stock.yahoo_symbol = "AAPL"
+        mock_stock.name = "Apple"
+        mock_stock.industry = "Consumer Electronics"
+        mock_stock.country = "United States"
+        mock_stock.priority_multiplier = 1.0
+        mock_stock.min_lot = 1
+        mock_stock.active = True
+        mock_stock.allow_buy = True
+        mock_stock.allow_sell = False
+
+        mock_stock_repo = AsyncMock()
+        mock_stock_repo.get_by_symbol.return_value = mock_stock
+
+        mock_score = MagicMock()
+        mock_score.total_score = 0.8
+        mock_scoring_service = AsyncMock()
+        mock_scoring_service.calculate_and_save_score.return_value = mock_score
+
+        update = StockUpdate(min_portfolio_target=5.0, max_portfolio_target=15.0)
+
+        with patch("app.api.stocks.cache"):
+            result = await update_stock(
+                "AAPL", update, mock_stock_repo, mock_scoring_service
+            )
+
+            assert result["symbol"] == "AAPL"
+            mock_stock_repo.update.assert_called_once()
+            # Check that portfolio targets are in the update call
+            call_kwargs = mock_stock_repo.update.call_args[1]
+            assert call_kwargs["min_portfolio_target"] == 5.0
+            assert call_kwargs["max_portfolio_target"] == 15.0
+
+    @pytest.mark.asyncio
+    async def test_update_stock_portfolio_target_validation_min_clamped(self):
+        """Test that min_portfolio_target is clamped to 0-20 range."""
+        mock_stock = MagicMock()
+        mock_stock.symbol = "AAPL"
+        mock_stock_repo = AsyncMock()
+        mock_stock_repo.get_by_symbol.return_value = mock_stock
+        mock_scoring_service = AsyncMock()
+
+        update = StockUpdate(min_portfolio_target=25.0)  # Over limit
+
+        with patch("app.api.stocks.cache"):
+            await update_stock("AAPL", update, mock_stock_repo, mock_scoring_service)
+
+            # Should be clamped to 20
+            call_kwargs = mock_stock_repo.update.call_args[1]
+            assert call_kwargs["min_portfolio_target"] == 20.0
+
+    @pytest.mark.asyncio
+    async def test_update_stock_portfolio_target_validation_max_clamped(self):
+        """Test that max_portfolio_target is clamped to 0-30 range."""
+        mock_stock = MagicMock()
+        mock_stock.symbol = "AAPL"
+        mock_stock_repo = AsyncMock()
+        mock_stock_repo.get_by_symbol.return_value = mock_stock
+        mock_scoring_service = AsyncMock()
+
+        update = StockUpdate(max_portfolio_target=35.0)  # Over limit
+
+        with patch("app.api.stocks.cache"):
+            await update_stock("AAPL", update, mock_stock_repo, mock_scoring_service)
+
+            # Should be clamped to 30
+            call_kwargs = mock_stock_repo.update.call_args[1]
+            assert call_kwargs["max_portfolio_target"] == 30.0
+
+    @pytest.mark.asyncio
+    async def test_update_stock_portfolio_target_max_less_than_min(self):
+        """Test that max < min is rejected."""
+        mock_stock = MagicMock()
+        mock_stock.symbol = "AAPL"
+        mock_stock_repo = AsyncMock()
+        mock_stock_repo.get_by_symbol.return_value = mock_stock
+        mock_scoring_service = AsyncMock()
+
+        update = StockUpdate(min_portfolio_target=15.0, max_portfolio_target=5.0)
+
+        with patch("app.api.stocks.cache"):
+            with pytest.raises(HTTPException) as exc_info:
+                await update_stock(
+                    "AAPL", update, mock_stock_repo, mock_scoring_service
+                )
+
+            assert exc_info.value.status_code == 400
+            assert (
+                "max" in exc_info.value.detail.lower()
+                or "min" in exc_info.value.detail.lower()
+            )
+
+
+class TestGetStockResponse:
+    """Tests for GET /stocks/{symbol} response format."""
+
+    @pytest.mark.asyncio
+    async def test_get_stock_includes_portfolio_targets(self):
+        """Test that get_stock response includes portfolio targets."""
+        mock_stock = MagicMock()
+        mock_stock.symbol = "AAPL"
+        mock_stock.yahoo_symbol = "AAPL"
+        mock_stock.name = "Apple Inc."
+        mock_stock.industry = "Consumer Electronics"
+        mock_stock.country = "United States"
+        mock_stock.priority_multiplier = 1.0
+        mock_stock.min_lot = 1
+        mock_stock.active = True
+        mock_stock.allow_buy = True
+        mock_stock.allow_sell = False
+        mock_stock.min_portfolio_target = 5.0
+        mock_stock.max_portfolio_target = 15.0
+
+        mock_stock_repo = AsyncMock()
+        mock_stock_repo.get_by_symbol.return_value = mock_stock
+
+        mock_position_repo = AsyncMock()
+        mock_position_repo.get_by_symbol.return_value = None
+
+        mock_score_repo = AsyncMock()
+        mock_score_repo.get_by_symbol.return_value = None
+
+        result = await get_stock(
+            "AAPL", mock_stock_repo, mock_position_repo, mock_score_repo
+        )
+
+        assert result["min_portfolio_target"] == 5.0
+        assert result["max_portfolio_target"] == 15.0
+
+
+class TestGetStocksResponse:
+    """Tests for GET /stocks response format."""
+
+    @pytest.mark.asyncio
+    async def test_get_stocks_includes_portfolio_targets(self):
+        """Test that get_stocks response includes portfolio targets."""
+        mock_stock = {
+            "symbol": "AAPL",
+            "name": "Apple",
+            "total_score": 0.8,
+            "volatility": 0.2,
+            "priority_multiplier": 1.0,
+            "country": "United States",
+            "industry": "Consumer Electronics",
+            "quality_score": 0.7,
+            "opportunity_score": 0.6,
+            "allocation_fit_score": 0.8,
+            "min_portfolio_target": 5.0,
+            "max_portfolio_target": 15.0,
+        }
+        mock_summary = MagicMock()
+        mock_summary.geographic_allocations = []
+        mock_summary.industry_allocations = []
+
+        with patch("app.api.stocks.cache") as mock_cache:
+            mock_cache.get.return_value = None
+
+            mock_stock_repo = AsyncMock()
+            mock_stock_repo.get_with_scores.return_value = [mock_stock]
+
+            mock_portfolio_service = AsyncMock()
+            mock_portfolio_service.get_portfolio_summary.return_value = mock_summary
+
+            result = await get_stocks(mock_stock_repo, mock_portfolio_service)
+
+            assert len(result) == 1
+            assert result[0]["min_portfolio_target"] == 5.0
+            assert result[0]["max_portfolio_target"] == 15.0
+
 
 class TestDeleteStock:
     """Tests for DELETE /stocks/{symbol} endpoint."""
