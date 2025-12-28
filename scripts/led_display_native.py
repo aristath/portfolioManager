@@ -100,6 +100,7 @@ def set_text(text: str, speed: int = DEFAULT_TICKER_SPEED) -> bool:
         # Replace Euro symbol with EUR (Font_5x7 only has ASCII 32-126)
         text = text.replace("€", "EUR")
         bridge_call("scrollText", text, speed, timeout=30)
+        logger.debug(f"Successfully sent text to MCU: {text[:50]}...")
         return True
     except Exception as e:
         logger.error(f"Failed to set text via Router Bridge: {e}")
