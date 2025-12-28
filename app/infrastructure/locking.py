@@ -85,5 +85,5 @@ async def file_lock(lock_name: str, timeout: float = 300.0) -> AsyncIterator[Non
             try:
                 if lock_file.exists():
                     lock_file.unlink()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Failed to clean up lock file {lock_file.name}: {e}")
