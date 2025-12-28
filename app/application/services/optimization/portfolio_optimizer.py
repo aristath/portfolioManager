@@ -19,6 +19,7 @@ from app.application.services.optimization.expected_returns import (
     ExpectedReturnsCalculator,
 )
 from app.application.services.optimization.risk_models import RiskModelBuilder
+from app.domain.constants import TARGET_PORTFOLIO_VOLATILITY
 from app.domain.models import Position, Stock
 from app.domain.scoring.constants import (
     OPTIMIZER_TARGET_RETURN,
@@ -330,17 +331,46 @@ class PortfolioOptimizer:
             logger.warning(f"MV target return failed: {e}")
 
             try:
-                # Strategy 2: Max Sharpe
+                # Strategy 2: Min Volatility (lower risk for retirement)
                 ef = EfficientFrontier(mu, S, weight_bounds=weight_bounds)
                 _apply_sector_constraints(ef)
-                ef.max_sharpe()
+                ef.min_volatility()
                 cleaned = ef.clean_weights()
-                logger.info("MV optimization succeeded with max_sharpe fallback")
-                return dict(cleaned), "max_sharpe"
+                logger.info("MV optimization succeeded with min_volatility fallback")
+                return dict(cleaned), "min_volatility"
 
             except OptimizationError as e2:
-                logger.warning(f"MV max_sharpe failed: {e2}")
-                return None, None
+                logger.warning(f"MV min_volatility failed: {e2}")
+
+                try:
+                    # Strategy 3: Efficient Risk (target 15% volatility)
+                    ef = EfficientFrontier(mu, S, weight_bounds=weight_bounds)
+                    _apply_sector_constraints(ef)
+                    ef.efficient_risk(target_volatility=TARGET_PORTFOLIO_VOLATILITY)
+                    cleaned = ef.clean_weights()
+                    logger.info(
+                        f"MV optimization succeeded with efficient_risk fallback "
+                        f"(target volatility {TARGET_PORTFOLIO_VOLATILITY:.1%})"
+                    )
+                    return dict(cleaned), "efficient_risk"
+
+                except OptimizationError as e3:
+                    logger.warning(f"MV efficient_risk failed: {e3}")
+
+                    try:
+                        # Strategy 4: Max Sharpe (final MV fallback)
+                        ef = EfficientFrontier(mu, S, weight_bounds=weight_bounds)
+                        _apply_sector_constraints(ef)
+                        ef.max_sharpe()
+                        cleaned = ef.clean_weights()
+                        logger.info(
+                            "MV optimization succeeded with max_sharpe fallback"
+                        )
+                        return dict(cleaned), "max_sharpe"
+
+                    except OptimizationError as e4:
+                        logger.warning(f"MV max_sharpe failed: {e4}")
+                        return None, None
 
     def _run_hrp(
         self,
