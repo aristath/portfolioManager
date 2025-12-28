@@ -59,6 +59,7 @@ def mock_rebalancing_triggers_dependencies(
 ):
     """Context manager to set up all mocks for rebalancing triggers."""
     # Default mocks
+    settings_repo_provided = mock_settings_repo is not None
     if mock_settings_repo is None:
         mock_settings_repo = AsyncMock()
     if mock_position_repo is None:
@@ -66,32 +67,24 @@ def mock_rebalancing_triggers_dependencies(
     if mock_tradernet_client is None:
         mock_tradernet_client = MagicMock()
 
-    # Setup default settings
-    async def get_float(key, default):
-        defaults = {
-            "event_driven_rebalancing_enabled": 1.0,
-            "rebalance_position_drift_threshold": 0.05,
-            "rebalance_cash_threshold_multiplier": 2.0,
-            "transaction_cost_fixed": 2.0,
-            "transaction_cost_percent": 0.002,
-        }
-        return defaults.get(key, default)
+    # Setup default settings only if not provided
+    if not settings_repo_provided:
 
-    mock_settings_repo.get_float = AsyncMock(side_effect=get_float)
+        async def get_float(key, default):
+            defaults = {
+                "event_driven_rebalancing_enabled": 1.0,
+                "rebalance_position_drift_threshold": 0.05,
+                "rebalance_cash_threshold_multiplier": 2.0,
+                "transaction_cost_fixed": 2.0,
+                "transaction_cost_percent": 0.002,
+            }
+            return defaults.get(key, default)
 
-    with (
-        patch(
-            "app.domain.services.rebalancing_triggers.SettingsRepository",
-            return_value=mock_settings_repo,
-        ),
-        patch(
-            "app.domain.services.rebalancing_triggers.PositionRepository",
-            return_value=mock_position_repo,
-        ),
-        patch(
-            "app.domain.services.rebalancing_triggers.get_tradernet_client",
-            return_value=mock_tradernet_client,
-        ),
+        mock_settings_repo.get_float = AsyncMock(side_effect=get_float)
+
+    with patch(
+        "app.domain.services.rebalancing_triggers.SettingsRepository",
+        return_value=mock_settings_repo,
     ):
         yield {
             "settings_repo": mock_settings_repo,
@@ -158,11 +151,14 @@ class TestPositionDriftDetection:
         from app.domain.services.rebalancing_triggers import check_rebalance_triggers
 
         # Position with 2% drift (below 5% threshold)
+        # Position value = 100 × 22 = 2,200
+        # Target = 20%, Current = 22% (2% drift)
+        # Total portfolio = 2,200 / 0.22 = 10,000
         positions = [
-            create_position("AAPL", quantity=100, avg_price=150.0, current_price=153.0),
+            create_position("AAPL", quantity=100, avg_price=20.0, current_price=22.0),
         ]
         target_allocations = {"AAPL": 0.20}
-        total_portfolio_value = 7650.0  # Small drift
+        total_portfolio_value = 10000.0
 
         mock_position_repo = AsyncMock()
         mock_position_repo.get_all = AsyncMock(return_value=positions)
@@ -323,11 +319,13 @@ class TestMultipleTriggers:
         from app.domain.services.rebalancing_triggers import check_rebalance_triggers
 
         # No drift, no cash accumulation
+        # Position value = 100 × 150 = 15,000
+        # Target = 20%, so total portfolio = 15,000 / 0.20 = 75,000
         positions = [
             create_position("AAPL", quantity=100, avg_price=150.0, current_price=150.0),
         ]
         target_allocations = {"AAPL": 0.20}
-        total_portfolio_value = 15000.0  # No drift
+        total_portfolio_value = 75000.0  # No drift (15000/75000 = 20%)
         cash_balance = 100.0  # Below threshold
 
         mock_position_repo = AsyncMock()
@@ -466,11 +464,13 @@ class TestEdgeCases:
         """
         from app.domain.services.rebalancing_triggers import check_rebalance_triggers
 
+        # Position value = 100 × 150 = 15,000
+        # Target = 20%, so total portfolio = 15,000 / 0.20 = 75,000 (no drift)
         positions = [
             create_position("AAPL", quantity=100, avg_price=150.0),
         ]
         target_allocations = {"AAPL": 0.20}
-        total_portfolio_value = 15000.0
+        total_portfolio_value = 75000.0  # No drift (15000/75000 = 20%)
         cash_balance = 0.0
 
         mock_position_repo = AsyncMock()

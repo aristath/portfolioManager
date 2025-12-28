@@ -476,11 +476,21 @@ class TestSettingsIntegration:
         from app.domain.services.stock_discovery import StockDiscoveryService
 
         mock_client = MagicMock()
-        mock_client.get_most_traded.return_value = [
-            create_mock_security("AAPL", "usa", 10000000.0),
-            create_mock_security("ASML", "europe", 8000000.0),
-            create_mock_security("9988", "asia", 6000000.0),
-        ]
+
+        # Return exchange-specific results to avoid duplicates
+        def get_most_traded_by_exchange(**kwargs):
+            exchange = kwargs.get("exchange", "")
+            if exchange == "usa":
+                return [
+                    create_mock_security("AAPL", "usa", 10000000.0),
+                ]
+            elif exchange == "europe":
+                return [
+                    create_mock_security("ASML", "europe", 8000000.0),
+                ]
+            return []
+
+        mock_client.get_most_traded.side_effect = get_most_traded_by_exchange
 
         mock_settings_repo = AsyncMock()
 
