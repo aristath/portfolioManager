@@ -42,7 +42,7 @@ class StockAddByIdentifier(BaseModel):
     identifier: str  # Symbol or ISIN
     min_lot: Optional[int] = 1
     allow_buy: Optional[bool] = True
-    allow_sell: Optional[bool] = False
+    allow_sell: Optional[bool] = True
 
 
 class StockUpdate(BaseModel):
@@ -297,7 +297,7 @@ async def add_stock_by_identifier(
                 stock_data.allow_buy if stock_data.allow_buy is not None else True
             ),
             allow_sell=(
-                stock_data.allow_sell if stock_data.allow_sell is not None else False
+                stock_data.allow_sell if stock_data.allow_sell is not None else True
             ),
         )
 

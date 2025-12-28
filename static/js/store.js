@@ -75,7 +75,7 @@ document.addEventListener('alpine:init', () => {
     industryTargets: {},
 
     // Add Stock Form
-    newStock: { symbol: '', name: '', yahoo_symbol: '' },
+    newStock: { identifier: '' },
     addingStock: false,
 
     // Fetch All Data
@@ -530,30 +530,27 @@ document.addEventListener('alpine:init', () => {
 
     // Stock Management
     resetNewStock() {
-      this.newStock = { symbol: '', name: '', yahoo_symbol: '' };
+      this.newStock = { identifier: '' };
     },
 
     async addStock() {
-      if (!this.newStock.symbol || !this.newStock.name) {
-        this.showMessage('Symbol and name are required', 'error');
+      if (!this.newStock.identifier || !this.newStock.identifier.trim()) {
+        this.showMessage('Identifier is required', 'error');
         return;
       }
       this.addingStock = true;
       try {
         const payload = {
-          symbol: this.newStock.symbol.toUpperCase(),
-          name: this.newStock.name
+          identifier: this.newStock.identifier.trim().toUpperCase()
         };
-        if (this.newStock.yahoo_symbol) {
-          payload.yahoo_symbol = this.newStock.yahoo_symbol;
-        }
-        await API.createStock(payload);
+        await API.addStockByIdentifier(payload);
         this.showMessage('Stock added successfully', 'success');
         this.showAddStockModal = false;
         this.resetNewStock();
         await this.fetchStocks();
       } catch (e) {
-        this.showMessage('Failed to add stock', 'error');
+        const errorMessage = e.message || 'Failed to add stock';
+        this.showMessage(errorMessage, 'error');
       }
       this.addingStock = false;
     },

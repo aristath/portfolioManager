@@ -17,32 +17,16 @@ class AddStockModal extends HTMLElement {
 
           <div class="p-4 space-y-4">
             <div>
-              <label class="block text-sm text-gray-400 mb-1">Symbol *</label>
+              <label class="block text-sm text-gray-400 mb-1">Identifier *</label>
               <input type="text"
-                     x-model="$store.app.newStock.symbol"
-                     placeholder="e.g., AAPL, MSFT.US"
+                     x-model="$store.app.newStock.identifier"
+                     placeholder="e.g., AAPL.US or US0378331005"
                      class="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-sm text-gray-100 focus:border-blue-500 focus:outline-none">
-            </div>
-
-            <div>
-              <label class="block text-sm text-gray-400 mb-1">Name *</label>
-              <input type="text"
-                     x-model="$store.app.newStock.name"
-                     placeholder="e.g., Apple Inc."
-                     class="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-sm text-gray-100 focus:border-blue-500 focus:outline-none">
-            </div>
-
-            <div>
-              <label class="block text-sm text-gray-400 mb-1">Yahoo Symbol (optional)</label>
-              <input type="text"
-                     x-model="$store.app.newStock.yahoo_symbol"
-                     placeholder="Leave empty to use convention"
-                     class="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-sm text-gray-100 focus:border-blue-500 focus:outline-none">
-              <p class="text-xs text-gray-500 mt-1">e.g., 1810.HK for Xiaomi, 300750.SZ for CATL</p>
+              <p class="text-xs text-gray-500 mt-1">Enter Tradernet symbol (e.g., AAPL.US) or ISIN (e.g., US0378331005)</p>
             </div>
 
             <div class="bg-blue-900/20 border border-blue-700/50 rounded p-3">
-              <p class="text-xs text-blue-300 mb-2">ℹ️ Country, Exchange, and Industry will be automatically detected from Yahoo Finance when the stock is added.</p>
+              <p class="text-xs text-blue-300 mb-2">ℹ️ All data will be automatically fetched: name, country, exchange, industry, currency, ISIN, historical data (10 years), and initial score calculation.</p>
             </div>
           </div>
 
@@ -52,10 +36,10 @@ class AddStockModal extends HTMLElement {
               Cancel
             </button>
             <button @click="$store.app.addStock()"
-                    :disabled="$store.app.addingStock || !$store.app.newStock.symbol || !$store.app.newStock.name"
+                    :disabled="$store.app.addingStock || !$store.app.newStock.identifier"
                     class="px-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm rounded transition-colors disabled:opacity-50">
               <span x-show="$store.app.addingStock" class="inline-block animate-spin mr-1">&#9696;</span>
-              Add Stock
+              <span x-text="$store.app.addingStock ? 'Adding Stock...' : 'Add Stock'"></span>
             </button>
           </div>
         </div>

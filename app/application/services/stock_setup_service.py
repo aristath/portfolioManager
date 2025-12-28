@@ -54,7 +54,7 @@ class StockSetupService:
         identifier: str,
         min_lot: int = 1,
         allow_buy: bool = True,
-        allow_sell: bool = False,
+        allow_sell: bool = True,
     ) -> Stock:
         """Add a stock to the universe by symbol or ISIN.
 
@@ -70,7 +70,7 @@ class StockSetupService:
             identifier: Stock identifier - Tradernet symbol (e.g., "AAPL.US") or ISIN (e.g., "US0378331005")
             min_lot: Minimum lot size (default: 1)
             allow_buy: Whether buying is allowed (default: True)
-            allow_sell: Whether selling is allowed (default: False)
+            allow_sell: Whether selling is allowed (default: True)
 
         Returns:
             Created Stock domain object

@@ -72,6 +72,7 @@ const API = {
   // Stocks
   fetchStocks: () => fetch('/api/stocks').then(r => r.json()),
   createStock: (data) => API._post('/api/stocks', data),
+  addStockByIdentifier: (data) => API._post('/api/stocks/add-by-identifier', data),
   updateStock: (symbol, data) => API._put(`/api/stocks/${symbol}`, data),
   deleteStock: (symbol) => API._delete(`/api/stocks/${symbol}`),
   refreshScore: (symbol) => API._post(`/api/stocks/${symbol}/refresh`),
