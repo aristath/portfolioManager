@@ -151,7 +151,7 @@ async def _sync_trades_internal():
 
     except Exception as e:
         logger.error(f"Trade sync failed: {e}", exc_info=True)
-        error_msg = "TRADE SYNC FAILED"
+        error_msg = "TRADE SYNC CRASHES"
         emit(SystemEvent.ERROR_OCCURRED, message=error_msg)
         set_error(error_msg)
     finally:

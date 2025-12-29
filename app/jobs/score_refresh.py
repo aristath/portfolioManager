@@ -123,7 +123,7 @@ async def _refresh_all_scores_internal():
     except Exception as e:
         logger.error(f"Score refresh failed: {e}")
         emit(SystemEvent.PROCESSING_END)
-        error_msg = "SCORE REFRESH FAILED"
+        error_msg = "SCORE REFRESH CRASHES"
         emit(SystemEvent.ERROR_OCCURRED, message=error_msg)
         set_error(error_msg)
     finally:

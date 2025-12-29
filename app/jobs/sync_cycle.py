@@ -79,7 +79,7 @@ async def _run_sync_cycle_internal():
 
     except Exception as e:
         logger.error(f"Sync cycle failed: {e}", exc_info=True)
-        error_msg = "SYNC CYCLE FAILED"
+        error_msg = "SYNC CYCLE CRASHES"
         emit(SystemEvent.ERROR_OCCURRED, message=error_msg)
         set_error(error_msg)
     finally:

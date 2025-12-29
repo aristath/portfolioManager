@@ -61,7 +61,6 @@ async def _run_event_based_trading_loop_internal():
     while True:
         try:
             # Step 1: Wait for planning completion
-            set_processing("WAITING FOR PLANNING...")
             await _wait_for_planning_completion()
 
             # Step 2: Get optimal recommendation
@@ -130,7 +129,7 @@ async def _run_event_based_trading_loop_internal():
 
         except Exception as e:
             logger.error(f"Event-based trading loop failed: {e}", exc_info=True)
-            error_msg = "TRADING LOOP FAILED"
+            error_msg = "MAIN TRADING LOOP CRASHES"
             emit(SystemEvent.ERROR_OCCURRED, message=error_msg)
             set_error(error_msg)
             await asyncio.sleep(60)  # Wait 1 minute before retrying
@@ -311,7 +310,38 @@ async def _wait_for_planning_completion():
     while iteration < max_wait_iterations:
         if await planner_repo.are_all_sequences_evaluated(portfolio_hash):
             logger.info("All sequences evaluated, planning complete")
+            clear_processing()
             return
+
+        # Update planning progress display
+        total_sequences = await planner_repo.get_total_sequence_count(portfolio_hash)
+        evaluated_count = await planner_repo.get_evaluation_count(portfolio_hash)
+        is_finished = await planner_repo.are_all_sequences_evaluated(portfolio_hash)
+
+        # Check if planning is active
+        is_planning = False
+        if total_sequences > 0 and not is_finished:
+            try:
+                from app.jobs.scheduler import get_scheduler
+
+                scheduler = get_scheduler()
+                if scheduler and scheduler.running:
+                    jobs = scheduler.get_jobs()
+                    planner_job = next(
+                        (job for job in jobs if job.id == "planner_batch"), None
+                    )
+                    if planner_job:
+                        is_planning = True
+            except Exception:
+                # If we can't check scheduler, assume planning is active if there's work to do
+                is_planning = total_sequences > 0 and not is_finished
+
+        if is_planning and total_sequences > 0:
+            set_processing(
+                f"PLANNING ({evaluated_count}/{total_sequences} SCENARIOS SIMULATED)"
+            )
+        else:
+            clear_processing()
 
         # Check periodically (reduced interval since API-driven batches are faster)
         logger.debug(
