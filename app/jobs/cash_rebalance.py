@@ -541,7 +541,12 @@ async def _refresh_recommendation_cache():
                     for step in multi_step_steps
                 ],
                 "total_score_improvement": (
-                    multi_step_steps[0].score_change if multi_step_steps else 0.0
+                    (
+                        multi_step_steps[-1].portfolio_score_after
+                        - multi_step_steps[0].portfolio_score_before
+                    )
+                    if multi_step_steps
+                    else 0.0
                 ),
                 "final_available_cash": (
                     multi_step_steps[-1].available_cash_after
