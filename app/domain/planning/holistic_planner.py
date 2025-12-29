@@ -1746,6 +1746,7 @@ async def simulate_sequence(
     portfolio_context: PortfolioContext,
     available_cash: float,
     stocks: List[Stock],
+    price_adjustments: Optional[Dict[str, float]] = None,
 ) -> Tuple[PortfolioContext, float]:
     """
     Simulate executing a sequence and return the resulting portfolio state.
@@ -1755,6 +1756,7 @@ async def simulate_sequence(
         portfolio_context: Starting portfolio state
         available_cash: Starting cash
         stocks: Available stocks for metadata
+        price_adjustments: Optional dict mapping symbol -> price multiplier (e.g., 1.05 for +5%)
 
     Returns:
         Tuple of (final_context, final_cash)
@@ -1768,30 +1770,52 @@ async def simulate_sequence(
         country = stock.country if stock else None
         industry = stock.industry if stock else None
 
+        # Apply price adjustment if provided
+        adjusted_price = action.price
+        adjusted_value_eur = action.value_eur
+        if price_adjustments and action.symbol in price_adjustments:
+            multiplier = price_adjustments[action.symbol]
+            adjusted_price = action.price * multiplier
+            # Recalculate value with adjusted price (maintain same quantity)
+            adjusted_value_eur = abs(action.quantity) * adjusted_price
+            # Note: Currency conversion would happen here if needed
+
         new_positions = dict(current_context.positions)
         new_geographies = dict(current_context.stock_countries or {})
         new_industries = dict(current_context.stock_industries or {})
 
         if action.side == TradeSide.SELL:
             # Reduce position (cash is PART of portfolio, so total doesn't change)
+            # Use adjusted value if price adjustments provided
+            sell_value = (
+                adjusted_value_eur
+                if price_adjustments and action.symbol in price_adjustments
+                else action.value_eur
+            )
             current_value = new_positions.get(action.symbol, 0)
-            new_positions[action.symbol] = max(0, current_value - action.value_eur)
+            new_positions[action.symbol] = max(0, current_value - sell_value)
             if new_positions[action.symbol] <= 0:
                 new_positions.pop(action.symbol, None)
-            current_cash += action.value_eur
+            current_cash += sell_value
             # Total portfolio value stays the same - we just converted stock to cash
             new_total = current_context.total_value
         else:  # BUY
-            if action.value_eur > current_cash:
+            # Use adjusted value if price adjustments provided
+            buy_value = (
+                adjusted_value_eur
+                if price_adjustments and action.symbol in price_adjustments
+                else action.value_eur
+            )
+            if buy_value > current_cash:
                 continue  # Skip if can't afford
             new_positions[action.symbol] = (
-                new_positions.get(action.symbol, 0) + action.value_eur
+                new_positions.get(action.symbol, 0) + buy_value
             )
             if country:
                 new_geographies[action.symbol] = country
             if industry:
                 new_industries[action.symbol] = industry
-            current_cash -= action.value_eur
+            current_cash -= buy_value
             # Total portfolio value stays the same - we just converted cash to stock
             new_total = current_context.total_value
 
@@ -2571,12 +2595,31 @@ async def create_holistic_plan(
         await settings_repo.get_float("enable_multi_objective", 0.0) == 1.0
     )
 
+    # Get stochastic scenarios setting
+    enable_stochastic_scenarios = (
+        await settings_repo.get_float("enable_stochastic_scenarios", 0.0) == 1.0
+    )
+    stochastic_scenario_shifts = [-0.10, -0.05, 0.0, 0.05, 0.10]  # ±10%, ±5%, base
+
+    # Build price adjustment maps for stochastic scenarios
+    # Map each symbol in sequences to its base price
+    symbol_prices: Dict[str, float] = {}
+    for sequence, _, _ in sequence_results_sorted:
+        for action in sequence:
+            if action.symbol not in symbol_prices:
+                # Get price from current_prices or action price
+                if current_prices and action.symbol in current_prices:
+                    symbol_prices[action.symbol] = current_prices[action.symbol]
+                else:
+                    symbol_prices[action.symbol] = action.price
+
     # Define async helper to evaluate a single sequence
     async def _evaluate_sequence(
         seq_idx: int,
         sequence: List[ActionCandidate],
         end_context: PortfolioContext,
         end_cash: float,
+        price_adjustments: Optional[Dict[str, float]] = None,
     ) -> Tuple[int, List[ActionCandidate], float, Dict]:
         """Evaluate a single sequence and return results."""
         # Calculate diversification score for end state
@@ -2622,6 +2665,12 @@ async def create_holistic_plan(
             "risk_score": round(risk_score, 3),
             "transaction_cost": round(total_cost, 2),
         }
+
+        # Store price scenario info if stochastic
+        if price_adjustments:
+            breakdown["price_scenario"] = {  # type: ignore[assignment]
+                "adjustments": {k: round(v, 3) for k, v in price_adjustments.items()},
+            }
 
         # Log sequence evaluation
         invested_value = sum(end_context.positions.values())
@@ -2712,13 +2761,79 @@ async def create_holistic_plan(
         batch_end = min(batch_start + batch_size, len(sequence_results_sorted))
         batch = sequence_results_sorted[batch_start:batch_end]
 
-        # Evaluate batch in parallel
-        evaluation_tasks = [
-            _evaluate_sequence(batch_start + i, sequence, end_context, end_cash)
-            for i, (sequence, end_context, end_cash) in enumerate(batch)
-        ]
+        # Evaluate batch - with stochastic scenarios if enabled
+        if enable_stochastic_scenarios:
+            # Evaluate each sequence under multiple price scenarios
+            async def _evaluate_with_scenarios(
+                seq_idx: int, sequence: List[ActionCandidate]
+            ) -> Tuple[int, List[ActionCandidate], float, Dict]:
+                """Evaluate sequence under multiple price scenarios."""
+                # Get unique symbols in this sequence
+                seq_symbols = set(action.symbol for action in sequence)
 
-        batch_results = await asyncio.gather(*evaluation_tasks)
+                # Evaluate under each price scenario
+                scenario_scores = []
+                scenario_breakdowns = []
+                for shift in stochastic_scenario_shifts:
+                    # Create price adjustments for this scenario
+                    price_adjustments = {
+                        symbol: 1.0 + shift
+                        for symbol in seq_symbols
+                        if symbol in symbol_prices
+                    }
+
+                    # Re-simulate sequence with adjusted prices
+                    adjusted_end_context, adjusted_end_cash = await simulate_sequence(
+                        sequence,
+                        portfolio_context,
+                        available_cash,
+                        stocks,
+                        price_adjustments,
+                    )
+
+                    # Evaluate with adjusted context
+                    scenario_result = await _evaluate_sequence(
+                        seq_idx,
+                        sequence,
+                        adjusted_end_context,
+                        adjusted_end_cash,
+                        price_adjustments,
+                    )
+                    scenario_scores.append(scenario_result[2])  # Extract score
+                    scenario_breakdowns.append(scenario_result[3])  # Extract breakdown
+
+                # Use average score across scenarios (or worst-case: min)
+                avg_score = sum(scenario_scores) / len(scenario_scores)
+                worst_score = min(scenario_scores)
+                # Use conservative approach: weighted average favoring worst-case
+                final_score = (worst_score * 0.6) + (avg_score * 0.4)
+
+                # Use base scenario breakdown (shift=0) and add stochastic metrics
+                base_breakdown = scenario_breakdowns[2]  # Index 2 is shift=0.0
+                base_breakdown["stochastic"] = {  # type: ignore[dict-item]
+                    "avg_score": round(avg_score, 3),
+                    "worst_score": round(worst_score, 3),
+                    "final_score": round(final_score, 3),
+                    "scenarios_evaluated": len(stochastic_scenario_shifts),
+                }
+
+                return (seq_idx, sequence, final_score, base_breakdown)
+
+            # Evaluate all sequences in batch with scenarios
+            evaluation_tasks = [
+                _evaluate_with_scenarios(batch_start + i, sequence)
+                for i, (sequence, _, _) in enumerate(batch)
+            ]
+
+            batch_results = await asyncio.gather(*evaluation_tasks)
+        else:
+            # Standard evaluation without stochastic scenarios
+            evaluation_tasks = [
+                _evaluate_sequence(batch_start + i, sequence, end_context, end_cash)
+                for i, (sequence, end_context, end_cash) in enumerate(batch)
+            ]
+
+            batch_results = await asyncio.gather(*evaluation_tasks)
 
         # Process batch results
         beam_updated = False
