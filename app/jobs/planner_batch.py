@@ -91,13 +91,20 @@ async def process_planner_batch_job(
             db_manager=db_manager,
         )
 
-        # Get available cash
+        # Get available cash (convert all currencies to EUR)
         cash_balances = (
             tradernet_client.get_cash_balances()
             if tradernet_client.is_connected
             else []
         )
-        available_cash = sum(b.amount for b in cash_balances if b.currency == "EUR")
+        if cash_balances:
+            amounts_by_currency = {b.currency: b.amount for b in cash_balances}
+            amounts_in_eur = await exchange_rate_service.batch_convert_to_eur(
+                amounts_by_currency
+            )
+            available_cash = sum(amounts_in_eur.values())
+        else:
+            available_cash = 0.0
 
         # Get optimizer target weights if available
         from app.application.services.optimization.portfolio_optimizer import (
