@@ -30,15 +30,19 @@ class TestGetStocks:
     @pytest.mark.asyncio
     async def test_get_stocks_returns_cached_data(self):
         """Test that cached data is returned when available."""
-        cached_data = [{"symbol": "AAPL", "name": "Apple"}]
+        cached_data = [{"symbol": "AAPL", "name": "Apple", "position_value": 100}]
 
         with patch("app.api.stocks.cache") as mock_cache:
             mock_cache.get.return_value = cached_data
 
             mock_stock_repo = AsyncMock()
             mock_portfolio_service = AsyncMock()
+            mock_position_repo = AsyncMock()
+            mock_position_repo.get_count.return_value = 1  # Match cached position count
 
-            result = await get_stocks(mock_stock_repo, mock_portfolio_service)
+            result = await get_stocks(
+                mock_stock_repo, mock_portfolio_service, mock_position_repo
+            )
 
             assert result == cached_data
             mock_stock_repo.get_with_scores.assert_not_called()
@@ -71,7 +75,11 @@ class TestGetStocks:
             mock_portfolio_service = AsyncMock()
             mock_portfolio_service.get_portfolio_summary.return_value = mock_summary
 
-            result = await get_stocks(mock_stock_repo, mock_portfolio_service)
+            mock_position_repo = AsyncMock()
+
+            result = await get_stocks(
+                mock_stock_repo, mock_portfolio_service, mock_position_repo
+            )
 
             assert len(result) == 1
             assert result[0]["symbol"] == "AAPL"
@@ -763,7 +771,11 @@ class TestGetStocksResponse:
             mock_portfolio_service = AsyncMock()
             mock_portfolio_service.get_portfolio_summary.return_value = mock_summary
 
-            result = await get_stocks(mock_stock_repo, mock_portfolio_service)
+            mock_position_repo = AsyncMock()
+
+            result = await get_stocks(
+                mock_stock_repo, mock_portfolio_service, mock_position_repo
+            )
 
             assert len(result) == 1
             assert result[0]["min_portfolio_target"] == 5.0

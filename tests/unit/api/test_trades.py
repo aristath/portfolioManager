@@ -95,7 +95,7 @@ class TestExecuteTrade:
         request = TradeRequest(symbol="UNKNOWN", side=TradeSide.BUY, quantity=10)
 
         mock_stock_repo = AsyncMock()
-        mock_stock_repo.get_by_symbol = AsyncMock(return_value=None)
+        mock_stock_repo.get_by_identifier = AsyncMock(return_value=None)
 
         with pytest.raises(HTTPException) as exc_info:
             await execute_trade(

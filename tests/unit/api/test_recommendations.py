@@ -13,6 +13,28 @@ from fastapi import HTTPException
 from app.domain.value_objects.trade_side import TradeSide
 
 
+@pytest.fixture(autouse=True)
+def mock_internal_repos():
+    """Auto-mock repositories that are created directly inside get_recommendations.
+
+    These repositories are created via direct constructor calls rather than
+    dependency injection, so we need to mock them at the module level.
+    The imports happen inside the function, so we patch at the source.
+    """
+    with patch("app.repositories.SettingsRepository") as mock_settings:
+        mock_settings_instance = AsyncMock()
+        mock_settings_instance.get_float.return_value = 0.0  # Disable incremental mode
+        mock_settings.return_value = mock_settings_instance
+        with patch(
+            "app.repositories.planner_repository.PlannerRepository"
+        ) as mock_planner:
+            mock_planner_instance = AsyncMock()
+            mock_planner_instance.get_best_result.return_value = None
+            mock_planner_instance.get_evaluation_count.return_value = 0
+            mock_planner.return_value = mock_planner_instance
+            yield
+
+
 @pytest.fixture
 def mock_position_repo():
     """Mock position repository."""
@@ -376,7 +398,8 @@ class TestGetRecommendations:
 
         assert result["depth"] == 2
         assert len(result["steps"]) == 2
-        assert result["total_score_improvement"] == 2.0  # First step's score change
+        # total_score_improvement = final_score - initial_score = 77.0 - 70.0 = 7.0
+        assert result["total_score_improvement"] == 7.0
         assert result["final_available_cash"] == 620.0  # Last step's cash
 
     @pytest.mark.asyncio

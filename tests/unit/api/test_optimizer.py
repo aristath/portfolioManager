@@ -116,6 +116,17 @@ def reset_cache():
     optimizer_module._last_optimization_time = None
 
 
+@pytest.fixture(autouse=True)
+def mock_grouping_repo():
+    """Auto-mock GroupingRepository for all tests in this file.
+
+    The GroupingRepository was added to optimizer.py but tests weren't updated.
+    This fixture ensures all tests have it mocked without modifying each test.
+    """
+    with patch("app.api.optimizer.GroupingRepository"):
+        yield
+
+
 class TestGetOptimizerStatus:
     """Test the GET /optimizer endpoint."""
 
