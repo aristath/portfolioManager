@@ -27,7 +27,7 @@ EXCHANGE_MAP = {
     "LSE": "XLON",  # London Stock Exchange
     "TSE": "XTSE",  # Tokyo Stock Exchange
     "ASX": "XASX",  # Australian Securities Exchange
-    "Athens": "XATH",  # Athens Stock Exchange (ATHEX)
+    "Athens": "ASEX",  # Athens Stock Exchange (ATHEX)
     # Add more mappings as needed
 }
 
@@ -40,7 +40,7 @@ EXCHANGE_TIMEZONES = {
     "XLON": "Europe/London",
     "XTSE": "Asia/Tokyo",
     "XASX": "Australia/Sydney",
-    "XATH": "Europe/Athens",
+    "ASEX": "Europe/Athens",
 }
 
 
