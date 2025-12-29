@@ -63,6 +63,8 @@ app/
 │
 └── jobs/               # Background jobs (APScheduler)
     ├── scheduler.py
+    ├── event_based_trading.py  # Event-driven trade execution
+    ├── sync_cycle.py           # Data synchronization (trades, portfolio, prices)
     ├── daily_sync.py
     ├── cash_rebalance.py
     └── ...
@@ -116,6 +118,7 @@ app/
 - LED display in `infrastructure/hardware/`
 - Portfolio optimizer with Mean-Variance and HRP algorithms
 - Holistic planner for rebalancing recommendations
+- Event-based trading system (waits for planning completion before executing trades)
 - Event-driven architecture with domain events
 - Comprehensive test suite (unit and integration tests)
 
@@ -208,6 +211,7 @@ The codebase has some pragmatic violations of Clean Architecture principles. The
 
 - **Unit Tests**: `tests/unit/domain/` - Test domain logic in isolation
 - **Integration Tests**: `tests/integration/` - Test repository implementations
+- **Job Tests**: `tests/unit/jobs/` - Test background jobs and schedulers
 - Run tests: `pytest`
 
 ## Usage Examples
@@ -249,3 +253,41 @@ results = PriorityCalculator.calculate_priorities(
     industry_weights,
 )
 ```
+
+## Event-Based Trading System
+
+The system uses an event-driven approach for trade execution, ensuring trades only execute after the holistic planner has completed evaluating all scenarios.
+
+### Architecture
+
+**Location**: `app/jobs/event_based_trading.py`
+
+**Flow**:
+1. Wait for planning completion (all sequences evaluated)
+2. Get optimal recommendation from best result
+3. Check trading conditions (P&L guardrails)
+4. Check market hours (with flexible behavior)
+5. Execute trade if allowed
+6. Monitor portfolio for changes (two-phase: 30s for 5min, then 1min for 15min)
+7. Restart loop when portfolio hash changes
+
+### Key Components
+
+- **`run_event_based_trading_loop()`**: Main entry point, runs as background task
+- **`_wait_for_planning_completion()`**: Waits until all sequences are evaluated
+- **`_get_optimal_recommendation()`**: Retrieves best recommendation from planner database
+- **`_can_execute_trade()`**: Checks market hours with flexible behavior
+- **`_monitor_portfolio_for_changes()`**: Two-phase monitoring for portfolio changes
+
+### Market Hours Behavior
+
+- **SELL orders**: Always require market hours check → must execute when market is open
+- **BUY orders on flexible markets** (NYSE, NASDAQ, XETR, LSE, etc.): Can execute anytime
+- **BUY orders on strict markets** (XHKG, XSHG, XTSE, XASX): Require market hours check
+
+### Integration
+
+- Started as background task in `scheduler.py` (not a scheduled job)
+- Automatically restarts if it crashes
+- Uses file lock to prevent multiple instances
+- Integrates with `planner_batch` job for sequence processing
