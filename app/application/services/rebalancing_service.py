@@ -4,6 +4,7 @@ Orchestrates rebalancing operations using domain services and repositories.
 Uses long-term value scoring with portfolio-aware allocation fit.
 """
 
+import json
 import logging
 from typing import Dict, List, Optional
 
@@ -200,7 +201,6 @@ class RebalancingService:
             List of MultiStepRecommendation objects representing the optimal sequence
         """
         from app.application.services.optimization import PortfolioOptimizer
-        from app.domain.planning.holistic_planner import create_holistic_plan
         from app.repositories import DividendRepository
 
         # Get optimizer settings
@@ -361,22 +361,129 @@ class RebalancingService:
             )
             target_weights = None
 
-        # Create holistic plan with optimizer weights
-        plan = await create_holistic_plan(
-            portfolio_context=portfolio_context,
-            available_cash=available_cash,
-            stocks=stocks,
-            positions=positions,
-            exchange_rate_service=self._exchange_rate_service,
-            target_weights=target_weights,
-            current_prices=current_prices,
-            transaction_cost_fixed=transaction_fixed,
-            transaction_cost_percent=transaction_pct,
-            max_plan_depth=max_plan_depth,
-            max_opportunities_per_category=max_opportunities_per_category,
-            enable_combinatorial=enable_combinatorial,
-            priority_threshold=priority_threshold,
+        # Check if incremental mode is enabled
+        incremental_enabled = (
+            await self._settings_repo.get_float("incremental_planner_enabled", 1.0)
+            == 1.0
         )
+
+        plan = None
+
+        # Try incremental mode first if enabled
+        if incremental_enabled:
+            from app.domain.portfolio_hash import generate_portfolio_hash
+            from app.repositories.planner_repository import PlannerRepository
+
+            planner_repo = PlannerRepository()
+            position_dicts = [
+                {"symbol": p.symbol, "quantity": p.quantity} for p in positions
+            ]
+            portfolio_hash = generate_portfolio_hash(position_dicts, stocks)
+            best_result = await planner_repo.get_best_result(portfolio_hash)
+
+            if best_result:
+                # Get best sequence from database
+                best_sequence = await planner_repo.get_best_sequence_from_hash(
+                    portfolio_hash, best_result["best_sequence_hash"]
+                )
+
+                if best_sequence:
+                    # Get evaluation for best sequence
+                    db = await planner_repo._get_db()
+                    eval_row = await db.fetchone(
+                        """SELECT end_score, breakdown_json, end_cash, end_context_positions_json,
+                                  div_score, total_value
+                         FROM evaluations
+                         WHERE sequence_hash = ? AND portfolio_hash = ?""",
+                        (best_result["best_sequence_hash"], portfolio_hash),
+                    )
+
+                    if eval_row:
+                        from app.domain.planning.narrative import (
+                            generate_plan_narrative,
+                            generate_step_narrative,
+                        )
+                        from app.domain.scoring.diversification import (
+                            calculate_portfolio_score,
+                        )
+
+                        breakdown = json.loads(eval_row["breakdown_json"])
+                        current_score = await calculate_portfolio_score(
+                            portfolio_context
+                        )
+
+                        # Convert sequence to HolisticPlan
+                        from app.domain.planning.holistic_planner import (
+                            HolisticPlan,
+                            HolisticStep,
+                        )
+
+                        steps = []
+                        for i, action in enumerate(best_sequence):
+                            narrative = generate_step_narrative(
+                                action, portfolio_context, {}
+                            )
+                            steps.append(
+                                HolisticStep(
+                                    step_number=i + 1,
+                                    side=action.side,
+                                    symbol=action.symbol,
+                                    name=action.name,
+                                    quantity=action.quantity,
+                                    estimated_price=action.price,
+                                    estimated_value=action.value_eur,
+                                    currency=action.currency,
+                                    reason=action.reason,
+                                    narrative=narrative,
+                                )
+                            )
+
+                        narrative_summary = generate_plan_narrative(
+                            steps, current_score.total, eval_row["end_score"] * 100, {}
+                        )
+
+                        plan = HolisticPlan(
+                            steps=steps,
+                            current_score=current_score.total,
+                            end_state_score=eval_row["end_score"] * 100,
+                            improvement=(eval_row["end_score"] * 100)
+                            - current_score.total,
+                            narrative_summary=narrative_summary,
+                            score_breakdown=breakdown,
+                            cash_required=sum(
+                                s.estimated_value for s in steps if s.side == "BUY"
+                            ),
+                            cash_generated=sum(
+                                s.estimated_value for s in steps if s.side == "SELL"
+                            ),
+                            feasible=True,
+                        )
+                        logger.info(
+                            f"Using best result from incremental planner database (score: {eval_row['end_score']:.3f})"
+                        )
+
+        # Fallback to full mode if incremental didn't return a plan
+        if not plan:
+            from app.domain.planning.holistic_planner import create_holistic_plan
+
+            logger.info(
+                "Using full planner mode (incremental disabled or no database result)"
+            )
+            plan = await create_holistic_plan(
+                portfolio_context=portfolio_context,
+                available_cash=available_cash,
+                stocks=stocks,
+                positions=positions,
+                exchange_rate_service=self._exchange_rate_service,
+                target_weights=target_weights,
+                current_prices=current_prices,
+                transaction_cost_fixed=transaction_fixed,
+                transaction_cost_percent=transaction_pct,
+                max_plan_depth=max_plan_depth,
+                max_opportunities_per_category=max_opportunities_per_category,
+                enable_combinatorial=enable_combinatorial,
+                priority_threshold=priority_threshold,
+            )
 
         # Convert HolisticPlan to MultiStepRecommendation list
         if not plan.steps:

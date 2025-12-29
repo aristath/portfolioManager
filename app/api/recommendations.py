@@ -129,17 +129,49 @@ async def get_recommendations(
     )
     cache_key = f"recommendations:{portfolio_cache_key}"
 
-    cached = cache.get(cache_key)
-    if cached is not None:
-        # Add evaluation count to cached result
+    # Check if incremental mode is enabled - if so, skip cache and check database first
+    from app.repositories import SettingsRepository
+
+    settings_repo = SettingsRepository()
+    incremental_enabled = (
+        await settings_repo.get_float("incremental_planner_enabled", 1.0) == 1.0
+    )
+
+    # If incremental mode is enabled, check database first (don't use stale cache)
+    if incremental_enabled:
         from app.domain.portfolio_hash import generate_portfolio_hash
         from app.repositories.planner_repository import PlannerRepository
 
-        portfolio_hash = generate_portfolio_hash(position_dicts, stocks)
         planner_repo = PlannerRepository()
-        evaluated_count = await planner_repo.get_evaluation_count(portfolio_hash)
-        cached["evaluated_count"] = evaluated_count
-        return cached
+        portfolio_hash = generate_portfolio_hash(position_dicts, stocks)
+        best_result = await planner_repo.get_best_result(portfolio_hash)
+
+        if best_result:
+            # We have a database result - invalidate cache and get fresh data
+            cache.invalidate(cache_key)
+            logger.info("Incremental mode: invalidating cache, using database result")
+        else:
+            # No database result yet - check cache but add evaluation count
+            cached = cache.get(cache_key)
+            if cached is not None:
+                evaluated_count = await planner_repo.get_evaluation_count(
+                    portfolio_hash
+                )
+                cached["evaluated_count"] = evaluated_count
+                return cached
+    else:
+        # Incremental mode disabled - use cache normally
+        cached = cache.get(cache_key)
+        if cached is not None:
+            # Add evaluation count to cached result
+            from app.domain.portfolio_hash import generate_portfolio_hash
+            from app.repositories.planner_repository import PlannerRepository
+
+            portfolio_hash = generate_portfolio_hash(position_dicts, stocks)
+            planner_repo = PlannerRepository()
+            evaluated_count = await planner_repo.get_evaluation_count(portfolio_hash)
+            cached["evaluated_count"] = evaluated_count
+            return cached
 
     try:
         steps = await rebalancing_service.get_recommendations()
