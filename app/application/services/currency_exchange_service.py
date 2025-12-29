@@ -3,6 +3,7 @@
 Handles currency conversions between EUR, USD, HKD, and GBP via Tradernet API.
 """
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from typing import List, Optional
@@ -175,20 +176,105 @@ class CurrencyExchangeService:
         if not self.client.is_connected:
             if not self.client.connect():
                 logger.error("Failed to connect to Tradernet for rate lookup")
-                return None
+                # Fallback to ExchangeRateService
+                return self._get_rate_fallback(from_curr, to_curr)
 
         try:
             symbol, inverse = _find_rate_symbol(from_curr, to_curr, self)
             if not symbol:
-                return _get_rate_via_path(from_curr, to_curr, self)
+                rate = _get_rate_via_path(from_curr, to_curr, self)
+                if rate:
+                    return rate
+                # Fallback if path lookup fails
+                return self._get_rate_fallback(from_curr, to_curr)
 
             quote = self.client.get_quote(symbol)
             if quote and quote.price > 0:
                 return 1.0 / quote.price if inverse else quote.price
 
-            return None
+            # Quote lookup failed, use fallback
+            logger.warning(
+                f"Failed to get quote for {symbol}, using ExchangeRateService fallback"
+            )
+            return self._get_rate_fallback(from_curr, to_curr)
         except Exception as e:
             logger.error(f"Failed to get rate {from_curr}/{to_curr}: {e}")
+            # Fallback on exception
+            return self._get_rate_fallback(from_curr, to_curr)
+
+    def _get_rate_fallback(self, from_curr: str, to_curr: str) -> Optional[float]:
+        """Get rate from ExchangeRateService as fallback when Tradernet quote fails."""
+        try:
+            from app.domain.services.exchange_rate_service import ExchangeRateService
+            from app.infrastructure.database.manager import get_db_manager
+
+            db_manager = get_db_manager()
+            exchange_rate_service = ExchangeRateService(db_manager)
+
+            # Handle async call - check if we're in an event loop
+            try:
+                asyncio.get_running_loop()
+                # We're in an async context, need to use a different approach
+                # Use a thread pool to run the async function
+                import concurrent.futures
+
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(
+                        lambda: (
+                            asyncio.run(
+                                exchange_rate_service.get_rate(from_curr, "EUR")
+                            )
+                            if to_curr == "EUR"
+                            else (
+                                asyncio.run(
+                                    exchange_rate_service.get_rate(to_curr, "EUR")
+                                )
+                                if from_curr == "EUR"
+                                else None
+                            )
+                        )
+                    )
+                    if to_curr == "EUR":
+                        rate = future.result(timeout=5)
+                        return 1.0 / rate if rate and rate > 0 else None
+                    elif from_curr == "EUR":
+                        rate = future.result(timeout=5)
+                        return rate if rate and rate > 0 else None
+                    else:
+                        # Two-step conversion
+                        future1 = executor.submit(
+                            lambda: asyncio.run(
+                                exchange_rate_service.get_rate(from_curr, "EUR")
+                            )
+                        )
+                        future2 = executor.submit(
+                            lambda: asyncio.run(
+                                exchange_rate_service.get_rate(to_curr, "EUR")
+                            )
+                        )
+                        rate1 = future1.result(timeout=5)
+                        rate2 = future2.result(timeout=5)
+                        if rate1 and rate2 and rate1 > 0 and rate2 > 0:
+                            return rate2 / rate1
+                        return None
+            except RuntimeError:
+                # No event loop running, can use asyncio.run()
+                if to_curr == "EUR":
+                    rate = asyncio.run(exchange_rate_service.get_rate(from_curr, "EUR"))
+                    return 1.0 / rate if rate and rate > 0 else None
+                elif from_curr == "EUR":
+                    rate = asyncio.run(exchange_rate_service.get_rate(to_curr, "EUR"))
+                    return rate if rate and rate > 0 else None
+                else:
+                    rate1 = asyncio.run(
+                        exchange_rate_service.get_rate(from_curr, "EUR")
+                    )
+                    rate2 = asyncio.run(exchange_rate_service.get_rate(to_curr, "EUR"))
+                    if rate1 and rate2 and rate1 > 0 and rate2 > 0:
+                        return rate2 / rate1
+                    return None
+        except Exception as e:
+            logger.error(f"Failed to get fallback rate {from_curr}/{to_curr}: {e}")
             return None
 
     def _validate_exchange_request(
