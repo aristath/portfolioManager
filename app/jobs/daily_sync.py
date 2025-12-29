@@ -241,6 +241,29 @@ async def _sync_portfolio_internal():
             return
 
     try:
+        # Get portfolio hash before sync for cache invalidation comparison
+        from app.domain.portfolio_hash import generate_portfolio_hash
+        from app.repositories import PositionRepository, StockRepository
+
+        position_repo = PositionRepository()
+        stock_repo = StockRepository()
+
+        positions_before = await position_repo.get_all()
+        stocks = await stock_repo.get_all_active()
+        cash_balances_before_raw = client.get_cash_balances()
+        cash_balances_before = (
+            {b.currency: b.amount for b in cash_balances_before_raw}
+            if cash_balances_before_raw
+            else {}
+        )
+        position_dicts_before = [
+            {"symbol": p.symbol, "quantity": p.quantity} for p in positions_before
+        ]
+        hash_before = generate_portfolio_hash(
+            position_dicts_before, stocks, cash_balances_before
+        )
+        logger.debug(f"Portfolio hash before sync: {hash_before}")
+
         # Get positions and cash balances from Tradernet
         logger.info("Calling client.get_portfolio()...")
         positions = client.get_portfolio()
@@ -330,6 +353,39 @@ async def _sync_portfolio_internal():
 
         # Sync prices from Yahoo
         await _sync_prices_internal()
+
+        # Calculate portfolio hash after sync and invalidate caches if changed
+        positions_after = await position_repo.get_all()
+        cash_balances_after_raw = client.get_cash_balances()
+        cash_balances_after = (
+            {b.currency: b.amount for b in cash_balances_after_raw}
+            if cash_balances_after_raw
+            else {}
+        )
+        position_dicts_after = [
+            {"symbol": p.symbol, "quantity": p.quantity} for p in positions_after
+        ]
+        hash_after = generate_portfolio_hash(
+            position_dicts_after, stocks, cash_balances_after
+        )
+        logger.debug(f"Portfolio hash after sync: {hash_after}")
+
+        # Only invalidate recommendation caches if portfolio hash changed
+        if hash_before != hash_after:
+            logger.info(
+                f"Portfolio hash changed ({hash_before} -> {hash_after}), "
+                "invalidating recommendation caches"
+            )
+            from app.infrastructure.cache_invalidation import (
+                get_cache_invalidation_service,
+            )
+
+            cache_service = get_cache_invalidation_service()
+            cache_service.invalidate_recommendation_caches()
+        else:
+            logger.debug(
+                "Portfolio hash unchanged, skipping recommendation cache invalidation"
+            )
 
         emit(SystemEvent.SYNC_COMPLETE)
 
