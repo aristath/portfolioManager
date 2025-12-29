@@ -184,7 +184,7 @@ async def _sync_cash_flows_internal():
 
     except Exception as e:
         logger.error(f"Cash flow sync failed: {e}", exc_info=True)
-        error_msg = "CASH FLOW SYNC FAILED"
+        error_msg = "CASH FLOW SYNC CRASHES"
         emit(SystemEvent.ERROR_OCCURRED, message=error_msg)
         set_error(error_msg)
     finally:

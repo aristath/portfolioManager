@@ -48,7 +48,7 @@ async def _sync_historical_data_internal():
         emit(SystemEvent.SYNC_COMPLETE)
     except Exception as e:
         logger.error(f"Historical data sync failed: {e}")
-        error_msg = "HISTORICAL DATA SYNC FAILED"
+        error_msg = "HISTORICAL DATA SYNC CRASHES"
         emit(SystemEvent.ERROR_OCCURRED, message=error_msg)
         set_error(error_msg)
         raise

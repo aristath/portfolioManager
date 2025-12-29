@@ -110,7 +110,7 @@ async def _run_health_check_internal():
 
     except Exception as e:
         logger.error(f"Health check failed: {e}", exc_info=True)
-        error_msg = "HEALTH CHECK FAILED"
+        error_msg = "HEALTH CHECK CRASHES"
         emit(SystemEvent.ERROR_OCCURRED, message=error_msg)
         set_error(error_msg)
     finally:

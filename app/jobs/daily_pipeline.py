@@ -73,7 +73,7 @@ async def _run_daily_pipeline_internal():
 
     except Exception as e:
         logger.error(f"Daily pipeline failed: {e}", exc_info=True)
-        error_msg = "DAILY PIPELINE FAILED"
+        error_msg = "DAILY PIPELINE CRASHES"
         emit(SystemEvent.ERROR_OCCURRED, message=error_msg)
         set_error(error_msg)
     finally:
@@ -96,7 +96,7 @@ async def refresh_single_stock(symbol: str) -> dict[str, Any]:
     logger.info(f"Force refreshing data for {symbol}")
 
     try:
-        set_processing(f"UPDATING {symbol} DATA...")
+        set_processing(f"PROCESSING SINGLE STOCK ({symbol})")
 
         # Run the full pipeline for this stock
         await _sync_historical_for_symbol(symbol)
@@ -111,7 +111,7 @@ async def refresh_single_stock(symbol: str) -> dict[str, Any]:
 
     except Exception as e:
         logger.error(f"Force refresh failed for {symbol}: {e}")
-        set_error(f"REFRESH FAILED: {symbol}")
+        set_error(f"STOCK REFRESH FAILED ({symbol})")
         return {"status": "error", "symbol": symbol, "reason": str(e)}
     finally:
         clear_processing()
@@ -169,7 +169,7 @@ async def _process_single_stock(symbol: str):
         symbol: The stock symbol to process
     """
     logger.info(f"Processing {symbol}...")
-    set_processing(f"UPDATING {symbol} DATA...")
+    set_processing(f"PROCESSING SINGLE STOCK ({symbol})")
 
     try:
         # Step 1: Sync historical prices
@@ -195,7 +195,7 @@ async def _process_single_stock(symbol: str):
 
     except Exception as e:
         logger.error(f"Pipeline error for {symbol}: {e}", exc_info=True)
-        set_error(f"PIPELINE FAILED: {symbol}")
+        set_error(f"STOCK REFRESH FAILED ({symbol})")
         # Don't update last_synced on error - will retry next hour
         raise
     finally:
