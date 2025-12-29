@@ -155,7 +155,39 @@ class PortfolioService:
                 industries = parse_industries(stock.industry)
                 all_stock_industries.update(industries)
 
-        cash_balance = await self._portfolio_repo.get_latest_cash_balance()
+        # Get cash balance from actual Tradernet balances (more accurate than snapshot)
+        # Fallback to snapshot if Tradernet is not connected
+        cash_balance = 0.0
+        try:
+            from app.infrastructure.external.tradernet_connection import (
+                ensure_tradernet_connected,
+            )
+
+            client = await ensure_tradernet_connected(raise_on_error=False)
+            if client:
+                from app.infrastructure.database.manager import get_db_manager
+                from app.infrastructure.dependencies import get_exchange_rate_service
+
+                db_manager = get_db_manager()
+                exchange_rate_service = get_exchange_rate_service(db_manager)
+                cash_balances = client.get_cash_balances()
+                amounts_by_currency = {b.currency: b.amount for b in cash_balances}
+                amounts_in_eur = await exchange_rate_service.batch_convert_to_eur(
+                    amounts_by_currency
+                )
+                cash_balance = sum(amounts_in_eur.values())
+            else:
+                # Fallback to snapshot if Tradernet not connected
+                cash_balance = await self._portfolio_repo.get_latest_cash_balance()
+        except Exception as e:
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                f"Failed to get cash balance from Tradernet: {e}, using snapshot"
+            )
+            # Fallback to snapshot on error
+            cash_balance = await self._portfolio_repo.get_latest_cash_balance()
 
         country_allocations = self._build_country_allocations(
             targets, country_values, total_value, all_stock_countries
