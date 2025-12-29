@@ -224,24 +224,28 @@ class TradeRepository:
         return await self.get_by_symbol(identifier, limit)
 
     async def get_recently_bought_symbols(self, days: int = 30) -> Set[str]:
-        """Get symbols that were bought in the last N days."""
+        """Get symbols that were bought in the last N days (excluding RESEARCH trades)."""
         cutoff = (datetime.now() - timedelta(days=days)).isoformat()
         rows = await self._db.fetchall(
             """
             SELECT DISTINCT symbol FROM trades
-            WHERE UPPER(side) = 'BUY' AND executed_at >= ?
+            WHERE UPPER(side) = 'BUY'
+              AND executed_at >= ?
+              AND (order_id IS NULL OR order_id NOT LIKE 'RESEARCH_%')
             """,
             (cutoff,),
         )
         return {row["symbol"] for row in rows}
 
     async def get_recently_sold_symbols(self, days: int = 30) -> Set[str]:
-        """Get symbols that were sold in the last N days."""
+        """Get symbols that were sold in the last N days (excluding RESEARCH trades)."""
         cutoff = (datetime.now() - timedelta(days=days)).isoformat()
         rows = await self._db.fetchall(
             """
             SELECT DISTINCT symbol FROM trades
-            WHERE UPPER(side) = 'SELL' AND executed_at >= ?
+            WHERE UPPER(side) = 'SELL'
+              AND executed_at >= ?
+              AND (order_id IS NULL OR order_id NOT LIKE 'RESEARCH_%')
             """,
             (cutoff,),
         )
@@ -249,7 +253,7 @@ class TradeRepository:
 
     async def has_recent_sell_order(self, symbol: str, hours: int = 2) -> bool:
         """
-        Check if there's a recent SELL order for the given symbol.
+        Check if there's a recent SELL order for the given symbol (excluding RESEARCH trades).
 
         Args:
             symbol: Stock symbol to check (e.g., "AAPL.US")
@@ -262,7 +266,10 @@ class TradeRepository:
         row = await self._db.fetchone(
             """
             SELECT 1 FROM trades
-            WHERE symbol = ? AND UPPER(side) = 'SELL' AND executed_at >= ?
+            WHERE symbol = ?
+              AND UPPER(side) = 'SELL'
+              AND executed_at >= ?
+              AND (order_id IS NULL OR order_id NOT LIKE 'RESEARCH_%')
             LIMIT 1
             """,
             (symbol.upper(), cutoff),

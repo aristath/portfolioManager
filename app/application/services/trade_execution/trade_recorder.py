@@ -53,9 +53,16 @@ async def _get_currency_and_rate(
 
 
 async def _update_position_after_sell(
-    symbol: str, position_repo: Optional[IPositionRepository]
+    symbol: str,
+    position_repo: Optional[IPositionRepository],
+    order_id: Optional[str] = None,
 ) -> None:
-    """Update last_sold_at timestamp for position after successful sell."""
+    """Update last_sold_at timestamp for position after successful sell (excluding RESEARCH trades)."""
+    # Don't update last_sold_at for RESEARCH mode trades
+    if order_id and order_id.startswith("RESEARCH_"):
+        logger.debug(f"Skipping last_sold_at update for RESEARCH trade: {order_id}")
+        return
+
     if position_repo:
         try:
             await position_repo.update_last_sold_at(symbol)
@@ -134,7 +141,7 @@ async def record_trade(
         event_bus.publish(TradeExecutedEvent(trade=trade_record))
 
         if trade_side.is_sell():
-            await _update_position_after_sell(symbol, position_repo)
+            await _update_position_after_sell(symbol, position_repo, order_id)
 
         return trade_record
 
