@@ -42,6 +42,31 @@ from app.domain.value_objects.trade_side import TradeSide
 logger = logging.getLogger(__name__)
 
 
+def _calculate_transaction_cost(
+    sequence: List["ActionCandidate"],
+    transaction_cost_fixed: float,
+    transaction_cost_percent: float,
+) -> float:
+    """
+    Calculate total transaction cost for a sequence.
+
+    Args:
+        sequence: List of actions in the sequence
+        transaction_cost_fixed: Fixed cost per trade in EUR
+        transaction_cost_percent: Variable cost as fraction
+
+    Returns:
+        Total transaction cost in EUR
+    """
+    total_cost = 0.0
+    for action in sequence:
+        trade_cost = (
+            transaction_cost_fixed + abs(action.value_eur) * transaction_cost_percent
+        )
+        total_cost += trade_cost
+    return total_cost
+
+
 def _hash_sequence(sequence: List["ActionCandidate"]) -> str:
     """
     Generate a deterministic hash for a sequence of actions.
@@ -836,6 +861,58 @@ def _generate_cash_generation_pattern(
     return sequence if len(sequence) > 0 else None
 
 
+def _generate_cost_optimized_pattern(
+    top_profit_taking: list,
+    top_rebalance_sells: list,
+    top_averaging: list,
+    top_rebalance_buys: list,
+    top_opportunity: list,
+    available_cash: float,
+    max_steps: int,
+) -> Optional[List[ActionCandidate]]:
+    """Generate pattern: Minimize number of trades while maximizing impact."""
+    if max_steps < 1:
+        return None
+
+    # Combine all opportunities and sort by priority/value ratio
+    all_opportunities = (
+        top_profit_taking
+        + top_rebalance_sells
+        + top_averaging
+        + top_rebalance_buys
+        + top_opportunity
+    )
+
+    if not all_opportunities:
+        return None
+
+    # Sort by priority (highest first) to get best impact per trade
+    all_opportunities.sort(key=lambda x: x.priority, reverse=True)
+
+    sequence: List[ActionCandidate] = []
+    running_cash = available_cash
+
+    # Add sells first (they generate cash)
+    for candidate in top_profit_taking + top_rebalance_sells:
+        if len(sequence) >= max_steps:
+            break
+        if candidate.side == TradeSide.SELL:
+            sequence.append(candidate)
+            running_cash += candidate.value_eur
+
+    # Add highest priority buys (minimize number of trades)
+    for candidate in all_opportunities:
+        if len(sequence) >= max_steps:
+            break
+        if candidate.side == TradeSide.BUY and candidate.value_eur <= running_cash:
+            # Avoid duplicates
+            if candidate not in sequence:
+                sequence.append(candidate)
+                running_cash -= candidate.value_eur
+
+    return sequence if len(sequence) > 0 else None
+
+
 def _select_diverse_opportunities(
     opportunities: List[ActionCandidate],
     max_count: int,
@@ -1170,6 +1247,19 @@ def _generate_patterns_at_depth(
     )
     if pattern10:
         sequences.append(pattern10)
+
+    # Cost-optimized pattern: minimize number of trades
+    pattern11 = _generate_cost_optimized_pattern(
+        top_profit_taking,
+        top_rebalance_sells,
+        top_averaging,
+        top_rebalance_buys,
+        top_opportunity,
+        available_cash,
+        max_steps,
+    )
+    if pattern11:
+        sequences.append(pattern11)
 
     # Combinatorial generation (if enabled)
     if enable_combinatorial:
@@ -2110,6 +2200,10 @@ async def create_holistic_plan(
         f"Sorted {len(sequence_results_sorted)} sequences by priority (highest first)"
     )
 
+    # Get transaction cost settings for cost-adjusted scoring
+    cost_penalty_factor = await settings_repo.get_float("cost_penalty_factor", 0.1)
+    cost_penalty_factor = max(0.0, min(1.0, cost_penalty_factor))  # Clamp to 0-1
+
     # Define async helper to evaluate a single sequence
     async def _evaluate_sequence(
         seq_idx: int,
@@ -2128,6 +2222,20 @@ async def create_holistic_plan(
             diversification_score=div_score.total / 100,  # Normalize to 0-1
             metrics_cache=metrics_cache,
         )
+
+        # Apply transaction cost penalty if enabled
+        if cost_penalty_factor > 0.0 and end_context.total_value > 0:
+            total_cost = _calculate_transaction_cost(
+                sequence, transaction_cost_fixed, transaction_cost_percent
+            )
+            cost_penalty = (total_cost / end_context.total_value) * cost_penalty_factor
+            end_score = max(0.0, end_score - cost_penalty)
+            # breakdown is a dict, update it with transaction cost info
+            breakdown["transaction_cost"] = {  # type: ignore[assignment]
+                "total_cost_eur": round(total_cost, 2),
+                "cost_penalty": round(cost_penalty, 4),
+                "adjusted_score": round(end_score, 3),
+            }
 
         # Log sequence evaluation
         invested_value = sum(end_context.positions.values())
