@@ -6,6 +6,7 @@ recommendation updates when caches are invalidated.
 
 import asyncio
 import logging
+import time
 from typing import Any, AsyncGenerator, Dict, Optional
 
 from app.infrastructure.events import SystemEvent, subscribe
@@ -77,8 +78,6 @@ async def subscribe_recommendation_events() -> AsyncGenerator[Dict[str, Any], No
 
     try:
         # Get initial state and send it
-        import time
-
         initial_invalidation = await get_current_invalidation()
         if initial_invalidation:
             yield initial_invalidation
@@ -96,8 +95,6 @@ async def subscribe_recommendation_events() -> AsyncGenerator[Dict[str, Any], No
                 heartbeat_counter = 0  # Reset on actual event
             except asyncio.TimeoutError:
                 # Send heartbeat every 5 seconds to keep connection alive
-                import time
-
                 heartbeat_counter += 1
                 # Re-send current invalidation as heartbeat
                 heartbeat_invalidation = await get_current_invalidation()
@@ -116,8 +113,6 @@ async def subscribe_recommendation_events() -> AsyncGenerator[Dict[str, Any], No
 
 def _on_recommendations_invalidated(event: SystemEvent, **data: Any) -> None:
     """Handle recommendations invalidated event - broadcast invalidation update."""
-    import time
-
     # Create invalidation data with timestamp
     invalidation_data = {
         "timestamp": time.time(),
