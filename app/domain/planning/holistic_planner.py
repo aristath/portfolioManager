@@ -1096,6 +1096,126 @@ def _generate_adaptive_patterns(
     return sequences
 
 
+def _generate_market_regime_patterns(
+    opportunities: Dict[str, List[ActionCandidate]],
+    market_regime: str,
+    available_cash: float,
+    max_steps: int,
+    max_opportunities_per_category: int,
+) -> List[List[ActionCandidate]]:
+    """
+    Generate patterns based on market regime.
+
+    - Bull market: Favor growth opportunities, reduce defensive positions
+    - Bear market: Favor defensive positions, reduce risk exposure
+    - Sideways: Balanced approach with focus on quality
+
+    Args:
+        opportunities: Categorized opportunities
+        market_regime: "bull", "bear", or "sideways"
+        available_cash: Available cash
+        max_steps: Maximum sequence length
+        max_opportunities_per_category: Max opportunities per category
+
+    Returns:
+        List of regime-aware pattern sequences
+    """
+    sequences: List[List[ActionCandidate]] = []
+
+    all_profit_taking = opportunities.get("profit_taking", [])[
+        :max_opportunities_per_category
+    ]
+    all_rebalance_sells = opportunities.get("rebalance_sells", [])[
+        :max_opportunities_per_category
+    ]
+    all_averaging = opportunities.get("averaging_down", [])[
+        :max_opportunities_per_category
+    ]
+    all_rebalance_buys = opportunities.get("rebalance_buys", [])[
+        :max_opportunities_per_category
+    ]
+    all_opportunity = opportunities.get("opportunity_buys", [])[
+        :max_opportunities_per_category
+    ]
+
+    if market_regime == "bull":
+        # Bull market: Aggressive growth, take profits, add to winners
+        # Pattern: Take profits from winners → Reinvest in high-growth opportunities
+        bull_sequence: List[ActionCandidate] = []
+        running_cash = available_cash
+
+        # Take profits first
+        for candidate in all_profit_taking[:2]:  # Top 2 profit-taking
+            if len(bull_sequence) < max_steps:
+                bull_sequence.append(candidate)
+                running_cash += candidate.value_eur
+
+        # Reinvest in high-growth opportunities
+        for candidate in all_opportunity + all_rebalance_buys:
+            if len(bull_sequence) >= max_steps or running_cash < candidate.value_eur:
+                break
+            if candidate not in bull_sequence:
+                bull_sequence.append(candidate)
+                running_cash -= candidate.value_eur
+
+        if bull_sequence:
+            sequences.append(bull_sequence)
+
+    elif market_regime == "bear":
+        # Bear market: Defensive, reduce exposure, focus on quality
+        # Pattern: Reduce positions → Build cash reserve → Add defensive positions
+        bear_sequence: List[ActionCandidate] = []
+        running_cash = available_cash
+
+        # Reduce positions (profit-taking and rebalance sells)
+        for candidate in all_profit_taking + all_rebalance_sells:
+            if len(bear_sequence) >= max_steps // 2:  # Limit sells in bear market
+                break
+            if candidate not in bear_sequence:
+                bear_sequence.append(candidate)
+                running_cash += candidate.value_eur
+
+        # Add defensive positions (high quality, stable)
+        # Prioritize averaging down on quality positions
+        for candidate in all_averaging:
+            if len(bear_sequence) >= max_steps or running_cash < candidate.value_eur:
+                break
+            if candidate not in bear_sequence:
+                bear_sequence.append(candidate)
+                running_cash -= candidate.value_eur
+
+        if bear_sequence:
+            sequences.append(bear_sequence)
+
+    else:  # sideways
+        # Sideways market: Balanced, focus on quality and rebalancing
+        # Pattern: Rebalance → Quality opportunities
+        sideways_sequence: List[ActionCandidate] = []
+        running_cash = available_cash
+
+        # Rebalance sells first
+        for candidate in all_rebalance_sells[:2]:
+            if len(sideways_sequence) < max_steps:
+                sideways_sequence.append(candidate)
+                running_cash += candidate.value_eur
+
+        # Quality buys (rebalance and opportunity)
+        for candidate in all_rebalance_buys + all_opportunity:
+            if (
+                len(sideways_sequence) >= max_steps
+                or running_cash < candidate.value_eur
+            ):
+                break
+            if candidate not in sideways_sequence:
+                sideways_sequence.append(candidate)
+                running_cash -= candidate.value_eur
+
+        if sideways_sequence:
+            sequences.append(sideways_sequence)
+
+    return sequences
+
+
 def _select_diverse_opportunities(
     opportunities: List[ActionCandidate],
     max_count: int,
@@ -2416,6 +2536,18 @@ async def create_holistic_plan(
     )
     diversity_weight = await settings_repo.get_float("diversity_weight", 0.3)
     diversity_weight = max(0.0, min(1.0, diversity_weight))  # Clamp to 0-1
+
+    # Get market regime-aware settings
+    enable_market_regime_scenarios = (
+        await settings_repo.get_float("enable_market_regime_scenarios", 0.0) == 1.0
+    )
+    market_regime = None
+    if enable_market_regime_scenarios:
+        from app.domain.analytics.market_regime import detect_market_regime
+
+        # Detect current market regime
+        market_regime = await detect_market_regime()
+        logger.info(f"Market regime detected: {market_regime}")
 
     # Generate candidate sequences at all depths (1 to max_plan_depth)
     sequences = await generate_action_sequences(
