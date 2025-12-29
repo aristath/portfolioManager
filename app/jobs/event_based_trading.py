@@ -276,8 +276,28 @@ async def _wait_for_planning_completion():
             batch_size=batch_size,
         )
 
+    # Trigger first batch via API to start API-driven batch chain
+    import httpx
+
+    base_url = "http://localhost:8000"
+    url = f"{base_url}/api/jobs/planner-batch"
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            await client.post(url, json={"portfolio_hash": portfolio_hash, "depth": 1})
+        logger.debug("Triggered first planner batch via API")
+    except Exception as e:
+        logger.warning(
+            f"Failed to trigger first batch via API: {e}, falling back to direct call"
+        )
+        # Fallback: call directly
+        from app.jobs.planner_batch import process_planner_batch_job
+
+        await process_planner_batch_job(max_depth=1, portfolio_hash=portfolio_hash)
+
     # Wait until all sequences are evaluated
-    max_wait_iterations = 360  # 1 hour max wait (10 second intervals)
+    # Reduced wait time since API-driven batches are faster
+    max_wait_iterations = 720  # 1 hour max wait (5 second intervals)
     iteration = 0
 
     while iteration < max_wait_iterations:
@@ -285,18 +305,15 @@ async def _wait_for_planning_completion():
             logger.info("All sequences evaluated, planning complete")
             return
 
-        # Process next batch
+        # Check periodically (reduced interval since API-driven batches are faster)
         logger.debug(
             f"Waiting for planning completion (iteration {iteration + 1}/{max_wait_iterations})..."
         )
 
-        # Call planner batch processing
-        from app.jobs.planner_batch import process_planner_batch_job
-
-        await process_planner_batch_job()
-
         iteration += 1
-        await asyncio.sleep(10)  # Wait 10 seconds between checks
+        await asyncio.sleep(
+            5
+        )  # Reduced from 10 to 5 seconds since API-driven batches are faster
 
     logger.warning(
         "Planning completion timeout reached, proceeding with best result so far"
