@@ -102,10 +102,8 @@ python3 scripts/seed_stocks.py || echo "Database already initialized or script n
 echo ""
 echo "Step 8: Installing systemd services..."
 cp "$REPO_DIR/deploy/arduino-trader.service" "$SERVICE_FILE"
-cp "$REPO_DIR/deploy/led-display.service" /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable arduino-trader
-systemctl enable led-display
 
 # Step 9: Install Arduino CLI and compile sketch
 echo ""
@@ -148,7 +146,6 @@ echo "Cron job installed: $CRON_JOB"
 echo ""
 echo "Step 11: Starting services..."
 systemctl start arduino-trader
-systemctl start led-display
 
 # Check status
 echo ""
@@ -162,7 +159,7 @@ systemctl status arduino-trader --no-pager || true
 echo ""
 echo "Next steps:"
 echo "1. Edit /home/arduino/arduino-trader/.env with your Tradernet API credentials"
-echo "2. Restart services: sudo systemctl restart arduino-trader led-display"
-echo "3. Check LED display: sudo systemctl status led-display"
+echo "2. Restart service: sudo systemctl restart arduino-trader"
+echo "3. LED display runs via Docker (Arduino App Framework)"
 echo "4. Access dashboard: http://localhost:8000"
 echo ""
