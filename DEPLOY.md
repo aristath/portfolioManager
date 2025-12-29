@@ -23,7 +23,7 @@ After setup, the board will have:
 │   ├── venv/                  # Python virtual environment
 │   └── .env                   # Configuration (API keys)
 ├── scripts/
-│   ├── led_display_native.py  # Native LED display script
+│   ├── arduino-app/python/main.py  # Docker LED display app
 │   └── compile_and_upload_sketch.sh  # Sketch compilation script
 ├── bin/
 │   └── auto-deploy.sh         # Auto-deployment script
