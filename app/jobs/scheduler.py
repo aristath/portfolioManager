@@ -108,7 +108,9 @@ async def init_scheduler() -> AsyncIOScheduler:
         await settings_repo.get_float("incremental_planner_enabled", 1.0) == 1.0
     )
     planner_batch_interval = int(
-        await settings_repo.get_float("planner_batch_interval_seconds", 10.0)
+        await settings_repo.get_float(
+            "planner_batch_interval_seconds", 30.0
+        )  # Changed from 10.0 to 30.0 as fallback
     )
 
     # Job 1: Sync Cycle - every 5 minutes (configurable, default 5.0)
