@@ -68,12 +68,14 @@ async def _insert_trade(db_manager, trade: dict, order_id: str) -> bool:
         if not executed_at:
             executed_at = datetime.now().isoformat()
 
+        created_at = datetime.now().isoformat()
+
         await db_manager.ledger.execute(
             """
-            INSERT INTO trades (symbol, side, quantity, price, executed_at, order_id, source)
-            VALUES (?, ?, ?, ?, ?, ?, 'tradernet')
+            INSERT INTO trades (symbol, side, quantity, price, executed_at, order_id, source, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, 'tradernet', ?)
             """,
-            (symbol, side, quantity, price, executed_at, order_id),
+            (symbol, side, quantity, price, executed_at, order_id, created_at),
         )
         return True
     except Exception as e:
