@@ -217,9 +217,20 @@ async def init_scheduler() -> AsyncIOScheduler:
 
     # Start event-based trading loop as background task (not a scheduled job)
     # since it has a while True loop and runs continuously
+    # Wrap in a function that restarts it if it crashes
     import asyncio
 
-    asyncio.create_task(run_event_based_trading_loop())
+    async def _run_with_restart():
+        """Run event-based trading loop with automatic restart on crash."""
+        while True:
+            try:
+                await run_event_based_trading_loop()
+            except Exception as e:
+                logger.error(f"Event-based trading loop crashed: {e}", exc_info=True)
+                # Wait 10 seconds before restarting
+                await asyncio.sleep(10)
+
+    asyncio.create_task(_run_with_restart())
     logger.info("Started event-based trading loop as background task")
 
     logger.info(
