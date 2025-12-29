@@ -166,6 +166,26 @@ class PlannerRepository:
         )
         await db.commit()
 
+    async def has_evaluation(self, sequence_hash: str, portfolio_hash: str) -> bool:
+        """
+        Check if evaluation exists for sequence.
+
+        Args:
+            sequence_hash: Sequence hash
+            portfolio_hash: Portfolio hash
+
+        Returns:
+            True if evaluation exists, False otherwise
+        """
+        db = await self._get_db()
+
+        row = await db.fetchone(
+            "SELECT COUNT(*) as count FROM evaluations WHERE sequence_hash = ? AND portfolio_hash = ?",
+            (sequence_hash, portfolio_hash),
+        )
+
+        return row and row["count"] > 0
+
     async def insert_evaluation(
         self,
         sequence_hash: str,
@@ -180,6 +200,8 @@ class PlannerRepository:
         """
         Insert evaluation result.
 
+        If evaluation already exists, skip insertion (avoids PRIMARY KEY violation).
+
         Args:
             sequence_hash: Sequence hash
             portfolio_hash: Portfolio hash
@@ -190,6 +212,13 @@ class PlannerRepository:
             div_score: Diversification score
             total_value: Total portfolio value
         """
+        # Check if evaluation already exists
+        if await self.has_evaluation(sequence_hash, portfolio_hash):
+            logger.debug(
+                f"Evaluation already exists for sequence {sequence_hash[:8]}, skipping insertion"
+            )
+            return
+
         db = await self._get_db()
         now = datetime.now().isoformat()
 
@@ -254,6 +283,27 @@ class PlannerRepository:
             (portfolio_hash, sequence_hash, score, now),
         )
         await db.commit()
+
+    async def delete_sequences_only(self, portfolio_hash: str) -> None:
+        """
+        Delete sequences only (keep evaluations and best_result).
+
+        Used when regenerating sequences with new settings - evaluations
+        are still valid and can be reused if sequences overlap.
+
+        Args:
+            portfolio_hash: Portfolio hash
+        """
+        db = await self._get_db()
+
+        await db.execute(
+            "DELETE FROM sequences WHERE portfolio_hash = ?", (portfolio_hash,)
+        )
+        await db.commit()
+
+        logger.info(
+            f"Deleted sequences (kept evaluations) for portfolio {portfolio_hash[:8]}..."
+        )
 
     async def delete_sequences_for_portfolio(self, portfolio_hash: str) -> None:
         """

@@ -289,6 +289,17 @@ document.addEventListener('alpine:init', () => {
       }
     },
 
+    async regenerateSequences() {
+      try {
+        const response = await API.regenerateSequences();
+        this.showMessage('Sequences regenerated. New sequences will be generated on next batch run.', 'success');
+        // Refresh recommendations to show updated state
+        await this.fetchRecommendations();
+      } catch (e) {
+        this.showMessage('Failed to regenerate sequences', 'error');
+      }
+    },
+
     async updateJobSetting(key, value) {
       const numValue = parseFloat(value);
       if (isNaN(numValue)) return;

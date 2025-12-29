@@ -393,12 +393,19 @@ class SettingsModal extends HTMLElement {
                            class="w-20 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-right font-mono text-sm text-gray-200 focus:outline-none focus:border-blue-500">
                   </div>
                 </div>
-              </div>
-                           @change="$store.app.updateSetting('planner_batch_size', Math.max(10, Math.min(1000, parseInt($event.target.value) || 100)))"
-                           class="w-20 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-right font-mono text-sm text-gray-200 focus:outline-none focus:border-blue-500">
-                    <span class="text-gray-400 text-sm">seq</span>
-                  </div>
+
+                <!-- Regenerate Sequences Button -->
+                <div class="mt-4 pt-3 border-t border-gray-700/50">
+                  <button
+                    type="button"
+                    @click="if (confirm('This will delete existing sequences and regenerate them with current settings. Existing evaluations will be preserved. Continue?')) { $store.app.regenerateSequences() }"
+                    :disabled="$store.app.settings.incremental_planner_enabled != 1"
+                    class="w-full px-4 py-2 bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed text-white text-sm font-medium rounded transition-colors"
+                    x-text="$store.app.settings.incremental_planner_enabled != 1 ? 'Enable Incremental Planner First' : 'Regenerate Sequences'">
+                  </button>
+                  <p class="text-xs text-gray-500 mt-2">Deletes sequences and regenerates with current combinatorial settings. Existing evaluations are preserved and reused.</p>
                 </div>
+              </div>
 
                 <!-- Info note -->
                 <div class="mt-4 pt-3 border-t border-gray-700/50">
