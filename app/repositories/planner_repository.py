@@ -365,6 +365,25 @@ class PlannerRepository:
 
         return row["count"] if row else 0
 
+    async def get_total_sequence_count(self, portfolio_hash: str) -> int:
+        """
+        Get total count of sequences for portfolio.
+
+        Args:
+            portfolio_hash: Portfolio hash
+
+        Returns:
+            Total number of sequences
+        """
+        db = await self._get_db()
+
+        row = await db.fetchone(
+            "SELECT COUNT(*) as count FROM sequences WHERE portfolio_hash = ?",
+            (portfolio_hash,),
+        )
+
+        return row["count"] if row else 0
+
     async def are_all_sequences_evaluated(self, portfolio_hash: str) -> bool:
         """
         Check if all sequences for portfolio_hash have been evaluated.
