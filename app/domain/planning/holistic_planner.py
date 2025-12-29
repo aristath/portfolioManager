@@ -2411,8 +2411,23 @@ async def process_planner_incremental(
             else:
                 progress_percentage = 0.0
 
-            # Check if planning is active
-            is_planning = total_sequences > 0 and not is_finished
+            # Check if planning is active (same logic as API endpoint for consistency)
+            is_planning = False
+            if total_sequences > 0 and not is_finished:
+                try:
+                    from app.jobs.scheduler import get_scheduler
+
+                    scheduler = get_scheduler()
+                    if scheduler and scheduler.running:
+                        jobs = scheduler.get_jobs()
+                        planner_job = next(
+                            (job for job in jobs if job.id == "planner_batch"), None
+                        )
+                        if planner_job:
+                            is_planning = True
+                except Exception:
+                    # If we can't check scheduler, assume planning is active if there's work to do
+                    is_planning = total_sequences > 0 and not is_finished
 
             status = {
                 "has_sequences": total_sequences > 0,

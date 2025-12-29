@@ -211,7 +211,24 @@ async def process_planner_batch_job(
                 progress_percentage = 0.0
 
             # Check if planning is active
-            is_planning = has_sequences and not is_finished
+            # Since we're in a batch job, planning is active if there's more work to do
+            # and the scheduler is running (which it must be for this job to run)
+            is_planning = False
+            if has_sequences and not is_finished:
+                try:
+                    from app.jobs.scheduler import get_scheduler
+
+                    scheduler = get_scheduler()
+                    if scheduler and scheduler.running:
+                        jobs = scheduler.get_jobs()
+                        planner_job = next(
+                            (job for job in jobs if job.id == "planner_batch"), None
+                        )
+                        if planner_job:
+                            is_planning = True
+                except Exception:
+                    # If we can't check scheduler, assume planning is active if there's work to do
+                    is_planning = has_sequences and not is_finished
 
             status = {
                 "has_sequences": has_sequences,
