@@ -26,15 +26,13 @@ def scroll_text(text: str, speed: int = 50) -> bool:
     """Scroll text across LED matrix using native ArduinoGraphics.
 
     Args:
-        text: Text to scroll (ASCII only, Euro symbol will be replaced)
+        text: Text to scroll (uses Euro symbol € directly)
         speed: Milliseconds per scroll step (lower = faster)
 
     Returns:
         True if successful, False otherwise
     """
     try:
-        # Replace Euro symbol with EUR (Font_5x7 only has ASCII 32-126)
-        text = text.replace("€", "EUR")
         Bridge.call("scrollText", text, speed, timeout=30)
         return True
     except Exception as e:
