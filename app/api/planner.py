@@ -174,17 +174,13 @@ async def stream_planner_status(
     async def event_generator() -> AsyncIterator[str]:
         """Generate SSE events from planner status changes."""
         try:
-            # Get initial status and send it
+            # Get initial status and cache it (subscribe_planner_events will send it)
             initial_status = await _get_planner_status_internal(
                 position_repo, stock_repo
             )
-            # Cache it
             await planner_events.set_current_status(initial_status)
-            # Format as SSE event: data: {json}\n\n
-            event_data = json.dumps(initial_status)
-            yield f"data: {event_data}\n\n"
 
-            # Subscribe to planner events
+            # Subscribe to planner events (sends initial status from cache, then streams updates)
             async for status_data in planner_events.subscribe_planner_events():
                 # Format as SSE event: data: {json}\n\n
                 event_data = json.dumps(status_data)
