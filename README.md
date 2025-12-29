@@ -4,6 +4,7 @@ Automated portfolio management system for Arduino Uno Q with monthly rebalancing
 
 ## Features
 
+- **Event-Based Trading**: Executes trades only after holistic planner completes all scenario evaluations
 - **Automated Monthly Rebalancing**: Invests monthly deposits according to allocation targets
 - **Stock Scoring Engine**: Technical (50%), Analyst (30%), Fundamental (20%) weighted scores
 - **Geographic Allocation**: EU 50%, Asia 30%, US 20%
