@@ -4,6 +4,7 @@ Orchestrates trade execution via Tradernet and records trades.
 """
 
 import logging
+from datetime import datetime
 from typing import List, Optional
 
 from app.application.services.currency_exchange_service import CurrencyExchangeService
@@ -14,12 +15,14 @@ from app.domain.repositories.protocols import (
     IStockRepository,
     ITradeRepository,
 )
+from app.domain.scoring.constants import DEFAULT_MIN_HOLD_DAYS
 from app.domain.services.exchange_rate_service import ExchangeRateService
 from app.domain.value_objects.currency import Currency
 from app.infrastructure.events import SystemEvent, emit
 from app.infrastructure.external.tradernet import TradernetClient
 from app.infrastructure.hardware.display_service import set_error, set_processing
 from app.infrastructure.market_hours import is_market_open, should_check_market_hours
+from app.repositories.base import safe_parse_datetime_string
 
 logger = logging.getLogger(__name__)
 
@@ -101,8 +104,8 @@ async def _handle_buy_currency(
     return None
 
 
-async def _validate_sell_order(trade, position_repo) -> Optional[dict]:
-    """Validate SELL order against position."""
+async def _validate_sell_order(trade, position_repo, trade_repo) -> Optional[dict]:
+    """Validate SELL order against position and minimum hold time."""
     if not position_repo:
         return None
 
@@ -125,6 +128,33 @@ async def _validate_sell_order(trade, position_repo) -> Optional[dict]:
             "status": "skipped",
             "error": f"SELL quantity ({trade.quantity}) exceeds position ({position.quantity})",
         }
+
+    # Check minimum hold time using the most recent buy date
+    if trade_repo:
+        try:
+            last_bought_at = await trade_repo.get_last_buy_date(trade.symbol)
+            if last_bought_at:
+                bought_date = safe_parse_datetime_string(last_bought_at)
+                if bought_date:
+                    days_held = (datetime.now() - bought_date).days
+                    if days_held < DEFAULT_MIN_HOLD_DAYS:
+                        logger.warning(
+                            f"SAFETY BLOCK: {trade.symbol} held only {days_held} days "
+                            f"(minimum {DEFAULT_MIN_HOLD_DAYS} days required)"
+                        )
+                        return {
+                            "symbol": trade.symbol,
+                            "status": "blocked",
+                            "error": f"Held only {days_held} days (minimum {DEFAULT_MIN_HOLD_DAYS} days required)",
+                        }
+        except Exception as e:
+            logger.error(f"Failed to check minimum hold time for {trade.symbol}: {e}")
+            # On error, be conservative and block
+            return {
+                "symbol": trade.symbol,
+                "status": "blocked",
+                "error": "Minimum hold time check failed",
+            }
 
     return None
 
@@ -249,7 +279,7 @@ async def _validate_trade_before_execution(
             return currency_result, 1
 
     if trade.side.upper() == "SELL":
-        sell_result = await _validate_sell_order(trade, position_repo)
+        sell_result = await _validate_sell_order(trade, position_repo, trade_repo)
         if sell_result:
             return sell_result, 1
 
