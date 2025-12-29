@@ -262,6 +262,7 @@ def get_trade_execution_service(
     exchange_rate_service: Annotated[
         ExchangeRateService, Depends(get_exchange_rate_service)
     ],
+    settings_repo: SettingsRepositoryDep,
 ) -> TradeExecutionService:
     """Get TradeExecutionService instance."""
     stock_repo = get_stock_repository()
@@ -272,6 +273,7 @@ def get_trade_execution_service(
         tradernet_client=tradernet_client,
         currency_exchange_service=currency_exchange_service,
         exchange_rate_service=exchange_rate_service,
+        settings_repo=settings_repo,
     )
 
 
