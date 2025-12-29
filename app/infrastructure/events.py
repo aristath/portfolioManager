@@ -83,6 +83,9 @@ class SystemEvent(Enum):
     PLANNER_BATCH_COMPLETE = "planner_batch_complete"
     PLANNER_SEQUENCES_GENERATED = "planner_sequences_generated"
 
+    # Recommendation events
+    RECOMMENDATIONS_INVALIDATED = "recommendations_invalidated"
+
 
 # Event listeners storage
 _listeners: dict[SystemEvent, list[Callable]] = {event: [] for event in SystemEvent}
