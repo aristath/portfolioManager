@@ -30,7 +30,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 from itertools import combinations
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from app.domain.models import Position, Stock
 from app.domain.portfolio_hash import generate_portfolio_hash
@@ -271,6 +271,7 @@ async def identify_opportunities_from_weights(
     transaction_cost_fixed: float = 2.0,
     transaction_cost_percent: float = 0.002,
     exchange_rate_service=None,
+    recently_sold: Optional[Set[str]] = None,
 ) -> Dict[str, List[ActionCandidate]]:
     """
     Identify opportunities based on optimizer target weights.
@@ -339,6 +340,12 @@ async def identify_opportunities_from_weights(
         if gap > 0:
             _process_buy_opportunity(gap_info, stock, position, price, opportunities)
         else:
+            # Skip sell opportunities for symbols in cooldown
+            if recently_sold and symbol in recently_sold:
+                logger.debug(
+                    f"{symbol}: Skipping sell opportunity (in cooldown period)"
+                )
+                continue
             if position is not None:
                 _process_sell_opportunity(
                     gap_info, stock, position, price, opportunities
@@ -412,8 +419,12 @@ async def identify_opportunities(
     stocks_by_symbol = {s.symbol: s for s in stocks}
     total_value = portfolio_context.total_value
 
-    # Get recently bought symbols for cooldown
+    # Get recently bought symbols for buy cooldown
     recently_bought = await trade_repo.get_recently_bought_symbols(BUY_COOLDOWN_DAYS)
+
+    # Get recently sold symbols for sell cooldown
+    sell_cooldown_days = await settings_repo.get_int("sell_cooldown_days", 180)
+    recently_sold = await trade_repo.get_recently_sold_symbols(sell_cooldown_days)
 
     # Calculate current country/industry allocations
     country_allocations: dict[str, float] = {}
@@ -441,13 +452,16 @@ async def identify_opportunities(
                         ind_allocations.get(ind, 0) + value / total_value
                     )
 
-    # Identify profit-taking opportunities
-    opportunities["profit_taking"] = await identify_profit_taking_opportunities(
+    # Identify profit-taking opportunities (filter out recently sold)
+    profit_taking_all = await identify_profit_taking_opportunities(
         positions, stocks_by_symbol, exchange_rate_service
     )
+    opportunities["profit_taking"] = [
+        opp for opp in profit_taking_all if opp.symbol not in recently_sold
+    ]
 
-    # Identify rebalance sell opportunities
-    opportunities["rebalance_sells"] = await identify_rebalance_sell_opportunities(
+    # Identify rebalance sell opportunities (filter out recently sold)
+    rebalance_sells_all = await identify_rebalance_sell_opportunities(
         positions,
         stocks_by_symbol,
         portfolio_context,
@@ -455,6 +469,9 @@ async def identify_opportunities(
         total_value,
         exchange_rate_service,
     )
+    opportunities["rebalance_sells"] = [
+        opp for opp in rebalance_sells_all if opp.symbol not in recently_sold
+    ]
 
     # Calculate minimum worthwhile trade from transaction costs
     transaction_cost_fixed = await settings_repo.get_float(
@@ -1263,6 +1280,14 @@ async def process_planner_incremental(
         # Calculate current portfolio score
         current_score = await calculate_portfolio_score(portfolio_context)
 
+        # Get recently sold symbols for sell cooldown
+        from app.repositories import SettingsRepository, TradeRepository
+
+        settings_repo = SettingsRepository()
+        trade_repo = TradeRepository()
+        sell_cooldown_days = await settings_repo.get_int("sell_cooldown_days", 180)
+        recently_sold = await trade_repo.get_recently_sold_symbols(sell_cooldown_days)
+
         # Identify opportunities
         if target_weights and current_prices:
             logger.info("Using optimizer target weights for opportunity identification")
@@ -1276,6 +1301,7 @@ async def process_planner_incremental(
                 transaction_cost_fixed=transaction_cost_fixed,
                 transaction_cost_percent=transaction_cost_percent,
                 exchange_rate_service=exchange_rate_service,
+                recently_sold=recently_sold,
             )
         else:
             logger.info("Using heuristic opportunity identification")
@@ -1700,6 +1726,14 @@ async def create_holistic_plan(
     # Calculate current portfolio score
     current_score = await calculate_portfolio_score(portfolio_context)
 
+    # Get recently sold symbols for sell cooldown
+    from app.repositories import SettingsRepository, TradeRepository
+
+    settings_repo = SettingsRepository()
+    trade_repo = TradeRepository()
+    sell_cooldown_days = await settings_repo.get_int("sell_cooldown_days", 180)
+    recently_sold = await trade_repo.get_recently_sold_symbols(sell_cooldown_days)
+
     # Identify opportunities (weight-based if optimizer provided, else heuristic)
     if target_weights and current_prices:
         logger.info("Using optimizer target weights for opportunity identification")
@@ -1713,6 +1747,7 @@ async def create_holistic_plan(
             transaction_cost_fixed=transaction_cost_fixed,
             transaction_cost_percent=transaction_cost_percent,
             exchange_rate_service=exchange_rate_service,
+            recently_sold=recently_sold,
         )
     else:
         logger.info("Using heuristic opportunity identification")
