@@ -31,7 +31,8 @@ class TestGetCalendar:
 
         calendar = get_calendar("NASDAQ")
         assert calendar is not None
-        assert calendar.name == "XNAS"  # NASDAQ uses XNAS calendar
+        # NASDAQ and NYSE share the same calendar (XNYS) in exchange_calendars
+        assert calendar.name == "XNYS"
 
     def test_returns_default_for_unknown(self):
         """Test returning default calendar for unknown exchange."""

@@ -46,7 +46,8 @@ _AVAILABLE_CALENDARS: Optional[set[str]] = None
 # Exchanges that require strict market hours checks for all orders (both BUY and SELL)
 # These markets do not accept orders when closed
 # Can be extended in the future for Middle East or other markets with similar restrictions
-STRICT_MARKET_HOURS_EXCHANGE_CODES = {"XHKG", "XSHG", "XTSE", "XASX"}
+# Include both canonical codes and aliases (some are valid calendar codes)
+STRICT_MARKET_HOURS_EXCHANGE_CODES = {"XHKG", "XSHG", "XTSE", "XASX", "ASX", "TSE"}
 
 
 def _get_available_calendars() -> set[str]:
