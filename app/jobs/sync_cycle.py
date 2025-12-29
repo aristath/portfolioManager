@@ -27,6 +27,7 @@ from app.infrastructure.market_hours import (
     get_open_markets,
     group_stocks_by_exchange,
     is_market_open,
+    should_check_market_hours,
 )
 
 logger = logging.getLogger(__name__)
@@ -241,7 +242,7 @@ async def _step_execute_trade(recommendation) -> dict[str, Any]:
     """
     Step 7: Execute trade (market-aware).
 
-    Only executes if the stock's market is currently open.
+    Only executes if the stock's market is currently open (if required for this trade).
 
     Args:
         recommendation: The trade recommendation
@@ -259,12 +260,14 @@ async def _step_execute_trade(recommendation) -> dict[str, Any]:
         if not exchange:
             logger.warning(f"Stock {recommendation.symbol} has no exchange set")
             # Allow trade anyway - exchange might not be set
-        elif not is_market_open(exchange):
-            return {
-                "status": "skipped",
-                "reason": f"Market closed for {exchange}",
-                "exchange": exchange,
-            }
+        elif should_check_market_hours(exchange, recommendation.side):
+            # Market hours check is required for this trade
+            if not is_market_open(exchange):
+                return {
+                    "status": "skipped",
+                    "reason": f"Market closed for {exchange}",
+                    "exchange": exchange,
+                }
 
         # Execute the trade
         return await _execute_trade_order(recommendation)
