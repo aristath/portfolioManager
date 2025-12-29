@@ -1452,6 +1452,31 @@ async def process_planner_incremental(
 
         sequence_hash = seq_data["sequence_hash"]
 
+        # Check if evaluation already exists (from previous generation)
+        if await repo.has_evaluation(sequence_hash, portfolio_hash):
+            logger.debug(
+                f"Evaluation already exists for sequence {sequence_hash[:8]}, skipping expensive evaluation"
+            )
+            # Get existing evaluation to update best result
+            db = await repo._get_db()
+            eval_row = await db.fetchone(
+                """SELECT end_score FROM evaluations
+                   WHERE sequence_hash = ? AND portfolio_hash = ?""",
+                (sequence_hash, portfolio_hash),
+            )
+            if eval_row:
+                end_score = eval_row["end_score"]
+                # Mark sequence as completed
+                evaluated_at = datetime.now().isoformat()
+                await repo.mark_sequence_completed(
+                    sequence_hash, portfolio_hash, evaluated_at
+                )
+                # Update best if better
+                if end_score > best_score_in_batch:
+                    best_score_in_batch = end_score
+                    best_in_batch = sequence_hash
+            continue
+
         # Simulate sequence
         end_context, end_cash = await simulate_sequence(
             sequence, portfolio_context, available_cash, stocks

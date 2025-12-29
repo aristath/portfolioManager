@@ -4,6 +4,7 @@ from app.api import (
     cash_flows,
     charts,
     optimizer,
+    planner,
     portfolio,
     recommendations,
     status,
@@ -21,4 +22,5 @@ __all__ = [
     "charts",
     "recommendations",
     "optimizer",
+    "planner",
 ]

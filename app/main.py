@@ -13,6 +13,7 @@ from app.api import (
     cash_flows,
     charts,
     optimizer,
+    planner,
     portfolio,
     recommendations,
 )
@@ -159,6 +160,7 @@ app.include_router(cash_flows.router, prefix="/api/cash-flows", tags=["Cash Flow
 app.include_router(charts.router, prefix="/api/charts", tags=["Charts"])
 app.include_router(settings_api.router, prefix="/api/settings", tags=["Settings"])
 app.include_router(optimizer.router, prefix="/api/optimizer", tags=["Optimizer"])
+app.include_router(planner.router, prefix="/api/planner", tags=["Planner"])
 
 
 @app.get("/")
