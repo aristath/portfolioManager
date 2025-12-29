@@ -18,12 +18,52 @@ from app.domain.scoring.scorers.end_state import score_total_return
 
 logger = logging.getLogger(__name__)
 
-# End-state scoring weights
+# End-state scoring weights (default/balanced profile)
 WEIGHT_TOTAL_RETURN = 0.35
 WEIGHT_DIVERSIFICATION = 0.25
 WEIGHT_LONG_TERM_PROMISE = 0.20
 WEIGHT_STABILITY = 0.15
 WEIGHT_OPINION = 0.05
+
+
+def get_risk_profile_weights(risk_profile: str = "balanced") -> Dict[str, float]:
+    """
+    Get scoring weights adjusted for risk profile.
+
+    Args:
+        risk_profile: "conservative", "balanced", or "aggressive"
+
+    Returns:
+        Dict with weight_total_return, weight_diversification, weight_long_term_promise,
+        weight_stability, weight_opinion (must sum to 1.0)
+    """
+    if risk_profile == "conservative":
+        # Conservative: Emphasize stability and diversification, reduce return focus
+        return {
+            "weight_total_return": 0.25,
+            "weight_diversification": 0.30,
+            "weight_long_term_promise": 0.20,
+            "weight_stability": 0.20,
+            "weight_opinion": 0.05,
+        }
+    elif risk_profile == "aggressive":
+        # Aggressive: Emphasize return and promise, reduce stability focus
+        return {
+            "weight_total_return": 0.45,
+            "weight_diversification": 0.20,
+            "weight_long_term_promise": 0.25,
+            "weight_stability": 0.05,
+            "weight_opinion": 0.05,
+        }
+    else:  # balanced (default)
+        return {
+            "weight_total_return": WEIGHT_TOTAL_RETURN,
+            "weight_diversification": WEIGHT_DIVERSIFICATION,
+            "weight_long_term_promise": WEIGHT_LONG_TERM_PROMISE,
+            "weight_stability": WEIGHT_STABILITY,
+            "weight_opinion": WEIGHT_OPINION,
+        }
+
 
 # Long-term promise sub-weights
 PROMISE_WEIGHT_CONSISTENCY = 0.35
@@ -269,6 +309,7 @@ async def calculate_portfolio_end_state_score(
     diversification_score: float,
     metrics_cache: Dict[str, Dict[str, float]],
     opinion_score: float = 0.5,
+    risk_profile: str = "balanced",
 ) -> Tuple[float, Dict[str, float]]:
     """
     Calculate end-state score for an entire portfolio.
@@ -321,42 +362,51 @@ async def calculate_portfolio_end_state_score(
         promise_details[symbol] = {"score": promise_score, "weight": round(weight, 3)}
         stability_details[symbol] = {"score": stab_score, "weight": round(weight, 3)}
 
-    # Calculate final end-state score
+    # Get risk-adjusted weights
+    weights = get_risk_profile_weights(risk_profile)
+    weight_total_return = weights["weight_total_return"]
+    weight_diversification = weights["weight_diversification"]
+    weight_long_term_promise = weights["weight_long_term_promise"]
+    weight_stability = weights["weight_stability"]
+    weight_opinion = weights["weight_opinion"]
+
+    # Calculate final end-state score with risk-adjusted weights
     end_state_score = (
-        weighted_total_return * WEIGHT_TOTAL_RETURN
-        + diversification_score * WEIGHT_DIVERSIFICATION
-        + weighted_promise * WEIGHT_LONG_TERM_PROMISE
-        + weighted_stability * WEIGHT_STABILITY
-        + opinion_score * WEIGHT_OPINION
+        weighted_total_return * weight_total_return
+        + diversification_score * weight_diversification
+        + weighted_promise * weight_long_term_promise
+        + weighted_stability * weight_stability
+        + opinion_score * weight_opinion
     )
 
     detailed_breakdown = {
         "total_return": {
             "weighted_score": round(weighted_total_return, 3),
-            "weight": WEIGHT_TOTAL_RETURN,
-            "contribution": round(weighted_total_return * WEIGHT_TOTAL_RETURN, 3),
+            "weight": weight_total_return,
+            "contribution": round(weighted_total_return * weight_total_return, 3),
         },
         "diversification": {
             "score": round(diversification_score, 3),
-            "weight": WEIGHT_DIVERSIFICATION,
-            "contribution": round(diversification_score * WEIGHT_DIVERSIFICATION, 3),
+            "weight": weight_diversification,
+            "contribution": round(diversification_score * weight_diversification, 3),
         },
         "long_term_promise": {
             "weighted_score": round(weighted_promise, 3),
-            "weight": WEIGHT_LONG_TERM_PROMISE,
-            "contribution": round(weighted_promise * WEIGHT_LONG_TERM_PROMISE, 3),
+            "weight": weight_long_term_promise,
+            "contribution": round(weighted_promise * weight_long_term_promise, 3),
         },
         "stability": {
             "weighted_score": round(weighted_stability, 3),
-            "weight": WEIGHT_STABILITY,
-            "contribution": round(weighted_stability * WEIGHT_STABILITY, 3),
+            "weight": weight_stability,
+            "contribution": round(weighted_stability * weight_stability, 3),
         },
         "opinion": {
             "score": round(opinion_score, 3),
-            "weight": WEIGHT_OPINION,
-            "contribution": round(opinion_score * WEIGHT_OPINION, 3),
+            "weight": weight_opinion,
+            "contribution": round(opinion_score * weight_opinion, 3),
         },
         "end_state_score": round(end_state_score, 3),
+        "risk_profile": risk_profile,
     }
 
     return round(min(1.0, end_state_score), 3), detailed_breakdown  # type: ignore[return-value]

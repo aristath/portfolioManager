@@ -360,6 +360,23 @@ class SettingsModal extends HTMLElement {
                     </label>
                     <p class="text-xs text-gray-500 mt-1 ml-7">Evaluate sequences under price variations (±10%, ±5%) to account for uncertainty. Uses conservative scoring (60% worst-case, 40% average).</p>
                   </div>
+
+                  <!-- Risk Profile -->
+                  <div>
+                    <div class="flex items-center justify-between mb-2">
+                      <span class="text-sm text-gray-300">Risk Profile</span>
+                      <span class="text-sm text-gray-400 font-mono capitalize"
+                            x-text="$store.app.settings.risk_profile || 'balanced'"></span>
+                    </div>
+                    <select :value="$store.app.settings.risk_profile || 'balanced'"
+                            @change="$store.app.updateSetting('risk_profile', $event.target.value)"
+                            class="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-blue-500">
+                      <option value="conservative">Conservative (Stability & Diversification)</option>
+                      <option value="balanced">Balanced (Default)</option>
+                      <option value="aggressive">Aggressive (Return & Promise)</option>
+                    </select>
+                    <p class="text-xs text-gray-500 mt-1">Adjusts scoring weights: Conservative emphasizes stability, Aggressive emphasizes returns</p>
+                  </div>
                 </div>
 
                 <!-- Info note -->
