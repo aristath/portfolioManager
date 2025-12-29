@@ -273,6 +273,89 @@ class SettingsModal extends HTMLElement {
                 </div>
               </div>
 
+              <!-- Enhanced Scenario Exploration Card -->
+              <div class="bg-gray-800 border border-gray-700 rounded p-4">
+                <h3 class="text-sm font-medium text-gray-400 uppercase tracking-wide mb-3">Enhanced Scenario Exploration</h3>
+                <p class="text-xs text-gray-500 mb-4">Advanced techniques for exploring more diverse and optimal trade sequences. Beam search maintains multiple candidates, diverse selection ensures variety, and multi-objective optimization balances multiple goals.</p>
+
+                <div class="space-y-4">
+                  <!-- Beam Width -->
+                  <div>
+                    <div class="flex items-center justify-between mb-2">
+                      <span class="text-sm text-gray-300">Beam Width</span>
+                      <span class="text-sm text-gray-400 font-mono"
+                            x-text="($store.app.settings.beam_width || 10)"></span>
+                    </div>
+                    <input type="range" min="1" max="50" step="1"
+                           :value="$store.app.settings.beam_width || 10"
+                           @input="$store.app.updateSetting('beam_width', parseInt($event.target.value) || 10)"
+                           class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">Number of top sequences to maintain during evaluation (1-50)</p>
+                  </div>
+
+                  <!-- Enable Diverse Selection -->
+                  <div>
+                    <label class="flex items-center gap-3 cursor-pointer">
+                      <input type="checkbox"
+                             :checked="($store.app.settings.enable_diverse_selection || 1) == 1"
+                             @change="$store.app.updateSetting('enable_diverse_selection', $event.target.checked ? 1 : 0)"
+                             class="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-800">
+                      <span class="text-sm text-gray-300">Enable Diverse Selection</span>
+                    </label>
+                    <p class="text-xs text-gray-500 mt-1 ml-7">Select opportunities from different countries/industries to ensure diversification</p>
+                  </div>
+
+                  <!-- Diversity Weight -->
+                  <div x-show="($store.app.settings.enable_diverse_selection || 1) == 1">
+                    <div class="flex items-center justify-between mb-2">
+                      <span class="text-sm text-gray-300">Diversity Weight</span>
+                      <span class="text-sm text-gray-400 font-mono"
+                            x-text="(($store.app.settings.diversity_weight || 0.3) * 100).toFixed(0) + '%'"></span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <span class="text-xs text-gray-500">Priority</span>
+                      <input type="range" min="0" max="1" step="0.05"
+                             :value="$store.app.settings.diversity_weight || 0.3"
+                             @input="$store.app.updateSetting('diversity_weight', parseFloat($event.target.value) || 0.3)"
+                             class="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500">
+                      <span class="text-xs text-gray-500">Diversity</span>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">Balance between priority and diversity (0% = pure priority, 100% = pure diversity)</p>
+                  </div>
+
+                  <!-- Cost Penalty Factor -->
+                  <div>
+                    <div class="flex items-center justify-between mb-2">
+                      <span class="text-sm text-gray-300">Cost Penalty Factor</span>
+                      <span class="text-sm text-gray-400 font-mono"
+                            x-text="(($store.app.settings.cost_penalty_factor || 0.1) * 100).toFixed(0) + '%'"></span>
+                    </div>
+                    <input type="range" min="0" max="1" step="0.05"
+                           :value="$store.app.settings.cost_penalty_factor || 0.1"
+                           @input="$store.app.updateSetting('cost_penalty_factor', parseFloat($event.target.value) || 0.1)"
+                           class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">Penalty applied to sequences with high transaction costs (0% = ignore costs, 100% = maximum penalty)</p>
+                  </div>
+
+                  <!-- Enable Multi-Objective -->
+                  <div>
+                    <label class="flex items-center gap-3 cursor-pointer">
+                      <input type="checkbox"
+                             :checked="($store.app.settings.enable_multi_objective || 0) == 1"
+                             @change="$store.app.updateSetting('enable_multi_objective', $event.target.checked ? 1 : 0)"
+                             class="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-800">
+                      <span class="text-sm text-gray-300">Enable Multi-Objective Optimization</span>
+                    </label>
+                    <p class="text-xs text-gray-500 mt-1 ml-7">Use Pareto frontier to balance score, diversification, risk, and cost simultaneously</p>
+                  </div>
+                </div>
+
+                <!-- Info note -->
+                <div class="mt-4 pt-3 border-t border-gray-700/50">
+                  <p class="text-xs text-gray-500">These features explore more scenarios to find optimal sequences. Higher beam width and enabled features may increase computation time.</p>
+                </div>
+              </div>
+
               <!-- Incremental Planner Card -->
               <div class="bg-gray-800 border border-gray-700 rounded p-4">
                 <h3 class="text-sm font-medium text-gray-400 uppercase tracking-wide mb-3">Incremental Planner</h3>
