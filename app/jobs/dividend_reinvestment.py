@@ -148,6 +148,7 @@ async def auto_reinvest_dividends() -> None:
             tradernet_client=client,
             currency_exchange_service=currency_exchange_service,
             exchange_rate_service=exchange_rate_service,
+            settings_repo=settings_repo,
         )
 
         # Get settings
