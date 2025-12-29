@@ -3503,9 +3503,8 @@ async def create_holistic_plan(
                 cash_generated=0.0,
                 feasible=True,
             )
-
-    # Get best sequence from beam (first one has highest score)
-    best_sequence, best_end_score, best_breakdown = beam[0]
+        # Get best sequence from beam (first one has highest score)
+        best_sequence, best_end_score, best_breakdown = beam[0]
     logger.info(
         f"Selected best sequence from beam of {len(beam)} (score: {best_end_score:.3f})"
     )
