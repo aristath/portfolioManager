@@ -271,6 +271,47 @@ class HolisticPlan:
 
 
 @dataclass
+class SequenceEvaluation:
+    """Multi-objective evaluation of a sequence."""
+
+    sequence: List["ActionCandidate"]
+    end_score: float  # Primary objective (0-1)
+    diversification_score: float  # Diversification (0-1)
+    risk_score: float  # Risk (0-1, higher = lower risk)
+    transaction_cost: float  # Total transaction cost in EUR
+    breakdown: Dict
+
+    def is_dominated_by(self, other: "SequenceEvaluation") -> bool:
+        """
+        Check if this sequence is Pareto-dominated by another.
+
+        A sequence is dominated if the other is better or equal in all objectives
+        and strictly better in at least one.
+
+        Args:
+            other: Another sequence evaluation to compare against
+
+        Returns:
+            True if this sequence is dominated by the other
+        """
+        # For end_score, diversification_score, risk_score: higher is better
+        # For transaction_cost: lower is better
+        better_or_equal = (
+            other.end_score >= self.end_score
+            and other.diversification_score >= self.diversification_score
+            and other.risk_score >= self.risk_score
+            and other.transaction_cost <= self.transaction_cost
+        )
+        strictly_better = (
+            other.end_score > self.end_score
+            or other.diversification_score > self.diversification_score
+            or other.risk_score > self.risk_score
+            or other.transaction_cost < self.transaction_cost
+        )
+        return better_or_equal and strictly_better
+
+
+@dataclass
 class ActionCandidate:
     """A candidate action for sequence generation."""
 
@@ -2204,6 +2245,11 @@ async def create_holistic_plan(
     cost_penalty_factor = await settings_repo.get_float("cost_penalty_factor", 0.1)
     cost_penalty_factor = max(0.0, min(1.0, cost_penalty_factor))  # Clamp to 0-1
 
+    # Get multi-objective optimization setting
+    enable_multi_objective = (
+        await settings_repo.get_float("enable_multi_objective", 0.0) == 1.0
+    )
+
     # Define async helper to evaluate a single sequence
     async def _evaluate_sequence(
         seq_idx: int,
@@ -2223,11 +2269,13 @@ async def create_holistic_plan(
             metrics_cache=metrics_cache,
         )
 
+        # Calculate transaction cost
+        total_cost = _calculate_transaction_cost(
+            sequence, transaction_cost_fixed, transaction_cost_percent
+        )
+
         # Apply transaction cost penalty if enabled
         if cost_penalty_factor > 0.0 and end_context.total_value > 0:
-            total_cost = _calculate_transaction_cost(
-                sequence, transaction_cost_fixed, transaction_cost_percent
-            )
             cost_penalty = (total_cost / end_context.total_value) * cost_penalty_factor
             end_score = max(0.0, end_score - cost_penalty)
             # breakdown is a dict, update it with transaction cost info
@@ -2236,6 +2284,23 @@ async def create_holistic_plan(
                 "cost_penalty": round(cost_penalty, 4),
                 "adjusted_score": round(end_score, 3),
             }
+
+        # Extract risk score from breakdown (stability score, normalized to 0-1)
+        stability_data = breakdown.get("stability")
+        if isinstance(stability_data, dict):
+            risk_score = stability_data.get("weighted_score", 0.5)
+            if not isinstance(risk_score, (int, float)):
+                risk_score = 0.5
+        else:
+            risk_score = 0.5
+
+        # Store multi-objective metrics in breakdown
+        breakdown["multi_objective"] = {  # type: ignore[assignment]
+            "end_score": round(end_score, 3),
+            "diversification_score": round(div_score.total / 100, 3),
+            "risk_score": round(risk_score, 3),
+            "transaction_cost": round(total_cost, 2),
+        }
 
         # Log sequence evaluation
         invested_value = sum(end_context.positions.values())
@@ -2261,9 +2326,11 @@ async def create_holistic_plan(
     plateau_threshold = 5  # Stop if no improvement in 5 consecutive sequences
 
     # Beam search: maintain top K sequences instead of just the best one
+    # If multi-objective, use SequenceEvaluation objects, otherwise use tuples
     beam: List[Tuple[List[ActionCandidate], float, Dict]] = (
         []
     )  # (sequence, score, breakdown)
+    beam_multi: List[SequenceEvaluation] = []  # Multi-objective beam
     best_end_score = 0.0
     plateau_count = 0
     evaluated_count = 0
@@ -2274,17 +2341,51 @@ async def create_holistic_plan(
         """Update beam with new sequence, keeping only top K."""
         nonlocal best_end_score
 
-        # Add to beam
-        beam.append((sequence, score, breakdown))
+        if enable_multi_objective:
+            # Multi-objective mode: use Pareto frontier
+            # Extract objectives from breakdown
+            mo_data = breakdown.get("multi_objective", {})
+            div_score = mo_data.get("diversification_score", 0.5)
+            risk_score = mo_data.get("risk_score", 0.5)
+            trans_cost = mo_data.get("transaction_cost", 0.0)
 
-        # Sort by score descending and keep only top K
-        beam.sort(key=lambda x: x[1], reverse=True)
-        if len(beam) > beam_width:
-            beam[:] = beam[:beam_width]
+            eval_obj = SequenceEvaluation(
+                sequence=sequence,
+                end_score=score,
+                diversification_score=div_score,
+                risk_score=risk_score,
+                transaction_cost=trans_cost,
+                breakdown=breakdown,
+            )
 
-        # Update best score
-        if score > best_end_score:
-            best_end_score = score
+            # Remove dominated sequences
+            beam_multi[:] = [e for e in beam_multi if not e.is_dominated_by(eval_obj)]
+
+            # Add new evaluation if not dominated
+            if not any(eval_obj.is_dominated_by(e) for e in beam_multi):
+                beam_multi.append(eval_obj)
+
+            # Keep only top K by end_score (primary objective)
+            beam_multi.sort(key=lambda x: x.end_score, reverse=True)
+            if len(beam_multi) > beam_width:
+                beam_multi[:] = beam_multi[:beam_width]
+
+            # Update best score
+            if score > best_end_score:
+                best_end_score = score
+        else:
+            # Single-objective mode: simple beam
+            # Add to beam
+            beam.append((sequence, score, breakdown))
+
+            # Sort by score descending and keep only top K
+            beam.sort(key=lambda x: x[1], reverse=True)
+            if len(beam) > beam_width:
+                beam[:] = beam[:beam_width]
+
+            # Update best score
+            if score > best_end_score:
+                best_end_score = score
 
     for batch_start in range(0, len(sequence_results_sorted), batch_size):
         batch_end = min(batch_start + batch_size, len(sequence_results_sorted))
@@ -2303,21 +2404,44 @@ async def create_holistic_plan(
         for seq_idx, sequence, end_score, breakdown in batch_results:
             evaluated_count += 1
 
-            # Check if this sequence would improve the beam
-            if len(beam) < beam_width or end_score > beam[-1][1]:
+            if enable_multi_objective:
+                # Multi-objective: always try to update beam (Pareto frontier)
+                old_size = len(beam_multi)
                 _update_beam(sequence, end_score, breakdown)
-                beam_updated = True
-                if end_score > best_end_score:
-                    plateau_count = 0
-                    logger.info(
-                        f"Sequence {seq_idx+1} -> NEW BEST (score: {end_score:.3f}, beam size: {len(beam)})"
-                    )
+                new_size = len(beam_multi)
+                if new_size > old_size or any(
+                    e.end_score > best_end_score for e in beam_multi
+                ):
+                    beam_updated = True
+                    if end_score > best_end_score:
+                        plateau_count = 0
+                        logger.info(
+                            f"Sequence {seq_idx+1} -> NEW BEST (score: {end_score:.3f}, "
+                            f"Pareto frontier size: {len(beam_multi)})"
+                        )
+                    else:
+                        logger.debug(
+                            f"Sequence {seq_idx+1} added to Pareto frontier "
+                            f"(score: {end_score:.3f}, frontier size: {len(beam_multi)})"
+                        )
                 else:
-                    logger.debug(
-                        f"Sequence {seq_idx+1} added to beam (score: {end_score:.3f}, beam size: {len(beam)})"
-                    )
+                    plateau_count += 1
             else:
-                plateau_count += 1
+                # Single-objective: check if this sequence would improve the beam
+                if len(beam) < beam_width or end_score > beam[-1][1]:
+                    _update_beam(sequence, end_score, breakdown)
+                    beam_updated = True
+                    if end_score > best_end_score:
+                        plateau_count = 0
+                        logger.info(
+                            f"Sequence {seq_idx+1} -> NEW BEST (score: {end_score:.3f}, beam size: {len(beam)})"
+                        )
+                    else:
+                        logger.debug(
+                            f"Sequence {seq_idx+1} added to beam (score: {end_score:.3f}, beam size: {len(beam)})"
+                        )
+                else:
+                    plateau_count += 1
 
         # Early termination check: beam has converged if no improvement in beam
         if (
@@ -2325,25 +2449,50 @@ async def create_holistic_plan(
             and not beam_updated
             and plateau_count >= plateau_threshold
         ):
+            beam_size = len(beam_multi) if enable_multi_objective else len(beam)
             logger.info(
                 f"Early termination: Beam converged (no improvement in {plateau_count} consecutive sequences, "
-                f"evaluated {evaluated_count}/{len(sequence_results_sorted)}, beam size: {len(beam)})"
+                f"evaluated {evaluated_count}/{len(sequence_results_sorted)}, beam size: {beam_size})"
             )
             break
 
     # Select best sequence from beam
-    if not beam:
-        return HolisticPlan(
-            steps=[],
-            current_score=current_score.total,
-            end_state_score=current_score.total,
-            improvement=0.0,
-            narrative_summary="No beneficial actions identified.",
-            score_breakdown={},
-            cash_required=0.0,
-            cash_generated=0.0,
-            feasible=True,
+    if enable_multi_objective:
+        if not beam_multi:
+            return HolisticPlan(
+                steps=[],
+                current_score=current_score.total,
+                end_state_score=current_score.total,
+                improvement=0.0,
+                narrative_summary="No beneficial actions identified.",
+                score_breakdown={},
+                cash_required=0.0,
+                cash_generated=0.0,
+                feasible=True,
+            )
+        # Select best from Pareto frontier (highest end_score)
+        best_eval = beam_multi[0]
+        best_sequence = best_eval.sequence
+        best_end_score = best_eval.end_score
+        best_breakdown = best_eval.breakdown
+        logger.info(
+            f"Selected best sequence from Pareto frontier of {len(beam_multi)} "
+            f"(score: {best_end_score:.3f}, div: {best_eval.diversification_score:.3f}, "
+            f"risk: {best_eval.risk_score:.3f}, cost: €{best_eval.transaction_cost:.2f})"
         )
+    else:
+        if not beam:
+            return HolisticPlan(
+                steps=[],
+                current_score=current_score.total,
+                end_state_score=current_score.total,
+                improvement=0.0,
+                narrative_summary="No beneficial actions identified.",
+                score_breakdown={},
+                cash_required=0.0,
+                cash_generated=0.0,
+                feasible=True,
+            )
 
     # Get best sequence from beam (first one has highest score)
     best_sequence, best_end_score, best_breakdown = beam[0]
