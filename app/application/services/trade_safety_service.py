@@ -13,7 +13,7 @@ from app.domain.repositories.protocols import (
 )
 from app.domain.value_objects.trade_side import TradeSide
 from app.infrastructure.external.tradernet import TradernetClient
-from app.infrastructure.market_hours import is_market_open
+from app.infrastructure.market_hours import is_market_open, should_check_market_hours
 
 logger = logging.getLogger(__name__)
 
@@ -153,8 +153,8 @@ class TradeSafetyService:
         Raises:
             HTTPException: If raise_on_error=True and validation fails
         """
-        # Check market hours first (applies to both BUY and SELL)
-        market_hours_error = await self.check_market_hours(symbol)
+        # Check market hours first (if required for this trade)
+        market_hours_error = await self.check_market_hours(symbol, side)
         if market_hours_error:
             if raise_on_error:
                 raise HTTPException(status_code=400, detail=market_hours_error)
@@ -187,15 +187,16 @@ class TradeSafetyService:
 
         return True, None
 
-    async def check_market_hours(self, symbol: str) -> Optional[str]:
+    async def check_market_hours(self, symbol: str, side: str) -> Optional[str]:
         """
-        Check if the stock's market is currently open.
+        Check if the stock's market is currently open (if required for this trade).
 
         Args:
             symbol: Stock symbol to check
+            side: Trade side (BUY or SELL)
 
         Returns:
-            Error message if market is closed, None if open or check failed
+            Error message if market is closed, None if open, check not required, or check failed
         """
         try:
             stock = await self._stock_repo.get_by_symbol(symbol)
@@ -208,6 +209,11 @@ class TradeSafetyService:
             exchange = getattr(stock, "fullExchangeName", None)
             if not exchange:
                 logger.warning(f"Stock {symbol} has no exchange set. Allowing trade.")
+                return None
+
+            # Check if market hours validation is required for this trade
+            if not should_check_market_hours(exchange, side):
+                # Market hours check not required (e.g., BUY order on flexible hours market)
                 return None
 
             if not is_market_open(exchange):
