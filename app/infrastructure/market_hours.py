@@ -43,6 +43,11 @@ EXCHANGE_NAME_TO_CODE = {
 # Cache of available exchange_calendars codes
 _AVAILABLE_CALENDARS: Optional[set[str]] = None
 
+# Exchanges that require strict market hours checks for all orders (both BUY and SELL)
+# These markets do not accept orders when closed
+# Can be extended in the future for Middle East or other markets with similar restrictions
+STRICT_MARKET_HOURS_EXCHANGE_CODES = {"XHKG", "XSHG", "XTSE", "XASX"}
+
 
 def _get_available_calendars() -> set[str]:
     """Get set of all available exchange_calendars codes (cached)."""
@@ -119,6 +124,20 @@ def _get_exchange_code(full_exchange_name: str) -> str:
     return exchange_code
 
 
+def requires_strict_market_hours(full_exchange_name: str) -> bool:
+    """
+    Check if an exchange requires strict market hours (all orders only when market is open).
+
+    Args:
+        full_exchange_name: Exchange name from database (e.g., "NYSE", "HKSE", "XETRA")
+
+    Returns:
+        True if the exchange requires strict market hours, False otherwise
+    """
+    exchange_code = _get_exchange_code(full_exchange_name)
+    return exchange_code in STRICT_MARKET_HOURS_EXCHANGE_CODES
+
+
 @lru_cache(maxsize=10)
 def get_calendar(full_exchange_name: str) -> Any:
     """
@@ -132,6 +151,30 @@ def get_calendar(full_exchange_name: str) -> Any:
     """
     exchange_code = _get_exchange_code(full_exchange_name)
     return xcals.get_calendar(exchange_code)
+
+
+def should_check_market_hours(full_exchange_name: str, side: str) -> bool:
+    """
+    Determine if market hours check is required for a trade.
+
+    Rules:
+    - SELL orders: Always check market hours (all markets)
+    - BUY orders: Only check if exchange requires strict market hours
+
+    Args:
+        full_exchange_name: Exchange name from database (e.g., "NYSE", "HKSE", "XETRA")
+        side: Trade side ("BUY" or "SELL")
+
+    Returns:
+        True if market hours check is required, False otherwise
+    """
+    side_upper = side.upper()
+    if side_upper == "SELL":
+        return True
+    if side_upper == "BUY":
+        return requires_strict_market_hours(full_exchange_name)
+    # Unknown side, default to checking (safe default)
+    return True
 
 
 def is_market_open(full_exchange_name: str) -> bool:
