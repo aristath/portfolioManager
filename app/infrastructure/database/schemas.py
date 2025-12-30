@@ -734,6 +734,7 @@ CREATE TABLE IF NOT EXISTS portfolio_snapshots (
     geo_asia_pct REAL,
     geo_us_pct REAL,
     position_count INTEGER,
+    annual_turnover REAL,
     created_at TEXT NOT NULL
 );
 
