@@ -133,7 +133,7 @@ async def init_scheduler() -> AsyncIOScheduler:
     from app.jobs.maintenance import run_daily_maintenance, run_weekly_maintenance
     from app.jobs.planner_batch import process_planner_batch_job
     from app.jobs.stock_discovery import discover_new_stocks
-    from app.jobs.stocks_data_sync import run_daily_pipeline
+    from app.jobs.stocks_data_sync import run_stocks_data_sync
     from app.jobs.sync_cycle import run_sync_cycle
     from app.jobs.universe_pruning import prune_universe
 
@@ -174,7 +174,7 @@ async def init_scheduler() -> AsyncIOScheduler:
     # Handles: historical data sync, metrics calculation, score refresh
     # Processes stocks sequentially, only those not synced in 24 hours
     scheduler.add_job(
-        run_daily_pipeline,
+        run_stocks_data_sync,
         IntervalTrigger(hours=1),
         id="stocks_data_sync",
         name="Stocks Data Sync",
