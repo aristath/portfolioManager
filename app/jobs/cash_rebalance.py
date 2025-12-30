@@ -74,9 +74,24 @@ async def _validate_next_action(
     cash_balance: float,
     min_trade_size: float,
     trade_repo,
+    settings_repo,
 ) -> bool:
-    """Validate next action against P&L guardrails, cash, and recent orders."""
+    """Validate next action against P&L guardrails, cash, recent orders, and frequency limits."""
     from app.domain.value_objects.trade_side import TradeSide
+
+    # Check trade frequency limits
+    if settings_repo:
+        from app.application.services.trade_frequency_service import (
+            TradeFrequencyService,
+        )
+
+        frequency_service = TradeFrequencyService(trade_repo, settings_repo)
+        can_trade, reason = await frequency_service.can_execute_trade()
+        if not can_trade:
+            logger.info(
+                f"{next_action.side} {next_action.symbol} blocked by frequency limit: {reason}"
+            )
+            return False
 
     if next_action.side == TradeSide.SELL and not pnl_status["can_sell"]:
         logger.info(
@@ -327,7 +342,12 @@ async def _check_and_rebalance_internal():
             return
 
         if not await _validate_next_action(
-            next_action, pnl_status, cash_balance, min_trade_size, trade_repo
+            next_action,
+            pnl_status,
+            cash_balance,
+            min_trade_size,
+            trade_repo,
+            settings_repo,
         ):
             emit(SystemEvent.REBALANCE_COMPLETE)
             await _refresh_recommendation_cache()

@@ -81,6 +81,25 @@ async def _run_event_based_trading_loop_internal():
                 await asyncio.sleep(300)  # Wait 5 minutes before retrying
                 continue
 
+            # Step 3.5: Check trade frequency limits
+            set_processing("CHECKING FREQUENCY LIMITS...")
+            from app.application.services.trade_frequency_service import (
+                TradeFrequencyService,
+            )
+            from app.repositories import SettingsRepository, TradeRepository
+
+            trade_repo = TradeRepository()
+            settings_repo = SettingsRepository()
+            frequency_service = TradeFrequencyService(trade_repo, settings_repo)
+            can_execute_frequency, frequency_reason = (
+                await frequency_service.can_execute_trade()
+            )
+
+            if not can_execute_frequency:
+                logger.warning(f"Trade blocked by frequency limit: {frequency_reason}")
+                await asyncio.sleep(300)  # Wait 5 minutes before retrying
+                continue
+
             # Step 4: Check if trade can execute (market hours)
             set_processing("CHECKING MARKET HOURS...")
             can_execute, reason = await _can_execute_trade(recommendation)

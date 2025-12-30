@@ -624,6 +624,31 @@ class TradeExecutionService:
         Returns:
             List of execution results with status for each trade
         """
+        # Check trade frequency limits
+        if self._settings_repo:
+            from app.application.services.trade_frequency_service import (
+                TradeFrequencyService,
+            )
+
+            frequency_service = TradeFrequencyService(
+                self._trade_repo, self._settings_repo
+            )
+            can_trade, reason = await frequency_service.can_execute_trade()
+            if not can_trade:
+                logger.warning(f"Trade blocked by frequency limit: {reason}")
+                error_msg = "TRADE FREQUENCY LIMIT"
+                emit(SystemEvent.ERROR_OCCURRED, message=error_msg)
+                set_error(error_msg)
+                # Return blocked result for all trades
+                return [
+                    {
+                        "symbol": trade.symbol,
+                        "status": "blocked",
+                        "error": reason,
+                    }
+                    for trade in trades
+                ]
+
         client = self._tradernet_client
 
         if not client.is_connected:
