@@ -261,13 +261,13 @@ class ConstraintsManager:
         """
         Build country and industry sector constraints.
 
-        Uses custom groups from DB if available, otherwise falls back to hardcoded mappings.
-        This reduces constraint complexity and improves optimizer feasibility.
+        Accepts group targets directly (no aggregation needed).
+        Maps stocks to groups and creates constraints for groups with targets.
 
         Args:
             stocks: List of Stock objects
-            country_targets: Dict mapping country name to target weight
-            ind_targets: Dict mapping industry name to target weight
+            country_targets: Dict mapping group name to target weight (already at group level)
+            ind_targets: Dict mapping group name to target weight (already at group level)
 
         Returns:
             Tuple of (country_constraints, industry_constraints)
@@ -287,17 +287,9 @@ class ConstraintsManager:
                 territory_groups[territory] = []
             territory_groups[territory].append(stock.symbol)
 
-        # Aggregate country targets to territory/group targets
-        territory_targets: Dict[str, float] = {}
-        for country, target in country_targets.items():
-            territory = country_to_group.get(country, "OTHER")
-            territory_targets[territory] = (
-                territory_targets.get(territory, 0.0) + target
-            )
-
         logger.info(
-            f"Grouped {len(country_targets)} country targets into {len(territory_targets)} groups: "
-            f"{', '.join(f'{t}={v:.1%}' for t, v in sorted(territory_targets.items()) if v > 0)}"
+            f"Grouped stocks into {len(territory_groups)} country groups: "
+            f"{', '.join(f'{t}={len(s)} stocks' for t, s in sorted(territory_groups.items()))}"
         )
 
         # Get industry to group mapping (custom from DB or hardcoded fallback)
@@ -315,54 +307,22 @@ class ConstraintsManager:
                 industry_group_groups[industry_group] = []
             industry_group_groups[industry_group].append(stock.symbol)
 
-        # Aggregate industry targets to industry group targets
-        industry_group_targets: Dict[str, float] = {}
-        for industry, target in ind_targets.items():
-            industry_group = industry_to_group.get(industry, "OTHER")
-            industry_group_targets[industry_group] = (
-                industry_group_targets.get(industry_group, 0.0) + target
-            )
-
         logger.info(
-            f"Grouped {len(ind_targets)} industry targets into {len(industry_group_targets)} groups: "
-            f"{', '.join(f'{g}={v:.1%}' for g, v in sorted(industry_group_targets.items()) if v > 0)}"
+            f"Grouped stocks into {len(industry_group_groups)} industry groups: "
+            f"{', '.join(f'{g}={len(s)} stocks' for g, s in sorted(industry_group_groups.items()))}"
         )
 
         # Use territory groups and industry group groups for constraints
+        # Targets are already at group level, no aggregation needed
         country_groups = territory_groups
         ind_groups = industry_group_groups
-        country_targets = territory_targets
-        ind_targets = industry_group_targets
-
-        # Normalize country group targets to sum to 100%
-        # Note: Individual targets are already normalized by the repository,
-        # but after grouping, group targets may not sum to 100% if some
-        # countries are not in any group (they go to "OTHER").
-        # Only normalize targets for groups that actually have stocks
-        country_targets_for_active_groups = {
-            country: country_targets.get(country, 0.0)
-            for country in country_groups.keys()
-            if country_targets.get(country, 0.0) > 0
-        }
-        country_sum = sum(country_targets_for_active_groups.values())
-        if country_sum > 0:
-            country_targets_normalized = {
-                k: v / country_sum for k, v in country_targets_for_active_groups.items()
-            }
-            # Merge back with original targets (keep zero targets as zero)
-            country_targets_normalized = {
-                country: country_targets_normalized.get(
-                    country, country_targets.get(country, 0.0)
-                )
-                for country in country_groups.keys()
-            }
-        else:
-            country_targets_normalized = country_targets
 
         # Build country constraints
+        # Targets are already at group level, no normalization needed
+        # Groups should sum to 100% at user level
         country_constraints = []
         for country, symbols in country_groups.items():
-            target = country_targets_normalized.get(country, 0.0)
+            target = country_targets.get(country, 0.0)
             if target > 0:
                 # Calculate tolerance-based bounds
                 tolerance_upper = min(1.0, target + self.geo_tolerance)
@@ -400,33 +360,12 @@ class ConstraintsManager:
                 f"Country constraints sum: min={country_min_sum:.2%}, max={country_max_sum_final:.2%}"
             )
 
-        # Normalize industry group targets to sum to 100%
-        # Note: Individual targets are already normalized by the repository,
-        # but after grouping, group targets may not sum to 100% if some
-        # industries are not in any group (they go to "OTHER").
-        # Only normalize targets for groups that actually have stocks
-        ind_targets_for_active_groups = {
-            ind: ind_targets.get(ind, 0.0)
-            for ind in ind_groups.keys()
-            if ind_targets.get(ind, 0.0) > 0
-        }
-        ind_sum = sum(ind_targets_for_active_groups.values())
-        if ind_sum > 0:
-            ind_targets_normalized = {
-                k: v / ind_sum for k, v in ind_targets_for_active_groups.items()
-            }
-            # Merge back with original targets (keep zero targets as zero)
-            ind_targets_normalized = {
-                ind: ind_targets_normalized.get(ind, ind_targets.get(ind, 0.0))
-                for ind in ind_groups.keys()
-            }
-        else:
-            ind_targets_normalized = ind_targets
-
         # Build industry constraints
+        # Targets are already at group level, no normalization needed
+        # Groups should sum to 100% at user level
         # First, count how many industries will have constraints
         industries_with_targets = [
-            ind for ind in ind_groups.keys() if ind_targets_normalized.get(ind, 0.0) > 0
+            ind for ind in ind_groups.keys() if ind_targets.get(ind, 0.0) > 0
         ]
         num_industry_constraints = len(industries_with_targets)
 
@@ -453,7 +392,7 @@ class ConstraintsManager:
 
         ind_constraints = []
         for ind, symbols in ind_groups.items():
-            target = ind_targets_normalized.get(ind, 0.0)
+            target = ind_targets.get(ind, 0.0)
             if target > 0:
                 # Calculate tolerance-based bounds
                 tolerance_upper = min(1.0, target + self.ind_tolerance)
