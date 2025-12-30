@@ -65,6 +65,7 @@ document.addEventListener('alpine:init', () => {
     showEditStockModal: false,
     showStockChart: false,
     showSettingsModal: false,
+    showUniverseManagementModal: false,
     selectedStockSymbol: null,
     editingStock: null,
     executingSymbol: null,
@@ -84,7 +85,8 @@ document.addEventListener('alpine:init', () => {
       industrySave: false,
       stockSave: false,
       refreshData: false,
-      logs: false
+      logs: false,
+      universeSuggestions: false
     },
 
     // SSE connections
@@ -101,6 +103,14 @@ document.addEventListener('alpine:init', () => {
     // Add Stock Form
     newStock: { identifier: '' },
     addingStock: false,
+
+    // Universe Management
+    universeSuggestions: {
+      candidatesToAdd: [],
+      stocksToPrune: []
+    },
+    addingFromSuggestion: {},  // Track per-symbol: { 'AAPL.US': true }
+    pruningFromSuggestion: {},  // Track per-symbol: { 'XYZ.US': true }
 
     // Fetch All Data
     async fetchAll() {
@@ -687,6 +697,63 @@ document.addEventListener('alpine:init', () => {
       } catch (e) {
         this.showMessage('Failed to remove stock', 'error');
       }
+    },
+
+    // Universe Management
+    async openUniverseManagementModal() {
+      this.showUniverseManagementModal = true;
+      await this.fetchUniverseSuggestions();
+    },
+
+    async fetchUniverseSuggestions() {
+      this.loading.universeSuggestions = true;
+      try {
+        const data = await API.fetchUniverseSuggestions();
+        this.universeSuggestions = {
+          candidatesToAdd: data.candidates_to_add || [],
+          stocksToPrune: data.stocks_to_prune || []
+        };
+      } catch (e) {
+        this.showMessage('Failed to fetch universe suggestions', 'error');
+        console.error('Failed to fetch universe suggestions:', e);
+      }
+      this.loading.universeSuggestions = false;
+    },
+
+    async addStockFromSuggestion(symbol) {
+      this.addingFromSuggestion[symbol] = true;
+      try {
+        await API.addStockFromSuggestion(symbol);
+        this.showMessage(`${symbol} added to universe`, 'success');
+        // Remove from candidates list
+        this.universeSuggestions.candidatesToAdd = this.universeSuggestions.candidatesToAdd.filter(
+          c => c.symbol !== symbol
+        );
+        // Refresh stocks list
+        await this.fetchStocks();
+      } catch (e) {
+        const errorMessage = e.message || 'Failed to add stock';
+        this.showMessage(errorMessage, 'error');
+      }
+      this.addingFromSuggestion[symbol] = false;
+    },
+
+    async pruneStockFromSuggestion(symbol) {
+      this.pruningFromSuggestion[symbol] = true;
+      try {
+        await API.pruneStockFromSuggestion(symbol);
+        this.showMessage(`${symbol} pruned from universe`, 'success');
+        // Remove from prune list
+        this.universeSuggestions.stocksToPrune = this.universeSuggestions.stocksToPrune.filter(
+          s => s.symbol !== symbol
+        );
+        // Refresh stocks list
+        await this.fetchStocks();
+      } catch (e) {
+        const errorMessage = e.message || 'Failed to prune stock';
+        this.showMessage(errorMessage, 'error');
+      }
+      this.pruningFromSuggestion[symbol] = false;
     },
 
     openEditStock(stock) {
