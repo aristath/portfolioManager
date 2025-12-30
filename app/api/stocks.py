@@ -300,6 +300,11 @@ async def get_universe_suggestions(
                 == 1.0
             )
 
+            logger.info(
+                f"Pruning criteria: threshold={score_threshold}, months={months}, "
+                f"min_samples={min_samples}, check_delisted={check_delisted}"
+            )
+
             # Get all active stocks
             stocks = await stock_repo.get_all_active()
             logger.info(f"Checking {len(stocks)} active stocks for pruning")
@@ -319,7 +324,7 @@ async def get_universe_suggestions(
 
                         # Check minimum samples requirement
                         if len(scores) < min_samples:
-                            logger.debug(
+                            logger.info(
                                 f"Stock {stock.symbol}: only {len(scores)} score(s), "
                                 f"below minimum {min_samples}, skipping"
                             )
@@ -330,19 +335,23 @@ async def get_universe_suggestions(
                             s.total_score for s in scores if s.total_score is not None
                         ]
                         if not total_scores:
-                            logger.debug(
+                            logger.info(
                                 f"Stock {stock.symbol}: no valid scores found, skipping"
                             )
                             continue
 
                         avg_score = sum(total_scores) / len(total_scores)
-                        logger.debug(
+                        logger.info(
                             f"Stock {stock.symbol}: average score {avg_score:.3f} "
                             f"(threshold: {score_threshold}, samples: {len(scores)})"
                         )
 
                         # Check if average score is below threshold
                         if avg_score >= score_threshold:
+                            logger.info(
+                                f"Stock {stock.symbol}: average score {avg_score:.3f} "
+                                f"above threshold {score_threshold}, keeping"
+                            )
                             continue
 
                         # Check if stock is delisted (if enabled)
@@ -365,6 +374,11 @@ async def get_universe_suggestions(
 
                         # Add to prune list if criteria met
                         if is_delisted or avg_score < score_threshold:
+                            logger.info(
+                                f"Stock {stock.symbol} meets pruning criteria: "
+                                f"avg_score={avg_score:.3f}, threshold={score_threshold}, "
+                                f"is_delisted={is_delisted}"
+                            )
                             # Get current score
                             current_score_obj = await score_repo.get_by_symbol(
                                 stock.symbol
