@@ -149,6 +149,11 @@ async def _step_rebalance_negative_balances():
         cash_balances = {cb.currency: cb.amount for cb in cash_balances_raw}
         has_negative = any(balance < 0 for balance in cash_balances.values())
 
+        logger.info(
+            f"Negative balance check: has_negative={has_negative}, "
+            f"balances={cash_balances}"
+        )
+
         if not has_negative:
             # Check for currencies below minimum
             trading_currencies = set()

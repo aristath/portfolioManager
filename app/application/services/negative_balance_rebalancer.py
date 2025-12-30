@@ -265,6 +265,144 @@ class NegativeBalanceRebalancer:
         if not remaining_shortfalls:
             return
 
+        # Check trading mode - skip execution in research mode
+        settings_repo = SettingsRepository()
+        trading_mode = await get_trading_mode(settings_repo)
+        if trading_mode == "research":
+            logger.info(
+                "Research mode: Emergency position sales recommended but NOT executed "
+                "(shown in UI only)"
+            )
+            # Still create recommendations for UI display, but don't execute
+            # Get open markets for recommendation purposes
+            open_markets = await get_open_markets()
+            if not open_markets:
+                logger.warning("No markets are open, cannot recommend position sales")
+                return
+
+            # Get positions with allow_sell=True
+            positions = await self._position_repo.get_with_stock_info()
+            sellable_positions = [
+                pos
+                for pos in positions
+                if pos.get("allow_sell", False)
+                and is_market_open(pos.get("fullExchangeName", ""))
+            ]
+
+            if not sellable_positions:
+                logger.warning("No sellable positions available in open markets")
+                return
+
+            # Calculate total cash needed in EUR (convert all shortfalls to EUR)
+            total_needed_eur = 0.0
+            for currency, shortfall in remaining_shortfalls.items():
+                try:
+                    rate = await self._exchange_rate_service.get_rate(currency, "EUR")
+                    if rate > 0:
+                        total_needed_eur += shortfall / rate
+                    else:
+                        total_needed_eur += shortfall  # Fallback: assume 1:1
+                except Exception:
+                    total_needed_eur += shortfall  # Fallback: assume 1:1
+
+            # Select positions to sell (simple: sell from largest positions first)
+            sell_recommendations: List[Recommendation] = []
+            total_sell_value = 0.0
+
+            for pos in sorted(
+                sellable_positions,
+                key=lambda p: p.get("market_value_eur", 0),
+                reverse=True,
+            ):
+                if total_sell_value >= total_needed_eur * 1.1:  # 10% buffer
+                    break
+
+                symbol = pos["symbol"]
+                name = pos.get("name", symbol)
+                quantity = pos["quantity"]
+                current_price = pos.get("current_price", pos.get("avg_price", 0))
+                currency = pos.get("currency", "EUR")
+
+                # Calculate exchange rate for position currency
+                rate = 1.0
+                try:
+                    rate = await self._exchange_rate_service.get_rate(currency, "EUR")
+                    if rate <= 0:
+                        rate = 1.0
+                except Exception:
+                    rate = 1.0
+
+                # Sell partial position if needed
+                position_value = pos.get("market_value_eur", 0)
+                sell_value_eur = min(
+                    position_value, (total_needed_eur - total_sell_value) * 1.1
+                )
+                sell_value_in_currency = sell_value_eur / rate
+                sell_quantity = min(
+                    quantity,
+                    (
+                        sell_value_in_currency / current_price
+                        if current_price > 0
+                        else quantity
+                    ),
+                )
+
+                if sell_quantity > 0:
+                    # Convert currency string to Currency enum
+                    try:
+                        currency_enum = Currency(currency.upper())
+                    except (ValueError, AttributeError):
+                        currency_enum = Currency.EUR  # Fallback to EUR
+
+                    recommendation = Recommendation(
+                        symbol=symbol,
+                        name=name,
+                        side=TradeSide.SELL,
+                        quantity=sell_quantity,
+                        estimated_price=current_price,
+                        estimated_value=sell_value_in_currency,
+                        reason="Emergency rebalancing: negative cash balance",
+                        currency=currency_enum,
+                    )
+                    sell_recommendations.append(recommendation)
+                    total_sell_value += sell_value_eur
+
+            if sell_recommendations:
+                # Store emergency recommendations in database for UI visibility
+                # Use special portfolio_hash prefix to mark them as emergency
+                emergency_portfolio_hash = "EMERGENCY:negative_balance_rebalancing"
+                for rec in sell_recommendations:
+                    try:
+                        await self._recommendation_repo.create_or_update(
+                            {
+                                "symbol": rec.symbol,
+                                "name": rec.name,
+                                "side": rec.side.value,
+                                "quantity": rec.quantity,
+                                "estimated_price": rec.estimated_price,
+                                "estimated_value": rec.estimated_value,
+                                "reason": rec.reason,
+                                "currency": (
+                                    rec.currency.value
+                                    if hasattr(rec.currency, "value")
+                                    else str(rec.currency)
+                                ),
+                                "priority": 999.0,  # High priority for emergency
+                                "current_portfolio_score": 0.0,
+                                "new_portfolio_score": 0.0,
+                                "score_change": 0.0,
+                            },
+                            emergency_portfolio_hash,
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to store emergency recommendation: {e}")
+
+                logger.info(
+                    f"Research mode: {len(sell_recommendations)} emergency sales "
+                    f"recommended (not executed, shown in UI only)"
+                )
+            return
+
         # Get open markets
         open_markets = await get_open_markets()
         if not open_markets:
@@ -297,7 +435,7 @@ class NegativeBalanceRebalancer:
                 total_needed_eur += shortfall  # Fallback: assume 1:1
 
         # Select positions to sell (simple: sell from largest positions first)
-        sell_recommendations: List[Recommendation] = []
+        sell_recommendations_live: List[Recommendation] = []
         total_sell_value = 0.0
 
         for pos in sorted(
@@ -353,19 +491,19 @@ class NegativeBalanceRebalancer:
                     reason="Emergency rebalancing: negative cash balance",
                     currency=currency_enum,
                 )
-                sell_recommendations.append(recommendation)
+                sell_recommendations_live.append(recommendation)
                 total_sell_value += sell_value_eur
 
-        if sell_recommendations:
+        if sell_recommendations_live:
             logger.info(
-                f"Executing {len(sell_recommendations)} emergency sales to cover "
+                f"Executing {len(sell_recommendations_live)} emergency sales to cover "
                 f"negative balances (bypassing cooldown and min-hold checks)"
             )
 
             # Store emergency recommendations in database for UI visibility
             # Use special portfolio_hash prefix to mark them as emergency
             emergency_portfolio_hash = "EMERGENCY:negative_balance_rebalancing"
-            for rec in sell_recommendations:
+            for rec in sell_recommendations_live:
                 try:
                     await self._recommendation_repo.create_or_update(
                         {
@@ -392,17 +530,32 @@ class NegativeBalanceRebalancer:
                     logger.warning(f"Failed to store emergency recommendation: {e}")
 
             # Execute with bypass flags (emergency rebalancing)
+            # Check trading mode again before execution
+            settings_repo = SettingsRepository()
+            trading_mode = await get_trading_mode(settings_repo)
+
+            if trading_mode == "research":
+                logger.info(
+                    "Research mode: Emergency sales recommended but NOT executed "
+                    "(shown in UI only)"
+                )
+                # Don't execute or mark as executed in research mode
+                return
+
             results = await self._trade_execution_service.execute_trades(
-                sell_recommendations,
+                sell_recommendations_live,
                 bypass_cooldown=True,
                 bypass_min_hold=True,
                 bypass_frequency_limit=True,
             )
 
             # Mark emergency recommendations as executed for successful trades
+            # Only in live mode (research mode already returned above)
             for i, result in enumerate(results):
-                if result.get("status") == "success" and i < len(sell_recommendations):
-                    rec = sell_recommendations[i]
+                if result.get("status") == "success" and i < len(
+                    sell_recommendations_live
+                ):
+                    rec = sell_recommendations_live[i]
                     try:
                         matching_recs = (
                             await self._recommendation_repo.find_matching_for_execution(
