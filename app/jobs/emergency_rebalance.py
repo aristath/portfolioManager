@@ -1,0 +1,117 @@
+"""Emergency rebalancing - executes immediately when negative balances detected.
+
+This module provides immediate execution of emergency rebalancing when negative
+cash balances are detected. It should be called after any operation that might
+affect cash balances (portfolio sync, trade execution, etc.).
+"""
+
+import logging
+
+from app.application.services.negative_balance_rebalancer import (
+    NegativeBalanceRebalancer,
+)
+from app.application.services.trade_execution_service import TradeExecutionService
+from app.infrastructure.database.manager import get_db_manager
+from app.infrastructure.dependencies import (
+    get_currency_exchange_service_dep,
+    get_exchange_rate_service,
+    get_tradernet_client,
+)
+from app.repositories import (
+    PositionRepository,
+    RecommendationRepository,
+    StockRepository,
+    TradeRepository,
+)
+
+logger = logging.getLogger(__name__)
+
+
+async def check_and_rebalance_immediately() -> bool:
+    """
+    Check for negative balances and rebalance immediately if detected.
+
+    This function executes immediately when called - no waiting, no scheduling.
+    Should be called after operations that might affect cash balances.
+
+    Returns:
+        True if rebalancing was needed and executed, False otherwise
+    """
+    try:
+        client = get_tradernet_client()
+        if not client.is_connected:
+            if not client.connect():
+                logger.warning(
+                    "Cannot connect to Tradernet for emergency rebalancing check"
+                )
+                return False
+
+        # Check if there are any negative balances or currencies below minimum
+        cash_balances_raw = client.get_cash_balances()
+        cash_balances = {cb.currency: cb.amount for cb in cash_balances_raw}
+        has_negative = any(balance < 0 for balance in cash_balances.values())
+
+        if not has_negative:
+            # Check for currencies below minimum
+            trading_currencies = set()
+            stock_repo = StockRepository()
+            stocks = await stock_repo.get_all_active()
+            for stock in stocks:
+                if stock.currency:
+                    currency_str = (
+                        stock.currency.value
+                        if hasattr(stock.currency, "value")
+                        else str(stock.currency)
+                    )
+                    trading_currencies.add(currency_str.upper())
+
+            below_minimum = any(
+                cash_balances.get(currency, 0) < 5.0 for currency in trading_currencies
+            )
+
+            if not below_minimum:
+                # No rebalancing needed
+                return False
+
+        # Negative balances or below minimum detected - rebalance immediately
+        logger.warning(
+            f"Emergency rebalancing triggered: has_negative={has_negative}, "
+            f"balances={cash_balances}"
+        )
+
+        # Initialize services
+        db_manager = get_db_manager()
+        exchange_rate_service = get_exchange_rate_service(db_manager)
+        currency_exchange_service = get_currency_exchange_service_dep(client)
+        position_repo = PositionRepository()
+        stock_repo = StockRepository()
+        trade_repo = TradeRepository()
+        recommendation_repo = RecommendationRepository()
+
+        trade_execution_service = TradeExecutionService(
+            trade_repo,
+            position_repo,
+            stock_repo,
+            client,
+            currency_exchange_service,
+            exchange_rate_service,
+        )
+
+        rebalancer = NegativeBalanceRebalancer(
+            client,
+            currency_exchange_service,
+            trade_execution_service,
+            stock_repo,
+            position_repo,
+            exchange_rate_service,
+            recommendation_repo,
+        )
+
+        # Execute immediately - no waiting
+        await rebalancer.rebalance_negative_balances()
+        return True
+
+    except Exception as e:
+        logger.error(f"Emergency rebalancing failed: {e}", exc_info=True)
+        # Don't raise - emergency rebalancing failure shouldn't block other operations
+        return False

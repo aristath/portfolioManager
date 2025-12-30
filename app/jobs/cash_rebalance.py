@@ -231,6 +231,12 @@ async def _execute_trade(
     emit(SystemEvent.SYNC_COMPLETE)
     await sync_portfolio()
 
+    # Check and rebalance negative balances immediately after trade
+    # (trades can affect cash balances)
+    from app.jobs.emergency_rebalance import check_and_rebalance_immediately
+
+    await check_and_rebalance_immediately()
+
 
 async def _check_and_rebalance_internal():
     """Internal rebalance implementation with drip execution."""
