@@ -287,10 +287,12 @@ class TestPortfolioRepository:
     def test_init_without_db(self):
         """Test initializing without db uses get_db_manager."""
         with patch("app.repositories.portfolio.get_db_manager") as mock_manager:
-            mock_state = MagicMock()
-            mock_manager.return_value.state = mock_state
+            mock_snapshots = MagicMock()
+            mock_db_manager = MagicMock()
+            mock_db_manager.snapshots = mock_snapshots
+            mock_manager.return_value = mock_db_manager
 
             repo = PortfolioRepository()
 
             mock_manager.assert_called_once()
-            assert repo._db == mock_state
+            assert repo._db == mock_snapshots

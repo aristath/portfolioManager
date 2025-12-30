@@ -140,6 +140,18 @@ class NegativeBalanceRebalancer:
 
         if not shortfalls:
             logger.info("All currencies meet minimum reserve requirements")
+            # Clean up any existing emergency recommendations since they're no longer needed
+            emergency_portfolio_hash = "EMERGENCY:negative_balance_rebalancing"
+            dismissed_count = (
+                await self._recommendation_repo.dismiss_all_by_portfolio_hash(
+                    emergency_portfolio_hash
+                )
+            )
+            if dismissed_count > 0:
+                logger.info(
+                    f"Dismissed {dismissed_count} emergency recommendations "
+                    "since all currencies now meet minimum reserve requirements"
+                )
             return True
 
         logger.warning(
