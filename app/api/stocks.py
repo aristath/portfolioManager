@@ -972,7 +972,8 @@ async def get_universe_suggestions(
                             )
                     except Exception as e:
                         logger.warning(
-                            f"Error processing {stock.symbol} for pruning suggestions: {e}"
+                            f"Error processing {stock.symbol} for pruning suggestions: {e}",
+                            exc_info=True,
                         )
                         continue
 
