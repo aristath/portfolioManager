@@ -39,9 +39,10 @@ void setRGB4(uint8_t r, uint8_t g, uint8_t b) {
 // Scroll text across LED matrix using native ArduinoGraphics
 // text: String to scroll, speed: ms per scroll step (lower = faster)
 void scrollText(String text, int speed) {
+  // Minimal setup - matrix operations should be non-blocking
   matrix.textScrollSpeed(speed);
   matrix.textFont(Font_5x7);
-  matrix.beginText(13, 1, 0xFFFFFF);  // Start at X=13 (matrix width) to scroll in from right
+  matrix.beginText(13, 1, 0xFFFFFF);
   matrix.print(text);
   matrix.endText(SCROLL_LEFT);
 }
@@ -57,7 +58,8 @@ void printText(String text, int x, int y) {
 void setup() {
   // Initialize LED matrix
   matrix.begin();
-  Serial.begin(115200);
+  // Note: Serial.begin() removed - Router Bridge uses its own serial communication
+  // and Serial can conflict with Bridge message processing
   matrix.setGrayscaleBits(8);  // For 0-255 brightness values
   matrix.clear();
 
@@ -83,5 +85,7 @@ void setup() {
 }
 
 void loop() {
-  delay(100);
+  // Router Bridge handles messages automatically in the background
+  // Keep loop minimal to avoid blocking Bridge message processing
+  delay(10);
 }

@@ -161,7 +161,23 @@ class NegativeBalanceRebalancer:
             )
             return True
 
-        # Step 2: Position sales if exchange insufficient
+        # Check if there's still cash available before moving to position sales
+        cash_balances_raw = self._client.get_cash_balances()
+        cash_balances_after = {cb.currency: cb.amount for cb in cash_balances_raw}
+        total_available_cash = 0.0
+        for currency, balance in cash_balances_after.items():
+            if balance > MIN_CURRENCY_RESERVE:
+                total_available_cash += balance - MIN_CURRENCY_RESERVE
+
+        if total_available_cash > 0:
+            logger.warning(
+                f"Still have {total_available_cash:.2f} EUR equivalent in cash available, "
+                f"but currency exchange didn't resolve shortfalls: {remaining_shortfalls}. "
+                "This may indicate exchange rate issues or insufficient exchange paths. "
+                "Proceeding to position sales as last resort."
+            )
+
+        # Step 2: Position sales only if exchange truly insufficient
         await self._step_2_position_sales(remaining_shortfalls)
 
         # Step 3: Final currency exchange
@@ -177,6 +193,10 @@ class NegativeBalanceRebalancer:
         self, shortfalls: Dict[str, float], cash_balances: Dict[str, float]
     ) -> Dict[str, float]:
         """Step 1: Exchange currencies to cover shortfalls.
+
+        Keeps trying exchanges until either:
+        - All shortfalls are resolved, OR
+        - No more cash is available to exchange
 
         Args:
             shortfalls: Dictionary of currency -> shortfall amount
@@ -196,74 +216,121 @@ class NegativeBalanceRebalancer:
             return shortfalls  # Return unchanged shortfalls
 
         remaining_shortfalls = shortfalls.copy()
+        max_iterations = 20  # Prevent infinite loops
+        iteration = 0
 
-        for currency, shortfall in shortfalls.items():
-            # Find currencies with excess (balance > minimum + buffer)
-            excess_currencies = []
-            for other_currency, balance in cash_balances.items():
-                if other_currency == currency:
-                    continue
-                # Check if this currency has enough to cover shortfall (with exchange rate)
+        # Keep trying until all shortfalls resolved or no more cash available
+        while remaining_shortfalls and iteration < max_iterations:
+            iteration += 1
+            progress_made = False
+
+            # Refresh balances at start of each iteration
+            cash_balances_raw = self._client.get_cash_balances()
+            cash_balances = {cb.currency: cb.amount for cb in cash_balances_raw}
+
+            # Check if there's any cash available to exchange
+            total_available_cash = 0.0
+            for currency, balance in cash_balances.items():
                 if balance > MIN_CURRENCY_RESERVE:
-                    excess_currencies.append((other_currency, balance))
+                    total_available_cash += balance - MIN_CURRENCY_RESERVE
 
-            # Try to exchange from currencies with excess
-            for source_currency, source_balance in excess_currencies:
-                if currency not in remaining_shortfalls:
-                    break  # Already covered
+            if total_available_cash <= 0:
+                logger.info(
+                    "No more cash available for currency exchange, "
+                    f"remaining shortfalls: {remaining_shortfalls}"
+                )
+                break
 
+            # Try to cover each remaining shortfall
+            for currency in list(remaining_shortfalls.keys()):
                 needed = remaining_shortfalls[currency]
 
-                # Convert needed amount to source currency using exchange rate
-                # get_rate returns rate where: amount_to = amount_from / rate
-                # So to get needed amount in target currency, we need:
-                # needed = source_amount / rate
-                # Therefore: source_amount = needed / rate
-                try:
-                    rate = await self._exchange_rate_service.get_rate(
-                        source_currency, currency
-                    )
-                    if rate > 0:
-                        source_amount_needed = needed / rate
-                    else:
-                        # Fallback: assume 1:1 if rate unavailable
+                # Find currencies with excess (balance > minimum)
+                excess_currencies = []
+                for other_currency, balance in cash_balances.items():
+                    if other_currency == currency:
+                        continue
+                    # Check if this currency has enough to cover shortfall
+                    if balance > MIN_CURRENCY_RESERVE:
+                        excess_currencies.append((other_currency, balance))
+
+                # Try to exchange from currencies with excess
+                for source_currency, source_balance in excess_currencies:
+                    if currency not in remaining_shortfalls:
+                        break  # Already covered
+
+                    needed = remaining_shortfalls[currency]
+
+                    # Convert needed amount to source currency using exchange rate
+                    # get_rate returns rate where: amount_to = amount_from / rate
+                    # So to get needed amount in target currency, we need:
+                    # needed = source_amount / rate
+                    # Therefore: source_amount = needed / rate
+                    try:
+                        rate = await self._exchange_rate_service.get_rate(
+                            source_currency, currency
+                        )
+                        if rate > 0:
+                            source_amount_needed = needed / rate
+                        else:
+                            # Fallback: assume 1:1 if rate unavailable
+                            source_amount_needed = needed
+                    except Exception as e:
+                        logger.warning(
+                            f"Could not get exchange rate {source_currency}/{currency}: {e}, "
+                            f"assuming 1:1"
+                        )
                         source_amount_needed = needed
-                except Exception as e:
-                    logger.warning(
-                        f"Could not get exchange rate {source_currency}/{currency}: {e}, "
-                        f"assuming 1:1"
-                    )
-                    source_amount_needed = needed
 
-                # Check if we have enough in source currency
-                available = source_balance - MIN_CURRENCY_RESERVE
-                if available < source_amount_needed:
-                    continue  # Not enough in this currency
+                    # Check if we have enough in source currency
+                    available = source_balance - MIN_CURRENCY_RESERVE
+                    if available < source_amount_needed:
+                        continue  # Not enough in this currency
 
-                logger.info(
-                    f"Exchanging {source_amount_needed:.2f} {source_currency} to "
-                    f"{currency} to cover shortfall ({needed:.2f} {currency})"
-                )
-
-                result = self._currency_service.exchange(
-                    source_currency, currency, source_amount_needed
-                )
-
-                if result:
                     logger.info(
-                        f"Currency exchange successful: {source_currency} -> {currency}"
+                        f"Exchanging {source_amount_needed:.2f} {source_currency} to "
+                        f"{currency} to cover shortfall ({needed:.2f} {currency})"
                     )
-                    # Refresh balances from API
-                    cash_balances_raw = self._client.get_cash_balances()
-                    cash_balances = {cb.currency: cb.amount for cb in cash_balances_raw}
 
-                    # Check if shortfall is resolved
-                    if cash_balances.get(currency, 0) >= MIN_CURRENCY_RESERVE:
-                        del remaining_shortfalls[currency]
-                else:
-                    logger.warning(
-                        f"Currency exchange failed: {source_currency} -> {currency}"
+                    result = self._currency_service.exchange(
+                        source_currency, currency, source_amount_needed
                     )
+
+                    if result:
+                        logger.info(
+                            f"Currency exchange successful: {source_currency} -> {currency}"
+                        )
+                        progress_made = True
+                        # Refresh balances from API after successful exchange
+                        cash_balances_raw = self._client.get_cash_balances()
+                        cash_balances = {
+                            cb.currency: cb.amount for cb in cash_balances_raw
+                        }
+
+                        # Check if shortfall is resolved
+                        if cash_balances.get(currency, 0) >= MIN_CURRENCY_RESERVE:
+                            del remaining_shortfalls[currency]
+                            logger.info(
+                                f"Shortfall for {currency} resolved via currency exchange"
+                            )
+                    else:
+                        logger.warning(
+                            f"Currency exchange failed: {source_currency} -> {currency}"
+                        )
+
+            # If no progress was made in this iteration, break to avoid infinite loop
+            if not progress_made:
+                logger.info(
+                    "No progress made in currency exchange iteration, "
+                    f"remaining shortfalls: {remaining_shortfalls}"
+                )
+                break
+
+        if iteration >= max_iterations:
+            logger.warning(
+                f"Reached maximum iterations ({max_iterations}) in currency exchange, "
+                f"remaining shortfalls: {remaining_shortfalls}"
+            )
 
         return remaining_shortfalls
 
