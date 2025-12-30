@@ -387,6 +387,8 @@ async def get_universe_suggestions(
                             "industry": candidate.get("industry"),
                             "exchange": candidate.get("exchange", ""),
                             "score": round(candidate_score, 3),
+                            "meets_threshold": candidate_score >= score_threshold,
+                            "threshold": score_threshold,
                             "isin": candidate.get("isin"),
                             "volume": candidate.get("volume", 0.0),
                             "yahoo_symbol": candidate.get("yahoo_symbol"),
