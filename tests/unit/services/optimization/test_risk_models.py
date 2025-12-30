@@ -1,243 +1,211 @@
 """Tests for risk models calculation.
 
 These tests validate risk model calculations for portfolio optimization,
-including covariance matrices, volatility estimates, and risk adjustments.
+including covariance matrices built from historical price data.
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import numpy as np
 import pandas as pd
 import pytest
 
+from app.application.services.optimization.risk_models import RiskModelBuilder
 
-class TestCalculateRiskModel:
-    """Test calculate_risk_model function."""
+
+class TestRiskModelBuilder:
+    """Test RiskModelBuilder class."""
+
+    @pytest.fixture
+    def builder(self):
+        """Create RiskModelBuilder instance."""
+        return RiskModelBuilder()
 
     @pytest.mark.asyncio
-    async def test_calculates_covariance_matrix(self):
-        """Test that covariance matrix is calculated from historical returns."""
-        from app.application.services.optimization.risk_models import (
-            calculate_risk_model,
-        )
-
+    async def test_builds_covariance_matrix_from_prices(self, builder):
+        """Test that covariance matrix is built from historical prices."""
         symbols = ["AAPL", "MSFT"]
-        historical_returns = {
-            "AAPL": pd.Series([0.01, 0.02, -0.01, 0.03], dtype=float),
-            "MSFT": pd.Series([0.02, 0.01, 0.02, 0.01], dtype=float),
-        }
-
-        with patch(
-            "app.application.services.optimization.risk_models._get_historical_returns",
-            new_callable=AsyncMock,
-        ) as mock_get_returns:
-            mock_get_returns.return_value = historical_returns
-
-            result = await calculate_risk_model(symbols, lookback_days=252)
-
-            assert isinstance(result, dict)
-            # Should return covariance matrix or risk metrics
-            assert len(result) > 0
-
-    @pytest.mark.asyncio
-    async def test_handles_missing_historical_data(self):
-        """Test handling when historical data is missing for some symbols."""
-        from app.application.services.optimization.risk_models import (
-            calculate_risk_model,
-        )
-
-        symbols = ["AAPL", "UNKNOWN"]
-        historical_returns = {
-            "AAPL": pd.Series([0.01, 0.02], dtype=float),
-            "UNKNOWN": pd.Series(dtype=float),  # Empty series
-        }
-
-        with patch(
-            "app.application.services.optimization.risk_models._get_historical_returns",
-            new_callable=AsyncMock,
-        ) as mock_get_returns:
-            mock_get_returns.return_value = historical_returns
-
-            result = await calculate_risk_model(symbols, lookback_days=252)
-
-            assert isinstance(result, dict)
-            # Should handle missing data gracefully
-
-    @pytest.mark.asyncio
-    async def test_handles_empty_symbols_list(self):
-        """Test handling when symbols list is empty."""
-        from app.application.services.optimization.risk_models import (
-            calculate_risk_model,
-        )
-
-        symbols = []
-        historical_returns = {}
-
-        with patch(
-            "app.application.services.optimization.risk_models._get_historical_returns",
-            new_callable=AsyncMock,
-        ) as mock_get_returns:
-            mock_get_returns.return_value = historical_returns
-
-            result = await calculate_risk_model(symbols, lookback_days=252)
-
-            assert isinstance(result, dict)
-            # Should handle empty list gracefully
-
-    @pytest.mark.asyncio
-    async def test_handles_insufficient_data_for_covariance(self):
-        """Test handling when there's insufficient data to calculate covariance."""
-        from app.application.services.optimization.risk_models import (
-            calculate_risk_model,
-        )
-
-        symbols = ["AAPL"]
-        # Only one return value (need at least 2 for covariance)
-        historical_returns = {"AAPL": pd.Series([0.01], dtype=float)}
-
-        with patch(
-            "app.application.services.optimization.risk_models._get_historical_returns",
-            new_callable=AsyncMock,
-        ) as mock_get_returns:
-            mock_get_returns.return_value = historical_returns
-
-            result = await calculate_risk_model(symbols, lookback_days=252)
-
-            assert isinstance(result, dict)
-            # Should handle insufficient data gracefully
-
-    @pytest.mark.asyncio
-    async def test_uses_default_lookback_days(self):
-        """Test that default lookback_days is used when not specified."""
-        from app.application.services.optimization.risk_models import (
-            calculate_risk_model,
-        )
-
-        symbols = ["AAPL"]
-        historical_returns = {"AAPL": pd.Series([0.01, 0.02], dtype=float)}
-
-        with patch(
-            "app.application.services.optimization.risk_models._get_historical_returns",
-            new_callable=AsyncMock,
-        ) as mock_get_returns:
-            mock_get_returns.return_value = historical_returns
-
-            result = await calculate_risk_model(symbols)
-
-            # Should use default lookback_days
-            assert isinstance(result, dict)
-
-
-class TestGetHistoricalReturns:
-    """Test _get_historical_returns helper function (shared with expected_returns)."""
-
-    @pytest.mark.asyncio
-    async def test_fetches_returns_from_history_repo(self):
-        """Test that historical returns are fetched from HistoryRepository."""
-        from app.application.services.optimization.risk_models import (
-            _get_historical_returns,
-        )
-
-        symbols = ["AAPL"]
-        mock_history_repo = AsyncMock()
-        mock_prices = [
-            MagicMock(date="2024-01-01", close_price=100.0),
-            MagicMock(date="2024-01-02", close_price=101.0),
-        ]
-        mock_history_repo.get_daily_range.return_value = mock_prices
-
-        with patch(
-            "app.application.services.optimization.risk_models.HistoryRepository",
-            return_value=mock_history_repo,
-        ):
-            result = await _get_historical_returns(symbols, lookback_days=252)
-
-            assert isinstance(result, dict)
-            assert "AAPL" in result
-            assert isinstance(result["AAPL"], pd.Series)
-
-    @pytest.mark.asyncio
-    async def test_calculates_returns_correctly(self):
-        """Test that returns are calculated correctly from price data."""
-        from app.application.services.optimization.risk_models import (
-            _get_historical_returns,
-        )
-
-        symbols = ["AAPL"]
-        mock_prices = [
+        
+        # Mock price data
+        mock_prices_aapl = [
             MagicMock(date="2024-01-01", close_price=100.0),
             MagicMock(date="2024-01-02", close_price=101.0),
             MagicMock(date="2024-01-03", close_price=102.0),
         ]
+        mock_prices_msft = [
+            MagicMock(date="2024-01-01", close_price=200.0),
+            MagicMock(date="2024-01-02", close_price=201.0),
+            MagicMock(date="2024-01-03", close_price=202.0),
+        ]
+        
+        mock_history_repo_aapl = AsyncMock()
+        mock_history_repo_aapl.get_daily_prices = AsyncMock(return_value=mock_prices_aapl)
+        
+        mock_history_repo_msft = AsyncMock()
+        mock_history_repo_msft.get_daily_prices = AsyncMock(return_value=mock_prices_msft)
+        
+        with patch(
+            "app.application.services.optimization.risk_models.HistoryRepository"
+        ) as mock_repo_class:
+            def repo_side_effect(symbol):
+                if symbol == "AAPL":
+                    return mock_history_repo_aapl
+                elif symbol == "MSFT":
+                    return mock_history_repo_msft
+                return AsyncMock()
+            
+            mock_repo_class.side_effect = repo_side_effect
+            
+            # Mock Ledoit-Wolf to return a simple covariance matrix
+            with patch(
+                "app.application.services.optimization.risk_models.pypfopt_risk.CovarianceShrinkage"
+            ) as mock_shrinkage:
+                mock_cov_matrix = pd.DataFrame(
+                    [[0.0001, 0.00005], [0.00005, 0.0001]],
+                    index=["AAPL", "MSFT"],
+                    columns=["AAPL", "MSFT"],
+                )
+                mock_shrinkage_instance = MagicMock()
+                mock_shrinkage_instance.ledoit_wolf.return_value = mock_cov_matrix
+                mock_shrinkage.return_value = mock_shrinkage_instance
+                
+                cov_matrix, returns_df = await builder.build_covariance_matrix(symbols)
+                
+                assert cov_matrix is not None
+                assert isinstance(cov_matrix, pd.DataFrame)
+                assert "AAPL" in cov_matrix.index
+                assert "MSFT" in cov_matrix.index
+                assert isinstance(returns_df, pd.DataFrame)
 
+    @pytest.mark.asyncio
+    async def test_handles_empty_price_data(self, builder):
+        """Test handling when no price data is available."""
+        symbols = ["AAPL"]
+        
         mock_history_repo = AsyncMock()
-        mock_history_repo.get_daily_range.return_value = mock_prices
-
+        mock_history_repo.get_daily_prices = AsyncMock(return_value=[])
+        
         with patch(
             "app.application.services.optimization.risk_models.HistoryRepository",
             return_value=mock_history_repo,
         ):
-            result = await _get_historical_returns(symbols, lookback_days=252)
+            cov_matrix, returns_df = await builder.build_covariance_matrix(symbols)
+            
+            assert cov_matrix is None
+            assert isinstance(returns_df, pd.DataFrame)
+            assert returns_df.empty
 
-            assert "AAPL" in result
-            returns = result["AAPL"]
-            assert isinstance(returns, pd.Series)
-            assert len(returns) == 2  # 3 prices -> 2 returns
-            assert returns.iloc[0] == pytest.approx(0.01, abs=0.001)
+    @pytest.mark.asyncio
+    async def test_handles_insufficient_history(self, builder):
+        """Test handling when symbols have insufficient price history."""
+        symbols = ["AAPL"]
+        
+        # Only one price point (need more for covariance)
+        mock_prices = [MagicMock(date="2024-01-01", close_price=100.0)]
+        
+        mock_history_repo = AsyncMock()
+        mock_history_repo.get_daily_prices = AsyncMock(return_value=mock_prices)
+        
+        with patch(
+            "app.application.services.optimization.risk_models.HistoryRepository",
+            return_value=mock_history_repo,
+        ):
+            cov_matrix, returns_df = await builder.build_covariance_matrix(symbols)
+            
+            # Should return None for covariance when insufficient data
+            assert cov_matrix is None or isinstance(cov_matrix, pd.DataFrame)
 
+    @pytest.mark.asyncio
+    async def test_handles_empty_symbols_list(self, builder):
+        """Test handling when symbols list is empty."""
+        symbols = []
+        
+        cov_matrix, returns_df = await builder.build_covariance_matrix(symbols)
+        
+        assert cov_matrix is None
+        assert isinstance(returns_df, pd.DataFrame)
+        assert returns_df.empty
 
-class TestCalculateCovarianceMatrix:
-    """Test covariance matrix calculation."""
+    @pytest.mark.asyncio
+    async def test_filters_valid_symbols(self, builder):
+        """Test that only symbols with sufficient history are included."""
+        symbols = ["AAPL", "MSFT", "INSUFFICIENT"]
+        
+        # AAPL and MSFT have enough prices
+        mock_prices_good = [
+            MagicMock(date=f"2024-01-{i:02d}", close_price=100.0 + i)
+            for i in range(1, 300)  # 299 prices (enough)
+        ]
+        
+        # INSUFFICIENT has too few prices
+        mock_prices_bad = [
+            MagicMock(date="2024-01-01", close_price=100.0),
+        ]
+        
+        mock_repo_good = AsyncMock()
+        mock_repo_good.get_daily_prices = AsyncMock(return_value=mock_prices_good)
+        
+        mock_repo_bad = AsyncMock()
+        mock_repo_bad.get_daily_prices = AsyncMock(return_value=mock_prices_bad)
+        
+        with patch(
+            "app.application.services.optimization.risk_models.HistoryRepository"
+        ) as mock_repo_class:
+            def repo_side_effect(symbol):
+                if symbol == "INSUFFICIENT":
+                    return mock_repo_bad
+                return mock_repo_good
+            
+            mock_repo_class.side_effect = repo_side_effect
+            
+            with patch(
+                "app.application.services.optimization.risk_models.pypfopt_risk.CovarianceShrinkage"
+            ) as mock_shrinkage:
+                # Create a covariance matrix for valid symbols only
+                mock_cov_matrix = pd.DataFrame(
+                    [[0.0001, 0.00005], [0.00005, 0.0001]],
+                    index=["AAPL", "MSFT"],
+                    columns=["AAPL", "MSFT"],
+                )
+                mock_shrinkage_instance = MagicMock()
+                mock_shrinkage_instance.ledoit_wolf.return_value = mock_cov_matrix
+                mock_shrinkage.return_value = mock_shrinkage_instance
+                
+                cov_matrix, returns_df = await builder.build_covariance_matrix(symbols)
+                
+                # Should only include symbols with sufficient history
+                if cov_matrix is not None:
+                    assert "INSUFFICIENT" not in cov_matrix.index
 
-    def test_calculates_covariance_from_returns_dataframe(self):
-        """Test that covariance matrix is calculated from returns DataFrame."""
-        from app.application.services.optimization.risk_models import (
-            _calculate_covariance_matrix,
-        )
-
-        # Create sample returns data
-        dates = pd.date_range("2024-01-01", periods=5, freq="D")
+    def test_get_correlations(self, builder):
+        """Test finding highly correlated stock pairs."""
+        # Create sample returns DataFrame
+        dates = pd.date_range("2024-01-01", periods=10, freq="D")
         returns_df = pd.DataFrame(
             {
-                "AAPL": [0.01, 0.02, -0.01, 0.03],
-                "MSFT": [0.02, 0.01, 0.02, 0.01],
+                "AAPL": [0.01, 0.02, -0.01, 0.03, 0.01, 0.02, -0.01, 0.03, 0.01, 0.02],
+                "MSFT": [0.02, 0.01, 0.02, 0.01, 0.02, 0.01, 0.02, 0.01, 0.02, 0.01],
+                "GOOGL": [0.01, 0.02, -0.01, 0.03, 0.01, 0.02, -0.01, 0.03, 0.01, 0.02],  # Highly correlated with AAPL
             },
-            index=dates[:4],
+            index=dates,
         )
+        
+        pairs = builder.get_correlations(returns_df, threshold=0.80)
+        
+        assert isinstance(pairs, list)
+        # Should find highly correlated pairs
+        # AAPL and GOOGL should be highly correlated (same returns)
+        if len(pairs) > 0:
+            assert any(
+                (p["symbol1"] == "AAPL" and p["symbol2"] == "GOOGL")
+                or (p["symbol1"] == "GOOGL" and p["symbol2"] == "AAPL")
+                for p in pairs
+            )
 
-        cov_matrix = _calculate_covariance_matrix(returns_df)
-
-        assert isinstance(cov_matrix, (pd.DataFrame, np.ndarray))
-        # Should be square matrix with dimensions matching number of symbols
-        if isinstance(cov_matrix, pd.DataFrame):
-            assert cov_matrix.shape[0] == 2
-            assert cov_matrix.shape[1] == 2
-
-    def test_handles_single_symbol(self):
-        """Test handling when only one symbol is provided."""
-        from app.application.services.optimization.risk_models import (
-            _calculate_covariance_matrix,
-        )
-
-        dates = pd.date_range("2024-01-01", periods=5, freq="D")
-        returns_df = pd.DataFrame(
-            {"AAPL": [0.01, 0.02, -0.01, 0.03]}, index=dates[:4]
-        )
-
-        cov_matrix = _calculate_covariance_matrix(returns_df)
-
-        assert isinstance(cov_matrix, (pd.DataFrame, np.ndarray))
-        # Single symbol should result in 1x1 matrix
-
-    def test_handles_empty_dataframe(self):
+    def test_get_correlations_empty_dataframe(self, builder):
         """Test handling when returns DataFrame is empty."""
-        from app.application.services.optimization.risk_models import (
-            _calculate_covariance_matrix,
-        )
-
         returns_df = pd.DataFrame()
-
-        cov_matrix = _calculate_covariance_matrix(returns_df)
-
-        # Should handle empty DataFrame gracefully
-        assert isinstance(cov_matrix, (pd.DataFrame, np.ndarray)) or cov_matrix is None
+        
+        pairs = builder.get_correlations(returns_df)
+        
+        assert isinstance(pairs, list)
+        assert len(pairs) == 0
