@@ -24,30 +24,8 @@ class OptimizerStatusCard extends HTMLElement {
           </button>
         </div>
 
-        <!-- Settings Summary Row -->
-        <div class="grid grid-cols-3 gap-4 mb-3">
-          <!-- Blend Indicator -->
-          <div>
-            <p class="text-xs text-gray-500 mb-1">Strategy Blend</p>
-            <div class="flex items-center gap-2">
-              <span class="text-xs text-gray-400">MV</span>
-              <div class="flex-1 h-1.5 bg-gray-700 rounded-full relative">
-                <div class="absolute top-1/2 -translate-y-1/2 w-2 h-2 bg-blue-500 rounded-full"
-                     :style="'left: ' + (($store.app.settings?.optimizer_blend || 0.5) * 100) + '%'"></div>
-              </div>
-              <span class="text-xs text-gray-400">HRP</span>
-            </div>
-            <p class="text-xs text-center text-gray-500 mt-0.5"
-               x-text="(($store.app.settings?.optimizer_blend || 0.5) * 100).toFixed(0) + '%'"></p>
-          </div>
-
-          <!-- Target Return -->
-          <div class="text-center">
-            <p class="text-xs text-gray-500 mb-1">Target Return</p>
-            <p class="text-lg font-mono text-blue-400"
-               x-text="(($store.app.settings?.optimizer_target_return || 0.11) * 100).toFixed(1) + '%'"></p>
-          </div>
-
+        <!-- Results Summary Row -->
+        <div class="grid grid-cols-2 gap-4 mb-3">
           <!-- Achieved Return -->
           <div class="text-center">
             <p class="text-xs text-gray-500 mb-1">Expected Return</p>
@@ -59,6 +37,13 @@ class OptimizerStatusCard extends HTMLElement {
             <template x-if="!$store.app.optimizerStatus?.last_run?.achieved_return_pct">
               <p class="text-lg font-mono text-gray-500">--</p>
             </template>
+          </div>
+
+          <!-- Stocks Optimized -->
+          <div class="text-center">
+            <p class="text-xs text-gray-500 mb-1">Stocks Optimized</p>
+            <p class="text-lg font-mono text-gray-300"
+               x-text="$store.app.optimizerStatus?.last_run?.total_stocks_optimized || '--'"></p>
           </div>
         </div>
 
@@ -105,9 +90,9 @@ class OptimizerStatusCard extends HTMLElement {
           <div class="mt-3 pt-3 border-t border-gray-700/50">
             <div class="grid grid-cols-2 gap-4 text-xs">
               <div>
-                <span class="text-gray-500">Stocks Optimized:</span>
+                <span class="text-gray-500">Fallback Used:</span>
                 <span class="text-gray-300 ml-1"
-                      x-text="$store.app.optimizerStatus?.last_run?.total_stocks_optimized || '--'"></span>
+                      x-text="$store.app.optimizerStatus?.last_run?.fallback_used || 'None'"></span>
               </div>
               <div>
                 <span class="text-gray-500">Min Trade:</span>
@@ -115,14 +100,15 @@ class OptimizerStatusCard extends HTMLElement {
                       x-text="$store.app.optimizerStatus?.settings?.min_trade_amount ? '€' + $store.app.optimizerStatus.settings.min_trade_amount : '--'"></span>
               </div>
               <div>
-                <span class="text-gray-500">Fallback Used:</span>
-                <span class="text-gray-300 ml-1"
-                      x-text="$store.app.optimizerStatus?.last_run?.fallback_used || 'None'"></span>
-              </div>
-              <div>
                 <span class="text-gray-500">Cash Reserve:</span>
                 <span class="text-gray-300 ml-1"
                       x-text="$store.app.optimizerStatus?.settings?.min_cash_reserve ? '€' + $store.app.optimizerStatus.settings.min_cash_reserve : '--'"></span>
+              </div>
+              <div>
+                <span class="text-gray-500">Settings:</span>
+                <span class="text-gray-300 ml-1 text-xs">
+                  <a href="#" @click.prevent="$dispatch('open-settings')" class="text-blue-400 hover:text-blue-300">Edit in Settings</a>
+                </span>
               </div>
             </div>
           </div>
