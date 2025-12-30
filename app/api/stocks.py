@@ -821,7 +821,10 @@ async def get_universe_suggestions(
                         if score and score.total_score is not None:
                             scored_candidates.append((candidate, score.total_score))
                     except Exception as e:
-                        logger.warning(f"Failed to score {symbol} for suggestions: {e}")
+                        logger.warning(
+                            f"Failed to score {symbol} for suggestions: {e}",
+                            exc_info=True,
+                        )
                         continue
 
                 logger.info(f"Scored {len(scored_candidates)} candidates")
