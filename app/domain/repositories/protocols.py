@@ -187,12 +187,12 @@ class IAllocationRepository(Protocol):
         """Get allocation targets by type (geography or industry)."""
         ...
 
-    async def get_country_targets(self) -> Dict[str, float]:
-        """Get country allocation targets."""
+    async def get_country_group_targets(self) -> Dict[str, float]:
+        """Get country group allocation targets (group name -> target_pct)."""
         ...
 
-    async def get_industry_targets(self) -> Dict[str, float]:
-        """Get industry allocation targets."""
+    async def get_industry_group_targets(self) -> Dict[str, float]:
+        """Get industry group allocation targets (group name -> target_pct)."""
         ...
 
     async def upsert(self, target: AllocationTarget) -> None:
