@@ -546,19 +546,12 @@ async def _build_portfolio_context(db_manager):
     positions = {row[0]: row[1] or 0 for row in await cursor.fetchall()}
     total_value = sum(positions.values())
 
-    # Get allocation targets
-    cursor = await db_manager.config.execute(
-        "SELECT name, target_pct, type FROM allocation_targets"
-    )
-    targets = await cursor.fetchall()
+    # Get group targets (use repository for consistency)
+    from app.repositories import AllocationRepository
 
-    country_weights = {}
-    industry_weights = {}
-    for name, target_pct, alloc_type in targets:
-        if alloc_type == "country":
-            country_weights[name] = (target_pct - 0.33) / 0.15 if target_pct else 0
-        elif alloc_type == "industry":
-            industry_weights[name] = (target_pct - 0.10) / 0.10 if target_pct else 0
+    allocation_repo = AllocationRepository(db=db_manager.config)
+    country_weights = await allocation_repo.get_country_group_targets()
+    industry_weights = await allocation_repo.get_industry_group_targets()
 
     # Get stock metadata for scoring
     cursor = await db_manager.config.execute(

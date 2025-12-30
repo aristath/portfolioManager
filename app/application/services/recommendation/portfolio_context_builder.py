@@ -36,20 +36,11 @@ async def build_portfolio_context(
     """
     positions = await position_repo.get_all()
     stocks = await stock_repo.get_all_active()
-    allocations = await allocation_repo.get_all()
     total_value = await position_repo.get_total_value()
 
-    # Build allocation weight maps
-    country_weights: Dict[str, float] = {}
-    industry_weights: Dict[str, float] = {}
-    for key, target_pct in allocations.items():
-        parts = key.split(":", 1)
-        if len(parts) == 2:
-            alloc_type, name = parts
-            if alloc_type == "country":
-                country_weights[name] = target_pct
-            elif alloc_type == "industry":
-                industry_weights[name] = target_pct
+    # Load group targets directly (already at group level)
+    country_weights = await allocation_repo.get_country_group_targets()
+    industry_weights = await allocation_repo.get_industry_group_targets()
 
     # Build stock metadata maps
     position_map = {p.symbol: p.market_value_eur or 0 for p in positions}
