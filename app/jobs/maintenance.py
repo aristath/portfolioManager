@@ -251,6 +251,7 @@ async def _cleanup_old_daily_prices_internal():
 
     emit(SystemEvent.CLEANUP_START)
     set_text("CLEANING OLD PRICES...")
+    set_led4(0, 255, 0)  # Green for processing
 
     try:
         db_manager = get_db_manager()
