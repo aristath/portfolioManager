@@ -33,8 +33,11 @@ def scroll_text(text: str, speed: int = 50) -> bool:
         True if successful, False otherwise
     """
     try:
-        Bridge.call("scrollText", text, speed, timeout=30)
+        Bridge.call("scrollText", text, speed, timeout=5)
         return True
+    except TimeoutError:
+        logger.warning(f"scrollText timed out after 5s: {text[:50]}...")
+        return False
     except Exception as e:
         logger.debug(f"scrollText failed: {e}")
         return False
@@ -139,9 +142,10 @@ def loop():
 
         # Update text only if changed
         if display_text and (display_text != _last_text or ticker_speed != _last_text_speed):
-            scroll_text(display_text, ticker_speed)
-            _last_text = display_text
-            _last_text_speed = ticker_speed
+            if scroll_text(display_text, ticker_speed):
+                _last_text = display_text
+                _last_text_speed = ticker_speed
+            # If scroll_text fails, don't update _last_text so it will retry next iteration
 
         time.sleep(2)  # Poll every 2 seconds
 

@@ -94,7 +94,16 @@ class NegativeBalanceRebalancer:
         trading_currencies = await self.get_trading_currencies()
         shortfalls: Dict[str, float] = {}
 
-        for currency in trading_currencies:
+        # Check all currencies that are either:
+        # 1. Trading currencies (from active stocks), OR
+        # 2. Have negative balances (must fix regardless)
+        currencies_to_check = set(trading_currencies)
+        for currency, balance in cash_balances.items():
+            if balance < 0:
+                # Always fix negative balances, even if not a trading currency
+                currencies_to_check.add(currency)
+
+        for currency in currencies_to_check:
             balance = cash_balances.get(currency, 0.0)
             if balance < MIN_CURRENCY_RESERVE:
                 shortfall = MIN_CURRENCY_RESERVE - balance
