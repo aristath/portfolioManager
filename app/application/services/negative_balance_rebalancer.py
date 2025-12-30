@@ -6,6 +6,7 @@ Automatically addresses negative cash balances and ensures minimum currency rese
 import logging
 from typing import Dict, List, Optional, Set
 
+from app.api.settings import get_trading_mode
 from app.application.services.currency_exchange_service import CurrencyExchangeService
 from app.application.services.trade_execution_service import TradeExecutionService
 from app.domain.models import Recommendation
@@ -18,6 +19,7 @@ from app.infrastructure.market_hours import get_open_markets, is_market_open
 from app.repositories import (
     PositionRepository,
     RecommendationRepository,
+    SettingsRepository,
     StockRepository,
 )
 
@@ -174,6 +176,16 @@ class NegativeBalanceRebalancer:
         Returns:
             Remaining shortfalls after exchange attempts
         """
+        # Check trading mode - skip execution in research mode
+        settings_repo = SettingsRepository()
+        trading_mode = await get_trading_mode(settings_repo)
+        if trading_mode == "research":
+            logger.info(
+                "Research mode: Currency exchanges recommended but NOT executed "
+                "(shown in UI only)"
+            )
+            return shortfalls  # Return unchanged shortfalls
+
         remaining_shortfalls = shortfalls.copy()
 
         for currency, shortfall in shortfalls.items():
@@ -419,6 +431,16 @@ class NegativeBalanceRebalancer:
 
     async def _step_3_final_exchange(self) -> None:
         """Step 3: Final currency exchange to ensure all currencies have minimum."""
+        # Check trading mode - skip execution in research mode
+        settings_repo = SettingsRepository()
+        trading_mode = await get_trading_mode(settings_repo)
+        if trading_mode == "research":
+            logger.info(
+                "Research mode: Final currency exchanges recommended but NOT executed "
+                "(shown in UI only)"
+            )
+            return
+
         # Refresh balances after sales
         cash_balances_raw = self._client.get_cash_balances()
         cash_balances = {cb.currency: cb.amount for cb in cash_balances_raw}
