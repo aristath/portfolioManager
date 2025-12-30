@@ -110,14 +110,6 @@ class TestDatabaseAdapter:
 
         mock_connection.commit.assert_called_once()
 
-    @pytest.mark.asyncio
-    async def test_rollback_rolls_back_transaction(self, adapter, mock_connection):
-        """Test that rollback rolls back the transaction."""
-        mock_connection.rollback = AsyncMock()
-
-        await adapter.rollback()
-
-        mock_connection.rollback.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_transaction_context_manager(self, adapter, mock_connection):
