@@ -183,27 +183,85 @@ class FileDeployer:
     async def atomic_swap(self) -> None:
         """Atomically swap staging to deployment.
 
-        This moves staging to the deployment directory. The staging directory
-        becomes the new deployment directory.
+        Preserves venv, data, .env and other important directories.
+        Only replaces code files from staging.
 
         Raises:
             DeploymentError: If swap fails
         """
         try:
-            # Remove current deployment directory
-            if self.deploy_dir.exists():
-                logger.info(f"Removing current deployment: {self.deploy_dir}")
-                shutil.rmtree(self.deploy_dir)
+            if not self.deploy_dir.exists():
+                # First deployment - just move staging
+                logger.info(f"First deployment - moving staging to: {self.deploy_dir}")
+                shutil.move(str(self.staging_dir), str(self.deploy_dir))
+                logger.info("Atomic swap completed successfully")
+                return
 
-            # Move staging to deployment
-            logger.info(f"Moving staging to deployment: {self.deploy_dir}")
-            shutil.move(str(self.staging_dir), str(self.deploy_dir))
+            # Preserve important directories/files
+            preserve_items = ["venv", "data", ".env", ".git"]
+            preserved = {}
+
+            logger.info(f"Preserving important directories in {self.deploy_dir}...")
+            for item in preserve_items:
+                item_path = self.deploy_dir / item
+                if item_path.exists():
+                    # Create temp location for preserved item
+                    temp_path = self.deploy_dir.parent / f".{item}.preserve"
+                    if temp_path.exists():
+                        shutil.rmtree(temp_path) if temp_path.is_dir() else temp_path.unlink()
+
+                    if item_path.is_dir():
+                        shutil.move(str(item_path), str(temp_path))
+                    else:
+                        shutil.copy2(str(item_path), str(temp_path))
+                    preserved[item] = temp_path
+                    logger.debug(f"Preserved {item}")
+
+            # Remove old code files (but keep preserved items)
+            logger.info(f"Removing old code files from {self.deploy_dir}...")
+            for item in self.deploy_dir.iterdir():
+                if item.name not in preserve_items:
+                    if item.is_dir():
+                        shutil.rmtree(item)
+                    else:
+                        item.unlink()
+
+            # Copy new code files from staging
+            logger.info(f"Copying new code files from staging...")
+            for item in self.staging_dir.iterdir():
+                dst = self.deploy_dir / item.name
+                if item.is_dir():
+                    shutil.copytree(item, dst, dirs_exist_ok=True)
+                else:
+                    shutil.copy2(item, dst)
+
+            # Restore preserved items
+            logger.info("Restoring preserved directories...")
+            for item, temp_path in preserved.items():
+                dst = self.deploy_dir / item
+                if temp_path.is_dir():
+                    shutil.move(str(temp_path), str(dst))
+                else:
+                    shutil.copy2(str(temp_path), str(dst))
+                    temp_path.unlink()
+                logger.debug(f"Restored {item}")
+
+            # Clean up staging
+            self._cleanup_staging()
 
             logger.info("Atomic swap completed successfully")
 
         except Exception as e:
-            # Clean up staging on failure
+            # Clean up staging and any preserved items on failure
             self._cleanup_staging()
+            for temp_path in self.deploy_dir.parent.glob(".*.preserve"):
+                try:
+                    if temp_path.is_dir():
+                        shutil.rmtree(temp_path)
+                    else:
+                        temp_path.unlink()
+                except Exception:
+                    pass
             raise DeploymentError(f"Error during atomic swap: {e}") from e
 
     def get_staging_size_mb(self) -> float:
