@@ -789,6 +789,37 @@ async def init_state_schema(db):
         await db.commit()
         logger.info("State database migrated to schema version 2")
 
+    # Migration: Add annual_turnover column to portfolio_snapshots (version 2 -> 3)
+    if current_version == 2:
+        now = datetime.now().isoformat()
+        logger.info("Migrating state database to schema version 3 (annual_turnover)...")
+
+        try:
+            # Check if column already exists
+            cursor = await db.execute("PRAGMA table_info(portfolio_snapshots)")
+            columns = await cursor.fetchall()
+            column_names = [col[1] for col in columns]
+
+            if "annual_turnover" not in column_names:
+                await db.execute(
+                    "ALTER TABLE portfolio_snapshots ADD COLUMN annual_turnover REAL"
+                )
+                logger.info("Added annual_turnover column to portfolio_snapshots")
+
+            await db.execute(
+                "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
+                (
+                    3,
+                    now,
+                    "Added annual_turnover column to portfolio_snapshots",
+                ),
+            )
+            await db.commit()
+            logger.info("State database migrated to schema version 3")
+        except Exception as e:
+            logger.error(f"Failed to migrate state schema to version 3: {e}")
+            await db.rollback()
+
 
 # =============================================================================
 # CACHE.DB - Computed aggregates (ephemeral, can be rebuilt)
