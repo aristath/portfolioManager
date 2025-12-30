@@ -84,17 +84,25 @@ class StockDiscoveryService:
                         limit=fetch_limit,
                     )
 
+                    logger.debug(
+                        f"Fetched {len(securities)} securities from exchange {exchange}"
+                    )
                     # Filter candidates
                     for security in securities:
                         if not isinstance(security, dict):
+                            logger.debug(
+                                f"Skipping non-dict security: {type(security)}"
+                            )
                             continue
 
                         symbol = security.get("symbol", "").upper()
                         if not symbol:
+                            logger.debug("Skipping security with empty symbol")
                             continue
 
                         # Skip if already in universe
                         if symbol in existing_set:
+                            logger.debug(f"Skipping {symbol}: already in universe")
                             continue
 
                         # Filter by geography (if available in security data)
@@ -103,11 +111,17 @@ class StockDiscoveryService:
                             # Map country to geography
                             security_geo = self._country_to_geography(security_country)
                             if security_geo and security_geo not in geographies:
+                                logger.debug(
+                                    f"Skipping {symbol}: geography {security_geo} not in {geographies}"
+                                )
                                 continue
 
                         # Filter by exchange
                         security_exchange = security.get("exchange", "").lower()
                         if security_exchange and security_exchange not in exchanges:
+                            logger.debug(
+                                f"Skipping {symbol}: exchange {security_exchange} not in {exchanges}"
+                            )
                             continue
 
                         # Filter by minimum volume
@@ -118,9 +132,13 @@ class StockDiscoveryService:
                             volume = 0.0
 
                         if volume < min_volume:
+                            logger.debug(
+                                f"Skipping {symbol}: volume {volume} below minimum {min_volume}"
+                            )
                             continue
 
                         # Add candidate
+                        logger.debug(f"Adding candidate: {symbol} (volume: {volume})")
                         candidates.append(security)
 
                         # Respect fetch limit
