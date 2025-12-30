@@ -38,56 +38,61 @@ class TradeFrequencyService:
             Tuple of (allowed: bool, reason: Optional[str])
             If allowed is False, reason explains why
         """
-        # Check if frequency limits are enabled
-        enabled = await self._settings_repo.get_float(
-            "trade_frequency_limits_enabled", 1.0
-        )
-        if enabled == 0.0:
-            return True, None
+        try:
+            # Check if frequency limits are enabled
+            enabled = await self._settings_repo.get_float(
+                "trade_frequency_limits_enabled", 1.0
+            )
+            if enabled == 0.0:
+                return True, None
 
-        # Check minimum time between trades
-        min_time_minutes = await self._settings_repo.get_float(
-            "min_time_between_trades_minutes", 60.0
-        )
-        last_trade_time = await self._trade_repo.get_last_trade_timestamp()
+            # Check minimum time between trades
+            min_time_minutes = await self._settings_repo.get_float(
+                "min_time_between_trades_minutes", 60.0
+            )
+            last_trade_time = await self._trade_repo.get_last_trade_timestamp()
 
-        if last_trade_time:
-            time_since_last = datetime.now() - last_trade_time
-            minutes_since_last = time_since_last.total_seconds() / 60.0
+            if last_trade_time:
+                time_since_last = datetime.now() - last_trade_time
+                minutes_since_last = time_since_last.total_seconds() / 60.0
 
-            if minutes_since_last < min_time_minutes:
-                remaining_minutes = int(min_time_minutes - minutes_since_last)
+                if minutes_since_last < min_time_minutes:
+                    remaining_minutes = int(min_time_minutes - minutes_since_last)
+                    return (
+                        False,
+                        f"Minimum {int(min_time_minutes)} minutes between trades. "
+                        f"{remaining_minutes} minutes remaining.",
+                    )
+
+            # Check daily trade limit
+            max_per_day = int(
+                await self._settings_repo.get_float("max_trades_per_day", 4.0)
+            )
+            trades_today = await self._trade_repo.get_trade_count_today()
+
+            if trades_today >= max_per_day:
                 return (
                     False,
-                    f"Minimum {int(min_time_minutes)} minutes between trades. "
-                    f"{remaining_minutes} minutes remaining.",
+                    f"Daily trade limit reached ({trades_today}/{max_per_day} trades today)",
                 )
 
-        # Check daily trade limit
-        max_per_day = int(
-            await self._settings_repo.get_float("max_trades_per_day", 4.0)
-        )
-        trades_today = await self._trade_repo.get_trade_count_today()
-
-        if trades_today >= max_per_day:
-            return (
-                False,
-                f"Daily trade limit reached ({trades_today}/{max_per_day} trades today)",
+            # Check weekly trade limit
+            max_per_week = int(
+                await self._settings_repo.get_float("max_trades_per_week", 10.0)
             )
+            trades_this_week = await self._trade_repo.get_trade_count_this_week()
 
-        # Check weekly trade limit
-        max_per_week = int(
-            await self._settings_repo.get_float("max_trades_per_week", 10.0)
-        )
-        trades_this_week = await self._trade_repo.get_trade_count_this_week()
+            if trades_this_week >= max_per_week:
+                return (
+                    False,
+                    f"Weekly trade limit reached ({trades_this_week}/{max_per_week} trades this week)",
+                )
 
-        if trades_this_week >= max_per_week:
-            return (
-                False,
-                f"Weekly trade limit reached ({trades_this_week}/{max_per_week} trades this week)",
-            )
-
-        return True, None
+            return True, None
+        except Exception as e:
+            logger.warning(f"Error checking trade frequency limits: {e}")
+            # On error, be conservative and block the trade
+            return False, f"Error checking trade frequency limits: {str(e)}"
 
     async def get_frequency_status(self) -> dict:
         """

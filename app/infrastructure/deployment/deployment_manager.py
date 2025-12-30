@@ -154,6 +154,13 @@ class DeploymentManager:
                     await self.file_deployer.atomic_swap()
                     logger.info("Main app deployed successfully")
 
+                    # Ensure venv exists after deployment
+                    if not self.venv_dir.exists():
+                        logger.warning(
+                            f"Virtual environment missing: {self.venv_dir}. "
+                            "Service may fail to start. Venv needs to be recreated."
+                        )
+
                     # Step 6: Restart service
                     try:
                         await self.service_manager.restart_service()

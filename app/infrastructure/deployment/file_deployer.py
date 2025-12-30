@@ -255,6 +255,13 @@ class FileDeployer:
             # Clean up staging
             self._cleanup_staging()
 
+            # Ensure venv exists after swap
+            if not self.venv_dir.exists():
+                logger.warning(
+                    f"Virtual environment missing after swap: {self.venv_dir}. "
+                    "It will need to be recreated manually."
+                )
+
             logger.info("Atomic swap completed successfully")
 
         except Exception as e:
