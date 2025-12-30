@@ -745,6 +745,7 @@ async def get_universe_suggestions(
     from app.repositories import ScoreRepository
 
     try:
+        logger.info("Fetching universe suggestions...")
         # Get dependencies
         score_repo = ScoreRepository()
 
@@ -757,6 +758,7 @@ async def get_universe_suggestions(
         discovery_enabled = await settings_repo.get_float(
             "stock_discovery_enabled", 1.0
         )
+        logger.info(f"Discovery enabled: {discovery_enabled}")
         if discovery_enabled != 0.0:
             # Get discovery settings
             score_threshold = await settings_repo.get_float(
@@ -777,6 +779,9 @@ async def get_universe_suggestions(
             # Find candidates
             candidates = await discovery_service.discover_candidates(
                 existing_symbols=existing_symbols
+            )
+            logger.info(
+                f"Discovery service returned {len(candidates) if candidates else 0} candidates"
             )
 
             if candidates:
@@ -819,12 +824,16 @@ async def get_universe_suggestions(
                         logger.warning(f"Failed to score {symbol} for suggestions: {e}")
                         continue
 
+                logger.info(f"Scored {len(scored_candidates)} candidates")
                 # Filter by score threshold and sort (best first)
                 above_threshold = [
                     (candidate, score)
                     for candidate, score in scored_candidates
                     if score >= score_threshold
                 ]
+                logger.info(
+                    f"{len(above_threshold)} candidates above threshold {score_threshold}"
+                )
                 above_threshold.sort(key=lambda x: x[1], reverse=True)
 
                 # Format candidates for response (don't enforce max_per_month limit)
@@ -851,6 +860,7 @@ async def get_universe_suggestions(
 
         # Check if pruning is enabled
         pruning_enabled = await settings_repo.get_float("universe_pruning_enabled", 1.0)
+        logger.info(f"Pruning enabled: {pruning_enabled}")
         if pruning_enabled != 0.0:
             # Get pruning settings
             score_threshold = await settings_repo.get_float(
@@ -867,6 +877,7 @@ async def get_universe_suggestions(
 
             # Get all active stocks
             stocks = await stock_repo.get_all_active()
+            logger.info(f"Checking {len(stocks)} active stocks for pruning")
 
             if stocks:
                 client = get_tradernet_client()
@@ -883,6 +894,10 @@ async def get_universe_suggestions(
 
                         # Check minimum samples requirement
                         if len(scores) < min_samples:
+                            logger.debug(
+                                f"Stock {stock.symbol}: only {len(scores)} score(s), "
+                                f"below minimum {min_samples}, skipping"
+                            )
                             continue
 
                         # Calculate average score
@@ -890,9 +905,16 @@ async def get_universe_suggestions(
                             s.total_score for s in scores if s.total_score is not None
                         ]
                         if not total_scores:
+                            logger.debug(
+                                f"Stock {stock.symbol}: no valid scores found, skipping"
+                            )
                             continue
 
                         avg_score = sum(total_scores) / len(total_scores)
+                        logger.debug(
+                            f"Stock {stock.symbol}: average score {avg_score:.3f} "
+                            f"(threshold: {score_threshold}, samples: {len(scores)})"
+                        )
 
                         # Check if average score is below threshold
                         if avg_score >= score_threshold:
@@ -951,6 +973,10 @@ async def get_universe_suggestions(
                         )
                         continue
 
+        logger.info(
+            f"Universe suggestions: {len(candidates_to_add)} candidates to add, "
+            f"{len(stocks_to_prune)} stocks to prune"
+        )
         return {
             "candidates_to_add": candidates_to_add,
             "stocks_to_prune": stocks_to_prune,
