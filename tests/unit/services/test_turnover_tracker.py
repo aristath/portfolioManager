@@ -378,57 +378,62 @@ class TestCalculateAnnualTurnover:
 class TestGetTurnoverStatus:
     """Test get_turnover_status method."""
 
-    def test_returns_unknown_when_turnover_none(self):
+    @pytest.mark.asyncio
+    async def test_returns_unknown_when_turnover_none(self, mock_db_manager):
         """Test that unknown status is returned when turnover is None."""
         from app.application.services.turnover_tracker import TurnoverTracker
 
-        tracker = TurnoverTracker()
-        result = tracker.get_turnover_status(None)
+        tracker = TurnoverTracker(db_manager=mock_db_manager)
+        result = await tracker.get_turnover_status(None)
 
         assert result["turnover"] is None
         assert result["status"] == "unknown"
         assert result["alert"] is None
         assert "Insufficient data" in result["reason"]
 
-    def test_returns_critical_for_high_turnover(self):
+    @pytest.mark.asyncio
+    async def test_returns_critical_for_high_turnover(self, mock_db_manager):
         """Test that critical status is returned for high turnover."""
         from app.application.services.turnover_tracker import TurnoverTracker
 
-        tracker = TurnoverTracker()
-        result = tracker.get_turnover_status(1.0)  # 100% turnover
+        tracker = TurnoverTracker(db_manager=mock_db_manager)
+        result = await tracker.get_turnover_status(1.0)  # 100% turnover
 
         assert result["status"] == "critical"
         assert result["alert"] == "critical"
         assert "Very high turnover" in result["reason"]
 
-    def test_returns_warning_for_moderate_turnover(self):
+    @pytest.mark.asyncio
+    async def test_returns_warning_for_moderate_turnover(self, mock_db_manager):
         """Test that warning status is returned for moderate turnover."""
         from app.application.services.turnover_tracker import TurnoverTracker
 
-        tracker = TurnoverTracker()
-        result = tracker.get_turnover_status(0.6)  # 60% turnover
+        tracker = TurnoverTracker(db_manager=mock_db_manager)
+        result = await tracker.get_turnover_status(0.6)  # 60% turnover
 
         assert result["status"] == "warning"
         assert result["alert"] == "warning"
         assert "High turnover" in result["reason"]
 
-    def test_returns_normal_for_low_turnover(self):
+    @pytest.mark.asyncio
+    async def test_returns_normal_for_low_turnover(self, mock_db_manager):
         """Test that normal status is returned for low turnover."""
         from app.application.services.turnover_tracker import TurnoverTracker
 
-        tracker = TurnoverTracker()
-        result = tracker.get_turnover_status(0.3)  # 30% turnover
+        tracker = TurnoverTracker(db_manager=mock_db_manager)
+        result = await tracker.get_turnover_status(0.3)  # 30% turnover
 
         assert result["status"] == "normal"
         assert result["alert"] is None
         assert "Normal turnover" in result["reason"]
 
-    def test_includes_turnover_display(self):
+    @pytest.mark.asyncio
+    async def test_includes_turnover_display(self, mock_db_manager):
         """Test that turnover display is included."""
         from app.application.services.turnover_tracker import TurnoverTracker
 
-        tracker = TurnoverTracker()
-        result = tracker.get_turnover_status(0.5)
+        tracker = TurnoverTracker(db_manager=mock_db_manager)
+        result = await tracker.get_turnover_status(0.5)
 
         assert "turnover_display" in result
         assert "%" in result["turnover_display"]

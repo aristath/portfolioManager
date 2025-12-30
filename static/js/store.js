@@ -67,6 +67,7 @@ document.addEventListener('alpine:init', () => {
     showSettingsModal: false,
     showUniverseManagementModal: false,
     selectedStockSymbol: null,
+    selectedStockIsin: null,
     editingStock: null,
     executingSymbol: null,
     executingSellSymbol: null,
@@ -528,9 +529,9 @@ document.addEventListener('alpine:init', () => {
       this.loading.scores = false;
     },
 
-    async refreshSingleScore(symbol) {
+    async refreshSingleScore(isin) {
       try {
-        await API.refreshScore(symbol);
+        await API.refreshScore(isin);
         await this.fetchStocks();
       } catch (e) {
         this.showMessage('Failed to refresh score', 'error');
@@ -688,11 +689,13 @@ document.addEventListener('alpine:init', () => {
       this.addingStock = false;
     },
 
-    async removeStock(symbol) {
-      if (!confirm(`Remove ${symbol} from the universe?`)) return;
+    async removeStock(isin) {
+      const stock = this.stocks.find(s => s.isin === isin);
+      const displaySymbol = stock ? stock.symbol : isin;
+      if (!confirm(`Remove ${displaySymbol} from the universe?`)) return;
       try {
-        await API.deleteStock(symbol);
-        this.showMessage(`${symbol} removed`, 'success');
+        await API.deleteStock(isin);
+        this.showMessage(`${displaySymbol} removed`, 'success');
         await this.fetchStocks();
       } catch (e) {
         this.showMessage('Failed to remove stock', 'error');
@@ -720,14 +723,16 @@ document.addEventListener('alpine:init', () => {
       this.loading.universeSuggestions = false;
     },
 
-    async addStockFromSuggestion(symbol) {
-      this.addingFromSuggestion[symbol] = true;
+    async addStockFromSuggestion(isin) {
+      this.addingFromSuggestion[isin] = true;
       try {
-        await API.addStockFromSuggestion(symbol);
-        this.showMessage(`${symbol} added to universe`, 'success');
+        await API.addStockFromSuggestion(isin);
+        const candidate = this.universeSuggestions.candidatesToAdd.find(c => c.isin === isin);
+        const displaySymbol = candidate ? candidate.symbol : isin;
+        this.showMessage(`${displaySymbol} added to universe`, 'success');
         // Remove from candidates list
         this.universeSuggestions.candidatesToAdd = this.universeSuggestions.candidatesToAdd.filter(
-          c => c.symbol !== symbol
+          c => c.isin !== isin
         );
         // Refresh stocks list
         await this.fetchStocks();
@@ -753,13 +758,15 @@ document.addEventListener('alpine:init', () => {
         const errorMessage = e.message || 'Failed to prune stock';
         this.showMessage(errorMessage, 'error');
       }
-      this.pruningFromSuggestion[symbol] = false;
+      this.pruningFromSuggestion[isin] = false;
     },
 
     openEditStock(stock) {
       this.editingStock = {
-        originalSymbol: stock.symbol,  // Track original for rename detection
+        originalIsin: stock.isin,  // Track original ISIN for API calls
+        originalSymbol: stock.symbol,  // Track original symbol for rename detection
         symbol: stock.symbol,
+        isin: stock.isin,
         yahoo_symbol: stock.yahoo_symbol || '',
         name: stock.name,
         country: stock.country || '',
@@ -799,7 +806,7 @@ document.addEventListener('alpine:init', () => {
           payload.new_symbol = this.editingStock.symbol.toUpperCase();
         }
 
-        await API.updateStock(this.editingStock.originalSymbol, payload);
+        await API.updateStock(this.editingStock.originalIsin, payload);
         this.showMessage('Stock updated successfully', 'success');
         this.closeEditStock();
         await this.fetchStocks();
@@ -810,11 +817,11 @@ document.addEventListener('alpine:init', () => {
       this.loading.stockSave = false;
     },
 
-    async updateMultiplier(symbol, value) {
+    async updateMultiplier(isin, value) {
       const multiplier = Math.max(0.1, Math.min(3.0, parseFloat(value) || 1.0));
       try {
-        await API.updateStock(symbol, { priority_multiplier: multiplier });
-        const stock = this.stocks.find(s => s.symbol === symbol);
+        await API.updateStock(isin, { priority_multiplier: multiplier });
+        const stock = this.stocks.find(s => s.isin === isin);
         if (stock) stock.priority_multiplier = multiplier;
         await this.fetchStocks();
       } catch (e) {

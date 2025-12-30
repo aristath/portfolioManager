@@ -59,6 +59,14 @@ class TestNegativeBalanceRebalancer:
         return service
 
     @pytest.fixture
+    def mock_recommendation_repo(self):
+        """Create mock recommendation repository."""
+        repo = AsyncMock()
+        repo.create = AsyncMock()
+        repo.dismiss_all_by_portfolio_hash = AsyncMock(return_value=0)
+        return repo
+
+    @pytest.fixture
     def rebalancer(
         self,
         mock_client,
@@ -67,6 +75,7 @@ class TestNegativeBalanceRebalancer:
         mock_stock_repo,
         mock_position_repo,
         mock_exchange_rate_service,
+        mock_recommendation_repo,
     ):
         """Create rebalancer instance with mocked dependencies."""
         return NegativeBalanceRebalancer(
@@ -76,6 +85,7 @@ class TestNegativeBalanceRebalancer:
             mock_stock_repo,
             mock_position_repo,
             mock_exchange_rate_service,
+            recommendation_repo=mock_recommendation_repo,
         )
 
     @pytest.mark.asyncio

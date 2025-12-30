@@ -16,10 +16,11 @@ function stockChartComponent() {
     chart: null,
     lineSeries: null,
     symbol: null,
+    isin: null,
     stockName: null,
 
     init() {
-      // Watch for symbol changes from store
+      // Watch for symbol changes from store (for display)
       this.$watch('$store.app.selectedStockSymbol', (symbol) => {
         if (symbol) {
           this.symbol = symbol;
@@ -27,13 +28,20 @@ function stockChartComponent() {
           const stocks = this.$store.app.stocks || [];
           const stock = stocks.find(s => s.symbol === symbol);
           this.stockName = stock ? stock.name : null;
+        }
+      });
+
+      // Watch for ISIN changes from store (for API calls)
+      this.$watch('$store.app.selectedStockIsin', (isin) => {
+        if (isin) {
+          this.isin = isin;
           this.loadChart();
         }
       });
 
       // Load chart when modal opens
       this.$watch('$store.app.showStockChart', (show) => {
-        if (show && this.symbol) {
+        if (show && this.isin) {
           this.loadChart();
         } else if (!show) {
           this.closeChart();
@@ -42,13 +50,13 @@ function stockChartComponent() {
     },
 
     async loadChart() {
-      if (!this.symbol) return;
+      if (!this.isin) return;
 
       this.loading = true;
       this.error = null;
 
       try {
-        const data = await API.fetchStockChart(this.symbol, this.selectedRange, this.selectedSource);
+        const data = await API.fetchStockChart(this.isin, this.selectedRange, this.selectedSource);
 
         if (!data || data.length === 0) {
           this.chartData = [];
@@ -143,6 +151,7 @@ function stockChartComponent() {
       this.chartData = null;
       this.error = null;
       this.symbol = null;
+      this.isin = null;
       this.stockName = null;
     },
   };

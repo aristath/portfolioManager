@@ -125,7 +125,7 @@ class StockTable extends HTMLElement {
                 <tr class="hover:bg-gray-800/50"
                     :class="getPositionAlert(stock.symbol) ? (getPositionAlert(stock.symbol).severity === 'critical' ? 'border-l-4 border-red-500' : 'border-l-4 border-yellow-500') : ''">
                   <td class="py-1.5 px-2 font-mono text-blue-400 sticky left-0 bg-gray-800">
-                    <button @click.stop="$store.app.showStockChart = true; $store.app.selectedStockSymbol = stock.symbol"
+                    <button @click.stop="$store.app.showStockChart = true; $store.app.selectedStockSymbol = stock.symbol; $store.app.selectedStockIsin = stock.isin"
                             class="hover:underline cursor-pointer"
                             title="View chart">
                       <span x-text="stock.symbol"></span>
@@ -166,7 +166,7 @@ class StockTable extends HTMLElement {
                            max="3"
                            step="0.1"
                            @click.stop
-                           @change="$store.app.updateMultiplier(stock.symbol, $event.target.value)"
+                           @change="$store.app.updateMultiplier(stock.isin, $event.target.value)"
                            title="Priority multiplier (0.1-3.0)">
                   </td>
                   <td class="py-1.5 px-2 text-center">
@@ -196,7 +196,7 @@ class StockTable extends HTMLElement {
                           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                         </svg>
                       </button>
-                      <button @click="$store.app.refreshSingleScore(stock.symbol)"
+                      <button @click="$store.app.refreshSingleScore(stock.isin)"
                               class="p-1 text-gray-300 hover:text-green-400 transition-colors"
                               title="Refresh score">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -206,7 +206,7 @@ class StockTable extends HTMLElement {
                           <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
                         </svg>
                       </button>
-                      <button @click="$store.app.removeStock(stock.symbol)"
+                      <button @click="$store.app.removeStock(stock.isin)"
                               class="p-1 text-gray-300 hover:text-red-400 transition-colors"
                               title="Remove from universe">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

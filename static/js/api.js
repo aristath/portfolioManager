@@ -86,13 +86,13 @@ const API = {
   fetchStocks: () => fetch('/api/stocks').then(r => r.json()),
   createStock: (data) => API._post('/api/stocks', data),
   addStockByIdentifier: (data) => API._post('/api/stocks/add-by-identifier', data),
-  updateStock: (symbol, data) => API._put(`/api/stocks/${symbol}`, data),
-  deleteStock: (symbol) => API._delete(`/api/stocks/${symbol}`),
-  refreshScore: (symbol) => API._post(`/api/stocks/${symbol}/refresh`),
+  updateStock: (isin, data) => API._put(`/api/stocks/${isin}`, data),
+  deleteStock: (isin) => API._delete(`/api/stocks/${isin}`),
+  refreshScore: (isin) => API._post(`/api/stocks/${isin}/refresh`),
   refreshAllScores: () => API._post('/api/stocks/refresh-all'),
   fetchUniverseSuggestions: () => fetch('/api/stocks/universe-suggestions').then(r => r.json()),
-  addStockFromSuggestion: (symbol) => API._post(`/api/stocks/${symbol}/add-from-suggestion`),
-  pruneStockFromSuggestion: (symbol) => API._post(`/api/stocks/${symbol}/prune-from-suggestion`),
+  addStockFromSuggestion: (isin) => API._post(`/api/stocks/${isin}/add-from-suggestion`),
+  pruneStockFromSuggestion: (isin) => API._post(`/api/stocks/${isin}/prune-from-suggestion`),
 
   // Trades
   fetchTrades: () => fetch('/api/trades').then(r => r.json()),
@@ -102,9 +102,9 @@ const API = {
   executeRecommendation: () => API._post('/api/trades/recommendations/execute'),
 
   // Charts
-  fetchStockChart: (symbol, range = '1Y', source = 'tradernet') => {
+  fetchStockChart: (isin, range = '1Y', source = 'tradernet') => {
     const params = new URLSearchParams({ range, source });
-    return fetch(`/api/charts/stocks/${symbol}?${params}`).then(r => r.json());
+    return fetch(`/api/charts/stocks/${isin}?${params}`).then(r => r.json());
   },
   fetchSparklines: () => fetch('/api/charts/sparklines').then(r => r.json()),
 

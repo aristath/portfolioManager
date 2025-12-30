@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from app.domain.events import StockAddedEvent, get_event_bus
 from app.domain.factories.stock_factory import StockFactory
 from app.domain.services.priority_calculator import PriorityCalculator, PriorityInput
+from app.domain.services.symbol_resolver import is_isin
 from app.infrastructure.cache import cache
 from app.infrastructure.dependencies import (
     PortfolioServiceDep,
@@ -449,9 +450,9 @@ async def get_universe_suggestions(
         )
 
 
-@router.get("/{identifier}")
+@router.get("/{isin}")
 async def get_stock(
-    identifier: str,
+    isin: str,
     stock_repo: StockRepositoryDep,
     position_repo: PositionRepositoryDep,
     score_repo: ScoreRepositoryDep,
@@ -459,9 +460,14 @@ async def get_stock(
     """Get detailed stock info with score breakdown.
 
     Args:
-        identifier: Stock symbol (e.g., AAPL.US) or ISIN (e.g., US0378331005)
+        isin: Stock ISIN (e.g., US0378331005)
     """
-    stock = await stock_repo.get_by_identifier(identifier)
+    # Validate ISIN format
+    isin = isin.strip().upper()
+    if not is_isin(isin):
+        raise HTTPException(status_code=400, detail="Invalid ISIN format")
+
+    stock = await stock_repo.get_by_isin(isin)
     if not stock:
         raise HTTPException(status_code=404, detail="Stock not found")
 
@@ -472,6 +478,7 @@ async def get_stock(
 
     result: dict[str, Any] = {
         "symbol": stock.symbol,
+        "isin": stock.isin,
         "yahoo_symbol": stock.yahoo_symbol,
         "name": stock.name,
         "industry": stock.industry,
@@ -704,9 +711,9 @@ async def refresh_all_scores(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/{identifier}/refresh-data")
+@router.post("/{isin}/refresh-data")
 async def refresh_stock_data(
-    identifier: str,
+    isin: str,
     stock_repo: StockRepositoryDep,
 ):
     """Trigger full data refresh for a stock.
@@ -719,11 +726,16 @@ async def refresh_stock_data(
     This bypasses the last_synced check and immediately processes the stock.
 
     Args:
-        identifier: Stock symbol (e.g., AAPL.US) or ISIN (e.g., US0378331005)
+        isin: Stock ISIN (e.g., US0378331005)
     """
     from app.jobs.stocks_data_sync import refresh_single_stock
 
-    stock = await stock_repo.get_by_identifier(identifier)
+    # Validate ISIN format
+    isin = isin.strip().upper()
+    if not is_isin(isin):
+        raise HTTPException(status_code=400, detail="Invalid ISIN format")
+
+    stock = await stock_repo.get_by_isin(isin)
     if not stock:
         raise HTTPException(status_code=404, detail="Stock not found")
 
@@ -749,22 +761,27 @@ async def refresh_stock_data(
         )
 
 
-@router.post("/{identifier}/refresh")
+@router.post("/{isin}/refresh")
 async def refresh_stock_score(
-    identifier: str,
+    isin: str,
     stock_repo: StockRepositoryDep,
     scoring_service: ScoringServiceDep,
 ):
     """Trigger score recalculation for a stock (quick, no historical data sync).
 
     Args:
-        identifier: Stock symbol (e.g., AAPL.US) or ISIN (e.g., US0378331005)
+        isin: Stock ISIN (e.g., US0378331005)
     """
+    # Validate ISIN format
+    isin = isin.strip().upper()
+    if not is_isin(isin):
+        raise HTTPException(status_code=400, detail="Invalid ISIN format")
+
     # Invalidate recommendation cache so new score affects recommendations immediately
     recommendation_cache = get_recommendation_cache()
     await recommendation_cache.invalidate_all_recommendations()
 
-    stock = await stock_repo.get_by_identifier(identifier)
+    stock = await stock_repo.get_by_isin(isin)
     if not stock:
         raise HTTPException(status_code=404, detail="Stock not found")
 
@@ -831,7 +848,7 @@ async def _validate_symbol_change(
 ) -> None:
     """Validate that new symbol doesn't already exist."""
     if new_symbol != old_symbol:
-        existing = await stock_repo.get_by_identifier(new_symbol)
+        existing = await stock_repo.get_by_symbol(new_symbol)
         if existing:
             raise HTTPException(
                 status_code=400, detail=f"Symbol {new_symbol} already exists"
@@ -951,9 +968,9 @@ def _format_stock_response(stock, score) -> dict:
     return stock_data
 
 
-@router.put("/{identifier}")
+@router.put("/{isin}")
 async def update_stock(
-    identifier: str,
+    isin: str,
     update: StockUpdate,
     stock_repo: StockRepositoryDep,
     scoring_service: ScoringServiceDep,
@@ -961,9 +978,14 @@ async def update_stock(
     """Update stock details.
 
     Args:
-        identifier: Stock symbol (e.g., AAPL.US) or ISIN (e.g., US0378331005)
+        isin: Stock ISIN (e.g., US0378331005)
     """
-    stock = await stock_repo.get_by_identifier(identifier)
+    # Validate ISIN format
+    isin = isin.strip().upper()
+    if not is_isin(isin):
+        raise HTTPException(status_code=400, detail="Invalid ISIN format")
+
+    stock = await stock_repo.get_by_isin(isin)
     if not stock:
         raise HTTPException(status_code=404, detail="Stock not found")
 
@@ -983,7 +1005,7 @@ async def update_stock(
     await stock_repo.update(old_symbol, **updates)
 
     final_symbol = new_symbol if new_symbol and new_symbol != old_symbol else old_symbol
-    updated_stock = await stock_repo.get_by_identifier(final_symbol)
+    updated_stock = await stock_repo.get_by_symbol(final_symbol)
     if not updated_stock:
         raise HTTPException(status_code=404, detail="Stock not found after update")
 
@@ -996,40 +1018,43 @@ async def update_stock(
     return _format_stock_response(updated_stock, score)
 
 
-@router.delete("/{identifier}")
+@router.delete("/{isin}")
 async def delete_stock(
-    identifier: str,
+    isin: str,
     stock_repo: StockRepositoryDep,
 ):
     """Remove a stock from the universe (soft delete by setting active=0).
 
     Args:
-        identifier: Stock symbol (e.g., AAPL.US) or ISIN (e.g., US0378331005)
+        isin: Stock ISIN (e.g., US0378331005)
     """
-    logger.info(f"DELETE /api/stocks/{identifier} - Attempting to delete stock")
+    # Validate ISIN format
+    isin = isin.strip().upper()
+    if not is_isin(isin):
+        raise HTTPException(status_code=400, detail="Invalid ISIN format")
 
-    stock = await stock_repo.get_by_identifier(identifier)
+    logger.info(f"DELETE /api/stocks/{isin} - Attempting to delete stock")
+
+    stock = await stock_repo.get_by_isin(isin)
     if not stock:
-        logger.warning(f"DELETE /api/stocks/{identifier} - Stock not found")
+        logger.warning(f"DELETE /api/stocks/{isin} - Stock not found")
         raise HTTPException(status_code=404, detail="Stock not found")
 
     symbol = stock.symbol
     logger.info(
-        f"DELETE /api/stocks/{identifier} - Soft deleting stock {symbol} (setting active=0)"
+        f"DELETE /api/stocks/{isin} - Soft deleting stock {symbol} (setting active=0)"
     )
     await stock_repo.delete(symbol)
 
     cache.invalidate("stocks_with_scores")
 
-    logger.info(
-        f"DELETE /api/stocks/{identifier} - Stock {symbol} successfully deleted"
-    )
+    logger.info(f"DELETE /api/stocks/{isin} - Stock {symbol} successfully deleted")
     return {"message": f"Stock {symbol} removed from universe"}
 
 
-@router.post("/{symbol}/add-from-suggestion")
+@router.post("/{isin}/add-from-suggestion")
 async def add_stock_from_suggestion(
-    symbol: str,
+    isin: str,
     stock_setup_service: StockSetupServiceDep,
     score_repo: ScoreRepositoryDep,
 ):
@@ -1039,26 +1064,28 @@ async def add_stock_from_suggestion(
     by the universe suggestions endpoint.
 
     Args:
-        symbol: Stock symbol (e.g., AAPL.US) to add
+        isin: Stock ISIN (e.g., US0378331005) to add
     """
     try:
-        symbol = symbol.strip().upper()
-        if not symbol:
-            raise HTTPException(status_code=400, detail="Symbol cannot be empty")
+        # Validate ISIN format
+        isin = isin.strip().upper()
+        if not is_isin(isin):
+            raise HTTPException(status_code=400, detail="Invalid ISIN format")
 
         # Check if stock already exists
         from app.infrastructure.dependencies import get_stock_repository
 
         concrete_stock_repo = get_stock_repository()
-        existing = await concrete_stock_repo.get_by_symbol(symbol)
+        existing = await concrete_stock_repo.get_by_isin(isin)
         if existing:
             raise HTTPException(
-                status_code=400, detail=f"Stock {symbol} already exists in universe"
+                status_code=400,
+                detail=f"Stock with ISIN {isin} already exists in universe",
             )
 
         # Add the stock
         stock = await stock_setup_service.add_stock_by_identifier(
-            identifier=symbol,
+            identifier=isin,
             min_lot=1,
             allow_buy=True,
             allow_sell=False,  # Conservative: don't allow selling initially
@@ -1094,9 +1121,9 @@ async def add_stock_from_suggestion(
         raise HTTPException(status_code=500, detail=f"Failed to add stock: {str(e)}")
 
 
-@router.post("/{symbol}/prune-from-suggestion")
+@router.post("/{isin}/prune-from-suggestion")
 async def prune_stock_from_suggestion(
-    symbol: str,
+    isin: str,
     stock_repo: StockRepositoryDep,
 ):
     """Prune a stock from the universe from a suggestion.
@@ -1105,22 +1132,25 @@ async def prune_stock_from_suggestion(
     by the universe suggestions endpoint. Marks the stock as inactive.
 
     Args:
-        symbol: Stock symbol (e.g., AAPL.US) to prune
+        isin: Stock ISIN (e.g., US0378331005) to prune
     """
-    try:
-        symbol = symbol.strip().upper()
-        if not symbol:
-            raise HTTPException(status_code=400, detail="Symbol cannot be empty")
+    # Validate ISIN format
+    isin = isin.strip().upper()
+    if not is_isin(isin):
+        raise HTTPException(status_code=400, detail="Invalid ISIN format")
 
+    try:
         # Check if stock exists
-        stock = await stock_repo.get_by_symbol(symbol)
+        stock = await stock_repo.get_by_isin(isin)
         if not stock:
-            raise HTTPException(status_code=404, detail=f"Stock {symbol} not found")
+            raise HTTPException(
+                status_code=404, detail=f"Stock with ISIN {isin} not found"
+            )
 
         # Check if already inactive
         if not stock.active:
             raise HTTPException(
-                status_code=400, detail=f"Stock {symbol} is already inactive"
+                status_code=400, detail=f"Stock {stock.symbol} is already inactive"
             )
 
         # Mark as inactive (soft delete)
@@ -1128,6 +1158,7 @@ async def prune_stock_from_suggestion(
         from app.infrastructure.dependencies import get_stock_repository
 
         concrete_stock_repo = get_stock_repository()
+        symbol = stock.symbol
         await concrete_stock_repo.mark_inactive(symbol)
 
         cache.invalidate("stocks_with_scores")

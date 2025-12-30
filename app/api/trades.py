@@ -5,6 +5,7 @@ import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
+from app.domain.services.symbol_resolver import is_isin
 from app.domain.value_objects.trade_side import TradeSide
 from app.infrastructure.cache_invalidation import get_cache_invalidation_service
 from app.infrastructure.dependencies import (
@@ -24,8 +25,8 @@ router = APIRouter()
 
 class TradeRequest(BaseModel):
     symbol: str = Field(
-        ..., min_length=1, description="Stock symbol or ISIN"
-    )  # Can be symbol or ISIN
+        ..., min_length=1, description="Stock ISIN (e.g., US0378331005)"
+    )  # ISIN only
     side: TradeSide = Field(..., description="Trade side: BUY or SELL")
     quantity: float = Field(
         ..., gt=0, description="Quantity to trade (must be positive)"
@@ -34,8 +35,13 @@ class TradeRequest(BaseModel):
     @field_validator("symbol")
     @classmethod
     def validate_symbol(cls, v: str) -> str:
-        """Validate and normalize symbol/identifier."""
-        return v.upper().strip()
+        """Validate and normalize ISIN."""
+        v = v.upper().strip()
+        if not is_isin(v):
+            raise ValueError(
+                "Symbol must be a valid ISIN (12 characters, e.g., US0378331005)"
+            )
+        return v
 
     @field_validator("quantity")
     @classmethod
@@ -109,10 +115,10 @@ async def execute_trade(
 ):
     """Execute a manual trade.
 
-    The symbol field can be either a Tradernet symbol or ISIN.
+    The symbol field must be an ISIN.
     """
-    # Check stock exists and resolve identifier to symbol
-    stock = await stock_repo.get_by_identifier(trade.symbol)
+    # Check stock exists - trade.symbol is validated as ISIN by the model
+    stock = await stock_repo.get_by_isin(trade.symbol)
     if not stock:
         raise HTTPException(status_code=404, detail="Stock not found")
 

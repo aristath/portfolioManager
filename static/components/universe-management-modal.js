@@ -62,11 +62,11 @@ class UniverseManagementModal extends HTMLElement {
                           <span x-show="candidate.volume" x-text="'Volume: ' + candidate.volume.toLocaleString()"></span>
                         </div>
                       </div>
-                      <button @click="$store.app.addStockFromSuggestion(candidate.symbol)"
-                              :disabled="$store.app.addingFromSuggestion[candidate.symbol]"
+                      <button @click="$store.app.addStockFromSuggestion(candidate.isin)"
+                              :disabled="$store.app.addingFromSuggestion[candidate.isin]"
                               class="px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-xs rounded transition-colors disabled:opacity-50 whitespace-nowrap">
-                        <span x-show="$store.app.addingFromSuggestion[candidate.symbol]" class="inline-block animate-spin mr-1">&#9696;</span>
-                        <span x-text="$store.app.addingFromSuggestion[candidate.symbol] ? 'Adding...' : 'Add'"></span>
+                        <span x-show="$store.app.addingFromSuggestion[candidate.isin]" class="inline-block animate-spin mr-1">&#9696;</span>
+                        <span x-text="$store.app.addingFromSuggestion[candidate.isin] ? 'Adding...' : 'Add'"></span>
                       </button>
                     </div>
                   </template>
@@ -126,11 +126,11 @@ class UniverseManagementModal extends HTMLElement {
                           </div>
                         </div>
                       </div>
-                      <button @click="$store.app.pruneStockFromSuggestion(stock.symbol)"
-                              :disabled="$store.app.pruningFromSuggestion[stock.symbol]"
+                      <button @click="$store.app.pruneStockFromSuggestion(stock.isin)"
+                              :disabled="$store.app.pruningFromSuggestion[stock.isin]"
                               class="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs rounded transition-colors disabled:opacity-50 whitespace-nowrap">
-                        <span x-show="$store.app.pruningFromSuggestion[stock.symbol]" class="inline-block animate-spin mr-1">&#9696;</span>
-                        <span x-text="$store.app.pruningFromSuggestion[stock.symbol] ? 'Pruning...' : 'Prune'"></span>
+                        <span x-show="$store.app.pruningFromSuggestion[stock.isin]" class="inline-block animate-spin mr-1">&#9696;</span>
+                        <span x-text="$store.app.pruningFromSuggestion[stock.isin] ? 'Pruning...' : 'Prune'"></span>
                       </button>
                     </div>
                   </template>

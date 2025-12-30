@@ -6,9 +6,10 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
+from app.domain.services.symbol_resolver import is_isin
 from app.infrastructure.cache import cache
 from app.infrastructure.database.manager import DatabaseManager
-from app.infrastructure.dependencies import DatabaseManagerDep
+from app.infrastructure.dependencies import DatabaseManagerDep, StockRepositoryDep
 from app.infrastructure.external import yahoo_finance as yahoo
 from app.infrastructure.external.tradernet_connection import ensure_tradernet_connected
 
@@ -258,10 +259,11 @@ def _combine_and_filter_data(
     return result
 
 
-@router.get("/stocks/{identifier}")
+@router.get("/stocks/{isin}")
 async def get_stock_chart(
-    identifier: str,
+    isin: str,
     db_manager: DatabaseManagerDep,
+    stock_repo: StockRepositoryDep,
     range: str = Query("1Y", description="Time range: 1M, 3M, 6M, 1Y, all"),
     source: str = Query("tradernet", description="Data source: tradernet or yahoo"),
 ):
@@ -272,13 +274,21 @@ async def get_stock_chart(
     Checks cache first, then fetches from API if missing.
 
     Args:
-        identifier: Stock symbol (e.g., AAPL.US) or ISIN (e.g., US0378331005)
+        isin: Stock ISIN (e.g., US0378331005)
     """
     try:
-        # Resolve identifier to symbol for history database lookup
-        # Note: For now, we use the identifier directly. In Phase 2.6, history files
-        # will be renamed from symbol to ISIN, and this logic will be updated.
-        symbol = identifier.upper()
+        # Validate ISIN format
+        isin = isin.strip().upper()
+        if not is_isin(isin):
+            raise HTTPException(status_code=400, detail="Invalid ISIN format")
+
+        # Look up stock by ISIN to get tradernet symbol
+        stock = await stock_repo.get_by_isin(isin)
+        if not stock:
+            raise HTTPException(status_code=404, detail="Stock not found")
+
+        # Use the tradernet symbol for history database lookup
+        symbol = stock.symbol
         start_date = _parse_date_range(range)
         cached_data = await _get_cached_stock_prices(symbol, start_date, db_manager)
 
