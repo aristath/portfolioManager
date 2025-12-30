@@ -123,6 +123,12 @@ async def _run_event_based_trading_loop_internal():
                 set_processing("SYNCING PORTFOLIO...")
                 await _step_sync_portfolio()
 
+                # Check and rebalance negative balances immediately after trade
+                # (trades can affect cash balances)
+                from app.jobs.emergency_rebalance import check_and_rebalance_immediately
+
+                await check_and_rebalance_immediately()
+
                 # Step 6: Monitor portfolio for changes
                 set_processing("MONITORING PORTFOLIO...")
                 portfolio_changed = await _monitor_portfolio_for_changes()

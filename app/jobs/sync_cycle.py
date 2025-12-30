@@ -67,9 +67,11 @@ async def _run_sync_cycle_internal():
         set_processing("SYNCING PORTFOLIO...")
         await _step_sync_portfolio()
 
-        # Step 3.5: Rebalance negative balances (if any)
-        set_processing("CHECKING CASH BALANCES...")
-        await _step_rebalance_negative_balances()
+        # Step 3.5: Check and rebalance negative balances immediately (if any)
+        # This executes immediately when detected, not waiting for next cycle
+        from app.jobs.emergency_rebalance import check_and_rebalance_immediately
+
+        await check_and_rebalance_immediately()
 
         # Step 4: Sync prices (market-aware)
         set_processing("SYNCING PRICES...")
@@ -121,97 +123,6 @@ async def _step_sync_portfolio():
     except Exception as e:
         logger.error(f"Portfolio sync failed: {e}")
         raise  # Portfolio sync is critical
-
-
-async def _step_rebalance_negative_balances():
-    """Step 3.5: Rebalance negative cash balances if detected."""
-    from app.application.services.negative_balance_rebalancer import (
-        NegativeBalanceRebalancer,
-    )
-    from app.application.services.trade_execution_service import TradeExecutionService
-    from app.infrastructure.database.manager import get_db_manager
-    from app.infrastructure.dependencies import (
-        get_currency_exchange_service_dep,
-        get_exchange_rate_service,
-        get_tradernet_client,
-    )
-    from app.repositories import PositionRepository, StockRepository
-
-    try:
-        client = get_tradernet_client()
-        if not client.is_connected:
-            if not client.connect():
-                logger.warning("Cannot connect to Tradernet for rebalancing check")
-                return
-
-        # Check if there are any negative balances
-        cash_balances_raw = client.get_cash_balances()
-        cash_balances = {cb.currency: cb.amount for cb in cash_balances_raw}
-        has_negative = any(balance < 0 for balance in cash_balances.values())
-
-        logger.info(
-            f"Negative balance check: has_negative={has_negative}, "
-            f"balances={cash_balances}"
-        )
-
-        if not has_negative:
-            # Check for currencies below minimum
-            trading_currencies = set()
-            stock_repo = StockRepository()
-            stocks = await stock_repo.get_all_active()
-            for stock in stocks:
-                if stock.currency:
-                    currency_str = (
-                        stock.currency.value
-                        if hasattr(stock.currency, "value")
-                        else str(stock.currency)
-                    )
-                    trading_currencies.add(currency_str.upper())
-
-            below_minimum = any(
-                cash_balances.get(currency, 0) < 5.0 for currency in trading_currencies
-            )
-
-            if not below_minimum:
-                logger.debug("All currencies meet minimum reserve requirements")
-                return
-
-        # Need to rebalance - initialize services
-        from app.repositories import RecommendationRepository, TradeRepository
-
-        db_manager = get_db_manager()
-        exchange_rate_service = get_exchange_rate_service(db_manager)
-        currency_exchange_service = get_currency_exchange_service_dep(client)
-        position_repo = PositionRepository()
-        stock_repo = StockRepository()
-        trade_repo = TradeRepository()
-        recommendation_repo = RecommendationRepository()
-
-        trade_execution_service = TradeExecutionService(
-            trade_repo,
-            position_repo,
-            stock_repo,
-            client,
-            currency_exchange_service,
-            exchange_rate_service,
-        )
-
-        rebalancer = NegativeBalanceRebalancer(
-            client,
-            currency_exchange_service,
-            trade_execution_service,
-            stock_repo,
-            position_repo,
-            exchange_rate_service,
-            recommendation_repo,
-        )
-
-        await rebalancer.rebalance_negative_balances()
-
-    except Exception as e:
-        logger.error(f"Negative balance rebalancing failed: {e}", exc_info=True)
-        # Don't raise - rebalancing failure shouldn't stop sync cycle
-        # Continue with other steps
 
 
 async def _step_sync_prices():
