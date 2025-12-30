@@ -323,6 +323,27 @@ async def trigger_stocks_data_sync():
         return {"status": "error", "message": str(e)}
 
 
+@router.post("/sync/daily-pipeline")
+async def trigger_daily_pipeline():
+    """Manually trigger daily pipeline (stocks data sync).
+
+    This is an alias for /sync/stocks-data for backwards compatibility.
+    Processes all stocks that haven't been synced in 24 hours.
+    This includes:
+    - Syncing historical prices from Yahoo Finance
+    - Detecting and updating industry from Yahoo Finance
+    - Calculating technical metrics (RSI, EMA, CAGR, etc.)
+    - Refreshing stock scores
+    """
+    from app.jobs.stocks_data_sync import run_stocks_data_sync
+
+    try:
+        await run_stocks_data_sync()
+        return {"status": "success", "message": "Daily pipeline completed"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
 @router.post("/maintenance/daily")
 async def trigger_daily_maintenance():
     """Manually trigger daily maintenance (backup, cleanup, WAL checkpoint)."""
