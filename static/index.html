@@ -91,6 +91,17 @@
            x-transition:leave-end="opacity-0">
         <trades-table></trades-table>
       </div>
+
+      <!-- Logs Tab -->
+      <div x-show="$store.app.activeTab === 'logs'"
+           x-transition:enter="transition ease-out duration-200"
+           x-transition:enter-start="opacity-0"
+           x-transition:enter-end="opacity-100"
+           x-transition:leave="transition ease-in duration-150"
+           x-transition:leave-start="opacity-100"
+           x-transition:leave-end="opacity-0">
+        <logs-viewer></logs-viewer>
+      </div>
     </div>
 
     <!-- Job Footer -->
@@ -128,5 +139,6 @@
   <script src="/static/components/job-footer.js"></script>
   <script src="/static/components/concentration-alerts.js"></script>
   <script src="/static/components/grouping-manager.js"></script>
+  <script src="/static/components/logs-viewer.js"></script>
 </body>
 </html>

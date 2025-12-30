@@ -1,7 +1,7 @@
 /**
  * Tab Navigation Component
- * Provides tab switching between "Next Actions", "Diversification", "Stock Universe", and "Recent Trades"
- * Keyboard shortcuts: 1 for Next Actions, 2 for Diversification, 3 for Stock Universe, 4 for Recent Trades
+ * Provides tab switching between "Next Actions", "Diversification", "Stock Universe", "Recent Trades", and "Logs"
+ * Keyboard shortcuts: 1 for Next Actions, 2 for Diversification, 3 for Stock Universe, 4 for Recent Trades, 5 for Logs
  */
 class TabNavigation extends HTMLElement {
   constructor() {
@@ -20,15 +20,23 @@ class TabNavigation extends HTMLElement {
     if (e.key === '1') {
       e.preventDefault();
       store.activeTab = 'next-actions';
+      store.watchActiveTab();
     } else if (e.key === '2') {
       e.preventDefault();
       store.activeTab = 'diversification';
+      store.watchActiveTab();
     } else if (e.key === '3') {
       e.preventDefault();
       store.activeTab = 'stock-universe';
+      store.watchActiveTab();
     } else if (e.key === '4') {
       e.preventDefault();
       store.activeTab = 'recent-trades';
+      store.watchActiveTab();
+    } else if (e.key === '5') {
+      e.preventDefault();
+      store.activeTab = 'logs';
+      store.watchActiveTab();
     }
   }
 
@@ -37,7 +45,7 @@ class TabNavigation extends HTMLElement {
       <div class="flex items-center gap-1 border-b border-gray-700"
            x-data
            x-init="$store.app.activeTab = $store.app.activeTab || 'next-actions'">
-        <button @click="$store.app.activeTab = 'next-actions'"
+        <button @click="$store.app.activeTab = 'next-actions'; $store.app.watchActiveTab()"
                 class="px-3 md:px-4 py-2 text-sm font-medium transition-colors relative"
                 :class="$store.app.activeTab === 'next-actions'
                   ? 'text-blue-400 border-b-2 border-blue-400'
@@ -55,7 +63,7 @@ class TabNavigation extends HTMLElement {
                   aria-label="Pending actions count"></span>
           </span>
         </button>
-        <button @click="$store.app.activeTab = 'diversification'"
+        <button @click="$store.app.activeTab = 'diversification'; $store.app.watchActiveTab()"
                 class="px-3 md:px-4 py-2 text-sm font-medium transition-colors relative"
                 :class="$store.app.activeTab === 'diversification'
                   ? 'text-blue-400 border-b-2 border-blue-400'
@@ -64,7 +72,7 @@ class TabNavigation extends HTMLElement {
           <span class="hidden sm:inline">Diversification</span>
           <span class="sm:hidden">Diversify</span>
         </button>
-        <button @click="$store.app.activeTab = 'stock-universe'"
+        <button @click="$store.app.activeTab = 'stock-universe'; $store.app.watchActiveTab()"
                 class="px-3 md:px-4 py-2 text-sm font-medium transition-colors relative"
                 :class="$store.app.activeTab === 'stock-universe'
                   ? 'text-blue-400 border-b-2 border-blue-400'
@@ -73,7 +81,7 @@ class TabNavigation extends HTMLElement {
           <span class="hidden sm:inline">Stock Universe</span>
           <span class="sm:hidden">Stocks</span>
         </button>
-        <button @click="$store.app.activeTab = 'recent-trades'"
+        <button @click="$store.app.activeTab = 'recent-trades'; $store.app.watchActiveTab()"
                 class="px-3 md:px-4 py-2 text-sm font-medium transition-colors relative"
                 :class="$store.app.activeTab === 'recent-trades'
                   ? 'text-blue-400 border-b-2 border-blue-400'
@@ -82,9 +90,18 @@ class TabNavigation extends HTMLElement {
           <span class="hidden sm:inline">Recent Trades</span>
           <span class="sm:hidden">Trades</span>
         </button>
+        <button @click="$store.app.activeTab = 'logs'; $store.app.watchActiveTab()"
+                class="px-3 md:px-4 py-2 text-sm font-medium transition-colors relative"
+                :class="$store.app.activeTab === 'logs'
+                  ? 'text-blue-400 border-b-2 border-blue-400'
+                  : 'text-gray-400 hover:text-gray-200'"
+                aria-label="Logs tab">
+          <span class="hidden sm:inline">Logs</span>
+          <span class="sm:hidden">Logs</span>
+        </button>
         <div class="ml-auto text-xs text-gray-500 hidden lg:flex items-center gap-1">
           <span class="text-gray-600">Press</span>
-          <kbd class="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300 font-mono">1-4</kbd>
+          <kbd class="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300 font-mono">1-5</kbd>
         </div>
       </div>
     `;
