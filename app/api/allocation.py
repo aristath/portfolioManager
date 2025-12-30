@@ -219,6 +219,7 @@ async def get_available_industries(grouping_repo: GroupingRepositoryDep):
 async def get_group_allocation(
     portfolio_service: PortfolioServiceDep,
     grouping_repo: GroupingRepositoryDep,
+    allocation_repo: AllocationRepositoryDep,
 ):
     """Get current allocation aggregated by groups (for UI display)."""
     summary = await portfolio_service.get_portfolio_summary()
@@ -238,47 +239,43 @@ async def get_group_allocation(
         for industry in industries:
             industry_to_group[industry] = group_name
 
-    # Aggregate country allocations by group
+    # Get saved group targets from database (group-level targets, not aggregated individual)
+    saved_country_targets = await allocation_repo.get_country_group_targets()
+
+    # Aggregate country allocations by group (only current values, not targets)
     group_country_values: Dict[str, float] = {}
-    group_country_targets: Dict[str, float] = {}
     for alloc in summary.country_allocations:
         # Map country to group (use "OTHER" if not in any group)
         group = country_to_group.get(alloc.name, "OTHER")
         group_country_values[group] = (
             group_country_values.get(group, 0) + alloc.current_value
         )
-        # Aggregate targets (sum individual country targets in group)
-        group_country_targets[group] = (
-            group_country_targets.get(group, 0) + alloc.target_pct
-        )
 
-    # Also include groups that exist in mapping but have no current positions
+    # Use saved group targets, default to 0 if not set
+    group_country_targets: Dict[str, float] = {}
     for group_name in set(country_to_group.values()):
+        group_country_targets[group_name] = saved_country_targets.get(group_name, 0.0)
         if group_name not in group_country_values:
             group_country_values[group_name] = 0.0
-        if group_name not in group_country_targets:
-            group_country_targets[group_name] = 0.0
 
-    # Aggregate industry allocations by group
+    # Get saved group targets from database (group-level targets, not aggregated individual)
+    saved_industry_targets = await allocation_repo.get_industry_group_targets()
+
+    # Aggregate industry allocations by group (only current values, not targets)
     group_industry_values: Dict[str, float] = {}
-    group_industry_targets: Dict[str, float] = {}
     for alloc in summary.industry_allocations:
         # Map industry to group (use "OTHER" if not in any group)
         group = industry_to_group.get(alloc.name, "OTHER")
         group_industry_values[group] = (
             group_industry_values.get(group, 0) + alloc.current_value
         )
-        # Aggregate targets (sum individual industry targets in group)
-        group_industry_targets[group] = (
-            group_industry_targets.get(group, 0) + alloc.target_pct
-        )
 
-    # Also include groups that exist in mapping but have no current positions
+    # Use saved group targets, default to 0 if not set
+    group_industry_targets: Dict[str, float] = {}
     for group_name in set(industry_to_group.values()):
+        group_industry_targets[group_name] = saved_industry_targets.get(group_name, 0.0)
         if group_name not in group_industry_values:
             group_industry_values[group_name] = 0.0
-        if group_name not in group_industry_targets:
-            group_industry_targets[group_name] = 0.0
 
     # Build group allocation status
     group_country_allocations = []
