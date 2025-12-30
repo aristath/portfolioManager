@@ -68,17 +68,23 @@ class TurnoverTracker:
         total_sell_value = 0.0
 
         for trade in trades:
-            side = trade["side"].upper()
+            # Convert Row to dict if needed
+            if hasattr(trade, "keys"):
+                trade_dict = {key: trade[key] for key in trade.keys()}
+            else:
+                trade_dict = trade
+
+            side = trade_dict["side"].upper()
 
             # Use value_eur if available (more accurate), otherwise calculate
-            value_eur = trade.get("value_eur")
+            value_eur = trade_dict.get("value_eur")
             if value_eur and value_eur > 0:
                 trade_value_eur = value_eur
             else:
                 # Fallback: calculate from quantity * price * currency_rate
-                quantity = trade["quantity"]
-                price = trade["price"]
-                currency_rate = trade.get("currency_rate") or 1.0
+                quantity = trade_dict["quantity"]
+                price = trade_dict["price"]
+                currency_rate = trade_dict.get("currency_rate") or 1.0
                 trade_value_eur = quantity * price * currency_rate
 
             if side == "BUY":
@@ -102,7 +108,16 @@ class TurnoverTracker:
             return None
 
         # Calculate average portfolio value
-        total_value_sum = sum(s["total_value"] for s in snapshots)
+        # Convert Row objects to dicts if needed
+        snapshot_values = []
+        for s in snapshots:
+            if hasattr(s, "keys"):
+                snapshot_dict = {key: s[key] for key in s.keys()}
+            else:
+                snapshot_dict = s
+            snapshot_values.append(snapshot_dict["total_value"])
+
+        total_value_sum = sum(snapshot_values)
         average_portfolio_value = total_value_sum / len(snapshots)
 
         if average_portfolio_value <= 0:
