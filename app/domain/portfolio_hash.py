@@ -57,11 +57,11 @@ def apply_pending_orders_to_portfolio(
 
     # Process each pending order
     for order in pending_orders:
-        symbol = order.get("symbol", "").upper()
-        side = order.get("side", "").lower()
-        quantity = float(order.get("quantity", 0))
-        price = float(order.get("price", 0))
-        currency = order.get("currency", "EUR")
+        symbol = (order.get("symbol") or "").upper()
+        side = (order.get("side") or "").lower()
+        quantity = float(order.get("quantity", 0) or 0)
+        price = float(order.get("price", 0) or 0)
+        currency = order.get("currency") or "EUR"
 
         if not symbol or quantity <= 0 or price <= 0:
             logger.warning(
