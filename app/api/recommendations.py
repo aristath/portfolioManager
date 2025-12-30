@@ -129,8 +129,22 @@ async def get_recommendations(
         if tradernet_client.is_connected
         else {}
     )
+
+    # Fetch pending orders for cache key
+    pending_orders = []
+    if tradernet_client.is_connected:
+        try:
+            pending_orders = tradernet_client.get_pending_orders()
+        except Exception as e:
+            logger.warning(f"Failed to fetch pending orders: {e}")
+
     portfolio_cache_key = generate_recommendation_cache_key(
-        position_dicts, settings.to_dict(), stocks, cash_balances, allocations
+        position_dicts,
+        settings.to_dict(),
+        stocks,
+        cash_balances,
+        allocations,
+        pending_orders,
     )
     cache_key = f"recommendations:{portfolio_cache_key}"
 
@@ -148,7 +162,9 @@ async def get_recommendations(
         from app.repositories.planner_repository import PlannerRepository
 
         planner_repo = PlannerRepository()
-        portfolio_hash = generate_portfolio_hash(position_dicts, stocks)
+        portfolio_hash = generate_portfolio_hash(
+            position_dicts, stocks, cash_balances, pending_orders
+        )
         best_result = await planner_repo.get_best_result(portfolio_hash)
 
         if best_result:
@@ -326,8 +342,22 @@ async def _regenerate_recommendations_cache(
         if tradernet_client.is_connected
         else {}
     )
+
+    # Fetch pending orders for cache key
+    pending_orders = []
+    if tradernet_client.is_connected:
+        try:
+            pending_orders = tradernet_client.get_pending_orders()
+        except Exception as e:
+            logger.warning(f"Failed to fetch pending orders: {e}")
+
     portfolio_cache_key = generate_recommendation_cache_key(
-        position_dicts, settings.to_dict(), stocks, cash_balances, allocations
+        position_dicts,
+        settings.to_dict(),
+        stocks,
+        cash_balances,
+        allocations,
+        pending_orders,
     )
     cache_key = f"recommendations:{portfolio_cache_key}"
 
@@ -420,8 +450,22 @@ async def execute_recommendation(
             if tradernet_client.is_connected
             else {}
         )
+
+        # Fetch pending orders for cache key
+        pending_orders = []
+        if tradernet_client.is_connected:
+            try:
+                pending_orders = tradernet_client.get_pending_orders()
+            except Exception as e:
+                logger.warning(f"Failed to fetch pending orders: {e}")
+
         portfolio_cache_key = generate_recommendation_cache_key(
-            position_dicts, settings.to_dict(), stocks, cash_balances, allocations
+            position_dicts,
+            settings.to_dict(),
+            stocks,
+            cash_balances,
+            allocations,
+            pending_orders,
         )
         cache_key = f"recommendations:{portfolio_cache_key}"
 

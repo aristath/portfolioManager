@@ -252,6 +252,135 @@ class RebalancingService:
             else 0.0
         )
 
+        # Fetch and apply pending orders to get hypothetical future state
+        pending_orders = []
+        if self._tradernet_client.is_connected:
+            try:
+                pending_orders = self._tradernet_client.get_pending_orders()
+                logger.info(f"Found {len(pending_orders)} pending orders")
+            except Exception as e:
+                logger.warning(f"Failed to fetch pending orders: {e}")
+
+        # Apply pending orders to positions and cash
+        if pending_orders:
+            from app.domain.models import Position
+            from app.domain.portfolio_hash import apply_pending_orders_to_portfolio
+
+            # Convert positions to dict format for adjustment
+            position_dicts = [
+                {"symbol": p.symbol, "quantity": p.quantity} for p in positions
+            ]
+            # Get cash balances in all currencies
+            cash_balances_raw = (
+                self._tradernet_client.get_cash_balances()
+                if self._tradernet_client.is_connected
+                else []
+            )
+            cash_balances = (
+                {b.currency: b.amount for b in cash_balances_raw}
+                if cash_balances_raw
+                else {}
+            )
+
+            # Apply pending orders
+            adjusted_position_dicts, adjusted_cash_balances = (
+                apply_pending_orders_to_portfolio(
+                    position_dicts, cash_balances, pending_orders
+                )
+            )
+
+            # Convert adjusted position dicts back to Position objects
+            # Create a map of symbol -> Position for lookup
+            position_map = {p.symbol: p for p in positions}
+            adjusted_positions = []
+            for pos_dict in adjusted_position_dicts:
+                symbol = pos_dict["symbol"]
+                quantity = pos_dict["quantity"]
+                if symbol in position_map:
+                    # Copy existing position and update quantity
+                    original = position_map[symbol]
+                    adjusted_positions.append(
+                        Position(
+                            symbol=original.symbol,
+                            quantity=quantity,
+                            avg_price=original.avg_price,
+                            isin=original.isin,
+                            currency=original.currency,
+                            currency_rate=original.currency_rate,
+                            current_price=original.current_price,
+                            market_value_eur=(
+                                original.market_value_eur
+                                * (quantity / original.quantity)
+                                if original.quantity > 0 and original.market_value_eur
+                                else None
+                            ),
+                            cost_basis_eur=(
+                                original.cost_basis_eur * (quantity / original.quantity)
+                                if original.quantity > 0 and original.cost_basis_eur
+                                else None
+                            ),
+                            unrealized_pnl=original.unrealized_pnl,
+                            unrealized_pnl_pct=original.unrealized_pnl_pct,
+                            last_updated=original.last_updated,
+                            first_bought_at=original.first_bought_at,
+                            last_sold_at=original.last_sold_at,
+                        )
+                    )
+                else:
+                    # New position from pending BUY order
+                    # Find the order to get the price for avg_price
+                    order_price = None
+                    order_currency = None
+                    for order in pending_orders:
+                        if (
+                            order.get("symbol", "").upper() == symbol
+                            and order.get("side", "").lower() == "buy"
+                        ):
+                            order_price = float(order.get("price", 0))
+                            order_currency = order.get("currency", "EUR")
+                            break
+
+                    # Use order price as avg_price (required by Position validation)
+                    # If we can't find the order, use a minimal valid price
+                    avg_price = order_price if order_price and order_price > 0 else 0.01
+
+                    from app.domain.value_objects.currency import Currency
+
+                    currency = (
+                        Currency.from_string(order_currency)
+                        if order_currency
+                        else Currency.EUR
+                    )
+
+                    adjusted_positions.append(
+                        Position(
+                            symbol=symbol,
+                            quantity=quantity,
+                            avg_price=avg_price,
+                            currency=currency,
+                            currency_rate=1.0,
+                        )
+                    )
+
+            # For BUY orders that add new positions, we already handled them above
+            # For SELL orders that remove positions, they're already filtered out (qty <= 0)
+
+            positions = adjusted_positions
+
+            # Recalculate available_cash from adjusted cash balances
+            if adjusted_cash_balances:
+                amounts_in_eur = await self._exchange_rate_service.batch_convert_to_eur(
+                    adjusted_cash_balances
+                )
+                available_cash = sum(amounts_in_eur.values())
+                logger.info(
+                    f"Adjusted available_cash for pending orders: {available_cash:.2f} EUR"
+                )
+            else:
+                # If no cash balances, available_cash should be 0
+                available_cash = 0.0
+                logger.info("No cash balances after applying pending orders")
+
         # Get current prices for portfolio value calculation
         yahoo_symbols: Dict[str, Optional[str]] = {
             s.symbol: s.yahoo_symbol for s in stocks if s.yahoo_symbol
@@ -392,7 +521,18 @@ class RebalancingService:
             position_dicts = [
                 {"symbol": p.symbol, "quantity": p.quantity} for p in positions
             ]
-            portfolio_hash = generate_portfolio_hash(position_dicts, stocks)
+            # Get cash balances for hash
+            cash_balances_for_hash = (
+                {
+                    b.currency: b.amount
+                    for b in self._tradernet_client.get_cash_balances()
+                }
+                if self._tradernet_client.is_connected
+                else {}
+            )
+            portfolio_hash = generate_portfolio_hash(
+                position_dicts, stocks, cash_balances_for_hash, pending_orders
+            )
             best_result = await planner_repo.get_best_result(portfolio_hash)
 
             if best_result:

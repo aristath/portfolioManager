@@ -259,8 +259,17 @@ async def _sync_portfolio_internal():
         position_dicts_before = [
             {"symbol": p.symbol, "quantity": p.quantity} for p in positions_before
         ]
+
+        # Fetch pending orders to include in hash calculation
+        try:
+            pending_orders = client.get_pending_orders()
+            logger.info(f"Found {len(pending_orders)} pending orders")
+        except Exception as e:
+            logger.warning(f"Failed to fetch pending orders: {e}")
+            pending_orders = []
+
         hash_before = generate_portfolio_hash(
-            position_dicts_before, stocks, cash_balances_before
+            position_dicts_before, stocks, cash_balances_before, pending_orders
         )
         logger.debug(f"Portfolio hash before sync: {hash_before}")
 
@@ -365,8 +374,9 @@ async def _sync_portfolio_internal():
         position_dicts_after = [
             {"symbol": p.symbol, "quantity": p.quantity} for p in positions_after
         ]
+        # Use same pending_orders as before (they should still be pending)
         hash_after = generate_portfolio_hash(
-            position_dicts_after, stocks, cash_balances_after
+            position_dicts_after, stocks, cash_balances_after, pending_orders
         )
         logger.debug(f"Portfolio hash after sync: {hash_after}")
 

@@ -69,12 +69,27 @@ async def process_planner_batch_job(
         positions = await position_repo.get_all()
         stocks = await stock_repo.get_all_active()
 
+        # Fetch pending orders
+        pending_orders = []
+        if tradernet_client.is_connected:
+            try:
+                pending_orders = tradernet_client.get_pending_orders()
+            except Exception as e:
+                logger.warning(f"Failed to fetch pending orders: {e}")
+
         # Generate portfolio hash if not provided
         if portfolio_hash is None:
             position_dicts = [
                 {"symbol": p.symbol, "quantity": p.quantity} for p in positions
             ]
-            portfolio_hash = generate_portfolio_hash(position_dicts, stocks)
+            cash_balances = (
+                {b.currency: b.amount for b in tradernet_client.get_cash_balances()}
+                if tradernet_client.is_connected
+                else {}
+            )
+            portfolio_hash = generate_portfolio_hash(
+                position_dicts, stocks, cash_balances, pending_orders
+            )
 
         # Skip scheduled job if API-driven batches are active
         # (API-driven batches have max_depth > 0 and self-trigger)
@@ -128,17 +143,19 @@ async def process_planner_batch_job(
                 logger.info("Successfully connected to Tradernet")
 
         # Get available cash (convert all currencies to EUR)
+        cash_balances_raw = None
+        cash_balances_dict = {}
         if tradernet_client.is_connected:
-            cash_balances = tradernet_client.get_cash_balances()
+            cash_balances_raw = tradernet_client.get_cash_balances()
             logger.info(
                 f"Tradernet connected: {tradernet_client.is_connected}, "
-                f"cash_balances count: {len(cash_balances) if cash_balances else 0}"
+                f"cash_balances count: {len(cash_balances_raw) if cash_balances_raw else 0}"
             )
-            if cash_balances:
-                amounts_by_currency = {b.currency: b.amount for b in cash_balances}
-                logger.info(f"Cash amounts by currency: {amounts_by_currency}")
+            if cash_balances_raw:
+                cash_balances_dict = {b.currency: b.amount for b in cash_balances_raw}
+                logger.info(f"Cash amounts by currency: {cash_balances_dict}")
                 amounts_in_eur = await exchange_rate_service.batch_convert_to_eur(
-                    amounts_by_currency
+                    cash_balances_dict
                 )
                 logger.info(f"Cash amounts in EUR: {amounts_in_eur}")
                 available_cash = sum(amounts_in_eur.values())
@@ -156,6 +173,108 @@ async def process_planner_batch_job(
                     "Using portfolio snapshot cash: {:.2f} EUR".format(snapshot_cash)
                 )
                 available_cash = snapshot_cash
+
+        # Apply pending orders to positions and cash
+        if pending_orders:
+            from app.domain.models import Position
+            from app.domain.portfolio_hash import apply_pending_orders_to_portfolio
+
+            # Convert positions to dict format for adjustment
+            position_dicts_for_adjustment = [
+                {"symbol": p.symbol, "quantity": p.quantity} for p in positions
+            ]
+
+            # Apply pending orders
+            adjusted_position_dicts, adjusted_cash_balances = (
+                apply_pending_orders_to_portfolio(
+                    position_dicts_for_adjustment, cash_balances_dict, pending_orders
+                )
+            )
+
+            # Convert adjusted position dicts back to Position objects
+            position_map = {p.symbol: p for p in positions}
+            adjusted_positions = []
+            for pos_dict in adjusted_position_dicts:
+                symbol = pos_dict["symbol"]
+                quantity = pos_dict["quantity"]
+                if symbol in position_map:
+                    original = position_map[symbol]
+                    adjusted_positions.append(
+                        Position(
+                            symbol=original.symbol,
+                            quantity=quantity,
+                            avg_price=original.avg_price,
+                            isin=original.isin,
+                            currency=original.currency,
+                            currency_rate=original.currency_rate,
+                            current_price=original.current_price,
+                            market_value_eur=(
+                                original.market_value_eur
+                                * (quantity / original.quantity)
+                                if original.quantity > 0 and original.market_value_eur
+                                else None
+                            ),
+                            cost_basis_eur=(
+                                original.cost_basis_eur * (quantity / original.quantity)
+                                if original.quantity > 0 and original.cost_basis_eur
+                                else None
+                            ),
+                            unrealized_pnl=original.unrealized_pnl,
+                            unrealized_pnl_pct=original.unrealized_pnl_pct,
+                            last_updated=original.last_updated,
+                            first_bought_at=original.first_bought_at,
+                            last_sold_at=original.last_sold_at,
+                        )
+                    )
+                else:
+                    # New position from pending BUY order
+                    # Find the order to get the price for avg_price
+                    order_price = None
+                    order_currency = None
+                    for order in pending_orders:
+                        if (
+                            order.get("symbol", "").upper() == symbol
+                            and order.get("side", "").lower() == "buy"
+                        ):
+                            order_price = float(order.get("price", 0))
+                            order_currency = order.get("currency", "EUR")
+                            break
+
+                    # Use order price as avg_price (required by Position validation)
+                    avg_price = order_price if order_price and order_price > 0 else 0.01
+
+                    from app.domain.value_objects.currency import Currency
+
+                    currency = (
+                        Currency.from_string(order_currency)
+                        if order_currency
+                        else Currency.EUR
+                    )
+
+                    adjusted_positions.append(
+                        Position(
+                            symbol=symbol,
+                            quantity=quantity,
+                            avg_price=avg_price,
+                            currency=currency,
+                            currency_rate=1.0,
+                        )
+                    )
+
+            positions = adjusted_positions
+
+            # Recalculate available_cash from adjusted cash balances
+            if adjusted_cash_balances:
+                amounts_in_eur = await exchange_rate_service.batch_convert_to_eur(
+                    adjusted_cash_balances
+                )
+                available_cash = sum(amounts_in_eur.values())
+                logger.info(
+                    f"Adjusted available_cash for pending orders: {available_cash:.2f} EUR"
+                )
+            else:
+                available_cash = 0.0
+                logger.info("No cash balances after applying pending orders")
 
         # Get optimizer target weights if available
         from app.application.services.optimization.portfolio_optimizer import (

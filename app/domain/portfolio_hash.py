@@ -12,15 +12,108 @@ The hash includes:
 """
 
 import hashlib
+import logging
 from typing import Any, Dict, List, Optional
 
 from app.domain.models import Stock
+
+logger = logging.getLogger(__name__)
+
+
+def apply_pending_orders_to_portfolio(
+    positions: List[Dict[str, Any]],
+    cash_balances: Dict[str, float],
+    pending_orders: List[Dict[str, Any]],
+) -> tuple[List[Dict[str, Any]], Dict[str, float]]:
+    """
+    Apply pending orders to positions and cash balances to get hypothetical future state.
+
+    For pending BUY orders: reduces cash balance by quantity * price in the order's currency.
+    For pending SELL orders: reduces position quantity by the order quantity.
+
+    Args:
+        positions: List of position dicts with 'symbol' and 'quantity' keys
+        cash_balances: Dict of currency -> amount (e.g., {"EUR": 1500.0, "USD": 200.0})
+        pending_orders: List of pending order dicts with keys: symbol, side, quantity, price, currency
+
+    Returns:
+        Tuple of (adjusted_positions, adjusted_cash_balances)
+
+    Example:
+        positions = [{"symbol": "AAPL", "quantity": 10}]
+        cash = {"EUR": 1500.0}
+        orders = [{"symbol": "AAPL", "side": "buy", "quantity": 5, "price": 100.0, "currency": "EUR"}]
+        adjusted_pos, adjusted_cash = apply_pending_orders_to_portfolio(positions, cash, orders)
+        # adjusted_pos = [{"symbol": "AAPL", "quantity": 15}]
+        # adjusted_cash = {"EUR": 1000.0}
+    """
+    # Create a copy of positions as a dict for easier manipulation
+    position_map: Dict[str, float] = {
+        p["symbol"].upper(): float(p.get("quantity", 0) or 0) for p in positions
+    }
+
+    # Create a copy of cash balances
+    adjusted_cash = cash_balances.copy()
+
+    # Process each pending order
+    for order in pending_orders:
+        symbol = order.get("symbol", "").upper()
+        side = order.get("side", "").lower()
+        quantity = float(order.get("quantity", 0))
+        price = float(order.get("price", 0))
+        currency = order.get("currency", "EUR")
+
+        if not symbol or quantity <= 0 or price <= 0:
+            logger.warning(
+                f"Skipping invalid pending order: symbol={symbol}, quantity={quantity}, price={price}"
+            )
+            continue
+
+        if side == "buy":
+            # Reduce cash by the order value
+            order_value = quantity * price
+            current_cash = adjusted_cash.get(currency, 0.0)
+            adjusted_cash[currency] = max(0.0, current_cash - order_value)
+
+            # Increase position quantity (assuming order will execute)
+            current_quantity = position_map.get(symbol, 0.0)
+            position_map[symbol] = current_quantity + quantity
+
+            logger.debug(
+                f"Applied pending BUY: {symbol} +{quantity}, cash {currency} -{order_value:.2f}"
+            )
+
+        elif side == "sell":
+            # Reduce position quantity
+            current_quantity = position_map.get(symbol, 0.0)
+            new_quantity = max(0.0, current_quantity - quantity)
+            position_map[symbol] = new_quantity
+
+            # Note: Cash is not increased here because SELL orders don't generate cash until executed
+            # The planner should account for this when calculating available cash
+
+            logger.debug(
+                f"Applied pending SELL: {symbol} -{quantity} (from {current_quantity} to {new_quantity})"
+            )
+
+        else:
+            logger.warning(f"Unknown order side: {side} for order {symbol}")
+
+    # Convert position_map back to list of dicts
+    adjusted_positions = [
+        {"symbol": symbol, "quantity": int(qty) if qty > 0 else 0}
+        for symbol, qty in position_map.items()
+        if qty > 0  # Only include positions with quantity > 0
+    ]
+
+    return adjusted_positions, adjusted_cash
 
 
 def generate_portfolio_hash(
     positions: List[Dict[str, Any]],
     stocks: Optional[List[Stock]] = None,
     cash_balances: Optional[Dict[str, float]] = None,
+    pending_orders: Optional[List[Dict[str, Any]]] = None,
 ) -> str:
     """
     Generate a deterministic hash from current portfolio state.
@@ -29,6 +122,7 @@ def generate_portfolio_hash(
         positions: List of position dicts with 'symbol' and 'quantity' keys
         stocks: Optional list of Stock objects in universe (to detect new stocks and include config)
         cash_balances: Optional dict of currency -> amount (e.g., {"EUR": 1500.0})
+        pending_orders: Optional list of pending order dicts with keys: symbol, side, quantity, price, currency
 
     Returns:
         8-character hex hash (first 8 chars of MD5)
@@ -37,8 +131,15 @@ def generate_portfolio_hash(
         positions = [{"symbol": "AAPL", "quantity": 10}]
         stocks = [Stock(symbol="AAPL", ...), Stock(symbol="MSFT", ...)]
         cash = {"EUR": 1500.0, "USD": 200.0}
-        hash = generate_portfolio_hash(positions, stocks, cash)
+        orders = [{"symbol": "AAPL", "side": "buy", "quantity": 5, "price": 100.0, "currency": "EUR"}]
+        hash = generate_portfolio_hash(positions, stocks, cash, orders)
     """
+    # Apply pending orders to get hypothetical future state
+    if pending_orders:
+        positions, cash_balances = apply_pending_orders_to_portfolio(
+            positions, cash_balances or {}, pending_orders
+        )
+
     # Build a dict of symbol -> quantity from positions
     # Use float | int to handle both stock quantities (int) and cash (float)
     position_map: Dict[str, float | int] = {
@@ -186,13 +287,14 @@ def generate_recommendation_cache_key(
     stocks: Optional[List[Stock]] = None,
     cash_balances: Optional[Dict[str, float]] = None,
     allocations_dict: Optional[Dict[str, float]] = None,
+    pending_orders: Optional[List[Dict[str, Any]]] = None,
 ) -> str:
     """
     Generate a cache key from portfolio state, settings, and allocations.
 
     This ensures that cache is invalidated when positions, settings,
-    stocks universe, cash balances, per-symbol configuration, or
-    allocation targets change.
+    stocks universe, cash balances, per-symbol configuration, allocation targets,
+    or pending orders change.
 
     Args:
         positions: List of position dicts with 'symbol' and 'quantity' keys
@@ -200,6 +302,7 @@ def generate_recommendation_cache_key(
         stocks: Optional list of Stock objects in universe
         cash_balances: Optional dict of currency -> amount
         allocations_dict: Optional dict of allocation targets (e.g., {"country:US": 0.6})
+        pending_orders: Optional list of pending order dicts with keys: symbol, side, quantity, price, currency
 
     Returns:
         26-character combined hash (portfolio_hash:settings_hash:allocations_hash)
@@ -210,9 +313,12 @@ def generate_recommendation_cache_key(
         stocks = [Stock(symbol="AAPL", ...), Stock(symbol="MSFT", ...)]
         cash = {"EUR": 1500.0}
         allocations = {"country:United States": 0.6}
-        key = generate_recommendation_cache_key(positions, settings, stocks, cash, allocations)
+        orders = [{"symbol": "AAPL", "side": "buy", "quantity": 5, "price": 100.0, "currency": "EUR"}]
+        key = generate_recommendation_cache_key(positions, settings, stocks, cash, allocations, orders)
     """
-    portfolio_hash = generate_portfolio_hash(positions, stocks, cash_balances)
+    portfolio_hash = generate_portfolio_hash(
+        positions, stocks, cash_balances, pending_orders
+    )
     settings_hash = generate_settings_hash(settings_dict)
     allocations_hash = generate_allocations_hash(allocations_dict or {})
     return f"{portfolio_hash}:{settings_hash}:{allocations_hash}"

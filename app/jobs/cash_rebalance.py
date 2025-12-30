@@ -382,8 +382,22 @@ async def _get_next_holistic_action() -> "Recommendation | None":
         if client.is_connected
         else {}
     )
+
+    # Fetch pending orders for cache key
+    pending_orders = []
+    if client.is_connected:
+        try:
+            pending_orders = client.get_pending_orders()
+        except Exception as e:
+            logger.warning(f"Failed to fetch pending orders: {e}")
+
     portfolio_cache_key = generate_recommendation_cache_key(
-        position_dicts, settings.to_dict(), stocks, cash_balances, allocations
+        position_dicts,
+        settings.to_dict(),
+        stocks,
+        cash_balances,
+        allocations,
+        pending_orders,
     )
     cache_key = f"recommendations:{portfolio_cache_key}"
 
@@ -513,8 +527,22 @@ async def _refresh_recommendation_cache():
             if client.is_connected
             else {}
         )
+
+        # Fetch pending orders for cache key
+        pending_orders = []
+        if client.is_connected:
+            try:
+                pending_orders = client.get_pending_orders()
+            except Exception as e:
+                logger.warning(f"Failed to fetch pending orders: {e}")
+
         portfolio_cache_key = generate_recommendation_cache_key(
-            position_dicts, settings.to_dict(), stocks, cash_balances, allocations
+            position_dicts,
+            settings.to_dict(),
+            stocks,
+            cash_balances,
+            allocations,
+            pending_orders,
         )
         cache_key = f"recommendations:{portfolio_cache_key}"
 

@@ -110,12 +110,22 @@ class TickerContentService:
                     if self._tradernet_client.is_connected
                     else {}
                 )
+
+                # Fetch pending orders for cache key
+                pending_orders = []
+                if self._tradernet_client.is_connected:
+                    try:
+                        pending_orders = self._tradernet_client.get_pending_orders()
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch pending orders: {e}")
+
                 portfolio_cache_key = generate_recommendation_cache_key(
                     position_dicts,
                     settings.to_dict(),
                     stocks,
                     cash_balances,
                     allocations,
+                    pending_orders,
                 )
                 cache_key = f"recommendations:{portfolio_cache_key}"
 

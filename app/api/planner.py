@@ -8,7 +8,11 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from app.domain.portfolio_hash import generate_portfolio_hash
-from app.infrastructure.dependencies import PositionRepositoryDep, StockRepositoryDep
+from app.infrastructure.dependencies import (
+    PositionRepositoryDep,
+    StockRepositoryDep,
+    TradernetClientDep,
+)
 from app.repositories.planner_repository import PlannerRepository
 
 logger = logging.getLogger(__name__)
@@ -19,6 +23,7 @@ router = APIRouter()
 async def regenerate_sequences(
     position_repo: PositionRepositoryDep,
     stock_repo: StockRepositoryDep,
+    tradernet_client: TradernetClientDep,
 ):
     """
     Regenerate sequences for current portfolio with current settings.
@@ -35,11 +40,28 @@ async def regenerate_sequences(
         positions = await position_repo.get_all()
         stocks = await stock_repo.get_all_active()
 
+        # Fetch pending orders for hash generation
+        pending_orders = []
+        cash_balances = {}
+        if tradernet_client.is_connected:
+            try:
+                pending_orders = tradernet_client.get_pending_orders()
+                cash_balances_raw = tradernet_client.get_cash_balances()
+                cash_balances = (
+                    {b.currency: b.amount for b in cash_balances_raw}
+                    if cash_balances_raw
+                    else {}
+                )
+            except Exception as e:
+                logger.warning(f"Failed to fetch pending orders: {e}")
+
         # Generate portfolio hash
         position_dicts = [
             {"symbol": p.symbol, "quantity": p.quantity} for p in positions
         ]
-        portfolio_hash = generate_portfolio_hash(position_dicts, stocks)
+        portfolio_hash = generate_portfolio_hash(
+            position_dicts, stocks, cash_balances, pending_orders
+        )
 
         # Delete sequences only (keep evaluations)
         planner_repo = PlannerRepository()
@@ -70,6 +92,7 @@ async def regenerate_sequences(
 async def _get_planner_status_internal(
     position_repo: PositionRepositoryDep,
     stock_repo: StockRepositoryDep,
+    tradernet_client: TradernetClientDep,
 ) -> Dict[str, Any]:
     """
     Internal function to get planner status.
@@ -81,9 +104,26 @@ async def _get_planner_status_internal(
     positions = await position_repo.get_all()
     stocks = await stock_repo.get_all_active()
 
+    # Fetch pending orders for hash generation
+    pending_orders = []
+    cash_balances = {}
+    if tradernet_client.is_connected:
+        try:
+            pending_orders = tradernet_client.get_pending_orders()
+            cash_balances_raw = tradernet_client.get_cash_balances()
+            cash_balances = (
+                {b.currency: b.amount for b in cash_balances_raw}
+                if cash_balances_raw
+                else {}
+            )
+        except Exception as e:
+            logger.warning(f"Failed to fetch pending orders: {e}")
+
     # Generate portfolio hash
     position_dicts = [{"symbol": p.symbol, "quantity": p.quantity} for p in positions]
-    portfolio_hash = generate_portfolio_hash(position_dicts, stocks)
+    portfolio_hash = generate_portfolio_hash(
+        position_dicts, stocks, cash_balances, pending_orders
+    )
 
     planner_repo = PlannerRepository()
 
@@ -138,6 +178,7 @@ async def _get_planner_status_internal(
 async def get_planner_status(
     position_repo: PositionRepositoryDep,
     stock_repo: StockRepositoryDep,
+    tradernet_client: TradernetClientDep,
 ):
     """
     Get planner status including sequence generation and evaluation progress.
@@ -153,7 +194,9 @@ async def get_planner_status(
         - progress_percentage: Percentage of sequences evaluated (0-100)
     """
     try:
-        return await _get_planner_status_internal(position_repo, stock_repo)
+        return await _get_planner_status_internal(
+            position_repo, stock_repo, tradernet_client
+        )
     except Exception as e:
         logger.error(f"Error getting planner status: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -163,6 +206,7 @@ async def get_planner_status(
 async def stream_planner_status(
     position_repo: PositionRepositoryDep,
     stock_repo: StockRepositoryDep,
+    tradernet_client: TradernetClientDep,
 ):
     """Stream planner status updates via Server-Sent Events (SSE).
 
@@ -176,7 +220,7 @@ async def stream_planner_status(
         try:
             # Get initial status and cache it (subscribe_planner_events will send it)
             initial_status = await _get_planner_status_internal(
-                position_repo, stock_repo
+                position_repo, stock_repo, tradernet_client
             )
             await planner_events.set_current_status(initial_status)
 
