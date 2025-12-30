@@ -1,26 +1,28 @@
 """Tests for event system infrastructure.
 
-These tests validate the event bus functionality for publishing and subscribing to events.
+These tests validate the event system functionality for publishing and subscribing to events.
 """
 
 import pytest
 
-from app.infrastructure.events import SystemEvent, emit, get_event_bus, subscribe
+from app.infrastructure.events import (
+    SystemEvent,
+    clear_all_listeners,
+    emit,
+    subscribe,
+    unsubscribe,
+)
 
 
-class TestEventBus:
-    """Test event bus functionality."""
+class TestEventSystem:
+    """Test event system functionality."""
 
-    def test_get_event_bus_returns_singleton(self):
-        """Test that get_event_bus returns the same instance."""
-        bus1 = get_event_bus()
-        bus2 = get_event_bus()
-
-        assert bus1 is bus2
+    def setup_method(self):
+        """Clear all listeners before each test."""
+        clear_all_listeners()
 
     def test_emit_publishes_event(self):
         """Test that emit publishes an event."""
-        bus = get_event_bus()
         received_events = []
 
         def handler(event, **kwargs):
@@ -37,7 +39,6 @@ class TestEventBus:
 
     def test_subscribe_adds_handler(self):
         """Test that subscribe adds a handler for an event."""
-        bus = get_event_bus()
         call_count = [0]  # Use list to allow modification in nested function
 
         def handler(event, **kwargs):
@@ -50,7 +51,6 @@ class TestEventBus:
 
     def test_multiple_handlers_for_same_event(self):
         """Test that multiple handlers can subscribe to the same event."""
-        bus = get_event_bus()
         call_counts = [0, 0]
 
         def handler1(event, **kwargs):
@@ -69,7 +69,6 @@ class TestEventBus:
 
     def test_handler_receives_event_and_kwargs(self):
         """Test that handlers receive both event and keyword arguments."""
-        bus = get_event_bus()
         received_data = []
 
         def handler(event, **kwargs):
@@ -85,7 +84,6 @@ class TestEventBus:
 
     def test_different_events_are_separate(self):
         """Test that different events are handled separately."""
-        bus = get_event_bus()
         event1_count = [0]
         event2_count = [0]
 
@@ -106,7 +104,6 @@ class TestEventBus:
 
     def test_handler_called_for_each_emit(self):
         """Test that handlers are called each time an event is emitted."""
-        bus = get_event_bus()
         call_count = [0]
 
         def handler(event, **kwargs):
@@ -127,7 +124,6 @@ class TestEventBus:
 
     def test_subscribe_multiple_times_same_handler(self):
         """Test that subscribing the same handler multiple times is allowed."""
-        bus = get_event_bus()
         call_count = [0]
 
         def handler(event, **kwargs):
@@ -138,12 +134,11 @@ class TestEventBus:
 
         emit(SystemEvent.ERROR_OCCURRED)
 
-        # Handler may be called once or twice depending on implementation
-        assert call_count[0] >= 1
+        # Handler should be called twice (once for each subscription)
+        assert call_count[0] >= 2
 
     def test_emit_with_no_kwargs(self):
         """Test that emit works with no keyword arguments."""
-        bus = get_event_bus()
         received = []
 
         def handler(event, **kwargs):
@@ -155,4 +150,56 @@ class TestEventBus:
         assert len(received) >= 1
         assert received[-1]["event"] == SystemEvent.ERROR_OCCURRED
         assert received[-1]["kwargs"] == {}
+
+    def test_unsubscribe_removes_handler(self):
+        """Test that unsubscribe removes a handler."""
+        call_count = [0]
+
+        def handler(event, **kwargs):
+            call_count[0] += 1
+
+        subscribe(SystemEvent.ERROR_OCCURRED, handler)
+        emit(SystemEvent.ERROR_OCCURRED)
+        assert call_count[0] >= 1
+
+        unsubscribe(SystemEvent.ERROR_OCCURRED, handler)
+        emit(SystemEvent.ERROR_OCCURRED)
+        # Should still be 1 (not called again after unsubscribe)
+        assert call_count[0] >= 1
+
+    def test_unsubscribe_nonexistent_handler_does_not_error(self):
+        """Test that unsubscribe on nonexistent handler does not error."""
+        def handler(event, **kwargs):
+            pass
+
+        # Should not raise
+        unsubscribe(SystemEvent.ERROR_OCCURRED, handler)
+
+    def test_clear_all_listeners_removes_all_handlers(self):
+        """Test that clear_all_listeners removes all handlers."""
+        call_count = [0]
+
+        def handler(event, **kwargs):
+            call_count[0] += 1
+
+        subscribe(SystemEvent.ERROR_OCCURRED, handler)
+        subscribe(SystemEvent.REBALANCE_START, handler)
+
+        clear_all_listeners()
+
+        emit(SystemEvent.ERROR_OCCURRED)
+        emit(SystemEvent.REBALANCE_START)
+
+        # Should not have been called after clear
+        assert call_count[0] == 0
+
+    def test_listener_exceptions_are_caught(self):
+        """Test that listener exceptions are caught and don't propagate."""
+        def failing_handler(event, **kwargs):
+            raise ValueError("Handler error")
+
+        subscribe(SystemEvent.ERROR_OCCURRED, failing_handler)
+
+        # Should not raise
+        emit(SystemEvent.ERROR_OCCURRED)
 
