@@ -456,8 +456,8 @@ class TestEventBasedTradingLoop:
                 "app.jobs.event_based_trading._get_optimal_recommendation",
                 side_effect=mock_get_recommendation,
             ),
-            patch("app.jobs.event_based_trading.set_processing"),
-            patch("app.jobs.event_based_trading.clear_processing"),
+            patch("app.jobs.event_based_trading.set_text"),
+            patch("pass  # LED cleared"),
             patch("asyncio.sleep", new_callable=AsyncMock),
         ):
             try:
@@ -511,8 +511,8 @@ class TestEventBasedTradingLoop:
                 "app.jobs.event_based_trading._step_check_trading_conditions",
                 side_effect=mock_check_conditions,
             ),
-            patch("app.jobs.event_based_trading.set_processing"),
-            patch("app.jobs.event_based_trading.clear_processing"),
+            patch("app.jobs.event_based_trading.set_text"),
+            patch("pass  # LED cleared"),
             patch("asyncio.sleep", new_callable=AsyncMock),
         ):
             try:
@@ -594,8 +594,8 @@ class TestEventBasedTradingLoop:
                 "app.jobs.event_based_trading._monitor_portfolio_for_changes",
                 side_effect=mock_monitor,
             ),
-            patch("app.jobs.event_based_trading.set_processing"),
-            patch("app.jobs.event_based_trading.clear_processing"),
+            patch("app.jobs.event_based_trading.set_text"),
+            patch("pass  # LED cleared"),
             patch("asyncio.sleep", new_callable=AsyncMock),
         ):
             try:

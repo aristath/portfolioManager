@@ -242,8 +242,8 @@ class TestSyncTradesInternal:
             "app.jobs.sync_trades.get_tradernet_client", return_value=mock_client
         ):
             with patch("app.jobs.sync_trades.emit"):
-                with patch("app.jobs.sync_trades.set_processing"):
-                    with patch("app.jobs.sync_trades.clear_processing"):
+                with patch("app.jobs.sync_trades.set_text"):
+                    with patch("pass  # LED cleared"):
                         await _sync_trades_internal()
 
         # Should not try to get trades
@@ -262,8 +262,8 @@ class TestSyncTradesInternal:
             "app.jobs.sync_trades.get_tradernet_client", return_value=mock_client
         ):
             with patch("app.jobs.sync_trades.emit"):
-                with patch("app.jobs.sync_trades.set_processing"):
-                    with patch("app.jobs.sync_trades.clear_processing"):
+                with patch("app.jobs.sync_trades.set_text"):
+                    with patch("pass  # LED cleared"):
                         await _sync_trades_internal()
 
         # Should not crash
@@ -304,8 +304,8 @@ class TestSyncTradesInternal:
         ):
             with patch("app.jobs.sync_trades.get_db_manager", return_value=mock_db):
                 with patch("app.jobs.sync_trades.emit"):
-                    with patch("app.jobs.sync_trades.set_processing"):
-                        with patch("app.jobs.sync_trades.clear_processing"):
+                    with patch("app.jobs.sync_trades.set_text"):
+                        with patch("pass  # LED cleared"):
                             await _sync_trades_internal()
 
         # Execute should have been called for insert
@@ -324,9 +324,9 @@ class TestSyncTradesInternal:
             "app.jobs.sync_trades.get_tradernet_client", return_value=mock_client
         ):
             with patch("app.jobs.sync_trades.emit"):
-                with patch("app.jobs.sync_trades.set_processing"):
-                    with patch("app.jobs.sync_trades.clear_processing"):
-                        with patch("app.jobs.sync_trades.set_error"):
+                with patch("app.jobs.sync_trades.set_text"):
+                    with patch("pass  # LED cleared"):
+                        with patch("app.jobs.sync_trades.set_text"):
                             # Should not raise
                             await _sync_trades_internal()
 

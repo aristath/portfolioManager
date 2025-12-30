@@ -44,8 +44,8 @@ class TestRefreshAllScoresInternal:
 
         with patch("app.jobs.score_refresh.get_db_manager", return_value=mock_db):
             with patch("app.jobs.score_refresh.emit"):
-                with patch("app.jobs.score_refresh.set_processing"):
-                    with patch("app.jobs.score_refresh.clear_processing"):
+                with patch("app.jobs.score_refresh.set_text"):
+                    with patch("pass  # LED cleared"):
                         await _refresh_all_scores_internal()
 
         # Should not crash when no stocks
@@ -62,8 +62,8 @@ class TestRefreshAllScoresInternal:
 
         with patch("app.jobs.score_refresh.get_db_manager", return_value=mock_db):
             with patch("app.jobs.score_refresh.emit") as mock_emit:
-                with patch("app.jobs.score_refresh.set_processing"):
-                    with patch("app.jobs.score_refresh.clear_processing"):
+                with patch("app.jobs.score_refresh.set_text"):
+                    with patch("pass  # LED cleared"):
                         await _refresh_all_scores_internal()
 
         # Should emit start and end events
@@ -96,8 +96,8 @@ class TestRefreshAllScoresInternal:
                     return_value=[],  # Insufficient data
                 ):
                     with patch("app.jobs.score_refresh.emit"):
-                        with patch("app.jobs.score_refresh.set_processing"):
-                            with patch("app.jobs.score_refresh.clear_processing"):
+                        with patch("app.jobs.score_refresh.set_text"):
+                            with patch("pass  # LED cleared"):
                                 await _refresh_all_scores_internal()
 
         # Should not crash with insufficient data
@@ -123,9 +123,9 @@ class TestRefreshAllScoresInternal:
                 side_effect=Exception("Test error"),
             ):
                 with patch("app.jobs.score_refresh.emit"):
-                    with patch("app.jobs.score_refresh.set_processing"):
-                        with patch("app.jobs.score_refresh.clear_processing"):
-                            with patch("app.jobs.score_refresh.set_error"):
+                    with patch("app.jobs.score_refresh.set_text"):
+                        with patch("pass  # LED cleared"):
+                            with patch("app.jobs.score_refresh.set_text"):
                                 await _refresh_all_scores_internal()
 
         # Should not raise, just log error

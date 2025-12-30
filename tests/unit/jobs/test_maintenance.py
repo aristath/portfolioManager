@@ -50,8 +50,8 @@ class TestCreateBackupInternal:
             with (
                 patch("app.jobs.maintenance.settings", mock_settings),
                 patch("app.jobs.maintenance.emit"),
-                patch("app.jobs.maintenance.set_processing"),
-                patch("app.jobs.maintenance.clear_processing"),
+                patch("app.jobs.maintenance.set_text"),
+                patch("pass  # LED cleared"),
                 patch("app.jobs.maintenance._cleanup_old_backups") as mock_cleanup,
             ):
                 await _create_backup_internal()
@@ -71,9 +71,9 @@ class TestCreateBackupInternal:
                 MagicMock(data_dir=Path("/nonexistent")),
             ),
             patch("app.jobs.maintenance.emit"),
-            patch("app.jobs.maintenance.set_processing"),
-            patch("app.jobs.maintenance.set_error") as mock_set_error,
-            patch("app.jobs.maintenance.clear_processing"),
+            patch("app.jobs.maintenance.set_text"),
+            patch("app.jobs.maintenance.set_text") as mock_set_error,
+            patch("pass  # LED cleared"),
         ):
             with pytest.raises(Exception):
                 await _create_backup_internal()
@@ -104,7 +104,7 @@ class TestCheckpointWalInternal:
 
         with (
             patch("app.jobs.maintenance.get_db_manager", return_value=mock_db_manager),
-            patch("app.jobs.maintenance.set_processing"),
+            patch("app.jobs.maintenance.set_text"),
         ):
             await _checkpoint_wal_internal()
 
@@ -127,7 +127,7 @@ class TestCheckpointWalInternal:
 
         with (
             patch("app.jobs.maintenance.get_db_manager", return_value=mock_db_manager),
-            patch("app.jobs.maintenance.set_processing"),
+            patch("app.jobs.maintenance.set_text"),
         ):
             # Should not raise - individual checkpoint errors are logged
             await _checkpoint_wal_internal()
@@ -158,8 +158,8 @@ class TestIntegrityCheckInternal:
         with (
             patch("app.jobs.maintenance.get_db_manager", return_value=mock_db_manager),
             patch("app.jobs.maintenance.emit") as mock_emit,
-            patch("app.jobs.maintenance.set_processing"),
-            patch("app.jobs.maintenance.clear_processing"),
+            patch("app.jobs.maintenance.set_text"),
+            patch("pass  # LED cleared"),
         ):
             await _integrity_check_internal()
 
@@ -186,9 +186,9 @@ class TestIntegrityCheckInternal:
         with (
             patch("app.jobs.maintenance.get_db_manager", return_value=mock_db_manager),
             patch("app.jobs.maintenance.emit"),
-            patch("app.jobs.maintenance.set_processing"),
-            patch("app.jobs.maintenance.set_error") as mock_set_error,
-            patch("app.jobs.maintenance.clear_processing"),
+            patch("app.jobs.maintenance.set_text"),
+            patch("app.jobs.maintenance.set_text") as mock_set_error,
+            patch("pass  # LED cleared"),
         ):
             await _integrity_check_internal()
 
@@ -224,7 +224,7 @@ class TestCleanupOldDailyPricesInternal:
             patch("app.jobs.maintenance.get_db_manager", return_value=mock_db_manager),
             patch("app.jobs.maintenance.settings", mock_settings),
             patch("app.jobs.maintenance.emit"),
-            patch("app.jobs.maintenance.set_processing"),
+            patch("app.jobs.maintenance.set_text"),
         ):
             await _cleanup_old_daily_prices_internal()
 
@@ -254,7 +254,7 @@ class TestCleanupExpiredCachesInternal:
                 "app.repositories.calculations.CalculationsRepository",
                 return_value=mock_calc_repo,
             ),
-            patch("app.jobs.maintenance.set_processing"),
+            patch("app.jobs.maintenance.set_text"),
         ):
             await _cleanup_expired_caches_internal()
 
@@ -271,7 +271,7 @@ class TestCleanupExpiredCachesInternal:
                 "app.infrastructure.recommendation_cache.get_recommendation_cache",
                 side_effect=Exception("Cache error"),
             ),
-            patch("app.jobs.maintenance.set_processing"),
+            patch("app.jobs.maintenance.set_text"),
         ):
             # Should not raise
             await _cleanup_expired_caches_internal()
@@ -300,7 +300,7 @@ class TestCleanupOldSnapshotsInternal:
         with (
             patch("app.jobs.maintenance.get_db_manager", return_value=mock_db_manager),
             patch("app.jobs.maintenance.settings", mock_settings),
-            patch("app.jobs.maintenance.set_processing"),
+            patch("app.jobs.maintenance.set_text"),
         ):
             await _cleanup_old_snapshots_internal()
 
@@ -327,7 +327,7 @@ class TestCleanupOldSnapshotsInternal:
         with (
             patch("app.jobs.maintenance.get_db_manager", return_value=mock_db_manager),
             patch("app.jobs.maintenance.settings", mock_settings),
-            patch("app.jobs.maintenance.set_processing"),
+            patch("app.jobs.maintenance.set_text"),
         ):
             await _cleanup_old_snapshots_internal()
 

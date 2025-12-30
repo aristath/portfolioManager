@@ -46,7 +46,7 @@ class TestSyncHistoricalDataInternal:
                 "app.jobs.historical_data_sync._sync_stock_price_history"
             ) as mock_sync,
             patch("app.jobs.historical_data_sync.emit") as mock_emit,
-            patch("app.jobs.historical_data_sync.clear_processing"),
+            patch("pass  # LED cleared"),
         ):
             await _sync_historical_data_internal()
 
@@ -65,8 +65,8 @@ class TestSyncHistoricalDataInternal:
                 side_effect=Exception("Sync failed"),
             ),
             patch("app.jobs.historical_data_sync.emit"),
-            patch("app.jobs.historical_data_sync.set_error") as mock_set_error,
-            patch("app.jobs.historical_data_sync.clear_processing"),
+            patch("app.jobs.historical_data_sync.set_text") as mock_set_error,
+            patch("pass  # LED cleared"),
         ):
             with pytest.raises(Exception, match="Sync failed"):
                 await _sync_historical_data_internal()
@@ -96,7 +96,7 @@ class TestSyncStockPriceHistory:
                 "app.jobs.historical_data_sync.get_db_manager",
                 return_value=mock_db_manager,
             ),
-            patch("app.jobs.historical_data_sync.set_processing"),
+            patch("app.jobs.historical_data_sync.set_text"),
         ):
             await _sync_stock_price_history()
 
@@ -140,7 +140,7 @@ class TestSyncStockPriceHistory:
                 return_value=mock_db_manager,
             ),
             patch("app.jobs.historical_data_sync.settings", mock_settings),
-            patch("app.jobs.historical_data_sync.set_processing"),
+            patch("app.jobs.historical_data_sync.set_text"),
         ):
             await _sync_stock_price_history()
 
@@ -179,7 +179,7 @@ class TestSyncStockPriceHistory:
                 return_value=mock_db_manager,
             ),
             patch("app.jobs.historical_data_sync.settings", mock_settings),
-            patch("app.jobs.historical_data_sync.set_processing"),
+            patch("app.jobs.historical_data_sync.set_text"),
             patch(
                 "app.jobs.historical_data_sync._fetch_and_store_prices"
             ) as mock_fetch,
@@ -213,7 +213,7 @@ class TestSyncStockPriceHistory:
                 return_value=mock_db_manager,
             ),
             patch("app.jobs.historical_data_sync.settings", mock_settings),
-            patch("app.jobs.historical_data_sync.set_processing"),
+            patch("app.jobs.historical_data_sync.set_text"),
         ):
             # Should not raise - errors are caught and logged
             await _sync_stock_price_history()

@@ -176,8 +176,8 @@ class TestRunHealthCheckInternal:
         with (
             patch("app.jobs.health_check._check_core_databases"),
             patch("app.jobs.health_check._check_history_databases"),
-            patch("app.jobs.health_check.set_processing"),
-            patch("app.jobs.health_check.clear_processing"),
+            patch("app.jobs.health_check.set_text"),
+            patch("pass  # LED cleared"),
         ):
             await _run_health_check_internal()
 
@@ -200,10 +200,10 @@ class TestRunHealthCheckInternal:
             patch("app.jobs.health_check._check_core_databases", side_effect=add_issue),
             patch("app.jobs.health_check._check_history_databases"),
             patch("app.jobs.health_check._report_issues") as mock_report,
-            patch("app.jobs.health_check.set_processing"),
-            patch("app.jobs.health_check.set_error"),
+            patch("app.jobs.health_check.set_text"),
+            patch("app.jobs.health_check.set_text"),
             patch("app.jobs.health_check.emit"),
-            patch("app.jobs.health_check.clear_processing"),
+            patch("pass  # LED cleared"),
         ):
             await _run_health_check_internal()
 
