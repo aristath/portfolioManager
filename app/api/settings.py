@@ -86,6 +86,11 @@ SETTING_DEFAULTS = {
     "event_driven_rebalancing_enabled": 1.0,  # 1.0 = enabled, 0.0 = disabled
     "rebalance_position_drift_threshold": 0.05,  # Position drift threshold (0.05 = 5%)
     "rebalance_cash_threshold_multiplier": 2.0,  # Cash threshold = multiplier × min_trade_size
+    # Trade Frequency Limits settings
+    "trade_frequency_limits_enabled": 1.0,  # 1.0 = enabled, 0.0 = disabled
+    "min_time_between_trades_minutes": 60.0,  # Minimum minutes between any trades
+    "max_trades_per_day": 4.0,  # Maximum trades per calendar day
+    "max_trades_per_week": 10.0,  # Maximum trades per rolling 7-day window
     # Stock Discovery settings
     "stock_discovery_enabled": 1.0,  # 1.0 = enabled, 0.0 = disabled
     "stock_discovery_score_threshold": 0.75,  # Minimum score to add stock (0-1)

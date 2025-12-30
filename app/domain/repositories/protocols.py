@@ -5,6 +5,7 @@ Using protocols allows for better testability and dependency injection
 without requiring abstract base classes.
 """
 
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Protocol, Set
 
 from app.domain.models import AllocationTarget, Position, Stock, Trade
@@ -127,6 +128,18 @@ class ITradeRepository(Protocol):
 
     async def has_recent_sell_order(self, symbol: str, hours: int = 2) -> bool:
         """Check if there was a recent sell order for a symbol."""
+        ...
+
+    async def get_last_trade_timestamp(self) -> Optional[datetime]:
+        """Get timestamp of the most recent trade."""
+        ...
+
+    async def get_trade_count_today(self) -> int:
+        """Count trades executed today."""
+        ...
+
+    async def get_trade_count_this_week(self) -> int:
+        """Count trades executed in the last 7 days."""
         ...
 
 

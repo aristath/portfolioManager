@@ -396,6 +396,60 @@ class TradeRepository:
 
         return result
 
+    async def get_last_trade_timestamp(self) -> Optional[datetime]:
+        """Get timestamp of the most recent trade.
+
+        Returns:
+            Datetime of last trade, or None if no trades exist
+        """
+        row = await self._db.fetchone(
+            """
+            SELECT executed_at
+            FROM trades
+            ORDER BY executed_at DESC
+            LIMIT 1
+            """
+        )
+        if row and row["executed_at"]:
+            return safe_get_datetime(row, "executed_at")
+        return None
+
+    async def get_trade_count_today(self) -> int:
+        """Count trades executed today.
+
+        Returns:
+            Number of trades executed today
+        """
+        today = datetime.now().strftime("%Y-%m-%d")
+        row = await self._db.fetchone(
+            """
+            SELECT COUNT(*) as cnt
+            FROM trades
+            WHERE DATE(executed_at) = ?
+            """,
+            (today,),
+        )
+        return row["cnt"] if row else 0
+
+    async def get_trade_count_this_week(self) -> int:
+        """Count trades executed in the last 7 days.
+
+        Returns:
+            Number of trades executed in the last 7 days
+        """
+        from datetime import timedelta
+
+        seven_days_ago = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+        row = await self._db.fetchone(
+            """
+            SELECT COUNT(*) as cnt
+            FROM trades
+            WHERE executed_at >= ?
+            """,
+            (seven_days_ago,),
+        )
+        return row["cnt"] if row else 0
+
     def _row_to_trade(self, row) -> Trade:
         """Convert database row to Trade model."""
         executed_at: datetime
