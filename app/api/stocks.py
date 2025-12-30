@@ -145,6 +145,276 @@ async def get_stocks(
     return stock_dicts
 
 
+@router.get("/universe-suggestions")
+async def get_universe_suggestions(
+    stock_repo: StockRepositoryDep,
+    scoring_service: ScoringServiceDep,
+    settings_repo: SettingsRepositoryDep,
+):
+    """Get suggestions for universe expansion and contraction without executing actions.
+
+    Returns candidates that would be added by discovery and stocks that would be pruned,
+    allowing manual review before execution.
+
+    Returns:
+        Dictionary with:
+        - candidates_to_add: List of stocks suggested for addition
+        - stocks_to_prune: List of stocks suggested for pruning
+    """
+    from app.domain.services.stock_discovery import StockDiscoveryService
+    from app.domain.services.symbol_resolver import SymbolResolver
+    from app.infrastructure.external.tradernet import get_tradernet_client
+    from app.repositories import ScoreRepository
+
+    try:
+        logger.info("Fetching universe suggestions...")
+        # Get dependencies
+        score_repo = ScoreRepository()
+
+        # ========================================================================
+        # DISCOVERY: Find candidates to add
+        # ========================================================================
+        candidates_to_add = []
+
+        # Check if discovery is enabled
+        discovery_enabled = await settings_repo.get_float(
+            "stock_discovery_enabled", 1.0
+        )
+        logger.info(f"Discovery enabled: {discovery_enabled}")
+        if discovery_enabled != 0.0:
+            # Get discovery settings
+            score_threshold = await settings_repo.get_float(
+                "stock_discovery_score_threshold", 0.75
+            )
+
+            # Get existing universe symbols
+            existing_stocks = await stock_repo.get_all_active()
+            existing_symbols = [s.symbol for s in existing_stocks]
+
+            # Initialize discovery service
+            tradernet_client = get_tradernet_client()
+            discovery_service = StockDiscoveryService(
+                tradernet_client=tradernet_client,
+                settings_repo=settings_repo,
+            )
+
+            # Find candidates
+            candidates = await discovery_service.discover_candidates(
+                existing_symbols=existing_symbols
+            )
+            logger.info(
+                f"Discovery service returned {len(candidates) if candidates else 0} candidates"
+            )
+
+            if candidates:
+                # Initialize scoring service and symbol resolver
+                # SymbolResolver needs concrete StockRepository, not interface
+                from app.infrastructure.dependencies import get_stock_repository
+
+                concrete_stock_repo = get_stock_repository()
+                symbol_resolver = SymbolResolver(
+                    tradernet_client=tradernet_client,
+                    stock_repo=concrete_stock_repo,
+                )
+
+                # Score candidates and collect results
+                scored_candidates = []
+                for candidate in candidates:
+                    symbol = candidate.get("symbol", "").upper()
+                    if not symbol:
+                        continue
+
+                    try:
+                        # Resolve symbol to get ISIN for Yahoo Finance lookups
+                        symbol_info = await symbol_resolver.resolve(symbol)
+                        if symbol_info.isin:
+                            candidate["isin"] = symbol_info.isin
+                        # Store yahoo_symbol for display
+                        candidate["yahoo_symbol"] = symbol_info.yahoo_symbol
+
+                        # Score the candidate
+                        score = await scoring_service.calculate_and_save_score(
+                            symbol=symbol,
+                            yahoo_symbol=symbol_info.yahoo_symbol,
+                            country=candidate.get("country"),
+                            industry=candidate.get("industry"),
+                        )
+
+                        if score and score.total_score is not None:
+                            scored_candidates.append((candidate, score.total_score))
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to score {symbol} for suggestions: {e}",
+                            exc_info=True,
+                        )
+                        continue
+
+                logger.info(f"Scored {len(scored_candidates)} candidates")
+                # Filter by score threshold and sort (best first)
+                above_threshold = [
+                    (candidate, score)
+                    for candidate, score in scored_candidates
+                    if score >= score_threshold
+                ]
+                logger.info(
+                    f"{len(above_threshold)} candidates above threshold {score_threshold}"
+                )
+                above_threshold.sort(key=lambda x: x[1], reverse=True)
+
+                # Format candidates for response (don't enforce max_per_month limit)
+                for candidate, candidate_score in above_threshold:
+                    symbol = candidate.get("symbol", "").upper()
+                    candidates_to_add.append(
+                        {
+                            "symbol": symbol,
+                            "name": candidate.get("name", symbol),
+                            "country": candidate.get("country"),
+                            "industry": candidate.get("industry"),
+                            "exchange": candidate.get("exchange", ""),
+                            "score": round(candidate_score, 3),
+                            "isin": candidate.get("isin"),
+                            "volume": candidate.get("volume", 0.0),
+                            "yahoo_symbol": candidate.get("yahoo_symbol"),
+                        }
+                    )
+
+        # ========================================================================
+        # PRUNING: Find stocks to prune
+        # ========================================================================
+        stocks_to_prune = []
+
+        # Check if pruning is enabled
+        pruning_enabled = await settings_repo.get_float("universe_pruning_enabled", 1.0)
+        logger.info(f"Pruning enabled: {pruning_enabled}")
+        if pruning_enabled != 0.0:
+            # Get pruning settings
+            score_threshold = await settings_repo.get_float(
+                "universe_pruning_score_threshold", 0.50
+            )
+            months = await settings_repo.get_float("universe_pruning_months", 3.0)
+            min_samples = int(
+                await settings_repo.get_float("universe_pruning_min_samples", 2.0)
+            )
+            check_delisted = (
+                await settings_repo.get_float("universe_pruning_check_delisted", 1.0)
+                == 1.0
+            )
+
+            # Get all active stocks
+            stocks = await stock_repo.get_all_active()
+            logger.info(f"Checking {len(stocks)} active stocks for pruning")
+
+            if stocks:
+                client = get_tradernet_client()
+                if check_delisted and not client.is_connected:
+                    if not client.connect():
+                        check_delisted = False
+
+                for stock in stocks:
+                    try:
+                        # Get recent scores
+                        scores = await score_repo.get_recent_scores(
+                            stock.symbol, months
+                        )
+
+                        # Check minimum samples requirement
+                        if len(scores) < min_samples:
+                            logger.debug(
+                                f"Stock {stock.symbol}: only {len(scores)} score(s), "
+                                f"below minimum {min_samples}, skipping"
+                            )
+                            continue
+
+                        # Calculate average score
+                        total_scores = [
+                            s.total_score for s in scores if s.total_score is not None
+                        ]
+                        if not total_scores:
+                            logger.debug(
+                                f"Stock {stock.symbol}: no valid scores found, skipping"
+                            )
+                            continue
+
+                        avg_score = sum(total_scores) / len(total_scores)
+                        logger.debug(
+                            f"Stock {stock.symbol}: average score {avg_score:.3f} "
+                            f"(threshold: {score_threshold}, samples: {len(scores)})"
+                        )
+
+                        # Check if average score is below threshold
+                        if avg_score >= score_threshold:
+                            continue
+
+                        # Check if stock is delisted (if enabled)
+                        is_delisted = False
+                        reason = "low_score"
+                        if check_delisted:
+                            try:
+                                security_info = client.get_security_info(stock.symbol)
+                                if security_info is None:
+                                    is_delisted = True
+                                    reason = "delisted"
+                                else:
+                                    quote = client.get_quote(stock.symbol)
+                                    if quote is None or not hasattr(quote, "price"):
+                                        is_delisted = True
+                                        reason = "delisted"
+                            except Exception:
+                                # Don't mark as delisted if check fails
+                                pass
+
+                        # Add to prune list if criteria met
+                        if is_delisted or avg_score < score_threshold:
+                            # Get current score
+                            current_score_obj = await score_repo.get_by_symbol(
+                                stock.symbol
+                            )
+                            current_score = (
+                                current_score_obj.total_score
+                                if current_score_obj
+                                else None
+                            )
+
+                            stocks_to_prune.append(
+                                {
+                                    "symbol": stock.symbol,
+                                    "name": stock.name,
+                                    "country": stock.country,
+                                    "industry": stock.industry,
+                                    "average_score": round(avg_score, 3),
+                                    "sample_count": len(scores),
+                                    "months_analyzed": months,
+                                    "reason": reason,
+                                    "current_score": (
+                                        round(current_score, 3)
+                                        if current_score is not None
+                                        else None
+                                    ),
+                                }
+                            )
+                    except Exception as e:
+                        logger.warning(
+                            f"Error processing {stock.symbol} for pruning suggestions: {e}",
+                            exc_info=True,
+                        )
+                        continue
+
+        logger.info(
+            f"Universe suggestions: {len(candidates_to_add)} candidates to add, "
+            f"{len(stocks_to_prune)} stocks to prune"
+        )
+        return {
+            "candidates_to_add": candidates_to_add,
+            "stocks_to_prune": stocks_to_prune,
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to get universe suggestions: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get suggestions: {str(e)}"
+        )
+
+
 @router.get("/{identifier}")
 async def get_stock(
     identifier: str,
@@ -721,276 +991,6 @@ async def delete_stock(
         f"DELETE /api/stocks/{identifier} - Stock {symbol} successfully deleted"
     )
     return {"message": f"Stock {symbol} removed from universe"}
-
-
-@router.get("/universe-suggestions")
-async def get_universe_suggestions(
-    stock_repo: StockRepositoryDep,
-    scoring_service: ScoringServiceDep,
-    settings_repo: SettingsRepositoryDep,
-):
-    """Get suggestions for universe expansion and contraction without executing actions.
-
-    Returns candidates that would be added by discovery and stocks that would be pruned,
-    allowing manual review before execution.
-
-    Returns:
-        Dictionary with:
-        - candidates_to_add: List of stocks suggested for addition
-        - stocks_to_prune: List of stocks suggested for pruning
-    """
-    from app.domain.services.stock_discovery import StockDiscoveryService
-    from app.domain.services.symbol_resolver import SymbolResolver
-    from app.infrastructure.external.tradernet import get_tradernet_client
-    from app.repositories import ScoreRepository
-
-    try:
-        logger.info("Fetching universe suggestions...")
-        # Get dependencies
-        score_repo = ScoreRepository()
-
-        # ========================================================================
-        # DISCOVERY: Find candidates to add
-        # ========================================================================
-        candidates_to_add = []
-
-        # Check if discovery is enabled
-        discovery_enabled = await settings_repo.get_float(
-            "stock_discovery_enabled", 1.0
-        )
-        logger.info(f"Discovery enabled: {discovery_enabled}")
-        if discovery_enabled != 0.0:
-            # Get discovery settings
-            score_threshold = await settings_repo.get_float(
-                "stock_discovery_score_threshold", 0.75
-            )
-
-            # Get existing universe symbols
-            existing_stocks = await stock_repo.get_all_active()
-            existing_symbols = [s.symbol for s in existing_stocks]
-
-            # Initialize discovery service
-            tradernet_client = get_tradernet_client()
-            discovery_service = StockDiscoveryService(
-                tradernet_client=tradernet_client,
-                settings_repo=settings_repo,
-            )
-
-            # Find candidates
-            candidates = await discovery_service.discover_candidates(
-                existing_symbols=existing_symbols
-            )
-            logger.info(
-                f"Discovery service returned {len(candidates) if candidates else 0} candidates"
-            )
-
-            if candidates:
-                # Initialize scoring service and symbol resolver
-                # SymbolResolver needs concrete StockRepository, not interface
-                from app.infrastructure.dependencies import get_stock_repository
-
-                concrete_stock_repo = get_stock_repository()
-                symbol_resolver = SymbolResolver(
-                    tradernet_client=tradernet_client,
-                    stock_repo=concrete_stock_repo,
-                )
-
-                # Score candidates and collect results
-                scored_candidates = []
-                for candidate in candidates:
-                    symbol = candidate.get("symbol", "").upper()
-                    if not symbol:
-                        continue
-
-                    try:
-                        # Resolve symbol to get ISIN for Yahoo Finance lookups
-                        symbol_info = await symbol_resolver.resolve(symbol)
-                        if symbol_info.isin:
-                            candidate["isin"] = symbol_info.isin
-                        # Store yahoo_symbol for display
-                        candidate["yahoo_symbol"] = symbol_info.yahoo_symbol
-
-                        # Score the candidate
-                        score = await scoring_service.calculate_and_save_score(
-                            symbol=symbol,
-                            yahoo_symbol=symbol_info.yahoo_symbol,
-                            country=candidate.get("country"),
-                            industry=candidate.get("industry"),
-                        )
-
-                        if score and score.total_score is not None:
-                            scored_candidates.append((candidate, score.total_score))
-                    except Exception as e:
-                        logger.warning(
-                            f"Failed to score {symbol} for suggestions: {e}",
-                            exc_info=True,
-                        )
-                        continue
-
-                logger.info(f"Scored {len(scored_candidates)} candidates")
-                # Filter by score threshold and sort (best first)
-                above_threshold = [
-                    (candidate, score)
-                    for candidate, score in scored_candidates
-                    if score >= score_threshold
-                ]
-                logger.info(
-                    f"{len(above_threshold)} candidates above threshold {score_threshold}"
-                )
-                above_threshold.sort(key=lambda x: x[1], reverse=True)
-
-                # Format candidates for response (don't enforce max_per_month limit)
-                for candidate, candidate_score in above_threshold:
-                    symbol = candidate.get("symbol", "").upper()
-                    candidates_to_add.append(
-                        {
-                            "symbol": symbol,
-                            "name": candidate.get("name", symbol),
-                            "country": candidate.get("country"),
-                            "industry": candidate.get("industry"),
-                            "exchange": candidate.get("exchange", ""),
-                            "score": round(candidate_score, 3),
-                            "isin": candidate.get("isin"),
-                            "volume": candidate.get("volume", 0.0),
-                            "yahoo_symbol": candidate.get("yahoo_symbol"),
-                        }
-                    )
-
-        # ========================================================================
-        # PRUNING: Find stocks to prune
-        # ========================================================================
-        stocks_to_prune = []
-
-        # Check if pruning is enabled
-        pruning_enabled = await settings_repo.get_float("universe_pruning_enabled", 1.0)
-        logger.info(f"Pruning enabled: {pruning_enabled}")
-        if pruning_enabled != 0.0:
-            # Get pruning settings
-            score_threshold = await settings_repo.get_float(
-                "universe_pruning_score_threshold", 0.50
-            )
-            months = await settings_repo.get_float("universe_pruning_months", 3.0)
-            min_samples = int(
-                await settings_repo.get_float("universe_pruning_min_samples", 2.0)
-            )
-            check_delisted = (
-                await settings_repo.get_float("universe_pruning_check_delisted", 1.0)
-                == 1.0
-            )
-
-            # Get all active stocks
-            stocks = await stock_repo.get_all_active()
-            logger.info(f"Checking {len(stocks)} active stocks for pruning")
-
-            if stocks:
-                client = get_tradernet_client()
-                if check_delisted and not client.is_connected:
-                    if not client.connect():
-                        check_delisted = False
-
-                for stock in stocks:
-                    try:
-                        # Get recent scores
-                        scores = await score_repo.get_recent_scores(
-                            stock.symbol, months
-                        )
-
-                        # Check minimum samples requirement
-                        if len(scores) < min_samples:
-                            logger.debug(
-                                f"Stock {stock.symbol}: only {len(scores)} score(s), "
-                                f"below minimum {min_samples}, skipping"
-                            )
-                            continue
-
-                        # Calculate average score
-                        total_scores = [
-                            s.total_score for s in scores if s.total_score is not None
-                        ]
-                        if not total_scores:
-                            logger.debug(
-                                f"Stock {stock.symbol}: no valid scores found, skipping"
-                            )
-                            continue
-
-                        avg_score = sum(total_scores) / len(total_scores)
-                        logger.debug(
-                            f"Stock {stock.symbol}: average score {avg_score:.3f} "
-                            f"(threshold: {score_threshold}, samples: {len(scores)})"
-                        )
-
-                        # Check if average score is below threshold
-                        if avg_score >= score_threshold:
-                            continue
-
-                        # Check if stock is delisted (if enabled)
-                        is_delisted = False
-                        reason = "low_score"
-                        if check_delisted:
-                            try:
-                                security_info = client.get_security_info(stock.symbol)
-                                if security_info is None:
-                                    is_delisted = True
-                                    reason = "delisted"
-                                else:
-                                    quote = client.get_quote(stock.symbol)
-                                    if quote is None or not hasattr(quote, "price"):
-                                        is_delisted = True
-                                        reason = "delisted"
-                            except Exception:
-                                # Don't mark as delisted if check fails
-                                pass
-
-                        # Add to prune list if criteria met
-                        if is_delisted or avg_score < score_threshold:
-                            # Get current score
-                            current_score_obj = await score_repo.get_by_symbol(
-                                stock.symbol
-                            )
-                            current_score = (
-                                current_score_obj.total_score
-                                if current_score_obj
-                                else None
-                            )
-
-                            stocks_to_prune.append(
-                                {
-                                    "symbol": stock.symbol,
-                                    "name": stock.name,
-                                    "country": stock.country,
-                                    "industry": stock.industry,
-                                    "average_score": round(avg_score, 3),
-                                    "sample_count": len(scores),
-                                    "months_analyzed": months,
-                                    "reason": reason,
-                                    "current_score": (
-                                        round(current_score, 3)
-                                        if current_score is not None
-                                        else None
-                                    ),
-                                }
-                            )
-                    except Exception as e:
-                        logger.warning(
-                            f"Error processing {stock.symbol} for pruning suggestions: {e}",
-                            exc_info=True,
-                        )
-                        continue
-
-        logger.info(
-            f"Universe suggestions: {len(candidates_to_add)} candidates to add, "
-            f"{len(stocks_to_prune)} stocks to prune"
-        )
-        return {
-            "candidates_to_add": candidates_to_add,
-            "stocks_to_prune": stocks_to_prune,
-        }
-
-    except Exception as e:
-        logger.error(f"Failed to get universe suggestions: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get suggestions: {str(e)}"
-        )
 
 
 @router.post("/{symbol}/add-from-suggestion")
