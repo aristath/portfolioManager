@@ -186,10 +186,10 @@ class StockScore:
 
 @dataclass
 class AllocationTarget:
-    """Target allocation for country or industry."""
+    """Target allocation for country_group or industry_group (not individual countries/industries)."""
 
-    type: str  # 'country' or 'industry'
-    name: str
+    type: str  # 'country_group' or 'industry_group'
+    name: str  # Group name (e.g., 'US', 'EU', 'Technology')
     target_pct: float  # Weight from -1.0 to 1.0
 
 

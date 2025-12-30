@@ -37,7 +37,7 @@ class AllocationRepository:
         return {f"{row['type']}:{row['name']}": row["target_pct"] for row in rows}
 
     async def get_by_type(self, target_type: str) -> List[AllocationTarget]:
-        """Get allocation targets by type (geography or industry)."""
+        """Get allocation targets by type (country_group or industry_group)."""
         rows = await self._db.fetchall(
             "SELECT * FROM allocation_targets WHERE type = ?", (target_type,)
         )
@@ -50,35 +50,23 @@ class AllocationRepository:
             for row in rows
         ]
 
-    async def get_country_targets(self) -> Dict[str, float]:
-        """Get country allocation targets, normalized to sum to 100%.
+    async def get_country_group_targets(self) -> Dict[str, float]:
+        """Get country group allocation targets.
 
-        User-defined weights are stored as preferences (don't need to sum to 100%).
-        This method normalizes them proportionally so they sum to 100%.
+        Returns group name -> target_pct mapping.
+        No normalization - groups should sum to 100% at user level.
         """
-        targets = await self.get_by_type("country")
-        weights = {t.name: t.target_pct for t in targets}
+        targets = await self.get_by_type("country_group")
+        return {t.name: t.target_pct for t in targets}
 
-        # Normalize weights to sum to 100% (proportional scaling)
-        total = sum(weights.values())
-        if total > 0:
-            return {name: weight / total for name, weight in weights.items()}
-        return weights
+    async def get_industry_group_targets(self) -> Dict[str, float]:
+        """Get industry group allocation targets.
 
-    async def get_industry_targets(self) -> Dict[str, float]:
-        """Get industry allocation targets, normalized to sum to 100%.
-
-        User-defined weights are stored as preferences (don't need to sum to 100%).
-        This method normalizes them proportionally so they sum to 100%.
+        Returns group name -> target_pct mapping.
+        No normalization - groups should sum to 100% at user level.
         """
-        targets = await self.get_by_type("industry")
-        weights = {t.name: t.target_pct for t in targets}
-
-        # Normalize weights to sum to 100% (proportional scaling)
-        total = sum(weights.values())
-        if total > 0:
-            return {name: weight / total for name, weight in weights.items()}
-        return weights
+        targets = await self.get_by_type("industry_group")
+        return {t.name: t.target_pct for t in targets}
 
     async def upsert(self, target: AllocationTarget) -> None:
         """Insert or update an allocation target."""
