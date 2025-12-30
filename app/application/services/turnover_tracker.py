@@ -45,16 +45,18 @@ class TurnoverTracker:
         end_dt = datetime.strptime(end_date, "%Y-%m-%d")
         start_dt = end_dt - timedelta(days=365)
         start_date = start_dt.strftime("%Y-%m-%d")
+        # Use next day for end_date to include all trades on end_date
+        end_date_next = (end_dt + timedelta(days=1)).strftime("%Y-%m-%d")
 
         # Get all trades in the 365-day window
         trades = await self._db_manager.ledger.fetchall(
             """
             SELECT side, quantity, price, currency, currency_rate
             FROM trades
-            WHERE executed_at >= ? AND executed_at <= ?
+            WHERE executed_at >= ? AND executed_at < ?
             ORDER BY executed_at
             """,
-            (start_date, end_date),
+            (start_date, end_date_next),
         )
 
         if not trades:
