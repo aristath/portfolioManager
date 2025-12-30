@@ -148,6 +148,8 @@ class StockRepository:
             "min_portfolio_target",
             "max_portfolio_target",
             "isin",
+            "min_lot",
+            "priority_multiplier",
         }
 
         # Validate all keys are in whitelist
