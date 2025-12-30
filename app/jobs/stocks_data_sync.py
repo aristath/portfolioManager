@@ -27,19 +27,19 @@ logger = logging.getLogger(__name__)
 SYNC_THRESHOLD_HOURS = 24
 
 
-async def run_daily_pipeline():
+async def run_stocks_data_sync():
     """
-    Run the daily pipeline for all stocks needing sync.
+    Run the stocks data sync for all stocks needing sync.
 
     This is the main entry point called by the scheduler every hour.
     """
-    async with file_lock("daily_pipeline", timeout=3600.0):
-        await _run_daily_pipeline_internal()
+    async with file_lock("stocks_data_sync", timeout=3600.0):
+        await _run_stocks_data_sync_internal()
 
 
-async def _run_daily_pipeline_internal():
-    """Internal daily pipeline implementation."""
-    logger.info("Starting daily pipeline...")
+async def _run_stocks_data_sync_internal():
+    """Internal stocks data sync implementation."""
+    logger.info("Starting stocks data sync...")
 
     emit(SystemEvent.SYNC_START)
 

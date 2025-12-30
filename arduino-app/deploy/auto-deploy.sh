@@ -177,6 +177,20 @@ if [ "$MAIN_APP_CHANGED" = true ]; then
     find "$MAIN_APP_DIR" -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
     find "$MAIN_APP_DIR" -name "*.pyc" -delete 2>/dev/null || true
 
+    # Reset deployment directory git repo if it exists (to prevent showing modified files)
+    # This ensures the deployment directory's git state matches the repo after file copy
+    if [ -d "$MAIN_APP_DIR/.git" ]; then
+        log "Resetting deployment directory git repo to match repo state..."
+        (
+            cd "$MAIN_APP_DIR" || exit 1
+            # Fetch latest to ensure we have the same commits
+            git fetch origin >> "$LOG_FILE" 2>&1 || log "WARNING: git fetch failed in deployment directory"
+            # Reset to match the repo's current commit
+            git reset --hard "$(cd "$REPO_DIR" && git rev-parse HEAD)" >> "$LOG_FILE" 2>&1 || log "WARNING: git reset failed in deployment directory"
+            git clean -fd >> "$LOG_FILE" 2>&1 || log "WARNING: git clean failed in deployment directory"
+        ) || log "WARNING: Failed to reset deployment directory git repo"
+    fi
+
     log "Main app files synced"
 
     # Update Python dependencies if requirements.txt changed

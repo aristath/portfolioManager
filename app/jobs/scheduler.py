@@ -1,16 +1,55 @@
 """APScheduler setup for background jobs.
 
-Scheduler with 9 jobs:
-1. sync_cycle - Every 5 minutes, handles data synchronization
-1.5. event_based_trading - Continuously, handles trade execution after planning completion
-2. stocks_data_sync - Hourly, processes per-symbol data
-3. daily_maintenance - Daily at configured hour, backup and cleanup
-4. weekly_maintenance - Weekly on Sunday, integrity checks
-5. dividend_reinvestment - Daily, automatic dividend reinvestment
-6. universe_pruning - Monthly (1st), removes low-quality stocks
-7. stock_discovery - Monthly (15th), discovers new high-quality stocks
-8. planner_batch - Every N seconds, processes planner sequences incrementally
-9. auto_deploy - Every N minutes (configurable), checks for updates and deploys changes
+The scheduler manages 9 scheduled jobs plus 1 background task, organized by category:
+
+DATA SYNC JOBS:
+1. sync_cycle - Every 5 minutes (configurable)
+   - Syncs trades, cash flows, portfolio, prices (market-aware)
+   - Updates LED display
+   - Calls emergency_rebalance internally when negative balances detected
+
+2. stocks_data_sync - Hourly
+   - Historical data sync (per symbol, only if not synced in 24h)
+   - Metrics calculation
+   - Score refresh
+
+TRADING JOBS:
+- event_based_trading - Continuous background task (not scheduled)
+  - Waits for planning completion, executes trades, monitors portfolio
+  - Triggers API-driven planner_batch chains for faster processing
+
+8. planner_batch - Every 30 minutes (fallback only)
+   - Processes planner sequences incrementally
+   - Only runs if incremental mode enabled
+   - Normal processing is API-driven (triggered by event_based_trading)
+   - This scheduled job is a fallback mechanism
+
+MAINTENANCE JOBS:
+3. daily_maintenance - Daily at configured hour
+   - Database backup
+   - Data cleanup (expired prices, snapshots, caches)
+   - WAL checkpoint
+
+4. weekly_maintenance - Sunday, 1 hour after daily maintenance
+   - Integrity checks
+   - Expired backup cleanup
+
+PORTFOLIO MANAGEMENT JOBS:
+5. dividend_reinvestment - Daily, 30 minutes after daily maintenance
+   - Automatic reinvestment of dividend payments
+
+6. universe_pruning - Monthly on 1st at configured hour
+   - Removes low-quality stocks from universe
+
+7. stock_discovery - Monthly on 15th at 2:00
+   - Discovers and adds high-quality stocks
+   - Checks stock_discovery_enabled setting internally
+
+SYSTEM JOBS:
+9. auto_deploy - Every 5 minutes (configurable)
+   - Checks GitHub for updates
+   - Deploys changes automatically
+   - Compiles and uploads sketch if changed
 """
 
 import logging
@@ -89,12 +128,12 @@ async def init_scheduler() -> AsyncIOScheduler:
 
     # Import job functions
     from app.jobs.auto_deploy import run_auto_deploy
-    from app.jobs.daily_pipeline import run_daily_pipeline
     from app.jobs.dividend_reinvestment import auto_reinvest_dividends
     from app.jobs.event_based_trading import run_event_based_trading_loop
     from app.jobs.maintenance import run_daily_maintenance, run_weekly_maintenance
     from app.jobs.planner_batch import process_planner_batch_job
     from app.jobs.stock_discovery import discover_new_stocks
+    from app.jobs.stocks_data_sync import run_daily_pipeline
     from app.jobs.sync_cycle import run_sync_cycle
     from app.jobs.universe_pruning import prune_universe
 
@@ -115,9 +154,14 @@ async def init_scheduler() -> AsyncIOScheduler:
     # API-driven batches (triggered by event-based trading) handle normal processing
     planner_batch_interval = 30 * 60  # 30 minutes in seconds
 
+    # ============================================================================
+    # DATA SYNC JOBS
+    # ============================================================================
+
     # Job 1: Sync Cycle - every 5 minutes (configurable, default 5.0)
     # Handles: trades, cash flows, portfolio, prices (market-aware), display
     # Note: Trade execution is handled by event-based trading loop
+    # Note: Calls emergency_rebalance internally when negative balances detected
     scheduler.add_job(
         run_sync_cycle,
         IntervalTrigger(minutes=sync_cycle_minutes),
@@ -126,20 +170,49 @@ async def init_scheduler() -> AsyncIOScheduler:
         replace_existing=True,
     )
 
-    # Event-Based Trading - started as background task (see below)
-    # Handles: waiting for planning completion, trade execution, portfolio monitoring
-    # Not added as a scheduled job because it has a while True loop and runs continuously
-
-    # Job 2: Daily Pipeline - hourly
+    # Job 2: Stocks Data Sync - hourly
     # Handles: historical data sync, metrics calculation, score refresh
     # Processes stocks sequentially, only those not synced in 24 hours
     scheduler.add_job(
         run_daily_pipeline,
         IntervalTrigger(hours=1),
-        id="daily_pipeline",
-        name="Daily Pipeline",
+        id="stocks_data_sync",
+        name="Stocks Data Sync",
         replace_existing=True,
     )
+
+    # ============================================================================
+    # TRADING JOBS
+    # ============================================================================
+
+    # Event-Based Trading - started as background task (see below)
+    # Handles: waiting for planning completion, trade execution, portfolio monitoring
+    # Not added as a scheduled job because it has a while True loop and runs continuously
+    # Triggers API-driven planner_batch chains for faster processing
+
+    # Job 8: Planner Batch - every 30 minutes (fallback only)
+    # Processes next batch of sequences for holistic planner (only if incremental mode enabled)
+    # This is a fallback mechanism - normal processing is handled by API-driven batches
+    # triggered by the event-based trading loop. The scheduled job will skip if API-driven
+    # batches are active (sequences exist but not all evaluated).
+    if incremental_enabled:
+        scheduler.add_job(
+            process_planner_batch_job,
+            IntervalTrigger(seconds=planner_batch_interval),
+            id="planner_batch",
+            name="Planner Batch (Fallback)",
+            replace_existing=True,
+        )
+    else:
+        # Remove job if it exists and incremental mode is disabled
+        try:
+            scheduler.remove_job("planner_batch")
+        except Exception:
+            pass  # Job doesn't exist, that's fine
+
+    # ============================================================================
+    # MAINTENANCE JOBS
+    # ============================================================================
 
     # Job 3: Daily Maintenance - daily at configured hour
     # Handles: backup, cleanup, WAL checkpoint
@@ -160,6 +233,10 @@ async def init_scheduler() -> AsyncIOScheduler:
         name="Weekly Maintenance",
         replace_existing=True,
     )
+
+    # ============================================================================
+    # PORTFOLIO MANAGEMENT JOBS
+    # ============================================================================
 
     # Job 5: Dividend Reinvestment - daily, 30 minutes after daily maintenance
     # Handles: automatic reinvestment of dividends
@@ -192,27 +269,11 @@ async def init_scheduler() -> AsyncIOScheduler:
         replace_existing=True,
     )
 
-    # Job 8: Planner Batch - every 30 minutes (fallback only)
-    # Processes next batch of sequences for holistic planner (only if incremental mode enabled)
-    # This is a fallback mechanism - normal processing is handled by API-driven batches
-    # triggered by the event-based trading loop. The scheduled job will skip if API-driven
-    # batches are active (sequences exist but not all evaluated).
-    if incremental_enabled:
-        scheduler.add_job(
-            process_planner_batch_job,
-            IntervalTrigger(seconds=planner_batch_interval),
-            id="planner_batch",
-            name="Planner Batch (Fallback)",
-            replace_existing=True,
-        )
-    else:
-        # Remove job if it exists and incremental mode is disabled
-        try:
-            scheduler.remove_job("planner_batch")
-        except Exception:
-            pass  # Job doesn't exist, that's fine
+    # ============================================================================
+    # SYSTEM JOBS
+    # ============================================================================
 
-    # Job 10: Auto-Deploy - every N minutes (configurable)
+    # Job 9: Auto-Deploy - every N minutes (configurable)
     # Handles: checking for updates from GitHub and deploying changes
     scheduler.add_job(
         run_auto_deploy,
@@ -221,6 +282,14 @@ async def init_scheduler() -> AsyncIOScheduler:
         name="Auto-Deploy",
         replace_existing=True,
     )
+
+    # ============================================================================
+    # BACKGROUND TASKS
+    # ============================================================================
+
+    # Event-Based Trading - started as background task (not a scheduled job)
+    # since it has a while True loop and runs continuously
+    # Wrap in a function that restarts it if it crashes
 
     # Start event-based trading loop as background task (not a scheduled job)
     # since it has a while True loop and runs continuously
@@ -287,7 +356,6 @@ async def reschedule_all_jobs():
         trigger=CronTrigger(day=1, hour=maintenance_hour, minute=0),
     )
     # Stock discovery schedule is fixed (15th at 2am), no reschedule needed
-    # Display updater schedule is fixed (9.9s), no reschedule needed
 
     # Reschedule auto-deploy
     scheduler.reschedule_job(

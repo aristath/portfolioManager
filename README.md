@@ -381,22 +381,23 @@ Many settings are stored in the database and can be configured via the Settings 
 
 ## Background Jobs
 
-The system runs 10 scheduled jobs plus 1 background task:
+The system runs 9 scheduled jobs plus 1 background task:
 
 ### Scheduled Jobs
 
 1. **sync_cycle** - Every 5 minutes (configurable)
    - Syncs trades, cash flows, portfolio, prices (market-aware)
    - Updates LED display
+   - Calls emergency_rebalance internally when negative balances detected
 
-2. **daily_pipeline** - Hourly
+2. **stocks_data_sync** - Hourly
    - Historical data sync (per symbol, only if not synced in 24h)
    - Metrics calculation
    - Score refresh
 
 3. **daily_maintenance** - Daily at configured hour (default: 3:00)
    - Database backup
-   - Data cleanup (expired prices, snapshots)
+   - Data cleanup (expired prices, snapshots, caches)
    - WAL checkpoint
 
 4. **weekly_maintenance** - Sunday, 1 hour after daily maintenance
@@ -413,25 +414,24 @@ The system runs 10 scheduled jobs plus 1 background task:
    - Discovers and adds high-quality stocks
    - Checks `stock_discovery_enabled` setting internally
 
-8. **display_updater** - Every 9.9 seconds
-   - Periodic LED display updates to ensure display is never blank
-
-9. **planner_batch** - Every 30 minutes
+8. **planner_batch** - Every 30 minutes (fallback only)
    - Processes next batch of sequences for holistic planner
    - Only runs if incremental mode enabled
    - API-driven batches triggered by event-based trading handle normal processing
+   - This scheduled job is a fallback; normal processing is API-driven
 
-10. **auto_deploy** - Every 5 minutes (configurable)
-    - Checks GitHub for updates
-    - Deploys changes automatically
-    - Compiles and uploads sketch if changed
+9. **auto_deploy** - Every 5 minutes (configurable)
+   - Checks GitHub for updates
+   - Deploys changes automatically
+   - Compiles and uploads sketch if changed
 
 ### Background Task
 
-- **event_based_trading** - Continuous (not scheduled)
+- **event_based_trading** - Continuous (not scheduled, runs as background task)
   - Waits for planning completion (all sequences evaluated)
+  - Triggers API-driven planner_batch chains for faster processing
   - Gets optimal recommendation from best result
-  - Checks trading conditions (P&L guardrails)
+  - Checks trading conditions (P&L guardrails, frequency limits)
   - Checks market hours (with flexible behavior)
   - Executes trade if allowed
   - Monitors portfolio for changes (two-phase: 30s for 5min, then 1min for 15min)
