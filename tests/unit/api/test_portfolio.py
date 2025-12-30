@@ -396,6 +396,19 @@ class TestGetPortfolioAnalytics:
             [0.01, 0.0099], index=pd.date_range("2024-01-01", periods=2)
         )
 
+        mock_db_manager = MagicMock()
+        mock_turnover_tracker = MagicMock()
+        mock_turnover_tracker.calculate_annual_turnover = AsyncMock(return_value=0.5)
+        mock_turnover_tracker.get_turnover_status = AsyncMock(
+            return_value={
+                "turnover": 0.5,
+                "turnover_display": "50.00%",
+                "status": "normal",
+                "alert": None,
+                "reason": "Normal turnover: 50.00%",
+            }
+        )
+
         with patch(
             "app.domain.analytics.reconstruct_portfolio_values",
             new_callable=AsyncMock,
@@ -420,7 +433,15 @@ class TestGetPortfolioAnalytics:
                         new_callable=AsyncMock,
                         return_value={"country": {}, "industry": {}},
                     ):
-                        result = await get_portfolio_analytics(days=365)
+                        with patch(
+                            "app.api.portfolio.get_db_manager",
+                            return_value=mock_db_manager,
+                        ):
+                            with patch(
+                                "app.application.services.turnover_tracker.TurnoverTracker",
+                                return_value=mock_turnover_tracker,
+                            ):
+                                result = await get_portfolio_analytics(days=365)
 
         # Result is a Pydantic model
         assert hasattr(result, "returns")
