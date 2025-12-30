@@ -253,13 +253,13 @@ class TradeRepository:
         )
         return {row["symbol"] for row in rows}
 
-    async def has_recent_sell_order(self, symbol: str, hours: int = 2) -> bool:
+    async def has_recent_sell_order(self, symbol: str, hours: float = 2.0) -> bool:
         """
         Check if there's a recent SELL order for the given symbol (excluding RESEARCH trades).
 
         Args:
             symbol: Stock symbol to check (e.g., "AAPL.US")
-            hours: Number of hours to look back (default: 2)
+            hours: Number of hours to look back (default: 2.0). Can be fractional (e.g., 0.083 for 5 minutes)
 
         Returns:
             True if a SELL order exists for this symbol within the time window

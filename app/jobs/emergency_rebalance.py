@@ -17,6 +17,7 @@ from app.infrastructure.dependencies import (
     get_exchange_rate_service,
     get_tradernet_client,
 )
+from app.infrastructure.locking import file_lock
 from app.repositories import (
     PositionRepository,
     RecommendationRepository,
@@ -34,9 +35,19 @@ async def check_and_rebalance_immediately() -> bool:
     This function executes immediately when called - no waiting, no scheduling.
     Should be called after operations that might affect cash balances.
 
+    Uses a lock to prevent concurrent execution, which could lead to duplicate trades.
+
     Returns:
         True if rebalancing was needed and executed, False otherwise
     """
+    # Use a lock to prevent concurrent emergency rebalancing
+    # This prevents duplicate trades when multiple triggers happen simultaneously
+    async with file_lock("emergency_rebalance", timeout=60.0):
+        return await _check_and_rebalance_immediately_internal()
+
+
+async def _check_and_rebalance_immediately_internal() -> bool:
+    """Internal implementation of emergency rebalancing check."""
     try:
         client = get_tradernet_client()
         if not client.is_connected:

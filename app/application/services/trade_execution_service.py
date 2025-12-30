@@ -272,17 +272,47 @@ async def _validate_sell_order(
 
 
 async def _check_pending_orders(trade, client, trade_repo) -> bool:
-    """Check if there are pending orders for this symbol."""
+    """
+    Check if there are pending orders for this symbol.
+
+    Checks both:
+    1. Broker API for pending orders
+    2. Database for very recent orders (last 5 minutes) to catch orders
+       that were just placed but not yet visible in broker API
+
+    This check is NEVER bypassed, even for emergency trades, to prevent duplicate orders.
+    """
     has_pending = client.has_pending_order_for_symbol(trade.symbol)
 
-    if not has_pending and trade.side.upper() == "SELL":
+    # Also check database for very recent orders (last 5 minutes)
+    # This catches orders that were just placed but broker API hasn't updated yet
+    if not has_pending:
         try:
-            has_recent = await trade_repo.has_recent_sell_order(trade.symbol, hours=2)
-            if has_recent:
+            # Check for very recent orders (5 minutes) to catch race conditions
+            # where an order was just placed but broker API hasn't updated
+            # Check both BUY and SELL orders
+            from datetime import timedelta
+
+            cutoff = (datetime.now() - timedelta(hours=0.083)).isoformat()  # 5 minutes
+            row = await trade_repo._db.fetchone(
+                """
+                SELECT 1 FROM trades
+                WHERE symbol = ?
+                  AND UPPER(side) = ?
+                  AND executed_at >= ?
+                  AND (order_id IS NULL OR order_id NOT LIKE 'RESEARCH_%')
+                LIMIT 1
+                """,
+                (trade.symbol.upper(), trade.side.upper(), cutoff),
+            )
+            if row:
                 has_pending = True
-                logger.info(f"Found recent SELL order in database for {trade.symbol}")
+                logger.info(
+                    f"Found very recent {trade.side} order in database for {trade.symbol} "
+                    "(within last 5 minutes), blocking duplicate trade"
+                )
         except Exception as e:
-            logger.warning(f"Failed to check database for recent sell orders: {e}")
+            logger.warning(f"Failed to check database for recent orders: {e}")
 
     if has_pending:
         logger.warning(
