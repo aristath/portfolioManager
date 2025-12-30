@@ -65,3 +65,16 @@ class TestTradeSide:
         assert TradeSide.BUY == TradeSide.BUY
         assert TradeSide.SELL == TradeSide.SELL
         assert TradeSide.BUY != TradeSide.SELL
+
+    def test_is_valid_with_valid_side(self):
+        """Test is_valid method with valid trade sides."""
+        assert TradeSide.is_valid("BUY") is True
+        assert TradeSide.is_valid("SELL") is True
+        assert TradeSide.is_valid("buy") is True  # Case insensitive
+        assert TradeSide.is_valid("sell") is True
+
+    def test_is_valid_with_invalid_side(self):
+        """Test is_valid method with invalid trade sides."""
+        assert TradeSide.is_valid("INVALID") is False
+        assert TradeSide.is_valid("") is False
+        assert TradeSide.is_valid("HOLD") is False

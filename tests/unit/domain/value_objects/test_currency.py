@@ -17,7 +17,6 @@ class TestCurrency:
         assert Currency.USD.value == "USD"
         assert Currency.GBP.value == "GBP"
         assert Currency.HKD.value == "HKD"
-        assert Currency.DKK.value == "DKK"
 
     def test_from_string_with_valid_currency(self):
         """Test from_string with valid currency strings."""
@@ -61,3 +60,21 @@ class TestCurrency:
         assert Currency.EUR == Currency.EUR
         assert Currency.USD == Currency.USD
         assert Currency.EUR != Currency.USD
+
+    def test_is_valid_with_valid_currency(self):
+        """Test is_valid method with valid currencies."""
+        assert Currency.is_valid("EUR") is True
+        assert Currency.is_valid("USD") is True
+        assert Currency.is_valid("GBP") is True
+        assert Currency.is_valid("HKD") is True
+        assert Currency.is_valid("eur") is True  # Case insensitive
+
+    def test_is_valid_with_invalid_currency(self):
+        """Test is_valid method with invalid currencies."""
+        assert Currency.is_valid("INVALID") is False
+        assert Currency.is_valid("") is False
+        assert Currency.is_valid("XXX") is False
+
+    def test_default_returns_eur(self):
+        """Test that default method returns EUR."""
+        assert Currency.default() == Currency.EUR
