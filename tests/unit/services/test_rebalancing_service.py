@@ -3,7 +3,7 @@
 These tests validate rebalancing trade calculation and orchestration.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -404,9 +404,7 @@ class TestCalculateRebalanceTrades:
             available_cash_after=1000.0,
         )
 
-        service.get_recommendations = AsyncMock(
-            return_value=[valid_step, invalid_step]
-        )
+        service.get_recommendations = AsyncMock(return_value=[valid_step, invalid_step])
 
         result = await service.calculate_rebalance_trades(available_cash=1000.0)
 
