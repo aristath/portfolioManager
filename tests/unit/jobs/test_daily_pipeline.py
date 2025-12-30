@@ -162,8 +162,8 @@ class TestProcessSingleStock:
             patch(
                 "app.jobs.daily_pipeline._update_last_synced", new_callable=AsyncMock
             ),
-            patch("app.jobs.daily_pipeline.set_processing"),
-            patch("app.jobs.daily_pipeline.clear_processing"),
+            patch("app.jobs.daily_pipeline.set_text"),
+            patch("pass  # LED cleared"),
         ):
             await _process_single_stock("TEST.DE")
 
@@ -210,8 +210,8 @@ class TestProcessSingleStock:
                 new_callable=AsyncMock,
                 side_effect=mock_update_last_synced,
             ),
-            patch("app.jobs.daily_pipeline.set_processing"),
-            patch("app.jobs.daily_pipeline.clear_processing"),
+            patch("app.jobs.daily_pipeline.set_text"),
+            patch("pass  # LED cleared"),
         ):
             await _process_single_stock("TEST.DE")
 
@@ -249,9 +249,9 @@ class TestProcessSingleStock:
                 new_callable=AsyncMock,
                 side_effect=mock_update_last_synced,
             ),
-            patch("app.jobs.daily_pipeline.set_processing"),
-            patch("app.jobs.daily_pipeline.clear_processing"),
-            patch("app.jobs.daily_pipeline.set_error"),
+            patch("app.jobs.daily_pipeline.set_text"),
+            patch("pass  # LED cleared"),
+            patch("app.jobs.daily_pipeline.set_text"),
         ):
             # The function should raise the exception after logging
             with pytest.raises(Exception, match="Historical sync failed"):
@@ -300,10 +300,10 @@ class TestDisplayUpdates:
                 "app.jobs.daily_pipeline._update_last_synced", new_callable=AsyncMock
             ),
             patch(
-                "app.jobs.daily_pipeline.set_processing",
+                "app.jobs.daily_pipeline.set_text",
                 side_effect=mock_set_processing,
             ),
-            patch("app.jobs.daily_pipeline.clear_processing"),
+            patch("pass  # LED cleared"),
         ):
             await _process_single_stock("AAPL.US")
 
@@ -347,9 +347,9 @@ class TestDisplayUpdates:
             patch(
                 "app.jobs.daily_pipeline._update_last_synced", new_callable=AsyncMock
             ),
-            patch("app.jobs.daily_pipeline.set_processing"),
+            patch("app.jobs.daily_pipeline.set_text"),
             patch(
-                "app.jobs.daily_pipeline.clear_processing",
+                "pass  # LED cleared",
                 side_effect=mock_clear_processing,
             ),
         ):
@@ -405,8 +405,8 @@ class TestForceRefresh:
             patch(
                 "app.jobs.daily_pipeline._update_last_synced", new_callable=AsyncMock
             ),
-            patch("app.jobs.daily_pipeline.set_processing"),
-            patch("app.jobs.daily_pipeline.clear_processing"),
+            patch("app.jobs.daily_pipeline.set_text"),
+            patch("pass  # LED cleared"),
         ):
             result = await refresh_single_stock("FRESH.US")
 
@@ -432,9 +432,9 @@ class TestForceRefresh:
                 new_callable=AsyncMock,
                 side_effect=mock_sync_error,
             ),
-            patch("app.jobs.daily_pipeline.set_processing"),
-            patch("app.jobs.daily_pipeline.clear_processing"),
-            patch("app.jobs.daily_pipeline.set_error"),
+            patch("app.jobs.daily_pipeline.set_text"),
+            patch("pass  # LED cleared"),
+            patch("app.jobs.daily_pipeline.set_text"),
         ):
             result = await refresh_single_stock("ERROR.US")
 

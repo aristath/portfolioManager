@@ -210,10 +210,10 @@ class TestSyncPortfolioInternal:
 
         with (
             patch("app.jobs.daily_sync.get_tradernet_client") as mock_get_client,
-            patch("app.jobs.daily_sync.set_processing"),
-            patch("app.jobs.daily_sync.set_error") as mock_set_error,
+            patch("app.jobs.daily_sync.set_text"),
+            patch("app.jobs.daily_sync.set_text") as mock_set_error,
             patch("app.jobs.daily_sync.emit"),
-            patch("app.jobs.daily_sync.clear_processing"),
+            patch("pass  # LED cleared"),
         ):
             mock_client = MagicMock()
             mock_client.is_connected = False
@@ -271,8 +271,8 @@ class TestSyncPortfolioInternal:
             patch("app.jobs.daily_sync.get_exchange_rate_service") as mock_get_exchange,
             patch("app.jobs.daily_sync.sync_stock_currencies"),
             patch("app.jobs.daily_sync._sync_prices_internal"),
-            patch("app.jobs.daily_sync.set_processing"),
-            patch("app.jobs.daily_sync.clear_processing"),
+            patch("app.jobs.daily_sync.set_text"),
+            patch("pass  # LED cleared"),
             patch("app.jobs.daily_sync.emit"),
             patch("app.repositories.PositionRepository") as mock_position_repo_class,
             patch("app.repositories.StockRepository") as mock_stock_repo_class,
@@ -313,7 +313,7 @@ class TestSyncPricesInternal:
 
         with (
             patch("app.jobs.daily_sync.StockRepository") as mock_stock_class,
-            patch("app.jobs.daily_sync.set_processing"),
+            patch("app.jobs.daily_sync.set_text"),
             patch("app.jobs.daily_sync.emit"),
         ):
             mock_stock_class.return_value = mock_stock_repo
@@ -353,7 +353,7 @@ class TestSyncPricesInternal:
             patch("app.jobs.daily_sync.StockRepository") as mock_stock_class,
             patch("app.jobs.daily_sync.get_db_manager") as mock_get_db,
             patch("app.jobs.daily_sync.yahoo.get_batch_quotes") as mock_yahoo,
-            patch("app.jobs.daily_sync.set_processing"),
+            patch("app.jobs.daily_sync.set_text"),
             patch("app.jobs.daily_sync.emit"),
         ):
             mock_stock_class.return_value = mock_stock_repo
@@ -379,8 +379,8 @@ class TestSyncPricesInternal:
         with (
             patch("app.jobs.daily_sync.StockRepository") as mock_stock_class,
             patch("app.jobs.daily_sync.yahoo.get_batch_quotes") as mock_yahoo,
-            patch("app.jobs.daily_sync.set_processing"),
-            patch("app.jobs.daily_sync.set_error") as mock_set_error,
+            patch("app.jobs.daily_sync.set_text"),
+            patch("app.jobs.daily_sync.set_text") as mock_set_error,
             patch("app.jobs.daily_sync.emit"),
         ):
             mock_stock_class.return_value = mock_stock_repo
@@ -402,8 +402,8 @@ class TestSyncStockCurrencies:
 
         with (
             patch("app.jobs.daily_sync.get_tradernet_client") as mock_get_client,
-            patch("app.jobs.daily_sync.set_processing"),
-            patch("app.jobs.daily_sync.clear_processing"),
+            patch("app.jobs.daily_sync.set_text"),
+            patch("pass  # LED cleared"),
         ):
             mock_client = MagicMock()
             mock_client.is_connected = False
@@ -426,7 +426,7 @@ class TestSyncStockCurrencies:
         with (
             patch("app.jobs.daily_sync.get_tradernet_client") as mock_get_client,
             patch("app.jobs.daily_sync.StockRepository") as mock_stock_class,
-            patch("app.jobs.daily_sync.set_processing"),
+            patch("app.jobs.daily_sync.set_text"),
         ):
             mock_client = MagicMock()
             mock_client.is_connected = True
@@ -462,7 +462,7 @@ class TestSyncStockCurrencies:
             patch("app.jobs.daily_sync.get_tradernet_client") as mock_get_client,
             patch("app.jobs.daily_sync.StockRepository") as mock_stock_class,
             patch("app.jobs.daily_sync.get_db_manager") as mock_get_db,
-            patch("app.jobs.daily_sync.set_processing"),
+            patch("app.jobs.daily_sync.set_text"),
         ):
             mock_client = MagicMock()
             mock_client.is_connected = True

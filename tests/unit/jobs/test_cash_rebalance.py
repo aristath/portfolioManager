@@ -55,7 +55,7 @@ class TestCheckPnlGuardrails:
             return_value=mock_tracker,
         ):
             with patch("app.jobs.cash_rebalance.emit"):
-                with patch("app.jobs.cash_rebalance.set_error"):
+                with patch("app.jobs.cash_rebalance.set_text"):
                     pnl_status, can_trade = await _check_pnl_guardrails()
 
         assert can_trade is False
@@ -320,8 +320,8 @@ class TestCheckAndRebalanceInternal:
             patch("app.jobs.daily_sync.sync_portfolio"),
             patch("app.jobs.cash_rebalance._check_pnl_guardrails") as mock_pnl,
             patch("app.jobs.cash_rebalance.emit"),
-            patch("app.jobs.cash_rebalance.set_processing"),
-            patch("app.jobs.cash_rebalance.clear_processing"),
+            patch("app.jobs.cash_rebalance.set_text"),
+            patch("pass  # LED cleared"),
         ):
             mock_pnl.return_value = ({"status": "halted"}, False)
 
@@ -348,9 +348,9 @@ class TestCheckAndRebalanceInternal:
                 "app.domain.services.settings_service.SettingsService"
             ) as mock_service,
             patch("app.jobs.cash_rebalance.emit"),
-            patch("app.jobs.cash_rebalance.set_processing"),
-            patch("app.jobs.cash_rebalance.set_error") as mock_set_error,
-            patch("app.jobs.cash_rebalance.clear_processing"),
+            patch("app.jobs.cash_rebalance.set_text"),
+            patch("app.jobs.cash_rebalance.set_text") as mock_set_error,
+            patch("pass  # LED cleared"),
         ):
             mock_pnl.return_value = ({"status": "ok"}, True)
             mock_get_client.return_value = mock_client
@@ -392,8 +392,8 @@ class TestCheckAndRebalanceInternal:
             patch("app.jobs.cash_rebalance._get_next_holistic_action") as mock_action,
             patch("app.jobs.cash_rebalance._refresh_recommendation_cache"),
             patch("app.jobs.cash_rebalance.emit"),
-            patch("app.jobs.cash_rebalance.set_processing"),
-            patch("app.jobs.cash_rebalance.clear_processing"),
+            patch("app.jobs.cash_rebalance.set_text"),
+            patch("pass  # LED cleared"),
         ):
             mock_pnl.return_value = ({"status": "ok"}, True)
             mock_get_client.return_value = mock_client
@@ -621,8 +621,8 @@ class TestEventDrivenRebalancing:
             patch("app.jobs.cash_rebalance._get_next_holistic_action") as mock_action,
             patch("app.jobs.cash_rebalance._refresh_recommendation_cache"),
             patch("app.jobs.cash_rebalance.emit"),
-            patch("app.jobs.cash_rebalance.set_processing"),
-            patch("app.jobs.cash_rebalance.clear_processing"),
+            patch("app.jobs.cash_rebalance.set_text"),
+            patch("pass  # LED cleared"),
             patch(
                 "app.domain.services.rebalancing_triggers.check_rebalance_triggers",
                 new=AsyncMock(return_value=(False, "no triggers met")),
@@ -706,8 +706,8 @@ class TestEventDrivenRebalancing:
             patch("app.jobs.cash_rebalance._execute_trade"),
             patch("app.jobs.cash_rebalance._refresh_recommendation_cache"),
             patch("app.jobs.cash_rebalance.emit"),
-            patch("app.jobs.cash_rebalance.set_processing"),
-            patch("app.jobs.cash_rebalance.clear_processing"),
+            patch("app.jobs.cash_rebalance.set_text"),
+            patch("pass  # LED cleared"),
             patch(
                 "app.domain.services.rebalancing_triggers.check_rebalance_triggers"
             ) as mock_check_triggers,
@@ -799,8 +799,8 @@ class TestEventDrivenRebalancing:
             patch("app.jobs.cash_rebalance._execute_trade"),
             patch("app.jobs.cash_rebalance._refresh_recommendation_cache"),
             patch("app.jobs.cash_rebalance.emit"),
-            patch("app.jobs.cash_rebalance.set_processing"),
-            patch("app.jobs.cash_rebalance.clear_processing"),
+            patch("app.jobs.cash_rebalance.set_text"),
+            patch("pass  # LED cleared"),
             patch(
                 "app.domain.services.rebalancing_triggers.check_rebalance_triggers"
             ) as mock_check_triggers,
@@ -889,8 +889,8 @@ class TestEventDrivenRebalancing:
             patch("app.jobs.cash_rebalance._execute_trade"),
             patch("app.jobs.cash_rebalance._refresh_recommendation_cache"),
             patch("app.jobs.cash_rebalance.emit"),
-            patch("app.jobs.cash_rebalance.set_processing"),
-            patch("app.jobs.cash_rebalance.clear_processing"),
+            patch("app.jobs.cash_rebalance.set_text"),
+            patch("pass  # LED cleared"),
             patch(
                 "app.domain.services.rebalancing_triggers.check_rebalance_triggers"
             ) as mock_check_triggers,
