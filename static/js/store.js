@@ -538,16 +538,16 @@ document.addEventListener('alpine:init', () => {
       }
     },
 
-    async refreshStockData(symbol) {
-      if (!symbol) return;
+    async refreshStockData(isin) {
+      if (!isin) return;
       this.loading.refreshData = true;
       try {
-        const response = await fetch(`/api/stocks/${encodeURIComponent(symbol)}/refresh-data`, {
+        const response = await fetch(`/api/stocks/${encodeURIComponent(isin)}/refresh-data`, {
           method: 'POST'
         });
         const data = await response.json();
         if (response.ok) {
-          this.showMessage(`Data refresh completed for ${symbol}`, 'success');
+          this.showMessage(`Data refresh completed for ${data.symbol || isin}`, 'success');
           await this.fetchStocks();
         } else {
           this.showMessage(data.detail || 'Data refresh failed', 'error');
