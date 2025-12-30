@@ -153,16 +153,18 @@ chmod +x /home/arduino/repos/autoTrader/scripts/compile_and_upload_sketch.sh
 
 ### 6. Setup Auto-Deployment
 
-The auto-deploy script checks GitHub every 5 minutes and deploys changes automatically.
+The auto-deploy script checks GitHub and deploys changes automatically. **The interval is now configurable via the Settings UI** (Settings > System > Job Scheduling > Auto-Deploy). The scheduler handles execution - no cron job needed.
 
 ```bash
 # Copy deploy script
 cp /home/arduino/repos/autoTrader/arduino-app/deploy/auto-deploy.sh /home/arduino/bin/
 chmod +x /home/arduino/bin/auto-deploy.sh
 
-# Add cron job
-(crontab -l 2>/dev/null; echo "*/5 * * * * /home/arduino/bin/auto-deploy.sh") | crontab -
+# Remove any existing cron job (scheduler handles this now)
+(crontab -l 2>/dev/null | grep -v 'auto-deploy.sh') | crontab - || true
 ```
+
+> **Note:** The auto-deploy interval defaults to 5 minutes but can be changed in the Settings UI. The scheduler will automatically reschedule the job when the setting is updated.
 
 ### 7. Configure Sudo Permissions for Auto-Deploy
 
@@ -248,7 +250,7 @@ Both services are configured to start automatically:
 |---------|------------|---------|
 | arduino-trader | systemd enabled | `sudo systemctl enable arduino-trader` |
 | LED display | Docker app | Managed by Arduino App Framework |
-| auto-deploy | cron job | Runs every 5 minutes |
+| auto-deploy | scheduler job | Configurable interval (default: 5 minutes) |
 
 ## Troubleshooting
 
@@ -275,12 +277,14 @@ curl http://localhost:8000/api/status/led/display
 
 ### Auto-deploy not running
 ```bash
-# Check cron
-crontab -l
+# Check scheduler job status (via API or logs)
+curl http://localhost:8000/api/status/jobs
 # Check logs
 tail -50 /home/arduino/logs/auto-deploy.log
 # Run manually
 /home/arduino/bin/auto-deploy.sh
+# Verify interval setting
+# Check Settings > System > Job Scheduling > Auto-Deploy in the UI
 ```
 
 ### Reset everything

@@ -137,10 +137,11 @@ cp "$REPO_DIR/arduino-app/deploy/auto-deploy.sh" "$BIN_DIR/"
 chmod +x "$BIN_DIR/auto-deploy.sh"
 chown arduino:arduino "$BIN_DIR/auto-deploy.sh"
 
-# Add cron job for arduino user (every 5 minutes)
-CRON_JOB="*/5 * * * * $BIN_DIR/auto-deploy.sh"
-sudo -u arduino bash -c "(crontab -l 2>/dev/null | grep -v 'auto-deploy.sh'; echo '$CRON_JOB') | crontab -"
-echo "Cron job installed: $CRON_JOB"
+# Note: Auto-deploy is now handled by the scheduler (configurable via settings UI)
+# Remove any existing cron job to avoid duplicate executions
+echo "Removing any existing auto-deploy cron job (scheduler handles this now)..."
+sudo -u arduino bash -c "(crontab -l 2>/dev/null | grep -v 'auto-deploy.sh') | crontab -" || true
+echo "Auto-deploy script installed. Interval is configurable via Settings > System > Job Scheduling."
 
 # Step 11: Start services
 echo ""

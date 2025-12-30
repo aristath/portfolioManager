@@ -39,13 +39,10 @@ echo "Syncing app files..."
 rm -rf "$APP_DIR"/* 2>/dev/null || true
 cp -r "$REPO_DIR/arduino-app/"* "$APP_DIR/"
 
-# Set up cron job (if not already set)
-if ! crontab -l 2>/dev/null | grep -q "auto-deploy.sh"; then
-    echo "Setting up cron job..."
-    (crontab -l 2>/dev/null; echo "*/5 * * * * /home/arduino/bin/auto-deploy.sh") | crontab -
-else
-    echo "Cron job already exists"
-fi
+# Note: Auto-deploy is now handled by the main app scheduler (configurable via settings UI)
+# Remove any existing cron job to avoid duplicate executions
+echo "Removing any existing auto-deploy cron job (scheduler handles this now)..."
+(crontab -l 2>/dev/null | grep -v 'auto-deploy.sh') | crontab - || true
 
 # Set as default app (auto-starts on boot)
 echo "Setting as default app for auto-start..."
@@ -63,7 +60,7 @@ arduino-app-cli app list | grep trader
 echo ""
 echo "The app will:"
 echo "  - Auto-start on boot (set as default)"
-echo "  - Auto-update every 5 minutes from GitHub"
+echo "  - Auto-update interval configurable via Settings UI (default: 5 minutes)"
 echo ""
 echo "Logs: /home/arduino/logs/auto-deploy.log"
 echo "App logs: arduino-app-cli app logs user:trader-display"
