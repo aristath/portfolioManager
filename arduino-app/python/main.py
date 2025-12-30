@@ -33,10 +33,13 @@ def scroll_text(text: str, speed: int = 50) -> bool:
         True if successful, False otherwise
     """
     try:
-        Bridge.call("scrollText", text, speed, timeout=5)
+        # Use longer timeout - scrollText may take time to set up scrolling animation
+        # Estimate timeout based on text length: ~100ms per character + 5s base
+        estimated_timeout = max(10, min(60, len(text) * 0.1 + 5))
+        Bridge.call("scrollText", text, speed, timeout=int(estimated_timeout))
         return True
     except TimeoutError:
-        logger.warning(f"scrollText timed out after 5s: {text[:50]}...")
+        logger.warning(f"scrollText timed out: {text[:50]}...")
         return False
     except Exception as e:
         logger.debug(f"scrollText failed: {e}")
@@ -95,8 +98,37 @@ def fetch_display_state() -> dict | None:
     return None
 
 
+def estimate_scroll_duration(text: str, speed_ms: int) -> float:
+    """Estimate how long scrolling text will take to complete.
+
+    Args:
+        text: Text to scroll
+        speed_ms: Milliseconds per scroll step
+
+    Returns:
+        Estimated duration in seconds
+    """
+    # Matrix width is 13 pixels, each character is ~5 pixels wide
+    # Text needs to scroll from right edge (x=13) to completely off left edge
+    # Total scroll distance = text_width + matrix_width
+    # Each scroll step moves 1 pixel, takes speed_ms milliseconds
+    matrix_width = 13
+    char_width = 5
+    text_width = len(text) * char_width
+    total_steps = text_width + matrix_width
+    duration_seconds = (total_steps * speed_ms) / 1000.0
+    # Add some buffer for safety
+    return duration_seconds + 2.0
+
+
 def loop():
-    """Main loop - fetch display state from API, update MCU if changed."""
+    """Main loop - fetch display state from API, update MCU if changed.
+
+    Strategy:
+    - If no message to display: poll every 10 seconds
+    - If we have a message: call scrollText, then wait for estimated completion
+      before polling for next message
+    """
     global _last_text, _last_text_speed, _last_led3, _last_led4
 
     try:
@@ -105,10 +137,15 @@ def loop():
         if state is None:
             # API unreachable - show error
             if _last_text != "API OFFLINE":
-                scroll_text("API OFFLINE", DEFAULT_TICKER_SPEED)
-                _last_text = "API OFFLINE"
-                _last_text_speed = DEFAULT_TICKER_SPEED
-            time.sleep(2)
+                if scroll_text("API OFFLINE", DEFAULT_TICKER_SPEED):
+                    _last_text = "API OFFLINE"
+                    _last_text_speed = DEFAULT_TICKER_SPEED
+                    # Wait for scroll to complete before next poll
+                    scroll_duration = estimate_scroll_duration("API OFFLINE", DEFAULT_TICKER_SPEED)
+                    time.sleep(scroll_duration)
+                    return
+            # No message to display - poll less frequently
+            time.sleep(10)
             return
 
         # Get state values
@@ -140,18 +177,27 @@ def loop():
         else:
             display_text = ""
 
-        # Update text only if changed
+        # If we have text to display and it's different, call scrollText
         if display_text and (display_text != _last_text or ticker_speed != _last_text_speed):
             if scroll_text(display_text, ticker_speed):
                 _last_text = display_text
                 _last_text_speed = ticker_speed
+                # Wait for scroll animation to complete before polling for next message
+                scroll_duration = estimate_scroll_duration(display_text, ticker_speed)
+                logger.debug(f"Scrolling '{display_text[:30]}...' for ~{scroll_duration:.1f}s")
+                time.sleep(scroll_duration)
+                return
             # If scroll_text fails, don't update _last_text so it will retry next iteration
+            # But don't wait - retry soon
+            time.sleep(2)
+            return
 
-        time.sleep(2)  # Poll every 2 seconds
+        # No message to display or same message - poll less frequently
+        time.sleep(10)
 
     except Exception as e:
         logger.error(f"Loop error: {e}")
-        time.sleep(2)
+        time.sleep(10)
 
 
 logger.info("LED Display starting (scrolling text mode)...")

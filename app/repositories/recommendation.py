@@ -292,3 +292,26 @@ class RecommendationRepository:
             (portfolio_hash,),
         )
         return [{key: row[key] for key in row.keys()} for row in rows]
+
+    async def dismiss_all_by_portfolio_hash(
+        self, portfolio_hash: str, dismissed_at: Optional[str] = None
+    ) -> int:
+        """
+        Dismiss all pending recommendations with the given portfolio_hash.
+
+        Returns the number of recommendations dismissed.
+        """
+        if dismissed_at is None:
+            dismissed_at = datetime.now().isoformat()
+
+        async with self._db.transaction() as conn:
+            cursor = await conn.execute(
+                """
+                UPDATE recommendations
+                SET status = 'dismissed', dismissed_at = ?
+                WHERE status = 'pending'
+                  AND portfolio_hash = ?
+                """,
+                (dismissed_at, portfolio_hash),
+            )
+            return cursor.rowcount
