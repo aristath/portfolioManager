@@ -184,17 +184,31 @@ class PositionRepository:
             "SELECT symbol, name, country, fullExchangeName, industry, min_lot, allow_sell, currency "
             "FROM stocks WHERE active = 1"
         )
-        stocks_by_symbol = {
-            row["symbol"]: {key: row[key] for key in row.keys()} for row in stock_rows
-        }
+        # Convert Row objects to dicts
+        stocks_by_symbol = {}
+        for row in stock_rows:
+            # Handle both Row objects and dicts
+            if hasattr(row, "keys"):
+                stock_dict = {key: row[key] for key in row.keys()}
+            else:
+                stock_dict = dict(row) if isinstance(row, (dict, tuple)) else {}
+            if stock_dict and "symbol" in stock_dict:
+                stocks_by_symbol[stock_dict["symbol"]] = stock_dict
 
         # Merge position and stock data
         result = []
         for pos in position_rows:
-            pos_dict = {key: pos[key] for key in pos.keys()}
-            stock = stocks_by_symbol.get(pos["symbol"], {})
+            # Convert Row object to dict
+            if hasattr(pos, "keys"):
+                pos_dict = {key: pos[key] for key in pos.keys()}
+            else:
+                pos_dict = dict(pos) if isinstance(pos, (dict, tuple)) else {}
+            if not pos_dict or "symbol" not in pos_dict:
+                continue
+            symbol = pos_dict["symbol"]
+            stock = stocks_by_symbol.get(symbol, {})
             # Merge stock fields into position
-            pos_dict["name"] = stock.get("name", pos["symbol"])
+            pos_dict["name"] = stock.get("name", symbol)
             pos_dict["country"] = stock.get("country")
             pos_dict["fullExchangeName"] = stock.get("fullExchangeName")
             pos_dict["industry"] = stock.get("industry")
