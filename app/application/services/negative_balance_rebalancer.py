@@ -155,6 +155,18 @@ class NegativeBalanceRebalancer:
 
         if not remaining_shortfalls:
             logger.info("Currency exchange resolved all shortfalls")
+            # Clean up any existing emergency recommendations since they're no longer needed
+            emergency_portfolio_hash = "EMERGENCY:negative_balance_rebalancing"
+            dismissed_count = (
+                await self._recommendation_repo.dismiss_all_by_portfolio_hash(
+                    emergency_portfolio_hash
+                )
+            )
+            if dismissed_count > 0:
+                logger.info(
+                    f"Dismissed {dismissed_count} emergency recommendations "
+                    "since currency exchange resolved all shortfalls"
+                )
             emit(
                 SystemEvent.REBALANCE_COMPLETE,
                 message="Negative balance rebalancing complete",
