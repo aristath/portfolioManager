@@ -69,9 +69,7 @@ class TestTradeValidation:
     @pytest.fixture
     def mock_currency_exchange_service(self):
         """Create mock currency exchange service."""
-        from app.modules.system.services.currency_exchange_service import (
-            CurrencyExchangeService,
-        )
+        from app.shared.services import CurrencyExchangeService
 
         service = MagicMock(spec=CurrencyExchangeService)
         return service

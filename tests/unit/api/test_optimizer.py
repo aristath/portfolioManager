@@ -106,7 +106,7 @@ def sample_optimization_result():
 @pytest.fixture(autouse=True)
 def reset_cache():
     """Reset the module-level cache before each test."""
-    import app.api.optimizer as optimizer_module
+    import app.modules.optimization.api.optimizer as optimizer_module
 
     optimizer_module._last_optimization_result = None
     optimizer_module._last_optimization_time = None
@@ -159,7 +159,7 @@ class TestGetOptimizerStatus:
     @pytest.mark.asyncio
     async def test_returns_status_with_cached_result(self, mock_settings):
         """Test that cached optimization result is included."""
-        import app.api.optimizer as optimizer_module
+        import app.modules.optimization.api.optimizer as optimizer_module
 
         # Setup cache
         cached_result = {
@@ -367,7 +367,7 @@ class TestRunOptimization:
         self, mock_settings, sample_optimization_result
     ):
         """Test that optimization result is cached."""
-        import app.api.optimizer as optimizer_module
+        import app.modules.optimization.api.optimizer as optimizer_module
 
         mock_stock = MagicMock()
         mock_stock.symbol = "AAPL"
@@ -1015,7 +1015,7 @@ class TestUpdateOptimizationCache:
 
     def test_updates_cache(self, sample_optimization_result):
         """Test that cache is updated correctly."""
-        import app.api.optimizer as optimizer_module
+        import app.modules.optimization.api.optimizer as optimizer_module
 
         portfolio_value = 10000.0
 
@@ -1031,7 +1031,7 @@ class TestUpdateOptimizationCache:
 
     def test_updates_cache_timestamp(self, sample_optimization_result):
         """Test that timestamp is set when cache is updated."""
-        import app.api.optimizer as optimizer_module
+        import app.modules.optimization.api.optimizer as optimizer_module
 
         before_time = datetime.now()
 
