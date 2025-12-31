@@ -14,11 +14,9 @@ from app.domain.value_objects.recommendation_status import RecommendationStatus
 from app.domain.value_objects.trade_side import TradeSide
 
 # AllocationTarget moved to modules/allocation/domain/models.py
-# Backward compatibility re-export (temporary - will be removed in Phase 5)
 from app.modules.allocation.domain.models import AllocationTarget
 
 # CashFlow moved to modules/cash_flows/domain/models.py
-# Backward compatibility re-export (temporary - will be removed in Phase 5)
 from app.modules.cash_flows.domain.models import CashFlow
 
 
@@ -84,7 +82,6 @@ class Stock:
 
 
 # Position moved to modules/portfolio/domain/models.py
-# Backward compatibility re-export (temporary - will be removed in Phase 5)
 from app.modules.portfolio.domain.models import Position
 
 
@@ -180,7 +177,6 @@ class StockScore:
 
 
 # PortfolioSnapshot, DailyPrice, MonthlyPrice moved to modules/portfolio/domain/models.py
-# Backward compatibility re-export (temporary - will be removed in Phase 5)
 from app.modules.portfolio.domain.models import (
     DailyPrice,
     MonthlyPrice,

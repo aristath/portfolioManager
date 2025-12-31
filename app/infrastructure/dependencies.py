@@ -9,13 +9,9 @@ from typing import Annotated
 from fastapi import Depends
 
 from app.application.services.currency_exchange_service import CurrencyExchangeService
-# Backward compatibility re-export (temporary - will be removed in Phase 5)
 from app.modules.portfolio.services.portfolio_service import PortfolioService
-# Backward compatibility re-export (temporary - will be removed in Phase 5)
 from app.modules.rebalancing.services.rebalancing_service import RebalancingService
-# Backward compatibility re-export (temporary - will be removed in Phase 5)
 from app.modules.universe.services.stock_setup_service import StockSetupService
-# Backward compatibility re-export (temporary - will be removed in Phase 5)
 from app.modules.trading.services.trade_execution_service import TradeExecutionService
 from app.modules.trading.services.trade_safety_service import TradeSafetyService
 from app.domain.repositories.protocols import (
@@ -27,7 +23,6 @@ from app.domain.repositories.protocols import (
 )
 from app.domain.services.exchange_rate_service import ExchangeRateService
 from app.domain.services.settings_service import SettingsService
-# Backward compatibility re-export (temporary - will be removed in Phase 5)
 from app.modules.universe.domain.ticker_content_service import TickerContentService
 from app.core.database.manager import DatabaseManager, get_db_manager
 from app.infrastructure.external.tradernet import TradernetClient, get_tradernet_client
