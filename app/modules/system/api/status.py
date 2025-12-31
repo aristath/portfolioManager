@@ -105,7 +105,7 @@ async def get_status(
     return {
         "status": "healthy",
         "last_sync": last_sync,
-        "security_universe_count": security_count,
+        "stock_universe_count": security_count,
         "active_positions": position_count,
         "cash_balance": cash_balance,
         "check_interval_minutes": settings.cash_check_interval_minutes,
