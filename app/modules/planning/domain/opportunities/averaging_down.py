@@ -6,11 +6,11 @@ Identifies quality stocks that are down and present averaging down opportunities
 from typing import Dict, List, Optional
 
 from app.domain.models import Stock
-from app.modules.scoring.domain.models import PortfolioContext
 from app.domain.services.exchange_rate_service import ExchangeRateService
-from app.modules.trading.domain.trade_sizing_service import TradeSizingService
 from app.domain.value_objects.trade_side import TradeSide
 from app.modules.planning.domain.holistic_planner import ActionCandidate
+from app.modules.scoring.domain.models import PortfolioContext
+from app.modules.trading.domain.trade_sizing_service import TradeSizingService
 
 
 async def identify_averaging_down_opportunities(

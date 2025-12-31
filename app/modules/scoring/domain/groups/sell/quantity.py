@@ -3,12 +3,12 @@
 Functions to calculate how much of a position should be sold based on scores.
 """
 
-from app.modules.trading.domain.trade_sizing_service import TradeSizingService
 from app.modules.scoring.domain.constants import (
     DEFAULT_MIN_SELL_VALUE_EUR,
     MAX_SELL_PCT,
     MIN_SELL_PCT,
 )
+from app.modules.trading.domain.trade_sizing_service import TradeSizingService
 
 
 def determine_sell_quantity(

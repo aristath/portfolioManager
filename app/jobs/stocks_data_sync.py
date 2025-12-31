@@ -18,8 +18,8 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from app.core.events import SystemEvent, emit
-from app.modules.display.services.display_service import set_led4, set_text
 from app.infrastructure.locking import file_lock
+from app.modules.display.services.display_service import set_led4, set_text
 
 logger = logging.getLogger(__name__)
 
@@ -430,9 +430,9 @@ async def _refresh_score_for_symbol(symbol: str):
     """
     from datetime import datetime
 
-    from app.modules.scoring.domain.stock_scorer import calculate_stock_score
     from app.core.database.manager import get_db_manager
     from app.infrastructure.external import yahoo_finance as yahoo
+    from app.modules.scoring.domain.stock_scorer import calculate_stock_score
 
     db_manager = get_db_manager()
 

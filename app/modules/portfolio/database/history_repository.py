@@ -4,8 +4,8 @@ from datetime import datetime
 from typing import List, Optional
 
 from app.core.database.manager import get_db_manager
-from app.modules.portfolio.domain.models import DailyPrice, MonthlyPrice
 from app.modules.portfolio.database.schemas import init_history_schema
+from app.modules.portfolio.domain.models import DailyPrice, MonthlyPrice
 
 
 class HistoryRepository:

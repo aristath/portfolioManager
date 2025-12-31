@@ -211,8 +211,8 @@ class CurrencyExchangeService:
     def _get_rate_fallback(self, from_curr: str, to_curr: str) -> Optional[float]:
         """Get rate from ExchangeRateService as fallback when Tradernet quote fails."""
         try:
-            from app.domain.services.exchange_rate_service import ExchangeRateService
             from app.core.database.manager import get_db_manager
+            from app.domain.services.exchange_rate_service import ExchangeRateService
 
             db_manager = get_db_manager()
             exchange_rate_service = ExchangeRateService(db_manager)

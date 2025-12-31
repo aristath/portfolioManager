@@ -5,7 +5,6 @@ import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
-from app.modules.universe.domain.symbol_resolver import is_isin
 from app.domain.value_objects.trade_side import TradeSide
 from app.infrastructure.cache_invalidation import get_cache_invalidation_service
 from app.infrastructure.dependencies import (
@@ -18,6 +17,7 @@ from app.infrastructure.dependencies import (
     TradeSafetyServiceDep,
 )
 from app.infrastructure.external.tradernet_connection import ensure_tradernet_connected
+from app.modules.universe.domain.symbol_resolver import is_isin
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

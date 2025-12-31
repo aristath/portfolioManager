@@ -11,11 +11,11 @@ from typing import Dict, List, Optional, Tuple
 import pandas as pd
 from pypfopt import risk_models as pypfopt_risk
 
+from app.modules.portfolio.database.history_repository import HistoryRepository
 from app.modules.scoring.domain.constants import (
     COVARIANCE_LOOKBACK_DAYS,
     COVARIANCE_MIN_HISTORY,
 )
-from app.modules.portfolio.database.history_repository import HistoryRepository
 
 logger = logging.getLogger(__name__)
 

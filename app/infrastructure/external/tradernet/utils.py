@@ -5,8 +5,8 @@ import logging
 from contextlib import contextmanager
 from typing import Optional
 
-from app.domain.services.exchange_rate_service import ExchangeRateService
 from app.core.events import SystemEvent, emit
+from app.domain.services.exchange_rate_service import ExchangeRateService
 
 logger = logging.getLogger(__name__)
 

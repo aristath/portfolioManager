@@ -7,6 +7,7 @@ portfolio value, cash balance, and trading recommendations.
 import logging
 from typing import Protocol
 
+from app.core.cache.cache import cache
 from app.domain.portfolio_hash import generate_recommendation_cache_key
 from app.domain.repositories.protocols import (
     IAllocationRepository,
@@ -15,7 +16,6 @@ from app.domain.repositories.protocols import (
     IStockRepository,
 )
 from app.domain.services.settings_service import SettingsService
-from app.core.cache.cache import cache
 from app.infrastructure.external.tradernet import TradernetClient
 from app.infrastructure.market_hours import format_market_status_for_display
 

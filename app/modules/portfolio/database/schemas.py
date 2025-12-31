@@ -44,6 +44,13 @@ CREATE TABLE IF NOT EXISTS portfolio_snapshots (
 );
 
 CREATE INDEX IF NOT EXISTS idx_snapshots_date ON portfolio_snapshots(date);
+
+-- Schema version tracking
+CREATE TABLE IF NOT EXISTS schema_version (
+    version INTEGER PRIMARY KEY,
+    applied_at TEXT NOT NULL,
+    description TEXT
+);
 """
 
 # History schema (per-symbol databases)

@@ -9,7 +9,6 @@ from app.application.services.recommendation.performance_adjustment_calculator i
 from app.application.services.recommendation.technical_data_calculator import (
     get_technical_data_for_positions,
 )
-
 from app.modules.planning.services.portfolio_context_builder import (
     build_portfolio_context,
 )

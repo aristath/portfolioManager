@@ -34,10 +34,10 @@ from typing import Dict, List, Optional, Set, Tuple
 
 from app.domain.models import Position, Stock
 from app.domain.portfolio_hash import generate_portfolio_hash
+from app.domain.value_objects.trade_side import TradeSide
 from app.modules.scoring.domain.diversification import calculate_portfolio_score
 from app.modules.scoring.domain.end_state import calculate_portfolio_end_state_score
 from app.modules.scoring.domain.models import PortfolioContext
-from app.domain.value_objects.trade_side import TradeSide
 
 logger = logging.getLogger(__name__)
 
@@ -531,9 +531,6 @@ async def identify_opportunities(
     Returns:
         Dict mapping category to list of ActionCandidate
     """
-    from app.modules.rebalancing.services.rebalancing_service import (
-        calculate_min_trade_amount,
-    )
     from app.config import settings as app_settings
     from app.domain.constants import BUY_COOLDOWN_DAYS
     from app.infrastructure.external import yahoo_finance as yahoo
@@ -543,6 +540,9 @@ async def identify_opportunities(
         identify_profit_taking_opportunities,
         identify_rebalance_buy_opportunities,
         identify_rebalance_sell_opportunities,
+    )
+    from app.modules.rebalancing.services.rebalancing_service import (
+        calculate_min_trade_amount,
     )
     from app.repositories import SettingsRepository, TradeRepository
 
@@ -2400,12 +2400,12 @@ async def process_planner_incremental(
     """
     from datetime import datetime
 
+    from app.modules.planning.database.planner_repository import PlannerRepository
     from app.modules.planning.domain.narrative import (
         generate_plan_narrative,
         generate_step_narrative,
     )
     from app.repositories.calculations import CalculationsRepository
-    from app.modules.planning.database.planner_repository import PlannerRepository
 
     # Generate portfolio hash
     position_dicts = [{"symbol": p.symbol, "quantity": p.quantity} for p in positions]

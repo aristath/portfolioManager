@@ -14,11 +14,11 @@ import logging
 from typing import TYPE_CHECKING, Dict, List, Optional
 
 if TYPE_CHECKING:
-    from app.modules.scoring.domain.models import PortfolioContext
     from app.modules.planning.domain.holistic_planner import (
         ActionCandidate,
         HolisticStep,
     )
+    from app.modules.scoring.domain.models import PortfolioContext
 
 logger = logging.getLogger(__name__)
 

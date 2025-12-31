@@ -6,8 +6,8 @@ Checks if portfolio conditions warrant rebalancing outside of scheduled interval
 import logging
 from typing import Dict, List, Optional
 
-from app.modules.portfolio.domain.models import Position
 from app.domain.repositories.protocols import ISettingsRepository
+from app.modules.portfolio.domain.models import Position
 from app.repositories import SettingsRepository
 
 logger = logging.getLogger(__name__)

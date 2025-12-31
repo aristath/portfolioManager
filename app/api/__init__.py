@@ -8,8 +8,8 @@ from app.modules.optimization.api import optimizer
 from app.modules.planning.api import planner, recommendations
 from app.modules.portfolio.api import portfolio
 from app.modules.system.api import status
-from app.modules.universe.api import stocks
 from app.modules.trading.api import trades
+from app.modules.universe.api import stocks
 
 __all__ = [
     "portfolio",

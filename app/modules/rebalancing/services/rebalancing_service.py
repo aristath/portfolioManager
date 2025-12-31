@@ -8,7 +8,7 @@ import json
 import logging
 from typing import Dict, List, Optional
 
-from app.modules.analytics.domain.market_regime import detect_market_regime
+from app.core.database.manager import DatabaseManager
 from app.domain.exceptions import ValidationError
 from app.domain.models import MultiStepRecommendation, Recommendation
 from app.domain.repositories.protocols import (
@@ -18,12 +18,14 @@ from app.domain.repositories.protocols import (
     IStockRepository,
     ITradeRepository,
 )
-from app.core.database.manager import DatabaseManager
 from app.domain.services.allocation_calculator import get_max_trades
 from app.domain.services.exchange_rate_service import ExchangeRateService
 from app.domain.services.settings_service import SettingsService
+from app.domain.value_objects.recommendation_status import RecommendationStatus
+from app.domain.value_objects.trade_side import TradeSide
 from app.infrastructure.external import yahoo_finance as yahoo
 from app.infrastructure.external.tradernet import TradernetClient
+from app.modules.analytics.domain.market_regime import detect_market_regime
 from app.modules.planning.services.portfolio_context_builder import (
     build_portfolio_context,
 )
@@ -31,8 +33,6 @@ from app.modules.portfolio.database.portfolio_repository import PortfolioReposit
 from app.modules.scoring.domain.models import PortfolioContext
 from app.repositories import RecommendationRepository
 from app.shared.domain.value_objects.currency import Currency
-from app.domain.value_objects.recommendation_status import RecommendationStatus
-from app.domain.value_objects.trade_side import TradeSide
 
 
 def calculate_min_trade_amount(
@@ -214,11 +214,11 @@ class RebalancingService:
         Returns:
             List of MultiStepRecommendation objects representing the optimal sequence
         """
-        from app.modules.optimization.services.portfolio_optimizer import (
-            PortfolioOptimizer,
-        )
         from app.modules.dividends.database.dividend_repository import (
             DividendRepository,
+        )
+        from app.modules.optimization.services.portfolio_optimizer import (
+            PortfolioOptimizer,
         )
 
         # Get optimizer settings
@@ -570,12 +570,12 @@ class RebalancingService:
                     )
 
                     if eval_row:
-                        from app.modules.scoring.domain.diversification import (
-                            calculate_portfolio_score,
-                        )
                         from app.modules.planning.domain.narrative import (
                             generate_plan_narrative,
                             generate_step_narrative,
+                        )
+                        from app.modules.scoring.domain.diversification import (
+                            calculate_portfolio_score,
                         )
 
                         breakdown = json.loads(eval_row["breakdown_json"])
