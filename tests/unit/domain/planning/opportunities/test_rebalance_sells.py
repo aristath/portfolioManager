@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.domain.models import Position, Security
+from app.domain.value_objects.product_type import ProductType
 from app.modules.planning.domain.opportunities.rebalance_sells import (
     identify_rebalance_sell_opportunities,
 )
@@ -35,6 +36,7 @@ class TestIdentifyRebalanceSellOpportunities:
         return Security(
             symbol="AAPL.US",
             name="Apple Inc",
+            product_type=ProductType.EQUITY,
             min_lot=1,
             allow_buy=True,
             allow_sell=True,
@@ -83,6 +85,7 @@ class TestIdentifyRebalanceSellOpportunities:
         security = Security(
             symbol="AAPL.US",
             name="Apple Inc",
+            product_type=ProductType.EQUITY,
             min_lot=1,
             allow_buy=True,
             allow_sell=False,
