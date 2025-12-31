@@ -33,7 +33,7 @@ class TestGetPositionRiskMetrics:
     @pytest.mark.asyncio
     async def test_returns_cached_metrics_if_available(self, mock_recommendation_cache):
         """Test that cached metrics are returned if available."""
-        from app.domain.analytics.position.risk import get_position_risk_metrics
+        from app.modules.analytics.domain.position.risk import get_position_risk_metrics
 
         cached_metrics = {
             "sortino_ratio": 1.5,
@@ -44,7 +44,7 @@ class TestGetPositionRiskMetrics:
         mock_recommendation_cache.get_analytics.return_value = cached_metrics
 
         with patch(
-            "app.domain.analytics.position.risk.get_recommendation_cache",
+            "app.infrastructure.recommendation_cache.get_recommendation_cache",
             return_value=mock_recommendation_cache,
         ):
             result = await get_position_risk_metrics("AAPL", "2024-01-01", "2024-01-31")
@@ -55,7 +55,7 @@ class TestGetPositionRiskMetrics:
     @pytest.mark.asyncio
     async def test_returns_zero_metrics_for_insufficient_data(self):
         """Test that zero metrics are returned when there's insufficient price data."""
-        from app.domain.analytics.position.risk import get_position_risk_metrics
+        from app.modules.analytics.domain.position.risk import get_position_risk_metrics
 
         mock_history_repo = AsyncMock()
         mock_history_repo.get_daily_range.return_value = []  # No price data
@@ -64,11 +64,11 @@ class TestGetPositionRiskMetrics:
         mock_cache.get_analytics.return_value = None
 
         with patch(
-            "app.domain.analytics.position.risk.get_recommendation_cache",
+            "app.infrastructure.recommendation_cache.get_recommendation_cache",
             return_value=mock_cache,
         ):
             with patch(
-                "app.domain.analytics.position.risk.HistoryRepository",
+                "app.modules.analytics.domain.position.risk.HistoryRepository",
                 return_value=mock_history_repo,
             ):
                 result = await get_position_risk_metrics(
@@ -85,7 +85,7 @@ class TestGetPositionRiskMetrics:
     @pytest.mark.asyncio
     async def test_returns_zero_metrics_for_single_price_point(self):
         """Test that zero metrics are returned when only one price point is available."""
-        from app.domain.analytics.position.risk import get_position_risk_metrics
+        from app.modules.analytics.domain.position.risk import get_position_risk_metrics
 
         prices = [DailyPrice(date="2024-01-01", close_price=100.0)]
 
@@ -96,11 +96,11 @@ class TestGetPositionRiskMetrics:
         mock_cache.get_analytics.return_value = None
 
         with patch(
-            "app.domain.analytics.position.risk.get_recommendation_cache",
+            "app.infrastructure.recommendation_cache.get_recommendation_cache",
             return_value=mock_cache,
         ):
             with patch(
-                "app.domain.analytics.position.risk.HistoryRepository",
+                "app.modules.analytics.domain.position.risk.HistoryRepository",
                 return_value=mock_history_repo,
             ):
                 result = await get_position_risk_metrics(
@@ -117,7 +117,7 @@ class TestGetPositionRiskMetrics:
     @pytest.mark.asyncio
     async def test_calculates_metrics_correctly(self):
         """Test that risk metrics are calculated correctly from price data."""
-        from app.domain.analytics.position.risk import get_position_risk_metrics
+        from app.modules.analytics.domain.position.risk import get_position_risk_metrics
 
         # Create sample price data (simple upward trend)
         prices = [
@@ -135,11 +135,11 @@ class TestGetPositionRiskMetrics:
         mock_cache.get_analytics.return_value = None
 
         with patch(
-            "app.domain.analytics.position.risk.get_recommendation_cache",
+            "app.infrastructure.recommendation_cache.get_recommendation_cache",
             return_value=mock_cache,
         ):
             with patch(
-                "app.domain.analytics.position.risk.HistoryRepository",
+                "app.modules.analytics.domain.position.risk.HistoryRepository",
                 return_value=mock_history_repo,
             ):
                 result = await get_position_risk_metrics(
@@ -170,7 +170,7 @@ class TestGetPositionRiskMetrics:
     @pytest.mark.asyncio
     async def test_handles_empty_returns_series(self):
         """Test handling when returns series is empty after pct_change."""
-        from app.domain.analytics.position.risk import get_position_risk_metrics
+        from app.modules.analytics.domain.position.risk import get_position_risk_metrics
 
         # Prices with same values (no returns)
         prices = [
@@ -185,11 +185,11 @@ class TestGetPositionRiskMetrics:
         mock_cache.get_analytics.return_value = None
 
         with patch(
-            "app.domain.analytics.position.risk.get_recommendation_cache",
+            "app.infrastructure.recommendation_cache.get_recommendation_cache",
             return_value=mock_cache,
         ):
             with patch(
-                "app.domain.analytics.position.risk.HistoryRepository",
+                "app.modules.analytics.domain.position.risk.HistoryRepository",
                 return_value=mock_history_repo,
             ):
                 result = await get_position_risk_metrics(
@@ -206,7 +206,7 @@ class TestGetPositionRiskMetrics:
     @pytest.mark.asyncio
     async def test_handles_non_finite_metrics(self):
         """Test handling when empyrical returns non-finite values."""
-        from app.domain.analytics.position.risk import get_position_risk_metrics
+        from app.modules.analytics.domain.position.risk import get_position_risk_metrics
 
         prices = [
             DailyPrice(date="2024-01-01", close_price=100.0),
@@ -220,11 +220,11 @@ class TestGetPositionRiskMetrics:
         mock_cache.get_analytics.return_value = None
 
         with patch(
-            "app.domain.analytics.position.risk.get_recommendation_cache",
+            "app.infrastructure.recommendation_cache.get_recommendation_cache",
             return_value=mock_cache,
         ):
             with patch(
-                "app.domain.analytics.position.risk.HistoryRepository",
+                "app.modules.analytics.domain.position.risk.HistoryRepository",
                 return_value=mock_history_repo,
             ):
                 # Mock empyrical to return inf/nan values
@@ -251,7 +251,7 @@ class TestGetPositionRiskMetrics:
     @pytest.mark.asyncio
     async def test_handles_exceptions_gracefully(self):
         """Test that exceptions during calculation return zero metrics."""
-        from app.domain.analytics.position.risk import get_position_risk_metrics
+        from app.modules.analytics.domain.position.risk import get_position_risk_metrics
 
         mock_history_repo = AsyncMock()
         mock_history_repo.get_daily_range.side_effect = Exception("DB error")
@@ -260,11 +260,11 @@ class TestGetPositionRiskMetrics:
         mock_cache.get_analytics.return_value = None
 
         with patch(
-            "app.domain.analytics.position.risk.get_recommendation_cache",
+            "app.infrastructure.recommendation_cache.get_recommendation_cache",
             return_value=mock_cache,
         ):
             with patch(
-                "app.domain.analytics.position.risk.HistoryRepository",
+                "app.modules.analytics.domain.position.risk.HistoryRepository",
                 return_value=mock_history_repo,
             ):
                 result = await get_position_risk_metrics(

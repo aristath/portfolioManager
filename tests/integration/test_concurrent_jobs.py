@@ -6,6 +6,7 @@ from datetime import datetime
 import pytest
 
 from app.domain.models import Position, Security, Trade
+from app.domain.value_objects.product_type import ProductType
 from app.infrastructure.locking import file_lock
 from app.repositories import PositionRepository, SecurityRepository, TradeRepository
 
@@ -120,6 +121,7 @@ async def test_concurrent_trade_execution_atomicity(db):
             symbol=symbol,
             yahoo_symbol=symbol,
             name=f"{symbol} Inc.",
+            product_type=ProductType.EQUITY,
             industry="Consumer Electronics",
             country="United States",
             priority_multiplier=1.0,

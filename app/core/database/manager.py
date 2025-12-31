@@ -154,6 +154,8 @@ class DatabaseManager:
     - dividends: Dividend history with DRIP tracking
     - rates: Exchange rates
     - snapshots: Portfolio snapshots (daily time-series)
+    - planner: Holistic planner state and decisions
+    - satellites: Multi-bucket portfolio system (core + satellite buckets)
     - history: Per-security price databases (keyed by ISIN)
     """
 
@@ -174,6 +176,7 @@ class DatabaseManager:
         self.rates = Database(data_dir / "rates.db")
         self.snapshots = Database(data_dir / "snapshots.db")
         self.planner = Database(data_dir / "planner.db")
+        self.satellites = Database(data_dir / "satellites.db")
 
         # Per-security history databases (lazy loaded, keyed by ISIN)
         self._history: dict[str, Database] = {}
@@ -276,6 +279,8 @@ class DatabaseManager:
         await self.dividends.close()
         await self.rates.close()
         await self.snapshots.close()
+        await self.planner.close()
+        await self.satellites.close()
 
         for db in self._history.values():
             await db.close()
@@ -301,6 +306,8 @@ class DatabaseManager:
             ("dividends", self.dividends),
             ("rates", self.rates),
             ("snapshots", self.snapshots),
+            ("planner", self.planner),
+            ("satellites", self.satellites),
         ]:
             try:
                 results[name] = await db.integrity_check()
@@ -328,6 +335,8 @@ class DatabaseManager:
             self.dividends,
             self.rates,
             self.snapshots,
+            self.planner,
+            self.satellites,
         ]:
             await db.checkpoint()
 
@@ -385,6 +394,7 @@ async def init_databases(data_dir: Path) -> DatabaseManager:
     from app.modules.dividends.database.schemas import init_dividends_schema
     from app.modules.planning.database.schemas import init_planner_schema
     from app.modules.portfolio.database.schemas import init_snapshots_schema
+    from app.modules.satellites.database.schemas import init_satellites_schema
 
     _db_manager = DatabaseManager(data_dir)
 
@@ -401,6 +411,7 @@ async def init_databases(data_dir: Path) -> DatabaseManager:
     await init_rates_schema(_db_manager.rates)
     await init_snapshots_schema(_db_manager.snapshots)
     await init_planner_schema(_db_manager.planner)
+    await init_satellites_schema(_db_manager.satellites)
 
     logger.info(f"Database manager initialized with data directory: {data_dir}")
 

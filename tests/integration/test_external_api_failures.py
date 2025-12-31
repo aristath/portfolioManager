@@ -7,6 +7,7 @@ import pytest
 
 from app.domain.models import Position, Security
 from app.domain.services.exchange_rate_service import ExchangeRateService
+from app.domain.value_objects.product_type import ProductType
 from app.infrastructure.external import yahoo_finance as yahoo
 from app.infrastructure.external.tradernet import get_tradernet_client
 from app.repositories import (
@@ -49,7 +50,7 @@ async def test_yahoo_finance_timeout_handling():
 async def test_tradernet_api_connection_failure():
     """Test handling of Tradernet API connection failures."""
     with patch(
-        "app.infrastructure.external.tradernet.get_tradernet_client"
+        "tests.integration.test_external_api_failures.get_tradernet_client"
     ) as mock_get_client:
         mock_client = MagicMock()
         mock_client.is_connected = False
@@ -67,7 +68,7 @@ async def test_tradernet_api_connection_failure():
 async def test_tradernet_api_request_failure():
     """Test handling of Tradernet API request failures."""
     with patch(
-        "app.infrastructure.external.tradernet.get_tradernet_client"
+        "tests.integration.test_external_api_failures.get_tradernet_client"
     ) as mock_get_client:
         mock_client = MagicMock()
         mock_client.is_connected = True
@@ -96,6 +97,7 @@ async def test_rebalancing_service_handles_price_fetch_failure(db):
         symbol="AAPL",
         yahoo_symbol="AAPL",
         name="Apple Inc.",
+        product_type=ProductType.EQUITY,
         industry="Consumer Electronics",
         country="United States",
         priority_multiplier=1.0,

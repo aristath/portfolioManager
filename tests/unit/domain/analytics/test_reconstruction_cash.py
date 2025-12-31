@@ -39,14 +39,16 @@ class TestReconstructCashBalance:
         self, mock_cash_flow_repo, mock_trade_repo
     ):
         """Test that series is returned with initial cash balance."""
-        from app.domain.analytics.reconstruction.cash import reconstruct_cash_balance
+        from app.modules.analytics.domain.reconstruction.cash import (
+            reconstruct_cash_balance,
+        )
 
         with patch(
-            "app.domain.analytics.reconstruction.cash.CashFlowRepository",
+            "app.modules.analytics.domain.reconstruction.cash.CashFlowRepository",
             return_value=mock_cash_flow_repo,
         ):
             with patch(
-                "app.domain.analytics.reconstruction.cash.TradeRepository",
+                "app.modules.analytics.domain.reconstruction.cash.TradeRepository",
                 return_value=mock_trade_repo,
             ):
                 result = await reconstruct_cash_balance(
@@ -63,7 +65,9 @@ class TestReconstructCashBalance:
         self, mock_cash_flow_repo, mock_trade_repo
     ):
         """Test handling of deposit cash flow."""
-        from app.domain.analytics.reconstruction.cash import reconstruct_cash_balance
+        from app.modules.analytics.domain.reconstruction.cash import (
+            reconstruct_cash_balance,
+        )
 
         cash_flow = CashFlow(
             transaction_id="TX1",
@@ -77,11 +81,11 @@ class TestReconstructCashBalance:
         mock_cash_flow_repo.get_by_date_range.return_value = [cash_flow]
 
         with patch(
-            "app.domain.analytics.reconstruction.cash.CashFlowRepository",
+            "app.modules.analytics.domain.reconstruction.cash.CashFlowRepository",
             return_value=mock_cash_flow_repo,
         ):
             with patch(
-                "app.domain.analytics.reconstruction.cash.TradeRepository",
+                "app.modules.analytics.domain.reconstruction.cash.TradeRepository",
                 return_value=mock_trade_repo,
             ):
                 result = await reconstruct_cash_balance(
@@ -101,7 +105,9 @@ class TestReconstructCashBalance:
         self, mock_cash_flow_repo, mock_trade_repo
     ):
         """Test handling of withdrawal cash flow."""
-        from app.domain.analytics.reconstruction.cash import reconstruct_cash_balance
+        from app.modules.analytics.domain.reconstruction.cash import (
+            reconstruct_cash_balance,
+        )
 
         cash_flow = CashFlow(
             transaction_id="TX1",
@@ -115,11 +121,11 @@ class TestReconstructCashBalance:
         mock_cash_flow_repo.get_by_date_range.return_value = [cash_flow]
 
         with patch(
-            "app.domain.analytics.reconstruction.cash.CashFlowRepository",
+            "app.modules.analytics.domain.reconstruction.cash.CashFlowRepository",
             return_value=mock_cash_flow_repo,
         ):
             with patch(
-                "app.domain.analytics.reconstruction.cash.TradeRepository",
+                "app.modules.analytics.domain.reconstruction.cash.TradeRepository",
                 return_value=mock_trade_repo,
             ):
                 result = await reconstruct_cash_balance(
@@ -134,7 +140,9 @@ class TestReconstructCashBalance:
         self, mock_cash_flow_repo, mock_trade_repo
     ):
         """Test handling of dividend cash flow."""
-        from app.domain.analytics.reconstruction.cash import reconstruct_cash_balance
+        from app.modules.analytics.domain.reconstruction.cash import (
+            reconstruct_cash_balance,
+        )
 
         cash_flow = CashFlow(
             transaction_id="TX1",
@@ -148,11 +156,11 @@ class TestReconstructCashBalance:
         mock_cash_flow_repo.get_by_date_range.return_value = [cash_flow]
 
         with patch(
-            "app.domain.analytics.reconstruction.cash.CashFlowRepository",
+            "app.modules.analytics.domain.reconstruction.cash.CashFlowRepository",
             return_value=mock_cash_flow_repo,
         ):
             with patch(
-                "app.domain.analytics.reconstruction.cash.TradeRepository",
+                "app.modules.analytics.domain.reconstruction.cash.TradeRepository",
                 return_value=mock_trade_repo,
             ):
                 result = await reconstruct_cash_balance(
@@ -165,7 +173,9 @@ class TestReconstructCashBalance:
     @pytest.mark.asyncio
     async def test_handles_buy_trade(self, mock_cash_flow_repo, mock_trade_repo):
         """Test handling of buy trade (cash decreases)."""
-        from app.domain.analytics.reconstruction.cash import reconstruct_cash_balance
+        from app.modules.analytics.domain.reconstruction.cash import (
+            reconstruct_cash_balance,
+        )
 
         trade = Trade(
             symbol="AAPL",
@@ -178,11 +188,11 @@ class TestReconstructCashBalance:
         mock_trade_repo.get_all_in_range.return_value = [trade]
 
         with patch(
-            "app.domain.analytics.reconstruction.cash.CashFlowRepository",
+            "app.modules.analytics.domain.reconstruction.cash.CashFlowRepository",
             return_value=mock_cash_flow_repo,
         ):
             with patch(
-                "app.domain.analytics.reconstruction.cash.TradeRepository",
+                "app.modules.analytics.domain.reconstruction.cash.TradeRepository",
                 return_value=mock_trade_repo,
             ):
                 result = await reconstruct_cash_balance(
@@ -195,7 +205,9 @@ class TestReconstructCashBalance:
     @pytest.mark.asyncio
     async def test_handles_sell_trade(self, mock_cash_flow_repo, mock_trade_repo):
         """Test handling of sell trade (cash increases)."""
-        from app.domain.analytics.reconstruction.cash import reconstruct_cash_balance
+        from app.modules.analytics.domain.reconstruction.cash import (
+            reconstruct_cash_balance,
+        )
 
         trade = Trade(
             symbol="AAPL",
@@ -208,11 +220,11 @@ class TestReconstructCashBalance:
         mock_trade_repo.get_all_in_range.return_value = [trade]
 
         with patch(
-            "app.domain.analytics.reconstruction.cash.CashFlowRepository",
+            "app.modules.analytics.domain.reconstruction.cash.CashFlowRepository",
             return_value=mock_cash_flow_repo,
         ):
             with patch(
-                "app.domain.analytics.reconstruction.cash.TradeRepository",
+                "app.modules.analytics.domain.reconstruction.cash.TradeRepository",
                 return_value=mock_trade_repo,
             ):
                 result = await reconstruct_cash_balance(
@@ -227,7 +239,9 @@ class TestReconstructCashBalance:
         self, mock_cash_flow_repo, mock_trade_repo
     ):
         """Test handling of trade without value_eur (calculated from quantity * price)."""
-        from app.domain.analytics.reconstruction.cash import reconstruct_cash_balance
+        from app.modules.analytics.domain.reconstruction.cash import (
+            reconstruct_cash_balance,
+        )
 
         trade = Trade(
             symbol="AAPL",
@@ -241,11 +255,11 @@ class TestReconstructCashBalance:
         mock_trade_repo.get_all_in_range.return_value = [trade]
 
         with patch(
-            "app.domain.analytics.reconstruction.cash.CashFlowRepository",
+            "app.modules.analytics.domain.reconstruction.cash.CashFlowRepository",
             return_value=mock_cash_flow_repo,
         ):
             with patch(
-                "app.domain.analytics.reconstruction.cash.TradeRepository",
+                "app.modules.analytics.domain.reconstruction.cash.TradeRepository",
                 return_value=mock_trade_repo,
             ):
                 result = await reconstruct_cash_balance(
@@ -260,7 +274,9 @@ class TestReconstructCashBalance:
         self, mock_cash_flow_repo, mock_trade_repo
     ):
         """Test handling of multiple transactions on the same date."""
-        from app.domain.analytics.reconstruction.cash import reconstruct_cash_balance
+        from app.modules.analytics.domain.reconstruction.cash import (
+            reconstruct_cash_balance,
+        )
 
         cash_flow = CashFlow(
             transaction_id="TX1",
@@ -283,11 +299,11 @@ class TestReconstructCashBalance:
         mock_trade_repo.get_all_in_range.return_value = [trade]
 
         with patch(
-            "app.domain.analytics.reconstruction.cash.CashFlowRepository",
+            "app.modules.analytics.domain.reconstruction.cash.CashFlowRepository",
             return_value=mock_cash_flow_repo,
         ):
             with patch(
-                "app.domain.analytics.reconstruction.cash.TradeRepository",
+                "app.modules.analytics.domain.reconstruction.cash.TradeRepository",
                 return_value=mock_trade_repo,
             ):
                 result = await reconstruct_cash_balance(
@@ -303,7 +319,9 @@ class TestReconstructCashBalance:
         self, mock_cash_flow_repo, mock_trade_repo
     ):
         """Test that trades outside date range are filtered."""
-        from app.domain.analytics.reconstruction.cash import reconstruct_cash_balance
+        from app.modules.analytics.domain.reconstruction.cash import (
+            reconstruct_cash_balance,
+        )
 
         trade_before = Trade(
             symbol="AAPL",
@@ -336,11 +354,11 @@ class TestReconstructCashBalance:
         ]
 
         with patch(
-            "app.domain.analytics.reconstruction.cash.CashFlowRepository",
+            "app.modules.analytics.domain.reconstruction.cash.CashFlowRepository",
             return_value=mock_cash_flow_repo,
         ):
             with patch(
-                "app.domain.analytics.reconstruction.cash.TradeRepository",
+                "app.modules.analytics.domain.reconstruction.cash.TradeRepository",
                 return_value=mock_trade_repo,
             ):
                 result = await reconstruct_cash_balance(
@@ -356,7 +374,9 @@ class TestReconstructCashBalance:
         self, mock_cash_flow_repo, mock_trade_repo
     ):
         """Test handling of trade with string executed_at (ISO format)."""
-        from app.domain.analytics.reconstruction.cash import reconstruct_cash_balance
+        from app.modules.analytics.domain.reconstruction.cash import (
+            reconstruct_cash_balance,
+        )
 
         # Create a trade with string executed_at
         trade = MagicMock(spec=Trade)
@@ -370,11 +390,11 @@ class TestReconstructCashBalance:
         mock_trade_repo.get_all_in_range.return_value = [trade]
 
         with patch(
-            "app.domain.analytics.reconstruction.cash.CashFlowRepository",
+            "app.modules.analytics.domain.reconstruction.cash.CashFlowRepository",
             return_value=mock_cash_flow_repo,
         ):
             with patch(
-                "app.domain.analytics.reconstruction.cash.TradeRepository",
+                "app.modules.analytics.domain.reconstruction.cash.TradeRepository",
                 return_value=mock_trade_repo,
             ):
                 result = await reconstruct_cash_balance(
@@ -389,14 +409,16 @@ class TestReconstructCashBalance:
         self, mock_cash_flow_repo, mock_trade_repo
     ):
         """Test handling when no cash flows or trades exist."""
-        from app.domain.analytics.reconstruction.cash import reconstruct_cash_balance
+        from app.modules.analytics.domain.reconstruction.cash import (
+            reconstruct_cash_balance,
+        )
 
         with patch(
-            "app.domain.analytics.reconstruction.cash.CashFlowRepository",
+            "app.modules.analytics.domain.reconstruction.cash.CashFlowRepository",
             return_value=mock_cash_flow_repo,
         ):
             with patch(
-                "app.domain.analytics.reconstruction.cash.TradeRepository",
+                "app.modules.analytics.domain.reconstruction.cash.TradeRepository",
                 return_value=mock_trade_repo,
             ):
                 result = await reconstruct_cash_balance(
@@ -412,7 +434,9 @@ class TestReconstructCashBalance:
         self, mock_cash_flow_repo, mock_trade_repo
     ):
         """Test handling of zero initial cash."""
-        from app.domain.analytics.reconstruction.cash import reconstruct_cash_balance
+        from app.modules.analytics.domain.reconstruction.cash import (
+            reconstruct_cash_balance,
+        )
 
         cash_flow = CashFlow(
             transaction_id="TX1",
@@ -426,11 +450,11 @@ class TestReconstructCashBalance:
         mock_cash_flow_repo.get_by_date_range.return_value = [cash_flow]
 
         with patch(
-            "app.domain.analytics.reconstruction.cash.CashFlowRepository",
+            "app.modules.analytics.domain.reconstruction.cash.CashFlowRepository",
             return_value=mock_cash_flow_repo,
         ):
             with patch(
-                "app.domain.analytics.reconstruction.cash.TradeRepository",
+                "app.modules.analytics.domain.reconstruction.cash.TradeRepository",
                 return_value=mock_trade_repo,
             ):
                 result = await reconstruct_cash_balance(

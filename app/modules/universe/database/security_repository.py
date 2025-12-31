@@ -81,6 +81,26 @@ class SecurityRepository:
         rows = await self._db.fetchall("SELECT * FROM securities")
         return [self._row_to_security(row) for row in rows]
 
+    async def get_by_bucket(
+        self, bucket_id: str, active_only: bool = True
+    ) -> List[Security]:
+        """Get all securities assigned to a specific bucket.
+
+        Args:
+            bucket_id: The bucket ID to filter by (e.g., "core", "satellite-momentum")
+            active_only: If True, only return active securities (default: True)
+
+        Returns:
+            List of securities assigned to the bucket
+        """
+        if active_only:
+            query = "SELECT * FROM securities WHERE bucket_id = ? AND active = 1"
+        else:
+            query = "SELECT * FROM securities WHERE bucket_id = ?"
+
+        rows = await self._db.fetchall(query, (bucket_id,))
+        return [self._row_to_security(row) for row in rows]
+
     async def create(self, security: Security) -> None:
         """Create a new security."""
         now = datetime.now().isoformat()

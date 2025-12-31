@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.domain.models import Position, Security
+from app.domain.value_objects.product_type import ProductType
 from app.modules.planning.domain.opportunities.rebalance_sells import (
     identify_rebalance_sell_opportunities,
 )
@@ -35,6 +36,7 @@ class TestIdentifyRebalanceSellOpportunities:
         return Security(
             symbol="AAPL.US",
             name="Apple Inc",
+            product_type=ProductType.EQUITY,
             min_lot=1,
             allow_buy=True,
             allow_sell=True,
@@ -83,6 +85,7 @@ class TestIdentifyRebalanceSellOpportunities:
         security = Security(
             symbol="AAPL.US",
             name="Apple Inc",
+            product_type=ProductType.EQUITY,
             min_lot=1,
             allow_buy=True,
             allow_sell=False,
@@ -172,10 +175,13 @@ class TestIdentifyRebalanceSellOpportunities:
         self, sample_position, sample_stock, portfolio_context
     ):
         """Test skipping when country is balanced."""
+        # Override portfolio_context to set target weight to 0.33
+        portfolio_context.country_weights = {"OTHER": 0.33}
+
         stocks_by_symbol = {"AAPL.US": sample_stock}
         country_allocations = {
             "OTHER": 0.35
-        }  # Near target of 0.33 (but portfolio_context has 0.0, so this is still overweight by 0.35)
+        }  # Actual 35% vs target 33% = only 2% overweight (below 5% threshold)
 
         opportunities = await identify_rebalance_sell_opportunities(
             positions=[sample_position],
@@ -228,7 +234,8 @@ class TestIdentifyRebalanceSellOpportunities:
 
         assert len(opportunities) == 1
         assert "rebalance" in opportunities[0].tags
-        assert "overweight_united states" in opportunities[0].tags
+        # Tag is based on group name (OTHER), not individual country
+        assert "overweight_other" in opportunities[0].tags
 
     @pytest.mark.asyncio
     async def test_priority_proportional_to_overweight(

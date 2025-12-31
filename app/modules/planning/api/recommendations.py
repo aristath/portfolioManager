@@ -34,6 +34,7 @@ async def _execute_single_step(
     client,
     safety_service,
     trade_execution_service,
+    security_repo,
 ) -> dict:
     """Execute a single step in the recommendation sequence."""
     try:
@@ -61,12 +62,27 @@ async def _execute_single_step(
         )
 
         if result:
+            # Look up security to get bucket_id and isin
+            bucket_id = "core"
+            isin = None
+            try:
+                security = await security_repo.get_by_symbol(step["symbol"])
+                if security:
+                    bucket_id = getattr(security, "bucket_id", "core")
+                    isin = getattr(security, "isin", None)
+            except Exception as e:
+                logger.warning(
+                    f"Failed to lookup security {step['symbol']} for bucket attribution: {e}"
+                )
+
             await trade_execution_service.record_trade(
                 symbol=step["symbol"],
                 side=step["side"],
                 quantity=step["quantity"],
                 price=result.price,
                 order_id=result.order_id,
+                isin=isin,
+                bucket_id=bucket_id,
             )
 
             return {
@@ -573,6 +589,19 @@ async def execute_recommendation(
         )
 
         if result:
+            # Look up security to get bucket_id and isin
+            bucket_id = "core"
+            isin = None
+            try:
+                security = await security_repo.get_by_symbol(step["symbol"])
+                if security:
+                    bucket_id = getattr(security, "bucket_id", "core")
+                    isin = getattr(security, "isin", None)
+            except Exception as e:
+                logger.warning(
+                    f"Failed to lookup security {step['symbol']} for bucket attribution: {e}"
+                )
+
             # Record the trade
             await trade_execution_service.record_trade(
                 symbol=step["symbol"],
@@ -580,6 +609,8 @@ async def execute_recommendation(
                 quantity=step["quantity"],
                 price=result.price,
                 order_id=result.order_id,
+                isin=isin,
+                bucket_id=bucket_id,
             )
 
             # Invalidate caches
