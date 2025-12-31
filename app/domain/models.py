@@ -13,8 +13,10 @@ from app.domain.value_objects.currency import Currency
 from app.domain.value_objects.recommendation_status import RecommendationStatus
 from app.domain.value_objects.trade_side import TradeSide
 
-# CashFlow moved to modules/cash_flows/domain/models.py
+# AllocationTarget moved to modules/allocation/domain/models.py
 # Backward compatibility re-export (temporary - will be removed in Phase 5)
+from app.modules.allocation.domain.models import AllocationTarget
+
 # CashFlow moved to modules/cash_flows/domain/models.py
 # Backward compatibility re-export (temporary - will be removed in Phase 5)
 from app.modules.cash_flows.domain.models import CashFlow
@@ -208,15 +210,6 @@ class StockScore:
     history_years: Optional[float] = None
     volatility: Optional[float] = None
     calculated_at: Optional[datetime] = None
-
-
-@dataclass
-class AllocationTarget:
-    """Target allocation for country_group or industry_group (not individual countries/industries)."""
-
-    type: str  # 'country_group' or 'industry_group'
-    name: str  # Group name (e.g., 'US', 'EU', 'Technology')
-    target_pct: float  # Weight from -1.0 to 1.0
 
 
 @dataclass
