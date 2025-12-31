@@ -130,7 +130,7 @@ async def init_scheduler() -> AsyncIOScheduler:
     from app.jobs.auto_deploy import run_auto_deploy
     from app.jobs.event_based_trading import run_event_based_trading_loop
     from app.jobs.maintenance import run_daily_maintenance, run_weekly_maintenance
-    from app.jobs.securities_data_sync import run_stocks_data_sync
+    from app.jobs.securities_data_sync import run_securities_data_sync
     from app.jobs.universe_pruning import prune_universe
     from app.modules.display.services.display_updater_service import (
         update_display_ticker,
@@ -179,11 +179,11 @@ async def init_scheduler() -> AsyncIOScheduler:
 
     # Job 2: Securities Data Sync - hourly
     # Handles: historical data sync, metrics calculation, score refresh
-    # Processes stocks sequentially, only those not synced in 24 hours
+    # Processes securities sequentially, only those not synced in 24 hours
     scheduler.add_job(
-        run_stocks_data_sync,
+        run_securities_data_sync,
         IntervalTrigger(hours=1),
-        id="stocks_data_sync",
+        id="securities_data_sync",
         name="Securities Data Sync",
         replace_existing=True,
     )

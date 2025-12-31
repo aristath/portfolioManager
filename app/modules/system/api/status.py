@@ -308,42 +308,42 @@ async def rebuild_universe_from_portfolio():
         return result
 
 
-@router.post("/sync/stocks-data")
-async def trigger_stocks_data_sync():
-    """Manually trigger stocks data sync (historical sync, industry detection, metrics, scores).
+@router.post("/sync/securities-data")
+async def trigger_securities_data_sync():
+    """Manually trigger securities data sync (historical sync, industry detection, metrics, scores).
 
-    Processes all stocks that haven't been synced in 24 hours.
+    Processes all securities that haven't been synced in 24 hours.
     This includes:
     - Syncing historical prices from Yahoo Finance
     - Detecting and updating industry from Yahoo Finance
     - Calculating technical metrics (RSI, EMA, CAGR, etc.)
-    - Refreshing stock scores
+    - Refreshing security scores
     """
-    from app.jobs.securities_data_sync import run_stocks_data_sync
+    from app.jobs.securities_data_sync import run_securities_data_sync
 
     try:
-        await run_stocks_data_sync()
-        return {"status": "success", "message": "Stocks data sync completed"}
+        await run_securities_data_sync()
+        return {"status": "success", "message": "Securities data sync completed"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
 
 @router.post("/sync/daily-pipeline")
 async def trigger_daily_pipeline():
-    """Manually trigger daily pipeline (stocks data sync).
+    """Manually trigger daily pipeline (securities data sync).
 
-    This is an alias for /sync/stocks-data for backwards compatibility.
-    Processes all stocks that haven't been synced in 24 hours.
+    This is an alias for /sync/securities-data for backwards compatibility.
+    Processes all securities that haven't been synced in 24 hours.
     This includes:
     - Syncing historical prices from Yahoo Finance
     - Detecting and updating industry from Yahoo Finance
     - Calculating technical metrics (RSI, EMA, CAGR, etc.)
-    - Refreshing stock scores
+    - Refreshing security scores
     """
-    from app.jobs.securities_data_sync import run_stocks_data_sync
+    from app.jobs.securities_data_sync import run_securities_data_sync
 
     try:
-        await run_stocks_data_sync()
+        await run_securities_data_sync()
         return {"status": "success", "message": "Daily pipeline completed"}
     except Exception as e:
         return {"status": "error", "message": str(e)}

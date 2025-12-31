@@ -27,50 +27,50 @@ logger = logging.getLogger(__name__)
 SYNC_THRESHOLD_HOURS = 24
 
 
-async def run_stocks_data_sync():
+async def run_securities_data_sync():
     """
-    Run the stocks data sync for all stocks needing sync.
+    Run the securities data sync for all securities needing sync.
 
     This is the main entry point called by the scheduler every hour.
     """
-    async with file_lock("stocks_data_sync", timeout=3600.0):
-        await _run_stocks_data_sync_internal()
+    async with file_lock("securities_data_sync", timeout=3600.0):
+        await _run_securities_data_sync_internal()
 
 
-async def _run_stocks_data_sync_internal():
-    """Internal stocks data sync implementation."""
-    logger.info("Starting stocks data sync...")
+async def _run_securities_data_sync_internal():
+    """Internal securities data sync implementation."""
+    logger.info("Starting securities data sync...")
 
     emit(SystemEvent.SYNC_START)
 
     try:
-        stocks = await _get_stocks_needing_sync()
+        securities = await _get_securities_needing_sync()
 
-        if not stocks:
-            logger.info("All stocks are up to date, no processing needed")
+        if not securities:
+            logger.info("All securities are up to date, no processing needed")
             emit(SystemEvent.SYNC_COMPLETE)
             return
 
-        logger.info(f"Processing {len(stocks)} stocks needing sync")
+        logger.info(f"Processing {len(securities)} securities needing sync")
 
         processed = 0
         errors = 0
 
-        for stock in stocks:
+        for security in securities:
             try:
-                await _process_single_stock(stock.symbol)
+                await _process_single_security(security.symbol)
                 processed += 1
             except Exception as e:
-                logger.error(f"Pipeline failed for {stock.symbol}: {e}")
+                logger.error(f"Pipeline failed for {security.symbol}: {e}")
                 errors += 1
 
         logger.info(
-            f"Stocks data sync complete: {processed} processed, {errors} errors"
+            f"Securities data sync complete: {processed} processed, {errors} errors"
         )
         emit(SystemEvent.SYNC_COMPLETE)
 
     except Exception as e:
-        logger.error(f"Stocks data sync failed: {e}", exc_info=True)
+        logger.error(f"Securities data sync failed: {e}", exc_info=True)
         error_msg = "STOCKS DATA SYNC CRASHES"
         emit(SystemEvent.ERROR_OCCURRED, message=error_msg)
         set_text(error_msg)
@@ -115,7 +115,7 @@ async def refresh_single_stock(symbol: str) -> dict[str, Any]:
         set_led4(0, 0, 0)  # Clear LED when done
 
 
-async def _get_stocks_needing_sync() -> list:
+async def _get_securities_needing_sync() -> list:
     """
     Get all active stocks that need to be synced.
 
@@ -124,38 +124,38 @@ async def _get_stocks_needing_sync() -> list:
     - last_synced is older than SYNC_THRESHOLD_HOURS
 
     Returns:
-        List of stock objects needing sync
+        List of security objects needing sync
     """
-    all_stocks = await _get_all_active_stocks()
+    all_securities = await _get_all_active_securities()
     threshold = datetime.now() - timedelta(hours=SYNC_THRESHOLD_HOURS)
 
-    stocks_needing_sync = []
-    for stock in all_stocks:
-        if stock.last_synced is None:
-            stocks_needing_sync.append(stock)
+    securities_needing_sync = []
+    for security in all_securities:
+        if security.last_synced is None:
+            securities_needing_sync.append(security)
         else:
             try:
-                last_synced = datetime.fromisoformat(stock.last_synced)
+                last_synced = datetime.fromisoformat(security.last_synced)
                 if last_synced < threshold:
-                    stocks_needing_sync.append(stock)
+                    securities_needing_sync.append(security)
             except (ValueError, TypeError):
                 # Invalid date format, treat as needing sync
-                stocks_needing_sync.append(stock)
+                securities_needing_sync.append(security)
 
-    return stocks_needing_sync
+    return securities_needing_sync
 
 
-async def _get_all_active_stocks() -> list:
-    """Get all active stocks from the database."""
+async def _get_all_active_securities() -> list:
+    """Get all active securities from the database."""
     from app.repositories import SecurityRepository
 
     security_repo = SecurityRepository()
     return await security_repo.get_all_active()
 
 
-async def _process_single_stock(symbol: str):
+async def _process_single_security(symbol: str):
     """
-    Process a single stock through the full data pipeline.
+    Process a single security through the full data pipeline.
 
     Steps:
     1. Sync historical prices from Yahoo
