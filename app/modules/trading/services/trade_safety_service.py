@@ -13,7 +13,7 @@ from app.domain.repositories.protocols import (
     ITradeRepository,
 )
 from app.modules.scoring.domain.constants import DEFAULT_MIN_HOLD_DAYS
-from app.shared.domain.value_objects.trade_side import TradeSide
+from app.domain.value_objects.trade_side import TradeSide
 from app.infrastructure.external.tradernet import TradernetClient
 from app.infrastructure.market_hours import is_market_open, should_check_market_hours
 from app.repositories.base import safe_parse_datetime_string

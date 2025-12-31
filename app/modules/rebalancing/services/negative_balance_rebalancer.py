@@ -21,7 +21,7 @@ from app.repositories import (
     StockRepository,
 )
 from app.shared.domain.value_objects.currency import Currency
-from app.shared.domain.value_objects.trade_side import TradeSide
+from app.domain.value_objects.trade_side import TradeSide
 
 logger = logging.getLogger(__name__)
 
