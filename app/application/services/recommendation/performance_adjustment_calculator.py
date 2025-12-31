@@ -7,7 +7,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, Optional, Tuple
 
-from app.domain.analytics import (
+from app.modules.analytics.domain import (
     calculate_portfolio_returns,
     get_performance_attribution,
     reconstruct_portfolio_values,

@@ -8,7 +8,7 @@ import json
 import logging
 from typing import Dict, List, Optional
 
-from app.domain.analytics.market_regime import detect_market_regime
+from app.modules.analytics.domain.market_regime import detect_market_regime
 from app.domain.exceptions import ValidationError
 from app.domain.models import MultiStepRecommendation, Recommendation
 from app.domain.repositories.protocols import (

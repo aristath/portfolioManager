@@ -3057,7 +3057,7 @@ async def create_holistic_plan(
     )
     market_regime = None
     if enable_market_regime_scenarios:
-        from app.domain.analytics.market_regime import detect_market_regime
+        from app.modules.analytics.domain.market_regime import detect_market_regime
 
         # Detect current market regime
         market_regime = await detect_market_regime()

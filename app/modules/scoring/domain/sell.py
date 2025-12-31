@@ -54,7 +54,7 @@ async def _calculate_drawdown_score(symbol: str) -> float:
     try:
         from datetime import datetime, timedelta
 
-        from app.domain.analytics import get_position_drawdown
+        from app.modules.analytics.domain import get_position_drawdown
 
         end_date = datetime.now().strftime("%Y-%m-%d")
         start_date = (datetime.now() - timedelta(days=365)).strftime("%Y-%m-%d")
