@@ -16,13 +16,13 @@ from pypfopt.exceptions import OptimizationError
 
 from app.domain.constants import TARGET_PORTFOLIO_VOLATILITY
 from app.domain.models import Position, Stock
+from app.modules.optimization.services.constraints_manager import ConstraintsManager
+from app.modules.optimization.services.expected_returns import ExpectedReturnsCalculator
+from app.modules.optimization.services.risk_models import RiskModelBuilder
 from app.modules.scoring.domain.constants import (
     OPTIMIZER_TARGET_RETURN,
     OPTIMIZER_WEIGHT_CUTOFF,
 )
-from app.modules.optimization.services.constraints_manager import ConstraintsManager
-from app.modules.optimization.services.expected_returns import ExpectedReturnsCalculator
-from app.modules.optimization.services.risk_models import RiskModelBuilder
 
 logger = logging.getLogger(__name__)
 

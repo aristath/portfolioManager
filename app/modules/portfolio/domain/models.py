@@ -3,8 +3,8 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from app.shared.domain.value_objects.currency import Currency
 from app.domain.exceptions import ValidationError
+from app.shared.domain.value_objects.currency import Currency
 
 
 @dataclass

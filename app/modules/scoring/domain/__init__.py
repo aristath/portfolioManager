@@ -19,6 +19,15 @@ Scoring Domain - Stock and portfolio scoring calculations.
 - Drawdown (15%): Current drawdown severity
 """
 
+# Dividend history analysis (re-exported from dividends module)
+from app.modules.dividends.domain.dividend_history import (
+    calculate_dividend_growth_rate,
+    calculate_dividend_stability_score,
+    get_dividend_analysis,
+    has_big_dividend_cut,
+    is_dividend_consistent,
+)
+
 # Technical indicators - Caching layer
 from app.modules.scoring.domain.caching import (
     calculate_distance_from_ma,
@@ -58,15 +67,6 @@ from app.modules.scoring.domain.diversification import (
     calculate_diversification_score,
     calculate_portfolio_score,
     calculate_post_transaction_score,
-)
-
-# Dividend history analysis (re-exported from dividends module)
-from app.modules.dividends.domain.dividend_history import (
-    calculate_dividend_growth_rate,
-    calculate_dividend_stability_score,
-    get_dividend_analysis,
-    has_big_dividend_cut,
-    is_dividend_consistent,
 )
 
 # End-state scoring (for holistic planner)

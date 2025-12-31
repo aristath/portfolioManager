@@ -16,8 +16,8 @@ from pathlib import Path
 from app.config import settings
 from app.core.database.manager import get_db_manager
 from app.core.events import SystemEvent, emit
-from app.modules.display.services.display_service import set_led4, set_text
 from app.infrastructure.locking import file_lock
+from app.modules.display.services.display_service import set_led4, set_text
 
 logger = logging.getLogger(__name__)
 

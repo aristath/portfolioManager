@@ -19,11 +19,7 @@ from app.modules.rebalancing.services.negative_balance_rebalancer import (
     NegativeBalanceRebalancer,
 )
 from app.modules.trading.services.trade_execution_service import TradeExecutionService
-from app.repositories import (
-    RecommendationRepository,
-    StockRepository,
-    TradeRepository,
-)
+from app.repositories import RecommendationRepository, StockRepository, TradeRepository
 
 logger = logging.getLogger(__name__)
 

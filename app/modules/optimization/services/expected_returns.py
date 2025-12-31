@@ -13,6 +13,7 @@ Calculates expected returns for each stock by blending:
 import logging
 from typing import Dict, List, Optional
 
+from app.infrastructure.external.yahoo import market_indicators
 from app.modules.scoring.domain.constants import (
     EXPECTED_RETURN_MAX,
     EXPECTED_RETURN_MIN,
@@ -30,7 +31,6 @@ from app.modules.scoring.domain.constants import (
     YIELD_CURVE_INVERTED,
     YIELD_CURVE_NORMAL,
 )
-from app.infrastructure.external.yahoo import market_indicators
 from app.modules.universe.database.stock_repository import StockRepository
 from app.repositories.calculations import CalculationsRepository
 from app.repositories.score import ScoreRepository

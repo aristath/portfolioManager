@@ -10,15 +10,9 @@ import logging
 from collections import defaultdict
 from typing import Dict, List
 
-from app.modules.rebalancing.services.rebalancing_service import (
-    RebalancingService,
-    calculate_min_trade_amount,
-)
-from app.application.services.trade_execution_service import TradeExecutionService
 from app.core.database.manager import get_db_manager
 from app.domain.models import DividendRecord, Recommendation
 from app.domain.services.settings_service import SettingsService
-from app.shared.domain.value_objects.currency import Currency
 from app.domain.value_objects.recommendation_status import RecommendationStatus
 from app.domain.value_objects.trade_side import TradeSide
 from app.infrastructure.dependencies import (
@@ -27,7 +21,12 @@ from app.infrastructure.dependencies import (
     get_tradernet_client,
 )
 from app.modules.dividends.database.dividend_repository import DividendRepository
+from app.modules.rebalancing.services.rebalancing_service import (
+    RebalancingService,
+    calculate_min_trade_amount,
+)
 from app.modules.scoring.domain.constants import HIGH_DIVIDEND_REINVESTMENT_THRESHOLD
+from app.modules.trading.services.trade_execution_service import TradeExecutionService
 from app.repositories import (
     AllocationRepository,
     CalculationsRepository,
@@ -38,6 +37,7 @@ from app.repositories import (
     StockRepository,
     TradeRepository,
 )
+from app.shared.domain.value_objects.currency import Currency
 
 logger = logging.getLogger(__name__)
 
