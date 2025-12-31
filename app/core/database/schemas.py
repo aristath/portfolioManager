@@ -346,7 +346,7 @@ async def init_config_schema(db):
         logger.info("Migrating config database to schema version 4 (last_synced)...")
 
         # Check if last_synced column exists
-        cursor = await db.execute("PRAGMA table_info(securities)")
+        cursor = await db.execute("PRAGMA table_info(stocks)")
         columns = [row[1] for row in await cursor.fetchall()]
 
         if "last_synced" not in columns:
@@ -369,15 +369,15 @@ async def init_config_schema(db):
         )
 
         # Check if country column exists
-        cursor = await db.execute("PRAGMA table_info(securities)")
+        cursor = await db.execute("PRAGMA table_info(stocks)")
         columns = [row[1] for row in await cursor.fetchall()]
 
         if "country" not in columns:
-            await db.execute("ALTER TABLE securities ADD COLUMN country TEXT")
+            await db.execute("ALTER TABLE stocks ADD COLUMN country TEXT")
             logger.info("Added country column to stocks table")
 
         if "fullExchangeName" not in columns:
-            await db.execute("ALTER TABLE securities ADD COLUMN fullExchangeName TEXT")
+            await db.execute("ALTER TABLE stocks ADD COLUMN fullExchangeName TEXT")
             logger.info("Added fullExchangeName column to stocks table")
 
         # Create index on country
@@ -415,19 +415,15 @@ async def init_config_schema(db):
         )
 
         # Check if min_portfolio_target column exists
-        cursor = await db.execute("PRAGMA table_info(securities)")
+        cursor = await db.execute("PRAGMA table_info(stocks)")
         columns = [row[1] for row in await cursor.fetchall()]
 
         if "min_portfolio_target" not in columns:
-            await db.execute(
-                "ALTER TABLE securities ADD COLUMN min_portfolio_target REAL"
-            )
+            await db.execute("ALTER TABLE stocks ADD COLUMN min_portfolio_target REAL")
             logger.info("Added min_portfolio_target column to stocks table")
 
         if "max_portfolio_target" not in columns:
-            await db.execute(
-                "ALTER TABLE securities ADD COLUMN max_portfolio_target REAL"
-            )
+            await db.execute("ALTER TABLE stocks ADD COLUMN max_portfolio_target REAL")
             logger.info("Added max_portfolio_target column to stocks table")
 
         await db.execute(

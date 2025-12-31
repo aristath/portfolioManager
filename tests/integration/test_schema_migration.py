@@ -140,9 +140,11 @@ async def test_new_installation_includes_portfolio_target_columns():
         assert columns["min_portfolio_target"] == "REAL"
         assert columns["max_portfolio_target"] == "REAL"
 
-        # Check that schema version is 8
+        # Check that schema is at latest version (includes all migrations)
         version_row = await db.fetchone("SELECT MAX(version) as v FROM schema_version")
-        assert version_row["v"] == 8
+        assert (
+            version_row["v"] >= 10
+        )  # At least version 10 (stocks → securities rename)
 
 
 @pytest.mark.asyncio
