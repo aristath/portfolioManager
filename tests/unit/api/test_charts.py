@@ -528,7 +528,7 @@ class TestStockChart:
     @pytest.mark.asyncio
     async def test_returns_chart_data_from_cache(self):
         """Test that chart data is returned from cache."""
-        from app.api.charts import get_stock_chart
+        from app.api.charts import get_security_chart
 
         mock_db_manager = MagicMock()
         mock_history_db = AsyncMock()
@@ -554,7 +554,7 @@ class TestStockChart:
         ]
 
         with patch("app.api.charts.is_isin", return_value=True):
-            result = await get_stock_chart(
+            result = await get_security_chart(
                 "US0378331005", mock_db_manager, mock_stock_repo, range="1M"
             )
 
@@ -566,7 +566,7 @@ class TestStockChart:
     @pytest.mark.asyncio
     async def test_returns_empty_when_no_data(self):
         """Test that empty list is returned when no data available."""
-        from app.api.charts import get_stock_chart
+        from app.api.charts import get_security_chart
 
         mock_db_manager = MagicMock()
         mock_history_db = AsyncMock()
@@ -595,7 +595,7 @@ class TestStockChart:
                 return_value=[],
             ):
                 with patch("app.api.charts.is_isin", return_value=True):
-                    result = await get_stock_chart(
+                    result = await get_security_chart(
                         "US0378331005",
                         mock_db_manager,
                         mock_stock_repo,
@@ -610,7 +610,7 @@ class TestStockChart:
         """Test that HTTPException is raised on database errors."""
         from fastapi import HTTPException
 
-        from app.api.charts import get_stock_chart
+        from app.api.charts import get_security_chart
 
         mock_db_manager = MagicMock()
         mock_stock_repo = AsyncMock()
@@ -624,7 +624,7 @@ class TestStockChart:
 
         with patch("app.api.charts.is_isin", return_value=True):
             with pytest.raises(HTTPException) as exc_info:
-                await get_stock_chart(
+                await get_security_chart(
                     "US0378331005", mock_db_manager, mock_stock_repo, range="1Y"
                 )
 
