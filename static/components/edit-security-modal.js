@@ -42,27 +42,39 @@ class EditSecurityModal extends HTMLElement {
               </div>
 
               <div>
+                <label class="block text-sm text-gray-300 mb-1">ISIN</label>
+                <input type="text"
+                       disabled
+                       :value="$store.app.editingSecurity.isin"
+                       class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-gray-400 cursor-not-allowed">
+                <p class="text-xs text-gray-300 mt-1">Unique security identifier (cannot be changed)</p>
+              </div>
+
+              <div>
                 <label class="block text-sm text-gray-300 mb-1">Country</label>
-                <div class="px-3 py-2 bg-gray-900 border border-gray-600 rounded text-sm text-gray-300">
-                  <span x-text="$store.app.editingSecurity.country || 'Auto-detected from Yahoo Finance'"></span>
-                </div>
-                <p class="text-xs text-gray-300 mt-1">Automatically detected from Yahoo Finance</p>
+                <input type="text"
+                       x-model="$store.app.editingSecurity.country"
+                       placeholder="e.g., United States, Netherlands, Germany"
+                       class="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-sm text-gray-100 focus:border-blue-500 focus:outline-none">
+                <p class="text-xs text-gray-300 mt-1">Country where the security is domiciled (auto-detected from Yahoo Finance, can be manually edited)</p>
               </div>
 
               <div>
                 <label class="block text-sm text-gray-300 mb-1">Exchange</label>
-                <div class="px-3 py-2 bg-gray-900 border border-gray-600 rounded text-sm text-gray-300">
-                  <span x-text="$store.app.editingSecurity.fullExchangeName || 'Auto-detected from Yahoo Finance'"></span>
-                </div>
-                <p class="text-xs text-gray-300 mt-1">Automatically detected from Yahoo Finance</p>
+                <input type="text"
+                       x-model="$store.app.editingSecurity.fullExchangeName"
+                       placeholder="e.g., NASDAQ, Euronext Amsterdam, XETRA"
+                       class="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-sm text-gray-100 focus:border-blue-500 focus:outline-none">
+                <p class="text-xs text-gray-300 mt-1">Exchange where the security trades (auto-detected from Yahoo Finance, can be manually edited)</p>
               </div>
 
               <div>
                 <label class="block text-sm text-gray-300 mb-1">Industry</label>
-                <div class="px-3 py-2 bg-gray-900 border border-gray-600 rounded text-sm text-gray-300">
-                  <span x-text="$store.app.editingSecurity.industry || 'Auto-detected from Yahoo Finance'"></span>
-                </div>
-                <p class="text-xs text-gray-300 mt-1">Automatically detected from Yahoo Finance during daily pipeline</p>
+                <input type="text"
+                       x-model="$store.app.editingSecurity.industry"
+                       placeholder="e.g., Technology, Healthcare, Financial Services"
+                       class="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-sm text-gray-100 focus:border-blue-500 focus:outline-none">
+                <p class="text-xs text-gray-300 mt-1">Industry classification (auto-detected from Yahoo Finance, can be manually edited)</p>
               </div>
 
               <div>
