@@ -15,7 +15,7 @@ from app.infrastructure.external import yahoo_finance as yahoo
 from app.infrastructure.external.tradernet import get_tradernet_client
 from app.infrastructure.hardware.display_service import set_led3, set_led4, set_text
 from app.infrastructure.locking import file_lock
-from app.repositories.stock import StockRepository
+from app.modules.universe.database.stock_repository import StockRepository
 
 logger = logging.getLogger(__name__)
 
@@ -593,7 +593,7 @@ async def _ensure_portfolio_stocks_in_universe(
     logger.info(f"Adding {len(missing_symbols)} missing stocks to universe...")
 
     # Import here to avoid circular dependencies
-    from app.application.services.stock_setup_service import StockSetupService
+    from app.modules.universe.services.stock_setup_service import StockSetupService
     from app.infrastructure.dependencies import (
         get_db_manager,
         get_score_repository,

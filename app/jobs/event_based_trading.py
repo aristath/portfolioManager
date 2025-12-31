@@ -28,13 +28,14 @@ from app.infrastructure.events import SystemEvent, emit
 from app.infrastructure.hardware.display_service import set_led4, set_text
 from app.infrastructure.locking import file_lock
 from app.infrastructure.market_hours import is_market_open, should_check_market_hours
-from app.jobs.sync_cycle import (
+from app.modules.system.jobs.sync_cycle import (
     _execute_trade_order,
     _step_check_trading_conditions,
     _step_sync_portfolio,
 )
-from app.repositories import PositionRepository, StockRepository
-from app.repositories.planner_repository import PlannerRepository
+from app.modules.planning.database.planner_repository import PlannerRepository
+from app.modules.portfolio.database.position_repository import PositionRepository
+from app.modules.universe.database.stock_repository import StockRepository
 
 logger = logging.getLogger(__name__)
 
@@ -350,7 +351,7 @@ async def _wait_for_planning_completion():
                 logger.info("No cash balances after applying pending orders")
 
         # Get optimizer target weights if available
-        from app.application.services.optimization.portfolio_optimizer import (
+        from app.modules.optimization.services.portfolio_optimizer import (
             PortfolioOptimizer,
         )
         from app.repositories import GroupingRepository
@@ -445,7 +446,7 @@ async def _wait_for_planning_completion():
             f"Failed to trigger first batch via API: {e}, falling back to direct call"
         )
         # Fallback: call directly
-        from app.jobs.planner_batch import process_planner_batch_job
+                from app.modules.planning.jobs.planner_batch import process_planner_batch_job
 
         await process_planner_batch_job(max_depth=1, portfolio_hash=portfolio_hash)
 

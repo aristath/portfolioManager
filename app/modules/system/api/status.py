@@ -86,7 +86,7 @@ async def get_status(
         )
         if latest:
             # Parse ISO format and reformat to "YYYY-MM-DD HH:MM"
-            from app.repositories.base import safe_parse_datetime_string
+            from app.repositories.base import safe_parse_datetime_string  # TODO: Move to shared utility
 
             dt = safe_parse_datetime_string(latest)
             if dt:
@@ -447,7 +447,7 @@ async def trigger_planner_batch(request: PlannerBatchRequest):
     This endpoint is used by the event-based trading loop to trigger
     API-driven batch processing (depth > 0) which self-triggers subsequent batches.
     """
-    from app.jobs.planner_batch import process_planner_batch_job
+    from app.modules.planning.jobs.planner_batch import process_planner_batch_job
 
     try:
         await process_planner_batch_job(

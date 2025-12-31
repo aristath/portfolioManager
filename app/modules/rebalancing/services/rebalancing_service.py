@@ -214,8 +214,8 @@ class RebalancingService:
         Returns:
             List of MultiStepRecommendation objects representing the optimal sequence
         """
-        from app.application.services.optimization import PortfolioOptimizer
-        from app.repositories import DividendRepository
+        from app.modules.optimization.services.portfolio_optimizer import PortfolioOptimizer
+        from app.modules.dividends.database.dividend_repository import DividendRepository
 
         # Get optimizer settings
         optimizer_blend = await self._settings_repo.get_float("optimizer_blend", 0.5)

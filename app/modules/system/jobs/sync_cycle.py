@@ -303,7 +303,7 @@ async def _update_position_prices(quotes: dict[str, float]):
 async def _get_holistic_recommendation():
     """Get next recommendation from the holistic planner."""
     from app.application.services.currency_exchange_service import (
-        CurrencyExchangeService,
+        CurrencyExchangeService,  # TODO: Keep in infrastructure or move to shared
     )
     from app.modules.rebalancing.services.rebalancing_service import (
         RebalancingService,
@@ -605,7 +605,7 @@ async def _get_holistic_recommendation():
 
 async def _execute_trade_order(recommendation) -> dict[str, Any]:
     """Execute a trade order via Tradernet."""
-    from app.application.services.trade_execution_service import TradeExecutionService
+    from app.modules.trading.services.trade_execution_service import TradeExecutionService
     from app.domain.value_objects.trade_side import TradeSide
     from app.infrastructure.database.manager import get_db_manager
     from app.infrastructure.dependencies import (

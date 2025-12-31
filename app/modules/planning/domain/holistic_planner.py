@@ -1366,7 +1366,7 @@ async def _filter_correlation_aware_sequences(
     Returns:
         Filtered list of sequences with reduced correlation
     """
-    from app.application.services.optimization.risk_models import RiskModelBuilder
+    from app.modules.optimization.services.risk_models import RiskModelBuilder
 
     if not sequences or not stocks:
         return sequences
@@ -2401,7 +2401,7 @@ async def process_planner_incremental(
         generate_step_narrative,
     )
     from app.repositories.calculations import CalculationsRepository
-    from app.repositories.planner_repository import PlannerRepository
+    from app.modules.planning.database.planner_repository import PlannerRepository
 
     # Generate portfolio hash
     position_dicts = [{"symbol": p.symbol, "quantity": p.quantity} for p in positions]
