@@ -311,9 +311,27 @@ User picks preset, then tweaks sliders to taste.
         "follow_regime": true,
         "auto_harvest": false,
         "pause_high_volatility": false
-    }
+    },
+    "dividend_handling": "reinvest_same"  // or "send_to_core" or "accumulate_cash"
 }
 ```
+
+### Satellite Notes
+
+Each satellite has a notes field for user documentation:
+
+```sql
+ALTER TABLE buckets ADD COLUMN notes TEXT;
+```
+
+Example:
+```
+"Testing Japanese market exposure. Started Jan 2025.
+Want to see if it's worth adding to core.
+Using conservative settings since this is exploratory."
+```
+
+Helps users remember why they created a satellite and what they're testing.
 
 ---
 
@@ -322,12 +340,26 @@ User picks preset, then tweaks sliders to taste.
 ### States
 
 ```
-accumulating → active → hibernating → active (recovered)
-                  ↓
-               paused (manual)
-                  ↓
-               retired
+research → accumulating → active → hibernating → active (recovered)
+                             ↓
+                          paused (manual)
+                             ↓
+                          retired
 ```
+
+### Research Mode
+
+New satellites can start in "research mode":
+- Simulates trades with assumed/virtual funds
+- No real money at risk
+- Tracks what trades it *would* make
+- After evaluation period (e.g., 1 quarter), user reviews simulated performance
+- User decides: activate with real funds, or abandon
+
+Benefits:
+- Test strategies before committing real money
+- Gather performance data for new satellites
+- Consistent with app's existing "research mode" concept
 
 ### Creation
 
@@ -609,17 +641,108 @@ Show per satellite:
 
 ---
 
+## Performance Attribution
+
+### Overview
+
+Don't just show "satellite made 8%" - explain WHY.
+
+### Metrics to Track
+
+Per satellite:
+- **Top contributing trades**: Which positions drove returns?
+- **Worst trades**: Which positions hurt performance?
+- **Win/loss breakdown**: How many winners vs losers?
+- **Average win vs average loss**: Risk/reward profile
+- **Holding period analysis**: Did quick trades or patient holds perform better?
+
+### Attribution Report
+
+```
+Satellite: Momentum Hunter
+Period: Q1 2025
+Return: +8.2%
+
+Top Contributors:
+  NVDA: +4.1% (bought breakout, sold +22%)
+  MSFT: +2.8% (rode trend for 3 weeks)
+
+Detractors:
+  AMD: -1.2% (stopped out after false breakout)
+
+Strategy Adherence:
+  - 85% of trades followed momentum rules
+  - 2 trades were "off-strategy" (both losses)
+```
+
+Helps determine if success was skill (following strategy) or luck (off-strategy wins).
+
+---
+
+## Regime Tagging
+
+### Overview
+
+Track which market regime each satellite performs best in.
+
+### Market Regimes
+
+| Regime | Characteristics |
+|--------|-----------------|
+| Bull | Sustained uptrend, low volatility |
+| Bear | Sustained downtrend, high volatility |
+| Sideways | Range-bound, mean-reverting |
+| High Volatility | Large swings in both directions |
+
+### Per-Satellite Regime Performance
+
+```sql
+CREATE TABLE satellite_regime_performance (
+    satellite_id TEXT,
+    regime TEXT,
+    period_start TEXT,
+    period_end TEXT,
+    return_pct REAL,
+    trades_count INTEGER,
+    win_rate REAL,
+    PRIMARY KEY (satellite_id, regime, period_start)
+);
+```
+
+### Example Report
+
+```
+Satellite: Momentum Hunter
+Historical Performance by Regime:
+
+| Regime     | Avg Return | Win Rate | Sample Size |
+|------------|------------|----------|-------------|
+| Bull       | +15.2%     | 68%      | 4 quarters  |
+| Bear       | -8.1%      | 35%      | 2 quarters  |
+| Sideways   | +2.3%      | 52%      | 3 quarters  |
+| High Vol   | -3.4%      | 41%      | 1 quarter   |
+
+Best suited for: Bull markets
+Consider pausing during: Bear markets, High Volatility
+```
+
+### Using Regime Data
+
+- **Inform allocation**: Increase allocation to satellites suited for current regime
+- **User awareness**: "Current regime is Bear - Momentum Hunter historically struggles here"
+- **Strategy refinement**: Identify weaknesses to address in strategy config
+
+---
+
 ## Open Questions
 
-1. **Initial satellites**: What satellites to offer by default? Or start with just core?
+1. **Preset refinement**: What exact slider values for each preset?
 
-2. **Preset refinement**: What exact slider values for each preset?
+2. **Evaluation weighting**: How to weight recent vs long-term performance in meta-allocator?
 
-3. **Evaluation weighting**: How to weight recent vs long-term performance?
+3. **Regime detection accuracy**: How reliable is our market regime detection? How to handle regime transitions?
 
-4. **Cold start**: How to allocate to satellites with no track record?
-
-5. **Reporting depth**: What reports/charts to show per-satellite performance?
+4. **Research mode simulation**: How much virtual capital should a research-mode satellite assume it has?
 
 ---
 
