@@ -8,7 +8,7 @@ from app.application.services.negative_balance_rebalancer import (
     NegativeBalanceRebalancer,
 )
 from app.domain.models import Stock
-from app.domain.value_objects.currency import Currency
+from app.shared.domain.value_objects.currency import Currency
 
 
 class TestNegativeBalanceRebalancer:

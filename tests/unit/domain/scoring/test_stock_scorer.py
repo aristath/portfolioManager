@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.domain.scoring.models import (
+from app.modules.scoring.domain.models import (
     CalculatedStockScore,
     PortfolioContext,
     PrefetchedStockData,

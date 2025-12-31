@@ -13,7 +13,7 @@ from app.domain.events.recommendation_events import RecommendationCreatedEvent
 from app.domain.events.stock_events import StockAddedEvent
 from app.domain.events.trade_events import TradeExecutedEvent
 from app.domain.models import Position, Recommendation, Stock, Trade
-from app.domain.value_objects.currency import Currency
+from app.shared.domain.value_objects.currency import Currency
 from app.domain.value_objects.trade_side import TradeSide
 
 

@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.domain.scoring.models import TechnicalData
+from app.modules.scoring.domain.models import TechnicalData
 from app.domain.scoring.sell import (
     SELL_WEIGHTS,
     _calculate_drawdown_score,

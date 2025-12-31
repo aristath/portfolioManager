@@ -10,7 +10,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.domain.models import Stock
-from app.domain.value_objects.currency import Currency
+from app.shared.domain.value_objects.currency import Currency
 
 
 @pytest.fixture

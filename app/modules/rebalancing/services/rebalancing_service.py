@@ -31,7 +31,7 @@ from app.modules.portfolio.database.portfolio_repository import PortfolioReposit
 from app.modules.scoring.domain.models import PortfolioContext
 from app.repositories import RecommendationRepository
 from app.shared.domain.value_objects.currency import Currency
-from app.shared.domain.value_objects.recommendation_status import RecommendationStatus
+from app.domain.value_objects.recommendation_status import RecommendationStatus
 from app.shared.domain.value_objects.trade_side import TradeSide
 
 

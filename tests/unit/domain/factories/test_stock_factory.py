@@ -8,7 +8,7 @@ import pytest
 from app.domain.exceptions import ValidationError
 from app.domain.factories.stock_factory import StockFactory
 from app.domain.models import Stock
-from app.domain.value_objects.currency import Currency
+from app.shared.domain.value_objects.currency import Currency
 
 
 class TestStockFactoryCreateFromApiRequest:
