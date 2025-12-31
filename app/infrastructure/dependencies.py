@@ -9,7 +9,8 @@ from typing import Annotated
 from fastapi import Depends
 
 from app.application.services.currency_exchange_service import CurrencyExchangeService
-from app.application.services.portfolio_service import PortfolioService
+# Backward compatibility re-export (temporary - will be removed in Phase 5)
+from app.modules.portfolio.services.portfolio_service import PortfolioService
 from app.application.services.rebalancing_service import RebalancingService
 from app.application.services.stock_setup_service import StockSetupService
 from app.application.services.trade_execution_service import TradeExecutionService

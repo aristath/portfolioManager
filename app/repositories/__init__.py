@@ -13,9 +13,10 @@ from app.repositories.cash_flow import CashFlowRepository
 # Backward compatibility re-export (temporary - will be removed in Phase 5)
 from app.modules.dividends.database.dividend_repository import DividendRepository
 from app.repositories.grouping import GroupingRepository
-from app.repositories.history import HistoryRepository
-from app.repositories.portfolio import PortfolioRepository
-from app.repositories.position import PositionRepository
+# Backward compatibility re-export (temporary - will be removed in Phase 5)
+from app.modules.portfolio.database.history_repository import HistoryRepository
+from app.modules.portfolio.database.portfolio_repository import PortfolioRepository
+from app.modules.portfolio.database.position_repository import PositionRepository
 from app.repositories.recommendation import RecommendationRepository
 from app.repositories.score import ScoreRepository
 from app.repositories.settings import SettingsRepository
