@@ -176,7 +176,7 @@ async def test_validate_trade_raises_on_error(
 async def test_check_minimum_hold_time_recent_buy_blocks_sell(
     safety_service, mock_trade_repo
 ):
-    """Test that minimum hold time check blocks sells for recently bought stocks."""
+    """Test that minimum hold time check blocks sells for recently bought securities."""
     from datetime import datetime, timedelta
 
     # Stock bought 30 days ago (less than 90 day minimum)
@@ -194,7 +194,7 @@ async def test_check_minimum_hold_time_recent_buy_blocks_sell(
 async def test_check_minimum_hold_time_old_buy_allows_sell(
     safety_service, mock_trade_repo
 ):
-    """Test that minimum hold time check allows sells for stocks held long enough."""
+    """Test that minimum hold time check allows sells for securities held long enough."""
     from datetime import datetime, timedelta
 
     # Stock bought 120 days ago (more than 90 day minimum)
@@ -211,7 +211,7 @@ async def test_check_minimum_hold_time_old_buy_allows_sell(
 async def test_validate_trade_sell_blocks_recent_buy(
     safety_service, mock_client, mock_trade_repo, mock_position_repo
 ):
-    """Test that SELL orders are blocked if stock was recently bought."""
+    """Test that SELL orders are blocked if security was recently bought."""
     from datetime import datetime, timedelta
 
     from app.domain.models import Position

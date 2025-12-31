@@ -1,6 +1,6 @@
 # Arduino Trader
 
-Autonomous portfolio management system for Arduino Uno Q. Manages retirement fund with monthly deposits, automated rebalancing, and intelligent stock selection.
+Autonomous portfolio management system for Arduino Uno Q. Manages retirement fund with monthly deposits, automated rebalancing, and intelligent security selection.
 
 **This is not a toy.** It manages real money. Every line of code matters.
 
@@ -12,7 +12,7 @@ Autonomous portfolio management system for Arduino Uno Q. Manages retirement fun
 - [Configuration](#configuration)
 - [API Reference](#api-reference)
 - [Background Jobs](#background-jobs)
-- [Security Scoring](#stock-scoring)
+- [Security Scoring](#security-scoring)
 - [Trading System](#trading-system)
 - [LED Display](#led-display)
 - [Deployment](#deployment)

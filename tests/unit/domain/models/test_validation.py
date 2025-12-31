@@ -33,24 +33,24 @@ class TestSecurityValidation:
 
     def test_stock_normalizes_symbol_to_uppercase(self):
         """Test that Stock normalizes symbol to uppercase."""
-        stock = Security(
+        security = Security(
             symbol="aapl", name="Apple Inc.", product_type=ProductType.EQUITY
         )
-        assert stock.symbol == "AAPL"
+        assert security.symbol == "AAPL"
 
     def test_stock_strips_symbol_whitespace(self):
         """Test that Stock strips whitespace from symbol."""
-        stock = Security(
+        security = Security(
             symbol="  AAPL  ", name="Apple Inc.", product_type=ProductType.EQUITY
         )
-        assert stock.symbol == "AAPL"
+        assert security.symbol == "AAPL"
 
     def test_stock_validates_min_lot(self):
         """Test that Stock corrects min_lot to minimum 1."""
-        stock = Security(
+        security = Security(
             symbol="AAPL", name="Apple Inc.", min_lot=0, product_type=ProductType.EQUITY
         )
-        assert stock.min_lot == 1
+        assert security.min_lot == 1
 
     def test_stock_validates_min_portfolio_target_range(self):
         """Test that Stock validates min_portfolio_target is 0-20."""

@@ -107,9 +107,9 @@ class TestPortfolioServiceCalculations:
     async def test_multi_industry_splits_value_equally(self, mock_repos):
         """Stock in multiple industries should split value equally.
 
-        A stock with "Technology, Defense" should count 50% to each industry.
+        A security with "Technology, Defense" should count 50% to each industry.
 
-        Bug caught: Multi-industry stocks being double-counted or ignored.
+        Bug caught: Multi-industry securities being double-counted or ignored.
         """
         portfolio_repo, position_repo, allocation_repo, security_repo = mock_repos
 

@@ -45,7 +45,7 @@ class TestTradeValidation:
 
     @pytest.fixture
     def mock_stock_repo(self):
-        """Create mock stock repository."""
+        """Create mock security repository."""
         repo = AsyncMock()
         repo.get_by_symbol = AsyncMock(return_value=None)
         return repo

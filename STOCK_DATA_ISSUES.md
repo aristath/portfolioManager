@@ -61,7 +61,7 @@ Even with correct symbol conversion, Yahoo Finance API doesn't return country/in
 - `IPX.EU` - `.EU` suffix not recognized by Yahoo Finance (UK stocks typically use `.L` for LSE, German stocks use `.DE` or `.F` for Frankfurt)
 - `UKW.EU` - Same issue, might need to be `UKW.L` for London Stock Exchange
 
-**Note:** The `fullExchangeName` field already has values ("Athens", "Stuttgart", "LSE"), suggesting these were set during initial stock creation. However, the country field wasn't inferred because:
+**Note:** The `fullExchangeName` field already has values ("Athens", "Stuttgart", "LSE"), suggesting these were set during initial security creation. However, the country field wasn't inferred because:
 1. Yahoo Finance API returns `(None, None)` for these symbols
 2. The fallback logic in `_detect_and_update_country_and_exchange()` only runs when Yahoo returns an exchange but no country
 3. Since Yahoo returns neither, the fallback never executes
@@ -75,7 +75,7 @@ Even with correct symbol conversion, Yahoo Finance API doesn't return country/in
 ### Finding Correct Yahoo Symbols
 
 To find the correct Yahoo Finance symbols:
-1. Search for the stock on finance.yahoo.com
+1. Search for the security on finance.yahoo.com
 2. Check the URL - it typically shows the ticker symbol
 3. Update the `yahoo_symbol` field via API:
    ```bash

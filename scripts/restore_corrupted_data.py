@@ -44,7 +44,7 @@ def main():
             currency,
             priority_multiplier,
             min_lot
-        FROM stocks
+        FROM securities
         ORDER BY symbol
     """)
 

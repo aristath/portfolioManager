@@ -312,7 +312,7 @@ class TestCanExecuteTrade:
 
     @pytest.mark.asyncio
     async def test_allows_trade_when_stock_not_found(self):
-        """Test that trade is allowed when stock not found (fail open)."""
+        """Test that trade is allowed when security not found (fail open)."""
         from app.jobs.event_based_trading import _can_execute_trade
 
         recommendation = Recommendation(

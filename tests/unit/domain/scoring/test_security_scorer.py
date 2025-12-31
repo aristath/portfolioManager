@@ -1,6 +1,6 @@
 """Tests for security_scorer module.
 
-These tests validate the main stock scoring orchestrator that:
+These tests validate the main security scoring orchestrator that:
 - Combines 8 scoring groups with configurable weights
 - Calculates total weighted scores
 - Handles edge cases and missing data
