@@ -22,7 +22,7 @@ from app.modules.universe.domain.priority_calculator import (
     PriorityCalculator,
     PriorityInput,
 )
-from app.modules.universe.domain.stock_factory import StockFactory
+from app.modules.universe.domain.security_factory import SecurityFactory
 from app.modules.universe.domain.symbol_resolver import is_isin
 
 router = APIRouter()
@@ -675,7 +675,7 @@ async def create_stock(
         "allow_sell": stock_data.allow_sell,
     }
 
-    new_stock = StockFactory.create_from_api_request(stock_dict)
+    new_stock = SecurityFactory.create_from_api_request(stock_dict)
 
     await stock_repo.create(new_stock)
 
