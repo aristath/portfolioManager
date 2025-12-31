@@ -116,6 +116,14 @@ const API = {
   // Planner
   regenerateSequences: () => API._post('/api/planner/regenerate-sequences'),
 
+  // Satellites/Buckets
+  fetchBuckets: () => fetch('/api/satellites/buckets').then(r => r.json()),
+  fetchBucketBalances: (bucketId) => fetch(`/api/satellites/buckets/${bucketId}/balances`).then(r => r.json()),
+  fetchAllBucketBalances: () => fetch('/api/satellites/balances/summary').then(r => r.json()),
+  createBucket: (data) => API._post('/api/satellites/buckets', data),
+  retireBucket: (bucketId) => API._post(`/api/satellites/buckets/${bucketId}/retire`),
+  transferCash: (data) => API._post('/api/satellites/balances/transfer', data),
+
 };
 
 // Make available globally
