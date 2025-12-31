@@ -102,7 +102,7 @@ async def _step_sync_trades():
 
 async def _step_sync_cash_flows():
     """Step 2: Sync cash flows from Tradernet."""
-    from app.jobs.cash_flow_sync import sync_cash_flows
+    from app.modules.cash_flows.jobs.cash_flow_sync import sync_cash_flows
 
     try:
         await sync_cash_flows()

@@ -32,10 +32,10 @@ from app.infrastructure.hardware.display_service import (
     DisplayStateManager,
     _display_state_manager,
 )
+from app.modules.cash_flows.database.cash_flow_repository import CashFlowRepository
 from app.repositories import (
     AllocationRepository,
     CalculationsRepository,
-    CashFlowRepository,
     GroupingRepository,
     PortfolioRepository,
     PositionRepository,

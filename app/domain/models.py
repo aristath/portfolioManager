@@ -13,6 +13,12 @@ from app.domain.value_objects.currency import Currency
 from app.domain.value_objects.recommendation_status import RecommendationStatus
 from app.domain.value_objects.trade_side import TradeSide
 
+# CashFlow moved to modules/cash_flows/domain/models.py
+# Backward compatibility re-export (temporary - will be removed in Phase 5)
+# CashFlow moved to modules/cash_flows/domain/models.py
+# Backward compatibility re-export (temporary - will be removed in Phase 5)
+from app.modules.cash_flows.domain.models import CashFlow
+
 
 @dataclass
 class Stock:
@@ -145,6 +151,26 @@ class Trade:
         object.__setattr__(self, "symbol", self.symbol.upper().strip())
 
 
+# Export all models including re-exported CashFlow
+__all__ = [
+    "Stock",
+    "Position",
+    "Trade",
+    "StockScore",
+    "AllocationTarget",
+    "CashFlow",  # Re-exported from modules/cash_flows/domain/models.py
+    "PortfolioSnapshot",
+    "DailyPrice",
+    "MonthlyPrice",
+    "AllocationStatus",
+    "PortfolioSummary",
+    "Recommendation",
+    "StockPriority",
+    "MultiStepRecommendation",
+    "DividendRecord",
+]
+
+
 @dataclass
 class StockScore:
     """Calculated score for a stock."""
@@ -191,26 +217,6 @@ class AllocationTarget:
     type: str  # 'country_group' or 'industry_group'
     name: str  # Group name (e.g., 'US', 'EU', 'Technology')
     target_pct: float  # Weight from -1.0 to 1.0
-
-
-@dataclass
-class CashFlow:
-    """Cash flow transaction (deposit, withdrawal, dividend, etc.)."""
-
-    transaction_id: str
-    type_doc_id: int
-    date: str
-    amount: float
-    currency: Currency
-    amount_eur: float
-    transaction_type: Optional[str] = None
-    status: Optional[str] = None
-    status_c: Optional[int] = None
-    description: Optional[str] = None
-    params_json: Optional[str] = None
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
-    id: Optional[int] = None
 
 
 @dataclass
@@ -423,3 +429,23 @@ class DividendRecord:
 
         # Normalize symbol
         object.__setattr__(self, "symbol", self.symbol.upper().strip())
+
+
+# Export all models including re-exported CashFlow
+__all__ = [
+    "Stock",
+    "Position",
+    "Trade",
+    "StockScore",
+    "AllocationTarget",
+    "CashFlow",  # Re-exported from modules/cash_flows/domain/models.py
+    "PortfolioSnapshot",
+    "DailyPrice",
+    "MonthlyPrice",
+    "AllocationStatus",
+    "PortfolioSummary",
+    "Recommendation",
+    "StockPriority",
+    "MultiStepRecommendation",
+    "DividendRecord",
+]
