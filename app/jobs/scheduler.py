@@ -43,7 +43,7 @@ PORTFOLIO MANAGEMENT JOBS:
 
 7. security_discovery - Monthly on 15th at 2:00
    - Discovers and adds high-quality stocks
-   - Checks stock_discovery_enabled setting internally
+   - Checks security_discovery_enabled setting internally
 
 SYSTEM JOBS:
 9. auto_deploy - Every 5 minutes (configurable)
@@ -292,7 +292,7 @@ async def init_scheduler() -> AsyncIOScheduler:
 
     # Job 7: Stock Discovery - monthly on 15th of month at 2am
     # Handles: automatic discovery and addition of high-quality stocks
-    # Note: discover_new_stocks checks stock_discovery_enabled internally
+    # Note: discover_new_stocks checks security_discovery_enabled internally
     scheduler.add_job(
         discover_new_stocks,
         CronTrigger(day=15, hour=2, minute=0),

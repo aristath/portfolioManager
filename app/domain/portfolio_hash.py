@@ -219,14 +219,14 @@ def generate_settings_hash(settings_dict: Dict[str, Any]) -> str:
         8-character hex hash (first 8 chars of MD5)
 
     Example:
-        settings = {"min_trade_size": 100, "min_stock_score": 0.5}
+        settings = {"min_trade_size": 100, "min_security_score": 0.5}
         hash = generate_settings_hash(settings)  # e.g., "b1c2d3e4"
     """
     # Settings that affect recommendation calculations
     # Note: min_trade_size and recommendation_depth removed (handled by optimizer now)
     relevant_keys = sorted(
         [
-            "min_stock_score",
+            "min_security_score",
             "min_hold_days",
             "sell_cooldown_days",
             "max_loss_threshold",
@@ -309,7 +309,7 @@ def generate_recommendation_cache_key(
 
     Example:
         positions = [{"symbol": "AAPL", "quantity": 10}]
-        settings = {"min_stock_score": 0.5}
+        settings = {"min_security_score": 0.5}
         stocks = [Stock(symbol="AAPL", ...), Stock(symbol="MSFT", ...)]
         cash = {"EUR": 1500.0}
         allocations = {"country:United States": 0.6}

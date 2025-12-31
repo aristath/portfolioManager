@@ -182,13 +182,13 @@ async def get_universe_suggestions(
 
         # Check if discovery is enabled
         discovery_enabled = await settings_repo.get_float(
-            "stock_discovery_enabled", 1.0
+            "security_discovery_enabled", 1.0
         )
         logger.info(f"Discovery enabled: {discovery_enabled}")
         if discovery_enabled != 0.0:
             # Get discovery settings
             score_threshold = await settings_repo.get_float(
-                "stock_discovery_score_threshold", 0.75
+                "security_discovery_score_threshold", 0.75
             )
 
             # Get existing universe symbols

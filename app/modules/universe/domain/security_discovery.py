@@ -40,22 +40,24 @@ class SecurityDiscoveryService:
         try:
             # Load discovery criteria from settings
             enabled = await self._settings_repo.get_float(
-                "stock_discovery_enabled", 1.0
+                "security_discovery_enabled", 1.0
             )
             if enabled == 0.0:
                 logger.info("Security discovery is disabled")
                 return []
 
             min_volume = await self._settings_repo.get_float(
-                "stock_discovery_min_volume", 1000000.0
+                "security_discovery_min_volume", 1000000.0
             )
             fetch_limit = int(
-                await self._settings_repo.get_float("stock_discovery_fetch_limit", 50.0)
+                await self._settings_repo.get_float(
+                    "security_discovery_fetch_limit", 50.0
+                )
             )
 
             # Get geography and exchange filters
             geographies_str = await self._settings_repo.get(
-                "stock_discovery_geographies"
+                "security_discovery_geographies"
             )
             if geographies_str is None:
                 geographies_str = "EU,US,ASIA"
@@ -63,7 +65,9 @@ class SecurityDiscoveryService:
                 g.strip().upper() for g in geographies_str.split(",") if g.strip()
             ]
 
-            exchanges_str = await self._settings_repo.get("stock_discovery_exchanges")
+            exchanges_str = await self._settings_repo.get(
+                "security_discovery_exchanges"
+            )
             if exchanges_str is None:
                 exchanges_str = "usa,europe"
             exchanges = [

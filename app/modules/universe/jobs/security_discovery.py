@@ -44,20 +44,22 @@ async def discover_new_securities() -> None:
         db_manager = get_db_manager()
 
         # Check if discovery is enabled
-        enabled = await settings_repo.get_float("stock_discovery_enabled", 1.0)
+        enabled = await settings_repo.get_float("security_discovery_enabled", 1.0)
         if enabled == 0.0:
             logger.info("Stock discovery is disabled, skipping")
             return
 
         # Get discovery settings
         score_threshold = await settings_repo.get_float(
-            "stock_discovery_score_threshold", 0.75
+            "security_discovery_score_threshold", 0.75
         )
         max_per_month = int(
-            await settings_repo.get_float("stock_discovery_max_per_month", 2.0)
+            await settings_repo.get_float("security_discovery_max_per_month", 2.0)
         )
         require_manual_review = (
-            await settings_repo.get_float("stock_discovery_require_manual_review", 0.0)
+            await settings_repo.get_float(
+                "security_discovery_require_manual_review", 0.0
+            )
             == 1.0
         )
 

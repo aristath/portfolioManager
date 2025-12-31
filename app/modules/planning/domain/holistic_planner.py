@@ -700,7 +700,7 @@ async def identify_opportunities(
             if portfolio_context.security_scores
             else 0.5
         )
-        >= app_settings.min_stock_score
+        >= app_settings.min_security_score
     ]
 
     # Identify averaging down opportunities
