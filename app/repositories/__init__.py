@@ -10,7 +10,8 @@ from app.modules.planning.database.planner_repository import PlannerRepository
 from app.repositories.allocation import AllocationRepository
 from app.repositories.calculations import CalculationsRepository
 from app.repositories.cash_flow import CashFlowRepository
-from app.repositories.dividend import DividendRepository
+# Backward compatibility re-export (temporary - will be removed in Phase 5)
+from app.modules.dividends.database.dividend_repository import DividendRepository
 from app.repositories.grouping import GroupingRepository
 from app.repositories.history import HistoryRepository
 from app.repositories.portfolio import PortfolioRepository

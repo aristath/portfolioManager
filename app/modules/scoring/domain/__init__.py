@@ -60,8 +60,8 @@ from app.modules.scoring.domain.diversification import (
     calculate_post_transaction_score,
 )
 
-# Dividend history analysis
-from app.modules.scoring.domain.dividend_history import (
+# Dividend history analysis (re-exported from dividends module)
+from app.modules.dividends.domain.dividend_history import (
     calculate_dividend_growth_rate,
     calculate_dividend_stability_score,
     get_dividend_analysis,
