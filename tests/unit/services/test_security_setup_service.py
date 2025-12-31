@@ -70,7 +70,7 @@ class TestSecuritySetupService:
     ):
         """Create SecuritySetupService with mocked dependencies."""
         return SecuritySetupService(
-            stock_repo=mock_stock_repo,
+            security_repo=mock_stock_repo,
             scoring_service=mock_scoring_service,
             tradernet_client=mock_tradernet_client,
             db_manager=mock_db_manager,
