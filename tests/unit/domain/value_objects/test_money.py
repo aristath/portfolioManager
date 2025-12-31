@@ -6,7 +6,7 @@ These tests validate the Money value object for representing monetary amounts wi
 import pytest
 
 from app.shared.domain.value_objects.currency import Currency
-from app.domain.value_objects.money import Money
+from app.shared.domain.value_objects.money import Money
 
 
 class TestMoney:

@@ -710,7 +710,7 @@ class TestProcessPlannerBatchJob:
                                                             call_args = (
                                                                 mock_emit.call_args
                                                             )
-                                                            from app.infrastructure.events import (
+                                                            from app.core.events import (
                                                                 SystemEvent,
                                                             )
 
