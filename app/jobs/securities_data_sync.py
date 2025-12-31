@@ -280,7 +280,8 @@ async def _detect_and_update_industry(symbol: str):
     Detect and update industry from Yahoo Finance for a security.
 
     This runs automatically during the securities data sync to keep industry
-    data up to date from Yahoo Finance.
+    data up to date from Yahoo Finance. Only updates if the field is empty/NULL
+    to preserve user-edited values.
 
     Args:
         symbol: The security symbol to update
@@ -291,30 +292,34 @@ async def _detect_and_update_industry(symbol: str):
 
     db_manager = get_db_manager()
 
-    # Get the security's yahoo_symbol
+    # Get the security's yahoo_symbol and current industry
     cursor = await db_manager.config.execute(
-        "SELECT yahoo_symbol FROM securities WHERE symbol = ?", (symbol,)
+        "SELECT yahoo_symbol, industry FROM securities WHERE symbol = ?", (symbol,)
     )
     row = await cursor.fetchone()
     if not row:
         logger.warning(f"Security {symbol} not found for industry detection")
         return
 
-    yahoo_symbol = row[0]
+    yahoo_symbol, current_industry = row
 
-    # Detect industry from Yahoo Finance
-    try:
-        detected_industry = yahoo.get_security_industry(symbol, yahoo_symbol)
-        if detected_industry:
-            # Update the security's industry in the database
-            security_repo = SecurityRepository()
-            await security_repo.update(symbol, industry=detected_industry)
-            logger.info(f"Updated industry for {symbol}: {detected_industry}")
-        else:
-            logger.debug(f"No industry detected for {symbol} from Yahoo Finance")
-    except Exception as e:
-        # Don't fail the entire pipeline if industry detection fails
-        logger.warning(f"Failed to detect industry for {symbol}: {e}")
+    # Only update if industry is not already set (preserve user-edited values)
+    if not current_industry:
+        # Detect industry from Yahoo Finance
+        try:
+            detected_industry = yahoo.get_security_industry(symbol, yahoo_symbol)
+            if detected_industry:
+                # Update the security's industry in the database
+                security_repo = SecurityRepository()
+                await security_repo.update(symbol, industry=detected_industry)
+                logger.info(f"Updated empty industry for {symbol}: {detected_industry}")
+            else:
+                logger.debug(f"No industry detected for {symbol} from Yahoo Finance")
+        except Exception as e:
+            # Don't fail the entire pipeline if industry detection fails
+            logger.warning(f"Failed to detect industry for {symbol}: {e}")
+    else:
+        logger.debug(f"Industry already set for {symbol}, skipping Yahoo detection")
 
 
 # Fallback mapping: exchange name -> country (used only when Yahoo doesn't provide country)
@@ -351,7 +356,8 @@ async def _detect_and_update_country_and_exchange(symbol: str):
     Detect and update country and exchange from Yahoo Finance for a security.
 
     This runs automatically during the securities data sync to keep country
-    and exchange data up to date from Yahoo Finance.
+    and exchange data up to date from Yahoo Finance. Only updates fields that
+    are empty/NULL to preserve user-edited values.
 
     Args:
         symbol: The security symbol to update
@@ -362,16 +368,17 @@ async def _detect_and_update_country_and_exchange(symbol: str):
 
     db_manager = get_db_manager()
 
-    # Get the security's yahoo_symbol
+    # Get the security's yahoo_symbol and current country/exchange values
     cursor = await db_manager.config.execute(
-        "SELECT yahoo_symbol FROM securities WHERE symbol = ?", (symbol,)
+        "SELECT yahoo_symbol, country, fullExchangeName FROM securities WHERE symbol = ?",
+        (symbol,),
     )
     row = await cursor.fetchone()
     if not row:
         logger.warning(f"Security {symbol} not found for country/exchange detection")
         return
 
-    yahoo_symbol = row[0]
+    yahoo_symbol, current_country, current_exchange = row
 
     # Detect country and exchange from Yahoo Finance
     try:
@@ -387,23 +394,27 @@ async def _detect_and_update_country_and_exchange(symbol: str):
                     f"Inferred country for {symbol} from exchange {detected_exchange}: {detected_country}"
                 )
 
-        if detected_country or detected_exchange:
+        # Only update fields that are empty/NULL (preserve user-edited values)
+        updates = {}
+        if detected_country and not current_country:
+            updates["country"] = detected_country
+        if detected_exchange and not current_exchange:
+            updates["fullExchangeName"] = detected_exchange
+
+        if updates:
             # Update the security's country and fullExchangeName in the database
             security_repo = SecurityRepository()
-            updates = {}
-            if detected_country:
-                updates["country"] = detected_country
-            if detected_exchange:
-                updates["fullExchangeName"] = detected_exchange
-            if updates:
-                await security_repo.update(symbol, **updates)
-                logger.info(
-                    f"Updated country/exchange for {symbol}: country={detected_country}, exchange={detected_exchange}"
-                )
+            await security_repo.update(symbol, **updates)
+            logger.info(f"Updated empty country/exchange for {symbol}: {updates}")
         else:
-            logger.debug(
-                f"No country/exchange detected for {symbol} from Yahoo Finance"
-            )
+            if detected_country or detected_exchange:
+                logger.debug(
+                    f"Country/exchange already set for {symbol}, skipping Yahoo detection"
+                )
+            else:
+                logger.debug(
+                    f"No country/exchange detected for {symbol} from Yahoo Finance"
+                )
     except Exception as e:
         # Don't fail the entire pipeline if country/exchange detection fails
         logger.warning(f"Failed to detect country/exchange for {symbol}: {e}")
