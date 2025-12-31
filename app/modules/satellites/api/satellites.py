@@ -649,3 +649,87 @@ async def update_satellite_budget(
         return {"satellite_budget_pct": budget_pct}
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/satellites/{satellite_id}/apply-preset")
+async def apply_strategy_preset(
+    satellite_id: str,
+    preset_name: str,
+    bucket_service: BucketServiceDep,
+):
+    """Apply a strategy preset to a satellite.
+
+    This endpoint loads one of the 4 predefined strategy presets and applies
+    it to the satellite's settings.
+
+    Available presets:
+    - momentum_hunter: Aggressive breakout trading
+    - steady_eddy: Conservative buy-and-hold
+    - dip_buyer: Opportunistic value investing
+    - dividend_catcher: Income-focused with cash accumulation
+    """
+    from app.modules.satellites.domain.models import SatelliteSettings
+    from app.modules.satellites.domain.strategy_presets import get_preset
+
+    try:
+        # Get preset values
+        preset_values = get_preset(preset_name)
+
+        # Create settings from preset
+        settings = SatelliteSettings(
+            satellite_id=satellite_id,
+            preset=preset_name,
+            **preset_values,
+        )
+
+        # Save settings
+        saved = await bucket_service.save_settings(settings)
+
+        return SettingsResponse(
+            satellite_id=saved.satellite_id,
+            preset=saved.preset,
+            risk_appetite=saved.risk_appetite,
+            hold_duration=saved.hold_duration,
+            entry_style=saved.entry_style,
+            position_spread=saved.position_spread,
+            profit_taking=saved.profit_taking,
+            trailing_stops=saved.trailing_stops,
+            follow_regime=saved.follow_regime,
+            auto_harvest=saved.auto_harvest,
+            pause_high_volatility=saved.pause_high_volatility,
+            dividend_handling=saved.dividend_handling,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid preset: {e}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to apply preset: {e}",
+        )
+
+
+@router.get("/presets")
+async def list_strategy_presets():
+    """List all available strategy presets with descriptions.
+
+    Returns information about the 4 predefined strategy presets that can
+    be applied to satellites.
+    """
+    from app.modules.satellites.domain.strategy_presets import (
+        get_preset_description,
+        list_presets,
+    )
+
+    presets = []
+    for preset_name in list_presets():
+        description = get_preset_description(preset_name)
+        presets.append(
+            {
+                "name": preset_name,
+                "description": description,
+            }
+        )
+
+    return {"presets": presets}
