@@ -145,7 +145,7 @@ def calculate_max_drawdown(equity_curve: list[float]) -> tuple[float, int, int]:
     running_max = np.maximum.accumulate(equity)
     drawdown = (equity - running_max) / running_max
 
-    max_dd_idx = np.argmin(drawdown)
+    max_dd_idx = int(np.argmin(drawdown))
     max_dd = abs(float(drawdown[max_dd_idx]))
 
     # Find peak before this trough
