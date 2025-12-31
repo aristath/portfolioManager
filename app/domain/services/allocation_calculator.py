@@ -117,9 +117,9 @@ def calculate_position_size(
     vol_weight = TARGET_PORTFOLIO_VOLATILITY / max(stock_vol, MIN_VOLATILITY_FOR_SIZING)
     vol_weight = max(MIN_VOL_WEIGHT, min(MAX_VOL_WEIGHT, vol_weight))
 
-    # Stock score adjustment (±20% range for better conviction expression)
+    # Security score adjustment (±20% range for better conviction expression)
     # Score 1.0 = +20%, Score 0.5 = 0%, Score 0.0 = -20%
-    score_adj = 1.0 + (candidate.stock_score - 0.5) * 0.4
+    score_adj = 1.0 + (candidate.security_score - 0.5) * 0.4
     score_adj = max(0.8, min(1.2, score_adj))
 
     size = base_size * vol_weight * score_adj

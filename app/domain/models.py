@@ -275,7 +275,7 @@ class SecurityPriority:
     symbol: str
     name: str
     industry: str
-    stock_score: float  # Note: field name kept as stock_score for compatibility
+    security_score: float  # Overall quality score for the security
     volatility: float  # Raw volatility (0.0-1.0)
     multiplier: float  # Manual priority multiplier
     min_lot: int  # Minimum lot size for trading
@@ -351,22 +351,12 @@ class DividendRecord:
         object.__setattr__(self, "symbol", self.symbol.upper().strip())
 
 
-# Backward compatibility aliases - DEPRECATED
-# These aliases are deprecated as of January 2025 and will be removed in June 2025.
-# See docs/DEPRECATION.md for migration timeline and guidance.
-# Please use Security, SecurityScore, and SecurityPriority instead.
-Stock = Security
-StockScore = SecurityScore
-StockPriority = SecurityPriority
-
 # Export all models including re-exported CashFlow
 __all__ = [
     "Security",
-    "Stock",  # Deprecated - use Security
     "Position",
     "Trade",
     "SecurityScore",
-    "StockScore",  # Deprecated - use SecurityScore
     "AllocationTarget",
     "CashFlow",  # Re-exported from modules/cash_flows/domain/models.py
     "PortfolioSnapshot",
@@ -376,7 +366,6 @@ __all__ = [
     "PortfolioSummary",
     "Recommendation",
     "SecurityPriority",
-    "StockPriority",  # Deprecated - use SecurityPriority
     "MultiStepRecommendation",
     "DividendRecord",
 ]

@@ -5,6 +5,7 @@ from typing import List, Optional
 
 from app.core.database.manager import get_db_manager
 from app.domain.models import Security
+from app.domain.value_objects.product_type import ProductType
 from app.repositories.base import transaction_context
 
 
@@ -87,17 +88,18 @@ class SecurityRepository:
             await conn.execute(
                 """
                 INSERT INTO securities
-                (symbol, yahoo_symbol, isin, name, industry, country, fullExchangeName,
+                (symbol, yahoo_symbol, isin, name, product_type, industry, country, fullExchangeName,
                  priority_multiplier, min_lot, active, allow_buy, allow_sell,
                  currency, min_portfolio_target, max_portfolio_target,
                  created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     security.symbol.upper(),
                     security.yahoo_symbol,
                     security.isin,
                     security.name,
+                    security.product_type.value if security.product_type else None,
                     security.industry,
                     security.country,
                     security.fullExchangeName,
@@ -134,9 +136,11 @@ class SecurityRepository:
             "allow_sell",
             "updated_at",
             "name",
+            "product_type",
             "sector",
             "industry",
             "country",
+            "fullExchangeName",
             "currency",
             "exchange",
             "market_cap",
@@ -250,11 +254,18 @@ class SecurityRepository:
     def _row_to_security(self, row) -> Security:
         """Convert database row to Security model."""
         keys = row.keys()
+
+        # Extract product_type from database row
+        product_type = None
+        if "product_type" in keys and row["product_type"]:
+            product_type = ProductType.from_string(row["product_type"])
+
         return Security(
             symbol=row["symbol"],
             yahoo_symbol=row["yahoo_symbol"],
             isin=row["isin"] if "isin" in keys else None,
             name=row["name"],
+            product_type=product_type,
             industry=row["industry"],
             country=row["country"] if "country" in keys else None,
             fullExchangeName=(

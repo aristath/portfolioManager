@@ -32,7 +32,3 @@ class SecurityAddedEvent(DomainEvent):
     def country(self) -> str | None:
         """Security country."""
         return self.security.country
-
-
-# Backward compatibility alias
-StockAddedEvent = SecurityAddedEvent

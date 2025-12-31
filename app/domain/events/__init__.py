@@ -8,7 +8,7 @@ and represent business events like "Trade Executed", "Position Updated", etc.
 from app.domain.events.base import DomainEvent, DomainEventBus, get_event_bus
 from app.domain.events.position_events import PositionUpdatedEvent
 from app.domain.events.recommendation_events import RecommendationCreatedEvent
-from app.domain.events.security_events import SecurityAddedEvent, StockAddedEvent
+from app.domain.events.security_events import SecurityAddedEvent
 from app.domain.events.trade_events import TradeExecutedEvent
 
 __all__ = [
@@ -19,5 +19,4 @@ __all__ = [
     "PositionUpdatedEvent",
     "RecommendationCreatedEvent",
     "SecurityAddedEvent",
-    "StockAddedEvent",  # DEPRECATED: Use SecurityAddedEvent (removal: June 2025)
 ]

@@ -4,12 +4,12 @@ from datetime import datetime
 from typing import List, Optional
 
 from app.core.database import get_db_manager
-from app.domain.models import StockScore
+from app.domain.models import SecurityScore
 from app.repositories.base import transaction_context
 
 
 class ScoreRepository:
-    """Repository for stock score operations (calculations.db)."""
+    """Repository for security score operations (calculations.db)."""
 
     def __init__(self, db=None):
         """Initialize repository.
@@ -29,7 +29,7 @@ class ScoreRepository:
         else:
             self._db = get_db_manager().calculations
 
-    async def get_by_symbol(self, symbol: str) -> Optional[StockScore]:
+    async def get_by_symbol(self, symbol: str) -> Optional[SecurityScore]:
         """Get score by symbol."""
         row = await self._db.fetchone(
             "SELECT * FROM scores WHERE symbol = ?", (symbol.upper(),)
@@ -38,7 +38,7 @@ class ScoreRepository:
             return None
         return self._row_to_score(row)
 
-    async def get_by_isin(self, isin: str) -> Optional[StockScore]:
+    async def get_by_isin(self, isin: str) -> Optional[SecurityScore]:
         """Get score by ISIN."""
         row = await self._db.fetchone(
             "SELECT * FROM scores WHERE isin = ?", (isin.upper(),)
@@ -47,7 +47,7 @@ class ScoreRepository:
             return None
         return self._row_to_score(row)
 
-    async def get_by_identifier(self, identifier: str) -> Optional[StockScore]:
+    async def get_by_identifier(self, identifier: str) -> Optional[SecurityScore]:
         """Get score by symbol or ISIN."""
         identifier = identifier.strip().upper()
 
@@ -60,12 +60,12 @@ class ScoreRepository:
         # Try symbol lookup
         return await self.get_by_symbol(identifier)
 
-    async def get_all(self) -> List[StockScore]:
+    async def get_all(self) -> List[SecurityScore]:
         """Get all scores."""
         rows = await self._db.fetchall("SELECT * FROM scores")
         return [self._row_to_score(row) for row in rows]
 
-    async def get_top(self, limit: int = 10) -> List[StockScore]:
+    async def get_top(self, limit: int = 10) -> List[SecurityScore]:
         """Get top scored stocks."""
         rows = await self._db.fetchall(
             """
@@ -78,7 +78,7 @@ class ScoreRepository:
         )
         return [self._row_to_score(row) for row in rows]
 
-    async def upsert(self, score: StockScore) -> None:
+    async def upsert(self, score: SecurityScore) -> None:
         """Insert or update a score."""
         calculated_at = (
             score.calculated_at.isoformat()
@@ -129,7 +129,9 @@ class ScoreRepository:
         async with transaction_context(self._db) as conn:
             await conn.execute("DELETE FROM scores")
 
-    async def get_recent_scores(self, symbol: str, months: float) -> List[StockScore]:
+    async def get_recent_scores(
+        self, symbol: str, months: float
+    ) -> List[SecurityScore]:
         """
         Get recent scores for a symbol within the specified time window.
 
@@ -142,7 +144,7 @@ class ScoreRepository:
             months: Number of months to look back
 
         Returns:
-            List of StockScore objects (currently 0 or 1 score)
+            List of SecurityScore objects (currently 0 or 1 score)
         """
         from datetime import datetime, timedelta
 
@@ -161,8 +163,8 @@ class ScoreRepository:
             return [self._row_to_score(row)]
         return []
 
-    def _row_to_score(self, row) -> StockScore:
-        """Convert database row to StockScore model."""
+    def _row_to_score(self, row) -> SecurityScore:
+        """Convert database row to SecurityScore model."""
         calculated_at = None
         if row["calculated_at"]:
             try:
@@ -178,7 +180,7 @@ class ScoreRepository:
             except (KeyError, IndexError):
                 return default
 
-        return StockScore(
+        return SecurityScore(
             symbol=row["symbol"],
             isin=safe_get("isin"),
             quality_score=safe_get("quality_score"),

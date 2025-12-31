@@ -544,6 +544,27 @@ async def init_config_schema(db):
             await db.execute("ALTER TABLE stocks ADD COLUMN product_type TEXT")
             logger.info("Added product_type column to stocks table")
 
+            # Set all inactive securities to UNKNOWN (safe default)
+            # Active securities will be set to UNKNOWN but validation will prevent trading
+            # until product_type is properly classified via backfill script
+            await db.execute(
+                "UPDATE stocks SET product_type = 'UNKNOWN' WHERE product_type IS NULL"
+            )
+
+            # Count securities that need classification
+            cursor = await db.execute(
+                "SELECT COUNT(*) FROM stocks WHERE product_type = 'UNKNOWN' AND active = 1"
+            )
+            active_unknown_count = (await cursor.fetchone())[0]
+
+            if active_unknown_count > 0:
+                logger.warning(
+                    f"{active_unknown_count} active securities have product_type=UNKNOWN. "
+                    "Run scripts/backfill_product_types.py to classify them before trading."
+                )
+            else:
+                logger.info("All active securities have product_type set")
+
         await db.execute(
             "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
             (
@@ -570,55 +591,88 @@ async def init_config_schema(db):
             "SELECT name FROM sqlite_master WHERE type='table' AND name='stocks'"
         )
         if await cursor.fetchone():
-            # Create securities table with new schema
-            await db.execute(
-                """
-                CREATE TABLE IF NOT EXISTS securities (
-                    symbol TEXT PRIMARY KEY,
-                    yahoo_symbol TEXT,
-                    isin TEXT,
-                    name TEXT NOT NULL,
-                    product_type TEXT,
-                    industry TEXT,
-                    country TEXT,
-                    fullExchangeName TEXT,
-                    priority_multiplier REAL DEFAULT 1.0,
-                    min_lot INTEGER DEFAULT 1,
-                    active INTEGER DEFAULT 1,
-                    allow_buy INTEGER DEFAULT 1,
-                    allow_sell INTEGER DEFAULT 0,
-                    currency TEXT,
-                    last_synced TEXT,
-                    min_portfolio_target REAL,
-                    max_portfolio_target REAL,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
+            # Begin transaction for atomic migration
+            await db.execute("BEGIN TRANSACTION")
+
+            try:
+                # Validate data before migration
+                cursor = await db.execute("SELECT COUNT(*) FROM stocks")
+                count_before = (await cursor.fetchone())[0]
+                logger.info(f"Found {count_before} securities in stocks table")
+
+                # Create securities table with new schema
+                await db.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS securities (
+                        symbol TEXT PRIMARY KEY,
+                        yahoo_symbol TEXT,
+                        isin TEXT,
+                        name TEXT NOT NULL,
+                        product_type TEXT,
+                        industry TEXT,
+                        country TEXT,
+                        fullExchangeName TEXT,
+                        priority_multiplier REAL DEFAULT 1.0,
+                        min_lot INTEGER DEFAULT 1,
+                        active INTEGER DEFAULT 1,
+                        allow_buy INTEGER DEFAULT 1,
+                        allow_sell INTEGER DEFAULT 0,
+                        currency TEXT,
+                        last_synced TEXT,
+                        min_portfolio_target REAL,
+                        max_portfolio_target REAL,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL
+                    )
+                    """
                 )
-                """
-            )
 
-            # Copy all data from stocks to securities
-            await db.execute(
-                """
-                INSERT INTO securities
-                SELECT * FROM stocks
-                """
-            )
+                # Copy all data from stocks to securities
+                await db.execute(
+                    """
+                    INSERT INTO securities
+                    SELECT * FROM stocks
+                    """
+                )
 
-            # Create indexes on new table
-            await db.execute(
-                "CREATE INDEX IF NOT EXISTS idx_securities_active ON securities(active)"
-            )
-            await db.execute(
-                "CREATE INDEX IF NOT EXISTS idx_securities_country ON securities(country)"
-            )
-            await db.execute(
-                "CREATE INDEX IF NOT EXISTS idx_securities_isin ON securities(isin)"
-            )
+                # Validate data after migration
+                cursor = await db.execute("SELECT COUNT(*) FROM securities")
+                count_after = (await cursor.fetchone())[0]
 
-            # Drop old table
-            await db.execute("DROP TABLE stocks")
-            logger.info("Renamed stocks table to securities, data preserved")
+                if count_before != count_after:
+                    raise Exception(
+                        f"Data loss detected: {count_before} rows before, "
+                        f"{count_after} rows after migration"
+                    )
+
+                logger.info(f"Successfully copied {count_after} securities")
+
+                # Create indexes on new table
+                await db.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_securities_active ON securities(active)"
+                )
+                await db.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_securities_country ON securities(country)"
+                )
+                await db.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_securities_isin ON securities(isin)"
+                )
+
+                # Drop old table
+                await db.execute("DROP TABLE stocks")
+
+                # Commit transaction
+                await db.execute("COMMIT")
+                logger.info(
+                    "Migration v10 successful: Renamed stocks table to securities, "
+                    f"data preserved ({count_after} rows)"
+                )
+
+            except Exception as e:
+                # Rollback on any error
+                await db.execute("ROLLBACK")
+                logger.error(f"Migration v10 failed, rolled back: {e}")
+                raise
 
         await db.execute(
             "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
