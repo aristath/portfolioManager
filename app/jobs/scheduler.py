@@ -138,7 +138,7 @@ async def init_scheduler() -> AsyncIOScheduler:
     from app.modules.dividends.jobs.dividend_reinvestment import auto_reinvest_dividends
     from app.modules.planning.jobs.planner_batch import process_planner_batch_job
     from app.modules.system.jobs.sync_cycle import run_sync_cycle
-    from app.modules.universe.jobs.stock_discovery import discover_new_stocks
+    from app.modules.universe.jobs.security_discovery import discover_new_stocks
 
     # Get settings
     job_settings = await _get_job_settings()

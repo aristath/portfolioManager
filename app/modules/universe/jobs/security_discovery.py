@@ -92,7 +92,7 @@ async def discover_new_securities() -> None:
         )
         symbol_resolver = SymbolResolver(
             tradernet_client=tradernet_client,
-            stock_repo=security_repo,
+            security_repo=security_repo,
         )
 
         # Score candidates and collect results
