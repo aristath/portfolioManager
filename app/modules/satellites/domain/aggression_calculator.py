@@ -62,7 +62,11 @@ def calculate_aggression(
         AggressionResult with final aggression and breakdown
     """
     # Percentage-based aggression (allocation status)
-    pct_of_target = current_value / target_value if target_value > 0 else 0.0
+    # Protect against division by zero or very small target values
+    if target_value < 0.01:  # Less than 1 cent
+        pct_of_target = 0.0
+    else:
+        pct_of_target = current_value / target_value
 
     if pct_of_target >= 1.0:
         agg_pct = 1.0  # At or above target → full aggression

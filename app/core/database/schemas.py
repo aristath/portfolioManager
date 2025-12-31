@@ -826,6 +826,7 @@ CREATE INDEX IF NOT EXISTS idx_trades_executed_at ON trades(executed_at);
 CREATE INDEX IF NOT EXISTS idx_trades_order_id ON trades(order_id);
 CREATE INDEX IF NOT EXISTS idx_trades_symbol_side ON trades(symbol, side);
 CREATE INDEX IF NOT EXISTS idx_trades_bucket ON trades(bucket_id);
+CREATE INDEX IF NOT EXISTS idx_trades_mode ON trades(mode);
 
 -- Cash flow transactions (append-only)
 CREATE TABLE IF NOT EXISTS cash_flows (
@@ -962,7 +963,12 @@ async def init_ledger_schema(db):
 
         if "mode" not in columns:
             await db.execute("ALTER TABLE trades ADD COLUMN mode TEXT DEFAULT 'live'")
-            logger.info("Added mode column to trades table (live vs research)")
+            await db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_trades_mode ON trades(mode)"
+            )
+            logger.info(
+                "Added mode column and index to trades table (live vs research)"
+            )
 
         await db.execute(
             "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",

@@ -140,9 +140,12 @@ class BucketService:
         updated = await self._bucket_repo.update_status(
             satellite_id, BucketStatus.ACTIVE
         )
+        if not updated:
+            raise RuntimeError(
+                f"Failed to update status for satellite '{satellite_id}' - "
+                "bucket disappeared during operation"
+            )
         logger.info(f"Activated satellite '{satellite_id}'")
-        # We know the bucket exists since we checked above
-        assert updated is not None
         return updated
 
     async def pause_bucket(self, bucket_id: str) -> Bucket:
@@ -168,8 +171,12 @@ class BucketService:
             raise ValueError("Bucket is already paused")
 
         updated = await self._bucket_repo.update_status(bucket_id, BucketStatus.PAUSED)
+        if not updated:
+            raise RuntimeError(
+                f"Failed to pause bucket '{bucket_id}' - "
+                "bucket disappeared during operation"
+            )
         logger.info(f"Paused bucket '{bucket_id}'")
-        assert updated is not None
         return updated
 
     async def resume_bucket(self, bucket_id: str) -> Bucket:
@@ -204,8 +211,12 @@ class BucketService:
             new_status = BucketStatus.ACCUMULATING
 
         updated = await self._bucket_repo.update_status(bucket_id, new_status)
+        if not updated:
+            raise RuntimeError(
+                f"Failed to resume bucket '{bucket_id}' - "
+                "bucket disappeared during operation"
+            )
         logger.info(f"Resumed bucket '{bucket_id}' to '{new_status.value}' status")
-        assert updated is not None
         return updated
 
     async def hibernate_bucket(self, bucket_id: str) -> Bucket:
@@ -238,8 +249,12 @@ class BucketService:
         updated = await self._bucket_repo.update_status(
             bucket_id, BucketStatus.HIBERNATING
         )
+        if not updated:
+            raise RuntimeError(
+                f"Failed to hibernate bucket '{bucket_id}' - "
+                "bucket disappeared during operation"
+            )
         logger.info(f"Hibernated bucket '{bucket_id}'")
-        assert updated is not None
         return updated
 
     async def retire_satellite(self, satellite_id: str) -> Bucket:
@@ -286,8 +301,12 @@ class BucketService:
         updated = await self._bucket_repo.update_status(
             satellite_id, BucketStatus.RETIRED
         )
+        if not updated:
+            raise RuntimeError(
+                f"Failed to retire satellite '{satellite_id}' - "
+                "bucket disappeared during operation"
+            )
         logger.info(f"Retired satellite '{satellite_id}'")
-        assert updated is not None
         return updated
 
     # Settings methods
@@ -338,11 +357,14 @@ class BucketService:
         if is_win:
             # Reset consecutive losses on any win
             await self._bucket_repo.reset_consecutive_losses(bucket_id)
-            logger.debug(f"Reset consecutive losses for '{bucket_id}' after win")
+            logger.info(f"Reset consecutive losses for '{bucket_id}' after win")
         else:
             # Increment consecutive losses
             new_count = await self._bucket_repo.increment_consecutive_losses(bucket_id)
-            logger.debug(f"Consecutive losses for '{bucket_id}': {new_count}")
+            logger.info(
+                f"Consecutive losses for '{bucket_id}': {new_count}/"
+                f"{bucket.max_consecutive_losses}"
+            )
 
             # Check circuit breaker
             if new_count >= bucket.max_consecutive_losses:
@@ -357,8 +379,11 @@ class BucketService:
                 )
 
         result = await self._bucket_repo.get_by_id(bucket_id)
-        # We know bucket exists since we checked above
-        assert result is not None
+        if not result:
+            raise RuntimeError(
+                f"Failed to retrieve bucket '{bucket_id}' after recording trade result - "
+                "bucket disappeared during operation"
+            )
         return result
 
     async def update_high_water_mark(
@@ -381,10 +406,14 @@ class BucketService:
             updated = await self._bucket_repo.update_high_water_mark(
                 bucket_id, current_value
             )
-            logger.debug(
+            if not updated:
+                raise RuntimeError(
+                    f"Failed to update high water mark for '{bucket_id}' - "
+                    "bucket disappeared during operation"
+                )
+            logger.info(
                 f"Updated high water mark for '{bucket_id}' to {current_value:.2f}"
             )
-            assert updated is not None
             return updated
 
         return bucket

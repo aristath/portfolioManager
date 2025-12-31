@@ -21,6 +21,9 @@ class BalanceService:
     SUM(bucket_balances for currency X) == Actual brokerage balance for currency X
     """
 
+    # Maximum allowed satellite budget (safety limit to prevent over-allocation)
+    MAX_SATELLITE_BUDGET_PCT = 0.30  # 30%
+
     def __init__(
         self,
         balance_repo: Optional[BalanceRepository] = None,
@@ -97,18 +100,22 @@ class BalanceService:
         delta = -amount if is_buy else amount
         tx_type = TransactionType.TRADE_BUY if is_buy else TransactionType.TRADE_SELL
 
-        # Adjust balance
-        balance = await self._balance_repo.adjust_balance(bucket_id, currency, delta)
+        # Atomic operation: adjust balance and record transaction together
+        async with self._balance_repo._db.transaction():
+            # Adjust balance
+            balance = await self._balance_repo.adjust_balance(
+                bucket_id, currency, delta
+            )
 
-        # Record transaction
-        tx = BucketTransaction(
-            bucket_id=bucket_id,
-            type=tx_type,
-            amount=amount if is_buy else amount,  # Store as positive
-            currency=currency.upper(),
-            description=description or f"{'Buy' if is_buy else 'Sell'} settlement",
-        )
-        await self._balance_repo.record_transaction(tx)
+            # Record transaction
+            tx = BucketTransaction(
+                bucket_id=bucket_id,
+                type=tx_type,
+                amount=amount,  # Store as positive
+                currency=currency.upper(),
+                description=description or f"{'Buy' if is_buy else 'Sell'} settlement",
+            )
+            await self._balance_repo.record_transaction(tx)
 
         logger.info(
             f"Recorded trade settlement for '{bucket_id}': "
@@ -137,18 +144,22 @@ class BalanceService:
         if amount <= 0:
             raise ValueError("Dividend amount must be positive")
 
-        # Adjust balance (cash comes in)
-        balance = await self._balance_repo.adjust_balance(bucket_id, currency, amount)
+        # Atomic operation: adjust balance and record transaction together
+        async with self._balance_repo._db.transaction():
+            # Adjust balance (cash comes in)
+            balance = await self._balance_repo.adjust_balance(
+                bucket_id, currency, amount
+            )
 
-        # Record transaction
-        tx = BucketTransaction(
-            bucket_id=bucket_id,
-            type=TransactionType.DIVIDEND,
-            amount=amount,
-            currency=currency.upper(),
-            description=description or "Dividend received",
-        )
-        await self._balance_repo.record_transaction(tx)
+            # Record transaction
+            tx = BucketTransaction(
+                bucket_id=bucket_id,
+                type=TransactionType.DIVIDEND,
+                amount=amount,
+                currency=currency.upper(),
+                description=description or "Dividend received",
+            )
+            await self._balance_repo.record_transaction(tx)
 
         logger.info(f"Recorded dividend for '{bucket_id}': {amount:.2f} {currency}")
         return balance
@@ -218,33 +229,35 @@ class BalanceService:
                         f"({remaining_pct:.1%} < {core_min_pct:.1%})"
                     )
 
-        # Perform the transfer
-        from_balance = await self._balance_repo.adjust_balance(
-            from_bucket_id, currency, -amount
-        )
-        to_balance = await self._balance_repo.adjust_balance(
-            to_bucket_id, currency, amount
-        )
+        # Atomic operation: perform transfer and record both transactions together
+        async with self._balance_repo._db.transaction():
+            # Perform the transfer
+            from_balance = await self._balance_repo.adjust_balance(
+                from_bucket_id, currency, -amount
+            )
+            to_balance = await self._balance_repo.adjust_balance(
+                to_bucket_id, currency, amount
+            )
 
-        # Record transactions for audit trail
-        desc = description or f"Transfer from {from_bucket_id} to {to_bucket_id}"
+            # Record transactions for audit trail
+            desc = description or f"Transfer from {from_bucket_id} to {to_bucket_id}"
 
-        tx_out = BucketTransaction(
-            bucket_id=from_bucket_id,
-            type=TransactionType.TRANSFER_OUT,
-            amount=amount,
-            currency=currency.upper(),
-            description=desc,
-        )
-        tx_in = BucketTransaction(
-            bucket_id=to_bucket_id,
-            type=TransactionType.TRANSFER_IN,
-            amount=amount,
-            currency=currency.upper(),
-            description=desc,
-        )
-        await self._balance_repo.record_transaction(tx_out)
-        await self._balance_repo.record_transaction(tx_in)
+            tx_out = BucketTransaction(
+                bucket_id=from_bucket_id,
+                type=TransactionType.TRANSFER_OUT,
+                amount=amount,
+                currency=currency.upper(),
+                description=desc,
+            )
+            tx_in = BucketTransaction(
+                bucket_id=to_bucket_id,
+                type=TransactionType.TRANSFER_IN,
+                amount=amount,
+                currency=currency.upper(),
+                description=desc,
+            )
+            await self._balance_repo.record_transaction(tx_out)
+            await self._balance_repo.record_transaction(tx_in)
 
         logger.info(
             f"Transferred {amount:.2f} {currency} "
@@ -332,19 +345,20 @@ class BalanceService:
                         share = (deficit / total_deficit) * remaining
                         allocations[sat_id] = share
 
-        # Record the allocations
-        for bucket_id, amount in allocations.items():
-            if amount > 0:
-                await self._balance_repo.adjust_balance(bucket_id, currency, amount)
+        # Record the allocations atomically
+        async with self._balance_repo._db.transaction():
+            for bucket_id, amount in allocations.items():
+                if amount > 0:
+                    await self._balance_repo.adjust_balance(bucket_id, currency, amount)
 
-                tx = BucketTransaction(
-                    bucket_id=bucket_id,
-                    type=TransactionType.DEPOSIT,
-                    amount=amount,
-                    currency=currency.upper(),
-                    description=description or "Deposit allocation",
-                )
-                await self._balance_repo.record_transaction(tx)
+                    tx = BucketTransaction(
+                        bucket_id=bucket_id,
+                        type=TransactionType.DEPOSIT,
+                        amount=amount,
+                        currency=currency.upper(),
+                        description=description or "Deposit allocation",
+                    )
+                    await self._balance_repo.record_transaction(tx)
 
         logger.info(
             f"Allocated deposit of {total_amount:.2f} {currency}: {allocations}"
@@ -375,31 +389,33 @@ class BalanceService:
         if amount <= 0:
             raise ValueError("Reallocation amount must be positive")
 
-        # Adjust balances
-        from_balance = await self._balance_repo.adjust_balance(
-            from_bucket_id, currency, -amount
-        )
-        to_balance = await self._balance_repo.adjust_balance(
-            to_bucket_id, currency, amount
-        )
+        # Atomic operation: adjust balances and record transactions together
+        async with self._balance_repo._db.transaction():
+            # Adjust balances
+            from_balance = await self._balance_repo.adjust_balance(
+                from_bucket_id, currency, -amount
+            )
+            to_balance = await self._balance_repo.adjust_balance(
+                to_bucket_id, currency, amount
+            )
 
-        # Record as reallocation (not regular transfer)
-        tx_out = BucketTransaction(
-            bucket_id=from_bucket_id,
-            type=TransactionType.REALLOCATION,
-            amount=-amount,  # Negative for outflow
-            currency=currency.upper(),
-            description=f"Quarterly reallocation to {to_bucket_id}",
-        )
-        tx_in = BucketTransaction(
-            bucket_id=to_bucket_id,
-            type=TransactionType.REALLOCATION,
-            amount=amount,  # Positive for inflow
-            currency=currency.upper(),
-            description=f"Quarterly reallocation from {from_bucket_id}",
-        )
-        await self._balance_repo.record_transaction(tx_out)
-        await self._balance_repo.record_transaction(tx_in)
+            # Record as reallocation (not regular transfer)
+            tx_out = BucketTransaction(
+                bucket_id=from_bucket_id,
+                type=TransactionType.REALLOCATION,
+                amount=-amount,  # Negative for outflow
+                currency=currency.upper(),
+                description=f"Quarterly reallocation to {to_bucket_id}",
+            )
+            tx_in = BucketTransaction(
+                bucket_id=to_bucket_id,
+                type=TransactionType.REALLOCATION,
+                amount=amount,  # Positive for inflow
+                currency=currency.upper(),
+                description=f"Quarterly reallocation from {from_bucket_id}",
+            )
+            await self._balance_repo.record_transaction(tx_out)
+            await self._balance_repo.record_transaction(tx_in)
 
         logger.info(
             f"Reallocated {amount:.2f} {currency} "
@@ -441,8 +457,11 @@ class BalanceService:
         Raises:
             ValueError: If budget is out of range
         """
-        if not 0.0 <= budget_pct <= 0.30:  # Max 30% for satellites
-            raise ValueError("Satellite budget must be between 0% and 30%")
+        if not 0.0 <= budget_pct <= self.MAX_SATELLITE_BUDGET_PCT:
+            raise ValueError(
+                f"Satellite budget must be between 0% and "
+                f"{self.MAX_SATELLITE_BUDGET_PCT:.0%}"
+            )
 
         await self._balance_repo.set_allocation_setting(
             "satellite_budget_pct", budget_pct

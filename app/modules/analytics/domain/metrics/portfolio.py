@@ -4,10 +4,10 @@ Calculates comprehensive portfolio performance metrics using PyFolio/empyrical.
 """
 
 import logging
+import math
 from typing import Optional
 
 import empyrical
-import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)
@@ -54,12 +54,12 @@ async def get_portfolio_metrics(
         calmar_ratio = annual_return / abs(max_drawdown) if max_drawdown != 0 else 0.0
 
         return {
-            "annual_return": annual_return if np.isfinite(annual_return) else 0.0,
-            "volatility": volatility if np.isfinite(volatility) else 0.0,
-            "sharpe_ratio": sharpe_ratio if np.isfinite(sharpe_ratio) else 0.0,
-            "sortino_ratio": sortino_ratio if np.isfinite(sortino_ratio) else 0.0,
-            "calmar_ratio": calmar_ratio if np.isfinite(calmar_ratio) else 0.0,
-            "max_drawdown": max_drawdown if np.isfinite(max_drawdown) else 0.0,
+            "annual_return": annual_return if math.isfinite(annual_return) else 0.0,
+            "volatility": volatility if math.isfinite(volatility) else 0.0,
+            "sharpe_ratio": sharpe_ratio if math.isfinite(sharpe_ratio) else 0.0,
+            "sortino_ratio": sortino_ratio if math.isfinite(sortino_ratio) else 0.0,
+            "calmar_ratio": calmar_ratio if math.isfinite(calmar_ratio) else 0.0,
+            "max_drawdown": max_drawdown if math.isfinite(max_drawdown) else 0.0,
         }
     except Exception as e:
         logger.error(f"Error calculating portfolio metrics: {e}")
