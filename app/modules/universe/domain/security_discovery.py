@@ -1,4 +1,4 @@
-"""Stock discovery service for finding new investment opportunities."""
+"""Security discovery service for finding new investment opportunities."""
 
 import logging
 from typing import List, Optional
@@ -9,8 +9,8 @@ from app.infrastructure.external.tradernet import TradernetClient
 logger = logging.getLogger(__name__)
 
 
-class StockDiscoveryService:
-    """Service for discovering new stocks to add to the investment universe."""
+class SecurityDiscoveryService:
+    """Service for discovering new securities to add to the investment universe."""
 
     def __init__(
         self,
@@ -18,7 +18,7 @@ class StockDiscoveryService:
         settings_repo: ISettingsRepository,
     ):
         """
-        Initialize stock discovery service.
+        Initialize security discovery service.
 
         Args:
             tradernet_client: Tradernet client for fetching stock data
@@ -29,13 +29,13 @@ class StockDiscoveryService:
 
     async def discover_candidates(self, existing_symbols: List[str]) -> List[dict]:
         """
-        Discover candidate stocks that are not in the current universe.
+        Discover candidate securities that are not in the current universe.
 
         Args:
             existing_symbols: List of symbols already in the investment universe
 
         Returns:
-            List of candidate stock dictionaries with symbol, exchange, volume, etc.
+            List of candidate security dictionaries with symbol, exchange, volume, etc.
         """
         try:
             # Load discovery criteria from settings
@@ -43,7 +43,7 @@ class StockDiscoveryService:
                 "stock_discovery_enabled", 1.0
             )
             if enabled == 0.0:
-                logger.info("Stock discovery is disabled")
+                logger.info("Security discovery is disabled")
                 return []
 
             min_volume = await self._settings_repo.get_float(
@@ -146,7 +146,7 @@ class StockDiscoveryService:
 
                 # Filter by minimum volume
                 # Note: If volume is not available (e.g., from ticker-only API response),
-                # we assume it meets the threshold since these are "most traded" stocks
+                # we assume it meets the threshold since these are "most traded" securities
                 volume = security.get("volume", None)
                 if volume is not None:
                     if isinstance(volume, (int, float)):
@@ -160,7 +160,7 @@ class StockDiscoveryService:
                         )
                         continue
                 else:
-                    # Volume not available - assume it meets threshold for "most traded" stocks
+                    # Volume not available - assume it meets threshold for "most traded" securities
                     logger.debug(
                         f"Volume not available for {symbol}, assuming it meets threshold (most traded)"
                     )
@@ -175,11 +175,11 @@ class StockDiscoveryService:
                 if len(candidates) >= fetch_limit:
                     break
 
-            logger.info(f"Discovered {len(candidates)} candidate stocks")
+            logger.info(f"Discovered {len(candidates)} candidate securities")
             return candidates[:fetch_limit]  # Ensure we don't exceed limit
 
         except Exception as e:
-            logger.error(f"Failed to discover stock candidates: {e}")
+            logger.error(f"Failed to discover security candidates: {e}")
             return []
 
     def _country_to_geography(self, country: str) -> Optional[str]:
@@ -256,3 +256,7 @@ class StockDiscoveryService:
             return "ASIA"
 
         return None
+
+
+# Backward compatibility alias
+StockDiscoveryService = SecurityDiscoveryService
