@@ -85,7 +85,7 @@ class TestGetPortfolioMetrics:
 
     @pytest.mark.asyncio
     async def test_handles_risk_free_rate(self):
-        """Test that risk-free rate is used in Sharpe/Sortino calculations."""
+        """Test that risk-free rate is used in Sharpe calculations."""
         from app.modules.analytics.domain.metrics.portfolio import get_portfolio_metrics
 
         returns = pd.Series(
@@ -97,7 +97,7 @@ class TestGetPortfolioMetrics:
 
         # Sharpe ratio should be different when risk-free rate is included
         assert metrics_with_rf["sharpe_ratio"] != metrics_without_rf["sharpe_ratio"]
-        assert metrics_with_rf["sortino_ratio"] != metrics_without_rf["sortino_ratio"]
+        # Note: Sortino ratio does not use risk_free_rate in empyrical
 
     @pytest.mark.asyncio
     async def test_handles_benchmark(self):

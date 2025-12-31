@@ -45,9 +45,7 @@ async def get_portfolio_metrics(
         annual_return = float(empyrical.annual_return(returns))
         volatility = float(empyrical.annual_volatility(returns))
         sharpe_ratio = float(empyrical.sharpe_ratio(returns, risk_free=risk_free_rate))
-        sortino_ratio = float(
-            empyrical.sortino_ratio(returns, risk_free=risk_free_rate)
-        )
+        sortino_ratio = float(empyrical.sortino_ratio(returns))
         max_drawdown = float(empyrical.max_drawdown(returns))
 
         # Calmar ratio = annual return / abs(max drawdown)
