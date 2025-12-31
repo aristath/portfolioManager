@@ -12,6 +12,7 @@ from app.domain.models import (
     SecurityScore,
     Trade,
 )
+from app.domain.value_objects.product_type import ProductType
 
 
 @pytest.mark.asyncio
@@ -21,6 +22,7 @@ async def test_stock_repository_create_and_get(security_repo):
         symbol="AAPL",
         yahoo_symbol="AAPL",
         name="Apple Inc.",
+        product_type=ProductType.EQUITY,
         industry="Consumer Electronics",
         country="United States",
         priority_multiplier=1.0,
@@ -43,6 +45,7 @@ async def test_stock_repository_get_all_active(security_repo):
         symbol="AAPL",
         yahoo_symbol="AAPL",
         name="Apple Inc.",
+        product_type=ProductType.EQUITY,
         industry="Consumer Electronics",
         country="United States",
         priority_multiplier=1.0,
@@ -53,6 +56,7 @@ async def test_stock_repository_get_all_active(security_repo):
         symbol="MSFT",
         yahoo_symbol="MSFT",
         name="Microsoft Corp.",
+        product_type=ProductType.EQUITY,
         industry="Consumer Electronics",
         country="United States",
         priority_multiplier=1.0,
@@ -163,6 +167,7 @@ async def test_trade_repository_create(security_repo, trade_repo):
         symbol="AAPL",
         yahoo_symbol="AAPL",
         name="Apple Inc.",
+        product_type=ProductType.EQUITY,
         industry="Consumer Electronics",
         country="United States",
         priority_multiplier=1.0,
