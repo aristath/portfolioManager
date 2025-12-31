@@ -980,12 +980,16 @@ class TestExecuteRecommendation:
                         )
 
         # Verify trade was recorded
+        from unittest.mock import ANY
+
         mock_trade_execution_service.record_trade.assert_called_once_with(
             symbol="AAPL",
             side=TradeSide.BUY,
             quantity=5,
             price=160.0,
             order_id="order-123",
+            isin=ANY,
+            bucket_id=ANY,
         )
 
     @pytest.mark.asyncio
@@ -1239,7 +1243,11 @@ class TestExecuteSingleStep:
 
     @pytest.mark.asyncio
     async def test_executes_step_successfully(
-        self, mock_safety_service, mock_trade_execution_service, mock_tradernet_client
+        self,
+        mock_safety_service,
+        mock_trade_execution_service,
+        mock_tradernet_client,
+        mock_stock_repo,
     ):
         """Test successful step execution."""
         from app.modules.planning.api.recommendations import _execute_single_step
@@ -1257,6 +1265,7 @@ class TestExecuteSingleStep:
             client=mock_tradernet_client,
             safety_service=mock_safety_service,
             trade_execution_service=mock_trade_execution_service,
+            security_repo=mock_stock_repo,
         )
 
         assert result["step"] == 1
@@ -1267,7 +1276,11 @@ class TestExecuteSingleStep:
 
     @pytest.mark.asyncio
     async def test_blocks_when_pending_order_exists(
-        self, mock_safety_service, mock_trade_execution_service, mock_tradernet_client
+        self,
+        mock_safety_service,
+        mock_trade_execution_service,
+        mock_tradernet_client,
+        mock_stock_repo,
     ):
         """Test that step is blocked when pending order exists."""
         from app.modules.planning.api.recommendations import _execute_single_step
@@ -1287,6 +1300,7 @@ class TestExecuteSingleStep:
             client=mock_tradernet_client,
             safety_service=mock_safety_service,
             trade_execution_service=mock_trade_execution_service,
+            security_repo=mock_stock_repo,
         )
 
         assert result["step"] == 2
@@ -1297,7 +1311,7 @@ class TestExecuteSingleStep:
 
     @pytest.mark.asyncio
     async def test_handles_failed_order(
-        self, mock_safety_service, mock_trade_execution_service
+        self, mock_safety_service, mock_trade_execution_service, mock_stock_repo
     ):
         """Test handling of failed order placement."""
         from app.modules.planning.api.recommendations import _execute_single_step
@@ -1318,6 +1332,7 @@ class TestExecuteSingleStep:
             client=mock_client,
             safety_service=mock_safety_service,
             trade_execution_service=mock_trade_execution_service,
+            security_repo=mock_stock_repo,
         )
 
         assert result["step"] == 1
@@ -1326,7 +1341,7 @@ class TestExecuteSingleStep:
 
     @pytest.mark.asyncio
     async def test_handles_exception_during_execution(
-        self, mock_safety_service, mock_trade_execution_service
+        self, mock_safety_service, mock_trade_execution_service, mock_stock_repo
     ):
         """Test handling of exception during step execution."""
         from app.modules.planning.api.recommendations import _execute_single_step
@@ -1347,6 +1362,7 @@ class TestExecuteSingleStep:
             client=mock_client,
             safety_service=mock_safety_service,
             trade_execution_service=mock_trade_execution_service,
+            security_repo=mock_stock_repo,
         )
 
         assert result["step"] == 3
@@ -1355,7 +1371,11 @@ class TestExecuteSingleStep:
 
     @pytest.mark.asyncio
     async def test_records_trade_after_successful_order(
-        self, mock_safety_service, mock_trade_execution_service, mock_tradernet_client
+        self,
+        mock_safety_service,
+        mock_trade_execution_service,
+        mock_tradernet_client,
+        mock_stock_repo,
     ):
         """Test that trade is recorded after successful order."""
         from app.modules.planning.api.recommendations import _execute_single_step
@@ -1373,7 +1393,10 @@ class TestExecuteSingleStep:
             client=mock_tradernet_client,
             safety_service=mock_safety_service,
             trade_execution_service=mock_trade_execution_service,
+            security_repo=mock_stock_repo,
         )
+
+        from unittest.mock import ANY
 
         mock_trade_execution_service.record_trade.assert_called_once_with(
             symbol="AAPL",
@@ -1381,6 +1404,8 @@ class TestExecuteSingleStep:
             quantity=5,
             price=160.0,
             order_id="order-123",
+            isin=ANY,
+            bucket_id=ANY,
         )
 
 

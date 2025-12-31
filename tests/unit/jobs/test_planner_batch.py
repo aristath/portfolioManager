@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.domain.value_objects.product_type import ProductType
 from app.shared.domain.value_objects.currency import Currency
 
 
@@ -38,6 +39,7 @@ def mock_stock_repo():
     mock_stock = Security(
         symbol="AAPL",
         name="Apple Inc.",
+        product_type=ProductType.EQUITY,
         country="United States",
         currency=Currency.USD,
     )
@@ -131,6 +133,7 @@ class TestProcessPlannerBatchJob:
                     mock_stock = Security(
                         symbol="AAPL",
                         name="Apple Inc.",
+                        product_type=ProductType.EQUITY,
                         country="United States",
                         currency=Currency.USD,
                     )

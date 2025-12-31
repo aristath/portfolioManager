@@ -2,11 +2,17 @@
 
 from pathlib import Path
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",  # Ignore extra fields from .env (like legacy finnhub_api_key)
+    )
 
     # Application
     app_name: str = "Arduino Trader"
@@ -59,10 +65,6 @@ class Settings(BaseSettings):
 
     # External API rate limiting
     external_api_rate_limit_delay: float = 0.33  # Delay between API calls (3 req/sec)
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
 
 
 settings = Settings()

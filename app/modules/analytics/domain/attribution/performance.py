@@ -4,6 +4,7 @@ Calculates performance attribution by geography and industry.
 """
 
 import logging
+import math
 from typing import Dict
 
 import pandas as pd
@@ -50,29 +51,29 @@ def _calculate_annualized_attribution(
     }
 
     for country, contributions in geo_returns.items():
-        if contributions:
+        if not contributions:
+            attribution["country"][country] = 0.0
+        else:
             total_return = sum(contributions)
             if total_return <= -1:
                 annualized = -1.0
-            elif len(contributions) > 0:
-                annualized = (1 + total_return) ** (252 / len(contributions)) - 1
             else:
-                annualized = 0.0
+                annualized = (1 + total_return) ** (252 / len(contributions)) - 1
             attribution["country"][country] = (
-                float(annualized) if pd.api.types.is_finite(annualized) else 0.0
+                float(annualized) if math.isfinite(annualized) else 0.0
             )
 
     for ind, contributions in industry_returns.items():
-        if contributions:
+        if not contributions:
+            attribution["industry"][ind] = 0.0
+        else:
             total_return = sum(contributions)
             if total_return <= -1:
                 annualized = -1.0
-            elif len(contributions) > 0:
-                annualized = (1 + total_return) ** (252 / len(contributions)) - 1
             else:
-                annualized = 0.0
+                annualized = (1 + total_return) ** (252 / len(contributions)) - 1
             attribution["industry"][ind] = (
-                float(annualized) if pd.api.types.is_finite(annualized) else 0.0
+                float(annualized) if math.isfinite(annualized) else 0.0
             )
 
     return attribution

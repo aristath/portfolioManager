@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS securities (
     last_synced TEXT,           -- When security data was last fully synced (daily pipeline)
     min_portfolio_target REAL,  -- Minimum target portfolio allocation percentage (0-20)
     max_portfolio_target REAL,  -- Maximum target portfolio allocation percentage (0-30)
+    bucket_id TEXT DEFAULT 'core',  -- Which bucket this security belongs to (core or satellite)
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -217,19 +218,24 @@ async def init_config_schema(db):
             "CREATE INDEX IF NOT EXISTS idx_securities_isin ON securities(isin)"
         )
 
+        # Create bucket_id index for new installs
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_securities_bucket ON securities(bucket_id)"
+        )
+
         # Record schema version
         await db.execute(
             "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
             (
-                10,
+                12,
                 now,
-                "Initial config schema with securities table, portfolio_hash recommendations, last_synced, country, fullExchangeName, portfolio targets, custom grouping, isin, and product_type",
+                "Initial config schema with securities table including bucket_id for multi-bucket portfolio support",
             ),
         )
 
         await db.commit()
         logger.info(
-            "Config database initialized with schema version 10 (securities table with product_type, portfolio_hash, last_synced, portfolio targets, custom grouping, isin)"
+            "Config database initialized with schema version 12 (securities table with bucket_id for multi-bucket support)"
         )
     elif current_version == 1:
         # Migration: Add recommendations table (version 1 -> 2)
@@ -340,7 +346,7 @@ async def init_config_schema(db):
         logger.info("Migrating config database to schema version 4 (last_synced)...")
 
         # Check if last_synced column exists
-        cursor = await db.execute("PRAGMA table_info(securities)")
+        cursor = await db.execute("PRAGMA table_info(stocks)")
         columns = [row[1] for row in await cursor.fetchall()]
 
         if "last_synced" not in columns:
@@ -363,7 +369,7 @@ async def init_config_schema(db):
         )
 
         # Check if country column exists
-        cursor = await db.execute("PRAGMA table_info(securities)")
+        cursor = await db.execute("PRAGMA table_info(stocks)")
         columns = [row[1] for row in await cursor.fetchall()]
 
         if "country" not in columns:
@@ -409,7 +415,7 @@ async def init_config_schema(db):
         )
 
         # Check if min_portfolio_target column exists
-        cursor = await db.execute("PRAGMA table_info(securities)")
+        cursor = await db.execute("PRAGMA table_info(stocks)")
         columns = [row[1] for row in await cursor.fetchall()]
 
         if "min_portfolio_target" not in columns:
@@ -621,6 +627,7 @@ async def init_config_schema(db):
                         last_synced TEXT,
                         min_portfolio_target REAL,
                         max_portfolio_target REAL,
+                        bucket_id TEXT DEFAULT 'core',
                         created_at TEXT NOT NULL,
                         updated_at TEXT NOT NULL
                     )
@@ -628,10 +635,21 @@ async def init_config_schema(db):
                 )
 
                 # Copy all data from stocks to securities
+                # Note: stocks table doesn't have bucket_id, so we set it to 'core' for all migrated records
                 await db.execute(
                     """
-                    INSERT INTO securities
-                    SELECT * FROM stocks
+                    INSERT INTO securities (
+                        symbol, yahoo_symbol, isin, name, product_type, industry, country,
+                        fullExchangeName, priority_multiplier, min_lot, active, allow_buy,
+                        allow_sell, currency, last_synced, min_portfolio_target,
+                        max_portfolio_target, bucket_id, created_at, updated_at
+                    )
+                    SELECT
+                        symbol, yahoo_symbol, isin, name, product_type, industry, country,
+                        fullExchangeName, priority_multiplier, min_lot, active, allow_buy,
+                        allow_sell, currency, last_synced, min_portfolio_target,
+                        max_portfolio_target, 'core', created_at, updated_at
+                    FROM stocks
                     """
                 )
 
@@ -736,6 +754,47 @@ async def init_config_schema(db):
         logger.info(
             "Config database migrated to schema version 11 (renamed security settings to security)"
         )
+        current_version = 11  # Continue to next migration
+
+    # =========================================================================
+    # Migration: Add bucket_id column to securities (version 11 -> 12)
+    # =========================================================================
+    if current_version == 11:
+        logger.info(
+            "Migrating config database to schema version 12 (bucket_id for multi-bucket support)..."
+        )
+
+        # Check if bucket_id column exists
+        cursor = await db.execute("PRAGMA table_info(securities)")
+        columns = [row[1] for row in await cursor.fetchall()]
+
+        if "bucket_id" not in columns:
+            await db.execute(
+                "ALTER TABLE securities ADD COLUMN bucket_id TEXT DEFAULT 'core'"
+            )
+            await db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_securities_bucket ON securities(bucket_id)"
+            )
+            logger.info("Added bucket_id column to securities table")
+
+        # Record migration
+        now = datetime.now().isoformat()
+        await db.execute(
+            """
+            INSERT INTO schema_version (version, applied_at, description)
+            VALUES (?, ?, ?)
+            """,
+            (
+                12,
+                now,
+                "Added bucket_id column to securities for multi-bucket portfolio support",
+            ),
+        )
+
+        await db.commit()
+        logger.info(
+            "Config database migrated to schema version 12 (bucket_id for multi-bucket support)"
+        )
 
 
 # =============================================================================
@@ -757,6 +816,8 @@ CREATE TABLE IF NOT EXISTS trades (
     currency_rate REAL,
     value_eur REAL,              -- Calculated trade value in EUR
     source TEXT DEFAULT 'tradernet',
+    bucket_id TEXT DEFAULT 'core',  -- Which bucket owns this trade
+    mode TEXT DEFAULT 'live',       -- 'live' or 'research' mode
     created_at TEXT NOT NULL
 );
 
@@ -764,6 +825,7 @@ CREATE INDEX IF NOT EXISTS idx_trades_symbol ON trades(symbol);
 CREATE INDEX IF NOT EXISTS idx_trades_executed_at ON trades(executed_at);
 CREATE INDEX IF NOT EXISTS idx_trades_order_id ON trades(order_id);
 CREATE INDEX IF NOT EXISTS idx_trades_symbol_side ON trades(symbol, side);
+-- bucket_id and mode indexes created in migration (version 3->4) or fresh DB init
 
 -- Cash flow transactions (append-only)
 CREATE TABLE IF NOT EXISTS cash_flows (
@@ -829,14 +891,18 @@ async def init_ledger_schema(db):
 
     if current_version == 0:
         now = datetime.now().isoformat()
-        # Create ISIN index for new databases
+        # Create indexes for new databases (including bucket_id and mode)
         await db.execute("CREATE INDEX IF NOT EXISTS idx_trades_isin ON trades(isin)")
         await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_trades_bucket ON trades(bucket_id)"
+        )
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_trades_mode ON trades(mode)")
+        await db.execute(
             "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
-            (3, now, "Initial ledger schema with ISIN column"),
+            (4, now, "Initial ledger schema with ISIN column and multi-bucket support"),
         )
         await db.commit()
-        logger.info("Ledger database initialized with schema version 3")
+        logger.info("Ledger database initialized with schema version 4")
     elif current_version == 1:
         # Migration: Add dividend_history table (version 1 -> 2)
         now = datetime.now().isoformat()
@@ -874,6 +940,46 @@ async def init_ledger_schema(db):
         )
         await db.commit()
         logger.info("Ledger database migrated to schema version 3")
+        current_version = 3  # Continue to next migration
+
+    if current_version == 3:
+        # Migration: Add bucket_id and mode columns to trades (version 3 -> 4)
+        now = datetime.now().isoformat()
+        logger.info(
+            "Migrating ledger database to schema version 4 (bucket_id and mode for multi-bucket support)..."
+        )
+
+        cursor = await db.execute("PRAGMA table_info(trades)")
+        columns = [row[1] for row in await cursor.fetchall()]
+
+        if "bucket_id" not in columns:
+            await db.execute(
+                "ALTER TABLE trades ADD COLUMN bucket_id TEXT DEFAULT 'core'"
+            )
+            await db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_trades_bucket ON trades(bucket_id)"
+            )
+            logger.info("Added bucket_id column to trades table")
+
+        if "mode" not in columns:
+            await db.execute("ALTER TABLE trades ADD COLUMN mode TEXT DEFAULT 'live'")
+            await db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_trades_mode ON trades(mode)"
+            )
+            logger.info(
+                "Added mode column and index to trades table (live vs research)"
+            )
+
+        await db.execute(
+            "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
+            (
+                4,
+                now,
+                "Added bucket_id and mode columns to trades for multi-bucket portfolio support",
+            ),
+        )
+        await db.commit()
+        logger.info("Ledger database migrated to schema version 4")
 
 
 # =============================================================================
@@ -896,10 +1002,11 @@ CREATE TABLE IF NOT EXISTS positions (
     unrealized_pnl_pct REAL,
     last_updated TEXT,
     first_bought_at TEXT,
-    last_sold_at TEXT
+    last_sold_at TEXT,
+    bucket_id TEXT DEFAULT 'core'  -- Which bucket owns this position
 );
 
--- Note: idx_positions_isin is created in migration or init_state_schema for new databases
+-- Note: idx_positions_isin and idx_positions_bucket are created in migration or init_state_schema for new databases
 
 -- Security scores (cached calculations)
 CREATE TABLE IF NOT EXISTS scores (
@@ -970,16 +1077,19 @@ async def init_state_schema(db):
 
     if current_version == 0:
         now = datetime.now().isoformat()
-        # Create ISIN index for new databases
+        # Create indexes for new databases
         await db.execute(
             "CREATE INDEX IF NOT EXISTS idx_positions_isin ON positions(isin)"
         )
         await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_positions_bucket ON positions(bucket_id)"
+        )
+        await db.execute(
             "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
-            (2, now, "Initial state schema with ISIN column"),
+            (4, now, "Initial state schema with ISIN column and multi-bucket support"),
         )
         await db.commit()
-        logger.info("State database initialized with schema version 2")
+        logger.info("State database initialized with schema version 4")
     elif current_version == 1:
         # Migration: Add ISIN column to positions (version 1 -> 2)
         now = datetime.now().isoformat()
@@ -1031,6 +1141,40 @@ async def init_state_schema(db):
             logger.info("State database migrated to schema version 3")
         except Exception as e:
             logger.error(f"Failed to migrate state schema to version 3: {e}")
+            await db.rollback()
+
+    # Migration: Add bucket_id column to positions (version 3 -> 4)
+    if current_version == 3:
+        now = datetime.now().isoformat()
+        logger.info(
+            "Migrating state database to schema version 4 (bucket_id for multi-bucket support)..."
+        )
+
+        try:
+            cursor = await db.execute("PRAGMA table_info(positions)")
+            columns = [row[1] for row in await cursor.fetchall()]
+
+            if "bucket_id" not in columns:
+                await db.execute(
+                    "ALTER TABLE positions ADD COLUMN bucket_id TEXT DEFAULT 'core'"
+                )
+                await db.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_positions_bucket ON positions(bucket_id)"
+                )
+                logger.info("Added bucket_id column to positions table")
+
+            await db.execute(
+                "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
+                (
+                    4,
+                    now,
+                    "Added bucket_id column to positions for multi-bucket portfolio support",
+                ),
+            )
+            await db.commit()
+            logger.info("State database migrated to schema version 4")
+        except Exception as e:
+            logger.error(f"Failed to migrate state schema to version 4: {e}")
             await db.rollback()
 
 

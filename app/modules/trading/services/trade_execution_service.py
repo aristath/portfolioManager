@@ -28,6 +28,16 @@ from app.shared.utils import safe_parse_datetime_string
 
 logger = logging.getLogger(__name__)
 
+# Optional dependency on satellites module for bucket balance tracking
+try:
+    from app.modules.satellites.services.balance_service import BalanceService
+
+    BALANCE_SERVICE_AVAILABLE = True
+except ImportError:
+    BALANCE_SERVICE_AVAILABLE = False
+    BalanceService = None  # type: ignore
+    logger.debug("BalanceService not available - bucket balance updates disabled")
+
 
 async def _calculate_commission_in_trade_currency(
     trade_value: float,
@@ -449,11 +459,27 @@ async def _validate_trade_before_execution(
     return None, 0
 
 
-async def _execute_and_record_trade(trade, client, service) -> Optional[dict]:
+async def _execute_and_record_trade(
+    trade, client, service, security_repo
+) -> Optional[dict]:
     """Execute trade and record it if successful."""
     execution_result = await _execute_single_trade(trade, client)
     if execution_result and execution_result.get("status") == "success":
         result = execution_result["result"]
+
+        # Look up security to get bucket_id and isin
+        bucket_id = "core"
+        isin = None
+        try:
+            security = await security_repo.get_by_symbol(trade.symbol)
+            if security:
+                bucket_id = getattr(security, "bucket_id", "core")
+                isin = getattr(security, "isin", None)
+        except Exception as e:
+            logger.warning(
+                f"Failed to lookup security {trade.symbol} for bucket attribution: {e}"
+            )
+
         await service.record_trade(
             symbol=trade.symbol,
             side=trade.side,
@@ -463,6 +489,8 @@ async def _execute_and_record_trade(trade, client, service) -> Optional[dict]:
             currency=trade.currency,
             estimated_price=trade.estimated_price,
             source="tradernet",
+            isin=isin,
+            bucket_id=bucket_id,
         )
         return execution_result
     return execution_result
@@ -510,7 +538,9 @@ async def _process_single_trade(
         if validation_result:
             return validation_result, skipped
 
-        execution_result = await _execute_and_record_trade(trade, client, service)
+        execution_result = await _execute_and_record_trade(
+            trade, client, service, security_repo
+        )
         return execution_result, 0
 
     except Exception as e:
@@ -645,6 +675,9 @@ class TradeExecutionService:
         self._exchange_rate_service = exchange_rate_service
         self._settings_repo = settings_repo
 
+        # Initialize balance service for bucket tracking (if available)
+        self._balance_service = BalanceService() if BALANCE_SERVICE_AVAILABLE else None
+
     async def record_trade(
         self,
         symbol: str,
@@ -655,6 +688,9 @@ class TradeExecutionService:
         currency: Optional[str] = None,
         estimated_price: Optional[float] = None,
         source: str = "tradernet",
+        isin: Optional[str] = None,
+        bucket_id: str = "core",
+        mode: str = "live",
     ) -> Optional[Trade]:
         """
         Record a trade in the database.
@@ -670,6 +706,9 @@ class TradeExecutionService:
             currency: Trade currency (optional)
             estimated_price: Estimated price to use if price <= 0 (optional)
             source: Trade source (default: "tradernet")
+            isin: Security ISIN for broker-agnostic identification (optional)
+            bucket_id: Which bucket owns this trade (default: "core")
+            mode: Trading mode - 'live' or 'research' (default: "live")
 
         Returns:
             Trade object if recorded successfully, None if duplicate or error
@@ -686,6 +725,10 @@ class TradeExecutionService:
             currency=currency,
             estimated_price=estimated_price,
             source=source,
+            isin=isin,
+            bucket_id=bucket_id,
+            mode=mode,
+            balance_service=self._balance_service,
         )
 
     async def execute_trades(

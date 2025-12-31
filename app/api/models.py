@@ -48,12 +48,16 @@ class CashBreakdownResponse(BaseModel):
 class DailyReturn(BaseModel):
     """Daily return data point."""
 
+    model_config = {"populate_by_name": True}
+
     date: str
     return_: float = Field(..., alias="return", description="Return value")
 
 
 class MonthlyReturn(BaseModel):
     """Monthly return data point."""
+
+    model_config = {"populate_by_name": True}
 
     month: str
     return_: float = Field(..., alias="return", description="Return value")
