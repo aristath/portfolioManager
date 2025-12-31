@@ -1,17 +1,23 @@
 """
-Backward compatibility re-export (temporary - will be removed in Phase 5).
+Portfolio Analytics - PyFolio integration for performance analysis.
 
-All analytics functionality has been moved to app.modules.analytics.domain.
+This module provides portfolio performance analytics by reconstructing
+portfolio history from trades and generating comprehensive metrics.
 """
 
-# Re-export all analytics functions from the new module location
-from app.modules.analytics.domain import (
-    calculate_portfolio_returns,
+from app.modules.analytics.domain.attribution import (
     get_factor_attribution,
     get_performance_attribution,
+)
+from app.modules.analytics.domain.metrics import (
+    calculate_portfolio_returns,
     get_portfolio_metrics,
+)
+from app.modules.analytics.domain.position import (
     get_position_drawdown,
     get_position_risk_metrics,
+)
+from app.modules.analytics.domain.reconstruction import (
     reconstruct_cash_balance,
     reconstruct_historical_positions,
     reconstruct_portfolio_values,
@@ -28,3 +34,4 @@ __all__ = [
     "get_position_drawdown",
     "get_factor_attribution",
 ]
+

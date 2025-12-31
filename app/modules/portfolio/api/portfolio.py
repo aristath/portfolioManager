@@ -248,7 +248,7 @@ async def get_portfolio_analytics(days: int = 365):
         Dict with returns, risk_metrics, attribution, drawdowns
     """
     try:
-        from app.domain.analytics import (
+        from app.modules.analytics.domain import (
             calculate_portfolio_returns,
             get_performance_attribution,
             get_portfolio_metrics,

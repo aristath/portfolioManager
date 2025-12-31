@@ -7,8 +7,8 @@ import logging
 
 import pandas as pd
 
-from app.domain.analytics.reconstruction.cash import reconstruct_cash_balance
-from app.domain.analytics.reconstruction.positions import (
+from app.modules.analytics.domain.reconstruction.cash import reconstruct_cash_balance
+from app.modules.analytics.domain.reconstruction.positions import (
     reconstruct_historical_positions,
 )
 from app.repositories import HistoryRepository

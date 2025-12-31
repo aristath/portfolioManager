@@ -8,7 +8,7 @@ from typing import Dict
 
 import pandas as pd
 
-from app.domain.analytics.reconstruction.positions import (
+from app.modules.analytics.domain.reconstruction.positions import (
     reconstruct_historical_positions,
 )
 from app.repositories import HistoryRepository, StockRepository
