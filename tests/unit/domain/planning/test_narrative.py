@@ -12,7 +12,7 @@ class TestAddStrategySummary:
 
     def test_windfall_and_averaging(self):
         """Test narrative for windfall sells with averaging buys."""
-        from app.domain.planning.narrative import _add_strategy_summary
+        from app.modules.planning.domain.narrative import _add_strategy_summary
 
         parts = []
         _add_strategy_summary(
@@ -29,7 +29,7 @@ class TestAddStrategySummary:
 
     def test_windfall_only(self):
         """Test narrative for windfall sells only."""
-        from app.domain.planning.narrative import _add_strategy_summary
+        from app.modules.planning.domain.narrative import _add_strategy_summary
 
         parts = []
         _add_strategy_summary(
@@ -45,7 +45,7 @@ class TestAddStrategySummary:
 
     def test_averaging_only(self):
         """Test narrative for averaging buys only."""
-        from app.domain.planning.narrative import _add_strategy_summary
+        from app.modules.planning.domain.narrative import _add_strategy_summary
 
         parts = []
         _add_strategy_summary(
@@ -61,7 +61,7 @@ class TestAddStrategySummary:
 
     def test_rebalance(self):
         """Test narrative for rebalancing."""
-        from app.domain.planning.narrative import _add_strategy_summary
+        from app.modules.planning.domain.narrative import _add_strategy_summary
 
         parts = []
         _add_strategy_summary(
@@ -77,7 +77,7 @@ class TestAddStrategySummary:
 
     def test_buys_only(self):
         """Test narrative for buys only."""
-        from app.domain.planning.narrative import _add_strategy_summary
+        from app.modules.planning.domain.narrative import _add_strategy_summary
 
         parts = []
         _add_strategy_summary(
@@ -93,7 +93,7 @@ class TestAddStrategySummary:
 
     def test_sells_only(self):
         """Test narrative for sells only."""
-        from app.domain.planning.narrative import _add_strategy_summary
+        from app.modules.planning.domain.narrative import _add_strategy_summary
 
         parts = []
         _add_strategy_summary(
@@ -113,7 +113,7 @@ class TestAddStepSummary:
 
     def test_includes_action_count(self):
         """Test that action count is included."""
-        from app.domain.planning.narrative import _add_step_summary
+        from app.modules.planning.domain.narrative import _add_step_summary
 
         parts = []
         mock_step1 = MagicMock()
@@ -134,7 +134,7 @@ class TestAddStepSummary:
 
     def test_includes_sell_summary(self):
         """Test that sell summary is included."""
-        from app.domain.planning.narrative import _add_step_summary
+        from app.modules.planning.domain.narrative import _add_step_summary
 
         parts = []
         mock_sell = MagicMock()
@@ -154,7 +154,7 @@ class TestAddStepSummary:
 
     def test_includes_buy_summary(self):
         """Test that buy summary is included."""
-        from app.domain.planning.narrative import _add_step_summary
+        from app.modules.planning.domain.narrative import _add_step_summary
 
         parts = []
         mock_buy = MagicMock()
@@ -176,7 +176,7 @@ class TestAddExpectedOutcome:
 
     def test_positive_improvement(self):
         """Test narrative for positive improvement."""
-        from app.domain.planning.narrative import _add_expected_outcome
+        from app.modules.planning.domain.narrative import _add_expected_outcome
 
         parts = []
         _add_expected_outcome(
@@ -190,7 +190,7 @@ class TestAddExpectedOutcome:
 
     def test_negative_improvement(self):
         """Test narrative for negative improvement."""
-        from app.domain.planning.narrative import _add_expected_outcome
+        from app.modules.planning.domain.narrative import _add_expected_outcome
 
         parts = []
         _add_expected_outcome(
@@ -202,7 +202,7 @@ class TestAddExpectedOutcome:
 
     def test_zero_improvement(self):
         """Test narrative for no change."""
-        from app.domain.planning.narrative import _add_expected_outcome
+        from app.modules.planning.domain.narrative import _add_expected_outcome
 
         parts = []
         _add_expected_outcome(
@@ -218,7 +218,7 @@ class TestGenerateSellNarrative:
 
     def test_windfall_narrative(self):
         """Test windfall sell narrative."""
-        from app.domain.planning.narrative import _generate_sell_narrative
+        from app.modules.planning.domain.narrative import _generate_sell_narrative
 
         context = MagicMock()
 
@@ -239,7 +239,7 @@ class TestGenerateSellNarrative:
 
     def test_profit_taking_narrative(self):
         """Test profit taking narrative."""
-        from app.domain.planning.narrative import _generate_sell_narrative
+        from app.modules.planning.domain.narrative import _generate_sell_narrative
 
         context = MagicMock()
 
@@ -258,7 +258,7 @@ class TestGenerateSellNarrative:
 
     def test_rebalance_overweight_narrative(self):
         """Test rebalance with overweight country."""
-        from app.domain.planning.narrative import _generate_sell_narrative
+        from app.modules.planning.domain.narrative import _generate_sell_narrative
 
         context = MagicMock()
 
@@ -278,7 +278,7 @@ class TestGenerateSellNarrative:
 
     def test_includes_buy_opportunity_context(self):
         """Test that buy opportunities are mentioned."""
-        from app.domain.planning.narrative import _generate_sell_narrative
+        from app.modules.planning.domain.narrative import _generate_sell_narrative
 
         context = MagicMock()
         mock_buy = MagicMock()
@@ -302,7 +302,7 @@ class TestGenerateBuyNarrative:
 
     def test_averaging_down_narrative(self):
         """Test averaging down buy narrative."""
-        from app.domain.planning.narrative import _generate_buy_narrative
+        from app.modules.planning.domain.narrative import _generate_buy_narrative
 
         context = MagicMock()
         context.stock_dividends = {}
@@ -323,7 +323,7 @@ class TestGenerateBuyNarrative:
 
     def test_rebalance_underweight_narrative(self):
         """Test rebalance with underweight country."""
-        from app.domain.planning.narrative import _generate_buy_narrative
+        from app.modules.planning.domain.narrative import _generate_buy_narrative
 
         context = MagicMock()
         context.stock_dividends = {}
@@ -344,7 +344,7 @@ class TestGenerateBuyNarrative:
 
     def test_quality_narrative(self):
         """Test quality/opportunity buy narrative."""
-        from app.domain.planning.narrative import _generate_buy_narrative
+        from app.modules.planning.domain.narrative import _generate_buy_narrative
 
         context = MagicMock()
         context.stock_dividends = {}
@@ -364,7 +364,7 @@ class TestGenerateBuyNarrative:
 
     def test_includes_dividend_yield(self):
         """Test that high dividend yield is mentioned."""
-        from app.domain.planning.narrative import _generate_buy_narrative
+        from app.modules.planning.domain.narrative import _generate_buy_narrative
 
         context = MagicMock()
         context.stock_dividends = {"T.US": 0.07}  # 7% yield
@@ -388,7 +388,7 @@ class TestGenerateStepNarrative:
 
     def test_generates_sell_narrative(self):
         """Test that sell actions get sell narrative."""
-        from app.domain.planning.narrative import generate_step_narrative
+        from app.modules.planning.domain.narrative import generate_step_narrative
         from app.domain.value_objects.trade_side import TradeSide
 
         action = MagicMock()
@@ -409,7 +409,7 @@ class TestGenerateStepNarrative:
 
     def test_generates_buy_narrative(self):
         """Test that buy actions get buy narrative."""
-        from app.domain.planning.narrative import generate_step_narrative
+        from app.modules.planning.domain.narrative import generate_step_narrative
         from app.domain.value_objects.trade_side import TradeSide
 
         action = MagicMock()
@@ -433,7 +433,7 @@ class TestGeneratePlanNarrative:
 
     def test_empty_plan(self):
         """Test narrative for empty plan."""
-        from app.domain.planning.narrative import generate_plan_narrative
+        from app.modules.planning.domain.narrative import generate_plan_narrative
 
         narrative = generate_plan_narrative(
             steps=[],
@@ -446,7 +446,7 @@ class TestGeneratePlanNarrative:
 
     def test_includes_all_components(self):
         """Test that all narrative components are included."""
-        from app.domain.planning.narrative import generate_plan_narrative
+        from app.modules.planning.domain.narrative import generate_plan_narrative
         from app.domain.value_objects.trade_side import TradeSide
 
         mock_sell = MagicMock()
@@ -479,7 +479,7 @@ class TestGenerateTradeoffExplanation:
 
     def test_no_explanation_for_positive_individual(self):
         """Test no explanation when individual impact is positive."""
-        from app.domain.planning.narrative import generate_tradeoff_explanation
+        from app.modules.planning.domain.narrative import generate_tradeoff_explanation
         from app.domain.value_objects.trade_side import TradeSide
 
         action = MagicMock()
@@ -496,7 +496,7 @@ class TestGenerateTradeoffExplanation:
 
     def test_no_explanation_when_sequence_worse(self):
         """Test no explanation when sequence doesn't improve."""
-        from app.domain.planning.narrative import generate_tradeoff_explanation
+        from app.modules.planning.domain.narrative import generate_tradeoff_explanation
         from app.domain.value_objects.trade_side import TradeSide
 
         action = MagicMock()
@@ -513,7 +513,7 @@ class TestGenerateTradeoffExplanation:
 
     def test_explains_tradeoff(self):
         """Test trade-off explanation when sequence improves."""
-        from app.domain.planning.narrative import generate_tradeoff_explanation
+        from app.modules.planning.domain.narrative import generate_tradeoff_explanation
         from app.domain.value_objects.trade_side import TradeSide
 
         action = MagicMock()
@@ -537,7 +537,7 @@ class TestFormatActionSummary:
 
     def test_formats_sell(self):
         """Test sell action formatting."""
-        from app.domain.planning.narrative import format_action_summary
+        from app.modules.planning.domain.narrative import format_action_summary
         from app.domain.value_objects.trade_side import TradeSide
 
         action = MagicMock()
@@ -556,7 +556,7 @@ class TestFormatActionSummary:
 
     def test_formats_buy(self):
         """Test buy action formatting."""
-        from app.domain.planning.narrative import format_action_summary
+        from app.modules.planning.domain.narrative import format_action_summary
         from app.domain.value_objects.trade_side import TradeSide
 
         action = MagicMock()

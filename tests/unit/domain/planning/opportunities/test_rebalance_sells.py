@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.domain.models import Position, Stock
-from app.domain.planning.opportunities.rebalance_sells import (
+from app.modules.planning.domain.opportunities.rebalance_sells import (
     identify_rebalance_sell_opportunities,
 )
 from app.modules.scoring.domain.models import PortfolioContext
