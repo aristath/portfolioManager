@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS securities (
     last_synced TEXT,           -- When security data was last fully synced (daily pipeline)
     min_portfolio_target REAL,  -- Minimum target portfolio allocation percentage (0-20)
     max_portfolio_target REAL,  -- Maximum target portfolio allocation percentage (0-30)
+    bucket_id TEXT DEFAULT 'core',  -- Which bucket this security belongs to (core or satellite)
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -217,19 +218,24 @@ async def init_config_schema(db):
             "CREATE INDEX IF NOT EXISTS idx_securities_isin ON securities(isin)"
         )
 
+        # Create bucket_id index for new installs
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_securities_bucket ON securities(bucket_id)"
+        )
+
         # Record schema version
         await db.execute(
             "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
             (
-                10,
+                12,
                 now,
-                "Initial config schema with securities table, portfolio_hash recommendations, last_synced, country, fullExchangeName, portfolio targets, custom grouping, isin, and product_type",
+                "Initial config schema with securities table including bucket_id for multi-bucket portfolio support",
             ),
         )
 
         await db.commit()
         logger.info(
-            "Config database initialized with schema version 10 (securities table with product_type, portfolio_hash, last_synced, portfolio targets, custom grouping, isin)"
+            "Config database initialized with schema version 12 (securities table with bucket_id for multi-bucket support)"
         )
     elif current_version == 1:
         # Migration: Add recommendations table (version 1 -> 2)
@@ -735,6 +741,47 @@ async def init_config_schema(db):
         await db.commit()
         logger.info(
             "Config database migrated to schema version 11 (renamed security settings to security)"
+        )
+        current_version = 11  # Continue to next migration
+
+    # =========================================================================
+    # Migration: Add bucket_id column to securities (version 11 -> 12)
+    # =========================================================================
+    if current_version == 11:
+        logger.info(
+            "Migrating config database to schema version 12 (bucket_id for multi-bucket support)..."
+        )
+
+        # Check if bucket_id column exists
+        cursor = await db.execute("PRAGMA table_info(securities)")
+        columns = [row[1] for row in await cursor.fetchall()]
+
+        if "bucket_id" not in columns:
+            await db.execute(
+                "ALTER TABLE securities ADD COLUMN bucket_id TEXT DEFAULT 'core'"
+            )
+            await db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_securities_bucket ON securities(bucket_id)"
+            )
+            logger.info("Added bucket_id column to securities table")
+
+        # Record migration
+        now = datetime.now().isoformat()
+        await db.execute(
+            """
+            INSERT INTO schema_version (version, applied_at, description)
+            VALUES (?, ?, ?)
+            """,
+            (
+                12,
+                now,
+                "Added bucket_id column to securities for multi-bucket portfolio support",
+            ),
+        )
+
+        await db.commit()
+        logger.info(
+            "Config database migrated to schema version 12 (bucket_id for multi-bucket support)"
         )
 
 

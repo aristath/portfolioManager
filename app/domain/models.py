@@ -54,6 +54,7 @@ class Security:
     max_portfolio_target: Optional[float] = (
         None  # Maximum target portfolio allocation percentage (0-30)
     )
+    bucket_id: str = "core"  # Which bucket this security belongs to (core or satellite)
 
     def __post_init__(self):
         """Validate security data."""

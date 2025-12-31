@@ -32,6 +32,11 @@ from app.modules.portfolio.database.portfolio_repository import PortfolioReposit
 from app.modules.portfolio.database.position_repository import PositionRepository
 from app.modules.portfolio.services.portfolio_service import PortfolioService
 from app.modules.rebalancing.services.rebalancing_service import RebalancingService
+from app.modules.satellites.database.balance_repository import BalanceRepository
+from app.modules.satellites.database.bucket_repository import BucketRepository
+from app.modules.satellites.services.balance_service import BalanceService
+from app.modules.satellites.services.bucket_service import BucketService
+from app.modules.satellites.services.reconciliation_service import ReconciliationService
 from app.modules.scoring.services.scoring_service import ScoringService
 from app.modules.trading.services.trade_execution_service import TradeExecutionService
 from app.modules.trading.services.trade_safety_service import TradeSafetyService
@@ -105,6 +110,16 @@ def get_grouping_repository() -> GroupingRepository:
     return GroupingRepository()
 
 
+def get_bucket_repository() -> BucketRepository:
+    """Get BucketRepository instance."""
+    return BucketRepository()
+
+
+def get_balance_repository() -> BalanceRepository:
+    """Get BalanceRepository instance."""
+    return BalanceRepository()
+
+
 # Infrastructure Dependencies
 
 
@@ -143,6 +158,8 @@ CalculationsRepositoryDep = Annotated[
     CalculationsRepository, Depends(get_calculations_repository)
 ]
 GroupingRepositoryDep = Annotated[GroupingRepository, Depends(get_grouping_repository)]
+BucketRepositoryDep = Annotated[BucketRepository, Depends(get_bucket_repository)]
+BalanceRepositoryDep = Annotated[BalanceRepository, Depends(get_balance_repository)]
 
 # Infrastructure dependency type aliases
 DatabaseManagerDep = Annotated[DatabaseManager, Depends(get_database_manager)]
@@ -341,4 +358,47 @@ def get_security_setup_service(
 
 SecuritySetupServiceDep = Annotated[
     SecuritySetupService, Depends(get_security_setup_service)
+]
+
+
+# Satellite Service Dependencies
+
+
+def get_bucket_service(
+    bucket_repo: BucketRepositoryDep,
+    balance_repo: BalanceRepositoryDep,
+) -> BucketService:
+    """Get BucketService instance."""
+    return BucketService(
+        bucket_repo=bucket_repo,
+        balance_repo=balance_repo,
+    )
+
+
+def get_balance_service(
+    balance_repo: BalanceRepositoryDep,
+    bucket_repo: BucketRepositoryDep,
+) -> BalanceService:
+    """Get BalanceService instance."""
+    return BalanceService(
+        balance_repo=balance_repo,
+        bucket_repo=bucket_repo,
+    )
+
+
+def get_reconciliation_service(
+    balance_repo: BalanceRepositoryDep,
+    bucket_repo: BucketRepositoryDep,
+) -> ReconciliationService:
+    """Get ReconciliationService instance."""
+    return ReconciliationService(
+        balance_repo=balance_repo,
+        bucket_repo=bucket_repo,
+    )
+
+
+BucketServiceDep = Annotated[BucketService, Depends(get_bucket_service)]
+BalanceServiceDep = Annotated[BalanceService, Depends(get_balance_service)]
+ReconciliationServiceDep = Annotated[
+    ReconciliationService, Depends(get_reconciliation_service)
 ]

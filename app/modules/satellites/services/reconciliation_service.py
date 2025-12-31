@@ -177,9 +177,7 @@ class ReconciliationService:
             results.append(result)
         return results
 
-    async def get_balance_breakdown(
-        self, currency: str
-    ) -> Dict[str, float]:
+    async def get_balance_breakdown(self, currency: str) -> Dict[str, float]:
         """Get breakdown of virtual balances by bucket.
 
         Useful for debugging reconciliation issues.
@@ -331,17 +329,19 @@ class ReconciliationService:
         for bucket_id in breakdown.keys():
             txs = await self._balance_repo.get_recent_transactions(bucket_id, days=7)
             for tx in txs:
-                all_transactions.append({
-                    "bucket_id": tx.bucket_id,
-                    "type": tx.type.value,
-                    "amount": tx.amount,
-                    "currency": tx.currency,
-                    "created_at": tx.created_at,
-                    "description": tx.description,
-                })
+                all_transactions.append(
+                    {
+                        "bucket_id": tx.bucket_id,
+                        "type": tx.type.value,
+                        "amount": tx.amount,
+                        "currency": tx.currency,
+                        "created_at": tx.created_at,
+                        "description": tx.description,
+                    }
+                )
 
         # Sort by time
-        all_transactions.sort(key=lambda x: x["created_at"], reverse=True)
+        all_transactions.sort(key=lambda x: x["created_at"] or "", reverse=True)
 
         return {
             "currency": currency,

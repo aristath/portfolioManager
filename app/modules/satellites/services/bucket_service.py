@@ -92,7 +92,11 @@ class BucketService:
             id=satellite_id,
             name=name,
             type=BucketType.SATELLITE,
-            status=BucketStatus.RESEARCH if start_in_research else BucketStatus.ACCUMULATING,
+            status=(
+                BucketStatus.RESEARCH
+                if start_in_research
+                else BucketStatus.ACCUMULATING
+            ),
             notes=notes,
             target_pct=0.0,  # Starts with no allocation
             min_pct=min_pct,
@@ -137,6 +141,8 @@ class BucketService:
             satellite_id, BucketStatus.ACTIVE
         )
         logger.info(f"Activated satellite '{satellite_id}'")
+        # We know the bucket exists since we checked above
+        assert updated is not None
         return updated
 
     async def pause_bucket(self, bucket_id: str) -> Bucket:
@@ -163,6 +169,7 @@ class BucketService:
 
         updated = await self._bucket_repo.update_status(bucket_id, BucketStatus.PAUSED)
         logger.info(f"Paused bucket '{bucket_id}'")
+        assert updated is not None
         return updated
 
     async def resume_bucket(self, bucket_id: str) -> Bucket:
@@ -198,6 +205,7 @@ class BucketService:
 
         updated = await self._bucket_repo.update_status(bucket_id, new_status)
         logger.info(f"Resumed bucket '{bucket_id}' to '{new_status.value}' status")
+        assert updated is not None
         return updated
 
     async def hibernate_bucket(self, bucket_id: str) -> Bucket:
@@ -223,12 +231,15 @@ class BucketService:
             raise ValueError("Cannot hibernate core bucket")
 
         if bucket.status in (BucketStatus.RETIRED, BucketStatus.RESEARCH):
-            raise ValueError(f"Cannot hibernate bucket in '{bucket.status.value}' status")
+            raise ValueError(
+                f"Cannot hibernate bucket in '{bucket.status.value}' status"
+            )
 
         updated = await self._bucket_repo.update_status(
             bucket_id, BucketStatus.HIBERNATING
         )
         logger.info(f"Hibernated bucket '{bucket_id}'")
+        assert updated is not None
         return updated
 
     async def retire_satellite(self, satellite_id: str) -> Bucket:
@@ -276,6 +287,7 @@ class BucketService:
             satellite_id, BucketStatus.RETIRED
         )
         logger.info(f"Retired satellite '{satellite_id}'")
+        assert updated is not None
         return updated
 
     # Settings methods
@@ -330,9 +342,7 @@ class BucketService:
         else:
             # Increment consecutive losses
             new_count = await self._bucket_repo.increment_consecutive_losses(bucket_id)
-            logger.debug(
-                f"Consecutive losses for '{bucket_id}': {new_count}"
-            )
+            logger.debug(f"Consecutive losses for '{bucket_id}': {new_count}")
 
             # Check circuit breaker
             if new_count >= bucket.max_consecutive_losses:
@@ -346,7 +356,10 @@ class BucketService:
                     f"after {new_count} consecutive losses"
                 )
 
-        return await self._bucket_repo.get_by_id(bucket_id)
+        result = await self._bucket_repo.get_by_id(bucket_id)
+        # We know bucket exists since we checked above
+        assert result is not None
+        return result
 
     async def update_high_water_mark(
         self, bucket_id: str, current_value: float
@@ -371,6 +384,7 @@ class BucketService:
             logger.debug(
                 f"Updated high water mark for '{bucket_id}' to {current_value:.2f}"
             )
+            assert updated is not None
             return updated
 
         return bucket

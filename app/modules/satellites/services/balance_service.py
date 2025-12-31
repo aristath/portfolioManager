@@ -150,9 +150,7 @@ class BalanceService:
         )
         await self._balance_repo.record_transaction(tx)
 
-        logger.info(
-            f"Recorded dividend for '{bucket_id}': {amount:.2f} {currency}"
-        )
+        logger.info(f"Recorded dividend for '{bucket_id}': {amount:.2f} {currency}")
         return balance
 
     async def transfer_between_buckets(
@@ -307,16 +305,19 @@ class BalanceService:
 
             # Filter to only accumulating or active satellites
             eligible = [
-                s for s in satellites
+                s
+                for s in satellites
                 if s.status in (BucketStatus.ACCUMULATING, BucketStatus.ACTIVE)
-                and s.target_pct and s.target_pct > 0
+                and s.target_pct
+                and s.target_pct > 0
             ]
 
             if eligible:
                 # Calculate how far below target each is
                 deficits = []
                 for sat in eligible:
-                    target_amount = new_total * sat.target_pct
+                    # target_pct is guaranteed non-None by the filter above
+                    target_amount = new_total * (sat.target_pct or 0.0)
                     current = await self._balance_repo.get_balance_amount(
                         sat.id, currency
                     )
@@ -441,9 +442,7 @@ class BalanceService:
             ValueError: If budget is out of range
         """
         if not 0.0 <= budget_pct <= 0.30:  # Max 30% for satellites
-            raise ValueError(
-                "Satellite budget must be between 0% and 30%"
-            )
+            raise ValueError("Satellite budget must be between 0% and 30%")
 
         await self._balance_repo.set_allocation_setting(
             "satellite_budget_pct", budget_pct
