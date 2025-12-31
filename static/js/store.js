@@ -17,6 +17,9 @@ document.addEventListener('alpine:init', () => {
     cashBreakdown: [],  // [{currency: 'EUR', amount: 1000}, ...]
     securities: [],
     trades: [],
+    buckets: [],  // [{id: 'core', name: 'Core', type: 'core', status: 'active', ...}]
+    bucketBalances: {},  // {bucket_id: {EUR: 1000, USD: 500, ...}}
+    selectedBucket: null,  // Currently selected bucket for health modal
     tradernet: { connected: false },
     markets: {},  // {EU: {open: bool, ...}, US: {...}, ASIA: {...}}
     recommendations: null,  // Unified recommendations: {depth: int, steps: [], total_score_improvement: float, final_available_cash: float}
@@ -65,6 +68,8 @@ document.addEventListener('alpine:init', () => {
     showEditSecurityModal: false,
     showSecurityChart: false,
     showSettingsModal: false,
+    showUniverseManagementModal: false,
+    showBucketHealthModal: false,
     selectedSecuritySymbol: null,
     selectedSecurityIsin: null,
     editingSecurity: null,
@@ -103,6 +108,19 @@ document.addEventListener('alpine:init', () => {
     newSecurity: { identifier: '' },
     addingSecurity: false,
 
+    // Universe/Bucket Management
+    newUniverseName: '',
+    creatingUniverse: false,
+    loadingBuckets: false,
+    cashTransfer: {
+      fromBucket: '',
+      toBucket: '',
+      amount: '',
+      currency: 'EUR',
+      description: ''
+    },
+    transferringCash: false,
+
     // Fetch All Data
     async fetchAll() {
       await Promise.all([
@@ -111,6 +129,7 @@ document.addEventListener('alpine:init', () => {
         this.fetchCashBreakdown(),
         this.fetchSecurities(),
         this.fetchTrades(),
+        this.fetchBuckets(),
         this.fetchTradernet(),
         this.fetchMarkets(),
         this.fetchCountries(),
@@ -198,6 +217,22 @@ document.addEventListener('alpine:init', () => {
         this.trades = await API.fetchTrades();
       } catch (e) {
         console.error('Failed to fetch trades:', e);
+      }
+    },
+
+    async fetchBuckets() {
+      try {
+        this.loadingBuckets = true;
+        this.buckets = await API.fetchBuckets();
+
+        // Fetch balances for all buckets
+        const balances = await API.fetchAllBucketBalances();
+        this.bucketBalances = balances;
+
+        this.loadingBuckets = false;
+      } catch (e) {
+        console.error('Failed to fetch buckets:', e);
+        this.loadingBuckets = false;
       }
     },
 
@@ -703,6 +738,7 @@ document.addEventListener('alpine:init', () => {
         country: security.country || '',
         fullExchangeName: security.fullExchangeName || '',
         industry: security.industry || '',
+        bucket_id: security.bucket_id || 'core',  // Universe/bucket assignment
         min_lot: security.min_lot || 1,
         allow_buy: security.allow_buy !== false,  // Default true
         allow_sell: !!security.allow_sell,   // Default false (SQLite stores as 0/1)
@@ -725,6 +761,7 @@ document.addEventListener('alpine:init', () => {
         const payload = {
           name: this.editingSecurity.name,
           yahoo_symbol: this.editingSecurity.yahoo_symbol || null,
+          bucket_id: this.editingSecurity.bucket_id || 'core',
           min_lot: parseInt(this.editingSecurity.min_lot) || 1,
           allow_buy: this.editingSecurity.allow_buy,
           allow_sell: this.editingSecurity.allow_sell,
@@ -758,6 +795,106 @@ document.addEventListener('alpine:init', () => {
       } catch (e) {
         this.showMessage('Failed to update multiplier', 'error');
       }
+    },
+
+    // Bucket/Universe Management
+    async createUniverse() {
+      if (!this.newUniverseName.trim()) {
+        this.showMessage('Please enter a universe name', 'error');
+        return;
+      }
+
+      this.creatingUniverse = true;
+      try {
+        await API.createBucket({
+          name: this.newUniverseName.trim(),
+          type: 'satellite'
+        });
+        this.showMessage('Universe created successfully', 'success');
+        this.newUniverseName = '';
+        await this.fetchBuckets();
+      } catch (e) {
+        console.error('Failed to create universe:', e);
+        this.showMessage(`Failed to create universe: ${e.message}`, 'error');
+      }
+      this.creatingUniverse = false;
+    },
+
+    async retireUniverse(bucketId) {
+      if (!confirm('Are you sure you want to retire this universe? This action cannot be undone.')) {
+        return;
+      }
+
+      try {
+        await API.retireBucket(bucketId);
+        this.showMessage('Universe retired successfully', 'success');
+        await this.fetchBuckets();
+        if (this.selectedBucket && this.selectedBucket.id === bucketId) {
+          this.closeBucketHealth();
+        }
+      } catch (e) {
+        console.error('Failed to retire universe:', e);
+        this.showMessage(`Failed to retire universe: ${e.message}`, 'error');
+      }
+    },
+
+    openBucketHealth(bucket) {
+      this.selectedBucket = bucket;
+      this.showBucketHealthModal = true;
+    },
+
+    closeBucketHealth() {
+      this.showBucketHealthModal = false;
+      this.selectedBucket = null;
+      // Reset cash transfer form
+      this.cashTransfer = {
+        fromBucket: '',
+        toBucket: '',
+        amount: '',
+        currency: 'EUR',
+        description: ''
+      };
+    },
+
+    async executeCashTransfer() {
+      if (!this.cashTransfer.fromBucket || !this.cashTransfer.toBucket || !this.cashTransfer.amount) {
+        this.showMessage('Please fill in all required fields', 'error');
+        return;
+      }
+
+      if (this.cashTransfer.fromBucket === this.cashTransfer.toBucket) {
+        this.showMessage('Source and destination must be different', 'error');
+        return;
+      }
+
+      this.transferringCash = true;
+      try {
+        await API.transferCash({
+          from_bucket: this.cashTransfer.fromBucket,
+          to_bucket: this.cashTransfer.toBucket,
+          amount: parseFloat(this.cashTransfer.amount),
+          currency: this.cashTransfer.currency,
+          description: this.cashTransfer.description || null
+        });
+        this.showMessage('Cash transfer completed successfully', 'success');
+        // Reset form
+        this.cashTransfer = {
+          fromBucket: '',
+          toBucket: '',
+          amount: '',
+          currency: 'EUR',
+          description: ''
+        };
+        await this.fetchBuckets();
+      } catch (e) {
+        console.error('Failed to transfer cash:', e);
+        this.showMessage(`Failed to transfer cash: ${e.message}`, 'error');
+      }
+      this.transferringCash = false;
+    },
+
+    getSecurityCountForBucket(bucketId) {
+      return this.securities.filter(s => (s.bucket_id || 'core') === bucketId).length;
     },
 
     // Trading Mode
