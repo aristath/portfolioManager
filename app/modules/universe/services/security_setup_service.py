@@ -13,7 +13,7 @@ from app.domain.events import SecurityAddedEvent, get_event_bus
 from app.domain.models import Security
 from app.infrastructure.external import yahoo_finance as yahoo
 from app.infrastructure.external.tradernet import TradernetClient
-from app.jobs.stocks_data_sync import _sync_historical_for_symbol
+from app.jobs.securities_data_sync import _sync_historical_for_symbol
 from app.modules.universe.database.security_repository import SecurityRepository
 from app.modules.universe.domain.symbol_resolver import IdentifierType, SymbolResolver
 from app.shared.domain.value_objects.currency import Currency
