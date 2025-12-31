@@ -234,7 +234,8 @@ class TestIdentifyRebalanceSellOpportunities:
 
         assert len(opportunities) == 1
         assert "rebalance" in opportunities[0].tags
-        assert "overweight_united states" in opportunities[0].tags
+        # Tag is based on group name (OTHER), not individual country
+        assert "overweight_other" in opportunities[0].tags
 
     @pytest.mark.asyncio
     async def test_priority_proportional_to_overweight(
