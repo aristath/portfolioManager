@@ -7,7 +7,6 @@ import logging
 from datetime import datetime
 from typing import List, Optional
 
-from app.shared.services import CurrencyExchangeService
 from app.core.events import SystemEvent, emit
 from app.domain.models import Recommendation, Trade
 from app.domain.repositories.protocols import (
@@ -24,6 +23,7 @@ from app.modules.display.services.display_service import set_led4, set_text
 from app.modules.scoring.domain.constants import DEFAULT_MIN_HOLD_DAYS
 from app.modules.trading.services.trade_execution.trade_recorder import record_trade
 from app.shared.domain.value_objects.currency import Currency
+from app.shared.services import CurrencyExchangeService
 from app.shared.utils import safe_parse_datetime_string
 
 logger = logging.getLogger(__name__)

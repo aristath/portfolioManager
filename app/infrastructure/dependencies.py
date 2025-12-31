@@ -8,12 +8,7 @@ from typing import Annotated
 
 from fastapi import Depends
 
-from app.shared.services import CurrencyExchangeService
-from app.modules.portfolio.services.portfolio_service import PortfolioService
-from app.modules.rebalancing.services.rebalancing_service import RebalancingService
-from app.modules.universe.services.stock_setup_service import StockSetupService
-from app.modules.trading.services.trade_execution_service import TradeExecutionService
-from app.modules.trading.services.trade_safety_service import TradeSafetyService
+from app.core.database.manager import DatabaseManager, get_db_manager
 from app.domain.repositories.protocols import (
     IAllocationRepository,
     IPositionRepository,
@@ -23,8 +18,6 @@ from app.domain.repositories.protocols import (
 )
 from app.domain.services.exchange_rate_service import ExchangeRateService
 from app.domain.services.settings_service import SettingsService
-from app.modules.universe.domain.ticker_content_service import TickerContentService
-from app.core.database.manager import DatabaseManager, get_db_manager
 from app.infrastructure.external.tradernet import TradernetClient, get_tradernet_client
 from app.modules.allocation.database.allocation_repository import AllocationRepository
 from app.modules.allocation.services.concentration_alerts import (
@@ -37,14 +30,21 @@ from app.modules.display.services.display_service import (
 )
 from app.modules.portfolio.database.portfolio_repository import PortfolioRepository
 from app.modules.portfolio.database.position_repository import PositionRepository
+from app.modules.portfolio.services.portfolio_service import PortfolioService
+from app.modules.rebalancing.services.rebalancing_service import RebalancingService
 from app.modules.scoring.services.scoring_service import ScoringService
+from app.modules.trading.services.trade_execution_service import TradeExecutionService
+from app.modules.trading.services.trade_safety_service import TradeSafetyService
 from app.modules.universe.database.stock_repository import StockRepository
+from app.modules.universe.domain.ticker_content_service import TickerContentService
+from app.modules.universe.services.stock_setup_service import StockSetupService
 from app.repositories.calculations import CalculationsRepository
 from app.repositories.grouping import GroupingRepository
 from app.repositories.recommendation import RecommendationRepository
 from app.repositories.score import ScoreRepository
 from app.repositories.settings import SettingsRepository
 from app.repositories.trade import TradeRepository
+from app.shared.services import CurrencyExchangeService
 
 # Repository Dependencies
 

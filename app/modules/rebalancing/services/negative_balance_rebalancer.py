@@ -7,10 +7,10 @@ import logging
 from typing import Dict, List, Optional, Set
 
 from app.api.settings import get_trading_mode
-from app.shared.services import CurrencyExchangeService
 from app.core.events import SystemEvent, emit
 from app.domain.models import Recommendation
 from app.domain.services.exchange_rate_service import ExchangeRateService
+from app.domain.value_objects.trade_side import TradeSide
 from app.infrastructure.external.tradernet import TradernetClient
 from app.infrastructure.market_hours import get_open_markets, is_market_open
 from app.modules.portfolio.database.position_repository import PositionRepository
@@ -21,7 +21,7 @@ from app.repositories import (
     StockRepository,
 )
 from app.shared.domain.value_objects.currency import Currency
-from app.domain.value_objects.trade_side import TradeSide
+from app.shared.services import CurrencyExchangeService
 
 logger = logging.getLogger(__name__)
 

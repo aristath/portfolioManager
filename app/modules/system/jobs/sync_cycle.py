@@ -16,7 +16,6 @@ from typing import Any, Optional
 
 from app.core.events import SystemEvent, emit
 from app.infrastructure.external import yahoo_finance as yahoo
-from app.modules.display.services.display_service import set_led3, set_text
 from app.infrastructure.locking import file_lock
 from app.infrastructure.market_hours import (
     get_open_markets,
@@ -24,6 +23,7 @@ from app.infrastructure.market_hours import (
     is_market_open,
     should_check_market_hours,
 )
+from app.modules.display.services.display_service import set_led3, set_text
 
 logger = logging.getLogger(__name__)
 
@@ -302,19 +302,15 @@ async def _update_position_prices(quotes: dict[str, float]):
 
 async def _get_holistic_recommendation():
     """Get next recommendation from the holistic planner."""
-    from app.shared.services import CurrencyExchangeService
-    from app.modules.rebalancing.services.rebalancing_service import (
-        RebalancingService,
-    )
+    from app.core.cache.cache import cache
+    from app.core.database import get_db_manager
     from app.domain.models import Recommendation
     from app.domain.portfolio_hash import generate_recommendation_cache_key
     from app.domain.services.settings_service import SettingsService
-    from app.shared.domain.value_objects.currency import Currency
     from app.domain.value_objects.recommendation_status import RecommendationStatus
     from app.domain.value_objects.trade_side import TradeSide
-    from app.core.cache.cache import cache
-    from app.core.database import get_db_manager
     from app.infrastructure.external.tradernet import TradernetClient
+    from app.modules.rebalancing.services.rebalancing_service import RebalancingService
     from app.repositories import (
         AllocationRepository,
         PortfolioRepository,
@@ -324,6 +320,8 @@ async def _get_holistic_recommendation():
         StockRepository,
         TradeRepository,
     )
+    from app.shared.domain.value_objects.currency import Currency
+    from app.shared.services import CurrencyExchangeService
 
     position_repo = PositionRepository()
     settings_repo = SettingsRepository()
@@ -603,15 +601,15 @@ async def _get_holistic_recommendation():
 
 async def _execute_trade_order(recommendation) -> dict[str, Any]:
     """Execute a trade order via Tradernet."""
-    from app.modules.trading.services.trade_execution_service import (
-        TradeExecutionService,
-    )
-    from app.domain.value_objects.trade_side import TradeSide
     from app.core.database.manager import get_db_manager
+    from app.domain.value_objects.trade_side import TradeSide
     from app.infrastructure.dependencies import (
         get_currency_exchange_service_dep,
         get_exchange_rate_service,
         get_tradernet_client,
+    )
+    from app.modules.trading.services.trade_execution_service import (
+        TradeExecutionService,
     )
     from app.repositories import PositionRepository, TradeRepository
 
