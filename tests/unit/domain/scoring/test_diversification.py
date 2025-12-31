@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.domain.scoring.models import PortfolioContext
+from app.modules.scoring.domain.models import PortfolioContext
 
 
 class TestCalculateGeoGapScore:

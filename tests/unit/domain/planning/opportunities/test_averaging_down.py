@@ -11,7 +11,7 @@ from app.domain.models import Stock
 from app.domain.planning.opportunities.averaging_down import (
     identify_averaging_down_opportunities,
 )
-from app.domain.scoring.models import PortfolioContext
+from app.modules.scoring.domain.models import PortfolioContext
 
 
 class TestIdentifyAveragingDownOpportunities:

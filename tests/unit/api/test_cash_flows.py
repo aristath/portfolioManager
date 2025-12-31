@@ -9,7 +9,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.domain.models import CashFlow
-from app.domain.value_objects.currency import Currency
+from app.shared.domain.value_objects.currency import Currency
 
 
 class TestValidateDateFormat:

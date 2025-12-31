@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.domain.models import CashFlow
-from app.domain.value_objects.currency import Currency
+from app.shared.domain.value_objects.currency import Currency
 from app.repositories.cash_flow import CashFlowRepository
 
 
