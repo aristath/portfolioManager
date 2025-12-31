@@ -83,6 +83,9 @@ async def record_trade(
     currency: Optional[str] = None,
     estimated_price: Optional[float] = None,
     source: str = "tradernet",
+    isin: Optional[str] = None,
+    bucket_id: str = "core",
+    mode: str = "live",
 ) -> Optional[Trade]:
     """
     Record a trade in the database.
@@ -101,6 +104,9 @@ async def record_trade(
         currency: Trade currency (optional)
         estimated_price: Estimated price to use if price <= 0 (optional)
         source: Trade source (default: "tradernet")
+        isin: Security ISIN for broker-agnostic identification (optional)
+        bucket_id: Which bucket owns this trade (default: "core")
+        mode: Trading mode - 'live' or 'research' (default: "live")
 
     Returns:
         Trade object if recorded successfully, None if duplicate or error
@@ -132,6 +138,9 @@ async def record_trade(
             currency=trade_currency,
             currency_rate=currency_rate,
             source=source,
+            isin=isin,
+            bucket_id=bucket_id,
+            mode=mode,
         )
 
         await trade_repo.create(trade_record)
