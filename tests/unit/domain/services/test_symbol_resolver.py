@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.domain.models import Security
+from app.domain.value_objects.product_type import ProductType
 from app.modules.universe.domain.symbol_resolver import (
     IdentifierType,
     SymbolInfo,
@@ -166,6 +167,7 @@ class TestSymbolResolver:
         mock_stock = Security(
             symbol="AAPL.US",
             name="Apple",
+            product_type=ProductType.EQUITY,
             isin="US0378331005",
             country="US",
         )
@@ -216,7 +218,13 @@ class TestSymbolResolver:
         self, mock_tradernet_client, mock_stock_repo
     ):
         """Test that resolve_and_cache caches ISIN when found."""
-        mock_stock = Security(symbol="AAPL.US", name="Apple", isin=None, country="US")
+        mock_stock = Security(
+            symbol="AAPL.US",
+            name="Apple",
+            product_type=ProductType.EQUITY,
+            isin=None,
+            country="US",
+        )
         mock_stock_repo.get_by_symbol.return_value = mock_stock
         mock_tradernet_client.get_quotes_raw.return_value = {
             "result": {"q": [{"issue_nb": "US0378331005"}]}
