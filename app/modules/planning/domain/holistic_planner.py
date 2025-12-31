@@ -142,7 +142,7 @@ def _is_trade_worthwhile(
 
 async def _compute_ineligible_symbols(
     positions: List[Position],
-    stocks_by_symbol: Dict[str, Security],
+    securities_by_symbol: Dict[str, Security],
     trade_repo,
     settings_repo,
 ) -> Set[str]:
@@ -160,7 +160,7 @@ async def _compute_ineligible_symbols(
 
     for position in positions:
         symbol = position.symbol
-        security = stocks_by_symbol.get(symbol)
+        security = securities_by_symbol.get(symbol)
         if not security or not security.allow_sell:
             continue
 
@@ -429,7 +429,7 @@ async def identify_opportunities_from_weights(
         Dict mapping category to list of ActionCandidate
     """
 
-    stocks_by_symbol = {s.symbol: s for s in securities}
+    securities_by_symbol = {s.symbol: s for s in securities}
     positions_by_symbol = {p.symbol: p for p in positions}
     total_value = portfolio_context.total_value
 
@@ -456,7 +456,7 @@ async def identify_opportunities_from_weights(
         gap = gap_info["gap"]
         gap_value = gap_info["gap_value"]
 
-        security = stocks_by_symbol.get(symbol)
+        security = securities_by_symbol.get(symbol)
         position = positions_by_symbol.get(symbol)
         price = current_prices.get(symbol, 0)
 
@@ -557,7 +557,7 @@ async def identify_opportunities(
         "opportunity_buys": [],
     }
 
-    stocks_by_symbol = {s.symbol: s for s in securities}
+    securities_by_symbol = {s.symbol: s for s in securities}
     total_value = portfolio_context.total_value
 
     # Get recently bought symbols for buy cooldown
@@ -614,7 +614,7 @@ async def identify_opportunities(
     positions_by_symbol = {p.symbol: p for p in positions}
 
     for symbol, position in positions_by_symbol.items():
-        security = stocks_by_symbol.get(symbol)
+        security = securities_by_symbol.get(symbol)
         if not security or not security.allow_sell:
             continue
 
@@ -650,7 +650,7 @@ async def identify_opportunities(
 
     # Identify profit-taking opportunities (filter out ineligible and recently sold)
     profit_taking_all = await identify_profit_taking_opportunities(
-        positions, stocks_by_symbol, exchange_rate_service
+        positions, securities_by_symbol, exchange_rate_service
     )
     opportunities["profit_taking"] = [
         opp
@@ -661,7 +661,7 @@ async def identify_opportunities(
     # Identify rebalance sell opportunities (filter out ineligible and recently sold)
     rebalance_sells_all = await identify_rebalance_sell_opportunities(
         positions,
-        stocks_by_symbol,
+        securities_by_symbol,
         portfolio_context,
         country_allocations,
         total_value,
@@ -1094,7 +1094,7 @@ def _generate_adaptive_patterns(
     available_cash: float,
     max_steps: int,
     max_opportunities_per_category: int,
-    stocks_by_symbol: Optional[Dict[str, Security]],
+    securities_by_symbol: Optional[Dict[str, Security]],
 ) -> List[List[ActionCandidate]]:
     """
     Generate adaptive patterns based on portfolio gaps.
@@ -1110,7 +1110,7 @@ def _generate_adaptive_patterns(
         available_cash: Available cash
         max_steps: Maximum sequence length
         max_opportunities_per_category: Max opportunities per category
-        stocks_by_symbol: Optional dict mapping symbol to Stock
+        securities_by_symbol: Optional dict mapping symbol to Security
 
     Returns:
         List of adaptive pattern sequences
@@ -1179,7 +1179,7 @@ def _generate_adaptive_patterns(
     sector_gaps.sort(key=lambda x: x[1], reverse=True)
 
     # Pattern 1: Geographic rebalance
-    if geographic_gaps and stocks_by_symbol:
+    if geographic_gaps and securities_by_symbol:
         geo_buys: List[ActionCandidate] = []
         all_buys = opportunities.get("rebalance_buys", []) + opportunities.get(
             "opportunity_buys", []
@@ -1191,7 +1191,7 @@ def _generate_adaptive_patterns(
             for candidate in all_buys:
                 if len(geo_buys) >= max_steps or running_cash < candidate.value_eur:
                     break
-                security = stocks_by_symbol.get(candidate.symbol)
+                security = securities_by_symbol.get(candidate.symbol)
                 if security and security.country == country:
                     if candidate not in geo_buys:
                         geo_buys.append(candidate)
@@ -1201,7 +1201,7 @@ def _generate_adaptive_patterns(
             sequences.append(geo_buys)
 
     # Pattern 2: Sector rotation
-    if sector_gaps and stocks_by_symbol:
+    if sector_gaps and securities_by_symbol:
         sector_buys: List[ActionCandidate] = []
         all_buys = opportunities.get("rebalance_buys", []) + opportunities.get(
             "opportunity_buys", []
@@ -1213,7 +1213,7 @@ def _generate_adaptive_patterns(
             for candidate in all_buys:
                 if len(sector_buys) >= max_steps or running_cash < candidate.value_eur:
                     break
-                security = stocks_by_symbol.get(candidate.symbol)
+                security = securities_by_symbol.get(candidate.symbol)
                 if security and security.industry:
                     industries = [i.strip() for i in security.industry.split(",")]
                     if industry in industries:
@@ -1581,7 +1581,7 @@ def _generate_constraint_relaxation_scenarios(
 def _select_diverse_opportunities(
     opportunities: List[ActionCandidate],
     max_count: int,
-    stocks_by_symbol: Optional[Dict[str, Security]] = None,
+    securities_by_symbol: Optional[Dict[str, Security]] = None,
     diversity_weight: float = 0.3,
 ) -> List[ActionCandidate]:
     """
@@ -1594,7 +1594,7 @@ def _select_diverse_opportunities(
     Args:
         opportunities: List of opportunities to select from (already sorted by priority)
         max_count: Maximum number of opportunities to return
-        stocks_by_symbol: Optional dict mapping symbol to Stock for country/industry info
+        securities_by_symbol: Optional dict mapping symbol to Security for country/industry info
         diversity_weight: Weight for diversity vs priority (0.0 = pure priority, 1.0 = pure diversity)
 
     Returns:
@@ -1611,8 +1611,8 @@ def _select_diverse_opportunities(
 
     for opp in opportunities:
         cluster_key = "OTHER"
-        if stocks_by_symbol:
-            security = stocks_by_symbol.get(opp.symbol)
+        if securities_by_symbol:
+            security = securities_by_symbol.get(opp.symbol)
             if security:
                 # Prefer country, then industry, then symbol prefix
                 if security.country:
@@ -1661,8 +1661,8 @@ def _select_diverse_opportunities(
     # Score = (1 - diversity_weight) * priority + diversity_weight * diversity_bonus
     def _get_cluster_key(opp: ActionCandidate) -> str:
         """Get cluster key for an opportunity."""
-        if stocks_by_symbol:
-            security = stocks_by_symbol.get(opp.symbol)
+        if securities_by_symbol:
+            security = securities_by_symbol.get(opp.symbol)
             if security:
                 if security.country:
                     return f"COUNTRY:{security.country}"
@@ -1702,7 +1702,7 @@ def _generate_enhanced_combinations(
     max_steps: int = 5,
     max_combinations: int = 50,
     max_candidates: int = 12,
-    stocks_by_symbol: Optional[Dict[str, Security]] = None,
+    securities_by_symbol: Optional[Dict[str, Security]] = None,
 ) -> List[List[ActionCandidate]]:
     """
     Generate combinations with priority-based sampling and diversity constraints.
@@ -1719,7 +1719,7 @@ def _generate_enhanced_combinations(
         max_steps: Maximum total steps in sequence
         max_combinations: Maximum number of combinations to generate
         max_candidates: Maximum candidates to consider
-        stocks_by_symbol: Optional dict mapping symbol to Stock for diversity
+        securities_by_symbol: Optional dict mapping symbol to Security for diversity
 
     Returns:
         List of action sequences (sells first, then buys)
@@ -1762,14 +1762,14 @@ def _generate_enhanced_combinations(
         sequence: List[ActionCandidate], existing_sequences: List[List[ActionCandidate]]
     ) -> bool:
         """Check if sequence adds diversity to existing sequences."""
-        if not stocks_by_symbol or not existing_sequences:
+        if not securities_by_symbol or not existing_sequences:
             return True
 
         # Get countries/industries in new sequence
         new_countries = set()
         new_industries = set()
         for action in sequence:
-            security = stocks_by_symbol.get(action.symbol)
+            security = securities_by_symbol.get(action.symbol)
             if security:
                 if security.country:
                     new_countries.add(security.country)
@@ -1782,7 +1782,7 @@ def _generate_enhanced_combinations(
             existing_countries = set()
             existing_industries = set()
             for action in existing_seq:
-                security = stocks_by_symbol.get(action.symbol)
+                security = securities_by_symbol.get(action.symbol)
                 if security:
                     if security.country:
                         existing_countries.add(security.country)
@@ -1952,7 +1952,7 @@ def _generate_patterns_at_depth(
     combinatorial_max_candidates: int = 12,
     enable_diverse_selection: bool = True,
     diversity_weight: float = 0.3,
-    stocks_by_symbol: Optional[Dict[str, Security]] = None,
+    securities_by_symbol: Optional[Dict[str, Security]] = None,
 ) -> List[List[ActionCandidate]]:
     """Generate sequence patterns capped at a specific depth."""
     sequences = []
@@ -1968,31 +1968,31 @@ def _generate_patterns_at_depth(
         top_profit_taking = _select_diverse_opportunities(
             all_profit_taking,
             max_opportunities_per_category,
-            stocks_by_symbol,
+            securities_by_symbol,
             diversity_weight,
         )
         top_averaging = _select_diverse_opportunities(
             all_averaging,
             max_opportunities_per_category,
-            stocks_by_symbol,
+            securities_by_symbol,
             diversity_weight,
         )
         top_rebalance_sells = _select_diverse_opportunities(
             all_rebalance_sells,
             max_opportunities_per_category,
-            stocks_by_symbol,
+            securities_by_symbol,
             diversity_weight,
         )
         top_rebalance_buys = _select_diverse_opportunities(
             all_rebalance_buys,
             max_opportunities_per_category,
-            stocks_by_symbol,
+            securities_by_symbol,
             diversity_weight,
         )
         top_opportunity = _select_diverse_opportunities(
             all_opportunity,
             max_opportunities_per_category,
-            stocks_by_symbol,
+            securities_by_symbol,
             diversity_weight,
         )
     else:
@@ -2130,7 +2130,7 @@ def _generate_patterns_at_depth(
                     max_steps=max_steps,
                     max_combinations=combinatorial_max_combinations_per_depth,
                     max_candidates=combinatorial_max_candidates,
-                    stocks_by_symbol=stocks_by_symbol,
+                    securities_by_symbol=securities_by_symbol,
                 )
             else:
                 combo_sequences = _generate_combinations(
@@ -2193,10 +2193,10 @@ async def generate_action_sequences(
     """
     all_sequences = []
 
-    # Build stocks_by_symbol dict for diverse selection and adaptive patterns
-    stocks_by_symbol: Optional[Dict[str, Security]] = None
+    # Build securities_by_symbol dict for diverse selection and adaptive patterns
+    securities_by_symbol: Optional[Dict[str, Security]] = None
     if securities:
-        stocks_by_symbol = {s.symbol: s for s in securities}
+        securities_by_symbol = {s.symbol: s for s in securities}
 
     # Generate patterns at each depth (1 to max_depth)
     for depth in range(1, max_depth + 1):
@@ -2213,7 +2213,7 @@ async def generate_action_sequences(
             combinatorial_max_candidates=combinatorial_max_candidates,
             enable_diverse_selection=enable_diverse_selection,
             diversity_weight=diversity_weight,
-            stocks_by_symbol=stocks_by_symbol,
+            securities_by_symbol=securities_by_symbol,
         )
         all_sequences.extend(depth_sequences)
 
@@ -2277,12 +2277,12 @@ async def simulate_sequence(
     Returns:
         Tuple of (final_context, final_cash)
     """
-    stocks_by_symbol = {s.symbol: s for s in securities}
+    securities_by_symbol = {s.symbol: s for s in securities}
     current_context = portfolio_context
     current_cash = available_cash
 
     for action in sequence:
-        security = stocks_by_symbol.get(action.symbol)
+        security = securities_by_symbol.get(action.symbol)
         country = security.country if security else None
         industry = security.industry if security else None
 
@@ -2439,9 +2439,9 @@ async def process_planner_incremental(
         recently_sold = await trade_repo.get_recently_sold_symbols(sell_cooldown_days)
 
         # Compute ineligible symbols for selling
-        stocks_by_symbol = {s.symbol: s for s in securities}
+        securities_by_symbol = {s.symbol: s for s in securities}
         ineligible_symbols = await _compute_ineligible_symbols(
-            positions, stocks_by_symbol, trade_repo, settings_repo
+            positions, securities_by_symbol, trade_repo, settings_repo
         )
 
         # Identify opportunities
@@ -2485,7 +2485,7 @@ async def process_planner_incremental(
         )
 
         # Filter sequences (same logic as in create_holistic_plan)
-        stocks_by_symbol = {s.symbol: s for s in securities}
+        securities_by_symbol = {s.symbol: s for s in securities}
         positions_by_symbol = {p.symbol: p for p in positions}
         feasible_sequences = []
 
@@ -2524,7 +2524,7 @@ async def process_planner_incremental(
             running_cash = available_cash
 
             for action in sequence:
-                security = stocks_by_symbol.get(action.symbol)
+                security = securities_by_symbol.get(action.symbol)
                 # ActionCandidate.side is a string, not TradeSide enum
                 side_str = (
                     action.side.upper()
@@ -3018,9 +3018,9 @@ async def create_holistic_plan(
     recently_sold = await trade_repo.get_recently_sold_symbols(sell_cooldown_days)
 
     # Compute ineligible symbols for selling
-    stocks_by_symbol = {s.symbol: s for s in securities}
+    securities_by_symbol = {s.symbol: s for s in securities}
     ineligible_symbols = await _compute_ineligible_symbols(
-        positions, stocks_by_symbol, trade_repo, settings_repo
+        positions, securities_by_symbol, trade_repo, settings_repo
     )
 
     # Get beam_width from settings if not provided
@@ -3093,7 +3093,7 @@ async def create_holistic_plan(
         available_cash,
         max_plan_depth,
         max_opportunities_per_category,
-        stocks_by_symbol,
+        securities_by_symbol,
     )
     sequences.extend(adaptive_patterns)
 
@@ -3127,7 +3127,7 @@ async def create_holistic_plan(
         sequences.extend(relaxed_sequences)
 
     # Early filtering: Filter by priority threshold and invalid steps before simulation
-    stocks_by_symbol = {s.symbol: s for s in securities}
+    securities_by_symbol = {s.symbol: s for s in securities}
     positions_by_symbol = {p.symbol: p for p in positions}
     feasible_sequences = []
     filtered_by_priority = 0
@@ -3168,7 +3168,7 @@ async def create_holistic_plan(
 
         for action in sequence:
             # Check allow_sell/allow_buy flags
-            security = stocks_by_symbol.get(action.symbol)
+            security = securities_by_symbol.get(action.symbol)
             if action.side == TradeSide.BUY:
                 if not security or not security.allow_buy:
                     filtered_by_flags += 1

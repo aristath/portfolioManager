@@ -244,7 +244,7 @@ class DatabaseManager:
         if is_isin(identifier):
             return identifier
 
-        # Look up ISIN from stocks table
+        # Look up ISIN from securities table
         try:
             row = await self.config.fetchone(
                 "SELECT isin FROM securities WHERE symbol = ?", (identifier,)
