@@ -1163,22 +1163,22 @@ async def delete_stock(
     if not is_isin(isin):
         raise HTTPException(status_code=400, detail="Invalid ISIN format")
 
-    logger.info(f"DELETE /api/stocks/{isin} - Attempting to delete stock")
+    logger.info(f"DELETE /api/securities/{isin} - Attempting to delete stock")
 
     stock = await stock_repo.get_by_isin(isin)
     if not stock:
-        logger.warning(f"DELETE /api/stocks/{isin} - Stock not found")
+        logger.warning(f"DELETE /api/securities/{isin} - Stock not found")
         raise HTTPException(status_code=404, detail="Stock not found")
 
     symbol = stock.symbol
     logger.info(
-        f"DELETE /api/stocks/{isin} - Soft deleting stock {symbol} (setting active=0)"
+        f"DELETE /api/securities/{isin} - Soft deleting stock {symbol} (setting active=0)"
     )
     await stock_repo.delete(symbol)
 
     cache.invalidate("stocks_with_scores")
 
-    logger.info(f"DELETE /api/stocks/{isin} - Stock {symbol} successfully deleted")
+    logger.info(f"DELETE /api/securities/{isin} - Stock {symbol} successfully deleted")
     return {"message": f"Stock {symbol} removed from universe"}
 
 

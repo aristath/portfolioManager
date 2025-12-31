@@ -29,7 +29,7 @@ from app.modules.planning.api import planner, recommendations
 from app.modules.portfolio.api import portfolio
 from app.modules.system.api import status
 from app.modules.trading.api import trades
-from app.modules.universe.api import stocks
+from app.modules.universe.api import securities
 
 # Log format with correlation ID
 log_format = logging.Formatter(
@@ -165,7 +165,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Include API routers
 app.include_router(portfolio.router, prefix="/api/portfolio", tags=["Portfolio"])
-app.include_router(stocks.router, prefix="/api/stocks", tags=["Stocks"])
+app.include_router(securities.router, prefix="/api/securities", tags=["Securities"])
 app.include_router(trades.router, prefix="/api/trades", tags=["Trades"])
 app.include_router(
     recommendations.router,
