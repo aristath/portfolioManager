@@ -7,7 +7,7 @@ import logging
 from datetime import datetime
 from typing import List, Optional
 
-from app.application.services.currency_exchange_service import CurrencyExchangeService
+from app.application.services.currency_exchange_service import CurrencyExchangeService  # TODO: Keep in infrastructure or move to shared
 from app.modules.trading.services.trade_execution.trade_recorder import record_trade
 from app.domain.models import Recommendation, Trade
 from app.domain.repositories.protocols import (
@@ -24,7 +24,7 @@ from app.shared.domain.value_objects.currency import Currency
 from app.infrastructure.external.tradernet import TradernetClient
 from app.infrastructure.hardware.display_service import set_led4, set_text
 from app.infrastructure.market_hours import is_market_open, should_check_market_hours
-from app.repositories.base import safe_parse_datetime_string
+from app.repositories.base import safe_parse_datetime_string  # TODO: Move to shared utility
 
 logger = logging.getLogger(__name__)
 
@@ -713,7 +713,7 @@ class TradeExecutionService:
         """
         # Check trade frequency limits (unless bypassed for emergency rebalancing)
         if self._settings_repo and not bypass_frequency_limit:
-            from app.application.services.trade_frequency_service import (
+            from app.modules.trading.services.trade_frequency_service import (
                 TradeFrequencyService,
             )
 

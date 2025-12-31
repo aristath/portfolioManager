@@ -15,7 +15,7 @@ from app.domain.scoring.constants import (
     COVARIANCE_LOOKBACK_DAYS,
     COVARIANCE_MIN_HISTORY,
 )
-from app.repositories.history import HistoryRepository
+from app.modules.portfolio.database.history_repository import HistoryRepository
 
 logger = logging.getLogger(__name__)
 

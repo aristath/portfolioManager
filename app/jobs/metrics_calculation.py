@@ -21,9 +21,9 @@ from app.domain.scoring.caching import (
     get_sharpe_ratio,
 )
 from app.domain.scoring.calculations import calculate_cagr
+from app.modules.portfolio.database.history_repository import HistoryRepository
+from app.modules.universe.database.stock_repository import StockRepository
 from app.repositories.calculations import CalculationsRepository
-from app.repositories.history import HistoryRepository
-from app.repositories.stock import StockRepository
 
 logger = logging.getLogger(__name__)
 

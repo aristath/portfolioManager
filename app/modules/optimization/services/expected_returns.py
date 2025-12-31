@@ -31,9 +31,9 @@ from app.domain.scoring.constants import (
     YIELD_CURVE_NORMAL,
 )
 from app.infrastructure.external.yahoo import market_indicators
+from app.modules.universe.database.stock_repository import StockRepository
 from app.repositories.calculations import CalculationsRepository
 from app.repositories.score import ScoreRepository
-from app.repositories.stock import StockRepository
 
 logger = logging.getLogger(__name__)
 
