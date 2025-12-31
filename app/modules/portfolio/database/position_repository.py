@@ -164,36 +164,36 @@ class PositionRepository:
         )
         return row["total"] if row else 0.0
 
-    async def get_with_stock_info(self) -> List[Dict]:
+    async def get_with_security_info(self) -> List[Dict]:
         """
-        Get all positions with stock info joined from config database.
+        Get all positions with security info joined from config database.
 
-        Returns list of dicts with position and stock fields merged.
+        Returns list of dicts with position and security fields merged.
 
-        Note: This method accesses both state.db (positions) and config.db (stocks),
+        Note: This method accesses both state.db (positions) and config.db (securities),
         which is a known architecture violation. See README.md Architecture section for details.
-        A future refactoring could inject StockRepository as a dependency.
+        A future refactoring could inject SecurityRepository as a dependency.
         """
         # Get positions from state.db
         position_rows = await self._db.fetchall("SELECT * FROM positions")
         if not position_rows:
             return []
 
-        # Get stocks from config.db
-        stock_rows = await self._manager.config.fetchall(
+        # Get securities from config.db
+        security_rows = await self._manager.config.fetchall(
             "SELECT symbol, name, country, fullExchangeName, industry, min_lot, allow_sell, currency "
             "FROM securities WHERE active = 1"
         )
         # Convert Row objects to dicts
-        stocks_by_symbol = {}
-        for row in stock_rows:
+        securities_by_symbol = {}
+        for row in security_rows:
             # Handle both Row objects and dicts
             if hasattr(row, "keys"):
-                stock_dict = {key: row[key] for key in row.keys()}
+                security_dict = {key: row[key] for key in row.keys()}
             else:
-                stock_dict = dict(row) if isinstance(row, (dict, tuple)) else {}
-            if stock_dict and "symbol" in stock_dict:
-                stocks_by_symbol[stock_dict["symbol"]] = stock_dict
+                security_dict = dict(row) if isinstance(row, (dict, tuple)) else {}
+            if security_dict and "symbol" in security_dict:
+                securities_by_symbol[security_dict["symbol"]] = security_dict
 
         # Merge position and stock data
         result = []
@@ -206,19 +206,19 @@ class PositionRepository:
             if not pos_dict or "symbol" not in pos_dict:
                 continue
             symbol = pos_dict["symbol"]
-            stock = stocks_by_symbol.get(symbol, {})
-            # Merge stock fields into position
-            pos_dict["name"] = stock.get("name", symbol)
-            pos_dict["country"] = stock.get("country")
-            pos_dict["fullExchangeName"] = stock.get("fullExchangeName")
-            pos_dict["industry"] = stock.get("industry")
-            pos_dict["min_lot"] = stock.get("min_lot", 1)
-            pos_dict["allow_sell"] = bool(stock.get("allow_sell", False))
-            # Use stock currency if position doesn't have one
+            security = securities_by_symbol.get(symbol, {})
+            # Merge security fields into position
+            pos_dict["name"] = security.get("name", symbol)
+            pos_dict["country"] = security.get("country")
+            pos_dict["fullExchangeName"] = security.get("fullExchangeName")
+            pos_dict["industry"] = security.get("industry")
+            pos_dict["min_lot"] = security.get("min_lot", 1)
+            pos_dict["allow_sell"] = bool(security.get("allow_sell", False))
+            # Use security currency if position doesn't have one
             if not pos_dict.get("currency"):
                 from app.shared.domain.value_objects.currency import Currency
 
-                pos_dict["currency"] = stock.get("currency") or Currency.EUR
+                pos_dict["currency"] = security.get("currency") or Currency.EUR
             result.append(pos_dict)
 
         return result

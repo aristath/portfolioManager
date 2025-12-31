@@ -385,7 +385,7 @@ class NegativeBalanceRebalancer:
                 return
 
             # Get positions with allow_sell=True
-            positions = await self._position_repo.get_with_stock_info()
+            positions = await self._position_repo.get_with_security_info()
             sellable_positions = [
                 pos
                 for pos in positions
@@ -514,7 +514,7 @@ class NegativeBalanceRebalancer:
             return
 
         # Get positions with allow_sell=True
-        positions = await self._position_repo.get_with_stock_info()
+        positions = await self._position_repo.get_with_security_info()
         sellable_positions = [
             pos
             for pos in positions

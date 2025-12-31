@@ -138,7 +138,7 @@ class PortfolioService:
         Returns complete summary with geographic and industry breakdowns.
         """
         targets = await self._allocation_repo.get_all()
-        positions = await self._position_repo.get_with_stock_info()
+        positions = await self._position_repo.get_with_security_info()
 
         country_values, industry_values, total_value = self._aggregate_position_values(
             positions

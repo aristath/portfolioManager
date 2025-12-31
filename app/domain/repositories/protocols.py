@@ -8,51 +8,55 @@ without requiring abstract base classes.
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Protocol, Set
 
-from app.domain.models import Position, Stock, Trade
+from app.domain.models import Position, Security, Trade
 
 # AllocationTarget moved to modules/allocation/domain/models.py
 # Backward compatibility import (temporary - will be removed in Phase 5)
 from app.modules.allocation.domain.models import AllocationTarget
 
 
-class IStockRepository(Protocol):
-    """Protocol for stock repository operations."""
+class ISecurityRepository(Protocol):
+    """Protocol for security repository operations (stocks, ETFs, ETCs, mutual funds)."""
 
-    async def get_by_symbol(self, symbol: str) -> Optional[Stock]:
-        """Get stock by symbol."""
+    async def get_by_symbol(self, symbol: str) -> Optional[Security]:
+        """Get security by symbol."""
         ...
 
-    async def get_by_isin(self, isin: str) -> Optional[Stock]:
-        """Get stock by ISIN."""
+    async def get_by_isin(self, isin: str) -> Optional[Security]:
+        """Get security by ISIN."""
         ...
 
-    async def get_by_identifier(self, identifier: str) -> Optional[Stock]:
-        """Get stock by symbol or ISIN."""
+    async def get_by_identifier(self, identifier: str) -> Optional[Security]:
+        """Get security by symbol or ISIN."""
         ...
 
-    async def get_all_active(self) -> List[Stock]:
-        """Get all active stocks."""
+    async def get_all_active(self) -> List[Security]:
+        """Get all active securities."""
         ...
 
-    async def get_all(self) -> List[Stock]:
-        """Get all stocks (active and inactive)."""
+    async def get_all(self) -> List[Security]:
+        """Get all securities (active and inactive)."""
         ...
 
-    async def create(self, stock: Stock) -> None:
-        """Create a new stock."""
+    async def create(self, security: Security) -> None:
+        """Create a new security."""
         ...
 
     async def update(self, symbol: str, **updates: Any) -> None:
-        """Update an existing stock by symbol with field updates."""
+        """Update an existing security by symbol with field updates."""
         ...
 
     async def delete(self, symbol: str) -> None:
-        """Delete a stock."""
+        """Delete a security."""
         ...
 
     async def get_with_scores(self) -> List[dict]:
-        """Get all active stocks with their scores."""
+        """Get all active securities with their scores."""
         ...
+
+
+# Backward compatibility alias
+IStockRepository = ISecurityRepository
 
 
 class IPositionRepository(Protocol):
@@ -82,8 +86,8 @@ class IPositionRepository(Protocol):
         """Get total portfolio value."""
         ...
 
-    async def get_with_stock_info(self) -> List[Dict]:
-        """Get positions with stock information."""
+    async def get_with_security_info(self) -> List[Dict]:
+        """Get positions with security information."""
         ...
 
 
