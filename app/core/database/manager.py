@@ -191,7 +191,7 @@ class DatabaseManager:
         - Independent recovery (can re-fetch from Yahoo if corrupted)
         - Smaller files (easier backup/restore)
         """
-        from app.core.database.schemas import init_history_schema
+        from app.modules.portfolio.database.schemas import init_history_schema
 
         # Normalize identifier
         identifier = identifier.strip().upper()

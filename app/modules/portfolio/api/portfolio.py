@@ -20,6 +20,7 @@ from app.api.models import (
 )
 from app.infrastructure.dependencies import (
     ExchangeRateServiceDep,
+    PortfolioRepositoryDep,
     PortfolioServiceDep,
     PositionRepositoryDep,
     StockRepositoryDep,

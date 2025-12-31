@@ -5,6 +5,8 @@ Direct implementations using the DatabaseManager.
 No abstract interfaces - there's only one implementation (SQLite).
 """
 
+from app.modules.allocation.database.allocation_repository import AllocationRepository
+from app.modules.cash_flows.database.cash_flow_repository import CashFlowRepository
 from app.modules.dividends.database.dividend_repository import DividendRepository
 from app.modules.planning.database.planner_repository import PlannerRepository
 from app.modules.portfolio.database.history_repository import HistoryRepository
@@ -19,7 +21,9 @@ from app.repositories.settings import SettingsRepository
 from app.repositories.trade import TradeRepository
 
 __all__ = [
+    "AllocationRepository",
     "CalculationsRepository",
+    "CashFlowRepository",
     "DividendRepository",
     "GroupingRepository",
     "HistoryRepository",
