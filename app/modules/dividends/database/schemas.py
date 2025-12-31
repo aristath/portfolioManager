@@ -65,4 +65,3 @@ async def init_dividends_schema(db):
     else:
         await db.commit()
         logger.info("Dividends database schema initialized")
-

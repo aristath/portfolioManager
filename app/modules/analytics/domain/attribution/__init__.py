@@ -4,7 +4,9 @@ Functions for analyzing performance attribution by geography, industry, and fact
 """
 
 from app.modules.analytics.domain.attribution.factors import get_factor_attribution
-from app.modules.analytics.domain.attribution.performance import get_performance_attribution
+from app.modules.analytics.domain.attribution.performance import (
+    get_performance_attribution,
+)
 
 __all__ = [
     "get_performance_attribution",

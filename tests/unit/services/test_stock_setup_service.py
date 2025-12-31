@@ -310,9 +310,7 @@ class TestStockSetupService:
 
         with (
             patch("app.modules.stock_setup_service.yahoo") as mock_yahoo,
-            patch(
-                "app.modules.stock_setup_service.get_event_bus"
-            ) as mock_event_bus,
+            patch("app.modules.stock_setup_service.get_event_bus") as mock_event_bus,
             patch(
                 "app.modules.stock_setup_service.StockAddedEvent"
             ) as mock_event_class,

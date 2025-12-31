@@ -185,7 +185,9 @@ async def get_recommendations(
         if cached is not None:
             # Add evaluation count to cached result
             from app.domain.portfolio_hash import generate_portfolio_hash
-            from app.modules.planning.database.planner_repository import PlannerRepository
+            from app.modules.planning.database.planner_repository import (
+                PlannerRepository,
+            )
 
             portfolio_hash = generate_portfolio_hash(position_dicts, stocks)
             planner_repo = PlannerRepository()
@@ -241,7 +243,9 @@ async def get_recommendations(
         if not steps and not emergency_steps_dicts:
             # Get evaluation count even if no steps
             from app.domain.portfolio_hash import generate_portfolio_hash
-            from app.modules.planning.database.planner_repository import PlannerRepository
+            from app.modules.planning.database.planner_repository import (
+                PlannerRepository,
+            )
 
             portfolio_hash = generate_portfolio_hash(position_dicts, stocks)
             planner_repo = PlannerRepository()

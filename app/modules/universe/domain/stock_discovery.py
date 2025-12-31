@@ -92,14 +92,14 @@ class StockDiscoveryService:
                     logger.info(
                         f"Fetched {len(securities)} securities from exchange {exchange}"
                     )
-                    
+
                     if len(securities) == 0:
                         logger.warning(
                             f"No securities returned from exchange {exchange}. "
                             f"This might indicate the exchange is not supported or has no data."
                         )
                         continue
-                    
+
                     all_securities.extend(securities)
                 except Exception as e:
                     logger.warning(
@@ -107,75 +107,73 @@ class StockDiscoveryService:
                         exc_info=True,
                     )
                     continue
-            
+
             # Now filter all securities and apply limit
             candidates = []
             for security in all_securities:
-                        if not isinstance(security, dict):
-                            logger.debug(
-                                f"Skipping non-dict security: {type(security)}"
-                            )
-                            continue
+                if not isinstance(security, dict):
+                    logger.debug(f"Skipping non-dict security: {type(security)}")
+                    continue
 
-                        symbol = security.get("symbol", "").upper()
-                        if not symbol:
-                            logger.debug("Skipping security with empty symbol")
-                            continue
+                symbol = security.get("symbol", "").upper()
+                if not symbol:
+                    logger.debug("Skipping security with empty symbol")
+                    continue
 
-                        # Skip if already in universe
-                        if symbol in existing_set:
-                            logger.info(f"Skipping {symbol}: already in universe")
-                            continue
+                # Skip if already in universe
+                if symbol in existing_set:
+                    logger.info(f"Skipping {symbol}: already in universe")
+                    continue
 
-                        # Filter by geography (if available in security data)
-                        security_country = security.get("country", "")
-                        if security_country:
-                            # Map country to geography
-                            security_geo = self._country_to_geography(security_country)
-                            if security_geo and security_geo not in geographies:
-                                logger.debug(
-                                    f"Skipping {symbol}: geography {security_geo} not in {geographies}"
-                                )
-                                continue
-
-                        # Filter by exchange
-                        security_exchange = security.get("exchange", "").lower()
-                        if security_exchange and security_exchange not in exchanges:
-                            logger.debug(
-                                f"Skipping {symbol}: exchange {security_exchange} not in {exchanges}"
-                            )
-                            continue
-
-                        # Filter by minimum volume
-                        # Note: If volume is not available (e.g., from ticker-only API response),
-                        # we assume it meets the threshold since these are "most traded" stocks
-                        volume = security.get("volume", None)
-                        if volume is not None:
-                            if isinstance(volume, (int, float)):
-                                volume = float(volume)
-                            else:
-                                volume = 0.0
-
-                            if volume < min_volume:
-                                logger.debug(
-                                    f"Skipping {symbol}: volume {volume} below minimum {min_volume}"
-                                )
-                                continue
-                        else:
-                            # Volume not available - assume it meets threshold for "most traded" stocks
-                            logger.debug(
-                                f"Volume not available for {symbol}, assuming it meets threshold (most traded)"
-                            )
-
-                        # Add candidate
-                        logger.info(
-                            f"Adding candidate: {symbol} (volume: {volume if volume is not None else 'N/A'})"
+                # Filter by geography (if available in security data)
+                security_country = security.get("country", "")
+                if security_country:
+                    # Map country to geography
+                    security_geo = self._country_to_geography(security_country)
+                    if security_geo and security_geo not in geographies:
+                        logger.debug(
+                            f"Skipping {symbol}: geography {security_geo} not in {geographies}"
                         )
-                        candidates.append(security)
+                        continue
 
-                        # Respect fetch limit
-                        if len(candidates) >= fetch_limit:
-                            break
+                # Filter by exchange
+                security_exchange = security.get("exchange", "").lower()
+                if security_exchange and security_exchange not in exchanges:
+                    logger.debug(
+                        f"Skipping {symbol}: exchange {security_exchange} not in {exchanges}"
+                    )
+                    continue
+
+                # Filter by minimum volume
+                # Note: If volume is not available (e.g., from ticker-only API response),
+                # we assume it meets the threshold since these are "most traded" stocks
+                volume = security.get("volume", None)
+                if volume is not None:
+                    if isinstance(volume, (int, float)):
+                        volume = float(volume)
+                    else:
+                        volume = 0.0
+
+                    if volume < min_volume:
+                        logger.debug(
+                            f"Skipping {symbol}: volume {volume} below minimum {min_volume}"
+                        )
+                        continue
+                else:
+                    # Volume not available - assume it meets threshold for "most traded" stocks
+                    logger.debug(
+                        f"Volume not available for {symbol}, assuming it meets threshold (most traded)"
+                    )
+
+                # Add candidate
+                logger.info(
+                    f"Adding candidate: {symbol} (volume: {volume if volume is not None else 'N/A'})"
+                )
+                candidates.append(security)
+
+                # Respect fetch limit
+                if len(candidates) >= fetch_limit:
+                    break
 
             logger.info(f"Discovered {len(candidates)} candidate stocks")
             return candidates[:fetch_limit]  # Ensure we don't exceed limit

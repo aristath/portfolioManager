@@ -319,7 +319,9 @@ class TestCalculatePortfolioEndStateScore:
     @pytest.mark.asyncio
     async def test_returns_0_5_for_empty_portfolio(self):
         """Test that empty portfolio returns 0.5."""
-        from app.modules.scoring.domain.end_state import calculate_portfolio_end_state_score
+        from app.modules.scoring.domain.end_state import (
+            calculate_portfolio_end_state_score,
+        )
 
         score, breakdown = await calculate_portfolio_end_state_score(
             positions={},
@@ -334,7 +336,9 @@ class TestCalculatePortfolioEndStateScore:
     @pytest.mark.asyncio
     async def test_calculates_weighted_scores(self):
         """Test weighted score calculation across positions."""
-        from app.modules.scoring.domain.end_state import calculate_portfolio_end_state_score
+        from app.modules.scoring.domain.end_state import (
+            calculate_portfolio_end_state_score,
+        )
 
         metrics_cache = {
             "AAPL.US": {
@@ -380,7 +384,9 @@ class TestCalculatePortfolioEndStateScore:
     @pytest.mark.asyncio
     async def test_skips_zero_value_positions(self):
         """Test that zero-value positions are skipped."""
-        from app.modules.scoring.domain.end_state import calculate_portfolio_end_state_score
+        from app.modules.scoring.domain.end_state import (
+            calculate_portfolio_end_state_score,
+        )
 
         metrics_cache = {
             "AAPL.US": {
@@ -409,7 +415,9 @@ class TestCalculatePortfolioEndStateScore:
     @pytest.mark.asyncio
     async def test_includes_weight_contributions(self):
         """Test that breakdown includes weight contributions."""
-        from app.modules.scoring.domain.end_state import calculate_portfolio_end_state_score
+        from app.modules.scoring.domain.end_state import (
+            calculate_portfolio_end_state_score,
+        )
 
         metrics_cache = {
             "AAPL.US": {
@@ -564,7 +572,9 @@ class TestCalculatePortfolioEndStateScoreWithMetricsCache:
     @pytest.mark.asyncio
     async def test_uses_metrics_cache(self):
         """Test that metrics cache is used instead of individual DB queries."""
-        from app.modules.scoring.domain.end_state import calculate_portfolio_end_state_score
+        from app.modules.scoring.domain.end_state import (
+            calculate_portfolio_end_state_score,
+        )
 
         metrics_cache = {
             "AAPL.US": {
@@ -608,7 +618,9 @@ class TestCalculatePortfolioEndStateScoreWithMetricsCache:
     @pytest.mark.asyncio
     async def test_handles_missing_symbols_in_cache(self):
         """Test that missing symbols in cache use defaults."""
-        from app.modules.scoring.domain.end_state import calculate_portfolio_end_state_score
+        from app.modules.scoring.domain.end_state import (
+            calculate_portfolio_end_state_score,
+        )
 
         metrics_cache = {
             "AAPL.US": {

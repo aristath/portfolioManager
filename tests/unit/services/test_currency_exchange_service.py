@@ -14,7 +14,9 @@ class TestFindRateSymbol:
 
     def test_finds_direct_symbol(self):
         """Test finding a direct rate symbol."""
-        from app.modules.system.services.currency_exchange_service import _find_rate_symbol
+        from app.modules.system.services.currency_exchange_service import (
+            _find_rate_symbol,
+        )
 
         mock_service = MagicMock()
         mock_service.RATE_SYMBOLS = {
@@ -28,7 +30,9 @@ class TestFindRateSymbol:
 
     def test_finds_inverse_symbol(self):
         """Test finding an inverse rate symbol."""
-        from app.modules.system.services.currency_exchange_service import _find_rate_symbol
+        from app.modules.system.services.currency_exchange_service import (
+            _find_rate_symbol,
+        )
 
         mock_service = MagicMock()
         mock_service.RATE_SYMBOLS = {
@@ -42,7 +46,9 @@ class TestFindRateSymbol:
 
     def test_returns_none_for_unknown_pair(self):
         """Test returns None for unknown currency pair."""
-        from app.modules.system.services.currency_exchange_service import _find_rate_symbol
+        from app.modules.system.services.currency_exchange_service import (
+            _find_rate_symbol,
+        )
 
         mock_service = MagicMock()
         mock_service.RATE_SYMBOLS = {}

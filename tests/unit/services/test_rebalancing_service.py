@@ -169,7 +169,9 @@ class TestCalculateRebalanceTrades:
         mock_exchange_rate_service,
     ):
         """Test that empty list is returned when cash is below minimum."""
-        from app.modules.rebalancing.services.rebalancing_service import RebalancingService
+        from app.modules.rebalancing.services.rebalancing_service import (
+            RebalancingService,
+        )
 
         service = RebalancingService(
             stock_repo=mock_stock_repo,
@@ -204,7 +206,9 @@ class TestCalculateRebalanceTrades:
         mock_exchange_rate_service,
     ):
         """Test that empty list is returned when there are no recommendations."""
-        from app.modules.rebalancing.services.rebalancing_service import RebalancingService
+        from app.modules.rebalancing.services.rebalancing_service import (
+            RebalancingService,
+        )
 
         service = RebalancingService(
             stock_repo=mock_stock_repo,
@@ -240,7 +244,9 @@ class TestCalculateRebalanceTrades:
         mock_exchange_rate_service,
     ):
         """Test that empty list is returned when there are no buy recommendations."""
-        from app.modules.rebalancing.services.rebalancing_service import RebalancingService
+        from app.modules.rebalancing.services.rebalancing_service import (
+            RebalancingService,
+        )
 
         service = RebalancingService(
             stock_repo=mock_stock_repo,
@@ -294,7 +300,9 @@ class TestCalculateRebalanceTrades:
         mock_exchange_rate_service,
     ):
         """Test that MultiStepRecommendation is converted to Recommendation."""
-        from app.modules.rebalancing.services.rebalancing_service import RebalancingService
+        from app.modules.rebalancing.services.rebalancing_service import (
+            RebalancingService,
+        )
 
         service = RebalancingService(
             stock_repo=mock_stock_repo,
@@ -353,7 +361,9 @@ class TestCalculateRebalanceTrades:
         mock_exchange_rate_service,
     ):
         """Test that invalid recommendations are filtered out."""
-        from app.modules.rebalancing.services.rebalancing_service import RebalancingService
+        from app.modules.rebalancing.services.rebalancing_service import (
+            RebalancingService,
+        )
 
         service = RebalancingService(
             stock_repo=mock_stock_repo,

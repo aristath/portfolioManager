@@ -147,7 +147,9 @@ async def _compute_ineligible_symbols(
     settings_repo,
 ) -> Set[str]:
     """Compute set of symbols that are ineligible for selling based on hold time and cooldown."""
-    from app.modules.scoring.domain.groups.sell.eligibility import check_sell_eligibility
+    from app.modules.scoring.domain.groups.sell.eligibility import (
+        check_sell_eligibility,
+    )
 
     ineligible_symbols = set()
 
@@ -604,7 +606,9 @@ async def identify_opportunities(
     max_loss_threshold = await settings_repo.get_float("max_loss_threshold", -0.20)
 
     # Fetch last transaction dates for all positions to check eligibility
-    from app.modules.scoring.domain.groups.sell.eligibility import check_sell_eligibility
+    from app.modules.scoring.domain.groups.sell.eligibility import (
+        check_sell_eligibility,
+    )
 
     ineligible_symbols = set()
     positions_by_symbol = {p.symbol: p for p in positions}

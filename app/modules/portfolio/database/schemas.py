@@ -120,7 +120,9 @@ async def init_snapshots_schema(db):
     if current_version == 1:
         try:
             now = datetime.now().isoformat()
-            logger.info("Migrating snapshots database to schema version 2 (annual_turnover)...")
+            logger.info(
+                "Migrating snapshots database to schema version 2 (annual_turnover)..."
+            )
 
             cursor = await db.execute("PRAGMA table_info(portfolio_snapshots)")
             columns = [row[1] for row in await cursor.fetchall()]
@@ -142,4 +144,3 @@ async def init_snapshots_schema(db):
         except Exception as e:
             logger.error(f"Failed to migrate snapshots schema to version 2: {e}")
             await db.rollback()
-

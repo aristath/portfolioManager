@@ -8,7 +8,10 @@ from pydantic import BaseModel
 
 from app.domain.events import StockAddedEvent, get_event_bus
 from app.modules.universe.domain.stock_factory import StockFactory
-from app.modules.universe.domain.priority_calculator import PriorityCalculator, PriorityInput
+from app.modules.universe.domain.priority_calculator import (
+    PriorityCalculator,
+    PriorityInput,
+)
 from app.modules.universe.domain.symbol_resolver import is_isin
 from app.core.cache.cache import cache
 from app.infrastructure.dependencies import (
@@ -227,7 +230,7 @@ async def get_universe_suggestions(
 
                 db_manager = get_db_manager()
                 scored_candidates = []
-                
+
                 # Limit to first 20 candidates to avoid timeout
                 # Users can refresh to see more candidates
                 candidates_to_process = candidates[:20]
@@ -235,7 +238,7 @@ async def get_universe_suggestions(
                     f"Processing {len(candidates_to_process)} of {len(candidates)} candidates "
                     f"to avoid timeout"
                 )
-                
+
                 for candidate in candidates_to_process:
                     symbol = candidate.get("symbol", "").upper()
                     if not symbol:
@@ -252,7 +255,7 @@ async def get_universe_suggestions(
                         # Fetch historical data for this candidate (required for scoring)
                         # Get history database for this symbol (creates if doesn't exist)
                         history_db = await db_manager.history(symbol)
-                        
+
                         # Check if we already have sufficient data for scoring
                         # Scoring requires: 50+ days of daily data AND 12+ months of monthly data
                         cursor = await history_db.execute(
@@ -260,13 +263,13 @@ async def get_universe_suggestions(
                         )
                         row = await cursor.fetchone()
                         daily_count = row[0] if row else 0
-                        
+
                         cursor = await history_db.execute(
                             "SELECT COUNT(*) FROM monthly_prices"
                         )
                         row = await cursor.fetchone()
                         monthly_count = row[0] if row else 0
-                        
+
                         # Only fetch if we don't have sufficient data
                         # This avoids expensive Yahoo API calls for candidates we've already processed
                         if daily_count < 50 or monthly_count < 12:
@@ -278,7 +281,7 @@ async def get_universe_suggestions(
                             ohlc_data = yahoo.get_historical_prices(
                                 symbol, symbol_info.yahoo_symbol, period="10y"
                             )
-                            
+
                             if ohlc_data:
                                 async with history_db.transaction():
                                     for ohlc in ohlc_data:
@@ -299,7 +302,7 @@ async def get_universe_suggestions(
                                                 ohlc.volume,
                                             ),
                                         )
-                                    
+
                                     # Aggregate to monthly
                                     await history_db.execute(
                                         """
@@ -315,12 +318,14 @@ async def get_universe_suggestions(
                                         GROUP BY strftime('%Y-%m', date)
                                         """
                                     )
-                                
+
                                 logger.info(
                                     f"Fetched {len(ohlc_data)} price records for {symbol}"
                                 )
                                 # Rate limit delay
-                                await asyncio.sleep(settings.external_api_rate_limit_delay)
+                                await asyncio.sleep(
+                                    settings.external_api_rate_limit_delay
+                                )
                             else:
                                 logger.warning(
                                     f"No historical data available for {symbol}, skipping"
@@ -353,11 +358,11 @@ async def get_universe_suggestions(
                     logger.info(
                         f"Top 5 candidate scores: {[(c.get('symbol'), round(s, 3)) for c, s in sample_scores]}"
                     )
-                
+
                 # For manual review interface, show ALL scored candidates, not just above threshold
                 # Sort by score (best first) and include threshold info for UI filtering
                 scored_candidates.sort(key=lambda x: x[1], reverse=True)
-                
+
                 # Count how many are above threshold for logging
                 above_threshold_count = sum(
                     1 for _, score in scored_candidates if score >= score_threshold

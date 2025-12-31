@@ -7,7 +7,9 @@ import empyrical
 import numpy as np
 import pandas as pd
 
-from app.modules.analytics.domain.attribution.performance import get_performance_attribution
+from app.modules.analytics.domain.attribution.performance import (
+    get_performance_attribution,
+)
 
 
 async def get_factor_attribution(

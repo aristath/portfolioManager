@@ -7,7 +7,9 @@ from app.modules.analytics.domain.reconstruction.cash import reconstruct_cash_ba
 from app.modules.analytics.domain.reconstruction.positions import (
     reconstruct_historical_positions,
 )
-from app.modules.analytics.domain.reconstruction.values import reconstruct_portfolio_values
+from app.modules.analytics.domain.reconstruction.values import (
+    reconstruct_portfolio_values,
+)
 
 __all__ = [
     "reconstruct_historical_positions",

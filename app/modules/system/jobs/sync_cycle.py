@@ -605,7 +605,9 @@ async def _get_holistic_recommendation():
 
 async def _execute_trade_order(recommendation) -> dict[str, Any]:
     """Execute a trade order via Tradernet."""
-    from app.modules.trading.services.trade_execution_service import TradeExecutionService
+    from app.modules.trading.services.trade_execution_service import (
+        TradeExecutionService,
+    )
     from app.domain.value_objects.trade_side import TradeSide
     from app.core.database.manager import get_db_manager
     from app.infrastructure.dependencies import (

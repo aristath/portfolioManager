@@ -84,4 +84,3 @@ class MonthlyPrice:
     min_price: Optional[float] = None
     max_price: Optional[float] = None
     source: str = "calculated"
-

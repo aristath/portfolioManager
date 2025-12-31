@@ -106,7 +106,9 @@ class TestGetCurrentAllocation:
     async def test_includes_alerts(self, mock_portfolio_service, mock_alert_service):
         """Test that concentration alerts are included."""
         from app.api.allocation import get_current_allocation
-        from app.modules.portfolio.services.concentration_alerts import ConcentrationAlert
+        from app.modules.portfolio.services.concentration_alerts import (
+            ConcentrationAlert,
+        )
 
         summary = PortfolioSummary(
             total_value=10000.0,

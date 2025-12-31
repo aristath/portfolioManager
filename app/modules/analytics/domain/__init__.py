@@ -34,4 +34,3 @@ __all__ = [
     "get_position_drawdown",
     "get_factor_attribution",
 ]
-

@@ -1154,11 +1154,10 @@ async def init_recommendations_schema(db):
         await db.commit()
         logger.info("Recommendations database migrated to schema version 2")
 
-
-# =============================================================================
-# DIVIDENDS.DB - Dividend history with DRIP tracking
-# =============================================================================
-# Note: init_dividends_schema is imported directly in manager.py where it's used
+        # =============================================================================
+        # DIVIDENDS.DB - Dividend history with DRIP tracking
+        # =============================================================================
+        # Note: init_dividends_schema is imported directly in manager.py where it's used
 
         await db.execute(
             "INSERT INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",

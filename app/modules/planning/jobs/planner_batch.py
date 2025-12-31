@@ -126,7 +126,9 @@ async def process_planner_batch_job(
         available_cash = 0.0
 
         # Always try to get cash from portfolio snapshot first as fallback
-        from app.modules.portfolio.database.portfolio_repository import PortfolioRepository
+        from app.modules.portfolio.database.portfolio_repository import (
+            PortfolioRepository,
+        )
 
         portfolio_repo = PortfolioRepository()
         latest_snapshot = await portfolio_repo.get_latest()
