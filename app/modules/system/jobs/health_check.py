@@ -151,7 +151,7 @@ async def _rebuild_cache_db(db_path: Path):
         # Create fresh cache database
         import aiosqlite
 
-        from app.infrastructure.database.schemas import CACHE_SCHEMA
+        from app.core.database.schemas import CACHE_SCHEMA
 
         async with aiosqlite.connect(str(db_path)) as db:
             await db.executescript(CACHE_SCHEMA)
@@ -185,7 +185,7 @@ async def _rebuild_symbol_history(db_path: Path, symbol: str):
         # Create fresh history database
         import aiosqlite
 
-        from app.infrastructure.database.schemas import HISTORY_SCHEMA
+        from app.core.database.schemas import HISTORY_SCHEMA
 
         async with aiosqlite.connect(str(db_path)) as db:
             await db.executescript(HISTORY_SCHEMA)
