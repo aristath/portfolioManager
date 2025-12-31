@@ -123,6 +123,8 @@ class Trade:
     currency_rate: Optional[float] = None
     value_eur: Optional[float] = None
     source: str = "tradernet"
+    bucket_id: str = "core"  # Which bucket owns this trade (core or satellite)
+    mode: str = "live"  # Trading mode: 'live' or 'research'
     id: Optional[int] = None
 
     def __post_init__(self):
