@@ -20,19 +20,15 @@ from app.api import (
 from app.api import settings as settings_api
 from app.api import status, stocks, trades
 from app.config import settings
+from app.core.database.manager import get_db_manager, init_databases, shutdown_databases
+from app.core.events import SystemEvent, emit
+
+# Configure logging with correlation ID support and log rotation
+from app.core.logging import CorrelationIDFilter
 
 # Import event modules to register event subscriptions
 from app.infrastructure import planner_events, recommendation_events  # noqa: F401
-from app.infrastructure.database.manager import (
-    get_db_manager,
-    init_databases,
-    shutdown_databases,
-)
-from app.infrastructure.events import SystemEvent, emit
 from app.infrastructure.external.tradernet import get_tradernet_client
-
-# Configure logging with correlation ID support and log rotation
-from app.infrastructure.logging_context import CorrelationIDFilter
 from app.jobs.scheduler import init_scheduler, start_scheduler, stop_scheduler
 
 # Log format with correlation ID
@@ -138,7 +134,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-from app.infrastructure.rate_limit import RateLimitMiddleware  # noqa: E402
+from app.core.middleware import RateLimitMiddleware  # noqa: E402
 
 # Add rate limiting middleware (must be before other middleware)
 app.add_middleware(RateLimitMiddleware)  # Uses values from config
@@ -147,10 +143,7 @@ app.add_middleware(RateLimitMiddleware)  # Uses values from config
 @app.middleware("http")
 async def request_context_middleware(request: Request, call_next):
     """Add correlation ID and LED indicators to requests."""
-    from app.infrastructure.logging_context import (
-        clear_correlation_id,
-        set_correlation_id,
-    )
+    from app.core.logging import clear_correlation_id, set_correlation_id
 
     # Set correlation ID for this request
     correlation_id = set_correlation_id()
