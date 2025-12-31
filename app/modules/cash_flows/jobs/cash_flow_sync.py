@@ -113,6 +113,30 @@ async def _sync_cash_flows_internal():
                 cash_flow_id = cursor.lastrowid
                 synced_count += 1
 
+                # Process deposits for automatic bucket allocation
+                try:
+                    from app.modules.cash_flows.services.deposit_processor import (
+                        process_deposit,
+                        should_process_cash_flow,
+                    )
+
+                    if await should_process_cash_flow(txn):
+                        result = await process_deposit(
+                            amount=amount_eur,  # Use EUR amount for allocation
+                            currency="EUR",  # Always allocate in EUR
+                            transaction_id=txn.get("transaction_id"),
+                            description=txn.get("description"),
+                        )
+                        logger.info(
+                            f"Allocated deposit across {len(result.get('allocations', {}))} buckets"
+                        )
+                except Exception as e:
+                    logger.error(
+                        f"Failed to process deposit allocation for txn {txn_id}: {e}",
+                        exc_info=True,
+                    )
+                    # Don't fail the entire sync if deposit processing fails
+
                 # Create dividend record if this is a dividend cash flow
                 transaction_type = (
                     txn.get("type") or txn.get("transaction_type", "")
