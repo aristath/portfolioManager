@@ -10,20 +10,20 @@ import pytest
 
 from app.domain.events.position_events import PositionUpdatedEvent
 from app.domain.events.recommendation_events import RecommendationCreatedEvent
-from app.domain.events.stock_events import StockAddedEvent
+from app.domain.events.security_events import SecurityAddedEvent
 from app.domain.events.trade_events import TradeExecutedEvent
 from app.domain.models import Position, Recommendation, Security, Trade
 from app.domain.value_objects.trade_side import TradeSide
 from app.shared.domain.value_objects.currency import Currency
 
 
-class TestStockAddedEvent:
-    """Test StockAddedEvent domain event."""
+class TestSecurityAddedEvent:
+    """Test SecurityAddedEvent domain event."""
 
     def test_creates_stock_added_event(self):
-        """Test creating StockAddedEvent."""
+        """Test creating SecurityAddedEvent."""
         stock = Security(symbol="AAPL", name="Apple Inc.")
-        event = StockAddedEvent(stock=stock)
+        event = SecurityAddedEvent(stock=stock)
 
         assert event.stock == stock
         assert isinstance(event.occurred_at, datetime)
@@ -32,22 +32,22 @@ class TestStockAddedEvent:
         assert event.country is None
 
     def test_stock_added_event_properties(self):
-        """Test StockAddedEvent properties."""
+        """Test SecurityAddedEvent properties."""
         stock = Security(
             symbol="MSFT",
             name="Microsoft Corporation",
             country="United States",
         )
-        event = StockAddedEvent(stock=stock)
+        event = SecurityAddedEvent(stock=stock)
 
         assert event.symbol == "MSFT"
         assert event.name == "Microsoft Corporation"
         assert event.country == "United States"
 
     def test_stock_added_event_is_frozen(self):
-        """Test that StockAddedEvent is immutable."""
+        """Test that SecurityAddedEvent is immutable."""
         stock = Security(symbol="AAPL", name="Apple Inc.")
-        event = StockAddedEvent(stock=stock)
+        event = SecurityAddedEvent(stock=stock)
 
         # Should raise FrozenInstanceError on attempt to modify
         with pytest.raises(FrozenInstanceError):

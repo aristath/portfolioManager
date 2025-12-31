@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
-from app.modules.universe.api.stocks import (
-    StockCreate,
-    StockUpdate,
+from app.modules.universe.api.securities import (
+    SecurityCreate,
+    SecurityUpdate,
     _apply_boolean_update,
     _apply_numeric_update,
     _apply_string_update,
@@ -244,7 +244,7 @@ class TestCreateStock:
         mock_score_repo = AsyncMock()
         mock_scoring_service = AsyncMock()
 
-        stock_data = StockCreate(
+        stock_data = SecurityCreate(
             symbol="AAPL",
             name="Apple",
             country="United States",
@@ -271,7 +271,7 @@ class TestCreateStock:
         mock_scoring_service = AsyncMock()
         mock_scoring_service.calculate_and_save_score.return_value = mock_score
 
-        stock_data = StockCreate(
+        stock_data = SecurityCreate(
             symbol="AAPL",
             name="Apple",
             country="United States",
@@ -309,7 +309,7 @@ class TestCreateStock:
         mock_scoring_service = AsyncMock()
         mock_scoring_service.calculate_and_save_score.return_value = mock_score
 
-        stock_data = StockCreate(
+        stock_data = SecurityCreate(
             symbol="AAPL",
             name="Apple",
             country="United States",
@@ -543,7 +543,7 @@ class TestUpdateStock:
         mock_scoring_service = AsyncMock()
         mock_scoring_service.calculate_and_save_score.return_value = mock_score
 
-        update = StockUpdate(name="Apple Inc.")
+        update = SecurityUpdate(name="Apple Inc.")
 
         with patch("app.api.stocks.cache"):
             with patch("app.api.stocks.is_isin", return_value=True):
@@ -563,7 +563,7 @@ class TestUpdateStock:
 
         mock_scoring_service = AsyncMock()
 
-        update = StockUpdate(name="New Name")
+        update = SecurityUpdate(name="New Name")
 
         with patch("app.api.stocks.is_isin", return_value=True):
             with pytest.raises(HTTPException) as exc_info:
@@ -585,7 +585,7 @@ class TestUpdateStock:
 
         mock_scoring_service = AsyncMock()
 
-        update = StockUpdate()  # Empty update
+        update = SecurityUpdate()  # Empty update
 
         with patch("app.api.stocks.is_isin", return_value=True):
             with pytest.raises(HTTPException) as exc_info:
@@ -626,7 +626,7 @@ class TestUpdateStock:
         mock_scoring_service = AsyncMock()
         mock_scoring_service.calculate_and_save_score.return_value = mock_score
 
-        update = StockUpdate(new_symbol="AAPL2.US")
+        update = SecurityUpdate(new_symbol="AAPL2.US")
 
         with patch("app.api.stocks.cache"):
             with patch("app.api.stocks.is_isin", return_value=True):
@@ -661,7 +661,7 @@ class TestUpdateStock:
         mock_scoring_service = AsyncMock()
         mock_scoring_service.calculate_and_save_score.return_value = mock_score
 
-        update = StockUpdate(min_portfolio_target=5.0, max_portfolio_target=15.0)
+        update = SecurityUpdate(min_portfolio_target=5.0, max_portfolio_target=15.0)
 
         with patch("app.api.stocks.cache"):
             with patch("app.api.stocks.is_isin", return_value=True):
@@ -688,7 +688,7 @@ class TestUpdateStock:
         mock_stock_repo.get_by_symbol.return_value = mock_stock
         mock_scoring_service = AsyncMock()
 
-        update = StockUpdate(min_portfolio_target=25.0)  # Over limit
+        update = SecurityUpdate(min_portfolio_target=25.0)  # Over limit
 
         with patch("app.api.stocks.cache"):
             with patch("app.api.stocks.is_isin", return_value=True):
@@ -711,7 +711,7 @@ class TestUpdateStock:
         mock_stock_repo.get_by_symbol.return_value = mock_stock
         mock_scoring_service = AsyncMock()
 
-        update = StockUpdate(max_portfolio_target=35.0)  # Over limit
+        update = SecurityUpdate(max_portfolio_target=35.0)  # Over limit
 
         with patch("app.api.stocks.cache"):
             with patch("app.api.stocks.is_isin", return_value=True):
@@ -733,7 +733,7 @@ class TestUpdateStock:
         mock_stock_repo.get_by_isin.return_value = mock_stock
         mock_scoring_service = AsyncMock()
 
-        update = StockUpdate(min_portfolio_target=15.0, max_portfolio_target=5.0)
+        update = SecurityUpdate(min_portfolio_target=15.0, max_portfolio_target=5.0)
 
         with patch("app.api.stocks.cache"):
             with patch("app.api.stocks.is_isin", return_value=True):
@@ -957,7 +957,7 @@ class TestHelperFunctions:
 
     def test_build_update_dict(self):
         """Test building update dictionary."""
-        update = StockUpdate(
+        update = SecurityUpdate(
             name="Apple Inc.",
             country="United States",  # Country is auto-detected, not in update dict
             active=True,
@@ -972,7 +972,7 @@ class TestHelperFunctions:
 
     def test_build_update_dict_with_new_symbol(self):
         """Test building update dictionary with new symbol."""
-        update = StockUpdate(name="Apple")
+        update = SecurityUpdate(name="Apple")
         result = _build_update_dict(update, "AAPL2")
 
         assert result["symbol"] == "AAPL2"
