@@ -33,7 +33,7 @@ class TestPriorityCalculator:
         input_data = PriorityInput(
             symbol="AAPL",
             name="Apple Inc.",
-            stock_score=0.7,  # Score already includes Quality, Opportunity, Analyst, Allocation Fit
+            security_score=0.7,  # Score already includes Quality, Opportunity, Analyst, Allocation Fit
             multiplier=1.0,
             country="US",
             industry="Consumer Electronics",
@@ -58,7 +58,7 @@ class TestPriorityCalculator:
         input_data = PriorityInput(
             symbol="AAPL",
             name="Apple Inc.",
-            stock_score=0.6,
+            security_score=0.6,
             multiplier=2.0,  # Double the priority
             country="US",
             industry="Consumer Electronics",
@@ -76,7 +76,7 @@ class TestPriorityCalculator:
             PriorityInput(
                 symbol="LOW",
                 name="Low Priority",
-                stock_score=0.4,
+                security_score=0.4,
                 multiplier=1.0,
                 country="US",
                 industry="Consumer Electronics",
@@ -85,7 +85,7 @@ class TestPriorityCalculator:
             PriorityInput(
                 symbol="HIGH",
                 name="High Priority",
-                stock_score=0.8,
+                security_score=0.8,
                 multiplier=1.0,
                 country="US",
                 industry="Consumer Electronics",

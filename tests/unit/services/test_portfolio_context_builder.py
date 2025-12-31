@@ -244,8 +244,8 @@ class TestBuildPortfolioContext:
                 mock_db_manager,
             )
 
-            assert context.stock_scores is not None
-            assert context.stock_scores["AAPL"] == 0.85
+            assert context.security_scores is not None
+            assert context.security_scores["AAPL"] == 0.85
 
     @pytest.mark.asyncio
     async def test_handles_empty_positions(
@@ -450,4 +450,6 @@ class TestBuildPortfolioContext:
             )
 
             # Should not include score if quality_score is None
-            assert context.stock_scores is None or "AAPL" not in context.stock_scores
+            assert (
+                context.security_scores is None or "AAPL" not in context.security_scores
+            )

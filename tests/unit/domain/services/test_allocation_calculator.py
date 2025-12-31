@@ -139,7 +139,7 @@ class TestCalculatePositionSize:
 
         candidate = SecurityPriority(
             symbol="AAPL",
-            stock_score=0.5,
+            security_score=0.5,
             volatility=0.20,  # 20% volatility
         )
 
@@ -155,7 +155,7 @@ class TestCalculatePositionSize:
 
         candidate = SecurityPriority(
             symbol="AAPL",
-            stock_score=0.5,
+            security_score=0.5,
             volatility=None,
         )
 
@@ -171,7 +171,7 @@ class TestCalculatePositionSize:
 
         candidate = SecurityPriority(
             symbol="AAPL",
-            stock_score=0.5,
+            security_score=0.5,
             volatility=0.20,
         )
 
@@ -186,13 +186,13 @@ class TestCalculatePositionSize:
 
         candidate_high_score = SecurityPriority(
             symbol="AAPL",
-            stock_score=1.0,  # High score
+            security_score=1.0,  # High score
             volatility=0.20,
         )
 
         candidate_low_score = SecurityPriority(
             symbol="MSFT",
-            stock_score=0.0,  # Low score
+            security_score=0.0,  # Low score
             volatility=0.20,
         )
 

@@ -36,7 +36,7 @@ class TestCalculatePositionSize:
             name="Test Stock",
             country="United States",
             industry="Consumer Electronics",
-            stock_score=score,
+            security_score=score,
             volatility=volatility,
             multiplier=1.0,
             min_lot=1,
