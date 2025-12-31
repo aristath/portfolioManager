@@ -87,7 +87,7 @@ class TestBuildPortfolioContext:
         mock_db_manager.state.fetchall = AsyncMock(return_value=[mock_row])
 
         with patch(
-            "app.modules.recommendation.portfolio_context_builder.GroupingRepository"
+            "app.modules.planning.services.portfolio_context_builder.GroupingRepository"
         ) as mock_grouping_repo_class:
             mock_grouping_repo = AsyncMock()
             mock_grouping_repo.get_country_groups = AsyncMock(
@@ -124,7 +124,7 @@ class TestBuildPortfolioContext:
         mock_db_manager.state.fetchall = AsyncMock(return_value=[])
 
         with patch(
-            "app.modules.recommendation.portfolio_context_builder.GroupingRepository"
+            "app.modules.planning.services.portfolio_context_builder.GroupingRepository"
         ) as mock_grouping_repo_class:
             mock_grouping_repo = AsyncMock()
             mock_grouping_repo.get_country_groups = AsyncMock(
@@ -159,7 +159,7 @@ class TestBuildPortfolioContext:
         mock_db_manager.state.fetchall = AsyncMock(return_value=[])
 
         with patch(
-            "app.modules.recommendation.portfolio_context_builder.GroupingRepository"
+            "app.modules.planning.services.portfolio_context_builder.GroupingRepository"
         ) as mock_grouping_repo_class:
             mock_grouping_repo = AsyncMock()
             mock_grouping_repo.get_country_groups = AsyncMock(
@@ -191,7 +191,7 @@ class TestBuildPortfolioContext:
         mock_db_manager.state.fetchall = AsyncMock(return_value=[])
 
         with patch(
-            "app.modules.recommendation.portfolio_context_builder.GroupingRepository"
+            "app.modules.planning.services.portfolio_context_builder.GroupingRepository"
         ) as mock_grouping_repo_class:
             mock_grouping_repo = AsyncMock()
             mock_grouping_repo.get_country_groups = AsyncMock(return_value={})
@@ -230,7 +230,7 @@ class TestBuildPortfolioContext:
         mock_db_manager.state.fetchall = AsyncMock(return_value=[mock_row])
 
         with patch(
-            "app.modules.recommendation.portfolio_context_builder.GroupingRepository"
+            "app.modules.planning.services.portfolio_context_builder.GroupingRepository"
         ) as mock_grouping_repo_class:
             mock_grouping_repo = AsyncMock()
             mock_grouping_repo.get_country_groups = AsyncMock(return_value={})
@@ -263,7 +263,7 @@ class TestBuildPortfolioContext:
         mock_db_manager.state.fetchall = AsyncMock(return_value=[])
 
         with patch(
-            "app.modules.recommendation.portfolio_context_builder.GroupingRepository"
+            "app.modules.planning.services.portfolio_context_builder.GroupingRepository"
         ) as mock_grouping_repo_class:
             mock_grouping_repo = AsyncMock()
             mock_grouping_repo.get_country_groups = AsyncMock(return_value={})
@@ -296,7 +296,7 @@ class TestBuildPortfolioContext:
         mock_db_manager.state.fetchall = AsyncMock(return_value=[])
 
         with patch(
-            "app.modules.recommendation.portfolio_context_builder.GroupingRepository"
+            "app.modules.planning.services.portfolio_context_builder.GroupingRepository"
         ) as mock_grouping_repo_class:
             mock_grouping_repo = AsyncMock()
             mock_grouping_repo.get_country_groups = AsyncMock(return_value={})
@@ -324,7 +324,7 @@ class TestBuildPortfolioContext:
         mock_db_manager.state.fetchall = AsyncMock(return_value=[])
 
         with patch(
-            "app.modules.recommendation.portfolio_context_builder.GroupingRepository"
+            "app.modules.planning.services.portfolio_context_builder.GroupingRepository"
         ) as mock_grouping_repo_class:
             mock_grouping_repo = AsyncMock()
             mock_grouping_repo.get_country_groups = AsyncMock(return_value={})
@@ -365,7 +365,7 @@ class TestBuildPortfolioContext:
         mock_db_manager.state.fetchall = AsyncMock(return_value=[])
 
         with patch(
-            "app.modules.recommendation.portfolio_context_builder.GroupingRepository"
+            "app.modules.planning.services.portfolio_context_builder.GroupingRepository"
         ) as mock_grouping_repo_class:
             mock_grouping_repo = AsyncMock()
             mock_grouping_repo.get_country_groups = AsyncMock(return_value={})
@@ -399,7 +399,7 @@ class TestBuildPortfolioContext:
         mock_db_manager.state.fetchall = AsyncMock(return_value=[])
 
         with patch(
-            "app.modules.recommendation.portfolio_context_builder.GroupingRepository"
+            "app.modules.planning.services.portfolio_context_builder.GroupingRepository"
         ) as mock_grouping_repo_class:
             mock_grouping_repo = AsyncMock()
             mock_grouping_repo.get_country_groups = AsyncMock(return_value={})
@@ -435,7 +435,7 @@ class TestBuildPortfolioContext:
         mock_db_manager.state.fetchall = AsyncMock(return_value=[mock_row])
 
         with patch(
-            "app.modules.recommendation.portfolio_context_builder.GroupingRepository"
+            "app.modules.planning.services.portfolio_context_builder.GroupingRepository"
         ) as mock_grouping_repo_class:
             mock_grouping_repo = AsyncMock()
             mock_grouping_repo.get_country_groups = AsyncMock(return_value={})

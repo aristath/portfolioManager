@@ -69,15 +69,15 @@ class TestExpectedReturnsCalculator:
         # Mock market indicators
         with (
             patch(
-                "app.modules.optimization.expected_returns.market_indicators.get_vix",
+                "app.modules.optimization.services.expected_returns.market_indicators.get_vix",
                 new_callable=AsyncMock,
             ) as mock_vix,
             patch(
-                "app.modules.optimization.expected_returns.market_indicators.get_treasury_yields",
+                "app.modules.optimization.services.expected_returns.market_indicators.get_treasury_yields",
                 new_callable=AsyncMock,
             ) as mock_yields,
             patch(
-                "app.modules.optimization.expected_returns.market_indicators.get_market_pe",
+                "app.modules.optimization.services.expected_returns.market_indicators.get_market_pe",
                 new_callable=AsyncMock,
             ) as mock_pe,
         ):
@@ -103,17 +103,17 @@ class TestExpectedReturnsCalculator:
 
         with (
             patch(
-                "app.modules.optimization.expected_returns.market_indicators.get_vix",
+                "app.modules.optimization.services.expected_returns.market_indicators.get_vix",
                 new_callable=AsyncMock,
                 return_value=None,
             ),
             patch(
-                "app.modules.optimization.expected_returns.market_indicators.get_treasury_yields",
+                "app.modules.optimization.services.expected_returns.market_indicators.get_treasury_yields",
                 new_callable=AsyncMock,
                 return_value=None,
             ),
             patch(
-                "app.modules.optimization.expected_returns.market_indicators.get_market_pe",
+                "app.modules.optimization.services.expected_returns.market_indicators.get_market_pe",
                 new_callable=AsyncMock,
                 return_value=None,
             ),
@@ -130,17 +130,17 @@ class TestExpectedReturnsCalculator:
 
         with (
             patch(
-                "app.modules.optimization.expected_returns.market_indicators.get_vix",
+                "app.modules.optimization.services.expected_returns.market_indicators.get_vix",
                 new_callable=AsyncMock,
                 return_value=None,
             ),
             patch(
-                "app.modules.optimization.expected_returns.market_indicators.get_treasury_yields",
+                "app.modules.optimization.services.expected_returns.market_indicators.get_treasury_yields",
                 new_callable=AsyncMock,
                 return_value=None,
             ),
             patch(
-                "app.modules.optimization.expected_returns.market_indicators.get_market_pe",
+                "app.modules.optimization.services.expected_returns.market_indicators.get_market_pe",
                 new_callable=AsyncMock,
                 return_value=None,
             ),
@@ -174,17 +174,17 @@ class TestExpectedReturnsCalculator:
 
         with (
             patch(
-                "app.modules.optimization.expected_returns.market_indicators.get_vix",
+                "app.modules.optimization.services.expected_returns.market_indicators.get_vix",
                 new_callable=AsyncMock,
                 return_value=None,
             ),
             patch(
-                "app.modules.optimization.expected_returns.market_indicators.get_treasury_yields",
+                "app.modules.optimization.services.expected_returns.market_indicators.get_treasury_yields",
                 new_callable=AsyncMock,
                 return_value=None,
             ),
             patch(
-                "app.modules.optimization.expected_returns.market_indicators.get_market_pe",
+                "app.modules.optimization.services.expected_returns.market_indicators.get_market_pe",
                 new_callable=AsyncMock,
                 return_value=None,
             ),
@@ -228,17 +228,17 @@ class TestExpectedReturnsCalculator:
 
         with (
             patch(
-                "app.modules.optimization.expected_returns.market_indicators.get_vix",
+                "app.modules.optimization.services.expected_returns.market_indicators.get_vix",
                 new_callable=AsyncMock,
                 return_value=None,
             ),
             patch(
-                "app.modules.optimization.expected_returns.market_indicators.get_treasury_yields",
+                "app.modules.optimization.services.expected_returns.market_indicators.get_treasury_yields",
                 new_callable=AsyncMock,
                 return_value=None,
             ),
             patch(
-                "app.modules.optimization.expected_returns.market_indicators.get_market_pe",
+                "app.modules.optimization.services.expected_returns.market_indicators.get_market_pe",
                 new_callable=AsyncMock,
                 return_value=None,
             ),

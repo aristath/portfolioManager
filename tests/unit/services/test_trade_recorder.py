@@ -43,10 +43,10 @@ class TestRecordTrade:
         """Test that a trade is recorded successfully."""
         with (
             patch(
-                "app.modules.trade_execution.trade_recorder.TradeFactory"
+                "app.modules.trading.services.trade_execution.trade_recorder.TradeFactory"
             ) as mock_factory,
             patch(
-                "app.modules.trade_execution.trade_recorder.get_event_bus"
+                "app.modules.trading.services.trade_execution.trade_recorder.get_event_bus"
             ) as mock_event_bus,
         ):
             mock_trade = MagicMock(spec=Trade)
@@ -138,10 +138,10 @@ class TestRecordTrade:
         """Test that estimated_price is used when price is zero."""
         with (
             patch(
-                "app.modules.trade_execution.trade_recorder.TradeFactory"
+                "app.modules.trading.services.trade_execution.trade_recorder.TradeFactory"
             ) as mock_factory,
             patch(
-                "app.modules.trade_execution.trade_recorder.get_event_bus"
+                "app.modules.trading.services.trade_execution.trade_recorder.get_event_bus"
             ) as mock_event_bus,
         ):
             mock_trade = MagicMock(spec=Trade)
@@ -177,10 +177,10 @@ class TestRecordTrade:
         """Test that position is updated after a sell trade."""
         with (
             patch(
-                "app.modules.trade_execution.trade_recorder.TradeFactory"
+                "app.modules.trading.services.trade_execution.trade_recorder.TradeFactory"
             ) as mock_factory,
             patch(
-                "app.modules.trade_execution.trade_recorder.get_event_bus"
+                "app.modules.trading.services.trade_execution.trade_recorder.get_event_bus"
             ) as mock_event_bus,
         ):
             mock_trade = MagicMock(spec=Trade)
@@ -214,10 +214,10 @@ class TestRecordTrade:
 
         with (
             patch(
-                "app.modules.trade_execution.trade_recorder.TradeFactory"
+                "app.modules.trading.services.trade_execution.trade_recorder.TradeFactory"
             ) as mock_factory,
             patch(
-                "app.modules.trade_execution.trade_recorder.get_event_bus"
+                "app.modules.trading.services.trade_execution.trade_recorder.get_event_bus"
             ) as mock_event_bus,
         ):
             mock_trade = MagicMock(spec=Trade)
@@ -271,13 +271,13 @@ class TestRecordTrade:
         """Test that TradeExecutedEvent is published."""
         with (
             patch(
-                "app.modules.trade_execution.trade_recorder.TradeFactory"
+                "app.modules.trading.services.trade_execution.trade_recorder.TradeFactory"
             ) as mock_factory,
             patch(
-                "app.modules.trade_execution.trade_recorder.get_event_bus"
+                "app.modules.trading.services.trade_execution.trade_recorder.get_event_bus"
             ) as mock_event_bus,
             patch(
-                "app.modules.trade_execution.trade_recorder.TradeExecutedEvent"
+                "app.modules.trading.services.trade_execution.trade_recorder.TradeExecutedEvent"
             ) as mock_event_class,
         ):
             mock_trade = MagicMock(spec=Trade)

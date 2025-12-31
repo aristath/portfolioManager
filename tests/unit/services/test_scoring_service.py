@@ -355,7 +355,7 @@ class TestCalculateAndSaveScore:
                 return_value=mock_fundamentals,
             ),
             patch(
-                "app.modules.scoring_service.calculate_stock_score",
+                "app.modules.scoring.services.scoring_service.calculate_stock_score",
                 return_value=mock_calculated_score,
             ),
         ):
@@ -415,7 +415,7 @@ class TestCalculateAndSaveScore:
                 return_value={},
             ) as mock_yahoo,
             patch(
-                "app.modules.scoring_service.calculate_stock_score",
+                "app.modules.scoring.services.scoring_service.calculate_stock_score",
                 return_value=None,
             ),
         ):
@@ -543,7 +543,7 @@ class TestCalculateAndSaveScore:
                 return_value={},
             ),
             patch(
-                "app.modules.scoring_service.calculate_stock_score",
+                "app.modules.scoring.services.scoring_service.calculate_stock_score",
                 return_value=None,  # Calculation fails
             ),
         ):
@@ -613,7 +613,7 @@ class TestCalculateAndSaveScore:
                 return_value={},
             ),
             patch(
-                "app.modules.scoring_service.calculate_stock_score",
+                "app.modules.scoring.services.scoring_service.calculate_stock_score",
                 return_value=None,
             ) as mock_calc,
         ):
