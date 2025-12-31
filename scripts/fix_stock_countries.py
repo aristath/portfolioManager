@@ -11,8 +11,8 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.infrastructure.database.manager import get_db_manager
-from app.repositories import StockRepository
+from app.core.database.manager import get_db_manager
+from app.modules.universe.database.stock_repository import StockRepository
 
 
 async def fix_missing_countries():

@@ -10,10 +10,10 @@ from app.core.database.schemas import (
     CACHE_SCHEMA,
     CALCULATIONS_SCHEMA,
     CONFIG_SCHEMA,
-    HISTORY_SCHEMA,
     LEDGER_SCHEMA,
     STATE_SCHEMA,
 )
+from app.modules.portfolio.database.schemas import HISTORY_SCHEMA
 from app.repositories import (
     AllocationRepository,
     PortfolioRepository,
