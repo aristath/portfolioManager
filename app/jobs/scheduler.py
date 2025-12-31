@@ -8,7 +8,7 @@ DATA SYNC JOBS:
    - Updates LED display
    - Calls emergency_rebalance internally when negative balances detected
 
-2. stocks_data_sync - Hourly
+2. securities_data_sync - Hourly
    - Historical data sync (per symbol, only if not synced in 24h)
    - Metrics calculation
    - Score refresh
@@ -350,7 +350,7 @@ async def init_scheduler() -> AsyncIOScheduler:
 
     logger.info(
         f"Scheduler initialized with 10 scheduled jobs + 1 background task - "
-        f"sync_cycle:{sync_cycle_minutes}m, stocks_data_sync:1h, "
+        f"sync_cycle:{sync_cycle_minutes}m, securities_data_sync:1h, "
         f"maintenance:{maintenance_hour}:00, dividend_reinvestment:{maintenance_hour}:30, "
         f"universe_pruning:1st of month {maintenance_hour}:00, "
         f"security_discovery:15th of month 02:00, "
@@ -377,7 +377,7 @@ async def reschedule_all_jobs():
         "sync_cycle", trigger=IntervalTrigger(minutes=sync_cycle_minutes)
     )
 
-    # Stocks data sync is fixed at hourly, no reschedule needed
+    # Securities data sync is fixed at hourly, no reschedule needed
 
     # Reschedule maintenance jobs
     scheduler.reschedule_job(
@@ -395,7 +395,7 @@ async def reschedule_all_jobs():
         "universe_pruning",
         trigger=CronTrigger(day=1, hour=maintenance_hour, minute=0),
     )
-    # Stock discovery schedule is fixed (15th at 2am), no reschedule needed
+    # Security discovery schedule is fixed (15th at 2am), no reschedule needed
 
     # Reschedule auto-deploy
     scheduler.reschedule_job(
