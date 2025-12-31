@@ -10,7 +10,8 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api import charts
 from app.api import settings as settings_api
-from app.api import status, stocks, trades
+from app.api import status, stocks
+from app.modules.trading.api import trades
 from app.modules.portfolio.api import portfolio
 from app.config import settings
 from app.core.database.manager import get_db_manager, init_databases, shutdown_databases

@@ -1,10 +1,6 @@
-"""Trade execution service modules.
+"""Backward compatibility re-export (temporary - will be removed in Phase 5)."""
 
-Helper modules for trade execution operations.
-"""
+from app.modules.trading.services.trade_execution import record_trade
 
-from app.application.services.trade_execution.trade_recorder import record_trade
+__all__ = ["record_trade"]
 
-__all__ = [
-    "record_trade",
-]

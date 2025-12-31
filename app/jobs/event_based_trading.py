@@ -80,7 +80,7 @@ async def _run_event_based_trading_loop_internal():
 
             # Step 3.5: Check trade frequency limits
             set_text("CHECKING FREQUENCY LIMITS...")
-            from app.application.services.trade_frequency_service import (
+            from app.modules.trading.services.trade_frequency_service import (
                 TradeFrequencyService,
             )
             from app.repositories import SettingsRepository, TradeRepository
