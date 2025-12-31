@@ -7,6 +7,7 @@ import pytest
 
 from app.domain.models import Position, Security
 from app.domain.services.exchange_rate_service import ExchangeRateService
+from app.domain.value_objects.product_type import ProductType
 from app.infrastructure.external import yahoo_finance as yahoo
 from app.infrastructure.external.tradernet import get_tradernet_client
 from app.repositories import (
@@ -96,6 +97,7 @@ async def test_rebalancing_service_handles_price_fetch_failure(db):
         symbol="AAPL",
         yahoo_symbol="AAPL",
         name="Apple Inc.",
+        product_type=ProductType.EQUITY,
         industry="Consumer Electronics",
         country="United States",
         priority_multiplier=1.0,
