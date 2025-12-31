@@ -72,6 +72,28 @@
            x-transition:leave="transition ease-in duration-150"
            x-transition:leave-start="opacity-100"
            x-transition:leave-end="opacity-0">
+        <!-- Universe Filter Buttons -->
+        <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
+          <div class="flex items-center gap-2 flex-wrap">
+            <template x-for="bucket in $store.app.buckets" :key="bucket.id">
+              <button @click="$store.app.openBucketHealth(bucket)"
+                      :class="{
+                        'px-4 py-2 rounded text-sm font-medium transition-colors border': true,
+                        'bg-blue-600 text-white border-blue-600': bucket.type === 'core',
+                        'bg-purple-600 text-white border-purple-600': bucket.type === 'satellite'
+                      }">
+                <span x-text="bucket.name"></span>
+                <span class="ml-2 text-xs opacity-75">
+                  (<span x-text="$store.app.getSecurityCountForBucket(bucket.id)"></span>)
+                </span>
+              </button>
+            </template>
+          </div>
+          <button @click="$store.app.showUniverseManagementModal = true"
+                  class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 text-sm rounded font-medium transition-colors border border-gray-600">
+            ⚙️ Manage Universes
+          </button>
+        </div>
         <security-table></security-table>
       </div>
 
