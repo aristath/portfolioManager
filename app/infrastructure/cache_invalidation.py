@@ -69,7 +69,7 @@ def get_cache_invalidation_service(
     Get or create a CacheInvalidationService instance.
 
     Args:
-        cache: Cache instance to use (default: imports from app.infrastructure.cache)
+        cache: Cache instance to use (default: imports from app.core.cache.cache)
 
     Returns:
         CacheInvalidationService instance
