@@ -1,0 +1,170 @@
+# Default Planner Configuration
+# This is the standard configuration with all features enabled.
+
+[planner]
+name = "default"
+description = "Standard planner with all features enabled"
+
+# Global settings
+max_depth = 5                           # Maximum actions per sequence
+max_opportunities_per_category = 5      # Max opportunities per category
+priority_threshold = 0.3                # Minimum priority to include
+enable_diverse_selection = true         # Enable diversity in selection
+diversity_weight = 0.3                  # Weight for diversity vs priority
+
+# Transaction costs
+transaction_cost_fixed = 5.0            # Fixed cost per trade (EUR)
+transaction_cost_percent = 0.001        # Variable cost (0.1%)
+
+# Trade permissions
+allow_sell = true
+allow_buy = true
+
+# ============================================================================
+# OPPORTUNITY CALCULATORS
+# Calculate different types of trading opportunities
+# ============================================================================
+
+[opportunity_calculators.profit_taking]
+enabled = true
+[opportunity_calculators.profit_taking.params]
+windfall_threshold = 0.30               # 30% gain threshold
+priority_weight = 1.2
+
+[opportunity_calculators.averaging_down]
+enabled = true
+[opportunity_calculators.averaging_down.params]
+dip_threshold = -0.20                   # 20% loss threshold
+min_quality_score = 0.6
+priority_weight = 1.0
+
+[opportunity_calculators.opportunity_buys]
+enabled = true
+[opportunity_calculators.opportunity_buys.params]
+min_quality_score = 0.7
+priority_weight = 1.1
+
+[opportunity_calculators.rebalance_sells]
+enabled = true
+[opportunity_calculators.rebalance_sells.params]
+overweight_threshold = 0.02             # 2% overweight
+priority_weight = 0.8
+
+[opportunity_calculators.rebalance_buys]
+enabled = true
+[opportunity_calculators.rebalance_buys.params]
+underweight_threshold = 0.02            # 2% underweight
+priority_weight = 0.9
+
+[opportunity_calculators.weight_based]
+enabled = true
+[opportunity_calculators.weight_based.params]
+min_gap_threshold = 0.01
+transaction_cost_fixed = 5.0
+transaction_cost_percent = 0.001
+
+# ============================================================================
+# PATTERN GENERATORS
+# Generate different trading patterns from opportunities
+# ============================================================================
+
+[pattern_generators.direct_buy]
+enabled = true
+[pattern_generators.direct_buy.params]
+max_depth = 5
+
+[pattern_generators.profit_taking]
+enabled = true
+[pattern_generators.profit_taking.params]
+max_depth = 5
+
+[pattern_generators.rebalance]
+enabled = true
+[pattern_generators.rebalance.params]
+max_depth = 5
+
+[pattern_generators.averaging_down]
+enabled = true
+[pattern_generators.averaging_down.params]
+max_depth = 5
+
+[pattern_generators.single_best]
+enabled = true
+[pattern_generators.single_best.params]
+max_depth = 1
+
+[pattern_generators.multi_sell]
+enabled = true
+[pattern_generators.multi_sell.params]
+max_depth = 5
+
+[pattern_generators.mixed_strategy]
+enabled = true
+[pattern_generators.mixed_strategy.params]
+max_depth = 5
+
+[pattern_generators.opportunity_first]
+enabled = true
+[pattern_generators.opportunity_first.params]
+max_depth = 5
+
+[pattern_generators.deep_rebalance]
+enabled = true
+[pattern_generators.deep_rebalance.params]
+max_depth = 5
+
+[pattern_generators.cash_generation]
+enabled = true
+[pattern_generators.cash_generation.params]
+max_depth = 5
+
+[pattern_generators.cost_optimized]
+enabled = true
+[pattern_generators.cost_optimized.params]
+max_depth = 5
+
+[pattern_generators.adaptive]
+enabled = false                         # Requires portfolio_context
+[pattern_generators.adaptive.params]
+max_depth = 5
+
+[pattern_generators.market_regime]
+enabled = false                         # Requires market_regime detection
+[pattern_generators.market_regime.params]
+max_depth = 5
+market_regime = "sideways"
+
+# ============================================================================
+# SEQUENCE GENERATORS
+# Combine opportunities into sequences using different strategies
+# ============================================================================
+
+[sequence_generators.combinatorial]
+enabled = false                         # Disabled by default (expensive)
+[sequence_generators.combinatorial.params]
+max_sells = 3
+max_buys = 3
+priority_threshold = 0.3
+max_steps = 5
+max_combinations = 50
+max_candidates = 12
+
+[sequence_generators.enhanced_combinatorial]
+enabled = true
+[sequence_generators.enhanced_combinatorial.params]
+max_sells = 3
+max_buys = 3
+priority_threshold = 0.3
+max_steps = 5
+max_combinations = 50
+max_candidates = 12
+
+# ============================================================================
+# FILTERS
+# Filter and refine generated sequences
+# ============================================================================
+
+[filters.correlation_aware]
+enabled = true
+[filters.correlation_aware.params]
+correlation_threshold = 0.7             # Filter if correlation > 0.7

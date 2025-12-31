@@ -1,0 +1,129 @@
+# Conservative Planner Configuration
+# Minimal intervention strategy - only the highest priority actions.
+
+[planner]
+name = "conservative"
+description = "Conservative strategy with minimal intervention"
+
+# Global settings
+max_depth = 2                           # Only 1-2 actions per sequence
+max_opportunities_per_category = 3      # Fewer opportunities
+priority_threshold = 0.5                # Higher threshold (only best opportunities)
+enable_diverse_selection = true
+diversity_weight = 0.2                  # Prioritize priority over diversity
+
+# Transaction costs
+transaction_cost_fixed = 5.0
+transaction_cost_percent = 0.001
+
+# Trade permissions
+allow_sell = true
+allow_buy = true
+
+# ============================================================================
+# OPPORTUNITY CALCULATORS
+# ============================================================================
+
+[opportunity_calculators.profit_taking]
+enabled = true
+[opportunity_calculators.profit_taking.params]
+windfall_threshold = 0.40               # Higher threshold (40%)
+priority_weight = 1.5
+
+[opportunity_calculators.averaging_down]
+enabled = true
+[opportunity_calculators.averaging_down.params]
+dip_threshold = -0.25                   # Deeper dips only
+min_quality_score = 0.7                 # Higher quality only
+priority_weight = 1.2
+
+[opportunity_calculators.opportunity_buys]
+enabled = true
+[opportunity_calculators.opportunity_buys.params]
+min_quality_score = 0.8                 # Very high quality only
+priority_weight = 1.3
+
+[opportunity_calculators.rebalance_sells]
+enabled = false                         # Disable aggressive rebalancing
+
+[opportunity_calculators.rebalance_buys]
+enabled = false                         # Disable aggressive rebalancing
+
+[opportunity_calculators.weight_based]
+enabled = false                         # Disable weight-based optimization
+
+# ============================================================================
+# PATTERN GENERATORS
+# Only simple, focused patterns
+# ============================================================================
+
+[pattern_generators.direct_buy]
+enabled = true
+[pattern_generators.direct_buy.params]
+max_depth = 2
+
+[pattern_generators.profit_taking]
+enabled = true
+[pattern_generators.profit_taking.params]
+max_depth = 2
+
+[pattern_generators.rebalance]
+enabled = false
+
+[pattern_generators.averaging_down]
+enabled = true
+[pattern_generators.averaging_down.params]
+max_depth = 2
+
+[pattern_generators.single_best]
+enabled = true                          # Perfect for conservative approach
+[pattern_generators.single_best.params]
+max_depth = 1
+
+[pattern_generators.multi_sell]
+enabled = false
+
+[pattern_generators.mixed_strategy]
+enabled = false
+
+[pattern_generators.opportunity_first]
+enabled = true
+[pattern_generators.opportunity_first.params]
+max_depth = 2
+
+[pattern_generators.deep_rebalance]
+enabled = false
+
+[pattern_generators.cash_generation]
+enabled = false
+
+[pattern_generators.cost_optimized]
+enabled = true                          # Minimize transaction costs
+[pattern_generators.cost_optimized.params]
+max_depth = 2
+
+[pattern_generators.adaptive]
+enabled = false
+
+[pattern_generators.market_regime]
+enabled = false
+
+# ============================================================================
+# SEQUENCE GENERATORS
+# Disable combinatorial (too many sequences)
+# ============================================================================
+
+[sequence_generators.combinatorial]
+enabled = false
+
+[sequence_generators.enhanced_combinatorial]
+enabled = false
+
+# ============================================================================
+# FILTERS
+# ============================================================================
+
+[filters.correlation_aware]
+enabled = true
+[filters.correlation_aware.params]
+correlation_threshold = 0.6             # Stricter (lower threshold)

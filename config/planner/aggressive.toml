@@ -1,0 +1,157 @@
+# Aggressive Planner Configuration
+# Active trading strategy with all features enabled.
+
+[planner]
+name = "aggressive"
+description = "Aggressive strategy with active trading and rebalancing"
+
+# Global settings
+max_depth = 7                           # More actions per sequence
+max_opportunities_per_category = 10     # More opportunities
+priority_threshold = 0.2                # Lower threshold (more opportunities)
+enable_diverse_selection = true
+diversity_weight = 0.4                  # Higher diversity weight
+
+# Transaction costs
+transaction_cost_fixed = 5.0
+transaction_cost_percent = 0.001
+
+# Trade permissions
+allow_sell = true
+allow_buy = true
+
+# ============================================================================
+# OPPORTUNITY CALCULATORS
+# All enabled with aggressive parameters
+# ============================================================================
+
+[opportunity_calculators.profit_taking]
+enabled = true
+[opportunity_calculators.profit_taking.params]
+windfall_threshold = 0.20               # Lower threshold (20%)
+priority_weight = 1.0
+
+[opportunity_calculators.averaging_down]
+enabled = true
+[opportunity_calculators.averaging_down.params]
+dip_threshold = -0.15                   # Smaller dips
+min_quality_score = 0.5
+priority_weight = 0.9
+
+[opportunity_calculators.opportunity_buys]
+enabled = true
+[opportunity_calculators.opportunity_buys.params]
+min_quality_score = 0.6
+priority_weight = 1.0
+
+[opportunity_calculators.rebalance_sells]
+enabled = true
+[opportunity_calculators.rebalance_sells.params]
+overweight_threshold = 0.01             # 1% overweight (aggressive)
+priority_weight = 0.9
+
+[opportunity_calculators.rebalance_buys]
+enabled = true
+[opportunity_calculators.rebalance_buys.params]
+underweight_threshold = 0.01            # 1% underweight (aggressive)
+priority_weight = 0.9
+
+[opportunity_calculators.weight_based]
+enabled = true
+[opportunity_calculators.weight_based.params]
+min_gap_threshold = 0.005               # Smaller gaps
+transaction_cost_fixed = 5.0
+transaction_cost_percent = 0.001
+
+# ============================================================================
+# PATTERN GENERATORS
+# All patterns enabled
+# ============================================================================
+
+[pattern_generators.direct_buy]
+enabled = true
+[pattern_generators.direct_buy.params]
+max_depth = 7
+
+[pattern_generators.profit_taking]
+enabled = true
+[pattern_generators.profit_taking.params]
+max_depth = 7
+
+[pattern_generators.rebalance]
+enabled = true
+[pattern_generators.rebalance.params]
+max_depth = 7
+
+[pattern_generators.averaging_down]
+enabled = true
+[pattern_generators.averaging_down.params]
+max_depth = 7
+
+[pattern_generators.single_best]
+enabled = true
+[pattern_generators.single_best.params]
+max_depth = 1
+
+[pattern_generators.multi_sell]
+enabled = true
+[pattern_generators.multi_sell.params]
+max_depth = 7
+
+[pattern_generators.mixed_strategy]
+enabled = true
+[pattern_generators.mixed_strategy.params]
+max_depth = 7
+
+[pattern_generators.opportunity_first]
+enabled = true
+[pattern_generators.opportunity_first.params]
+max_depth = 7
+
+[pattern_generators.deep_rebalance]
+enabled = true
+[pattern_generators.deep_rebalance.params]
+max_depth = 7
+
+[pattern_generators.cash_generation]
+enabled = true
+[pattern_generators.cash_generation.params]
+max_depth = 7
+
+[pattern_generators.cost_optimized]
+enabled = true
+[pattern_generators.cost_optimized.params]
+max_depth = 7
+
+[pattern_generators.adaptive]
+enabled = false                         # Requires portfolio_context
+
+[pattern_generators.market_regime]
+enabled = false                         # Requires market_regime detection
+
+# ============================================================================
+# SEQUENCE GENERATORS
+# Enhanced combinatorial enabled for more exploration
+# ============================================================================
+
+[sequence_generators.combinatorial]
+enabled = false                         # Too expensive even for aggressive
+
+[sequence_generators.enhanced_combinatorial]
+enabled = true
+[sequence_generators.enhanced_combinatorial.params]
+max_sells = 4
+max_buys = 5
+priority_threshold = 0.2
+max_steps = 7
+max_combinations = 100                  # More combinations
+max_candidates = 15
+
+# ============================================================================
+# FILTERS
+# ============================================================================
+
+[filters.correlation_aware]
+enabled = true
+[filters.correlation_aware.params]
+correlation_threshold = 0.75            # More lenient (higher threshold)
