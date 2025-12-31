@@ -15,7 +15,7 @@ import hashlib
 import logging
 from typing import Any, Dict, List, Optional
 
-from app.domain.models import Stock
+from app.domain.models import Security
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +111,7 @@ def apply_pending_orders_to_portfolio(
 
 def generate_portfolio_hash(
     positions: List[Dict[str, Any]],
-    stocks: Optional[List[Stock]] = None,
+    stocks: Optional[List[Security]] = None,
     cash_balances: Optional[Dict[str, float]] = None,
     pending_orders: Optional[List[Dict[str, Any]]] = None,
 ) -> str:
@@ -284,7 +284,7 @@ def generate_allocations_hash(allocations_dict: Dict[str, float]) -> str:
 def generate_recommendation_cache_key(
     positions: List[Dict[str, Any]],
     settings_dict: Dict[str, Any],
-    stocks: Optional[List[Stock]] = None,
+    stocks: Optional[List[Security]] = None,
     cash_balances: Optional[Dict[str, float]] = None,
     allocations_dict: Optional[Dict[str, float]] = None,
     pending_orders: Optional[List[Dict[str, Any]]] = None,

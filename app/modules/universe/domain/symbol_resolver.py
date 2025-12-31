@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from app.infrastructure.external.tradernet import TradernetClient
-    from app.modules.universe.database.stock_repository import StockRepository
+    from app.modules.universe.database.security_repository import SecurityRepository
 
 logger = logging.getLogger(__name__)
 
@@ -118,16 +118,16 @@ class SymbolResolver:
     def __init__(
         self,
         tradernet_client: "TradernetClient",
-        stock_repo: Optional["StockRepository"] = None,
+        security_repo: Optional["SecurityRepository"] = None,
     ):
         """Initialize the resolver.
 
         Args:
             tradernet_client: Client for fetching security info from Tradernet
-            stock_repo: Optional repository for caching resolved ISINs
+            security_repo: Optional repository for caching resolved ISINs
         """
         self._tradernet = tradernet_client
-        self._stock_repo = stock_repo
+        self._security_repo = security_repo
 
     def detect_type(self, identifier: str) -> IdentifierType:
         """Detect the type of identifier."""
@@ -202,8 +202,8 @@ class SymbolResolver:
             ISIN string if found, None otherwise
         """
         # Check database cache first
-        if self._stock_repo:
-            stock = await self._stock_repo.get_by_symbol(tradernet_symbol)
+        if self._security_repo:
+            stock = await self._security_repo.get_by_symbol(tradernet_symbol)
             if stock and stock.isin:
                 logger.debug(f"Found cached ISIN for {tradernet_symbol}: {stock.isin}")
                 return stock.isin
@@ -262,11 +262,11 @@ class SymbolResolver:
         info = await self.resolve(tradernet_symbol)
 
         # Cache the ISIN if we have a repo and found an ISIN
-        if self._stock_repo and info.isin:
+        if self._security_repo and info.isin:
             try:
-                stock = await self._stock_repo.get_by_symbol(tradernet_symbol)
+                stock = await self._security_repo.get_by_symbol(tradernet_symbol)
                 if stock and not stock.isin:
-                    await self._stock_repo.update(tradernet_symbol, isin=info.isin)
+                    await self._security_repo.update(tradernet_symbol, isin=info.isin)
                     logger.info(f"Cached ISIN for {tradernet_symbol}: {info.isin}")
             except Exception as e:
                 logger.warning(f"Failed to cache ISIN for {tradernet_symbol}: {e}")
@@ -307,14 +307,14 @@ class SymbolResolver:
         Returns:
             Tradernet symbol for display, or original input if not found
         """
-        if not self._stock_repo:
+        if not self._security_repo:
             return isin_or_symbol
 
         identifier = isin_or_symbol.strip().upper()
 
         if is_isin(identifier):
             # Look up by ISIN to get symbol
-            stock = await self._stock_repo.get_by_isin(identifier)
+            stock = await self._security_repo.get_by_isin(identifier)
             if stock:
                 return stock.symbol
             return identifier
@@ -331,10 +331,10 @@ class SymbolResolver:
         Returns:
             ISIN if found in database, None otherwise
         """
-        if not self._stock_repo:
+        if not self._security_repo:
             return None
 
-        stock = await self._stock_repo.get_by_symbol(symbol.upper())
+        stock = await self._security_repo.get_by_symbol(symbol.upper())
         if stock and stock.isin:
             return stock.isin
         return None

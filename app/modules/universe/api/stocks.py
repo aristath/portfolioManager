@@ -218,7 +218,7 @@ async def get_universe_suggestions(
                 concrete_stock_repo = get_stock_repository()
                 symbol_resolver = SymbolResolver(
                     tradernet_client=tradernet_client,
-                    stock_repo=concrete_stock_repo,
+                    security_repo=concrete_stock_repo,
                 )
 
                 # Score candidates and collect results
