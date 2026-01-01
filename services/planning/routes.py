@@ -4,7 +4,6 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from app.infrastructure.grpc_helpers.protobuf_converters import holistic_plan_to_proto
 from app.modules.planning.services.local_planning_service import LocalPlanningService
 from app.modules.planning.services.planning_service_interface import PlanRequest
 from app.modules.portfolio.domain.models import Position

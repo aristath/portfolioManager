@@ -11,9 +11,9 @@ from services.gateway.models import (
     ServiceHealthResponse,
     ServiceStatus,
     SystemStatusResponse,
-    TradingCycleRequest,
     TradingCycleResponse,
     TradingCycleUpdate,
+    TriggerTradingCycleRequest,
 )
 
 router = APIRouter()
@@ -54,7 +54,7 @@ async def get_system_status(
 
 @router.post("/trading-cycle", response_model=TradingCycleResponse)
 async def trigger_trading_cycle(
-    request: TradingCycleRequest,
+    request: TriggerTradingCycleRequest,
     service: LocalGatewayService = Depends(get_gateway_service),
 ):
     """

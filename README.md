@@ -170,6 +170,71 @@ Some pragmatic violations exist for performance/convenience on the Arduino's con
 
 Other violations are documented in code comments where they occur.
 
+### REST Microservices
+
+The system includes 7 REST microservices that can run locally or distributed across multiple Arduino devices:
+
+```
+services/
+├── universe/        # Security management (Port 8001)
+│   ├── models.py          # Pydantic request/response models
+│   ├── dependencies.py    # Dependency injection
+│   ├── routes.py          # 8 REST endpoints
+│   └── main.py            # FastAPI application
+│
+├── portfolio/       # Position management (Port 8002)
+│   └── ...                # 7 REST endpoints
+│
+├── trading/         # Trade execution (Port 8003)
+│   └── ...                # 6 REST endpoints
+│
+├── scoring/         # Security scoring (Port 8004)
+│   └── ...                # 4 REST endpoints
+│
+├── optimization/    # Portfolio optimization (Port 8005)
+│   └── ...                # 3 REST endpoints
+│
+├── planning/        # Portfolio planning (Port 8006)
+│   └── ...                # 4 REST endpoints
+│
+└── gateway/         # System orchestration (Port 8007)
+    └── ...                # 4 REST endpoints
+```
+
+**Architecture Benefits:**
+- **35-43% memory savings** per service vs gRPC (525-910MB total)
+- **Simple HTTP/JSON** - no protobuf compilation, universal compatibility
+- **Built-in resilience** - circuit breakers, retries, automatic failover
+- **OpenAPI documentation** - interactive docs at `/docs` for each service
+- **Flexible deployment** - run all locally or distribute across devices
+
+**Starting Services:**
+```bash
+# Start individual service
+cd services/universe
+../../venv/bin/python main.py
+
+# Start all services
+for svc in universe portfolio trading scoring optimization planning gateway; do
+    cd services/$svc && ../../venv/bin/python main.py &
+done
+```
+
+**Using HTTP Clients:**
+```python
+from app.infrastructure.service_discovery import get_service_locator
+
+locator = get_service_locator()
+universe_client = locator.create_http_client("universe")
+
+# Get tradable securities
+securities = await universe_client.get_securities(tradable_only=True)
+```
+
+**Complete documentation:**
+- [REST API Migration Summary](REST_API_MIGRATION.md) - Implementation details
+- [Usage Examples](REST_API_USAGE_EXAMPLES.md) - API usage, workflows, examples
+
 ## Quick Start
 
 ### Local Development
