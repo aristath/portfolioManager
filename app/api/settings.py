@@ -16,14 +16,11 @@ router = APIRouter()
 
 
 # Default values for all configurable settings
-# NOTE: Score weights (score_weight_*, sell_weight_*) have been removed.
-# The optimizer now handles portfolio-level allocation. Per-security scoring
-# uses fixed weights defined in app/domain/scoring/security_scorer.py and sell.py.
+# NOTE: Planner settings have been moved to TOML configuration files.
+# Transaction costs, trading constraints, and all planner algorithms are now
+# per-bucket and configured via config/planner/*.toml files.
 SETTING_DEFAULTS = {
-    # Core trading constraints
-    "min_hold_days": 90,  # Minimum days before selling
-    "sell_cooldown_days": 180,  # Days between sells of same security
-    "max_loss_threshold": -0.20,  # Don't sell if loss exceeds this (as decimal)
+    # Security scoring
     "min_security_score": 0.5,  # Minimum score for security to be recommended (0-1)
     "target_annual_return": 0.11,  # Optimal CAGR for scoring (11%)
     "market_avg_pe": 22.0,  # Reference P/E for valuation
@@ -32,38 +29,8 @@ SETTING_DEFAULTS = {
     # Portfolio Optimizer settings
     "optimizer_blend": 0.5,  # 0.0 = pure Mean-Variance, 1.0 = pure HRP
     "optimizer_target_return": 0.11,  # Target annual return for MV component
-    # Transaction costs (Freedom24) - replaces min_trade_size for smarter filtering
-    "transaction_cost_fixed": 2.0,  # Fixed cost per trade in EUR
-    "transaction_cost_percent": 0.002,  # Variable cost as fraction (0.2%)
     # Cash management
     "min_cash_reserve": 500.0,  # Minimum cash to keep (never fully deploy)
-    # Holistic Planner settings
-    "max_plan_depth": 5.0,  # Maximum depth for holistic planner sequences (1-10)
-    "max_opportunities_per_category": 5.0,  # Max opportunities per category to consider (1-20)
-    "enable_combinatorial_generation": 1.0,  # Enable combinatorial generation (1.0 = enabled, 0.0 = disabled)
-    "priority_threshold_for_combinations": 0.3,  # Min priority for combinations (0.0-1.0)
-    # Combinatorial generation settings
-    "combinatorial_max_combinations_per_depth": 50.0,  # Max combinatorial sequences per depth (10-500)
-    "combinatorial_max_sells": 4.0,  # Max sells in combinations (1-10)
-    "combinatorial_max_buys": 4.0,  # Max buys in combinations (1-10)
-    "combinatorial_max_candidates": 12.0,  # Max candidates considered for combinations (5-30)
-    # Enhanced scenario exploration settings
-    "beam_width": 10.0,  # Beam search width - number of top sequences to maintain (1-50)
-    "enable_diverse_selection": 1.0,  # Enable diverse opportunity selection (1.0 = enabled, 0.0 = disabled)
-    "diversity_weight": 0.3,  # Weight for diversity vs priority in selection (0.0-1.0)
-    "cost_penalty_factor": 0.1,  # Transaction cost penalty factor for scoring (0.0-1.0)
-    "enable_multi_objective": 0.0,  # Enable multi-objective optimization with Pareto frontier (1.0 = enabled, 0.0 = disabled)
-    "enable_stochastic_scenarios": 0.0,  # Enable stochastic price scenarios for uncertainty evaluation (1.0 = enabled, 0.0 = disabled)
-    "risk_profile": "balanced",  # Risk profile: "conservative", "balanced", or "aggressive"
-    "enable_market_regime_scenarios": 0.0,  # Enable market regime-aware scenario generation (1.0 = enabled, 0.0 = disabled)
-    "enable_correlation_aware": 0.0,  # Enable correlation-aware sequence filtering (1.0 = enabled, 0.0 = disabled)
-    "enable_partial_execution": 0.0,  # Enable partial execution scenarios (first N actions only) (1.0 = enabled, 0.0 = disabled)
-    "enable_constraint_relaxation": 0.0,  # Enable constraint relaxation scenarios (1.0 = enabled, 0.0 = disabled)
-    "enable_monte_carlo_paths": 0.0,  # Enable Monte Carlo price path evaluation (1.0 = enabled, 0.0 = disabled)
-    "monte_carlo_path_count": 100,  # Number of Monte Carlo paths to simulate (10-500)
-    "enable_multi_timeframe": 0.0,  # Enable multi-timeframe optimization (short/medium/long-term) (1.0 = enabled, 0.0 = disabled)
-    # Incremental Planner settings
-    "incremental_planner_enabled": 1.0,  # Enable incremental planner mode (1.0 = enabled, 0.0 = disabled)
     # LED Matrix settings
     "ticker_speed": 50.0,  # Ticker scroll speed in ms per frame (lower = faster)
     "led_brightness": 150.0,  # LED brightness (0-255)
@@ -262,216 +229,9 @@ async def update_setting_value(
             )
         await set_setting(key, str(data.value), settings_repo)
         return {key: data.value}
-    elif key == "max_plan_depth":
-        # Validate range (1-10)
-        if data.value < 1 or data.value > 10:
-            raise HTTPException(
-                status_code=400,
-                detail=f"{key} must be between 1 and 10",
-            )
-        await set_setting(key, str(int(data.value)), settings_repo)
-        return {key: int(data.value)}
-    elif key == "max_opportunities_per_category":
-        # Validate range (1-20)
-        if data.value < 1 or data.value > 20:
-            raise HTTPException(
-                status_code=400,
-                detail=f"{key} must be between 1 and 20",
-            )
-        await set_setting(key, str(int(data.value)), settings_repo)
-        return {key: int(data.value)}
-    elif key == "enable_combinatorial_generation":
-        # Validate boolean-like (0.0 or 1.0)
-        if data.value not in (0.0, 1.0):
-            raise HTTPException(
-                status_code=400,
-                detail=f"{key} must be 0.0 (disabled) or 1.0 (enabled)",
-            )
-        await set_setting(key, str(data.value), settings_repo)
-        return {key: data.value}
-    elif key == "priority_threshold_for_combinations":
-        # Validate range (0.0-1.0)
-        if data.value < 0.0 or data.value > 1.0:
-            raise HTTPException(
-                status_code=400,
-                detail=f"{key} must be between 0.0 and 1.0",
-            )
-        await set_setting(key, str(data.value), settings_repo)
-        return {key: data.value}
-    elif key == "combinatorial_max_combinations_per_depth":
-        # Validate range (10-500)
-        if data.value < 10 or data.value > 500:
-            raise HTTPException(
-                status_code=400,
-                detail=f"{key} must be between 10 and 500",
-            )
-        await set_setting(key, str(int(data.value)), settings_repo)
-        return {key: int(data.value)}
-    elif key == "combinatorial_max_sells":
-        # Validate range (1-10)
-        if data.value < 1 or data.value > 10:
-            raise HTTPException(
-                status_code=400,
-                detail=f"{key} must be between 1 and 10",
-            )
-        await set_setting(key, str(int(data.value)), settings_repo)
-        return {key: int(data.value)}
-    elif key == "combinatorial_max_buys":
-        # Validate range (1-10)
-        if data.value < 1 or data.value > 10:
-            raise HTTPException(
-                status_code=400,
-                detail=f"{key} must be between 1 and 10",
-            )
-        await set_setting(key, str(int(data.value)), settings_repo)
-        return {key: int(data.value)}
-    elif key == "combinatorial_max_candidates":
-        # Validate range (5-30)
-        if data.value < 5 or data.value > 30:
-            raise HTTPException(
-                status_code=400,
-                detail=f"{key} must be between 5 and 30",
-            )
-        await set_setting(key, str(int(data.value)), settings_repo)
-        return {key: int(data.value)}
-    elif key == "beam_width":
-        # Validate range (1-50)
-        if data.value < 1 or data.value > 50:
-            raise HTTPException(
-                status_code=400,
-                detail=f"{key} must be between 1 and 50",
-            )
-        await set_setting(key, str(int(data.value)), settings_repo)
-        return {key: int(data.value)}
-    elif key == "enable_diverse_selection":
-        # Validate boolean-like (0.0 or 1.0)
-        if data.value not in (0.0, 1.0):
-            raise HTTPException(
-                status_code=400,
-                detail=f"{key} must be 0.0 (disabled) or 1.0 (enabled)",
-            )
-        await set_setting(key, str(data.value), settings_repo)
-        return {key: data.value}
-    elif key == "diversity_weight":
-        # Validate range (0.0-1.0)
-        if data.value < 0.0 or data.value > 1.0:
-            raise HTTPException(
-                status_code=400,
-                detail=f"{key} must be between 0.0 and 1.0",
-            )
-        await set_setting(key, str(data.value), settings_repo)
-        return {key: data.value}
-    elif key == "cost_penalty_factor":
-        # Validate range (0.0-1.0)
-        if data.value < 0.0 or data.value > 1.0:
-            raise HTTPException(
-                status_code=400,
-                detail=f"{key} must be between 0.0 and 1.0",
-            )
-        await set_setting(key, str(data.value), settings_repo)
-        return {key: data.value}
-    elif key == "enable_multi_objective":
-        # Validate boolean-like (0.0 or 1.0)
-        if data.value not in (0.0, 1.0):
-            raise HTTPException(
-                status_code=400,
-                detail=f"{key} must be 0.0 (disabled) or 1.0 (enabled)",
-            )
-        await set_setting(key, str(data.value), settings_repo)
-        return {key: data.value}
-    elif key == "enable_stochastic_scenarios":
-        # Validate boolean-like (0.0 or 1.0)
-        if data.value not in (0.0, 1.0):
-            raise HTTPException(
-                status_code=400,
-                detail=f"{key} must be 0.0 (disabled) or 1.0 (enabled)",
-            )
-        await set_setting(key, str(data.value), settings_repo)
-        return {key: data.value}
-    elif key == "risk_profile":
-        # Validate risk profile string
-        profile = str(data.value).lower()
-        if profile not in ("conservative", "balanced", "aggressive"):
-            raise HTTPException(
-                status_code=400,
-                detail=f"{key} must be 'conservative', 'balanced', or 'aggressive'",
-            )
-        await settings_repo.set(key, profile)
-        cache.invalidate("settings:all")
-        return {key: profile}
-    elif key == "enable_market_regime_scenarios":
-        # Validate boolean-like (0.0 or 1.0)
-        if data.value not in (0.0, 1.0):
-            raise HTTPException(
-                status_code=400,
-                detail=f"{key} must be 0.0 (disabled) or 1.0 (enabled)",
-            )
-        await set_setting(key, str(data.value), settings_repo)
-        return {key: data.value}
-    elif key == "enable_correlation_aware":
-        # Validate boolean-like (0.0 or 1.0)
-        if data.value not in (0.0, 1.0):
-            raise HTTPException(
-                status_code=400,
-                detail=f"{key} must be 0.0 (disabled) or 1.0 (enabled)",
-            )
-        await set_setting(key, str(data.value), settings_repo)
-        return {key: data.value}
-    elif key == "enable_partial_execution":
-        # Validate boolean-like (0.0 or 1.0)
-        if data.value not in (0.0, 1.0):
-            raise HTTPException(
-                status_code=400,
-                detail=f"{key} must be 0.0 (disabled) or 1.0 (enabled)",
-            )
-        await set_setting(key, str(data.value), settings_repo)
-        return {key: data.value}
-    elif key == "enable_constraint_relaxation":
-        # Validate boolean-like (0.0 or 1.0)
-        if data.value not in (0.0, 1.0):
-            raise HTTPException(
-                status_code=400,
-                detail=f"{key} must be 0.0 (disabled) or 1.0 (enabled)",
-            )
-        await set_setting(key, str(data.value), settings_repo)
-        return {key: data.value}
-    elif key == "enable_monte_carlo_paths":
-        # Validate boolean-like (0.0 or 1.0)
-        if data.value not in (0.0, 1.0):
-            raise HTTPException(
-                status_code=400,
-                detail=f"{key} must be 0.0 (disabled) or 1.0 (enabled)",
-            )
-        await set_setting(key, str(data.value), settings_repo)
-        return {key: data.value}
-    elif key == "monte_carlo_path_count":
-        # Validate integer (10-500)
-        if not isinstance(data.value, (int, float)):
-            raise HTTPException(status_code=400, detail=f"{key} must be a number")
-        count = int(data.value)
-        if count < 10 or count > 500:
-            raise HTTPException(
-                status_code=400,
-                detail=f"{key} must be between 10 and 500",
-            )
-        await set_setting(key, str(count), settings_repo)
-        return {key: count}
-    elif key == "incremental_planner_enabled":
-        # Validate boolean-like (0.0 or 1.0)
-        if data.value not in (0.0, 1.0):
-            raise HTTPException(
-                status_code=400,
-                detail=f"{key} must be 0.0 (disabled) or 1.0 (enabled)",
-            )
-        await set_setting(key, str(data.value), settings_repo)
-        # Invalidate cache when toggling incremental mode
-        from app.infrastructure.recommendation_cache import get_recommendation_cache
 
-        rec_cache = get_recommendation_cache()
-        await rec_cache.invalidate_all_recommendations()
-        cache.invalidate_prefix("recommendations")
-        return {key: data.value}
-
+    # All planner settings have been moved to TOML configuration
+    # Generic validation for remaining settings
     await set_setting(key, str(data.value), settings_repo)
 
     # Invalidate recommendation caches when recommendation-affecting settings change
