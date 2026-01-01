@@ -29,8 +29,8 @@ class TestStockValidation:
         security = Security(
             symbol="AAPL.US",
             name="Test",
-            country="Greece",
             product_type=ProductType.EQUITY,
+            country="Greece",
         )
         assert security.country == "Greece"
 
@@ -72,8 +72,8 @@ class TestStockValidation:
         security = Security(
             symbol="AAPL.US",
             name="Test",
-            min_portfolio_target=0.0,
             product_type=ProductType.EQUITY,
+            min_portfolio_target=0.0,
         )
         assert security.min_portfolio_target == 0.0
 
@@ -101,6 +101,7 @@ class TestStockValidation:
             Security(
                 symbol="AAPL.US",
                 name="Test",
+                product_type=ProductType.EQUITY,
                 min_portfolio_target=-1.0,
                 active=False,
             )
@@ -113,6 +114,7 @@ class TestStockValidation:
             Security(
                 symbol="AAPL.US",
                 name="Test",
+                product_type=ProductType.EQUITY,
                 min_portfolio_target=21.0,
                 active=False,
             )
@@ -151,6 +153,7 @@ class TestStockValidation:
             Security(
                 symbol="AAPL.US",
                 name="Test",
+                product_type=ProductType.EQUITY,
                 max_portfolio_target=-1.0,
                 active=False,
             )
@@ -163,6 +166,7 @@ class TestStockValidation:
             Security(
                 symbol="AAPL.US",
                 name="Test",
+                product_type=ProductType.EQUITY,
                 max_portfolio_target=31.0,
                 active=False,
             )
@@ -188,6 +192,7 @@ class TestStockValidation:
             Security(
                 symbol="AAPL.US",
                 name="Test",
+                product_type=ProductType.EQUITY,
                 min_portfolio_target=15.0,
                 max_portfolio_target=5.0,
                 active=False,
@@ -206,8 +211,8 @@ class TestStockValidation:
         security = Security(
             symbol="AAPL.US",
             name="Test",
-            min_portfolio_target=5.0,
             product_type=ProductType.EQUITY,
+            min_portfolio_target=5.0,
         )
         assert security.min_portfolio_target == 5.0
         assert security.max_portfolio_target is None

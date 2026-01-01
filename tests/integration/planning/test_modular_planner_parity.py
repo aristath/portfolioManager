@@ -7,6 +7,7 @@ to ensure identical behavior.
 import pytest
 
 from app.domain.models import Position, Security
+from app.domain.value_objects.product_type import ProductType
 from app.modules.planning.domain.config.models import PlannerConfiguration
 from app.modules.planning.domain.planner import HolisticPlanner
 from app.modules.planning.domain.planner_adapter import create_holistic_plan_modular
@@ -82,6 +83,7 @@ def sample_securities():
         Security(
             symbol="AAPL",
             name="Apple Inc.",
+            product_type=ProductType.EQUITY,
             country="USA",
             industry="Technology",
             currency="USD",
@@ -91,6 +93,7 @@ def sample_securities():
         Security(
             symbol="MSFT",
             name="Microsoft Corp.",
+            product_type=ProductType.EQUITY,
             country="USA",
             industry="Technology",
             currency="USD",
@@ -100,6 +103,7 @@ def sample_securities():
         Security(
             symbol="JNJ",
             name="Johnson & Johnson",
+            product_type=ProductType.EQUITY,
             country="USA",
             industry="Healthcare",
             currency="USD",
@@ -109,6 +113,7 @@ def sample_securities():
         Security(
             symbol="SAP",
             name="SAP SE",
+            product_type=ProductType.EQUITY,
             country="Germany",
             industry="Technology",
             currency="EUR",

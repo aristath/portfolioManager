@@ -7,6 +7,7 @@ to ensure proper functionality and registry integration.
 import pytest
 
 from app.domain.models import Position, Security
+from app.domain.value_objects.product_type import ProductType
 from app.modules.planning.domain.calculations.context import OpportunityContext
 from app.modules.planning.domain.calculations.filters.base import (
     sequence_filter_registry,
@@ -61,6 +62,7 @@ def sample_opportunity_context():
         Security(
             symbol="AAPL",
             name="Apple Inc.",
+            product_type=ProductType.EQUITY,
             country="USA",
             industry="Technology",
             currency="USD",
@@ -70,6 +72,7 @@ def sample_opportunity_context():
         Security(
             symbol="MSFT",
             name="Microsoft Corp.",
+            product_type=ProductType.EQUITY,
             country="USA",
             industry="Technology",
             currency="USD",
@@ -79,6 +82,7 @@ def sample_opportunity_context():
         Security(
             symbol="SAP",
             name="SAP SE",
+            product_type=ProductType.EQUITY,
             country="Germany",
             industry="Technology",
             currency="EUR",
@@ -92,6 +96,7 @@ def sample_opportunity_context():
         positions=positions,
         securities=securities,
         available_cash_eur=2000.0,
+        total_portfolio_value_eur=11000.0,  # 9000 + 2000 cash
         current_prices={"AAPL": 150.0, "MSFT": 250.0, "SAP": 120.0},
         target_weights=None,
         ineligible_symbols=set(),
@@ -122,7 +127,9 @@ class TestOpportunityCalculatorRegistry:
         calculator = opportunity_calculator_registry.get("opportunity_buys")
         assert calculator is not None
 
-        opportunities = await calculator.identify(sample_opportunity_context, params={})
+        opportunities = await calculator.calculate(
+            sample_opportunity_context, params={}
+        )
 
         # Should identify at least SAP as a buy opportunity (not currently held)
         assert isinstance(opportunities, list)
@@ -135,7 +142,7 @@ class TestOpportunityCalculatorRegistry:
         calculator = opportunity_calculator_registry.get("profit_taking")
         assert calculator is not None
 
-        opportunities = await calculator.identify(
+        opportunities = await calculator.calculate(
             sample_opportunity_context, params={"windfall_threshold": 0.20}
         )
 
@@ -192,9 +199,10 @@ class TestPatternGeneratorRegistry:
             )
         ]
 
-        opportunities_by_category = {"buy": buy_opportunities}
-        sequences = await pattern.generate(
-            opportunities_by_category, params={"max_sequences": 5}
+        opportunities_by_category = {"opportunity_buys": buy_opportunities}
+        sequences = pattern.generate(
+            opportunities_by_category,
+            params={"max_sequences": 5, "available_cash_eur": 5000.0},
         )
 
         assert isinstance(sequences, list)
@@ -213,7 +221,7 @@ class TestPatternGeneratorRegistry:
 
         # Create mixed opportunities
         opportunities_by_category = {
-            "buy": [
+            "opportunity_buys": [
                 ActionCandidate(
                     side=TradeSide.BUY,
                     symbol="AAPL",
@@ -227,7 +235,7 @@ class TestPatternGeneratorRegistry:
                     tags=["buy"],
                 )
             ],
-            "sell": [
+            "rebalance_sells": [
                 ActionCandidate(
                     side=TradeSide.SELL,
                     symbol="MSFT",
@@ -243,7 +251,9 @@ class TestPatternGeneratorRegistry:
             ],
         }
 
-        sequences = await pattern.generate(opportunities_by_category, params={})
+        sequences = pattern.generate(
+            opportunities_by_category, params={"available_cash_eur": 5000.0}
+        )
 
         assert isinstance(sequences, list)
         # Single best should return exactly one sequence with the highest priority action
@@ -288,9 +298,8 @@ class TestSequenceGeneratorRegistry:
             tags=["buy"],
         )
 
-        opportunities_by_category = {"buy": [buy_opp]}
-        sequences = await generator.generate(
-            opportunities_by_category, params={"fill_percentages": [0.5, 1.0]}
+        sequences = generator.generate(
+            [buy_opp], params={"fill_percentages": [0.5, 1.0]}
         )
 
         assert isinstance(sequences, list)
@@ -394,6 +403,7 @@ async def test_end_to_end_module_pipeline():
         Security(
             symbol="AAPL",
             name="Apple Inc.",
+            product_type=ProductType.EQUITY,
             country="USA",
             industry="Technology",
             currency="USD",
@@ -403,6 +413,7 @@ async def test_end_to_end_module_pipeline():
         Security(
             symbol="MSFT",
             name="Microsoft Corp.",
+            product_type=ProductType.EQUITY,
             country="USA",
             industry="Technology",
             currency="USD",
@@ -416,6 +427,7 @@ async def test_end_to_end_module_pipeline():
         positions=positions,
         securities=securities,
         available_cash_eur=2000.0,
+        total_portfolio_value_eur=7000.0,  # 5000 + 2000 cash
         current_prices={"AAPL": 150.0, "MSFT": 250.0},
         target_weights=None,
         ineligible_symbols=set(),
@@ -424,13 +436,13 @@ async def test_end_to_end_module_pipeline():
     # Step 1: Identify opportunities
     calculator = opportunity_calculator_registry.get("opportunity_buys")
     assert calculator is not None
-    opportunities = await calculator.identify(opp_context, params={})
+    opportunities = await calculator.calculate(opp_context, params={})
 
     # Step 2: Generate patterns
     pattern = pattern_generator_registry.get("direct_buy")
     assert pattern is not None
     opportunities_by_category = {"buy": opportunities}
-    sequences = await pattern.generate(opportunities_by_category, params={})
+    sequences = pattern.generate(opportunities_by_category, params={})
 
     # Step 3: Apply filters
     diversity_filter = sequence_filter_registry.get("diversity")

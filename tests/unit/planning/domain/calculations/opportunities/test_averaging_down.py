@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.domain.models import Position, Security
+from app.domain.value_objects.product_type import ProductType
 from app.domain.value_objects.trade_side import TradeSide
 from app.modules.planning.domain.calculations.opportunities.averaging_down import (
     AveragingDownCalculator,
@@ -29,6 +30,7 @@ def basic_security():
         id=1,
         symbol="AAPL",
         name="Apple Inc.",
+        product_type=ProductType.EQUITY,
         currency="USD",
         allow_buy=True,
         allow_sell=True,

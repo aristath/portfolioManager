@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.domain.models import Position, Security
+from app.domain.value_objects.product_type import ProductType
 from app.modules.planning.domain.config.factory import ModularPlannerFactory
 from app.modules.planning.domain.config.models import PlannerConfiguration
 from app.modules.planning.domain.holistic_planner import HolisticPlan
@@ -290,6 +291,7 @@ async def test_custom_config_receives_correct_parameters(
         Security(
             symbol="AAPL",
             name="Apple Inc.",
+            product_type=ProductType.EQUITY,
             isin="US0378331005",
             currency="USD",
             exchange="NASDAQ",

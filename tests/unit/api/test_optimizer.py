@@ -209,7 +209,9 @@ class TestGetOptimizerStatus:
 
                     result = await get_optimizer_status()
 
-                    mock_calc.assert_called_once_with(2.0, 0.002)
+                    mock_calc.assert_called_once_with(
+                        transaction_cost_fixed=2.0, transaction_cost_percent=0.002
+                    )
                     assert result["settings"]["min_trade_amount"] == 285.71
 
 

@@ -60,6 +60,7 @@ class TestSecurityValidation:
             Security(
                 symbol="AAPL",
                 name="Apple Inc.",
+                product_type=ProductType.EQUITY,
                 min_portfolio_target=21.0,
                 active=False,
             )
@@ -68,6 +69,7 @@ class TestSecurityValidation:
             Security(
                 symbol="AAPL",
                 name="Apple Inc.",
+                product_type=ProductType.EQUITY,
                 min_portfolio_target=-0.1,
                 active=False,
             )
@@ -80,6 +82,7 @@ class TestSecurityValidation:
             Security(
                 symbol="AAPL",
                 name="Apple Inc.",
+                product_type=ProductType.EQUITY,
                 max_portfolio_target=31.0,
                 active=False,
             )
@@ -88,6 +91,7 @@ class TestSecurityValidation:
             Security(
                 symbol="AAPL",
                 name="Apple Inc.",
+                product_type=ProductType.EQUITY,
                 max_portfolio_target=-0.1,
                 active=False,
             )
@@ -101,6 +105,7 @@ class TestSecurityValidation:
             Security(
                 symbol="AAPL",
                 name="Apple Inc.",
+                product_type=ProductType.EQUITY,
                 min_portfolio_target=0.15,
                 max_portfolio_target=0.10,
                 active=False,

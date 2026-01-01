@@ -80,6 +80,7 @@ class TestCheckAndRebalanceImmediately:
                     mock_stock = Security(
                         symbol="AAPL",
                         name="Apple Inc.",
+                        product_type=ProductType.EQUITY,
                         country="United States",
                         currency=Currency.USD,
                     )
@@ -213,6 +214,7 @@ class TestCheckAndRebalanceImmediately:
                                         mock_stock = Security(
                                             symbol="AAPL",
                                             name="Apple Inc.",
+                                            product_type=ProductType.EQUITY,
                                             country="United States",
                                             currency=Currency.USD,
                                         )
@@ -274,6 +276,7 @@ class TestCheckAndRebalanceImmediately:
                     mock_stock = Security(
                         symbol="AAPL",
                         name="Apple Inc.",
+                        product_type=ProductType.EQUITY,
                         country="United States",
                         currency=Currency.USD,
                     )
