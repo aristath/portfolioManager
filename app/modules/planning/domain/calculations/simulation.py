@@ -92,15 +92,14 @@ async def simulate_sequence(
             new_positions[action.symbol] = (
                 new_positions.get(action.symbol, 0) + buy_value
             )
-            # Copy-on-write: Now that we're modifying geography/industry, create copies.
-            # Only copy if we have metadata to add (skip if security has no country/industry).
-            if country or industry:
+            # Copy-on-write: Create copies only for dicts we're about to modify.
+            # This avoids unnecessary copies when only one type of metadata exists.
+            if country:
                 new_geographies = new_geographies.copy()
+                new_geographies[action.symbol] = country
+            if industry:
                 new_industries = new_industries.copy()
-                if country:
-                    new_geographies[action.symbol] = country
-                if industry:
-                    new_industries[action.symbol] = industry
+                new_industries[action.symbol] = industry
             current_cash -= buy_value
             # Total portfolio value stays the same - we just converted cash to security
             new_total = current_context.total_value
