@@ -5,8 +5,8 @@ from typing import Any, Dict, Optional
 
 import httpx
 
-from app.infrastructure.grpc_helpers.circuit_breaker import get_circuit_breaker
-from app.infrastructure.grpc_helpers.retry import get_retry_handler
+from app.infrastructure.resilience.circuit_breaker import get_circuit_breaker
+from app.infrastructure.resilience.retry import get_retry_handler
 
 logger = logging.getLogger(__name__)
 

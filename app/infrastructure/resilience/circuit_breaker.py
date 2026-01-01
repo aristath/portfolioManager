@@ -1,4 +1,4 @@
-"""Circuit breaker pattern implementation for gRPC clients."""
+"""Circuit breaker pattern implementation for HTTP/gRPC clients."""
 
 import asyncio
 import time
@@ -47,7 +47,7 @@ class CircuitBreaker:
 
         @breaker
         async def call_service():
-            return await some_grpc_call()
+            return await some_client_call()
     """
 
     def __init__(self, config: Optional[CircuitBreakerConfig] = None):

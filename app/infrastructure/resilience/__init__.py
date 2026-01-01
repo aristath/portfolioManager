@@ -1,6 +1,6 @@
-"""gRPC helper utilities for resilience and reliability."""
+"""Resilience utilities for HTTP/gRPC clients (circuit breaker, retry)."""
 
-from app.infrastructure.grpc_helpers.circuit_breaker import (
+from app.infrastructure.resilience.circuit_breaker import (
     CircuitBreaker,
     CircuitBreakerConfig,
     CircuitBreakerError,
@@ -8,7 +8,7 @@ from app.infrastructure.grpc_helpers.circuit_breaker import (
     get_all_circuit_breaker_states,
     get_circuit_breaker,
 )
-from app.infrastructure.grpc_helpers.retry import (
+from app.infrastructure.resilience.retry import (
     RetryConfig,
     RetryExhaustedError,
     get_all_retry_stats,

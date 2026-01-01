@@ -1,5 +1,5 @@
 #!/bin/bash
-# Health check for all gRPC services
+# Health check for all microservices (HTTP/REST)
 
 set -e
 
@@ -10,69 +10,79 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Services and their ports
+# Services and their HTTP ports
 declare -A SERVICES=(
-    ["planning"]="50051"
-    ["scoring"]="50052"
-    ["optimization"]="50053"
-    ["portfolio"]="50054"
-    ["trading"]="50055"
-    ["universe"]="50056"
-    ["gateway"]="50057"
+    ["universe"]="8001"
+    ["portfolio"]="8002"
+    ["trading"]="8003"
+    ["scoring"]="8004"
+    ["optimization"]="8005"
+    ["planning"]="8006"
+    ["gateway"]="8007"
 )
 
-# Check if grpcurl is installed
-if ! command -v grpcurl &> /dev/null; then
-    echo "${YELLOW}Warning: grpcurl not installed. Install with: brew install grpcurl${NC}"
-    echo "Falling back to port checks only..."
-    GRPCURL_AVAILABLE=false
-else
-    GRPCURL_AVAILABLE=true
+# Check if curl is installed
+if ! command -v curl &> /dev/null; then
+    echo -e "${RED}Error: curl not installed${NC}"
+    echo "Install with: apt-get install curl (Linux) or brew install curl (macOS)"
+    exit 1
 fi
 
-echo "Checking health of all services..."
-echo "=================================="
+echo -e "${BLUE}Checking health of all microservices...${NC}"
+echo "======================================"
+echo ""
 
 HEALTHY_COUNT=0
 TOTAL_COUNT=0
 
-for service in "${!SERVICES[@]}"; do
+# Sort services by port for consistent output
+for service in universe portfolio trading scoring optimization planning gateway; do
     port="${SERVICES[$service]}"
     TOTAL_COUNT=$((TOTAL_COUNT + 1))
 
     # Check if port is listening
     if ! nc -z localhost "$port" 2>/dev/null; then
-        echo -e "${RED}✗${NC} $service (port $port): NOT RUNNING"
+        echo -e "${RED}✗${NC} $service (HTTP $port): NOT RUNNING"
         continue
     fi
 
-    # If grpcurl is available, try health check
-    if [ "$GRPCURL_AVAILABLE" = true ]; then
-        # Try health check (different services may have different RPC names)
-        if timeout 2 grpcurl -plaintext localhost:$port list >/dev/null 2>&1; then
-            echo -e "${GREEN}✓${NC} $service (port $port): HEALTHY"
-            HEALTHY_COUNT=$((HEALTHY_COUNT + 1))
-        else
-            echo -e "${YELLOW}⚠${NC} $service (port $port): LISTENING (health check failed)"
-        fi
-    else
-        echo -e "${GREEN}✓${NC} $service (port $port): LISTENING"
+    # Try HTTP health endpoint
+    if curl -s -f --connect-timeout 2 "http://localhost:$port/health" > /dev/null 2>&1; then
+        echo -e "${GREEN}✓${NC} $service (HTTP $port): HEALTHY"
         HEALTHY_COUNT=$((HEALTHY_COUNT + 1))
+    else
+        # Port is listening but health endpoint failed
+        echo -e "${YELLOW}⚠${NC} $service (HTTP $port): LISTENING (health endpoint unavailable)"
     fi
 done
 
-echo "=================================="
+echo ""
+echo "======================================"
 echo "Health check complete: $HEALTHY_COUNT/$TOTAL_COUNT services healthy"
+echo ""
 
 if [ $HEALTHY_COUNT -eq $TOTAL_COUNT ]; then
-    echo -e "${GREEN}All services are healthy!${NC}"
+    echo -e "${GREEN}✓ All services are healthy!${NC}"
+    echo ""
+    echo "Access points:"
+    echo "  • Dashboard: http://localhost:8000"
+    echo "  • API Docs:  http://localhost:8000/docs"
     exit 0
 elif [ $HEALTHY_COUNT -gt 0 ]; then
-    echo -e "${YELLOW}Some services are not healthy${NC}"
+    echo -e "${YELLOW}⚠ Some services are not healthy${NC}"
+    echo ""
+    echo "Troubleshooting:"
+    echo "  • Check logs: docker compose logs"
+    echo "  • Restart:    docker compose restart"
     exit 1
 else
-    echo -e "${RED}No services are running!${NC}"
+    echo -e "${RED}✗ No services are running!${NC}"
+    echo ""
+    echo "Start services:"
+    echo "  cd /home/arduino/arduino-trader"
+    echo "  docker compose up -d"
     exit 2
 fi

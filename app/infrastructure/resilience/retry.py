@@ -102,7 +102,7 @@ def with_retry(config: Optional[RetryConfig] = None):
     Example:
         @with_retry(RetryConfig(max_attempts=5))
         async def call_service():
-            return await grpc_stub.SomeMethod(request)
+            return await client_stub.SomeMethod(request)
     """
 
     def decorator(func: Callable) -> Callable:
