@@ -12,7 +12,6 @@ from typing import Dict, List
 
 from app.core.database.manager import get_db_manager
 from app.domain.models import DividendRecord, Recommendation
-from app.domain.services.settings_service import SettingsService
 from app.domain.value_objects.recommendation_status import RecommendationStatus
 from app.domain.value_objects.trade_side import TradeSide
 from app.infrastructure.dependencies import (
@@ -131,7 +130,6 @@ async def auto_reinvest_dividends() -> None:
         dividend_repo = DividendRepository()
         security_repo = SecurityRepository()
         settings_repo = SettingsRepository()
-        settings_service = SettingsService(settings_repo)
         client = get_tradernet_client()
 
         # Create TradeExecutionService with all dependencies
@@ -151,11 +149,11 @@ async def auto_reinvest_dividends() -> None:
             settings_repo=settings_repo,
         )
 
-        # Get settings
-        settings = await settings_service.get_settings()
+        # Use standard Freedom24 transaction costs for dividend reinvestment
+        # Bucket-specific costs are configured in TOML configs
         min_trade_size = calculate_min_trade_amount(
-            settings.transaction_cost_fixed,
-            settings.transaction_cost_percent,
+            transaction_cost_fixed=2.0,
+            transaction_cost_percent=0.002,
         )
 
         # Get all unreinvested dividends (no min_amount filter initially)

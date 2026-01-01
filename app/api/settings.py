@@ -475,41 +475,14 @@ async def update_setting_value(
     await set_setting(key, str(data.value), settings_repo)
 
     # Invalidate recommendation caches when recommendation-affecting settings change
-    # Note: optimizer settings (optimizer_blend, optimizer_target_return) also affect recommendations
+    # Note: Planner settings now come from TOML and don't need cache invalidation
+    # Only settings that affect security scoring or portfolio optimization remain here
     recommendation_settings = {
-        "min_security_score",
-        "min_hold_days",
-        "sell_cooldown_days",
-        "max_loss_threshold",
-        "target_annual_return",
-        "optimizer_blend",
-        "optimizer_target_return",
-        "transaction_cost_fixed",
-        "transaction_cost_percent",
-        "min_cash_reserve",
-        "max_plan_depth",
-        "max_opportunities_per_category",
-        "enable_combinatorial_generation",
-        "priority_threshold_for_combinations",
-        "combinatorial_max_combinations_per_depth",
-        "combinatorial_max_sells",
-        "combinatorial_max_buys",
-        "combinatorial_max_candidates",
-        "beam_width",
-        "enable_diverse_selection",
-        "diversity_weight",
-        "cost_penalty_factor",
-        "enable_multi_objective",
-        "enable_stochastic_scenarios",
-        "risk_profile",
-        "enable_market_regime_scenarios",
-        "enable_correlation_aware",
-        "enable_partial_execution",
-        "enable_constraint_relaxation",
-        "enable_monte_carlo_paths",
-        "monte_carlo_path_count",
-        "enable_multi_timeframe",
-        "incremental_planner_enabled",
+        "min_security_score",  # Security scoring
+        "target_annual_return",  # Security scoring
+        "optimizer_blend",  # Portfolio optimizer
+        "optimizer_target_return",  # Portfolio optimizer
+        "min_cash_reserve",  # Global trading constraint
     }
     if key in recommendation_settings:
         from app.infrastructure.recommendation_cache import get_recommendation_cache

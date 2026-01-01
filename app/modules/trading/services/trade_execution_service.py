@@ -16,7 +16,6 @@ from app.domain.repositories.protocols import (
     ITradeRepository,
 )
 from app.domain.services.exchange_rate_service import ExchangeRateService
-from app.domain.services.settings_service import SettingsService
 from app.infrastructure.external.tradernet import TradernetClient
 from app.infrastructure.market_hours import is_market_open, should_check_market_hours
 from app.modules.display.services.display_service import set_led4, set_text
@@ -824,20 +823,10 @@ class TradeExecutionService:
             set()
         )  # Track which currencies we've converted to
 
-        # Get transaction cost settings
-        if self._settings_repo:
-            settings_service = SettingsService(self._settings_repo)
-            settings = await settings_service.get_settings()
-            transaction_cost_fixed = settings.transaction_cost_fixed
-            transaction_cost_percent = settings.transaction_cost_percent
-        else:
-            # Use defaults if settings repository not available
-            transaction_cost_fixed = 2.0
-            transaction_cost_percent = 0.002
-            logger.warning(
-                "Settings repository not available, using default transaction costs "
-                f"(fixed={transaction_cost_fixed}, percent={transaction_cost_percent})"
-            )
+        # Use standard Freedom24 transaction costs for trade execution
+        # Bucket-specific costs are configured in TOML configs
+        transaction_cost_fixed = 2.0
+        transaction_cost_percent = 0.002
 
         from app.domain.constants import BUY_COOLDOWN_DAYS
 

@@ -103,10 +103,11 @@ class RebalancingService:
         """
         Calculate optimal trades using get_recommendations() as the source of truth.
         """
-        settings = await self._settings_service.get_settings()
+        # Use standard Freedom24 transaction costs for rebalancing
+        # Bucket-specific costs are in TOML configs
         min_trade_amount = calculate_min_trade_amount(
-            settings.transaction_cost_fixed,
-            settings.transaction_cost_percent,
+            transaction_cost_fixed=2.0,
+            transaction_cost_percent=0.002,
         )
 
         if available_cash < min_trade_amount:
