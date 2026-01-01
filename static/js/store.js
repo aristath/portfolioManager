@@ -892,6 +892,27 @@ document.addEventListener('alpine:init', () => {
       }
     },
 
+    async applyPlannerConfig() {
+      if (!this.plannerForm.id || !this.plannerForm.bucket_id) {
+        this.plannerError = 'Cannot apply: planner has no associated bucket';
+        return;
+      }
+      this.plannerLoading = true;
+      this.plannerError = null;
+      try {
+        const result = await API.applyPlanner(this.plannerForm.id);
+        this.showMessage(
+          `Planner applied successfully for bucket ${result.bucket_id}`,
+          'success'
+        );
+      } catch (e) {
+        this.plannerError = e.message || 'Failed to apply planner';
+        console.error('Failed to apply planner:', e);
+      } finally {
+        this.plannerLoading = false;
+      }
+    },
+
     closePlannerManagement() {
       this.showPlannerManagementModal = false;
       this.plannerFormMode = 'none';

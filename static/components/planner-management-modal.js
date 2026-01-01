@@ -99,11 +99,19 @@ class PlannerManagementModal extends HTMLElement {
                         class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm rounded transition-colors disabled:opacity-50">
                   Delete
                 </button>
-                <!-- Cancel and Save on right -->
+                <!-- Cancel, Apply, and Save on right -->
                 <div class="flex gap-2">
                   <button @click="$store.app.closePlannerManagement()"
                           class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm rounded transition-colors">
                     Cancel
+                  </button>
+                  <button @click="$store.app.applyPlannerConfig()"
+                          x-show="$store.app.plannerForm.bucket_id"
+                          :disabled="$store.app.plannerLoading"
+                          class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded transition-colors disabled:opacity-50"
+                          title="Hot-reload this planner configuration for its bucket">
+                    <span x-show="$store.app.plannerLoading" class="inline-block animate-spin mr-1">&#9696;</span>
+                    <span x-text="$store.app.plannerLoading ? 'Applying...' : 'Apply'"></span>
                   </button>
                   <button @click="$store.app.savePlanner()"
                           :disabled="$store.app.plannerLoading || !$store.app.plannerForm.name || !$store.app.plannerForm.toml"
