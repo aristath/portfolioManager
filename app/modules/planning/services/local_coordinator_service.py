@@ -84,12 +84,38 @@ class LocalCoordinatorService:
         ]
 
         # Step 1: Identify opportunities
+        # Convert PortfolioContext to Opportunity format (different field names)
+        opp_portfolio_ctx = OppPortfolioContext(
+            total_value=request.portfolio_context.total_value_eur,
+            positions={},  # Will be computed from positions list
+            country_weights={},  # Not needed for opportunity identification
+            industry_weights={},
+        )
+
         opp_request = IdentifyOpportunitiesRequest(
-            portfolio_context=OppPortfolioContext(
-                **request.portfolio_context.model_dump()
-            ),
-            positions=[OppPosition(**p.model_dump()) for p in request.positions],
-            securities=[OppSecurity(**s.model_dump()) for s in request.securities],
+            portfolio_context=opp_portfolio_ctx,
+            positions=[
+                OppPosition(
+                    symbol=p.symbol,
+                    quantity=p.quantity,
+                    avg_price=p.average_cost,
+                    market_value_eur=p.value_eur,
+                    unrealized_pnl_pct=p.unrealized_gain_loss_percent,
+                )
+                for p in request.positions
+            ],
+            securities=[
+                OppSecurity(
+                    symbol=s.symbol,
+                    name=s.name,
+                    isin="",  # Not available in Coordinator's SecurityInput
+                    country=getattr(s, "country", None),
+                    industry=s.industry,
+                    allow_buy=True,
+                    allow_sell=True,
+                )
+                for s in request.securities
+            ],
             available_cash=request.available_cash,
             target_weights=request.target_weights,
             current_prices=request.current_prices,
@@ -139,13 +165,20 @@ class LocalCoordinatorService:
                 for sequence in batch.sequences
             ]
 
+            # Convert models explicitly to avoid type mismatch
+            eval_portfolio_ctx = EvalPortfolioContext(
+                **request.portfolio_context.model_dump()
+            )
+            eval_positions = [EvalPosition(**p.model_dump()) for p in request.positions]
+            eval_securities = [
+                EvalSecurity(**s.model_dump()) for s in request.securities
+            ]
+
             eval_request = EvaluateSequencesRequest(
                 sequences=eval_sequences,
-                portfolio_context=EvalPortfolioContext(
-                    **request.portfolio_context.model_dump()
-                ),
-                positions=[EvalPosition(**p.model_dump()) for p in request.positions],
-                securities=[EvalSecurity(**s.model_dump()) for s in request.securities],
+                portfolio_context=eval_portfolio_ctx,
+                positions=eval_positions,
+                securities=eval_securities,
                 settings=EvaluationSettings(
                     beam_width=request.parameters.beam_width,
                     enable_monte_carlo=request.parameters.enable_monte_carlo,

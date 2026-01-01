@@ -124,12 +124,16 @@ class LocalEvaluatorService:
 
     def _to_securities(self, securities_input: List) -> List[Security]:
         """Convert Pydantic security models to domain Security models."""
+        from app.domain.value_objects.product_type import ProductType
+
         return [
             Security(
                 symbol=s.symbol,
                 name=s.name,
-                country=s.country,
-                industry=s.industry,
+                isin=getattr(s, "isin", None),
+                country=getattr(s, "sector", None),  # Evaluator uses 'sector' field
+                industry=getattr(s, "industry", None),
+                product_type=ProductType.EQUITY,  # Default to EQUITY for evaluation
             )
             for s in securities_input
         ]

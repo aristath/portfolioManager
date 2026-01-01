@@ -39,44 +39,50 @@ def sample_request():
     return CreatePlanRequest(
         portfolio_context=PortfolioContextInput(
             total_value_eur=100000.0,
-            positions={"AAPL": 10000.0, "MSFT": 15000.0},
-            country_weights={"US": 0.25},
-            industry_weights={"Technology": 0.25},
-            security_countries={"AAPL": "US", "MSFT": "US"},
-            security_industries={"AAPL": "Technology", "MSFT": "Technology"},
+            available_cash=5000.0,
+            invested_value=95000.0,
+            num_positions=2,
         ),
         positions=[
             PositionInput(
                 symbol="AAPL",
                 quantity=50,
-                avg_price=180.0,
-                market_value_eur=10000.0,
-                unrealized_pnl_pct=0.1,
+                average_cost=180.0,
+                current_price=200.0,
+                value_eur=10000.0,
+                currency="EUR",
+                unrealized_gain_loss=1000.0,
+                unrealized_gain_loss_percent=0.1,
             ),
             PositionInput(
                 symbol="MSFT",
                 quantity=40,
-                avg_price=350.0,
-                market_value_eur=15000.0,
-                unrealized_pnl_pct=0.15,
+                average_cost=350.0,
+                current_price=375.0,
+                value_eur=15000.0,
+                currency="EUR",
+                unrealized_gain_loss=1000.0,
+                unrealized_gain_loss_percent=0.07,
             ),
         ],
         securities=[
             SecurityInput(
                 symbol="AAPL",
                 name="Apple Inc.",
-                country="US",
+                current_price=200.0,
+                currency="EUR",
                 industry="Technology",
             ),
             SecurityInput(
                 symbol="MSFT",
                 name="Microsoft Corporation",
-                country="US",
+                current_price=375.0,
+                currency="EUR",
                 industry="Technology",
             ),
         ],
+        available_cash=5000.0,
         planning_parameters=PlanningParameters(
-            available_cash=5000.0,
             transaction_cost_fixed=1.0,
             transaction_cost_percent=0.001,
             beam_width=10,
@@ -193,8 +199,8 @@ async def test_create_plan_full_workflow(coordinator_service, sample_request):
 
     assert isinstance(response, CreatePlanResponse)
     assert len(response.plan.steps) > 0
-    assert response.execution_stats.total_sequences_evaluated == 1
-    assert response.execution_stats.batches_processed == 1
+    assert response.stats.sequences_evaluated == 1
+    assert response.stats.batches_processed == 1
 
 
 @pytest.mark.asyncio
@@ -310,7 +316,7 @@ async def test_create_plan_round_robin_distribution(
         response = await coordinator_service.create_plan(sample_request)
 
     # Verify 3 batches were processed
-    assert response.execution_stats.batches_processed == 3
+    assert response.stats.batches_processed == 3
 
     # Verify round-robin distribution (each evaluator called once)
     assert evaluator_call_count == [1, 1, 1]

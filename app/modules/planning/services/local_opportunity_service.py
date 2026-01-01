@@ -126,15 +126,18 @@ class LocalOpportunityService:
 
     def _to_securities(self, securities_input: List) -> List[Security]:
         """Convert Pydantic security models to domain Security models."""
+        from app.domain.value_objects.product_type import ProductType
+
         return [
             Security(
                 symbol=s.symbol,
                 name=s.name,
-                isin=s.isin,
-                country=s.country,
-                industry=s.industry,
-                allow_buy=s.allow_buy,
-                allow_sell=s.allow_sell,
+                isin=getattr(s, "isin", None),
+                country=getattr(s, "country", None),
+                industry=getattr(s, "industry", None),
+                allow_buy=getattr(s, "allow_buy", True),
+                allow_sell=getattr(s, "allow_sell", True),
+                product_type=ProductType.EQUITY,  # Default to EQUITY for planning
             )
             for s in securities_input
         ]

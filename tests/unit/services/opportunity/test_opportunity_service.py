@@ -31,7 +31,7 @@ def sample_request():
     """Create sample IdentifyOpportunitiesRequest."""
     return IdentifyOpportunitiesRequest(
         portfolio_context=PortfolioContextInput(
-            total_value_eur=100000.0,
+            total_value=100000.0,
             positions={"AAPL": 10000.0, "MSFT": 15000.0},
             country_weights={"US": 0.25},
             industry_weights={"Technology": 0.25},
