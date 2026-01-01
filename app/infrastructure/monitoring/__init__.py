@@ -1,3 +1,47 @@
 """Monitoring and metrics infrastructure."""
 
-__all__: list[str] = []
+from app.infrastructure.monitoring.health import (
+    HealthCheck,
+    HealthCheckRegistry,
+    HealthCheckResult,
+    HealthStatus,
+    check_database_connection,
+    check_disk_space,
+    check_grpc_service_availability,
+    check_memory_usage,
+)
+from app.infrastructure.monitoring.metrics import (
+    Counter,
+    Gauge,
+    Histogram,
+    MetricsRegistry,
+    Timer,
+    get_metrics_registry,
+    record_circuit_breaker_state,
+    record_grpc_request,
+    record_retry_attempt,
+    record_service_health,
+    time_grpc_request,
+)
+
+__all__ = [
+    "HealthCheck",
+    "HealthCheckRegistry",
+    "HealthCheckResult",
+    "HealthStatus",
+    "check_database_connection",
+    "check_disk_space",
+    "check_grpc_service_availability",
+    "check_memory_usage",
+    "Counter",
+    "Gauge",
+    "Histogram",
+    "MetricsRegistry",
+    "Timer",
+    "get_metrics_registry",
+    "record_circuit_breaker_state",
+    "record_grpc_request",
+    "record_retry_attempt",
+    "record_service_health",
+    "time_grpc_request",
+]
