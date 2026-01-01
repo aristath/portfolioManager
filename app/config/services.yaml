@@ -123,6 +123,62 @@ services:
       enabled: true
       interval_seconds: 15
 
+  opportunity:
+    mode: "local"
+    device_id: "primary"
+    port: 8008
+    health_endpoint: "/opportunity/health"
+    client:
+      timeout_seconds: 10
+      max_retries: 3
+    health_check:
+      enabled: true
+      interval_seconds: 30
+
+  generator:
+    mode: "local"
+    device_id: "primary"
+    port: 8009
+    health_endpoint: "/generator/health"
+    client:
+      timeout_seconds: 30
+      max_retries: 3
+    health_check:
+      enabled: true
+      interval_seconds: 30
+
+  evaluator:
+    mode: "local"
+    instances:
+      - device_id: "primary"
+        port: 8010
+        health_endpoint: "/evaluator/health"
+      - device_id: "primary"
+        port: 8020
+        health_endpoint: "/evaluator/health"
+      - device_id: "primary"
+        port: 8030
+        health_endpoint: "/evaluator/health"
+    load_balancing: "round_robin"
+    client:
+      timeout_seconds: 120
+      max_retries: 2
+    health_check:
+      enabled: true
+      interval_seconds: 60
+
+  coordinator:
+    mode: "local"
+    device_id: "primary"
+    port: 8011
+    health_endpoint: "/coordinator/health"
+    client:
+      timeout_seconds: 300
+      max_retries: 2
+    health_check:
+      enabled: true
+      interval_seconds: 30
+
 # Device registry - maps device IDs to network addresses
 devices:
   primary:

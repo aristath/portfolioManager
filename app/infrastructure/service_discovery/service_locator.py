@@ -7,7 +7,11 @@ from typing import Any, Dict, Optional, Union, cast
 
 import yaml  # type: ignore[import-untyped]
 
+from app.infrastructure.http_clients.coordinator_client import CoordinatorHTTPClient
+from app.infrastructure.http_clients.evaluator_client import EvaluatorHTTPClient
 from app.infrastructure.http_clients.gateway_client import GatewayHTTPClient
+from app.infrastructure.http_clients.generator_client import GeneratorHTTPClient
+from app.infrastructure.http_clients.opportunity_client import OpportunityHTTPClient
 from app.infrastructure.http_clients.optimization_client import OptimizationHTTPClient
 from app.infrastructure.http_clients.planning_client import PlanningHTTPClient
 from app.infrastructure.http_clients.portfolio_client import PortfolioHTTPClient
@@ -165,6 +169,10 @@ class ServiceLocator:
         OptimizationHTTPClient,
         PlanningHTTPClient,
         GatewayHTTPClient,
+        OpportunityHTTPClient,
+        GeneratorHTTPClient,
+        EvaluatorHTTPClient,
+        CoordinatorHTTPClient,
     ]:
         """
         Create HTTP client for a service.
@@ -192,6 +200,10 @@ class ServiceLocator:
             "optimization": OptimizationHTTPClient,
             "planning": PlanningHTTPClient,
             "gateway": GatewayHTTPClient,
+            "opportunity": OpportunityHTTPClient,
+            "generator": GeneratorHTTPClient,
+            "evaluator": EvaluatorHTTPClient,
+            "coordinator": CoordinatorHTTPClient,
         }
 
         if service_name not in client_classes:
@@ -208,6 +220,10 @@ class ServiceLocator:
                 OptimizationHTTPClient,
                 PlanningHTTPClient,
                 GatewayHTTPClient,
+                OpportunityHTTPClient,
+                GeneratorHTTPClient,
+                EvaluatorHTTPClient,
+                CoordinatorHTTPClient,
             ],
             client_class(
                 base_url=base_url,
