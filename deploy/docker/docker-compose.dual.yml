@@ -1,0 +1,58 @@
+# Docker Compose for Dual-Device Deployment
+# This file is for documentation/testing - actual dual-device deployment
+# uses separate docker-compose instances on each device
+
+version: '3.8'
+
+# Device 1 Services (Compute Engine)
+services:
+  planning:
+    build:
+      context: ../..
+      dockerfile: services/planning/Dockerfile
+    ports:
+      - "50051:50051"
+    volumes:
+      - ../../data:/app/data
+      - ../../deploy/configs/dual-device:/app/app/config
+    environment:
+      - PYTHONPATH=/app
+      - DEVICE_CONFIG_PATH=/app/app/config/device1.yaml
+      - SERVICES_CONFIG_PATH=/app/app/config/services.yaml
+    restart: unless-stopped
+
+  scoring:
+    build:
+      context: ../..
+      dockerfile: services/scoring/Dockerfile
+    ports:
+      - "50052:50052"
+    volumes:
+      - ../../data:/app/data
+      - ../../deploy/configs/dual-device:/app/app/config
+    environment:
+      - PYTHONPATH=/app
+      - DEVICE_CONFIG_PATH=/app/app/config/device1.yaml
+      - SERVICES_CONFIG_PATH=/app/app/config/services.yaml
+    restart: unless-stopped
+
+  optimization:
+    build:
+      context: ../..
+      dockerfile: services/optimization/Dockerfile
+    ports:
+      - "50053:50053"
+    volumes:
+      - ../../data:/app/data
+      - ../../deploy/configs/dual-device:/app/app/config
+    environment:
+      - PYTHONPATH=/app
+      - DEVICE_CONFIG_PATH=/app/app/config/device1.yaml
+      - SERVICES_CONFIG_PATH=/app/app/config/services.yaml
+    restart: unless-stopped
+
+# Note: For actual dual-device deployment, run these services on Device 2:
+# - portfolio (port 50054)
+# - trading (port 50055)
+# - universe (port 50056)
+# - gateway (ports 8000, 50057)

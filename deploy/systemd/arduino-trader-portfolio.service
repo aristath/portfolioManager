@@ -1,0 +1,16 @@
+[Unit]
+Description=Arduino Trader - Portfolio Service
+After=network.target
+
+[Service]
+Type=simple
+User=arduino
+WorkingDirectory=/home/arduino/arduino-trader
+Environment="PYTHONPATH=/home/arduino/arduino-trader"
+Environment="DEVICE_CONFIG_PATH=/home/arduino/arduino-trader/app/config/device.yaml"
+ExecStart=/home/arduino/arduino-trader/venv/bin/python services/portfolio/main.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
