@@ -107,7 +107,8 @@ void updateRandomPixels() {
   }
   lastRefresh = now;
 
-  int targetOn = (int)(TOTAL_PIXELS * targetFillPercentage / 100.0);
+  // Ensure at least 1 pixel is always ON for visual feedback
+  int targetOn = max(1, (int)(TOTAL_PIXELS * targetFillPercentage / 100.0));
   int currentOn = countOnPixels();
 
   if (currentOn < targetOn) {
@@ -116,15 +117,14 @@ void updateRandomPixels() {
   } else if (currentOn > targetOn) {
     // Turn off random ON pixel
     toggleRandomPixel(true, false);
-  } else if (targetFillPercentage > 0.0) {
-    // At equilibrium and not at 0% - swap 5% of pixels (minimum 1) for visual effect
+  } else {
+    // At equilibrium - swap 5% of pixels (minimum 1) for visual effect
     int swapCount = max(1, (int)(TOTAL_PIXELS * 0.05));
     for (int i = 0; i < swapCount; i++) {
       toggleRandomPixel(true, false);   // Turn one OFF
       toggleRandomPixel(false, true);   // Turn one ON
     }
   }
-  // If usage is 0%, don't swap any pixels (all OFF, no visual effect needed)
 
   renderPixels();
 }
