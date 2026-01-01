@@ -60,7 +60,7 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(
-        "main:app",
+        "services.scoring.main:app",
         host="0.0.0.0",  # nosec B104
         port=8004,
         reload=True,

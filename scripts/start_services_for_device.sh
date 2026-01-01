@@ -33,7 +33,23 @@ echo "Device ID: $DEVICE_ID"
 # Services with mode: "local" or device_id matching this device
 SERVICES_TO_START=()
 
-for service in planning scoring optimization portfolio trading universe gateway; do
+# Try to read device roles from device.yaml if yq is available
+if command -v yq &> /dev/null; then
+    DEVICE_ROLES=$(yq '.device.roles[]' "$DEVICE_CONFIG" 2>/dev/null || echo "")
+    if [ -n "$DEVICE_ROLES" ]; then
+        echo "Reading services from device.yaml roles..."
+        # Convert to array
+        ALL_SERVICES=($DEVICE_ROLES)
+    else
+        # Fall back to all services from services.yaml
+        ALL_SERVICES=(planning opportunity generator coordinator evaluator-1 evaluator-2 evaluator-3 scoring optimization portfolio trading universe gateway)
+    fi
+else
+    # yq not available, use all known services
+    ALL_SERVICES=(planning opportunity generator coordinator evaluator-1 evaluator-2 evaluator-3 scoring optimization portfolio trading universe gateway)
+fi
+
+for service in "${ALL_SERVICES[@]}"; do
     # Check if service should run on this device
     SERVICE_MODE=$(grep -A 5 "^  $service:" "$SERVICES_CONFIG" | grep "mode:" | awk '{print $2}')
     SERVICE_DEVICE=$(grep -A 5 "^  $service:" "$SERVICES_CONFIG" | grep "device_id:" | awk '{print $2}' | tr -d '"')

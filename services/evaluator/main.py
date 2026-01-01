@@ -42,7 +42,7 @@ if __name__ == "__main__":
     port = int(os.getenv("EVALUATOR_PORT", "8010"))
 
     uvicorn.run(
-        "main:app",
+        "services.evaluator.main:app",
         host="0.0.0.0",
         port=port,
         reload=True,

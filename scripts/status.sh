@@ -54,7 +54,7 @@ if command -v curl &> /dev/null; then
     echo ""
 
     # Check each service
-    services=("universe:8001" "portfolio:8002" "trading:8003" "scoring:8004" "optimization:8005" "planning:8006" "gateway:8007")
+    services=("universe:8001" "portfolio:8002" "trading:8003" "scoring:8004" "optimization:8005" "planning:8006" "gateway:8007" "opportunity:8008" "generator:8009" "evaluator-1:8010" "coordinator:8011" "evaluator-2:8020" "evaluator-3:8030")
 
     for svc in "${services[@]}"; do
         IFS=':' read -r name port <<< "$svc"

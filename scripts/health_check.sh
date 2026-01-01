@@ -22,6 +22,12 @@ declare -A SERVICES=(
     ["optimization"]="8005"
     ["planning"]="8006"
     ["gateway"]="8007"
+    ["opportunity"]="8008"
+    ["generator"]="8009"
+    ["evaluator-1"]="8010"
+    ["coordinator"]="8011"
+    ["evaluator-2"]="8020"
+    ["evaluator-3"]="8030"
 )
 
 # Check if curl is installed
@@ -39,7 +45,7 @@ HEALTHY_COUNT=0
 TOTAL_COUNT=0
 
 # Sort services by port for consistent output
-for service in universe portfolio trading scoring optimization planning gateway; do
+for service in universe portfolio trading scoring optimization planning gateway opportunity generator evaluator-1 coordinator evaluator-2 evaluator-3; do
     port="${SERVICES[$service]}"
     TOTAL_COUNT=$((TOTAL_COUNT + 1))
 
