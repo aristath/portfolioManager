@@ -72,7 +72,18 @@ The system will:
 
 ### Using TOML Files
 
-Create configuration files in `config/planner/`:
+Three preset configurations are available in `config/planner/`:
+- **default.toml** (625 lines) - Balanced strategy with all features enabled
+- **conservative.toml** (358 lines) - Minimal intervention for risk-averse investors
+- **aggressive.toml** (401 lines) - Active trading for maximum optimization
+
+Each file includes comprehensive documentation:
+- Complete philosophy and use case guidance
+- Every setting documented with MIN-MAX ranges and defaults
+- Real-world examples and recommendations
+- Beginner-friendly explanations alongside technical details
+
+You can also create custom configuration files in `config/planner/`:
 
 ```toml
 # config/planner/aggressive.toml
