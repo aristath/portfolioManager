@@ -7,6 +7,14 @@
 prompt_configuration() {
     echo ""
 
+    # In dry-run mode, use dummy credentials
+    if [ "$DRY_RUN" = true ]; then
+        API_KEY="dry_run_api_key_placeholder"
+        API_SECRET="dry_run_api_secret_placeholder"
+        print_msg "${YELLOW}" "→ Dry-run mode: Using placeholder credentials"
+        return
+    fi
+
     # Check if we have existing credentials
     if [ "$INSTALL_TYPE" = "existing" ]; then
         local env_file="/home/arduino/arduino-trader/.env"

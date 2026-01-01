@@ -7,10 +7,62 @@
 # microservices architecture. It supports both fresh installations and modifications
 # to existing installations.
 #
-# Usage: sudo ./install.sh
+# Usage:
+#   sudo ./install.sh           # Normal installation
+#   sudo ./install.sh --dry-run # Preview without making changes
+#   ./install.sh --help         # Show help
 #
 
 set -e  # Exit on error
+
+# Parse command line arguments
+DRY_RUN=false
+for arg in "$@"; do
+    case $arg in
+        --dry-run)
+            DRY_RUN=true
+            echo "Running in DRY-RUN mode - no changes will be made"
+            shift
+            ;;
+        --help|-h)
+            cat << 'EOF'
+Arduino Trader - Interactive Installation Script
+
+USAGE:
+    sudo ./install.sh [OPTIONS]
+
+OPTIONS:
+    --dry-run    Preview installation without making changes
+    --help, -h   Show this help message
+
+DESCRIPTION:
+    Interactive installer for Arduino Trader microservices architecture.
+    Supports both fresh installations and modifications to existing setups.
+
+FEATURES:
+    • Single-device or distributed deployment
+    • Service selection (choose which services run on this device)
+    • Automatic health checks and validation
+    • Configuration backup before changes
+    • Minimal user input (only API credentials required)
+
+EXAMPLES:
+    # Fresh installation with all services
+    sudo ./install.sh
+
+    # Preview installation without changes
+    sudo ./install.sh --dry-run
+
+    # Modify existing installation
+    sudo ./install.sh  # Will detect existing install automatically
+
+For detailed documentation, see INSTALL.md
+
+EOF
+            exit 0
+            ;;
+    esac
+done
 
 # Colors for output
 RED='\033[0;31m'
@@ -69,8 +121,12 @@ print_warning() {
 
 # Check if running as root
 check_root() {
-    if [ "$EUID" -ne 0 ]; then
+    if [ "$EUID" -ne 0 ] && [ "$DRY_RUN" = false ]; then
         error_exit "Please run as root (sudo ./install.sh)"
+    fi
+
+    if [ "$DRY_RUN" = true ]; then
+        print_msg "${YELLOW}" "DRY-RUN MODE: No files will be modified"
     fi
 }
 
@@ -137,25 +193,54 @@ main() {
     print_step 5 9 "Configuration"
     prompt_configuration
 
-    # Phase 6: Generate config files
-    print_step 6 9 "Generating Configuration Files"
-    generate_config_files
+    if [ "$DRY_RUN" = true ]; then
+        # Dry-run mode - show what would be done
+        print_msg "${YELLOW}" "\n[6/9] Would Generate Configuration Files:"
+        echo "  - /home/arduino/arduino-trader/.env"
+        echo "  - /home/arduino/arduino-trader/app/config/device.yaml"
+        echo "  - /home/arduino/arduino-trader/app/config/services.yaml"
 
-    # Phase 7: Setup microservices
-    print_step 7 9 "Setting Up Microservices"
-    setup_microservices
+        print_msg "${YELLOW}" "\n[7/9] Would Setup Microservices:"
+        echo "  - Build Docker images for: ${SELECTED_SERVICES[*]}"
+        echo "  - Start containers with docker-compose"
+        echo "  - Setup systemd service for auto-start"
 
-    # Phase 8: Health checks
-    print_step 8 9 "Running Health Checks"
-    validate_installation
+        print_msg "${YELLOW}" "\n[8/9] Would Run Health Checks:"
+        echo "  - Verify service ports are accessible"
+        echo "  - Test /health endpoints"
+        echo "  - Validate service connectivity"
 
-    # Phase 9: Installation summary
-    print_step 9 9 "Installation Summary"
-    print_installation_summary
+        print_msg "${YELLOW}" "\n[9/9] Installation Summary:"
+        echo "  Mode: $([ ${#SELECTED_SERVICES[@]} -eq 7 ] && echo 'Single-device' || echo 'Distributed')"
+        echo "  Services: ${SELECTED_SERVICES[*]}"
+        echo ""
+        print_msg "${GREEN}" "═══════════════════════════════════════════"
+        print_msg "${GREEN}" "  DRY-RUN Complete!"
+        print_msg "${GREEN}" "═══════════════════════════════════════════"
+        print_msg "${BLUE}" "\nNo changes were made to your system."
+        print_msg "${BLUE}" "Run without --dry-run to perform actual installation."
+    else
+        # Normal installation
+        # Phase 6: Generate config files
+        print_step 6 9 "Generating Configuration Files"
+        generate_config_files
 
-    print_msg "${GREEN}" "\n═══════════════════════════════════════════"
-    print_msg "${GREEN}" "  Installation Complete!"
-    print_msg "${GREEN}" "═══════════════════════════════════════════\n"
+        # Phase 7: Setup microservices
+        print_step 7 9 "Setting Up Microservices"
+        setup_microservices
+
+        # Phase 8: Health checks
+        print_step 8 9 "Running Health Checks"
+        validate_installation
+
+        # Phase 9: Installation summary
+        print_step 9 9 "Installation Summary"
+        print_installation_summary
+
+        print_msg "${GREEN}" "\n═══════════════════════════════════════════"
+        print_msg "${GREEN}" "  Installation Complete!"
+        print_msg "${GREEN}" "═══════════════════════════════════════════\n"
+    fi
 }
 
 # Run main
