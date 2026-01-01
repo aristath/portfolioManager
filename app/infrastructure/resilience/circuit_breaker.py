@@ -110,16 +110,17 @@ class CircuitBreaker:
             # Execute the function (lock released for performance)
             result = await func()
 
-            # Record success
+            # Record success and reset in-progress flag
             async with self._lock:
                 await self._on_success()
-                if self.state != CircuitState.HALF_OPEN:
-                    self._half_open_call_in_progress = False
+                # Always reset flag after call completes, even if still HALF_OPEN
+                # (will allow next request to try if we haven't reached success threshold)
+                self._half_open_call_in_progress = False
 
             return result
 
         except self.config.expected_exception as e:
-            # Record failure
+            # Record failure and reset in-progress flag
             async with self._lock:
                 await self._on_failure()
                 self._half_open_call_in_progress = False
