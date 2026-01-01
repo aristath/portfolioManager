@@ -1,0 +1,13 @@
+# Dual Device Configuration - Device 1 (Primary)
+# This device runs core planning and data services
+
+device:
+  id: "device1"
+  name: "Arduino Uno Q - Device 1 (Core Services)"
+  roles: ["planning", "scoring", "universe", "gateway"]
+  network:
+    bind_address: "0.0.0.0"
+    advertise_address: "192.168.1.100"  # Replace with actual IP
+  resources:
+    max_workers: 10
+    max_memory_mb: 2048

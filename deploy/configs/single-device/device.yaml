@@ -1,0 +1,13 @@
+# Single Device Configuration
+# This device runs all services locally
+
+device:
+  id: "primary"
+  name: "Arduino Uno Q - Single Device"
+  roles: ["all"]
+  network:
+    bind_address: "0.0.0.0"
+    advertise_address: "localhost"
+  resources:
+    max_workers: 10
+    max_memory_mb: 2048

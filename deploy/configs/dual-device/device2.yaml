@@ -1,0 +1,13 @@
+# Dual Device Configuration - Device 2 (Secondary)
+# This device runs execution services
+
+device:
+  id: "device2"
+  name: "Arduino Uno Q - Device 2 (Execution Services)"
+  roles: ["portfolio", "trading", "optimization"]
+  network:
+    bind_address: "0.0.0.0"
+    advertise_address: "192.168.1.101"  # Replace with actual IP
+  resources:
+    max_workers: 10
+    max_memory_mb: 2048

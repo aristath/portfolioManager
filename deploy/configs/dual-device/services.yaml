@@ -1,0 +1,71 @@
+# Dual Device Service Configuration
+# Services distributed across two Arduino Uno Q devices
+
+deployment:
+  mode: "distributed"
+
+services:
+  # Core services on Device 1
+  planning:
+    mode: "remote"
+    device_id: "device1"
+    address: "192.168.1.100"  # Replace with actual Device 1 IP
+    port: 50051
+    client:
+      timeout_seconds: 300
+      max_retries: 3
+
+  scoring:
+    mode: "remote"
+    device_id: "device1"
+    address: "192.168.1.100"
+    port: 50052
+    client:
+      timeout_seconds: 60
+      max_retries: 3
+
+  universe:
+    mode: "remote"
+    device_id: "device1"
+    address: "192.168.1.100"
+    port: 50056
+    client:
+      timeout_seconds: 180
+      max_retries: 3
+
+  gateway:
+    mode: "remote"
+    device_id: "device1"
+    address: "192.168.1.100"
+    port: 50057
+    client:
+      timeout_seconds: 300
+      max_retries: 3
+
+  # Execution services on Device 2
+  portfolio:
+    mode: "remote"
+    device_id: "device2"
+    address: "192.168.1.101"  # Replace with actual Device 2 IP
+    port: 50054
+    client:
+      timeout_seconds: 30
+      max_retries: 3
+
+  trading:
+    mode: "remote"
+    device_id: "device2"
+    address: "192.168.1.101"
+    port: 50055
+    client:
+      timeout_seconds: 60
+      max_retries: 3
+
+  optimization:
+    mode: "remote"
+    device_id: "device2"
+    address: "192.168.1.101"
+    port: 50053
+    client:
+      timeout_seconds: 120
+      max_retries: 3

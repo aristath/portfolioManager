@@ -1,0 +1,62 @@
+# Single Device Service Configuration
+# All services run in local mode (in-process, no gRPC)
+
+deployment:
+  mode: "local"  # All services run locally without gRPC
+
+services:
+  planning:
+    mode: "local"
+    device_id: "primary"
+    port: 50051
+    client:
+      timeout_seconds: 300
+      max_retries: 3
+
+  scoring:
+    mode: "local"
+    device_id: "primary"
+    port: 50052
+    client:
+      timeout_seconds: 60
+      max_retries: 3
+
+  optimization:
+    mode: "local"
+    device_id: "primary"
+    port: 50053
+    client:
+      timeout_seconds: 120
+      max_retries: 3
+
+  portfolio:
+    mode: "local"
+    device_id: "primary"
+    port: 50054
+    client:
+      timeout_seconds: 30
+      max_retries: 3
+
+  trading:
+    mode: "local"
+    device_id: "primary"
+    port: 50055
+    client:
+      timeout_seconds: 60
+      max_retries: 3
+
+  universe:
+    mode: "local"
+    device_id: "primary"
+    port: 50056
+    client:
+      timeout_seconds: 180
+      max_retries: 3
+
+  gateway:
+    mode: "local"
+    device_id: "primary"
+    port: 50057
+    client:
+      timeout_seconds: 300
+      max_retries: 3
