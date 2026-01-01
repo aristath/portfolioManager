@@ -117,9 +117,9 @@ const API = {
   regenerateSequences: () => API._post('/api/planner/regenerate-sequences'),
 
   // Planner Configuration Management
-  fetchPlanners: () => fetch('/api/planners').then(r => r.json()),
+  fetchPlanners: () => fetch('/api/planners/').then(r => r.json()),
   fetchPlannerById: (id) => fetch(`/api/planners/${id}`).then(r => r.json()),
-  createPlanner: (data) => API._post('/api/planners', data),
+  createPlanner: (data) => API._post('/api/planners/', data),
   updatePlanner: (id, data) => API._put(`/api/planners/${id}`, data),
   deletePlanner: (id) => API._delete(`/api/planners/${id}`),
   validatePlannerToml: (toml) => API._post('/api/planners/validate', { toml }),
