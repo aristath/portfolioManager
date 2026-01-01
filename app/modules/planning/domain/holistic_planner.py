@@ -63,7 +63,7 @@ def _calculate_adaptive_batch_size(
     - Memory >80%: Use minimum batch size (conservative)
     - Memory 70-80%: Reduce batch size by 50%
     - Memory 50-70%: Use base batch size
-    - Memory <50%: Increase batch size by 50% (up to max)
+    - Memory <50%: Increase batch size by 20% (up to max) - conservative
 
     Args:
         base_batch_size: Requested batch size
@@ -96,7 +96,8 @@ def _calculate_adaptive_batch_size(
         )
     elif mem_percent < 50:
         # Low memory - can increase for efficiency
-        increased = int(base_batch_size * 1.5)
+        # Conservative 1.2x increase (was 1.5x) to avoid overshooting memory capacity
+        increased = int(base_batch_size * 1.2)
         adjusted = max(min_batch_size, min(max_batch_size, increased))
         if adjusted > base_batch_size:
             logger.info(

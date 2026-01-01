@@ -580,8 +580,9 @@ class HolisticPlanner:
                 best_sequence = sequence
                 best_breakdown = breakdown
 
-            # Progress logging with memory monitoring (every 50 sequences)
-            if (i + 1) % 50 == 0:
+            # Progress logging with memory monitoring
+            # Log every 100 sequences to reduce noise (was 50)
+            if (i + 1) % 100 == 0:
                 progress_pct = ((i + 1) / len(sequences)) * 100
                 if PSUTIL_AVAILABLE:
                     mem = psutil.virtual_memory()
@@ -602,17 +603,18 @@ class HolisticPlanner:
                         f"Best score: {best_score:.3f}"
                     )
 
-                # Arduino-Q reliability: Explicit GC to prevent memory creep during long runs.
-                # Python's GC is generational and may not run frequently enough on Arduino-Q.
-                # Force collection every 50 sequences to free simulation/evaluation objects.
-                gc.collect()
+            # Arduino-Q reliability: Minor GC every 50 sequences to prevent memory creep.
+            # Use generation=0 (youngest objects only) to minimize latency spikes.
+            # Full collection happens at batch end.
+            if (i + 1) % 50 == 0:
+                gc.collect(generation=0)
 
         logger.info(
             f"Evaluation complete: Best sequence score: {best_score:.3f} "
             f"(from {len(sequences)} sequences)"
         )
 
-        # Final cleanup
+        # Final cleanup: Full GC (all generations) to reclaim all unreachable objects
         gc.collect()
 
         if PSUTIL_AVAILABLE:
