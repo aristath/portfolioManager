@@ -95,10 +95,17 @@ touch "$OUTPUT_DIR/common/__init__.py"
 # Fix imports in generated files
 echo "Fixing imports in generated files..."
 
+# Detect OS for sed compatibility (macOS needs -i '', Linux needs -i)
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    SED_INPLACE="sed -i ''"
+else
+    SED_INPLACE="sed -i"
+fi
+
 # Fix common imports
 for file in "$OUTPUT_DIR"/*_pb2.py "$OUTPUT_DIR"/*_pb2_grpc.py "$OUTPUT_DIR/common"/*_pb2.py "$OUTPUT_DIR/common"/*_pb2_grpc.py; do
     if [ -f "$file" ]; then
-        sed -i '' 's/^from common import \(.*\)_pb2/from contracts.common import \1_pb2/g' "$file"
+        $SED_INPLACE 's/^from common import \(.*\)_pb2/from contracts.common import \1_pb2/g' "$file"
     fi
 done
 
@@ -106,7 +113,7 @@ done
 for file in "$OUTPUT_DIR"/*_grpc.py; do
     if [ -f "$file" ]; then
         filename=$(basename "$file" _grpc.py)
-        sed -i '' "s/^import ${filename}_pb2 as /from contracts import ${filename}_pb2 as /g" "$file"
+        $SED_INPLACE "s/^import ${filename}_pb2 as /from contracts import ${filename}_pb2 as /g" "$file"
     fi
 done
 
@@ -114,7 +121,7 @@ done
 for file in "$OUTPUT_DIR/common"/*_grpc.py; do
     if [ -f "$file" ]; then
         filename=$(basename "$file" _grpc.py)
-        sed -i '' "s/^import ${filename}_pb2 as /from contracts.common import ${filename}_pb2 as /g" "$file"
+        $SED_INPLACE "s/^import ${filename}_pb2 as /from contracts.common import ${filename}_pb2 as /g" "$file"
     fi
 done
 
