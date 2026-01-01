@@ -103,6 +103,20 @@ document.addEventListener('alpine:init', () => {
     newSecurity: { identifier: '' },
     addingSecurity: false,
 
+    // Planner Management
+    planners: [],                          // List of all planner configs
+    selectedPlannerId: '',                 // Currently selected planner ID
+    plannerFormMode: 'none',               // 'none', 'edit', 'create'
+    plannerForm: {                         // Form data
+      id: '',
+      name: '',
+      toml: '',
+      bucket_id: null
+    },
+    showPlannerManagementModal: false,     // Modal visibility
+    plannerLoading: false,                 // Loading state
+    plannerError: null,                    // Validation/save errors
+
     // Fetch All Data
     async fetchAll() {
       await Promise.all([
@@ -758,6 +772,131 @@ document.addEventListener('alpine:init', () => {
       } catch (e) {
         this.showMessage('Failed to update multiplier', 'error');
       }
+    },
+
+    // Planner Management
+    async openPlannerManagement() {
+      this.showPlannerManagementModal = true;
+      this.plannerFormMode = 'none';
+      this.selectedPlannerId = '';
+      this.plannerError = null;
+      await this.fetchPlanners();
+    },
+
+    async fetchPlanners() {
+      this.plannerLoading = true;
+      try {
+        this.planners = await API.fetchPlanners();
+      } catch (e) {
+        this.plannerError = e.message || 'Failed to fetch planners';
+        console.error('Failed to fetch planners:', e);
+      } finally {
+        this.plannerLoading = false;
+      }
+    },
+
+    async loadSelectedPlanner() {
+      if (!this.selectedPlannerId) {
+        this.plannerFormMode = 'none';
+        return;
+      }
+      this.plannerLoading = true;
+      this.plannerError = null;
+      try {
+        const planner = await API.fetchPlannerById(this.selectedPlannerId);
+        this.plannerForm = {
+          id: planner.id,
+          name: planner.name,
+          toml: planner.toml_config,
+          bucket_id: planner.bucket_id
+        };
+        this.plannerFormMode = 'edit';
+      } catch (e) {
+        this.plannerError = e.message || 'Failed to load planner';
+        console.error('Failed to load planner:', e);
+      } finally {
+        this.plannerLoading = false;
+      }
+    },
+
+    startCreatePlanner() {
+      this.selectedPlannerId = '';
+      this.plannerForm = {
+        id: '',
+        name: '',
+        toml: '# New planner configuration\n',
+        bucket_id: null
+      };
+      this.plannerFormMode = 'create';
+      this.plannerError = null;
+    },
+
+    async savePlanner() {
+      this.plannerLoading = true;
+      this.plannerError = null;
+      try {
+        // Validate TOML first
+        const validation = await API.validatePlannerToml(this.plannerForm.toml);
+        if (!validation.valid) {
+          this.plannerError = validation.error;
+          this.plannerLoading = false;
+          return;
+        }
+
+        if (this.plannerFormMode === 'create') {
+          await API.createPlanner({
+            name: this.plannerForm.name,
+            toml_config: this.plannerForm.toml,
+            bucket_id: this.plannerForm.bucket_id
+          });
+          this.showMessage('Planner created successfully', 'success');
+        } else {
+          await API.updatePlanner(this.plannerForm.id, {
+            name: this.plannerForm.name,
+            toml_config: this.plannerForm.toml
+          });
+          this.showMessage('Planner updated successfully', 'success');
+        }
+
+        // Reload planners list
+        await this.fetchPlanners();
+
+        // Reset form
+        this.plannerFormMode = 'none';
+        this.selectedPlannerId = '';
+      } catch (e) {
+        this.plannerError = e.message || 'Failed to save planner';
+        console.error('Failed to save planner:', e);
+      } finally {
+        this.plannerLoading = false;
+      }
+    },
+
+    async deletePlanner() {
+      if (!confirm('Are you sure you want to delete this planner configuration?')) {
+        return;
+      }
+      this.plannerLoading = true;
+      this.plannerError = null;
+      try {
+        await API.deletePlanner(this.plannerForm.id);
+        this.showMessage('Planner deleted successfully', 'success');
+        await this.fetchPlanners();
+        this.plannerFormMode = 'none';
+        this.selectedPlannerId = '';
+      } catch (e) {
+        this.plannerError = e.message || 'Failed to delete planner';
+        console.error('Failed to delete planner:', e);
+      } finally {
+        this.plannerLoading = false;
+      }
+    },
+
+    closePlannerManagement() {
+      this.showPlannerManagementModal = false;
+      this.plannerFormMode = 'none';
+      this.selectedPlannerId = '';
+      this.plannerError = null;
     },
 
     // Trading Mode
