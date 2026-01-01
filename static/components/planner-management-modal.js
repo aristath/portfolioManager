@@ -76,11 +76,36 @@ class PlannerManagementModal extends HTMLElement {
               <div>
                 <div class="flex items-center justify-between mb-1">
                   <label class="block text-sm text-gray-300">TOML Configuration *</label>
-                  <button x-show="$store.app.plannerFormMode === 'edit'"
-                          @click="$store.app.togglePlannerHistory()"
-                          class="text-xs text-blue-400 hover:text-blue-300 transition-colors">
-                    <span x-text="$store.app.showPlannerHistory ? '▼ Hide History' : '▶ View History'"></span>
-                  </button>
+                  <div class="flex gap-2">
+                    <!-- Template Loader (create mode only) -->
+                    <div x-show="$store.app.plannerFormMode === 'create'" class="relative" x-data="{ showTemplates: false }">
+                      <button @click="showTemplates = !showTemplates"
+                              class="text-xs text-green-400 hover:text-green-300 transition-colors">
+                        📋 Load Template
+                      </button>
+                      <div x-show="showTemplates" @click.away="showTemplates = false"
+                           class="absolute right-0 mt-1 bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-10 min-w-[180px]">
+                        <button @click="$store.app.loadPlannerTemplate('conservative'); showTemplates = false"
+                                class="block w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700">
+                          Conservative Strategy
+                        </button>
+                        <button @click="$store.app.loadPlannerTemplate('balanced'); showTemplates = false"
+                                class="block w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700">
+                          Balanced Growth
+                        </button>
+                        <button @click="$store.app.loadPlannerTemplate('aggressive'); showTemplates = false"
+                                class="block w-full text-left px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700">
+                          Aggressive Growth
+                        </button>
+                      </div>
+                    </div>
+                    <!-- History Viewer (edit mode only) -->
+                    <button x-show="$store.app.plannerFormMode === 'edit'"
+                            @click="$store.app.togglePlannerHistory()"
+                            class="text-xs text-blue-400 hover:text-blue-300 transition-colors">
+                      <span x-text="$store.app.showPlannerHistory ? '▼ Hide History' : '▶ View History'"></span>
+                    </button>
+                  </div>
                 </div>
                 <textarea
                   x-model="$store.app.plannerForm.toml"
