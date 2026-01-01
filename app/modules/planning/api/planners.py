@@ -73,7 +73,7 @@ class ValidationResponse(BaseModel):
 # ============================================================================
 
 
-@router.get("/planners", response_model=List[PlannerConfigResponse])
+@router.get("/", response_model=List[PlannerConfigResponse])
 async def list_planners():
     """List all planner configurations."""
     service = PlannerConfigService()
@@ -81,7 +81,7 @@ async def list_planners():
     return configs
 
 
-@router.get("/planners/{config_id}", response_model=PlannerConfigResponse)
+@router.get("/{config_id}", response_model=PlannerConfigResponse)
 async def get_planner(config_id: str):
     """Get a specific planner configuration."""
     service = PlannerConfigService()
@@ -97,7 +97,7 @@ async def get_planner(config_id: str):
 
 
 @router.post(
-    "/planners",
+    "/",
     response_model=PlannerConfigResponse,
     status_code=status.HTTP_201_CREATED,
 )
@@ -117,7 +117,7 @@ async def create_planner(request: CreatePlannerRequest):
     return result["config"]
 
 
-@router.put("/planners/{config_id}", response_model=PlannerConfigResponse)
+@router.put("/{config_id}", response_model=PlannerConfigResponse)
 async def update_planner(config_id: str, request: UpdatePlannerRequest):
     """Update a planner configuration (creates backup automatically)."""
     service = PlannerConfigService()
@@ -141,7 +141,7 @@ async def update_planner(config_id: str, request: UpdatePlannerRequest):
     return result["config"]
 
 
-@router.delete("/planners/{config_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{config_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_planner(config_id: str):
     """Delete a planner configuration."""
     service = PlannerConfigService()
@@ -158,7 +158,7 @@ async def delete_planner(config_id: str):
         )
 
 
-@router.post("/planners/validate", response_model=ValidationResponse)
+@router.post("/validate", response_model=ValidationResponse)
 async def validate_toml(request: ValidateTomlRequest):
     """Validate TOML configuration without saving."""
     service = PlannerConfigService()
@@ -168,9 +168,7 @@ async def validate_toml(request: ValidateTomlRequest):
     return {"valid": validation["valid"], "error": validation["error"]}
 
 
-@router.get(
-    "/planners/{config_id}/history", response_model=List[PlannerConfigHistoryResponse]
-)
+@router.get("/{config_id}/history", response_model=List[PlannerConfigHistoryResponse])
 async def get_planner_history(config_id: str):
     """Get version history for a planner configuration."""
     service = PlannerConfigService()
@@ -187,7 +185,7 @@ async def get_planner_history(config_id: str):
     return history
 
 
-@router.post("/planners/{config_id}/apply")
+@router.post("/{config_id}/apply")
 async def apply_planner(config_id: str):
     """Apply/hot-reload a planner configuration for its bucket."""
     loader = get_planner_loader()
