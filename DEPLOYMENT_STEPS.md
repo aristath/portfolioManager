@@ -1,5 +1,8 @@
 # Deployment Steps for Arduino Device
 
+> **NOTE:** This guide is for the legacy monolith deployment (main branch).
+> For microservices deployment (micro-services branch - RECOMMENDED), see [INSTALL.md](INSTALL.md).
+
 ## Steps to Apply New Python-Based Deployment System
 
 ### 1. SSH into Arduino
