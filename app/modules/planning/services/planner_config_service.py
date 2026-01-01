@@ -115,6 +115,7 @@ class PlannerConfigService:
         config_id: str,
         name: Optional[str] = None,
         toml_config: Optional[str] = None,
+        bucket_id: Optional[str] = None,
     ) -> dict:
         """Update a planner configuration.
 
@@ -124,6 +125,7 @@ class PlannerConfigService:
             config_id: ID of the configuration to update
             name: New name (if provided)
             toml_config: New TOML configuration (if provided)
+            bucket_id: New bucket assignment (if provided)
 
         Returns:
             Dictionary with result:
@@ -141,7 +143,11 @@ class PlannerConfigService:
 
         try:
             config = await self.repository.update(
-                config_id, name=name, toml_config=toml_config, create_backup=True
+                config_id,
+                name=name,
+                toml_config=toml_config,
+                bucket_id=bucket_id,
+                create_backup=True,
             )
 
             if not config:

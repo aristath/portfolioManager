@@ -29,6 +29,9 @@ class UpdatePlannerRequest(BaseModel):
 
     name: Optional[str] = Field(None, description="New name")
     toml_config: Optional[str] = Field(None, description="New TOML configuration")
+    bucket_id: Optional[str] = Field(
+        None, description="Bucket assignment (empty string to unassign)"
+    )
 
 
 class ValidateTomlRequest(BaseModel):
@@ -120,7 +123,10 @@ async def update_planner(config_id: str, request: UpdatePlannerRequest):
     service = PlannerConfigService()
 
     result = await service.update(
-        config_id=config_id, name=request.name, toml_config=request.toml_config
+        config_id=config_id,
+        name=request.name,
+        toml_config=request.toml_config,
+        bucket_id=request.bucket_id,
     )
 
     if not result["success"]:

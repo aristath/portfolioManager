@@ -104,6 +104,7 @@ class PlannerConfigRepository:
         config_id: str,
         name: Optional[str] = None,
         toml_config: Optional[str] = None,
+        bucket_id: Optional[str] = None,
         create_backup: bool = True,
     ) -> Optional[PlannerConfig]:
         """Update a planner configuration.
@@ -114,6 +115,7 @@ class PlannerConfigRepository:
             config_id: ID of the configuration to update
             name: New name (if provided)
             toml_config: New TOML configuration (if provided)
+            bucket_id: New bucket assignment (if provided, use empty string for None)
             create_backup: Whether to create backup (default True)
 
         Returns:
@@ -130,12 +132,15 @@ class PlannerConfigRepository:
         if create_backup:
             await self._create_history_entry(current)
 
-        # Prepare updates
-        updates = {"updated_at": datetime.now().isoformat()}
+        # Prepare updates (Note: values can be str or None for nullable columns)
+        updates: dict[str, str | None] = {"updated_at": datetime.now().isoformat()}
         if name is not None:
             updates["name"] = name
         if toml_config is not None:
             updates["toml_config"] = toml_config
+        if bucket_id is not None:
+            # Empty string means unassign (set to NULL)
+            updates["bucket_id"] = bucket_id if bucket_id else None
 
         # Build dynamic UPDATE query
         set_clause = ", ".join(f"{k} = ?" for k in updates.keys())

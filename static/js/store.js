@@ -105,6 +105,7 @@ document.addEventListener('alpine:init', () => {
 
     // Planner Management
     planners: [],                          // List of all planner configs
+    plannerBuckets: [],                    // List of buckets for assignment
     selectedPlannerId: '',                 // Currently selected planner ID
     plannerFormMode: 'none',               // 'none', 'edit', 'create'
     plannerForm: {                         // Form data
@@ -780,7 +781,19 @@ document.addEventListener('alpine:init', () => {
       this.plannerFormMode = 'none';
       this.selectedPlannerId = '';
       this.plannerError = null;
-      await this.fetchPlanners();
+      await Promise.all([
+        this.fetchPlanners(),
+        this.fetchPlannerBuckets()
+      ]);
+    },
+
+    async fetchPlannerBuckets() {
+      try {
+        this.plannerBuckets = await API.fetchBuckets();
+      } catch (e) {
+        console.error('Failed to fetch buckets:', e);
+        this.plannerBuckets = [];
+      }
     },
 
     async fetchPlanners() {
@@ -853,7 +866,8 @@ document.addEventListener('alpine:init', () => {
         } else {
           await API.updatePlanner(this.plannerForm.id, {
             name: this.plannerForm.name,
-            toml_config: this.plannerForm.toml
+            toml_config: this.plannerForm.toml,
+            bucket_id: this.plannerForm.bucket_id || ''
           });
           this.showMessage('Planner updated successfully', 'success');
         }
