@@ -237,7 +237,35 @@ securities = await universe_client.get_securities(tradable_only=True)
 
 ## Quick Start
 
-### Local Development
+### Microservices Installation (Recommended)
+
+**Interactive installer** for easy setup:
+
+```bash
+# Clone repository
+git clone https://github.com/aristath/autoTrader.git
+cd autoTrader
+
+# Run interactive installer
+sudo ./install.sh
+
+# Follow the prompts:
+# 1. Select services (use 'all' for single-device)
+# 2. Enter Tradernet API credentials
+# 3. Wait for installation (~15 minutes)
+```
+
+Access the dashboard at `http://localhost:8000`
+
+**See [INSTALL.md](INSTALL.md) for:**
+- Complete installation guide
+- Distributed deployment
+- Modifying existing installations
+- Troubleshooting
+
+### Local Development (Monolith)
+
+For development/testing on the main branch:
 
 ```bash
 # Clone repository
@@ -263,36 +291,6 @@ uvicorn app.main:app --reload
 ```
 
 Access the dashboard at `http://localhost:8000`
-
-### Arduino Uno Q Deployment
-
-```bash
-# SSH into your Arduino Uno Q
-ssh arduino@192.168.1.11  # Password: aristath
-
-# Clone repository
-cd /home/arduino
-mkdir -p repos && cd repos
-git clone https://github.com/aristath/autoTrader.git
-cd autoTrader
-
-# Run setup script (installs main app and LED display)
-sudo deploy/setup.sh
-
-# Edit configuration
-nano /home/arduino/arduino-trader/.env
-
-# Restart service
-sudo systemctl restart arduino-trader
-```
-
-The setup script automatically:
-- Creates Python virtual environment
-- Installs dependencies
-- Sets up systemd service
-- Deploys LED display Docker app
-- Compiles and uploads Arduino sketch
-- Configures auto-deployment
 
 ## Configuration
 
