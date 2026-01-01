@@ -13,12 +13,29 @@ enable_diverse_selection = true
 diversity_weight = 0.4                  # Higher diversity weight
 
 # Transaction costs
-transaction_cost_fixed = 5.0
-transaction_cost_percent = 0.001
+transaction_cost_fixed = 2.0            # Match old planner defaults
+transaction_cost_percent = 0.002        # Match old planner defaults
 
 # Trade permissions
 allow_sell = true
 allow_buy = true
+
+# Eligibility and risk management (aggressive = relaxed)
+min_hold_days = 60                      # Shorter hold period
+sell_cooldown_days = 120                # Shorter cooldown
+max_loss_threshold = -0.25              # Wider stop loss (-25%)
+
+# Search and optimization (aggressive = larger search)
+beam_width = 20                         # Wider beam
+cost_penalty_factor = 0.05              # Lower cost penalty
+
+# Advanced evaluation features (enabled for aggressive)
+enable_multi_objective = true           # Multi-objective optimization
+enable_stochastic_scenarios = true      # Stochastic price scenarios
+enable_monte_carlo_paths = false        # Monte Carlo (too expensive)
+monte_carlo_path_count = 200            # More paths if enabled
+enable_multi_timeframe = true           # Multi-timeframe evaluation
+enable_market_regime_scenarios = true   # Market regime scenarios
 
 # ============================================================================
 # OPPORTUNITY CALCULATORS

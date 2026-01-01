@@ -13,12 +13,29 @@ enable_diverse_selection = true
 diversity_weight = 0.2                  # Prioritize priority over diversity
 
 # Transaction costs
-transaction_cost_fixed = 5.0
-transaction_cost_percent = 0.001
+transaction_cost_fixed = 2.0            # Match old planner defaults
+transaction_cost_percent = 0.002        # Match old planner defaults
 
 # Trade permissions
 allow_sell = true
 allow_buy = true
+
+# Eligibility and risk management (conservative = stricter)
+min_hold_days = 120                     # Longer hold period
+sell_cooldown_days = 240                # Longer cooldown
+max_loss_threshold = -0.15              # Tighter stop loss (-15%)
+
+# Search and optimization (conservative = smaller search)
+beam_width = 5                          # Narrower beam
+cost_penalty_factor = 0.15              # Higher cost penalty
+
+# Advanced evaluation features (disabled for conservative)
+enable_multi_objective = false
+enable_stochastic_scenarios = false
+enable_monte_carlo_paths = false
+monte_carlo_path_count = 50
+enable_multi_timeframe = false
+enable_market_regime_scenarios = false
 
 # ============================================================================
 # OPPORTUNITY CALCULATORS
