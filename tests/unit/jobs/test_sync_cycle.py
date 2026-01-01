@@ -426,37 +426,31 @@ class TestStepUpdateDisplay:
     """Test the display update step."""
 
     @pytest.mark.asyncio
-    async def test_updates_ticker_text(self):
-        """Test that ticker text is updated."""
+    async def test_updates_display_stats(self):
+        """Test that display stats are updated."""
         from app.jobs.sync_cycle import _step_update_display
 
-        set_text_called = False
+        # Mock the stats and monitor services
+        mock_stats_service = MagicMock()
+        mock_stats_service.get_fill_percentage = MagicMock(return_value=42.5)
 
-        def mock_set_text(text):
-            nonlocal set_text_called
-            set_text_called = True
-
-        mock_ticker_service = MagicMock()
-        mock_ticker_service.generate_ticker_text = AsyncMock(
-            return_value="Portfolio EUR10,000 | BUY AAPL EUR500"
-        )
+        mock_monitor_service = MagicMock()
+        mock_monitor_service.get_led3_color = MagicMock(return_value=[255, 0, 0])
+        mock_monitor_service.get_led4_color = MagicMock(return_value=[0, 255, 0])
 
         with (
-            patch("app.repositories.PortfolioRepository"),
-            patch("app.repositories.PositionRepository"),
-            patch("app.repositories.SecurityRepository"),
-            patch("app.repositories.SettingsRepository"),
-            patch("app.repositories.AllocationRepository"),
-            patch("app.infrastructure.external.tradernet.get_tradernet_client"),
             patch(
-                "app.domain.services.ticker_content_service.TickerContentService",
-                return_value=mock_ticker_service,
+                "app.modules.display.services.display_updater_service.get_system_stats_service",
+                return_value=mock_stats_service,
             ),
             patch(
-                "app.infrastructure.hardware.display_service.set_text",
-                side_effect=mock_set_text,
+                "app.modules.display.services.display_updater_service.get_service_monitor_service",
+                return_value=mock_monitor_service,
             ),
         ):
             await _step_update_display()
 
-        assert set_text_called is True
+        # Verify that the services were called
+        mock_stats_service.get_fill_percentage.assert_called_once()
+        mock_monitor_service.get_led3_color.assert_called_once()
+        mock_monitor_service.get_led4_color.assert_called_once()
