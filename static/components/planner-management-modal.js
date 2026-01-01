@@ -56,14 +56,20 @@ class PlannerManagementModal extends HTMLElement {
                        class="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-sm text-gray-100 focus:border-blue-500 focus:outline-none">
               </div>
 
-              <!-- Bucket ID (optional, shown in edit mode) -->
-              <div x-show="$store.app.plannerFormMode === 'edit' && $store.app.plannerForm.bucket_id">
-                <label class="block text-sm text-gray-300 mb-1">Associated Bucket</label>
-                <input type="text"
-                       :value="$store.app.plannerForm.bucket_id || 'None (Template)'"
-                       disabled
-                       class="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-sm text-gray-400 cursor-not-allowed">
-                <p class="text-xs text-gray-500 mt-1">Bucket assignments are managed separately</p>
+              <!-- Bucket Assignment Dropdown -->
+              <div>
+                <label class="block text-sm text-gray-300 mb-1">Assign to Bucket (Optional)</label>
+                <select x-model="$store.app.plannerForm.bucket_id"
+                        class="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-sm text-gray-100 focus:border-blue-500 focus:outline-none">
+                  <option value="">None (Template)</option>
+                  <template x-for="bucket in $store.app.plannerBuckets" :key="bucket.id">
+                    <option :value="bucket.id" x-text="bucket.name + ' (' + bucket.type + ')'"></option>
+                  </template>
+                </select>
+                <p class="text-xs text-gray-500 mt-1">
+                  <span x-show="$store.app.plannerForm.bucket_id">This planner will be used for the selected bucket</span>
+                  <span x-show="!$store.app.plannerForm.bucket_id">No bucket assigned - this is a template configuration</span>
+                </p>
               </div>
 
               <!-- TOML Configuration Textarea -->
