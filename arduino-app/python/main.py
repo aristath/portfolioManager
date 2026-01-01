@@ -5,7 +5,6 @@ from arduino.app_utils import App, Bridge, Logger
 import time
 import requests
 import subprocess
-import psutil
 
 logger = Logger("trader-display")
 
@@ -119,19 +118,8 @@ def restart_bridge_if_needed() -> bool:
             logger.info("Restarted trader-display container")
             return True
     except FileNotFoundError:
-        # Docker command not available, try finding and killing bridge process
-        try:
-            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-                try:
-                    cmdline = proc.info.get('cmdline', [])
-                    if cmdline and any('bridge' in str(arg).lower() for arg in cmdline):
-                        proc.kill()
-                        logger.info(f"Killed bridge process {proc.info['pid']}")
-                        return True
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    pass
-        except Exception as e:
-            logger.debug(f"Failed to find/kill bridge process: {e}")
+        # Docker command not available - log and continue
+        logger.debug("Docker command not found, cannot restart container")
     except Exception as e:
         logger.debug(f"Failed to restart bridge: {e}")
     return False
