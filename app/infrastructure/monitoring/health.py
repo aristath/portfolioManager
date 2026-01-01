@@ -178,33 +178,6 @@ async def check_database_connection() -> HealthCheckResult:
     )
 
 
-async def check_grpc_service_availability(
-    service_name: str, health_check_func
-) -> HealthCheckResult:
-    """Check if a gRPC service is available."""
-    try:
-        result = await asyncio.wait_for(health_check_func(), timeout=3.0)
-        if result.healthy:
-            return HealthCheckResult(
-                status=HealthStatus.HEALTHY, message=f"{service_name} is available"
-            )
-        else:
-            return HealthCheckResult(
-                status=HealthStatus.UNHEALTHY,
-                message=f"{service_name} reported unhealthy",
-            )
-    except asyncio.TimeoutError:
-        return HealthCheckResult(
-            status=HealthStatus.UNHEALTHY,
-            message=f"{service_name} health check timed out",
-        )
-    except Exception as e:
-        return HealthCheckResult(
-            status=HealthStatus.UNHEALTHY,
-            message=f"{service_name} health check failed: {e}",
-        )
-
-
 async def check_memory_usage(threshold_pct: float = 90.0) -> HealthCheckResult:
     """Check memory usage."""
     try:

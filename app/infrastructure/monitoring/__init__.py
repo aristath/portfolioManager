@@ -7,7 +7,6 @@ from app.infrastructure.monitoring.health import (
     HealthStatus,
     check_database_connection,
     check_disk_space,
-    check_grpc_service_availability,
     check_memory_usage,
 )
 from app.infrastructure.monitoring.metrics import (
@@ -18,10 +17,8 @@ from app.infrastructure.monitoring.metrics import (
     Timer,
     get_metrics_registry,
     record_circuit_breaker_state,
-    record_grpc_request,
     record_retry_attempt,
     record_service_health,
-    time_grpc_request,
 )
 
 __all__ = [
@@ -31,7 +28,6 @@ __all__ = [
     "HealthStatus",
     "check_database_connection",
     "check_disk_space",
-    "check_grpc_service_availability",
     "check_memory_usage",
     "Counter",
     "Gauge",
@@ -40,8 +36,6 @@ __all__ = [
     "Timer",
     "get_metrics_registry",
     "record_circuit_breaker_state",
-    "record_grpc_request",
     "record_retry_attempt",
     "record_service_health",
-    "time_grpc_request",
 ]

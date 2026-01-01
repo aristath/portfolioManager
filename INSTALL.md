@@ -413,12 +413,53 @@ docker compose ps
 docker compose logs [service-name]
 ```
 
+## Verification and Uninstall
+
+### Verify Installation
+
+After installation, verify everything is configured correctly:
+
+```bash
+./scripts/verify-installation.sh
+```
+
+This checks:
+- Installation files and directories
+- Configuration files
+- Docker services
+- Service ports
+- HTTP health endpoints
+
+### Uninstall
+
+To remove Arduino Trader:
+
+```bash
+# Interactive (prompts to keep data)
+sudo ./scripts/uninstall.sh
+
+# Keep data and configs
+sudo ./scripts/uninstall.sh --keep-data
+
+# Remove everything
+sudo ./scripts/uninstall.sh --full
+```
+
+The uninstall script:
+- Stops and removes Docker containers
+- Optionally removes Docker images
+- Removes systemd service
+- Backs up data before removal (if --keep-data)
+- Preserves configuration for reinstallation
+
 ## Additional Resources
 
 - **Main README**: `README.md` - Architecture and features
 - **Project Instructions**: `CLAUDE.md` - Development guidelines
 - **API Documentation**: `http://localhost:8000/docs` - Interactive API docs
 - **GitHub Issues**: https://github.com/aristath/autoTrader/issues
+- **Verification Script**: `./scripts/verify-installation.sh` - Check installation
+- **Uninstall Script**: `./scripts/uninstall.sh` - Remove installation
 
 ## Support
 
