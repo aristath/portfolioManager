@@ -47,8 +47,11 @@ async def get_optimizer_status() -> Dict[str, Any]:
         calculate_min_trade_amount,
     )
 
+    # Use standard Freedom24 transaction costs
+    # Bucket-specific costs are configured in TOML configs
     min_trade_amount = calculate_min_trade_amount(
-        settings.transaction_cost_fixed, settings.transaction_cost_percent
+        transaction_cost_fixed=2.0,
+        transaction_cost_percent=0.002,
     )
 
     response = {
@@ -146,8 +149,9 @@ async def run_optimization() -> Dict[str, Any]:
         ind_targets=ind_targets,
         min_cash_reserve=settings.min_cash_reserve,
         dividend_bonuses=dividend_bonuses,
-        transaction_cost_fixed=settings.transaction_cost_fixed,
-        transaction_cost_percent=settings.transaction_cost_percent,
+        # Use standard Freedom24 transaction costs
+        transaction_cost_fixed=2.0,
+        transaction_cost_percent=0.002,
     )
 
     # Convert result to dict for caching and response
