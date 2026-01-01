@@ -33,6 +33,91 @@ services:
       timeout_seconds: 180
       max_retries: 3
 
+  # Planning Microservices (HTTP-only)
+  opportunity:
+    mode: "remote"
+    device_id: "device1"
+    address: "192.168.1.100"
+    port: 8008
+    http_port: 8008
+    client:
+      timeout_seconds: 30
+      max_retries: 3
+      retry_backoff_ms: 1000
+    health_check:
+      enabled: true
+      interval_seconds: 30
+
+  generator:
+    mode: "remote"
+    device_id: "device1"
+    address: "192.168.1.100"
+    port: 8009
+    http_port: 8009
+    client:
+      timeout_seconds: 60
+      max_retries: 3
+      retry_backoff_ms: 1000
+    health_check:
+      enabled: true
+      interval_seconds: 30
+
+  evaluator-1:
+    mode: "remote"
+    device_id: "device1"
+    address: "192.168.1.100"
+    port: 8010
+    http_port: 8010
+    client:
+      timeout_seconds: 120
+      max_retries: 3
+      retry_backoff_ms: 1000
+    health_check:
+      enabled: true
+      interval_seconds: 30
+
+  evaluator-2:
+    mode: "remote"
+    device_id: "device1"
+    address: "192.168.1.100"
+    port: 8020
+    http_port: 8020
+    client:
+      timeout_seconds: 120
+      max_retries: 3
+      retry_backoff_ms: 1000
+    health_check:
+      enabled: true
+      interval_seconds: 30
+
+  evaluator-3:
+    mode: "remote"
+    device_id: "device1"
+    address: "192.168.1.100"
+    port: 8030
+    http_port: 8030
+    client:
+      timeout_seconds: 120
+      max_retries: 3
+      retry_backoff_ms: 1000
+    health_check:
+      enabled: true
+      interval_seconds: 30
+
+  coordinator:
+    mode: "remote"
+    device_id: "device1"
+    address: "192.168.1.100"
+    port: 8011
+    http_port: 8011
+    client:
+      timeout_seconds: 300
+      max_retries: 3
+      retry_backoff_ms: 1000
+    health_check:
+      enabled: true
+      interval_seconds: 30
+
   gateway:
     mode: "remote"
     device_id: "device1"

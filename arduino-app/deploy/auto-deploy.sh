@@ -110,6 +110,32 @@ MAIN_APP_CHANGED=false
 SKETCH_CHANGED=false
 REQUIREMENTS_CHANGED=false
 DEPLOY_SCRIPT_CHANGED=false
+MICROSERVICES_CHANGED=()
+
+# Map file patterns to Docker service names
+declare -A FILE_TO_SERVICE_MAP=(
+    # Planning microservices
+    ["services/opportunity/"]="opportunity"
+    ["services/generator/"]="generator"
+    ["services/coordinator/"]="coordinator"
+    ["services/evaluator/"]="evaluator-1 evaluator-2 evaluator-3"
+
+    # Shared Planning code affects all Planning microservices
+    ["app/modules/planning/domain/"]="opportunity generator coordinator evaluator-1 evaluator-2 evaluator-3"
+    ["app/modules/planning/services/local_opportunity"]="opportunity"
+    ["app/modules/planning/services/local_generator"]="generator"
+    ["app/modules/planning/services/local_coordinator"]="coordinator"
+    ["app/modules/planning/services/local_evaluator"]="evaluator-1 evaluator-2 evaluator-3"
+
+    # Original services (gRPC-based)
+    ["services/planning/"]="planning"
+    ["services/scoring/"]="scoring"
+    ["services/optimization/"]="optimization"
+    ["services/portfolio/"]="portfolio"
+    ["services/trading/"]="trading"
+    ["services/universe/"]="universe"
+    ["services/gateway/"]="gateway"
+)
 
 while IFS= read -r file; do
     # Check for main app changes
@@ -135,6 +161,20 @@ while IFS= read -r file; do
     if [[ "$file" == arduino-app/deploy/auto-deploy.sh ]]; then
         DEPLOY_SCRIPT_CHANGED=true
     fi
+
+    # Check for microservice changes
+    for pattern in "${!FILE_TO_SERVICE_MAP[@]}"; do
+        if [[ "$file" == $pattern* ]]; then
+            # Add affected services to restart list
+            services="${FILE_TO_SERVICE_MAP[$pattern]}"
+            for service in $services; do
+                # Check if already in list to avoid duplicates
+                if [[ ! " ${MICROSERVICES_CHANGED[@]} " =~ " ${service} " ]]; then
+                    MICROSERVICES_CHANGED+=("$service")
+                fi
+            done
+        fi
+    done
 done <<< "$CHANGED_FILES"
 
 # Self-update: Update this script if it changed
@@ -213,6 +253,70 @@ if [ "$MAIN_APP_CHANGED" = true ]; then
 
     # Restart systemd service with retry logic
     restart_service
+fi
+
+# Handle microservice restarts (device-aware, intelligent)
+if [ ${#MICROSERVICES_CHANGED[@]} -gt 0 ]; then
+    log "Microservice changes detected: ${MICROSERVICES_CHANGED[*]}"
+
+    # Read device configuration to see which services are installed locally
+    CONFIG_DIR="$MAIN_APP_DIR/app/config"
+    DEVICE_CONFIG="$CONFIG_DIR/device.yaml"
+
+    if [ -f "$DEVICE_CONFIG" ]; then
+        # Get locally configured services
+        if command -v yq &> /dev/null; then
+            LOCAL_SERVICES=$(yq '.device.roles[]' "$DEVICE_CONFIG" 2>/dev/null || echo "")
+        else
+            # Fallback: try to parse with grep (less reliable but works without yq)
+            LOCAL_SERVICES=$(grep -A 100 "roles:" "$DEVICE_CONFIG" 2>/dev/null | grep "^    - " | sed 's/^    - //' || echo "")
+        fi
+
+        # Determine docker-compose file location
+        COMPOSE_FILE=""
+        if [ -f "$MAIN_APP_DIR/docker-compose.yml" ]; then
+            COMPOSE_FILE="$MAIN_APP_DIR/docker-compose.yml"
+        elif [ -f "$MAIN_APP_DIR/deploy/docker/docker-compose.dual.yml" ]; then
+            COMPOSE_FILE="$MAIN_APP_DIR/deploy/docker/docker-compose.dual.yml"
+        elif [ -f "$MAIN_APP_DIR/deploy/docker/docker-compose.lb.yml" ]; then
+            COMPOSE_FILE="$MAIN_APP_DIR/deploy/docker/docker-compose.lb.yml"
+        fi
+
+        if [ -n "$COMPOSE_FILE" ] && [ -n "$LOCAL_SERVICES" ]; then
+            log "Using docker-compose file: $COMPOSE_FILE"
+
+            for service in "${MICROSERVICES_CHANGED[@]}"; do
+                # Check if this service is installed on this device
+                if echo "$LOCAL_SERVICES" | grep -q "^${service}$"; then
+                    log "Restarting Docker container for service: $service"
+
+                    # Restart specific Docker container
+                    if docker compose -f "$COMPOSE_FILE" restart "$service" >> "$LOG_FILE" 2>&1; then
+                        log "Successfully restarted $service container"
+                    else
+                        log "WARNING: Failed to restart $service container - trying docker-compose"
+                        # Fallback to docker-compose (older systems)
+                        if docker-compose -f "$COMPOSE_FILE" restart "$service" >> "$LOG_FILE" 2>&1; then
+                            log "Successfully restarted $service container (using docker-compose)"
+                        else
+                            log "WARNING: Failed to restart $service container"
+                        fi
+                    fi
+                else
+                    log "Skipping $service (not installed on this device)"
+                fi
+            done
+        else
+            if [ -z "$COMPOSE_FILE" ]; then
+                log "WARNING: No docker-compose file found, skipping microservice restarts"
+            fi
+            if [ -z "$LOCAL_SERVICES" ]; then
+                log "WARNING: No local services found in device.yaml, skipping microservice restarts"
+            fi
+        fi
+    else
+        log "WARNING: device.yaml not found at $DEVICE_CONFIG, skipping microservice restarts"
+    fi
 fi
 
 # Handle sketch changes (compile and upload)

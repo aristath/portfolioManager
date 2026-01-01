@@ -13,7 +13,11 @@ NC='\033[0m' # No Color
 echo -e "${YELLOW}Checking microservices status...${NC}"
 echo ""
 
-# Array of services with ports
+# Array of gRPC services with their ports
+# Note: The new Planning microservices (opportunity, generator, coordinator, evaluator-1/2/3)
+# are HTTP-only (FastAPI) and run in Docker containers, not as local processes.
+# They run on HTTP ports 8008-8011, 8020, 8030 and are checked via HTTP health endpoints.
+# Use scripts/health_check.sh to check their status.
 services=(
     "planning:50051"
     "scoring:50052"

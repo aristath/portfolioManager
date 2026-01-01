@@ -34,7 +34,10 @@ export SERVICES_CONFIG_PATH="$PROJECT_ROOT/app/config/services.yaml"
 # Create logs directory
 mkdir -p "$PROJECT_ROOT/logs"
 
-# Array of services
+# Array of gRPC services (with their gRPC ports)
+# Note: The new Planning microservices (opportunity, generator, coordinator, evaluator-1/2/3)
+# are HTTP-only (FastAPI) and don't use gRPC, so they are not included here.
+# They run on HTTP ports 8008-8011, 8020, 8030 and are managed via Docker Compose.
 services=(
     "planning:50051"
     "scoring:50052"
