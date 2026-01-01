@@ -3456,8 +3456,13 @@ async def create_holistic_plan(
 
     # Pre-fetch all metrics for all symbols that will be evaluated
     # First, collect all symbols from all sequence end states by simulating them
+    # TODO: Optimize with Go service - requires Go to return end_context/positions
+    # Currently using Python simulation to preserve advanced features (multi-objective,
+    # stochastic scenarios, multi-timeframe, etc.) that need full end state details
     all_symbols: set[str] = set()
     sequence_results = []  # Store (sequence, end_context, end_cash) tuples
+
+    from app.modules.planning.domain.calculations.simulation import simulate_sequence
 
     for sequence in sequences:
         end_context, end_cash = await simulate_sequence(
