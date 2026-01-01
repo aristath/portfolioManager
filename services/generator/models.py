@@ -36,7 +36,14 @@ class CombinatorialSettings(BaseModel):
     max_depth: int = Field(default=4, ge=1, le=10)
     max_combinations: int = Field(default=1000, ge=10, le=10000)
     max_opportunities_per_category: int = Field(default=5, ge=1, le=20)
+    priority_threshold: float = Field(default=0.3, ge=0.0, le=1.0)
+    combinatorial_max_combinations_per_depth: int = Field(default=50, ge=10, le=200)
+    combinatorial_max_sells: int = Field(default=4, ge=1, le=10)
+    combinatorial_max_buys: int = Field(default=4, ge=1, le=10)
+    combinatorial_max_candidates: int = Field(default=12, ge=4, le=30)
     enable_weighted_combinations: bool = True
+    enable_diverse_selection: bool = True
+    diversity_weight: float = Field(default=0.3, ge=0.0, le=1.0)
     enable_adaptive_patterns: bool = True
     enable_partial_execution: bool = True
     enable_constraint_relaxation: bool = True

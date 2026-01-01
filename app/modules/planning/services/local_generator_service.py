@@ -84,7 +84,15 @@ class LocalGeneratorService:
             opportunities=opportunities,
             available_cash=request.feasibility.available_cash,
             max_depth=request.combinatorial.max_depth,
+            max_opportunities_per_category=request.combinatorial.max_opportunities_per_category,
             enable_combinatorial=request.combinatorial.enable_weighted_combinations,
+            priority_threshold=request.combinatorial.priority_threshold,
+            combinatorial_max_combinations_per_depth=request.combinatorial.combinatorial_max_combinations_per_depth,
+            combinatorial_max_sells=request.combinatorial.combinatorial_max_sells,
+            combinatorial_max_buys=request.combinatorial.combinatorial_max_buys,
+            combinatorial_max_candidates=request.combinatorial.combinatorial_max_candidates,
+            enable_diverse_selection=request.combinatorial.enable_diverse_selection,
+            diversity_weight=request.combinatorial.diversity_weight,
             securities=securities,
         )
 

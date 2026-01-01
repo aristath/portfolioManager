@@ -58,13 +58,42 @@ class SecurityInput(BaseModel):
 class PlanningParameters(BaseModel):
     """Parameters for plan creation."""
 
+    # Basic parameters
     max_depth: int = Field(default=4, ge=1, le=10)
     beam_width: int = Field(default=10, ge=1, le=100)
     batch_size: int = Field(default=500, ge=10, le=5000)
     transaction_cost_fixed: float = Field(default=2.0, ge=0.0)
     transaction_cost_percent: float = Field(default=0.002, ge=0.0, le=0.1)
-    enable_monte_carlo: bool = False
+
+    # Combinatorial generation parameters
+    max_opportunities_per_category: int = Field(default=5, ge=1, le=20)
+    priority_threshold: float = Field(default=0.3, ge=0.0, le=1.0)
+    combinatorial_max_combinations_per_depth: int = Field(default=50, ge=10, le=200)
+    combinatorial_max_sells: int = Field(default=4, ge=1, le=10)
+    combinatorial_max_buys: int = Field(default=4, ge=1, le=10)
+    combinatorial_max_candidates: int = Field(default=12, ge=4, le=30)
+    enable_combinatorial: bool = True
+    enable_diverse_selection: bool = True
+    diversity_weight: float = Field(default=0.3, ge=0.0, le=1.0)
+
+    # Advanced pattern generation
+    enable_adaptive_patterns: bool = True
+    enable_market_regime: bool = False
+    enable_partial_execution: bool = False
+    enable_constraint_relaxation: bool = False
+
+    # Filtering
     enable_correlation_aware: bool = True
+
+    # Evaluation features
+    enable_multi_objective: bool = False
+    enable_stochastic_scenarios: bool = False
+    enable_monte_carlo: bool = False
+    monte_carlo_paths: int = Field(default=100, ge=10, le=500)
+    enable_multi_timeframe: bool = False
+    cost_penalty_factor: float = Field(default=0.1, ge=0.0, le=1.0)
+    enable_priority_sorting: bool = True
+
     # Early termination settings
     enable_early_termination: bool = True
     min_batches_to_evaluate: int = Field(default=2, ge=1, le=20)
