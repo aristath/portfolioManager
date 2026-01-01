@@ -18,10 +18,22 @@ const int MATRIX_WIDTH = 13;
 const int MATRIX_HEIGHT = 8;
 const int TOTAL_PIXELS = MATRIX_WIDTH * MATRIX_HEIGHT;  // 104 pixels
 
-bool pixels[MATRIX_HEIGHT][MATRIX_WIDTH];
+// PWM brightness control (0-255 per pixel)
+// Memory usage: 8 * 13 = 104 bytes
+uint8_t pixelBrightness[MATRIX_HEIGHT][MATRIX_WIDTH];
 float targetFillPercentage = 0.0;  // 0.0-100.0
-unsigned long lastRefresh = 0;
-const int REFRESH_INTERVAL = 10;  // ms (100 FPS)
+
+// Two-layer timing: PWM frame cycling + pixel pattern updates
+const int PWM_FRAME_INTERVAL = 10;     // Fixed 100 FPS for PWM rendering
+unsigned long lastPWMFrame = 0;
+uint8_t pwmCycle = 0;                   // 0-15 for 4-bit PWM
+
+int pixelUpdateInterval = 2010;         // Dynamic interval for pattern updates
+unsigned long lastPixelUpdate = 0;
+
+// Shared frame buffer for rendering (8 * 12 = 96 bytes)
+// Using global to avoid stack allocation in renderPWMFrame()
+uint8_t frameBuffer[8][12];
 
 // Set RGB LED 3 color (active-low, digital only)
 void setRGB3(uint8_t r, uint8_t g, uint8_t b) {
@@ -37,108 +49,131 @@ void setRGB4(uint8_t r, uint8_t g, uint8_t b) {
   digitalWrite(LED_BUILTIN + 5, b > 0 ? LOW : HIGH);
 }
 
-// Set fill percentage for LED matrix (0.0-100.0)
-void setFillPercentage(float percentage) {
+// Set fill percentage for LED matrix (0.0-100.0) with dynamic update interval
+void setFillPercentageWithActivity(float percentage) {
   targetFillPercentage = constrain(percentage, 0.0, 100.0);
+
+  // Calculate dynamic pixel update interval: 2010ms at 0% to 10ms at 100%
+  pixelUpdateInterval = 2010 - (int)(targetFillPercentage * 20.0);
+  pixelUpdateInterval = constrain(pixelUpdateInterval, 10, 2010);
 }
 
-// Count number of pixels that are currently ON
-int countOnPixels() {
-  int count = 0;
-  for (int row = 0; row < MATRIX_HEIGHT; row++) {
-    for (int col = 0; col < MATRIX_WIDTH; col++) {
-      if (pixels[row][col]) {
-        count++;
+// Update pixel pattern with random brightness based on activity level
+void updatePixelPattern() {
+  int targetLitPixels = (int)(targetFillPercentage / 100.0 * TOTAL_PIXELS);
+  targetLitPixels = constrain(targetLitPixels, 0, TOTAL_PIXELS);
+
+  // Calculate brightness range based on activity
+  // At 0%: min=60, max=100
+  // At 100%: min=215, max=255
+  float activityPercent = constrain(targetFillPercentage, 0.0, 100.0);
+  float minBrightness = 60.0 + (activityPercent * 1.55);
+  float maxBrightness = minBrightness + 40.0;
+
+  // Ensure brightness values are within valid range
+  minBrightness = constrain(minBrightness, 16.0, 255.0);  // Min 16 for visibility
+  maxBrightness = constrain(maxBrightness, minBrightness, 255.0);
+
+  // Count currently lit pixels
+  int currentLitPixels = 0;
+  for (int y = 0; y < MATRIX_HEIGHT; y++) {
+    for (int x = 0; x < MATRIX_WIDTH; x++) {
+      if (pixelBrightness[y][x] > 0) {
+        currentLitPixels++;
       }
     }
   }
-  return count;
+
+  // Smoothly transition: add or remove pixels, and update brightness
+  // This creates a more organic, flowing effect
+  if (currentLitPixels < targetLitPixels) {
+    // Need to add pixels
+    int toAdd = targetLitPixels - currentLitPixels;
+    int added = 0;
+    int attempts = 0;
+    const int MAX_ATTEMPTS = toAdd * 10;
+
+    while (added < toAdd && attempts < MAX_ATTEMPTS) {
+      int x = random(MATRIX_WIDTH);
+      int y = random(MATRIX_HEIGHT);
+
+      if (pixelBrightness[y][x] == 0) {
+        pixelBrightness[y][x] = random((int)minBrightness, (int)maxBrightness + 1);
+        added++;
+      }
+      attempts++;
+    }
+  } else if (currentLitPixels > targetLitPixels) {
+    // Need to remove pixels
+    int toRemove = currentLitPixels - targetLitPixels;
+    int removed = 0;
+    int attempts = 0;
+    const int MAX_ATTEMPTS = toRemove * 10;
+
+    while (removed < toRemove && attempts < MAX_ATTEMPTS) {
+      int x = random(MATRIX_WIDTH);
+      int y = random(MATRIX_HEIGHT);
+
+      if (pixelBrightness[y][x] > 0) {
+        pixelBrightness[y][x] = 0;
+        removed++;
+      }
+      attempts++;
+    }
+  }
+
+  // Add sparkle effect: randomly adjust brightness of some lit pixels
+  // This creates visual interest even when pixel count is stable
+  int sparkleCount = max(1, currentLitPixels / 10);  // 10% of lit pixels sparkle
+  for (int i = 0; i < sparkleCount; i++) {
+    int x = random(MATRIX_WIDTH);
+    int y = random(MATRIX_HEIGHT);
+
+    if (pixelBrightness[y][x] > 0) {
+      // Adjust brightness within range
+      pixelBrightness[y][x] = random((int)minBrightness, (int)maxBrightness + 1);
+    }
+  }
 }
 
-// Toggle a random pixel with given current state to new state
-// Returns true if successful, false if no pixel found after max attempts
-bool toggleRandomPixel(bool currentState, bool newState) {
-  int attempts = 0;
-  while (attempts < 200) {
-    int row = random(MATRIX_HEIGHT);
-    int col = random(MATRIX_WIDTH);
-    if (pixels[row][col] == currentState) {
-      pixels[row][col] = newState;
-      return true;
-    }
-    attempts++;
-  }
-  return false;
-}
+// Render PWM frame for software brightness control
+void renderPWMFrame() {
+  // Clear frame buffer
+  memset(frameBuffer, 0, sizeof(frameBuffer));
 
-// Render pixel array to LED matrix
-void renderPixels() {
-  uint8_t frame[8][12];  // LED matrix uses 8x12 byte array
+  // Build frame based on current PWM cycle
+  for (int y = 0; y < MATRIX_HEIGHT; y++) {
+    for (int x = 0; x < MATRIX_WIDTH; x++) {
+      // Get 4-bit brightness level (0-15)
+      uint8_t level = pixelBrightness[y][x] >> 4;
 
-  // Clear frame
-  for (int i = 0; i < 8; i++) {
-    for (int j = 0; j < 12; j++) {
-      frame[i][j] = 0;
-    }
-  }
-
-  // Convert pixels to frame format
-  // Each pixel is a single bit in the frame
-  for (int row = 0; row < MATRIX_HEIGHT; row++) {
-    for (int col = 0; col < MATRIX_WIDTH; col++) {
-      if (pixels[row][col]) {
-        int byteIndex = col / 8;
-        int bitIndex = 7 - (col % 8);
+      // Pixel is ON if pwmCycle < brightness level
+      if (pwmCycle < level) {
+        int byteIndex = x / 8;
+        int bitIndex = 7 - (x % 8);
         if (byteIndex < 12) {  // Safety check
-          frame[row][byteIndex] |= (1 << bitIndex);
+          frameBuffer[y][byteIndex] |= (1 << bitIndex);
         }
       }
     }
   }
 
-  matrix.renderBitmap(frame, 8, 12);
-}
+  // Render to LED matrix
+  matrix.renderBitmap(frameBuffer, 8, 12);
 
-// Update random pixel display based on target fill percentage
-void updateRandomPixels() {
-  unsigned long now = millis();
-  if (now - lastRefresh < REFRESH_INTERVAL) {
-    return;
-  }
-  lastRefresh = now;
-
-  // Ensure at least 1 pixel is always ON for visual feedback
-  int targetOn = max(1, (int)(TOTAL_PIXELS * targetFillPercentage / 100.0));
-  int currentOn = countOnPixels();
-
-  if (currentOn < targetOn) {
-    // Turn on random OFF pixel
-    toggleRandomPixel(false, true);
-  } else if (currentOn > targetOn) {
-    // Turn off random ON pixel
-    toggleRandomPixel(true, false);
-  } else {
-    // At equilibrium - swap 5% of pixels (minimum 1) for visual effect
-    int swapCount = max(1, (int)(TOTAL_PIXELS * 0.05));
-    for (int i = 0; i < swapCount; i++) {
-      toggleRandomPixel(true, false);   // Turn one OFF
-      toggleRandomPixel(false, true);   // Turn one ON
-    }
-  }
-
-  renderPixels();
+  // Increment PWM cycle (0-15 for 4-bit PWM)
+  pwmCycle = (pwmCycle + 1) & 0x0F;
 }
 
 void setup() {
   // Initialize LED matrix
   matrix.begin();
 
-  // Initialize pixel array (all OFF)
-  for (int row = 0; row < MATRIX_HEIGHT; row++) {
-    for (int col = 0; col < MATRIX_WIDTH; col++) {
-      pixels[row][col] = false;
-    }
-  }
+  // Initialize pixel brightness array (all OFF)
+  memset(pixelBrightness, 0, sizeof(pixelBrightness));
+
+  // Initialize frame buffer (all OFF)
+  memset(frameBuffer, 0, sizeof(frameBuffer));
 
   // Initialize RGB LED 3 & 4 pins
   pinMode(LED_BUILTIN, OUTPUT);
@@ -156,21 +191,32 @@ void setup() {
   Bridge.begin();
   Bridge.provide("setRGB3", setRGB3);
   Bridge.provide("setRGB4", setRGB4);
-  Bridge.provide("setFillPercentage", setFillPercentage);
+  Bridge.provide("setFillPercentageWithActivity", setFillPercentageWithActivity);
 
   // Seed random number generator
   randomSeed(analogRead(0));
 
   // Initial render
-  renderPixels();
+  renderPWMFrame();
 }
 
 void loop() {
   // Bridge handles RPC messages automatically in background thread
   // No need to call Bridge.loop() - it's handled by __loopHook()
 
-  // Update pixel display at 100 FPS (10ms refresh)
-  updateRandomPixels();
+  unsigned long currentMillis = millis();
+
+  // Layer 1: PWM frame cycling at fixed 100 FPS
+  if (currentMillis - lastPWMFrame >= PWM_FRAME_INTERVAL) {
+    lastPWMFrame = currentMillis;
+    renderPWMFrame();
+  }
+
+  // Layer 2: Pixel pattern updates at dynamic rate
+  if (currentMillis - lastPixelUpdate >= pixelUpdateInterval) {
+    lastPixelUpdate = currentMillis;
+    updatePixelPattern();
+  }
 
   // Small delay to allow Bridge background thread to process
   delay(1);

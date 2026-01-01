@@ -24,10 +24,10 @@ def set_fill_percentage(percentage: float) -> bool:
         True if successful, False otherwise
     """
     try:
-        Bridge.call("setFillPercentage", percentage, timeout=2)
+        Bridge.call("setFillPercentageWithActivity", percentage, timeout=2)
         return True
     except Exception as e:
-        logger.debug(f"setFillPercentage failed: {e}")
+        logger.debug(f"setFillPercentageWithActivity failed: {e}")
         return False
 
 

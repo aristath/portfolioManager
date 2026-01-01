@@ -24,7 +24,7 @@ except ImportError:
 class SystemStatsService:
     """Service for collecting system statistics.
 
-    Polls CPU and memory usage at 2Hz (every 500ms) and calculates
+    Polls CPU and memory usage at 0.5Hz (every 2000ms) and calculates
     a fill percentage for the LED matrix display.
     """
 
@@ -44,7 +44,7 @@ class SystemStatsService:
         self._running = True
         self._thread = threading.Thread(target=self._poll_stats, daemon=True)
         self._thread.start()
-        logger.info("SystemStatsService started (polling at 2Hz)")
+        logger.info("SystemStatsService started (polling at 0.5Hz)")
 
     def stop(self) -> None:
         """Stop the stats collection thread."""
@@ -63,7 +63,7 @@ class SystemStatsService:
             return self._fill_percentage
 
     def _poll_stats(self) -> None:
-        """Background thread that polls system stats at 2Hz."""
+        """Background thread that polls system stats at 0.5Hz."""
         while self._running:
             try:
                 cpu_percent = self._get_cpu_percent()
@@ -86,8 +86,8 @@ class SystemStatsService:
                 with self._lock:
                     self._fill_percentage = 0.0
 
-            # Sleep for 500ms (2Hz polling rate)
-            time.sleep(0.5)
+            # Sleep for 2000ms (0.5Hz polling rate)
+            time.sleep(2.0)
 
     def _get_cpu_percent(self) -> float:
         """Get CPU usage percentage.
