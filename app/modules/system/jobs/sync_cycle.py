@@ -248,14 +248,14 @@ async def _step_execute_trade(recommendation) -> dict[str, Any]:
 
 
 async def _step_update_display():
-    """Step 8: Update the LED ticker display."""
+    """Step 8: Update the LED display with system stats."""
     try:
         from app.modules.display.services.display_updater_service import (
-            update_display_ticker,
+            update_display_stats,
         )
 
-        await update_display_ticker()
-        logger.debug("Ticker updated")
+        await update_display_stats()
+        logger.debug("Display stats updated")
     except Exception as e:
         logger.error(f"Display update failed: {e}")
 

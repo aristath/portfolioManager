@@ -20,7 +20,6 @@ from app.infrastructure.dependencies import (
     PortfolioRepositoryDep,
     PositionRepositoryDep,
     SecurityRepositoryDep,
-    SettingsRepositoryDep,
 )
 
 logger = logging.getLogger(__name__)
@@ -114,27 +113,25 @@ async def get_status(
 
 @router.get("/led/display")
 async def get_led_display_state(
-    settings_repo: SettingsRepositoryDep,
     display_manager: DisplayStateManagerDep,
 ):
     """Get LED display state for Arduino App Framework Docker app.
 
-    Returns display text and RGB LED states in the format expected
-    by the trader-display Arduino app.
+    Returns fill percentage (for system stats visualization) and RGB LED states
+    (for microservice health indication) in the format expected by the
+    trader-display Arduino app.
     """
-    display_text = display_manager.get_current_text()
-    ticker_speed = int(await settings_repo.get_float("ticker_speed", 50.0))
+    fill_percentage = display_manager.get_fill_percentage()
     led3 = display_manager.get_led3()
     led4 = display_manager.get_led4()
 
     logger.debug(
-        f"LED display state requested: text='{display_text}', speed={ticker_speed}, "
+        f"LED display state requested: fill={fill_percentage:.1f}%, "
         f"led3={led3}, led4={led4}"
     )
 
     return {
-        "display_text": display_text,
-        "ticker_speed": ticker_speed,
+        "fill_percentage": fill_percentage,
         "led3": led3,
         "led4": led4,
     }

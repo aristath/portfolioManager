@@ -124,10 +124,10 @@ async def lifespan(app: FastAPI):
     async def update_display_on_startup():
         try:
             from app.modules.display.services.display_updater_service import (
-                update_display_ticker,
+                update_display_stats,
             )
 
-            await update_display_ticker()
+            await update_display_stats()
             logger.info("Display updated on startup")
         except Exception as e:
             logger.warning(f"Failed to update display on startup: {e}")

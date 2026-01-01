@@ -41,6 +41,9 @@ vulture>=2.11
 msgpack>=1.0.0
 tomli>=2.0.0
 
+# System stats monitoring
+psutil>=5.9.0
+
 # gRPC for microservices
 grpcio>=1.60.0,<2.0.0
 grpcio-tools>=1.60.0,<2.0.0

@@ -133,7 +133,7 @@ async def init_scheduler() -> AsyncIOScheduler:
     from app.jobs.maintenance import run_daily_maintenance, run_weekly_maintenance
     from app.jobs.securities_data_sync import run_securities_data_sync
     from app.modules.display.services.display_updater_service import (
-        update_display_ticker,
+        update_display_stats,
     )
     from app.modules.dividends.jobs.dividend_reinvestment import auto_reinvest_dividends
     from app.modules.planning.jobs.planner_batch import process_planner_batch_job
@@ -309,14 +309,14 @@ async def init_scheduler() -> AsyncIOScheduler:
     # SYSTEM JOBS
     # ============================================================================
 
-    # Job 6: Display Ticker Update - every 10 seconds
-    # Handles: updating LED matrix display with current ticker text
+    # Job 6: Display Stats Update - every 10 seconds
+    # Handles: updating LED matrix display with system stats and microservice health
     # Lightweight job that only updates display, not full sync
     scheduler.add_job(
-        update_display_ticker,
+        update_display_stats,
         IntervalTrigger(seconds=10),
-        id="display_ticker_update",
-        name="Display Ticker Update",
+        id="display_stats_update",
+        name="Display Stats Update",
         replace_existing=True,
     )
 

@@ -41,7 +41,6 @@ from app.modules.scoring.services.scoring_service import ScoringService
 from app.modules.trading.services.trade_execution_service import TradeExecutionService
 from app.modules.trading.services.trade_safety_service import TradeSafetyService
 from app.modules.universe.database.security_repository import SecurityRepository
-from app.modules.universe.domain.ticker_content_service import TickerContentService
 from app.modules.universe.services.security_setup_service import SecuritySetupService
 from app.repositories.calculations import CalculationsRepository
 from app.repositories.grouping import GroupingRepository
@@ -213,25 +212,6 @@ def get_exchange_rate_service(
     return ExchangeRateService(db_manager=db_manager)
 
 
-def get_ticker_content_service(
-    portfolio_repo: PortfolioRepositoryDep,
-    position_repo: PositionRepositoryDep,
-    security_repo: SecurityRepositoryDep,
-    settings_repo: SettingsRepositoryDep,
-    allocation_repo: AllocationRepositoryDep,
-    tradernet_client: TradernetClientDep,
-) -> TickerContentService:
-    """Get TickerContentService instance."""
-    return TickerContentService(
-        portfolio_repo=portfolio_repo,
-        position_repo=position_repo,
-        security_repo=security_repo,
-        settings_repo=settings_repo,
-        allocation_repo=allocation_repo,
-        tradernet_client=tradernet_client,
-    )
-
-
 def get_currency_exchange_service_dep(
     tradernet_client: TradernetClientDep,
 ) -> CurrencyExchangeService:
@@ -320,9 +300,6 @@ CurrencyExchangeServiceDep = Annotated[
 ]
 ExchangeRateServiceDep = Annotated[
     ExchangeRateService, Depends(get_exchange_rate_service)
-]
-TickerContentServiceDep = Annotated[
-    TickerContentService, Depends(get_ticker_content_service)
 ]
 
 
