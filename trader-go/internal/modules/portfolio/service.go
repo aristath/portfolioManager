@@ -6,7 +6,9 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"time"
 
+	"github.com/aristath/arduino-trader/pkg/formulas"
 	"github.com/rs/zerolog"
 )
 
@@ -292,4 +294,207 @@ func parseIndustries(industryStr string) []string {
 func round(val float64, decimals int) float64 {
 	multiplier := math.Pow(10, float64(decimals))
 	return math.Round(val*multiplier) / multiplier
+}
+
+// GetAnalytics calculates portfolio analytics for the specified period
+// Faithful translation from Python: app/modules/portfolio/api/portfolio.py -> get_portfolio_analytics()
+func (s *PortfolioService) GetAnalytics(days int) (PortfolioAnalyticsResponse, error) {
+	// 1. Calculate date range
+	endDate := time.Now()
+	startDate := endDate.AddDate(0, 0, -days)
+	startDateStr := startDate.Format("2006-01-02")
+	endDateStr := endDate.Format("2006-01-02")
+
+	// 2. Get portfolio value series from snapshots
+	snapshots, err := s.portfolioRepo.GetRange(startDateStr, endDateStr)
+	if err != nil {
+		return s.buildErrorResponse("Failed to get portfolio history", startDateStr, endDateStr, days), fmt.Errorf("failed to get snapshots: %w", err)
+	}
+
+	if len(snapshots) < 2 {
+		return s.buildErrorResponse("Insufficient data", startDateStr, endDateStr, days), nil
+	}
+
+	// 3. Extract values and calculate returns
+	values := make([]float64, len(snapshots))
+	for i, snap := range snapshots {
+		values[i] = snap.TotalValue
+	}
+
+	returns := formulas.CalculateReturns(values)
+	if len(returns) == 0 {
+		return s.buildErrorResponse("Could not calculate returns", startDateStr, endDateStr, days), nil
+	}
+
+	// 4. Calculate annual return and metrics
+	annualReturn := formulas.CalculateAnnualReturn(returns)
+	metrics := s.calculateMetrics(returns, annualReturn)
+
+	// 5. Format returns data (daily, monthly, annual)
+	returnsData := s.formatReturnsData(returns, snapshots, annualReturn)
+
+	// 6. Build response (stub attribution/turnover for MVP)
+	return PortfolioAnalyticsResponse{
+		Returns:     returnsData,
+		RiskMetrics: metrics,
+		Attribution: AttributionData{
+			Country:  make(map[string]float64),
+			Industry: make(map[string]float64),
+		},
+		Period: PeriodInfo{
+			StartDate: startDateStr,
+			EndDate:   endDateStr,
+			Days:      days,
+		},
+		Turnover: nil, // Stub for MVP
+	}, nil
+}
+
+// calculateMetrics computes all risk metrics from returns
+// Faithful translation from Python: app/modules/analytics/domain/metrics/portfolio.py -> get_portfolio_metrics()
+func (s *PortfolioService) calculateMetrics(returns []float64, annualReturn float64) RiskMetrics {
+	const riskFreeRate = 0.0 // Match Python default
+
+	// Volatility (annualized)
+	volatility := formulas.AnnualizedVolatility(returns)
+
+	// Sharpe ratio
+	sharpe := formulas.CalculateSharpeRatio(returns, riskFreeRate, 252)
+	sharpeVal := 0.0
+	if sharpe != nil {
+		sharpeVal = *sharpe
+	}
+
+	// Sortino ratio
+	sortino := formulas.CalculateSortinoRatio(returns, riskFreeRate, 252)
+	sortinoVal := 0.0
+	if sortino != nil {
+		sortinoVal = *sortino
+	}
+
+	// Max drawdown (need to reconstruct prices from returns)
+	prices := reconstructPricesFromReturns(returns)
+	maxDD := formulas.CalculateMaxDrawdown(prices)
+	maxDDVal := 0.0
+	if maxDD != nil {
+		maxDDVal = *maxDD
+	}
+
+	// Calmar ratio = annual_return / abs(max_drawdown)
+	calmarVal := 0.0
+	if maxDDVal != 0 {
+		calmarVal = annualReturn / math.Abs(maxDDVal)
+	}
+
+	return RiskMetrics{
+		SharpeRatio:  sharpeVal,
+		SortinoRatio: sortinoVal,
+		CalmarRatio:  calmarVal,
+		Volatility:   volatility,
+		MaxDrawdown:  maxDDVal,
+	}
+}
+
+// reconstructPricesFromReturns converts returns back to price series
+// This is needed because CalculateMaxDrawdown works on prices, not returns
+func reconstructPricesFromReturns(returns []float64) []float64 {
+	if len(returns) == 0 {
+		return []float64{}
+	}
+
+	prices := make([]float64, len(returns)+1)
+	prices[0] = 100.0 // Start at 100 (arbitrary base value)
+
+	for i, r := range returns {
+		prices[i+1] = prices[i] * (1 + r)
+	}
+
+	return prices
+}
+
+// formatReturnsData formats returns for API response
+// Faithful translation from Python: app/modules/portfolio/api/portfolio.py -> _format_returns_data()
+func (s *PortfolioService) formatReturnsData(
+	returns []float64,
+	snapshots []PortfolioSnapshot,
+	annualReturn float64,
+) ReturnsData {
+	// Daily returns
+	daily := make([]DailyReturn, len(returns))
+	for i, r := range returns {
+		// snapshots[i+1] because returns[i] = change from snapshots[i] to snapshots[i+1]
+		daily[i] = DailyReturn{
+			Date:   snapshots[i+1].Date,
+			Return: r,
+		}
+	}
+
+	// Monthly returns (aggregate by month)
+	monthly := aggregateMonthlyReturns(daily)
+
+	return ReturnsData{
+		Daily:   daily,
+		Monthly: monthly,
+		Annual:  annualReturn,
+	}
+}
+
+// aggregateMonthlyReturns groups daily returns into monthly compound returns
+// Faithful translation from Python monthly resampling logic
+func aggregateMonthlyReturns(daily []DailyReturn) []MonthlyReturn {
+	// Group by year-month
+	monthlyMap := make(map[string][]float64)
+
+	for _, d := range daily {
+		month := d.Date[:7] // Extract YYYY-MM
+		monthlyMap[month] = append(monthlyMap[month], d.Return)
+	}
+
+	// Calculate compound return for each month
+	var monthly []MonthlyReturn
+	for month, rets := range monthlyMap {
+		// Compound: (1+r1)*(1+r2)*...*(1+rN) - 1
+		compound := 1.0
+		for _, r := range rets {
+			compound *= (1 + r)
+		}
+		monthly = append(monthly, MonthlyReturn{
+			Month:  month,
+			Return: compound - 1,
+		})
+	}
+
+	// Sort by month
+	sort.Slice(monthly, func(i, j int) bool {
+		return monthly[i].Month < monthly[j].Month
+	})
+
+	return monthly
+}
+
+// buildErrorResponse creates an error response with empty metrics
+func (s *PortfolioService) buildErrorResponse(
+	errorMsg, startDate, endDate string,
+	days int,
+) PortfolioAnalyticsResponse {
+	s.log.Warn().Str("error", errorMsg).Msg("Analytics error")
+
+	return PortfolioAnalyticsResponse{
+		Returns: ReturnsData{
+			Daily:   []DailyReturn{},
+			Monthly: []MonthlyReturn{},
+			Annual:  0.0,
+		},
+		RiskMetrics: RiskMetrics{},
+		Attribution: AttributionData{
+			Country:  make(map[string]float64),
+			Industry: make(map[string]float64),
+		},
+		Period: PeriodInfo{
+			StartDate: startDate,
+			EndDate:   endDate,
+			Days:      days,
+		},
+		Turnover: nil,
+	}
 }

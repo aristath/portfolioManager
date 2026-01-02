@@ -73,3 +73,48 @@ func Covariance(x, y []float64) float64 {
 	}
 	return stat.Covariance(x, y, nil)
 }
+
+// CalculateAnnualReturn calculates annualized return from daily returns
+// Faithful translation of Python empyrical.annual_return
+//
+// Formula: ((1+r1)*(1+r2)*...*(1+rN))^(252/N) - 1
+//
+// This computes the compound annual growth rate (CAGR) from a series of
+// periodic returns by first calculating the cumulative return and then
+// annualizing it based on the number of trading periods.
+//
+// Args:
+//
+//	returns: Daily returns as decimals (e.g., 0.01 = 1%)
+//
+// Returns:
+//
+//	Annualized return as decimal (e.g., 0.15 = 15% annual return)
+func CalculateAnnualReturn(returns []float64) float64 {
+	if len(returns) == 0 {
+		return 0.0
+	}
+
+	// Calculate cumulative return: (1+r1)*(1+r2)*...*(1+rN)
+	cumulative := 1.0
+	for _, r := range returns {
+		cumulative *= (1 + r)
+	}
+
+	// Annualize: cumulative^(252/N) - 1
+	// 252 is the number of trading days per year
+	periodsPerYear := 252.0
+	numPeriods := float64(len(returns))
+
+	// For very short periods (< 3 days), return simple cumulative return
+	// to avoid extreme annualization
+	if numPeriods < 3 {
+		return cumulative - 1
+	}
+
+	years := numPeriods / periodsPerYear
+
+	// Apply compound annual growth rate formula
+	annualized := math.Pow(cumulative, 1.0/years) - 1
+	return annualized
+}

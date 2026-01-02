@@ -181,11 +181,26 @@ func (h *Handler) HandleGetCashBreakdown(w http.ResponseWriter, r *http.Request)
 	h.writeJSON(w, http.StatusOK, response)
 }
 
-// HandleGetAnalytics proxies to Python for portfolio analytics
+// HandleGetAnalytics calculates portfolio analytics
 // Faithful translation of Python: @router.get("/analytics")
 func (h *Handler) HandleGetAnalytics(w http.ResponseWriter, r *http.Request) {
-	// TODO: Proxy to Python service (requires analytics module - pandas/numpy/PyFolio)
-	h.proxyToPython(w, r, "/api/portfolio/analytics"+r.URL.RawQuery)
+	// Parse days parameter (default 365)
+	days := 365
+	if daysParam := r.URL.Query().Get("days"); daysParam != "" {
+		if parsed, err := strconv.Atoi(daysParam); err == nil && parsed > 0 {
+			days = parsed
+		}
+	}
+
+	// Get analytics from service
+	analytics, err := h.service.GetAnalytics(days)
+	if err != nil {
+		h.log.Error().Err(err).Int("days", days).Msg("Failed to calculate analytics")
+		h.writeError(w, http.StatusInternalServerError, "Failed to calculate analytics")
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, analytics)
 }
 
 // Helper methods
@@ -200,29 +215,4 @@ func (h *Handler) writeJSON(w http.ResponseWriter, status int, data interface{})
 
 func (h *Handler) writeError(w http.ResponseWriter, status int, message string) {
 	h.writeJSON(w, status, map[string]string{"error": message})
-}
-
-func (h *Handler) proxyToPython(w http.ResponseWriter, r *http.Request, path string) {
-	// Simple proxy to Python service during migration
-	// pythonURL is configured internally and path is from trusted internal routes
-	url := h.pythonURL + path
-
-	//nolint:gosec // G107: URL is internal service proxy, not user-controlled
-	resp, err := http.Get(url)
-	if err != nil {
-		h.writeError(w, http.StatusBadGateway, "Failed to contact Python service")
-		return
-	}
-	defer resp.Body.Close()
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(resp.StatusCode)
-
-	var result interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		h.writeError(w, http.StatusInternalServerError, "Failed to decode Python response")
-		return
-	}
-
-	_ = json.NewEncoder(w).Encode(result) // Ignore encode error - already committed response
 }

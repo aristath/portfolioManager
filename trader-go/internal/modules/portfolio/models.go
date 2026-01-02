@@ -72,3 +72,65 @@ type PositionWithSecurity struct {
 	AvgPrice         float64 `db:"avg_price"`
 	Quantity         float64 `db:"quantity"`
 }
+
+// Analytics Response Models
+// Faithful translation from Python: app/api/models.py
+
+// DailyReturn represents a daily return data point
+type DailyReturn struct {
+	Date   string  `json:"date"`
+	Return float64 `json:"return"`
+}
+
+// MonthlyReturn represents a monthly return data point
+type MonthlyReturn struct {
+	Month  string  `json:"month"` // YYYY-MM format
+	Return float64 `json:"return"`
+}
+
+// ReturnsData holds all return metrics
+type ReturnsData struct {
+	Daily   []DailyReturn   `json:"daily"`
+	Monthly []MonthlyReturn `json:"monthly"`
+	Annual  float64         `json:"annual"`
+}
+
+// RiskMetrics holds portfolio risk measurements
+type RiskMetrics struct {
+	SharpeRatio  float64 `json:"sharpe_ratio"`
+	SortinoRatio float64 `json:"sortino_ratio"`
+	CalmarRatio  float64 `json:"calmar_ratio"`
+	Volatility   float64 `json:"volatility"`
+	MaxDrawdown  float64 `json:"max_drawdown"`
+}
+
+// AttributionData holds performance attribution by category
+type AttributionData struct {
+	Country  map[string]float64 `json:"country"`
+	Industry map[string]float64 `json:"industry"`
+}
+
+// PeriodInfo describes the analytics time period
+type PeriodInfo struct {
+	StartDate string `json:"start_date"` // YYYY-MM-DD
+	EndDate   string `json:"end_date"`   // YYYY-MM-DD
+	Days      int    `json:"days"`
+}
+
+// TurnoverInfo describes portfolio turnover metrics
+type TurnoverInfo struct {
+	AnnualTurnover  *float64 `json:"annual_turnover"`
+	TurnoverDisplay string   `json:"turnover_display"`
+	Status          string   `json:"status"`
+	Alert           *string  `json:"alert"`
+	Reason          string   `json:"reason"`
+}
+
+// PortfolioAnalyticsResponse is the main analytics response
+type PortfolioAnalyticsResponse struct {
+	Returns     ReturnsData     `json:"returns"`
+	RiskMetrics RiskMetrics     `json:"risk_metrics"`
+	Attribution AttributionData `json:"attribution"`
+	Period      PeriodInfo      `json:"period"`
+	Turnover    *TurnoverInfo   `json:"turnover,omitempty"`
+}
