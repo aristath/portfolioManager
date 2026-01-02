@@ -38,6 +38,9 @@ uint8_t targetBrightness = 100;  // Target brightness for lit pixels (100-220)
 int pixelUpdateInterval = 2000;         // Dynamic 10ms-2000ms
 unsigned long lastPixelUpdate = 0;
 
+// Efficient random pixel selection - smooth animation
+uint8_t pixelIndices[TOTAL_PIXELS];  // Array of pixel positions [0, 1, 2, ..., 103]
+
 // Set RGB LED 3 color (active-low, digital only)
 void setRGB3(uint8_t r, uint8_t g, uint8_t b) {
   digitalWrite(LED_BUILTIN, r > 0 ? LOW : HIGH);
@@ -70,30 +73,39 @@ void setSystemStats(int pixels_on, int brightness, int interval_ms) {
   inStatsMode = true;
 }
 
-// Update pixel pattern - regenerate completely new random pattern
+// Update pixel pattern - smooth gradual animation (only changes a few pixels)
 void updatePixelPattern() {
-  // Clear all pixels
-  for (int y = 0; y < MATRIX_HEIGHT; y++) {
-    for (int x = 0; x < MATRIX_WIDTH; x++) {
-      pixelBrightness[y][x] = 0;
+  // Smooth animation: swap a few positions to gradually change pattern
+  // Adjust pixelsToChange (3-10) for animation speed - lower = smoother, higher = more chaotic
+  int pixelsToChange = 5;
+
+  // Only animate if we have pixels to work with
+  if (targetPixelsOn > 0 && targetPixelsOn < TOTAL_PIXELS) {
+    // Randomly swap elements from "lit" section with "dark" section
+    for (int i = 0; i < pixelsToChange; i++) {
+      // Pick a random lit pixel (first targetPixelsOn elements)
+      int litIdx = random(targetPixelsOn);
+
+      // Pick a random dark pixel (remaining elements)
+      int darkIdx = targetPixelsOn + random(TOTAL_PIXELS - targetPixelsOn);
+
+      // Swap them
+      uint8_t temp = pixelIndices[litIdx];
+      pixelIndices[litIdx] = pixelIndices[darkIdx];
+      pixelIndices[darkIdx] = temp;
     }
   }
 
-  // Generate completely new random pattern
-  int pixelsPlaced = 0;
-  int attempts = 0;
-  int maxAttempts = targetPixelsOn * 20; // Prevent infinite loop
+  // Update brightness array efficiently
+  // Clear all pixels
+  memset(pixelBrightness, 0, sizeof(pixelBrightness));
 
-  while (pixelsPlaced < targetPixelsOn && attempts < maxAttempts) {
-    int x = random(MATRIX_WIDTH);
-    int y = random(MATRIX_HEIGHT);
-
-    // Only set if not already set (avoid duplicates)
-    if (pixelBrightness[y][x] == 0) {
-      pixelBrightness[y][x] = targetBrightness;
-      pixelsPlaced++;
-    }
-    attempts++;
+  // Set lit pixels based on current indices arrangement
+  for (int i = 0; i < targetPixelsOn; i++) {
+    uint8_t pos = pixelIndices[i];
+    uint8_t x = pos % MATRIX_WIDTH;
+    uint8_t y = pos / MATRIX_WIDTH;
+    pixelBrightness[y][x] = targetBrightness;
   }
 
   // Render updated pattern
@@ -135,6 +147,22 @@ void setup() {
   // Initialize pixel brightness array (all OFF)
   memset(pixelBrightness, 0, sizeof(pixelBrightness));
 
+  // Initialize pixel indices array with sequential positions
+  for (int i = 0; i < TOTAL_PIXELS; i++) {
+    pixelIndices[i] = i;
+  }
+
+  // Seed random number generator for pixel randomization
+  randomSeed(analogRead(0));
+
+  // Do initial full shuffle to randomize starting pattern (Fisher-Yates)
+  for (int i = 0; i < TOTAL_PIXELS - 1; i++) {
+    int j = i + random(TOTAL_PIXELS - i);
+    uint8_t temp = pixelIndices[i];
+    pixelIndices[i] = pixelIndices[j];
+    pixelIndices[j] = temp;
+  }
+
   // Initialize RGB LED 3 & 4 pins
   pinMode(LED_BUILTIN, OUTPUT);
   pinMode(LED_BUILTIN + 1, OUTPUT);
@@ -153,9 +181,6 @@ void setup() {
   Bridge.provide("setRGB4", setRGB4);
   Bridge.provide("scrollText", scrollText);
   Bridge.provide("setSystemStats", setSystemStats);  // NEW: System stats mode
-
-  // Seed random number generator for pixel randomization
-  randomSeed(analogRead(0));
 }
 
 void loop() {
@@ -196,6 +221,6 @@ void loop() {
     hasPendingText = false;
   }
 
-  // Small delay to allow Bridge background thread to process
-  delay(10);
+  // Bridge handles RPC in background thread - no delay needed
+  // Removed delay(10) for instant RPC response and lower CPU usage
 }
