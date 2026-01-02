@@ -24,6 +24,7 @@ import (
 	"github.com/aristath/arduino-trader/internal/modules/evaluation"
 	"github.com/aristath/arduino-trader/internal/modules/optimization"
 	"github.com/aristath/arduino-trader/internal/modules/portfolio"
+	"github.com/aristath/arduino-trader/internal/modules/satellites"
 	"github.com/aristath/arduino-trader/internal/modules/scoring/api"
 	"github.com/aristath/arduino-trader/internal/modules/scoring/scorers"
 	"github.com/aristath/arduino-trader/internal/modules/trading"
@@ -32,41 +33,44 @@ import (
 
 // Config holds server configuration
 type Config struct {
-	Log         zerolog.Logger
-	ConfigDB    *database.DB
-	StateDB     *database.DB
-	SnapshotsDB *database.DB
-	LedgerDB    *database.DB
-	DividendsDB *database.DB
-	Config      *config.Config
-	Port        int
-	DevMode     bool
+	Log          zerolog.Logger
+	ConfigDB     *database.DB
+	StateDB      *database.DB
+	SnapshotsDB  *database.DB
+	LedgerDB     *database.DB
+	DividendsDB  *database.DB
+	SatellitesDB *database.DB
+	Config       *config.Config
+	Port         int
+	DevMode      bool
 }
 
 // Server represents the HTTP server
 type Server struct {
-	router      *chi.Mux
-	server      *http.Server
-	log         zerolog.Logger
-	configDB    *database.DB
-	stateDB     *database.DB
-	snapshotsDB *database.DB
-	ledgerDB    *database.DB
-	dividendsDB *database.DB
-	cfg         *config.Config
+	router       *chi.Mux
+	server       *http.Server
+	log          zerolog.Logger
+	configDB     *database.DB
+	stateDB      *database.DB
+	snapshotsDB  *database.DB
+	ledgerDB     *database.DB
+	dividendsDB  *database.DB
+	satellitesDB *database.DB
+	cfg          *config.Config
 }
 
 // New creates a new HTTP server
 func New(cfg Config) *Server {
 	s := &Server{
-		router:      chi.NewRouter(),
-		log:         cfg.Log.With().Str("component", "server").Logger(),
-		configDB:    cfg.ConfigDB,
-		stateDB:     cfg.StateDB,
-		snapshotsDB: cfg.SnapshotsDB,
-		ledgerDB:    cfg.LedgerDB,
-		dividendsDB: cfg.DividendsDB,
-		cfg:         cfg.Config,
+		router:       chi.NewRouter(),
+		log:          cfg.Log.With().Str("component", "server").Logger(),
+		configDB:     cfg.ConfigDB,
+		stateDB:      cfg.StateDB,
+		snapshotsDB:  cfg.SnapshotsDB,
+		ledgerDB:     cfg.LedgerDB,
+		dividendsDB:  cfg.DividendsDB,
+		satellitesDB: cfg.SatellitesDB,
+		cfg:          cfg.Config,
 	}
 
 	s.setupMiddleware(cfg.DevMode)
@@ -155,6 +159,9 @@ func (s *Server) setupRoutes() {
 
 		// Cash-flows module (MIGRATED TO GO!)
 		s.setupCashFlowsRoutes(r)
+
+		// Satellites module (MIGRATED TO GO!)
+		s.setupSatellitesRoutes(r)
 
 		// TODO: Add more routes as modules are migrated
 		// r.Route("/planning", func(r chi.Router) { ... })
@@ -560,6 +567,34 @@ func (s *Server) setupEvaluationRoutes(r chi.Router) {
 			r.Post("/batch", handler.HandleSimulateBatch)
 		})
 	})
+}
+
+// setupSatellitesRoutes configures satellites module routes
+func (s *Server) setupSatellitesRoutes(r chi.Router) {
+	// Initialize satellites database schema
+	if err := satellites.InitSchema(s.satellitesDB.Conn()); err != nil {
+		s.log.Fatal().Err(err).Msg("Failed to initialize satellites schema")
+	}
+
+	// Initialize repositories
+	bucketRepo := satellites.NewBucketRepository(s.satellitesDB.Conn(), s.log)
+	balanceRepo := satellites.NewBalanceRepository(s.satellitesDB.Conn(), s.log)
+
+	// Initialize services
+	bucketService := satellites.NewBucketService(bucketRepo, balanceRepo, s.log)
+	balanceService := satellites.NewBalanceService(balanceRepo, s.log)
+	reconciliationService := satellites.NewReconciliationService(balanceRepo, bucketRepo, s.log)
+
+	// Initialize handlers
+	handlers := satellites.NewHandlers(
+		bucketService,
+		balanceService,
+		reconciliationService,
+		s.log,
+	)
+
+	// Register routes
+	handlers.RegisterRoutes(r)
 }
 
 // Start starts the HTTP server

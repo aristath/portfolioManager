@@ -67,6 +67,13 @@ func main() {
 	}
 	defer dividendsDB.Close()
 
+	// satellites.db - bucket management and satellite accounts
+	satellitesDB, err := database.New("../data/satellites.db")
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize satellites database")
+	}
+	defer satellitesDB.Close()
+
 	// Run migrations
 	if err := configDB.Migrate(); err != nil {
 		log.Fatal().Err(err).Msg("Failed to run migrations")
@@ -84,15 +91,16 @@ func main() {
 
 	// Initialize HTTP server
 	srv := server.New(server.Config{
-		Port:        cfg.Port,
-		Log:         log,
-		ConfigDB:    configDB,
-		StateDB:     stateDB,
-		SnapshotsDB: snapshotsDB,
-		LedgerDB:    ledgerDB,
-		DividendsDB: dividendsDB,
-		Config:      cfg,
-		DevMode:     cfg.DevMode,
+		Port:         cfg.Port,
+		Log:          log,
+		ConfigDB:     configDB,
+		StateDB:      stateDB,
+		SnapshotsDB:  snapshotsDB,
+		LedgerDB:     ledgerDB,
+		DividendsDB:  dividendsDB,
+		SatellitesDB: satellitesDB,
+		Config:       cfg,
+		DevMode:      cfg.DevMode,
 	})
 
 	// Start server in goroutine
