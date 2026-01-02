@@ -7,16 +7,21 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/aristath/arduino-trader/internal/modules/allocation"
 	"github.com/rs/zerolog"
 )
+
+// AllocationTargetProvider provides access to allocation targets
+// This interface breaks the circular dependency between portfolio and allocation packages
+type AllocationTargetProvider interface {
+	GetAll() (map[string]float64, error)
+}
 
 // PortfolioService orchestrates portfolio operations
 // Faithful translation from Python: app/modules/portfolio/services/portfolio_service.py
 type PortfolioService struct {
 	portfolioRepo *PortfolioRepository
 	positionRepo  *PositionRepository
-	allocRepo     *allocation.Repository
+	allocRepo     AllocationTargetProvider
 	configDB      *sql.DB // For querying securities
 	log           zerolog.Logger
 }
@@ -25,7 +30,7 @@ type PortfolioService struct {
 func NewPortfolioService(
 	portfolioRepo *PortfolioRepository,
 	positionRepo *PositionRepository,
-	allocRepo *allocation.Repository,
+	allocRepo AllocationTargetProvider,
 	configDB *sql.DB,
 	log zerolog.Logger,
 ) *PortfolioService {

@@ -3,9 +3,11 @@ package allocation
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 
+	"github.com/aristath/arduino-trader/internal/modules/portfolio"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 )
@@ -13,11 +15,12 @@ import (
 // Handler handles allocation HTTP requests
 // Faithful translation from Python: app/modules/allocation/api/allocation.py
 type Handler struct {
-	allocRepo    *Repository
-	groupingRepo *GroupingRepository
-	alertService *ConcentrationAlertService
-	log          zerolog.Logger
-	pythonURL    string // URL of Python service (temporary during migration)
+	allocRepo        *Repository
+	groupingRepo     *GroupingRepository
+	alertService     *ConcentrationAlertService
+	portfolioService *portfolio.PortfolioService
+	log              zerolog.Logger
+	pythonURL        string // URL of Python service (temporary during migration)
 }
 
 // NewHandler creates a new allocation handler
@@ -25,15 +28,17 @@ func NewHandler(
 	allocRepo *Repository,
 	groupingRepo *GroupingRepository,
 	alertService *ConcentrationAlertService,
+	portfolioService *portfolio.PortfolioService,
 	log zerolog.Logger,
 	pythonURL string,
 ) *Handler {
 	return &Handler{
-		allocRepo:    allocRepo,
-		groupingRepo: groupingRepo,
-		alertService: alertService,
-		log:          log.With().Str("handler", "allocation").Logger(),
-		pythonURL:    pythonURL,
+		allocRepo:        allocRepo,
+		groupingRepo:     groupingRepo,
+		alertService:     alertService,
+		portfolioService: portfolioService,
+		log:              log.With().Str("handler", "allocation").Logger(),
+		pythonURL:        pythonURL,
 	}
 }
 
@@ -368,30 +373,195 @@ func (h *Handler) HandleUpdateIndustryGroupTargets(w http.ResponseWriter, r *htt
 
 // HandleGetGroupAllocation returns current allocation aggregated by groups
 // Faithful translation of Python: @router.get("/groups/allocation")
-// NOTE: This calls Python service temporarily until portfolio service is migrated
 func (h *Handler) HandleGetGroupAllocation(w http.ResponseWriter, r *http.Request) {
-	// TODO: For now, proxy to Python service
-	// Once portfolio service is migrated to Go, implement full logic here
-	h.proxyToPython(w, r, "/api/allocation/groups/allocation")
+	// Get portfolio summary
+	portfolioSummary, err := h.portfolioService.GetPortfolioSummary()
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Convert to allocation types
+	summary := convertPortfolioSummary(portfolioSummary)
+
+	// Get group mappings
+	countryGroups, err := h.groupingRepo.GetCountryGroups()
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	industryGroups, err := h.groupingRepo.GetIndustryGroups()
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Get saved group targets
+	countryTargets, err := h.allocRepo.GetCountryGroupTargets()
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	industryTargets, err := h.allocRepo.GetIndustryGroupTargets()
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Calculate group allocations
+	countryGroupAllocs, industryGroupAllocs := CalculateGroupAllocation(
+		summary,
+		countryGroups,
+		industryGroups,
+		countryTargets,
+		industryTargets,
+	)
+
+	response := map[string]interface{}{
+		"total_value":  summary.TotalValue,
+		"cash_balance": summary.CashBalance,
+		"country":      countryGroupAllocs,
+		"industry":     industryGroupAllocs,
+	}
+
+	h.writeJSON(w, http.StatusOK, response)
 }
 
 // HandleGetCurrentAllocation returns current allocation vs targets
 // Faithful translation of Python: @router.get("/current")
-// NOTE: This calls Python service temporarily until portfolio service is migrated
 func (h *Handler) HandleGetCurrentAllocation(w http.ResponseWriter, r *http.Request) {
-	// TODO: For now, proxy to Python service
-	h.proxyToPython(w, r, "/api/allocation/current")
+	// Get portfolio summary
+	portfolioSummary, err := h.portfolioService.GetPortfolioSummary()
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Convert to allocation types
+	summary := convertPortfolioSummary(portfolioSummary)
+
+	// Detect concentration alerts
+	alerts, err := h.alertService.DetectAlerts(summary)
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Build response matching Python structure
+	response := map[string]interface{}{
+		"total_value":  summary.TotalValue,
+		"cash_balance": summary.CashBalance,
+		"country":      buildAllocationArray(summary.CountryAllocations),
+		"industry":     buildAllocationArray(summary.IndustryAllocations),
+		"alerts":       buildAlertsArray(alerts),
+	}
+
+	h.writeJSON(w, http.StatusOK, response)
 }
 
 // HandleGetDeviations returns allocation deviation scores
 // Faithful translation of Python: @router.get("/deviations")
-// NOTE: This calls Python service temporarily until portfolio service is migrated
 func (h *Handler) HandleGetDeviations(w http.ResponseWriter, r *http.Request) {
-	// TODO: For now, proxy to Python service
-	h.proxyToPython(w, r, "/api/allocation/deviations")
+	// Get portfolio summary
+	portfolioSummary, err := h.portfolioService.GetPortfolioSummary()
+	if err != nil {
+		h.writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Convert to allocation types
+	summary := convertPortfolioSummary(portfolioSummary)
+
+	// Calculate deviations
+	response := map[string]interface{}{
+		"country":  calculateDeviationMap(summary.CountryAllocations),
+		"industry": calculateDeviationMap(summary.IndustryAllocations),
+	}
+
+	h.writeJSON(w, http.StatusOK, response)
 }
 
 // Helper methods
+
+// convertPortfolioSummary converts portfolio.PortfolioSummary to allocation.PortfolioSummary
+func convertPortfolioSummary(src portfolio.PortfolioSummary) PortfolioSummary {
+	return PortfolioSummary{
+		CountryAllocations:  convertAllocations(src.CountryAllocations),
+		IndustryAllocations: convertAllocations(src.IndustryAllocations),
+		TotalValue:          src.TotalValue,
+		CashBalance:         src.CashBalance,
+	}
+}
+
+// convertAllocations converts []portfolio.AllocationStatus to []PortfolioAllocation
+func convertAllocations(src []portfolio.AllocationStatus) []PortfolioAllocation {
+	result := make([]PortfolioAllocation, len(src))
+	for i, a := range src {
+		result[i] = PortfolioAllocation{
+			Name:         a.Name,
+			TargetPct:    a.TargetPct,
+			CurrentPct:   a.CurrentPct,
+			CurrentValue: a.CurrentValue,
+			Deviation:    a.Deviation,
+		}
+	}
+	return result
+}
+
+// calculateDeviationMap converts allocations to deviation status map
+func calculateDeviationMap(allocations []PortfolioAllocation) map[string]interface{} {
+	result := make(map[string]interface{})
+
+	for _, a := range allocations {
+		status := "balanced"
+		if a.Deviation < -0.02 {
+			status = "underweight"
+		} else if a.Deviation > 0.02 {
+			status = "overweight"
+		}
+
+		result[a.Name] = map[string]interface{}{
+			"deviation": a.Deviation,
+			"need":      math.Max(0, -a.Deviation),
+			"status":    status,
+		}
+	}
+
+	return result
+}
+
+// buildAllocationArray converts PortfolioAllocation slice to response format
+func buildAllocationArray(allocations []PortfolioAllocation) []map[string]interface{} {
+	result := make([]map[string]interface{}, len(allocations))
+	for i, a := range allocations {
+		result[i] = map[string]interface{}{
+			"name":          a.Name,
+			"target_pct":    a.TargetPct,
+			"current_pct":   a.CurrentPct,
+			"current_value": a.CurrentValue,
+			"deviation":     a.Deviation,
+		}
+	}
+	return result
+}
+
+// buildAlertsArray converts ConcentrationAlert slice to response format
+func buildAlertsArray(alerts []ConcentrationAlert) []map[string]interface{} {
+	result := make([]map[string]interface{}, len(alerts))
+	for i, alert := range alerts {
+		result[i] = map[string]interface{}{
+			"type":                  alert.Type,
+			"name":                  alert.Name,
+			"current_pct":           alert.CurrentPct,
+			"limit_pct":             alert.LimitPct,
+			"alert_threshold_pct":   alert.AlertThresholdPct,
+			"severity":              alert.Severity,
+		}
+	}
+	return result
+}
 
 func (h *Handler) writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
