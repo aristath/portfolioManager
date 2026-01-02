@@ -117,14 +117,16 @@ func calculateGrowthBonus(growthRate *float64) float64 {
 	}
 
 	rate := *growthRate
-	if rate >= 0.05 { // 5%+ annual growth
+	switch {
+	case rate >= 0.05: // 5%+ annual growth
 		return 0.30
-	} else if rate >= 0.02 { // 2-5% growth
+	case rate >= 0.02: // 2-5% growth
 		return 0.20
-	} else if rate >= 0 { // Stable
+	case rate >= 0: // Stable
 		return 0.10
+	default: // Declining
+		return 0.0
 	}
-	return 0.0 // Declining
 }
 
 // calculateYieldBonus calculates bonus based on yield vs portfolio average

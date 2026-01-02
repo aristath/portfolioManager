@@ -251,4 +251,3 @@ func formatShift(shift float64) string {
 		return fmt.Sprintf("%.2f", shift)
 	}
 }
-
