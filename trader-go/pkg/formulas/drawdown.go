@@ -4,25 +4,28 @@ import "math"
 
 // DrawdownMetrics represents drawdown analysis results
 type DrawdownMetrics struct {
-	MaxDrawdown     float64 `json:"max_drawdown"`      // Maximum drawdown (as positive percentage, e.g., 0.25 = 25% drawdown)
-	CurrentDrawdown float64 `json:"current_drawdown"`  // Current drawdown from peak
-	DaysInDrawdown  int     `json:"days_in_drawdown"`  // Days since peak
-	PeakValue       float64 `json:"peak_value"`        // Value at peak
-	CurrentValue    float64 `json:"current_value"`     // Current value
+	MaxDrawdown     float64 `json:"max_drawdown"`     // Maximum drawdown (as positive percentage, e.g., 0.25 = 25% drawdown)
+	CurrentDrawdown float64 `json:"current_drawdown"` // Current drawdown from peak
+	DaysInDrawdown  int     `json:"days_in_drawdown"` // Days since peak
+	PeakValue       float64 `json:"peak_value"`       // Value at peak
+	CurrentValue    float64 `json:"current_value"`    // Current value
 }
 
 // CalculateMaxDrawdown calculates the maximum drawdown from a price series
 // Faithful translation from Python: app/modules/scoring/domain/calculations/drawdown.py
 //
 // Drawdown Formula:
-//   Drawdown = (Peak Value - Current Value) / Peak Value
-//   Max Drawdown = Maximum of all drawdowns
+//
+//	Drawdown = (Peak Value - Current Value) / Peak Value
+//	Max Drawdown = Maximum of all drawdowns
 //
 // Args:
-//   prices: Array of prices (daily, adjusted close)
+//
+//	prices: Array of prices (daily, adjusted close)
 //
 // Returns:
-//   Maximum drawdown as positive percentage (0.25 = 25% loss from peak) or nil
+//
+//	Maximum drawdown as positive percentage (0.25 = 25% loss from peak) or nil
 func CalculateMaxDrawdown(prices []float64) *float64 {
 	if len(prices) < 2 {
 		return nil

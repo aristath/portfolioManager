@@ -8,15 +8,18 @@ import (
 // Faithful translation from Python: app/modules/scoring/domain/calculations/rsi.py
 //
 // RSI Formula:
-//   RSI = 100 - (100 / (1 + RS))
-//   where RS = Average Gain / Average Loss over N periods
+//
+//	RSI = 100 - (100 / (1 + RS))
+//	where RS = Average Gain / Average Loss over N periods
 //
 // Args:
-//   closes: Array of closing prices
-//   length: RSI period (typically 14)
+//
+//	closes: Array of closing prices
+//	length: RSI period (typically 14)
 //
 // Returns:
-//   Current RSI value (0-100) or nil if insufficient data
+//
+//	Current RSI value (0-100) or nil if insufficient data
 func CalculateRSI(closes []float64, length int) *float64 {
 	if len(closes) < length+1 {
 		return nil

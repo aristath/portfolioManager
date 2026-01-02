@@ -8,15 +8,18 @@ import (
 // Faithful translation from Python: app/modules/scoring/domain/calculations/ema.py
 //
 // EMA Formula:
-//   EMA_today = (Price_today × multiplier) + (EMA_yesterday × (1 - multiplier))
-//   where multiplier = 2 / (period + 1)
+//
+//	EMA_today = (Price_today × multiplier) + (EMA_yesterday × (1 - multiplier))
+//	where multiplier = 2 / (period + 1)
 //
 // Args:
-//   closes: Array of closing prices
-//   length: EMA period (typically 200)
+//
+//	closes: Array of closing prices
+//	length: EMA period (typically 200)
 //
 // Returns:
-//   Current EMA value or nil if insufficient data
+//
+//	Current EMA value or nil if insufficient data
 func CalculateEMA(closes []float64, length int) *float64 {
 	if len(closes) == 0 {
 		return nil
