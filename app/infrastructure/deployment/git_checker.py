@@ -232,14 +232,13 @@ class GitChecker:
             files: List of changed file paths
 
         Returns:
-            Dictionary with categories: main_app, sketch, requirements, deploy_script, go_evaluator
+            Dictionary with categories: main_app, sketch, requirements, deploy_script
         """
         categories = {
             "main_app": False,
             "sketch": False,
             "requirements": False,
             "deploy_script": False,
-            "go_evaluator": False,
         }
 
         for file in files:
@@ -263,10 +262,6 @@ class GitChecker:
             # Deploy script changes (legacy bash script)
             if file == "arduino-app/deploy/auto-deploy.sh":
                 categories["deploy_script"] = True
-
-            # Go evaluator service changes
-            if file.startswith("services/evaluator-go/"):
-                categories["go_evaluator"] = True
 
         return categories
 
