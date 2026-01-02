@@ -70,41 +70,30 @@ void setSystemStats(int pixels_on, int brightness, int interval_ms) {
   inStatsMode = true;
 }
 
-// Update pixel pattern - add or remove pixels to match target
+// Update pixel pattern - regenerate completely new random pattern
 void updatePixelPattern() {
-  // Count currently lit pixels
-  int currentLit = 0;
+  // Clear all pixels
   for (int y = 0; y < MATRIX_HEIGHT; y++) {
     for (int x = 0; x < MATRIX_WIDTH; x++) {
-      if (pixelBrightness[y][x] > 0) currentLit++;
+      pixelBrightness[y][x] = 0;
     }
   }
 
-  // Add or remove pixels to match target
-  if (currentLit < targetPixelsOn) {
-    // Add pixels with targetBrightness
-    int attempts = 0;
-    while (currentLit < targetPixelsOn && attempts < targetPixelsOn * 10) {
-      int x = random(MATRIX_WIDTH);
-      int y = random(MATRIX_HEIGHT);
-      if (pixelBrightness[y][x] == 0) {
-        pixelBrightness[y][x] = targetBrightness;
-        currentLit++;
-      }
-      attempts++;
+  // Generate completely new random pattern
+  int pixelsPlaced = 0;
+  int attempts = 0;
+  int maxAttempts = targetPixelsOn * 20; // Prevent infinite loop
+
+  while (pixelsPlaced < targetPixelsOn && attempts < maxAttempts) {
+    int x = random(MATRIX_WIDTH);
+    int y = random(MATRIX_HEIGHT);
+
+    // Only set if not already set (avoid duplicates)
+    if (pixelBrightness[y][x] == 0) {
+      pixelBrightness[y][x] = targetBrightness;
+      pixelsPlaced++;
     }
-  } else if (currentLit > targetPixelsOn) {
-    // Remove pixels
-    int attempts = 0;
-    while (currentLit > targetPixelsOn && attempts < currentLit * 10) {
-      int x = random(MATRIX_WIDTH);
-      int y = random(MATRIX_HEIGHT);
-      if (pixelBrightness[y][x] > 0) {
-        pixelBrightness[y][x] = 0;
-        currentLit--;
-      }
-      attempts++;
-    }
+    attempts++;
   }
 
   // Render updated pattern

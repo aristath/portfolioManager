@@ -87,9 +87,12 @@ def handle_stats_mode(stats: dict) -> bool:
     cpu_percent = stats.get("cpu_percent", 0)
     ram_percent = stats.get("ram_percent", 0)
 
-    # Calculate animation interval: 2000ms - (load% × 19.9)
+    # Calculate animation interval: faster when load is high
+    # 500ms at 0% load, 5ms at 100% load
     load_percent = (cpu_percent + ram_percent) / 2
-    interval_ms = max(10, int(2000 - (load_percent * 19.9)))
+    interval_ms = int(500 - (load_percent * 4.95))
+    # Clamp to reasonable range
+    interval_ms = max(5, min(500, interval_ms))
 
     try:
         Bridge.call("setSystemStats", pixels_on, brightness, interval_ms, timeout=2)
