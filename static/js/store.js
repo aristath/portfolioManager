@@ -707,6 +707,41 @@ document.addEventListener('alpine:init', () => {
       this.loading.industrySave = false;
     },
 
+    // TEST Currency Inline Editing
+    startEditTestCash(currentAmount) {
+      const newAmount = prompt(
+        'Enter TEST currency amount (EUR equivalent):',
+        currentAmount.toString()
+      );
+
+      if (newAmount !== null) {
+        const amount = parseFloat(newAmount);
+        if (isNaN(amount) || amount < 0) {
+          alert('Please enter a valid non-negative number');
+          return;
+        }
+
+        this.saveTestCash(amount);
+      }
+    },
+
+    async saveTestCash(amount) {
+      try {
+        await api.updateSetting('virtual_test_cash', amount);
+
+        // Refresh cash breakdown to show updated TEST amount
+        await this.fetchCashBreakdown();
+
+        // Refresh recommendations (they'll be recalculated with new cash)
+        await this.fetchRecommendations();
+
+        console.log(`TEST currency updated to ${amount}`);
+      } catch (error) {
+        console.error('Failed to update TEST cash:', error);
+        alert('Failed to update TEST cash. Please try again.');
+      }
+    },
+
     // Security Management
     resetNewSecurity() {
       this.newSecurity = { identifier: '' };

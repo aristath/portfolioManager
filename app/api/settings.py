@@ -1,5 +1,6 @@
 """Settings API endpoints."""
 
+import logging
 from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException
@@ -12,6 +13,7 @@ from app.infrastructure.dependencies import (
     SettingsRepositoryDep,
 )
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -75,6 +77,8 @@ SETTING_DEFAULTS = {
     "market_regime_sideways_cash_reserve": 0.03,  # Cash reserve percentage in sideways market (3%)
     "market_regime_bull_threshold": 0.05,  # Threshold for bull market (5% above MA)
     "market_regime_bear_threshold": -0.05,  # Threshold for bear market (-5% below MA)
+    # Virtual test currency (for testing planner in research mode)
+    "virtual_test_cash": 0.0,  # TEST currency amount (only visible in research mode)
 }
 
 
@@ -230,6 +234,20 @@ async def update_setting_value(
         await set_setting(key, str(data.value), settings_repo)
         return {key: data.value}
 
+    elif key == "virtual_test_cash":
+        if data.value < 0:
+            raise HTTPException(
+                status_code=400, detail="virtual_test_cash must be non-negative"
+            )
+        await set_setting(key, str(data.value), settings_repo)
+        # Invalidate recommendation caches when TEST cash changes
+        from app.infrastructure.recommendation_cache import get_recommendation_cache
+
+        rec_cache = get_recommendation_cache()
+        await rec_cache.invalidate_all_recommendations()
+        cache.invalidate_prefix("recommendations")
+        return {key: data.value}
+
     # All planner settings have been moved to TOML configuration
     # Generic validation for remaining settings
     await set_setting(key, str(data.value), settings_repo)
@@ -352,5 +370,19 @@ async def toggle_trading_mode(settings_repo: SettingsRepositoryDep):
     """Toggle trading mode between 'live' and 'research'."""
     current_mode = await get_trading_mode(settings_repo)
     new_mode = "research" if current_mode == "live" else "live"
+
+    # Clear TEST currency when switching to live mode (safety)
+    if new_mode == "live":
+        await settings_repo.set_float("virtual_test_cash", 0.0)
+        logger.info("Cleared virtual_test_cash when switching to live mode")
+
     await set_trading_mode(new_mode, settings_repo)
+
+    # Invalidate recommendation caches
+    from app.infrastructure.recommendation_cache import get_recommendation_cache
+
+    rec_cache = get_recommendation_cache()
+    await rec_cache.invalidate_all_recommendations()
+    cache.invalidate_prefix("recommendations")
+
     return {"trading_mode": new_mode, "previous_mode": current_mode}

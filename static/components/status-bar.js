@@ -35,7 +35,24 @@ class StatusBar extends HTMLElement {
               <span class="text-gray-400">
                 (<template x-for="(cb, index) in $store.app.cashBreakdown" :key="cb.currency">
                   <span>
-                    <span x-text="cb.currency"></span>: <span class="font-mono" x-text="formatNumber(cb.amount, 2)"></span>
+                    <!-- TEST currency with green background and inline editing -->
+                    <template x-if="cb.currency === 'TEST'">
+                      <span class="bg-green-600 bg-opacity-20 px-1 rounded cursor-pointer"
+                            @click="$store.app.startEditTestCash(cb.amount)"
+                            title="Click to edit test cash (research mode only)">
+                        <span x-text="cb.currency" class="text-green-400"></span>:
+                        <span class="font-mono text-green-400" x-text="formatNumber(cb.amount, 2)"></span>
+                      </span>
+                    </template>
+
+                    <!-- Regular currencies -->
+                    <template x-if="cb.currency !== 'TEST'">
+                      <span>
+                        <span x-text="cb.currency"></span>:
+                        <span class="font-mono" x-text="formatNumber(cb.amount, 2)"></span>
+                      </span>
+                    </template>
+
                     <span x-show="index < $store.app.cashBreakdown.length - 1">, </span>
                   </span>
                 </template>)

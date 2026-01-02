@@ -190,6 +190,42 @@ class TradernetClient:
                         f"Negative cash balance detected: {amount:.2f} {currency}"
                     )
 
+            # INJECT TEST CURRENCY (only in research mode)
+            import asyncio
+            from concurrent.futures import ThreadPoolExecutor
+
+            from app.infrastructure.external.tradernet.parsers import get_trading_mode
+            from app.repositories import SettingsRepository
+
+            trading_mode = get_trading_mode()
+            if trading_mode == "research":
+                # Get TEST currency amount from settings
+                async def _get_test_amount() -> float:
+                    settings_repo = SettingsRepository()
+                    return await settings_repo.get_float("virtual_test_cash", 0.0)
+
+                # Run async in sync context (same pattern as get_trading_mode)
+                try:
+                    asyncio.get_running_loop()
+
+                    # In async context - use thread
+                    def _run():
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        try:
+                            return loop.run_until_complete(_get_test_amount())
+                        finally:
+                            loop.close()
+
+                    with ThreadPoolExecutor(max_workers=1) as executor:
+                        test_amount = executor.submit(_run).result(timeout=2.0)
+                except RuntimeError:
+                    # Not in async context - use asyncio.run()
+                    test_amount = asyncio.run(_get_test_amount())
+
+                if test_amount > 0:
+                    balances.append(CashBalance(currency="TEST", amount=test_amount))
+
             return balances
         except Exception as e:
             logger.error(f"Failed to get cash balances: {e}")
