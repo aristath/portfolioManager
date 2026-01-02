@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"runtime"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/aristath/arduino-trader/internal/config"
 	"github.com/aristath/arduino-trader/internal/database"
 	"github.com/aristath/arduino-trader/internal/modules/allocation"
+	"github.com/aristath/arduino-trader/internal/modules/cash_flows"
 	"github.com/aristath/arduino-trader/internal/modules/display"
 	"github.com/aristath/arduino-trader/internal/modules/dividends"
 	"github.com/aristath/arduino-trader/internal/modules/evaluation"
@@ -124,10 +126,8 @@ func (s *Server) setupRoutes() {
 
 	// API routes
 	s.router.Route("/api", func(r chi.Router) {
-		// System
-		r.Route("/system", func(r chi.Router) {
-			r.Get("/status", s.handleSystemStatus)
-		})
+		// System monitoring and operations (MIGRATED TO GO!)
+		s.setupSystemRoutes(r)
 
 		// Allocation module (MIGRATED TO GO!)
 		s.setupAllocationRoutes(r)
@@ -153,6 +153,9 @@ func (s *Server) setupRoutes() {
 		// Optimization module (MIGRATED TO GO!)
 		s.setupOptimizationRoutes(r)
 
+		// Cash-flows module (MIGRATED TO GO!)
+		s.setupCashFlowsRoutes(r)
+
 		// TODO: Add more routes as modules are migrated
 		// r.Route("/planning", func(r chi.Router) { ... })
 	})
@@ -164,6 +167,32 @@ func (s *Server) setupRoutes() {
 	// Serve static files (for dashboard)
 	fileServer := http.FileServer(http.Dir("./static"))
 	s.router.Handle("/static/*", http.StripPrefix("/static/", fileServer))
+}
+
+// setupSystemRoutes configures system monitoring and operations routes
+func (s *Server) setupSystemRoutes(r chi.Router) {
+	// Initialize system handlers
+	// Data directory is the parent of DatabasePath (e.g., "./data" from "./data/portfolio.db")
+	dataDir := filepath.Dir(s.cfg.DatabasePath)
+	systemHandlers := NewSystemHandlers(s.log, dataDir, s.stateDB)
+	logHandlers := NewLogHandlers(s.log, dataDir)
+
+	// System routes (complete Phase 1 implementation)
+	r.Route("/system", func(r chi.Router) {
+		// Status and monitoring
+		r.Get("/status", systemHandlers.HandleSystemStatus)
+		r.Get("/led/display", systemHandlers.HandleLEDDisplay)
+		r.Get("/tradernet", systemHandlers.HandleTradernetStatus)
+		r.Get("/jobs", systemHandlers.HandleJobsStatus)
+		r.Get("/markets", systemHandlers.HandleMarketsStatus)
+		r.Get("/database/stats", systemHandlers.HandleDatabaseStats)
+		r.Get("/disk", systemHandlers.HandleDiskUsage)
+
+		// Log access
+		r.Get("/logs/list", logHandlers.HandleListLogs)
+		r.Get("/logs", logHandlers.HandleGetLogs)
+		r.Get("/logs/errors", logHandlers.HandleGetErrors)
+	})
 }
 
 // setupAllocationRoutes configures allocation module routes
@@ -451,13 +480,61 @@ func (s *Server) setupOptimizationRoutes(r chi.Router) {
 		s.log,
 	)
 
+	// Initialize Yahoo Finance client for current prices
+	yahooClient := yahoo.NewClient(s.log)
+
+	// Initialize Tradernet client for cash balance
+	tradernetClient := tradernet.NewClient(s.cfg.TradernetServiceURL, s.log)
+
+	// Initialize dividend repository for pending bonuses
+	dividendRepo := dividends.NewRepository(s.ledgerDB.Conn(), s.log)
+
 	// Initialize handler
-	handler := optimization.NewHandler(optimizerService, s.configDB.Conn(), s.log)
+	handler := optimization.NewHandler(
+		optimizerService,
+		s.configDB.Conn(),
+		yahooClient,
+		tradernetClient,
+		dividendRepo,
+		s.log,
+	)
 
 	// Optimization routes (faithful translation of Python routes)
 	r.Route("/optimizer", func(r chi.Router) {
 		r.Get("/", handler.HandleGetStatus) // Get optimizer status and last run
 		r.Post("/run", handler.HandleRun)   // Run optimization
+	})
+}
+
+// setupCashFlowsRoutes configures cash-flows module routes
+func (s *Server) setupCashFlowsRoutes(r chi.Router) {
+	// Initialize cash flows repository
+	repo := cash_flows.NewRepository(s.ledgerDB.Conn(), s.log)
+
+	// Initialize schema
+	if err := cash_flows.InitSchema(s.ledgerDB.Conn()); err != nil {
+		s.log.Error().Err(err).Msg("Failed to initialize cash_flows schema")
+	}
+
+	// Initialize Tradernet client and adapter
+	tradernetClient := tradernet.NewClient(s.cfg.TradernetServiceURL, s.log)
+	tradernetAdapter := cash_flows.NewTradernetAdapter(tradernetClient)
+
+	// Initialize deposit processor (BalanceService integration will be added when satellites module is migrated)
+	// For now, using nil BalanceService - deposits won't be allocated but won't fail either
+	depositProcessor := cash_flows.NewDepositProcessor(nil, s.log)
+
+	// Note: DividendCreator and sync job will be set up separately when scheduling background jobs
+	// For now, the API endpoints are fully functional
+
+	// Initialize handler
+	handler := cash_flows.NewHandler(repo, depositProcessor, tradernetAdapter, s.log)
+
+	// Cash-flows routes (faithful translation of Python routes)
+	r.Route("/cash-flows", func(r chi.Router) {
+		r.Get("/", handler.HandleGetCashFlows)      // GET / - list cash flows with filters
+		r.Get("/sync", handler.HandleSyncCashFlows) // GET /sync - sync from Tradernet
+		r.Get("/summary", handler.HandleGetSummary) // GET /summary - aggregate statistics
 	})
 }
 

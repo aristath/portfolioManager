@@ -9,6 +9,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/aristath/arduino-trader/internal/clients/tradernet"
+	"github.com/aristath/arduino-trader/internal/clients/yahoo"
+	"github.com/aristath/arduino-trader/internal/modules/dividends"
 	"github.com/rs/zerolog"
 )
 
@@ -21,21 +24,30 @@ type OptimizationCache struct {
 
 // Handler handles HTTP requests for the optimization module.
 type Handler struct {
-	service *OptimizerService
-	db      *sql.DB
-	cache   *OptimizationCache
-	log     zerolog.Logger
+	service         *OptimizerService
+	db              *sql.DB
+	yahooClient     *yahoo.Client
+	tradernetClient *tradernet.Client
+	dividendRepo    *dividends.DividendRepository
+	cache           *OptimizationCache
+	log             zerolog.Logger
 }
 
 // NewHandler creates a new optimization handler.
 func NewHandler(
 	service *OptimizerService,
 	db *sql.DB,
+	yahooClient *yahoo.Client,
+	tradernetClient *tradernet.Client,
+	dividendRepo *dividends.DividendRepository,
 	log zerolog.Logger,
 ) *Handler {
 	return &Handler{
-		service: service,
-		db:      db,
+		service:         service,
+		db:              db,
+		yahooClient:     yahooClient,
+		tradernetClient: tradernetClient,
+		dividendRepo:    dividendRepo,
 		cache: &OptimizationCache{
 			lastResult:  nil,
 			lastUpdated: time.Time{},
@@ -306,27 +318,41 @@ func (h *Handler) getPositions() (map[string]Position, error) {
 }
 
 func (h *Handler) getCurrentPrices(securities []Security) (map[string]float64, error) {
-	// Stub: In production, this would call Yahoo Finance or another price source
-	// For now, use last known prices from price_history table
+	// Fetch current prices from Yahoo Finance with fallback to price_history table
 	prices := make(map[string]float64)
 
 	for _, sec := range securities {
-		query := `
-			SELECT close
-			FROM price_history
-			WHERE symbol = ?
-			ORDER BY date DESC
-			LIMIT 1
-		`
+		// Try to get current price from Yahoo Finance
+		price, err := h.yahooClient.GetCurrentPrice(sec.Symbol, nil, 3)
+		if err != nil {
+			h.log.Debug().
+				Str("symbol", sec.Symbol).
+				Err(err).
+				Msg("Failed to get price from Yahoo Finance, falling back to price_history")
 
-		var price float64
-		err := h.db.QueryRow(query, sec.Symbol).Scan(&price)
-		if err != nil && err != sql.ErrNoRows {
-			h.log.Warn().Str("symbol", sec.Symbol).Err(err).Msg("Failed to get price")
-			continue
-		}
-		if err == nil {
-			prices[sec.Symbol] = price
+			// Fallback: use last known price from price_history table
+			query := `
+				SELECT close
+				FROM price_history
+				WHERE symbol = ?
+				ORDER BY date DESC
+				LIMIT 1
+			`
+
+			var fallbackPrice float64
+			err := h.db.QueryRow(query, sec.Symbol).Scan(&fallbackPrice)
+			if err != nil && err != sql.ErrNoRows {
+				h.log.Warn().
+					Str("symbol", sec.Symbol).
+					Err(err).
+					Msg("Failed to get price from both Yahoo and price_history")
+				continue
+			}
+			if err == nil {
+				prices[sec.Symbol] = fallbackPrice
+			}
+		} else if price != nil {
+			prices[sec.Symbol] = *price
 		}
 	}
 
