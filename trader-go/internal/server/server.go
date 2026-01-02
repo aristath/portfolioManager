@@ -14,6 +14,7 @@ import (
 	"github.com/aristath/arduino-trader/internal/config"
 	"github.com/aristath/arduino-trader/internal/database"
 	"github.com/aristath/arduino-trader/internal/modules/allocation"
+	"github.com/aristath/arduino-trader/internal/modules/display"
 	"github.com/aristath/arduino-trader/internal/modules/dividends"
 	"github.com/aristath/arduino-trader/internal/modules/portfolio"
 	"github.com/aristath/arduino-trader/internal/modules/trading"
@@ -135,6 +136,9 @@ func (s *Server) setupRoutes() {
 
 		// Dividends module (MIGRATED TO GO!)
 		s.setupDividendRoutes(r)
+
+		// Display module (MIGRATED TO GO!)
+		s.setupDisplayRoutes(r)
 
 		// TODO: Add more routes as modules are migrated
 		// r.Route("/planning", func(r chi.Router) { ... })
@@ -314,6 +318,21 @@ func (s *Server) setupDividendRoutes(r chi.Router) {
 		// Analytics endpoints
 		r.Get("/analytics/total", handler.HandleGetTotalDividendsBySymbol)       // Total dividends by symbol
 		r.Get("/analytics/reinvestment-rate", handler.HandleGetReinvestmentRate) // Overall reinvestment rate
+	})
+}
+
+// setupDisplayRoutes configures display module routes
+func (s *Server) setupDisplayRoutes(r chi.Router) {
+	// Initialize display module components
+	stateManager := display.NewStateManager(s.log)
+	handler := display.NewHandlers(stateManager, s.log)
+
+	// Display routes (faithful translation of Python display service)
+	r.Route("/display", func(r chi.Router) {
+		r.Get("/state", handler.HandleGetState)         // Get current display state
+		r.Post("/text", handler.HandleSetText)          // Set display text
+		r.Post("/led3", handler.HandleSetLED3)          // Set LED3 color
+		r.Post("/led4", handler.HandleSetLED4)          // Set LED4 color
 	})
 }
 
