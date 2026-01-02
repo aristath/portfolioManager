@@ -22,17 +22,20 @@ type BollingerPosition struct {
 // Faithful translation from Python: app/modules/scoring/domain/calculations/bollinger.py
 //
 // Bollinger Bands Formula:
-//   Middle Band = 20-day SMA
-//   Upper Band = Middle + (2 × std deviation)
-//   Lower Band = Middle - (2 × std deviation)
+//
+//	Middle Band = 20-day SMA
+//	Upper Band = Middle + (2 × std deviation)
+//	Lower Band = Middle - (2 × std deviation)
 //
 // Args:
-//   closes: Array of closing prices
-//   length: Period for moving average (typically 20)
-//   stdDevMultiplier: Standard deviation multiplier (typically 2)
+//
+//	closes: Array of closing prices
+//	length: Period for moving average (typically 20)
+//	stdDevMultiplier: Standard deviation multiplier (typically 2)
 //
 // Returns:
-//   BollingerBands struct or nil if insufficient data
+//
+//	BollingerBands struct or nil if insufficient data
 func CalculateBollingerBands(closes []float64, length int, stdDevMultiplier float64) *BollingerBands {
 	if len(closes) < length {
 		return nil

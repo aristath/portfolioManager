@@ -13,8 +13,8 @@ type LongTermScorer struct{}
 
 // LongTermScore represents the result of long-term scoring
 type LongTermScore struct {
-	Score      float64            `json:"score"`       // Total score (0-1)
-	Components map[string]float64 `json:"components"`  // Individual component scores
+	Score      float64            `json:"score"`      // Total score (0-1)
+	Components map[string]float64 `json:"components"` // Individual component scores
 }
 
 // NewLongTermScorer creates a new long-term scorer

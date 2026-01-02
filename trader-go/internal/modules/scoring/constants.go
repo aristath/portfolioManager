@@ -29,11 +29,11 @@ const (
 	HighDividendReinvestmentThreshold = 0.03 // 3%+ yield: reinvest in same security
 
 	// Quality score component weights (must sum to 1.0)
-	QualityWeightTotalReturn      = 0.40
-	QualityWeightConsistency      = 0.20
+	QualityWeightTotalReturn       = 0.40
+	QualityWeightConsistency       = 0.20
 	QualityWeightFinancialStrength = 0.20
-	QualityWeightSharpe           = 0.10
-	QualityWeightMaxDrawdown      = 0.10
+	QualityWeightSharpe            = 0.10
+	QualityWeightMaxDrawdown       = 0.10
 
 	// Sharpe ratio thresholds
 	SharpeExcellent = 2.0 // Score = 1.0
@@ -62,9 +62,9 @@ const (
 	VIXAdjustmentMax = 0.10 // Max ±10% adjustment for VIX
 
 	// Yield curve slope thresholds
-	YieldCurveNormal       = 0.01  // 1%+ slope = normal (expansionary)
-	YieldCurveFlat         = 0.0   // Flat curve
-	YieldCurveInverted     = -0.01 // Negative = inverted (recession signal)
+	YieldCurveNormal        = 0.01  // 1%+ slope = normal (expansionary)
+	YieldCurveFlat          = 0.0   // Flat curve
+	YieldCurveInverted      = -0.01 // Negative = inverted (recession signal)
 	YieldCurveAdjustmentMax = 0.15  // Max ±15% adjustment for yield curve
 
 	// Market P/E thresholds (vs historical average of 22)
@@ -121,8 +121,8 @@ const (
 	AllocationWeightAveragingDown = 0.30
 
 	// Averaging down boost for positions underwater
-	MaxCostBasisBoost        = 0.40 // Max boost at 20% loss
-	CostBasisBoostThreshold  = 0.20 // No boost beyond 20% loss
+	MaxCostBasisBoost       = 0.40 // Max boost at 20% loss
+	CostBasisBoostThreshold = 0.20 // No boost beyond 20% loss
 
 	// Concentration limits
 	ConcentrationHigh = 0.10 // >10% = reduce enthusiasm
@@ -135,10 +135,10 @@ const (
 
 const (
 	// Hard blocks (NEVER sell if any apply)
-	DefaultMinHoldDays       = 90    // 3 months minimum hold
-	DefaultSellCooldownDays  = 180   // 6 months between sells
-	DefaultMaxLossThreshold  = -0.20 // Never sell if down more than 20%
-	DefaultMinSellValueEUR   = 100.0 // Minimum sell value in EUR
+	DefaultMinHoldDays      = 90    // 3 months minimum hold
+	DefaultSellCooldownDays = 180   // 6 months between sells
+	DefaultMaxLossThreshold = -0.20 // Never sell if down more than 20%
+	DefaultMinSellValueEUR  = 100.0 // Minimum sell value in EUR
 
 	// Sell quantity limits
 	MinSellPct = 0.10 // Minimum 10% of position
@@ -192,11 +192,11 @@ const (
 
 const (
 	// Windfall detection thresholds
-	WindfallExcessHigh        = 0.50 // 50%+ above expected = high windfall
-	WindfallExcessMedium      = 0.25 // 25-50% above expected = medium windfall
-	WindfallSellPctHigh       = 0.40 // Sell 40% on high windfall
-	WindfallSellPctMedium     = 0.20 // Sell 20% on medium windfall
-	ConsistentDoubleSellPct   = 0.30 // Sell 30% on consistent doubler
+	WindfallExcessHigh      = 0.50 // 50%+ above expected = high windfall
+	WindfallExcessMedium    = 0.25 // 25-50% above expected = medium windfall
+	WindfallSellPctHigh     = 0.40 // Sell 40% on high windfall
+	WindfallSellPctMedium   = 0.20 // Sell 20% on medium windfall
+	ConsistentDoubleSellPct = 0.30 // Sell 30% on consistent doubler
 
 	// Dividend cut threshold
 	DividendCutThreshold = 0.20 // 20% YoY cut = "big cut"

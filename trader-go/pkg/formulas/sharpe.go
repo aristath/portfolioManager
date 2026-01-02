@@ -8,16 +8,19 @@ import (
 // Faithful translation from Python: app/modules/scoring/domain/calculations/sharpe.py
 //
 // Sharpe Ratio Formula:
-//   Sharpe = (Portfolio Return - Risk-free Rate) / Standard Deviation of Returns
-//   Annualized: Sharpe × sqrt(252) for daily returns
+//
+//	Sharpe = (Portfolio Return - Risk-free Rate) / Standard Deviation of Returns
+//	Annualized: Sharpe × sqrt(252) for daily returns
 //
 // Args:
-//   returns: Array of periodic returns (daily, monthly, etc.)
-//   riskFreeRate: Risk-free rate (annual, as decimal, e.g., 0.02 for 2%)
-//   periodsPerYear: Number of periods per year (252 for daily, 12 for monthly)
+//
+//	returns: Array of periodic returns (daily, monthly, etc.)
+//	riskFreeRate: Risk-free rate (annual, as decimal, e.g., 0.02 for 2%)
+//	periodsPerYear: Number of periods per year (252 for daily, 12 for monthly)
 //
 // Returns:
-//   Sharpe ratio or nil if insufficient data
+//
+//	Sharpe ratio or nil if insufficient data
 func CalculateSharpeRatio(returns []float64, riskFreeRate float64, periodsPerYear int) *float64 {
 	if len(returns) < 2 {
 		return nil
@@ -62,15 +65,18 @@ func CalculateSharpeFromPrices(prices []float64, riskFreeRate float64) *float64 
 // Only considers downside volatility (negative returns)
 //
 // Sortino Formula:
-//   Sortino = (Portfolio Return - Risk-free Rate) / Downside Deviation
+//
+//	Sortino = (Portfolio Return - Risk-free Rate) / Downside Deviation
 //
 // Args:
-//   returns: Array of periodic returns
-//   riskFreeRate: Risk-free rate (annual, as decimal)
-//   periodsPerYear: Number of periods per year
+//
+//	returns: Array of periodic returns
+//	riskFreeRate: Risk-free rate (annual, as decimal)
+//	periodsPerYear: Number of periods per year
 //
 // Returns:
-//   Sortino ratio or nil if insufficient data
+//
+//	Sortino ratio or nil if insufficient data
 func CalculateSortinoRatio(returns []float64, riskFreeRate float64, periodsPerYear int) *float64 {
 	if len(returns) < 2 {
 		return nil

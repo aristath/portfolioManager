@@ -4,8 +4,8 @@ import "math"
 
 // MonthlyPrice represents a monthly price data point
 type MonthlyPrice struct {
-	YearMonth    string  `json:"year_month"`
-	AvgAdjClose  float64 `json:"avg_adj_close"`
+	YearMonth   string  `json:"year_month"`
+	AvgAdjClose float64 `json:"avg_adj_close"`
 }
 
 // CalculateCAGR calculates Compound Annual Growth Rate from monthly prices
@@ -14,11 +14,13 @@ type MonthlyPrice struct {
 // Formula: CAGR = (Ending Value / Beginning Value)^(1/years) - 1
 //
 // Args:
-//   prices: Slice of MonthlyPrice with year_month and avg_adj_close
-//   months: Number of months to use (e.g., 60 for 5 years)
+//
+//	prices: Slice of MonthlyPrice with year_month and avg_adj_close
+//	months: Number of months to use (e.g., 60 for 5 years)
 //
 // Returns:
-//   CAGR as decimal (e.g., 0.11 = 11%) or nil if insufficient data
+//
+//	CAGR as decimal (e.g., 0.11 = 11%) or nil if insufficient data
 func CalculateCAGR(prices []MonthlyPrice, months int) *float64 {
 	const minMonthsForCAGR = 12
 

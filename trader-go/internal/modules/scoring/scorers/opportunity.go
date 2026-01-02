@@ -13,8 +13,8 @@ type OpportunityScorer struct{}
 
 // OpportunityScore represents the result of opportunity scoring
 type OpportunityScore struct {
-	Score      float64            `json:"score"`       // Total score (0-1)
-	Components map[string]float64 `json:"components"`  // Individual component scores
+	Score      float64            `json:"score"`      // Total score (0-1)
+	Components map[string]float64 `json:"components"` // Individual component scores
 }
 
 // NewOpportunityScorer creates a new opportunity scorer
