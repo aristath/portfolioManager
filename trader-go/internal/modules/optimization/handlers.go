@@ -360,9 +360,28 @@ func (h *Handler) getCurrentPrices(securities []Security) (map[string]float64, e
 }
 
 func (h *Handler) getCashBalance() (float64, error) {
-	// Stub: In production, this would call Tradernet API
-	// For now, return 0
-	return 0.0, nil
+	// Get cash balances from Tradernet API
+	balances, err := h.tradernetClient.GetCashBalances()
+	if err != nil {
+		h.log.Warn().Err(err).Msg("Failed to get cash balances from Tradernet, returning 0")
+		return 0.0, nil // Gracefully return 0 on error
+	}
+
+	var totalEUR float64
+	for _, balance := range balances {
+		if balance.Currency == "EUR" {
+			totalEUR += balance.Amount
+		} else {
+			// For non-EUR currencies, we would need exchange rate conversion
+			// For now, only include EUR balances
+			h.log.Debug().
+				Str("currency", balance.Currency).
+				Float64("amount", balance.Amount).
+				Msg("Skipping non-EUR balance (exchange rate conversion not implemented)")
+		}
+	}
+
+	return totalEUR, nil
 }
 
 func (h *Handler) getCountryTargets() (map[string]float64, error) {
