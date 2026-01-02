@@ -57,9 +57,33 @@ func (db *DB) Conn() *sql.DB {
 
 // Migrate runs database migrations
 func (db *DB) Migrate() error {
-	// TODO: Implement proper migration system
-	// For now, we'll use the existing Python-created schema
-	// Later: Use golang-migrate or similar
+	// Run migrations from migrations directory
+	migrationsDir := filepath.Join(filepath.Dir(db.path), "../internal/database/migrations")
+
+	// Check if migrations directory exists
+	if _, err := os.Stat(migrationsDir); os.IsNotExist(err) {
+		// Migrations directory doesn't exist, skip (tables may already exist from Python)
+		return nil
+	}
+
+	// Get list of migration files
+	files, err := filepath.Glob(filepath.Join(migrationsDir, "*.sql"))
+	if err != nil {
+		return fmt.Errorf("failed to list migration files: %w", err)
+	}
+
+	// Execute each migration
+	for _, file := range files {
+		content, err := os.ReadFile(file)
+		if err != nil {
+			return fmt.Errorf("failed to read migration %s: %w", file, err)
+		}
+
+		if _, err := db.conn.Exec(string(content)); err != nil {
+			return fmt.Errorf("failed to execute migration %s: %w", file, err)
+		}
+	}
+
 	return nil
 }
 
