@@ -103,12 +103,26 @@ func (r *Repository) GetCountryGroupTargets() (map[string]float64, error) {
 		return nil, err
 	}
 
-	result := make(map[string]float64)
+	rawWeights := make(map[string]float64)
 	for _, t := range targets {
-		result[t.Name] = t.TargetPct
+		rawWeights[t.Name] = t.TargetPct
 	}
 
-	return result, nil
+	// Normalize weights to sum to 1.0 (100%)
+	totalWeight := 0.0
+	for _, weight := range rawWeights {
+		totalWeight += weight
+	}
+
+	if totalWeight > 0 {
+		result := make(map[string]float64)
+		for name, weight := range rawWeights {
+			result[name] = weight / totalWeight
+		}
+		return result, nil
+	}
+
+	return rawWeights, nil
 }
 
 // GetIndustryGroupTargets returns industry group allocation targets
@@ -119,12 +133,26 @@ func (r *Repository) GetIndustryGroupTargets() (map[string]float64, error) {
 		return nil, err
 	}
 
-	result := make(map[string]float64)
+	rawWeights := make(map[string]float64)
 	for _, t := range targets {
-		result[t.Name] = t.TargetPct
+		rawWeights[t.Name] = t.TargetPct
 	}
 
-	return result, nil
+	// Normalize weights to sum to 1.0 (100%)
+	totalWeight := 0.0
+	for _, weight := range rawWeights {
+		totalWeight += weight
+	}
+
+	if totalWeight > 0 {
+		result := make(map[string]float64)
+		for name, weight := range rawWeights {
+			result[name] = weight / totalWeight
+		}
+		return result, nil
+	}
+
+	return rawWeights, nil
 }
 
 // Upsert inserts or updates an allocation target
