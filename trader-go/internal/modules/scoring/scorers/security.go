@@ -12,60 +12,65 @@ import (
 // SecurityScorer orchestrates all scoring groups for a security
 // Faithful translation from Python: app/modules/scoring/domain/security_scorer.py
 type SecurityScorer struct {
-	technicals   *TechnicalsScorer
-	longTerm     *LongTermScorer
-	opportunity  *OpportunityScorer
-	dividend     *DividendScorer
-	fundamentals *FundamentalsScorer
-	shortTerm    *ShortTermScorer
-	opinion      *OpinionScorer
+	technicals      *TechnicalsScorer
+	longTerm        *LongTermScorer
+	opportunity     *OpportunityScorer
+	dividend        *DividendScorer
+	fundamentals    *FundamentalsScorer
+	shortTerm       *ShortTermScorer
+	opinion         *OpinionScorer
+	diversification *DiversificationScorer
 }
 
 // ScoreWeights defines the weight for each scoring group
 // Fixed weights (no longer configurable) - optimizer handles portfolio decisions
 var ScoreWeights = map[string]float64{
-	"long_term":    0.20, // CAGR, Sortino, Sharpe
-	"fundamentals": 0.15, // Financial strength, Consistency
-	"opportunity":  0.15, // 52W high distance, P/E ratio
-	"dividends":    0.12, // Yield, Dividend consistency
-	"short_term":   0.10, // Recent momentum, Drawdown
-	"technicals":   0.10, // RSI, Bollinger, EMA
-	"opinion":      0.10, // Analyst recommendations, Price targets
-	// diversification: 0.08 - not yet implemented in Go
+	"long_term":       0.20, // CAGR, Sortino, Sharpe
+	"fundamentals":    0.15, // Financial strength, Consistency
+	"opportunity":     0.15, // 52W high distance, P/E ratio
+	"dividends":       0.12, // Yield, Dividend consistency
+	"short_term":      0.10, // Recent momentum, Drawdown
+	"technicals":      0.10, // RSI, Bollinger, EMA
+	"opinion":         0.10, // Analyst recommendations, Price targets
+	"diversification": 0.08, // Geography, Industry, Averaging down
 }
 
 // NewSecurityScorer creates a new security scorer
 func NewSecurityScorer() *SecurityScorer {
 	return &SecurityScorer{
-		technicals:   NewTechnicalsScorer(),
-		longTerm:     NewLongTermScorer(),
-		opportunity:  NewOpportunityScorer(),
-		dividend:     NewDividendScorer(),
-		fundamentals: NewFundamentalsScorer(),
-		shortTerm:    NewShortTermScorer(),
-		opinion:      NewOpinionScorer(),
+		technicals:      NewTechnicalsScorer(),
+		longTerm:        NewLongTermScorer(),
+		opportunity:     NewOpportunityScorer(),
+		dividend:        NewDividendScorer(),
+		fundamentals:    NewFundamentalsScorer(),
+		shortTerm:       NewShortTermScorer(),
+		opinion:         NewOpinionScorer(),
+		diversification: NewDiversificationScorer(),
 	}
 }
 
 // ScoreSecurityInput contains all data needed to score a security
 type ScoreSecurityInput struct {
-	Symbol                string
-	DailyPrices           []float64
-	MonthlyPrices         []formulas.MonthlyPrice
-	TargetAnnualReturn    float64
-	MarketAvgPE           float64
+	PayoutRatio           *float64
+	DebtToEquity          *float64
+	PortfolioContext      *domain.PortfolioContext
+	Industry              *string
+	Country               *string
 	SortinoRatio          *float64
 	MaxDrawdown           *float64
 	PERatio               *float64
-	ForwardPE             *float64
 	DividendYield         *float64
-	PayoutRatio           *float64
-	FiveYearAvgDivYield   *float64
+	UpsidePct             *float64
 	ProfitMargin          *float64
-	DebtToEquity          *float64
+	FiveYearAvgDivYield   *float64
+	AnalystRecommendation *float64
+	ForwardPE             *float64
 	CurrentRatio          *float64
-	AnalystRecommendation *float64 // 0-1 normalized
-	UpsidePct             *float64 // Percentage
+	Symbol                string
+	DailyPrices           []float64
+	MonthlyPrices         []formulas.MonthlyPrice
+	MarketAvgPE           float64
+	TargetAnnualReturn    float64
 }
 
 // ScoreSecurityWithDefaults scores a security with default values for missing data
@@ -146,7 +151,29 @@ func (ss *SecurityScorer) ScoreSecurity(input ScoreSecurityInput) *domain.Calcul
 	groupScores["opinion"] = opinionScore.Score
 	subScores["opinion"] = opinionScore.Components
 
-	// Note: Diversification (8%) not yet implemented - would be added here
+	// 8. Diversification (8%) - DYNAMIC, portfolio-aware
+	if input.PortfolioContext != nil && input.Country != nil {
+		// Need quality and opportunity for averaging down calculation
+		qualityApprox := (groupScores["long_term"] + groupScores["fundamentals"]) / 2
+		diversificationScore := ss.diversification.Calculate(
+			input.Symbol,
+			*input.Country,
+			input.Industry,
+			qualityApprox,
+			groupScores["opportunity"],
+			input.PortfolioContext,
+		)
+		groupScores["diversification"] = diversificationScore.Score
+		subScores["diversification"] = diversificationScore.Components
+	} else {
+		// No portfolio context - return neutral
+		groupScores["diversification"] = 0.5
+		subScores["diversification"] = map[string]float64{
+			"country":   0.5,
+			"industry":  0.5,
+			"averaging": 0.5,
+		}
+	}
 
 	// Normalize weights
 	normalizedWeights := normalizeWeights(ScoreWeights)
