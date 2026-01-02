@@ -24,9 +24,9 @@ unsigned long scrollStartTime = 0;
 unsigned long estimatedScrollDuration = 0;
 
 // LED Matrix dimensions
-const int MATRIX_WIDTH = 12;  // Actual hardware is 12x8, not 13x8
+const int MATRIX_WIDTH = 13;
 const int MATRIX_HEIGHT = 8;
-const int TOTAL_PIXELS = MATRIX_WIDTH * MATRIX_HEIGHT;  // 96 pixels
+const int TOTAL_PIXELS = MATRIX_WIDTH * MATRIX_HEIGHT;  // 104 pixels
 
 // System stats mode state
 bool inStatsMode = false;
@@ -74,7 +74,7 @@ void setSystemStats(int pixels_on, int brightness, int interval_ms) {
 void updatePixelPattern() {
   // Smooth animation: swap a few positions to gradually change pattern
   // Adjust pixelsToChange (3-10) for animation speed - lower = smoother, higher = more chaotic
-  int pixelsToChange = 15;  // Increased for more visible animation
+  int pixelsToChange = 2;  // Subtle, smooth animation
 
   // Only animate if we have pixels to work with
   if (targetPixelsOn > 0 && targetPixelsOn < TOTAL_PIXELS) {
@@ -117,13 +117,13 @@ void renderBrightnessFrame() {
   // For now, using binary on/off as fallback until brightness method is found
   // This will at least show pixel count correctly
 
-  uint32_t frame[3] = {0, 0, 0};
+  uint32_t frame[4] = {0, 0, 0, 0};  // 4 * 32 = 128 bits for 13x8 = 104 pixels
 
   // Convert brightness array to binary frame (pixels with brightness > 0 are ON)
   int pixel_idx = 0;
   for (int y = 0; y < MATRIX_HEIGHT; y++) {
     for (int x = 0; x < MATRIX_WIDTH; x++) {
-      if (pixelBrightness[y][x] > 0) {
+      if (pixel_idx < TOTAL_PIXELS && pixelBrightness[y][x] > 0) {
         frame[pixel_idx / 32] |= (1UL << (pixel_idx % 32));
       }
       pixel_idx++;
