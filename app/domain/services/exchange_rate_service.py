@@ -24,9 +24,11 @@ FALLBACK_RATES: Dict[Tuple[str, str], float] = {
     ("USD", "EUR"): 1.05,  # 1 EUR = 1.05 USD, so 100 USD / 1.05 = 95.24 EUR
     ("HKD", "EUR"): 8.33,  # 1 EUR = 8.33 HKD, so 100 HKD / 8.33 = 12.00 EUR
     ("GBP", "EUR"): 0.85,  # 1 EUR = 0.85 GBP, so 100 GBP / 0.85 = 117.6 EUR
+    ("TEST", "EUR"): 1.0,  # Virtual test currency: 1 TEST = 1 EUR
     ("EUR", "USD"): 0.95,  # Inverse: 100 EUR / 0.95 = 105.3 USD
     ("EUR", "HKD"): 0.12,  # Inverse: 100 EUR / 0.12 = 833 HKD
     ("EUR", "GBP"): 1.17,  # Inverse: 100 EUR / 1.17 = 85.5 GBP
+    ("EUR", "TEST"): 1.0,  # Inverse: 1 EUR = 1 TEST
 }
 
 # Default TTL for exchange rates (1 hour)

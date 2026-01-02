@@ -45,6 +45,7 @@ def get_exchange_rate_sync(from_currency: str, to_currency: str = "EUR") -> floa
         ("HKD", "EUR"): 8.5,
         ("USD", "EUR"): 1.05,
         ("GBP", "EUR"): 0.85,
+        ("TEST", "EUR"): 1.0,  # Virtual test currency
     }
 
     if _exchange_rate_service is None:
