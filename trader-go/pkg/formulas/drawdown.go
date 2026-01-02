@@ -16,8 +16,8 @@ type DrawdownMetrics struct {
 //
 // Drawdown Formula:
 //
-//	Drawdown = (Peak Value - Current Value) / Peak Value
-//	Max Drawdown = Maximum of all drawdowns
+//	Drawdown = (Current Value - Peak Value) / Peak Value
+//	Max Drawdown = Maximum of all drawdowns (most negative)
 //
 // Args:
 //
@@ -25,7 +25,7 @@ type DrawdownMetrics struct {
 //
 // Returns:
 //
-//	Maximum drawdown as positive percentage (0.25 = 25% loss from peak) or nil
+//	Maximum drawdown as negative percentage (e.g., -0.25 = 25% loss from peak) or nil
 func CalculateMaxDrawdown(prices []float64) *float64 {
 	if len(prices) < 2 {
 		return nil
@@ -40,10 +40,10 @@ func CalculateMaxDrawdown(prices []float64) *float64 {
 			peak = price
 		}
 
-		// Calculate drawdown from peak
+		// Calculate drawdown from peak (negative value)
 		if peak > 0 {
-			drawdown := (peak - price) / peak
-			if drawdown > maxDrawdown {
+			drawdown := (price - peak) / peak
+			if drawdown < maxDrawdown {
 				maxDrawdown = drawdown
 			}
 		}
@@ -71,19 +71,19 @@ func CalculateDrawdownMetrics(prices []float64) *DrawdownMetrics {
 			peakIndex = i
 		}
 
-		// Calculate drawdown from peak
+		// Calculate drawdown from peak (negative value)
 		if peak > 0 {
-			drawdown := (peak - price) / peak
-			if drawdown > maxDrawdown {
+			drawdown := (price - peak) / peak
+			if drawdown < maxDrawdown {
 				maxDrawdown = drawdown
 			}
 		}
 	}
 
-	// Calculate current drawdown
+	// Calculate current drawdown (negative value)
 	currentDrawdown := 0.0
 	if peak > 0 {
-		currentDrawdown = (peak - currentValue) / peak
+		currentDrawdown = (currentValue - peak) / peak
 	}
 
 	// Days in drawdown (from peak to current)
@@ -250,7 +250,7 @@ func CalculateUlcerIndex(prices []float64, period int) *float64 {
 		}
 
 		if peak > 0 {
-			drawdown := (peak - price) / peak
+			drawdown := (price - peak) / peak
 			sumSquaredDrawdowns += drawdown * drawdown
 		}
 	}
