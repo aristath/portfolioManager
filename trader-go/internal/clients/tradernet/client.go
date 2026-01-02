@@ -272,3 +272,59 @@ func (c *Client) GetExecutedTrades(limit int) ([]Trade, error) {
 
 	return result.Trades, nil
 }
+
+// CashFlowTransaction represents a cash flow transaction from Tradernet API
+type CashFlowTransaction struct {
+	ID              string                 `json:"id"`
+	TransactionID   string                 `json:"transaction_id"`
+	TypeDocID       int                    `json:"type_doc_id"`
+	Type            string                 `json:"type"`
+	TransactionType string                 `json:"transaction_type"`
+	DT              string                 `json:"dt"`
+	Date            string                 `json:"date"`
+	SM              float64                `json:"sm"`
+	Amount          float64                `json:"amount"`
+	Curr            string                 `json:"curr"`
+	Currency        string                 `json:"currency"`
+	SMEUR           float64                `json:"sm_eur"`
+	AmountEUR       float64                `json:"amount_eur"`
+	Status          string                 `json:"status"`
+	StatusC         int                    `json:"status_c"`
+	Description     string                 `json:"description"`
+	Params          map[string]interface{} `json:"params"`
+}
+
+// CashFlowsResponse is the response for GetAllCashFlows
+type CashFlowsResponse struct {
+	CashFlows []CashFlowTransaction `json:"cash_flows"`
+}
+
+// GetAllCashFlows fetches all cash flows from Tradernet API
+// Combines multiple sources: transaction history, corporate actions, fees
+func (c *Client) GetAllCashFlows(limit int) ([]CashFlowTransaction, error) {
+	url := fmt.Sprintf("/api/transactions/cash-flows?limit=%d", limit)
+	resp, err := c.get(url)
+	if err != nil {
+		c.log.Error().Err(err).Msg("Failed to fetch cash flows from Tradernet")
+		return nil, fmt.Errorf("failed to fetch cash flows: %w", err)
+	}
+
+	var result CashFlowsResponse
+	if err := json.Unmarshal(resp.Data, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse cash flows: %w", err)
+	}
+
+	c.log.Info().Int("count", len(result.CashFlows)).Msg("Fetched cash flows from Tradernet")
+	return result.CashFlows, nil
+}
+
+// IsConnected checks if the Tradernet microservice is reachable
+func (c *Client) IsConnected() bool {
+	// Try a simple health check endpoint
+	resp, err := c.get("/health")
+	if err != nil {
+		c.log.Debug().Err(err).Msg("Tradernet microservice not connected")
+		return false
+	}
+	return resp.Success
+}
