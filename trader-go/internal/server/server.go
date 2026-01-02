@@ -15,6 +15,7 @@ import (
 	"github.com/aristath/arduino-trader/internal/database"
 	"github.com/aristath/arduino-trader/internal/modules/allocation"
 	"github.com/aristath/arduino-trader/internal/modules/portfolio"
+	"github.com/aristath/arduino-trader/internal/modules/trading"
 	"github.com/aristath/arduino-trader/internal/modules/universe"
 )
 
@@ -25,6 +26,7 @@ type Config struct {
 	ConfigDB    *database.DB // config.db - securities, allocation data
 	StateDB     *database.DB // state.db - positions, scores
 	SnapshotsDB *database.DB // snapshots.db - portfolio snapshots
+	LedgerDB    *database.DB // ledger.db - trades (append-only ledger)
 	Config      *config.Config
 	DevMode     bool
 }
@@ -37,6 +39,7 @@ type Server struct {
 	configDB    *database.DB
 	stateDB     *database.DB
 	snapshotsDB *database.DB
+	ledgerDB    *database.DB
 	cfg         *config.Config
 }
 
@@ -48,6 +51,7 @@ func New(cfg Config) *Server {
 		configDB:    cfg.ConfigDB,
 		stateDB:     cfg.StateDB,
 		snapshotsDB: cfg.SnapshotsDB,
+		ledgerDB:    cfg.LedgerDB,
 		cfg:         cfg.Config,
 	}
 
@@ -119,8 +123,10 @@ func (s *Server) setupRoutes() {
 		// Universe module (MIGRATED TO GO!)
 		s.setupUniverseRoutes(r)
 
+		// Trading module (MIGRATED TO GO!)
+		s.setupTradingRoutes(r)
+
 		// TODO: Add more routes as modules are migrated
-		// r.Route("/trading", func(r chi.Router) { ... })
 		// r.Route("/planning", func(r chi.Router) { ... })
 	})
 
@@ -228,6 +234,46 @@ func (s *Server) setupUniverseRoutes(r chi.Router) {
 		// PUT/DELETE endpoints
 		r.Put("/{isin}", handler.HandleUpdateStock)    // Update security (requires score recalc)
 		r.Delete("/{isin}", handler.HandleDeleteStock) // Soft delete (implemented in Go)
+	})
+}
+
+// securityFetcherAdapter adapts universe.SecurityRepository to trading.SecurityFetcher interface
+type securityFetcherAdapter struct {
+	repo *universe.SecurityRepository
+}
+
+func (a *securityFetcherAdapter) GetSecurityName(symbol string) (string, error) {
+	security, err := a.repo.GetBySymbol(symbol)
+	if err != nil {
+		return "", err
+	}
+	if security == nil {
+		return symbol, nil // Return symbol if not found
+	}
+	return security.Name, nil
+}
+
+// setupTradingRoutes configures trading module routes
+func (s *Server) setupTradingRoutes(r chi.Router) {
+	// Initialize trading module components
+	tradeRepo := trading.NewTradeRepository(s.ledgerDB.Conn(), s.log)
+
+	// Security repo for enriching trade data with security names
+	securityRepo := universe.NewSecurityRepository(s.configDB.Conn(), s.log)
+	securityFetcher := &securityFetcherAdapter{repo: securityRepo}
+
+	handler := trading.NewTradingHandlers(
+		tradeRepo,
+		securityFetcher,
+		s.cfg.PythonServiceURL,
+		s.log,
+	)
+
+	// Trading routes (faithful translation of Python routes)
+	r.Route("/trades", func(r chi.Router) {
+		r.Get("/", handler.HandleGetTrades)                // Trade history
+		r.Post("/execute", handler.HandleExecuteTrade)     // Execute trade (proxy to Python)
+		r.Get("/allocation", handler.HandleGetAllocation)  // Portfolio allocation (proxy to Python)
 	})
 }
 

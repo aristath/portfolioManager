@@ -50,6 +50,13 @@ func main() {
 	}
 	defer snapshotsDB.Close()
 
+	// ledger.db - trades (append-only ledger)
+	ledgerDB, err := database.New("../data/ledger.db")
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize ledger database")
+	}
+	defer ledgerDB.Close()
+
 	// Run migrations
 	if err := configDB.Migrate(); err != nil {
 		log.Fatal().Err(err).Msg("Failed to run migrations")
@@ -72,6 +79,7 @@ func main() {
 		ConfigDB:    configDB,
 		StateDB:     stateDB,
 		SnapshotsDB: snapshotsDB,
+		LedgerDB:    ledgerDB,
 		Config:      cfg,
 		DevMode:     cfg.DevMode,
 	})
