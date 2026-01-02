@@ -263,12 +263,30 @@ class RebalancingService:
         positions = await self._position_repo.get_all()
         securities = await self._security_repo.get_all_active()
 
-        # Get current cash balance
-        available_cash = (
-            self._tradernet_client.get_total_cash_eur()
+        # Get current cash balances in all currencies (including TEST in research mode)
+        cash_balances_raw = (
+            self._tradernet_client.get_cash_balances()
             if self._tradernet_client.is_connected
-            else 0.0
+            else []
         )
+        cash_balances = (
+            {b.currency: b.amount for b in cash_balances_raw}
+            if cash_balances_raw
+            else {}
+        )
+
+        # Convert to EUR for initial available_cash calculation
+        if cash_balances:
+            amounts_in_eur = await self._exchange_rate_service.batch_convert_to_eur(
+                cash_balances
+            )
+            available_cash = sum(amounts_in_eur.values())
+            logger.info(
+                f"Initial available_cash from all currencies: {available_cash:.2f} EUR"
+            )
+        else:
+            available_cash = 0.0
+            logger.info("No cash balances available")
 
         # Fetch and apply pending orders to get hypothetical future state
         pending_orders = []
@@ -288,19 +306,8 @@ class RebalancingService:
             position_dicts = [
                 {"symbol": p.symbol, "quantity": p.quantity} for p in positions
             ]
-            # Get cash balances in all currencies
-            cash_balances_raw = (
-                self._tradernet_client.get_cash_balances()
-                if self._tradernet_client.is_connected
-                else []
-            )
-            cash_balances = (
-                {b.currency: b.amount for b in cash_balances_raw}
-                if cash_balances_raw
-                else {}
-            )
 
-            # Apply pending orders
+            # Apply pending orders using cash_balances from earlier
             # Allow negative cash for hypothetical rebalancing scenarios
             adjusted_position_dicts, adjusted_cash_balances = (
                 apply_pending_orders_to_portfolio(
