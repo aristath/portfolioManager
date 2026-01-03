@@ -1,0 +1,5 @@
+name: trader-display
+description: Trading portfolio LED display showing geographic allocation
+ports: []
+bricks: []
+icon: 📈

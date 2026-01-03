@@ -11,22 +11,22 @@ cd "$(dirname "$SCRIPT_DIR")"  # Change to repo root
 
 log_header "Building for Arduino Uno Q (ARM64)"
 
-# Build trader-go
+# Build trader
 if [ "$BUILD_TRADER_GO" = "yes" ]; then
-    log_info "Building trader-go..."
-    cd trader-go/cmd/server
-    GOOS=linux GOARCH=arm64 go build -o ../../../build/trader-go
+    log_info "Building trader..."
+    cd trader/cmd/server
+    GOOS=linux GOARCH=arm64 go build -o ../../../build/trader
     cd ../../..
-    log_success "trader-go built successfully → build/trader-go"
+    log_success "trader built successfully → build/trader"
 fi
 
-# Build bridge-go
+# Build display bridge
 if [ "$BUILD_BRIDGE_GO" = "yes" ]; then
-    log_info "Building bridge-go..."
-    cd bridge-go
-    GOOS=linux GOARCH=arm64 go build -o ../build/bridge-go
-    cd ..
-    log_success "bridge-go built successfully → build/bridge-go"
+    log_info "Building display bridge..."
+    cd display/bridge
+    GOOS=linux GOARCH=arm64 go build -o ../../build/display-bridge
+    cd ../..
+    log_success "display bridge built successfully → build/display-bridge"
 fi
 
 log_header "Build Summary"

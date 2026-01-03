@@ -31,24 +31,24 @@ log_success "SSH connection verified"
 log_info "Ensuring deployment directory exists..."
 ssh "${ARDUINO_SSH}" "mkdir -p ${ARDUINO_DEPLOY_PATH}"
 
-# Deploy trader-go
-if [ -f "build/trader-go" ]; then
-    log_info "Deploying trader-go..."
-    scp build/trader-go "${ARDUINO_SSH}:${ARDUINO_DEPLOY_PATH}/"
-    ssh "${ARDUINO_SSH}" "chmod +x ${ARDUINO_DEPLOY_PATH}/trader-go"
-    log_success "trader-go deployed"
+# Deploy trader
+if [ -f "build/trader" ]; then
+    log_info "Deploying trader..."
+    scp build/trader "${ARDUINO_SSH}:${ARDUINO_DEPLOY_PATH}/"
+    ssh "${ARDUINO_SSH}" "chmod +x ${ARDUINO_DEPLOY_PATH}/trader"
+    log_success "trader deployed"
 else
-    log_warn "build/trader-go not found, skipping"
+    log_warn "build/trader not found, skipping"
 fi
 
-# Deploy bridge-go
-if [ -f "build/bridge-go" ]; then
-    log_info "Deploying bridge-go..."
-    scp build/bridge-go "${ARDUINO_SSH}:${ARDUINO_DEPLOY_PATH}/"
-    ssh "${ARDUINO_SSH}" "chmod +x ${ARDUINO_DEPLOY_PATH}/bridge-go"
-    log_success "bridge-go deployed"
+# Deploy display-bridge
+if [ -f "build/display-bridge" ]; then
+    log_info "Deploying display-bridge..."
+    scp build/display-bridge "${ARDUINO_SSH}:${ARDUINO_DEPLOY_PATH}/"
+    ssh "${ARDUINO_SSH}" "chmod +x ${ARDUINO_DEPLOY_PATH}/display-bridge"
+    log_success "display-bridge deployed"
 else
-    log_warn "build/bridge-go not found, skipping"
+    log_warn "build/display-bridge not found, skipping"
 fi
 
 # Deploy data directory (if needed)
@@ -59,6 +59,6 @@ if [ "$DEPLOY_DATA" = "yes" ]; then
 fi
 
 log_header "Deployment Summary"
-ssh "${ARDUINO_SSH}" "ls -lh ${ARDUINO_DEPLOY_PATH}/ | grep -E 'trader-go|bridge-go|data'"
+ssh "${ARDUINO_SSH}" "ls -lh ${ARDUINO_DEPLOY_PATH}/ | grep -E 'trader|display-bridge|data'"
 log_success "Deployment complete!"
 log_info "Run './scripts/restart.sh' to restart services"
