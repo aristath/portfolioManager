@@ -211,11 +211,17 @@
 - ✅ **Database schema (satellites.db with 5 tables)**
 - ✅ **Event system (13 satellite event types)**
 
-**Missing**:
-- ❌ Background jobs (maintenance, reconciliation, evaluation)
-- ❌ Planner integration
+**Completed** (Simplified):
+- ✅ Background jobs (maintenance, reconciliation, evaluation) - Structured but pending position integration
+  - satellite_maintenance.go - Daily high water mark updates and hibernation checks
+  - satellite_reconciliation.go - Daily balance reconciliation
+  - satellite_evaluation.go - Quarterly performance evaluation
 
-**Impact:** API operational, multi-bucket strategies available via API, background automation pending
+**Missing**:
+- ❌ Planner integration
+- ❌ Position tracking integration for jobs (required for full HWM updates and reconciliation)
+
+**Impact:** API operational, multi-bucket strategies available via API, background job structure complete (needs position integration for full functionality)
 
 ---
 
