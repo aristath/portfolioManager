@@ -648,12 +648,18 @@ func (s *Server) setupSatellitesRoutes(r chi.Router) {
 		s.log.Fatal().Err(err).Msg("Failed to initialize satellites schema")
 	}
 
+	// Initialize Tradernet client for exchange rates
+	tradernetClient := tradernet.NewClient(s.cfg.TradernetServiceURL, s.log)
+
+	// Initialize currency exchange service for multi-currency cash conversion
+	currencyExchangeService := services.NewCurrencyExchangeService(tradernetClient, s.log)
+
 	// Initialize repositories
 	bucketRepo := satellites.NewBucketRepository(s.satellitesDB.Conn(), s.log)
 	balanceRepo := satellites.NewBalanceRepository(s.satellitesDB.Conn(), s.log)
 
 	// Initialize services
-	bucketService := satellites.NewBucketService(bucketRepo, balanceRepo, s.log)
+	bucketService := satellites.NewBucketService(bucketRepo, balanceRepo, currencyExchangeService, s.log)
 	balanceService := satellites.NewBalanceService(balanceRepo, bucketRepo, s.log)
 	reconciliationService := satellites.NewReconciliationService(balanceRepo, bucketRepo, s.log)
 

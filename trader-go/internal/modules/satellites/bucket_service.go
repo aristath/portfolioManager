@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/aristath/arduino-trader/internal/modules/portfolio"
+	"github.com/aristath/arduino-trader/internal/services"
 	"github.com/rs/zerolog"
 )
 
@@ -14,21 +15,24 @@ import (
 // Handles creation, updates, status transitions, and retirement
 // of both core and satellite buckets.
 type BucketService struct {
-	bucketRepo  *BucketRepository
-	balanceRepo *BalanceRepository
-	log         zerolog.Logger
+	bucketRepo        *BucketRepository
+	balanceRepo       *BalanceRepository
+	exchangeService   *services.CurrencyExchangeService
+	log               zerolog.Logger
 }
 
 // NewBucketService creates a new bucket service
 func NewBucketService(
 	bucketRepo *BucketRepository,
 	balanceRepo *BalanceRepository,
+	exchangeService *services.CurrencyExchangeService,
 	log zerolog.Logger,
 ) *BucketService {
 	return &BucketService{
-		bucketRepo:  bucketRepo,
-		balanceRepo: balanceRepo,
-		log:         log.With().Str("service", "bucket").Logger(),
+		bucketRepo:      bucketRepo,
+		balanceRepo:     balanceRepo,
+		exchangeService: exchangeService,
+		log:             log.With().Str("service", "bucket").Logger(),
 	}
 }
 
@@ -517,7 +521,7 @@ func (s *BucketService) UpdateAllocation(bucketID string, targetPct float64) (*B
 //
 // Calculates current bucket value by:
 // 1. Summing market_value_eur for all positions in the bucket
-// 2. Summing cash balances for the bucket (EUR only for now)
+// 2. Summing cash balances for the bucket (all currencies converted to EUR)
 //
 // Args:
 //
@@ -528,8 +532,8 @@ func (s *BucketService) UpdateAllocation(bucketID string, targetPct float64) (*B
 //
 //	Total bucket value in EUR
 //
-// Note: Currently only counts EUR cash. For full multi-currency support,
-// this needs ExchangeRateService to convert USD/GBP/HKD to EUR.
+// Note: Uses CurrencyExchangeService to convert USD/GBP/HKD to EUR.
+// If exchange service is unavailable, non-EUR currencies are skipped with warning.
 func (s *BucketService) CalculateBucketValue(
 	bucketID string,
 	positionRepo *portfolio.PositionRepository,
@@ -554,20 +558,43 @@ func (s *BucketService) CalculateBucketValue(
 		return 0, fmt.Errorf("failed to get balances: %w", err)
 	}
 
-	// Sum EUR cash (simplified - full version needs exchange rate service)
+	// Sum all cash balances, converting to EUR
 	cashEUR := 0.0
 	for _, balance := range balances {
+		if balance.Balance <= 0 {
+			continue
+		}
+
 		if balance.Currency == "EUR" {
 			cashEUR += balance.Balance
-		}
-		// TODO: Convert USD/GBP/HKD to EUR using ExchangeRateService
-		// For now, log that non-EUR balances exist but aren't counted
-		if balance.Currency != "EUR" && balance.Balance > 0 {
-			s.log.Debug().
-				Str("bucket_id", bucketID).
-				Str("currency", balance.Currency).
-				Float64("balance", balance.Balance).
-				Msg("Non-EUR balance not converted (needs ExchangeRateService)")
+		} else {
+			// Convert to EUR using exchange service
+			if s.exchangeService != nil {
+				rate, err := s.exchangeService.GetRate(balance.Currency, "EUR")
+				if err != nil {
+					s.log.Warn().
+						Err(err).
+						Str("bucket_id", bucketID).
+						Str("currency", balance.Currency).
+						Float64("balance", balance.Balance).
+						Msg("Failed to get exchange rate, skipping currency")
+					continue
+				}
+				cashEUR += balance.Balance * rate
+				s.log.Debug().
+					Str("bucket_id", bucketID).
+					Str("currency", balance.Currency).
+					Float64("balance", balance.Balance).
+					Float64("rate", rate).
+					Float64("eur_value", balance.Balance*rate).
+					Msg("Converted currency to EUR")
+			} else {
+				s.log.Warn().
+					Str("bucket_id", bucketID).
+					Str("currency", balance.Currency).
+					Float64("balance", balance.Balance).
+					Msg("Exchange service not available, skipping currency")
+			}
 		}
 	}
 
