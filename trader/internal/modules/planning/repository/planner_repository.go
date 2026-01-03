@@ -12,12 +12,14 @@ import (
 )
 
 // PlannerRepository handles database operations for planning module.
+// Database: agents.db (sequences, evaluations, best_result tables)
 type PlannerRepository struct {
-	db  *database.DB
+	db  *database.DB // agents.db
 	log zerolog.Logger
 }
 
 // NewPlannerRepository creates a new planner repository.
+// db parameter should be agents.db connection
 func NewPlannerRepository(db *database.DB, log zerolog.Logger) *PlannerRepository {
 	return &PlannerRepository{
 		db:  db,

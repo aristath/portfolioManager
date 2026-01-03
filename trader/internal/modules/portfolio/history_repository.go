@@ -25,6 +25,8 @@ type DailyPrice struct {
 
 // HistoryRepository handles per-symbol historical price data
 // Faithful translation from Python: app/modules/portfolio/database/history_repository.py
+// TODO: Migrate to use consolidated history.db instead of per-symbol databases
+// Database: Currently history/{SYMBOL}.db, will be consolidated to history.db
 type HistoryRepository struct {
 	symbol      string
 	historyPath string // Base path for history databases
@@ -34,6 +36,7 @@ type HistoryRepository struct {
 
 // NewHistoryRepository creates a new history repository for a symbol
 // historyPath is the directory where per-symbol .history.db files are stored
+// TODO: Update to use consolidated history.db with symbol column
 func NewHistoryRepository(symbol, historyPath string, log zerolog.Logger) *HistoryRepository {
 	return &HistoryRepository{
 		symbol:      strings.ToUpper(strings.TrimSpace(symbol)),

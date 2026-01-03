@@ -26,7 +26,7 @@ type PortfolioService struct {
 	allocRepo       AllocationTargetProvider
 	turnoverTracker *TurnoverTracker
 	attributionCalc *AttributionCalculator
-	configDB        *sql.DB // For querying securities
+	universeDB      *sql.DB // For querying securities (universe.db)
 	log             zerolog.Logger
 }
 
@@ -37,7 +37,7 @@ func NewPortfolioService(
 	allocRepo AllocationTargetProvider,
 	turnoverTracker *TurnoverTracker,
 	attributionCalc *AttributionCalculator,
-	configDB *sql.DB,
+	universeDB *sql.DB,
 	log zerolog.Logger,
 ) *PortfolioService {
 	return &PortfolioService{
@@ -46,7 +46,7 @@ func NewPortfolioService(
 		allocRepo:       allocRepo,
 		turnoverTracker: turnoverTracker,
 		attributionCalc: attributionCalc,
-		configDB:        configDB,
+		universeDB:      universeDB,
 		log:             log.With().Str("service", "portfolio").Logger(),
 	}
 }
@@ -245,7 +245,7 @@ func (s *PortfolioService) buildIndustryAllocations(
 func (s *PortfolioService) getAllSecurityCountriesAndIndustries() (map[string]bool, map[string]bool, error) {
 	query := "SELECT country, industry FROM securities WHERE active = 1"
 
-	rows, err := s.configDB.Query(query)
+	rows, err := s.universeDB.Query(query)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to query securities: %w", err)
 	}

@@ -31,14 +31,14 @@ func (s *Server) setupPlanningRoutes(r chi.Router) {
 		s.log,
 	)
 
-	// Initialize planner repository (uses configDB for planner state)
-	plannerRepo := repository.NewPlannerRepository(s.configDB, s.log)
+	// Initialize planner repository (uses agentsDB for sequences/evaluations)
+	plannerRepo := repository.NewPlannerRepository(s.agentsDB, s.log)
 
 	// Initialize config loader
 	configLoader := config.NewLoader(s.log)
 
-	// Initialize config repository
-	configRepo := repository.NewConfigRepository(s.configDB, configLoader, s.log)
+	// Initialize config repository (uses agentsDB for agent configs)
+	configRepo := repository.NewConfigRepository(s.agentsDB, configLoader, s.log)
 
 	// Initialize config validator
 	validator := config.NewValidator()

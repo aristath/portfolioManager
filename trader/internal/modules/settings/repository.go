@@ -11,12 +11,14 @@ import (
 
 // Repository handles settings database operations
 // Faithful translation from Python: app/repositories/settings.py -> SettingsRepository
+// Database: config.db (settings table)
 type Repository struct {
-	db  *sql.DB
+	db  *sql.DB // config.db
 	log zerolog.Logger
 }
 
 // NewRepository creates a new settings repository
+// db parameter should be config.db connection
 func NewRepository(db *sql.DB, log zerolog.Logger) *Repository {
 	return &Repository{
 		db:  db,

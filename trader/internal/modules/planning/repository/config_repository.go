@@ -12,13 +12,15 @@ import (
 )
 
 // ConfigRepository handles database operations for planner configurations.
+// Database: agents.db (agent_configs, config_history tables)
 type ConfigRepository struct {
-	db     *database.DB
+	db     *database.DB // agents.db
 	loader *config.Loader
 	log    zerolog.Logger
 }
 
 // NewConfigRepository creates a new config repository.
+// db parameter should be agents.db connection
 func NewConfigRepository(db *database.DB, loader *config.Loader, log zerolog.Logger) *ConfigRepository {
 	return &ConfigRepository{
 		db:     db,

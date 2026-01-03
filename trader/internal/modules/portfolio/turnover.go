@@ -13,15 +13,15 @@ import (
 // Faithful translation from Python: app/application/services/turnover_tracker.py
 type TurnoverTracker struct {
 	ledgerDB    *sql.DB // For trades
-	snapshotsDB *sql.DB // For portfolio snapshots
+	portfolioDB *sql.DB // For portfolio snapshots
 	log         zerolog.Logger
 }
 
 // NewTurnoverTracker creates a new turnover tracker
-func NewTurnoverTracker(ledgerDB, snapshotsDB *sql.DB, log zerolog.Logger) *TurnoverTracker {
+func NewTurnoverTracker(ledgerDB, portfolioDB *sql.DB, log zerolog.Logger) *TurnoverTracker {
 	return &TurnoverTracker{
 		ledgerDB:    ledgerDB,
-		snapshotsDB: snapshotsDB,
+		portfolioDB: portfolioDB,
 		log:         log.With().Str("service", "turnover").Logger(),
 	}
 }
@@ -231,7 +231,7 @@ func (t *TurnoverTracker) getSnapshotsInRange(startDate, endDate string) ([]snap
 		ORDER BY date
 	`
 
-	rows, err := t.snapshotsDB.Query(query, startDate, endDate)
+	rows, err := t.portfolioDB.Query(query, startDate, endDate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query snapshots: %w", err)
 	}

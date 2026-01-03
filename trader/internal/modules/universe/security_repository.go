@@ -12,15 +12,15 @@ import (
 // SecurityRepository handles security database operations
 // Faithful translation from Python: app/modules/universe/database/security_repository.py
 type SecurityRepository struct {
-	configDB *sql.DB // config.db - securities table
-	log      zerolog.Logger
+	universeDB *sql.DB // config.db - securities table
+	log        zerolog.Logger
 }
 
 // NewSecurityRepository creates a new security repository
-func NewSecurityRepository(configDB *sql.DB, log zerolog.Logger) *SecurityRepository {
+func NewSecurityRepository(universeDB *sql.DB, log zerolog.Logger) *SecurityRepository {
 	return &SecurityRepository{
-		configDB: configDB,
-		log:      log.With().Str("repo", "security").Logger(),
+		universeDB: universeDB,
+		log:        log.With().Str("repo", "security").Logger(),
 	}
 }
 
@@ -29,7 +29,7 @@ func NewSecurityRepository(configDB *sql.DB, log zerolog.Logger) *SecurityReposi
 func (r *SecurityRepository) GetBySymbol(symbol string) (*Security, error) {
 	query := "SELECT * FROM securities WHERE symbol = ?"
 
-	rows, err := r.configDB.Query(query, strings.ToUpper(strings.TrimSpace(symbol)))
+	rows, err := r.universeDB.Query(query, strings.ToUpper(strings.TrimSpace(symbol)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query security by symbol: %w", err)
 	}
@@ -52,7 +52,7 @@ func (r *SecurityRepository) GetBySymbol(symbol string) (*Security, error) {
 func (r *SecurityRepository) GetByISIN(isin string) (*Security, error) {
 	query := "SELECT * FROM securities WHERE isin = ?"
 
-	rows, err := r.configDB.Query(query, strings.ToUpper(strings.TrimSpace(isin)))
+	rows, err := r.universeDB.Query(query, strings.ToUpper(strings.TrimSpace(isin)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query security by ISIN: %w", err)
 	}
@@ -99,7 +99,7 @@ func (r *SecurityRepository) GetByIdentifier(identifier string) (*Security, erro
 func (r *SecurityRepository) GetAllActive() ([]Security, error) {
 	query := "SELECT * FROM securities WHERE active = 1"
 
-	rows, err := r.configDB.Query(query)
+	rows, err := r.universeDB.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query active securities: %w", err)
 	}
@@ -126,7 +126,7 @@ func (r *SecurityRepository) GetAllActive() ([]Security, error) {
 func (r *SecurityRepository) GetAll() ([]Security, error) {
 	query := "SELECT * FROM securities"
 
-	rows, err := r.configDB.Query(query)
+	rows, err := r.universeDB.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query all securities: %w", err)
 	}
@@ -158,7 +158,7 @@ func (r *SecurityRepository) GetByBucket(bucketID string, activeOnly bool) ([]Se
 		query = "SELECT * FROM securities WHERE bucket_id = ?"
 	}
 
-	rows, err := r.configDB.Query(query, bucketID)
+	rows, err := r.universeDB.Query(query, bucketID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query securities by bucket: %w", err)
 	}
@@ -189,7 +189,7 @@ func (r *SecurityRepository) Create(security Security) error {
 	security.Symbol = strings.ToUpper(strings.TrimSpace(security.Symbol))
 
 	// Begin transaction
-	tx, err := r.configDB.Begin()
+	tx, err := r.universeDB.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
@@ -286,7 +286,7 @@ func (r *SecurityRepository) Update(symbol string, updates map[string]interface{
 	values = append(values, strings.ToUpper(strings.TrimSpace(symbol)))
 
 	// Begin transaction
-	tx, err := r.configDB.Begin()
+	tx, err := r.universeDB.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
@@ -317,10 +317,10 @@ func (r *SecurityRepository) Delete(symbol string) error {
 
 // GetWithScores returns all active securities with their scores and positions
 // Faithful translation of Python: async def get_with_scores(self) -> List[dict]
-// Note: This method accesses multiple databases (config.db and state.db) - architecture violation
-func (r *SecurityRepository) GetWithScores(stateDB *sql.DB) ([]SecurityWithScore, error) {
-	// Fetch securities from config.db
-	securityRows, err := r.configDB.Query("SELECT * FROM securities WHERE active = 1")
+// Note: This method accesses multiple databases (universe.db and portfolio.db) - architecture violation
+func (r *SecurityRepository) GetWithScores(portfolioDB *sql.DB) ([]SecurityWithScore, error) {
+	// Fetch securities from universe.db
+	securityRows, err := r.universeDB.Query("SELECT * FROM securities WHERE active = 1")
 	if err != nil {
 		return nil, fmt.Errorf("failed to query securities: %w", err)
 	}
@@ -361,15 +361,15 @@ func (r *SecurityRepository) GetWithScores(stateDB *sql.DB) ([]SecurityWithScore
 		return nil, fmt.Errorf("error iterating securities: %w", err)
 	}
 
-	// Fetch scores from state.db
-	scoreRows, err := stateDB.Query("SELECT * FROM scores")
+	// Fetch scores from portfolio.db
+	scoreRows, err := portfolioDB.Query("SELECT * FROM scores")
 	if err != nil {
 		return nil, fmt.Errorf("failed to query scores: %w", err)
 	}
 	defer scoreRows.Close()
 
 	scoresMap := make(map[string]SecurityScore)
-	scoreRepo := NewScoreRepository(stateDB, r.log)
+	scoreRepo := NewScoreRepository(portfolioDB, r.log)
 	for scoreRows.Next() {
 		score, err := scoreRepo.scanScore(scoreRows)
 		if err != nil {
@@ -382,8 +382,8 @@ func (r *SecurityRepository) GetWithScores(stateDB *sql.DB) ([]SecurityWithScore
 		return nil, fmt.Errorf("error iterating scores: %w", err)
 	}
 
-	// Fetch positions from state.db
-	positionRows, err := stateDB.Query("SELECT * FROM positions")
+	// Fetch positions from portfolio.db
+	positionRows, err := portfolioDB.Query("SELECT * FROM positions")
 	if err != nil {
 		return nil, fmt.Errorf("failed to query positions: %w", err)
 	}

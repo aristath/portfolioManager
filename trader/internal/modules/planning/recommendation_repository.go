@@ -15,8 +15,9 @@ import (
 // TODO: Full implementation matching Python can be added later.
 //
 // Faithful translation from Python: app/repositories/recommendation.py
+// Database: cache.db (recommendations table)
 type RecommendationRepository struct {
-	db  *sql.DB
+	db  *sql.DB // cache.db
 	log zerolog.Logger
 }
 

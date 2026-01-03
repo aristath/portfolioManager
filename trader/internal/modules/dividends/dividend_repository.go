@@ -13,15 +13,15 @@ import (
 // DividendRepository handles dividend database operations
 // Faithful translation from Python: app/modules/dividends/database/dividend_repository.py
 type DividendRepository struct {
-	dividendsDB *sql.DB // dividends.db - dividend_history table
-	log         zerolog.Logger
+	ledgerDB *sql.DB // dividends.db - dividend_history table
+	log      zerolog.Logger
 }
 
 // NewDividendRepository creates a new dividend repository
-func NewDividendRepository(dividendsDB *sql.DB, log zerolog.Logger) *DividendRepository {
+func NewDividendRepository(ledgerDB *sql.DB, log zerolog.Logger) *DividendRepository {
 	return &DividendRepository{
-		dividendsDB: dividendsDB,
-		log:         log.With().Str("repo", "dividend").Logger(),
+		ledgerDB: ledgerDB,
+		log:      log.With().Str("repo", "dividend").Logger(),
 	}
 }
 
@@ -38,7 +38,7 @@ func (r *DividendRepository) Create(dividend *DividendRecord) error {
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
-	result, err := r.dividendsDB.Exec(query,
+	result, err := r.ledgerDB.Exec(query,
 		strings.ToUpper(dividend.Symbol),
 		dividend.ISIN,
 		nullInt(dividend.CashFlowID),
@@ -81,7 +81,7 @@ func (r *DividendRepository) Create(dividend *DividendRecord) error {
 func (r *DividendRepository) GetByID(id int) (*DividendRecord, error) {
 	query := "SELECT * FROM dividend_history WHERE id = ?"
 
-	row := r.dividendsDB.QueryRow(query, id)
+	row := r.ledgerDB.QueryRow(query, id)
 	dividend, err := r.scanDividend(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -98,7 +98,7 @@ func (r *DividendRepository) GetByID(id int) (*DividendRecord, error) {
 func (r *DividendRepository) GetByCashFlowID(cashFlowID int) (*DividendRecord, error) {
 	query := "SELECT * FROM dividend_history WHERE cash_flow_id = ?"
 
-	row := r.dividendsDB.QueryRow(query, cashFlowID)
+	row := r.ledgerDB.QueryRow(query, cashFlowID)
 	dividend, err := r.scanDividend(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -116,7 +116,7 @@ func (r *DividendRepository) ExistsForCashFlow(cashFlowID int) (bool, error) {
 	query := "SELECT 1 FROM dividend_history WHERE cash_flow_id = ? LIMIT 1"
 
 	var exists int
-	err := r.dividendsDB.QueryRow(query, cashFlowID).Scan(&exists)
+	err := r.ledgerDB.QueryRow(query, cashFlowID).Scan(&exists)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
@@ -136,7 +136,7 @@ func (r *DividendRepository) GetBySymbol(symbol string) ([]DividendRecord, error
 		ORDER BY payment_date DESC
 	`
 
-	rows, err := r.dividendsDB.Query(query, strings.ToUpper(symbol))
+	rows, err := r.ledgerDB.Query(query, strings.ToUpper(symbol))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get dividends by symbol: %w", err)
 	}
@@ -163,7 +163,7 @@ func (r *DividendRepository) GetByISIN(isin string) ([]DividendRecord, error) {
 		ORDER BY payment_date DESC
 	`
 
-	rows, err := r.dividendsDB.Query(query, strings.ToUpper(isin))
+	rows, err := r.ledgerDB.Query(query, strings.ToUpper(isin))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get dividends by ISIN: %w", err)
 	}
@@ -207,10 +207,10 @@ func (r *DividendRepository) GetAll(limit int) ([]DividendRecord, error) {
 
 	if limit > 0 {
 		query = "SELECT * FROM dividend_history ORDER BY payment_date DESC LIMIT ?"
-		rows, err = r.dividendsDB.Query(query, limit)
+		rows, err = r.ledgerDB.Query(query, limit)
 	} else {
 		query = "SELECT * FROM dividend_history ORDER BY payment_date DESC"
-		rows, err = r.dividendsDB.Query(query)
+		rows, err = r.ledgerDB.Query(query)
 	}
 
 	if err != nil {
@@ -240,7 +240,7 @@ func (r *DividendRepository) GetPendingBonuses() (map[string]float64, error) {
 		GROUP BY symbol
 	`
 
-	rows, err := r.dividendsDB.Query(query)
+	rows, err := r.ledgerDB.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get pending bonuses: %w", err)
 	}
@@ -269,7 +269,7 @@ func (r *DividendRepository) GetPendingBonus(symbol string) (float64, error) {
 	`
 
 	var total float64
-	err := r.dividendsDB.QueryRow(query, strings.ToUpper(symbol)).Scan(&total)
+	err := r.ledgerDB.QueryRow(query, strings.ToUpper(symbol)).Scan(&total)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get pending bonus: %w", err)
 	}
@@ -291,7 +291,7 @@ func (r *DividendRepository) MarkReinvested(dividendID int, quantity int) error 
 		WHERE id = ?
 	`
 
-	_, err := r.dividendsDB.Exec(query, now, quantity, dividendID)
+	_, err := r.ledgerDB.Exec(query, now, quantity, dividendID)
 	if err != nil {
 		return fmt.Errorf("failed to mark dividend as reinvested: %w", err)
 	}
@@ -313,7 +313,7 @@ func (r *DividendRepository) SetPendingBonus(dividendID int, bonus float64) erro
 		WHERE id = ?
 	`
 
-	_, err := r.dividendsDB.Exec(query, bonus, dividendID)
+	_, err := r.ledgerDB.Exec(query, bonus, dividendID)
 	if err != nil {
 		return fmt.Errorf("failed to set pending bonus: %w", err)
 	}
@@ -332,7 +332,7 @@ func (r *DividendRepository) ClearBonus(symbol string) (int, error) {
 		WHERE symbol = ? AND bonus_cleared = 0 AND pending_bonus > 0
 	`
 
-	result, err := r.dividendsDB.Exec(query, now, strings.ToUpper(symbol))
+	result, err := r.ledgerDB.Exec(query, now, strings.ToUpper(symbol))
 	if err != nil {
 		return 0, fmt.Errorf("failed to clear bonus: %w", err)
 	}
@@ -361,7 +361,7 @@ func (r *DividendRepository) GetUnreinvestedDividends(minAmountEUR float64) ([]D
 		ORDER BY payment_date ASC
 	`
 
-	rows, err := r.dividendsDB.Query(query, minAmountEUR)
+	rows, err := r.ledgerDB.Query(query, minAmountEUR)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get unreinvested dividends: %w", err)
 	}
@@ -389,7 +389,7 @@ func (r *DividendRepository) GetTotalDividendsBySymbol() (map[string]float64, er
 		ORDER BY total DESC
 	`
 
-	rows, err := r.dividendsDB.Query(query)
+	rows, err := r.ledgerDB.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get total dividends by symbol: %w", err)
 	}
@@ -418,7 +418,7 @@ func (r *DividendRepository) GetTotalReinvested() (float64, error) {
 	`
 
 	var total float64
-	err := r.dividendsDB.QueryRow(query).Scan(&total)
+	err := r.ledgerDB.QueryRow(query).Scan(&total)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get total reinvested: %w", err)
 	}
@@ -437,7 +437,7 @@ func (r *DividendRepository) GetReinvestmentRate() (float64, error) {
 	`
 
 	var reinvested, total float64
-	err := r.dividendsDB.QueryRow(query).Scan(&reinvested, &total)
+	err := r.ledgerDB.QueryRow(query).Scan(&reinvested, &total)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get reinvestment rate: %w", err)
 	}

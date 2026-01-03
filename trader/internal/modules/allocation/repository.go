@@ -10,12 +10,14 @@ import (
 
 // Repository handles allocation target database operations
 // Faithful translation from Python: app/modules/allocation/database/allocation_repository.py
+// Database: config.db (allocation_targets table)
 type Repository struct {
-	db  *sql.DB
+	db  *sql.DB // config.db
 	log zerolog.Logger
 }
 
 // NewRepository creates a new allocation repository
+// db parameter should be config.db connection
 func NewRepository(db *sql.DB, log zerolog.Logger) *Repository {
 	return &Repository{
 		db:  db,

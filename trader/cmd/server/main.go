@@ -49,7 +49,21 @@ func main() {
 		log.Fatal().Err(err).Msg("Failed to load configuration")
 	}
 
-	// Initialize databases (Python uses multiple SQLite databases)
+	// Initialize databases - NEW 8-database architecture
+	// Architecture: universe, config, ledger, portfolio, satellites, agents, history, cache
+
+	// 1. universe.db - Investment universe (securities, groups)
+	universeDB, err := database.New(database.Config{
+		Path:    "../data/universe.db",
+		Profile: database.ProfileStandard,
+		Name:    "universe",
+	})
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize universe database")
+	}
+	defer universeDB.Close()
+
+	// 2. config.db - Application configuration (REDUCED: settings, allocation targets)
 	configDB, err := database.New(database.Config{
 		Path:    cfg.DatabasePath,
 		Profile: database.ProfileStandard,
@@ -60,32 +74,7 @@ func main() {
 	}
 	defer configDB.Close()
 
-	// state.db - positions, scores
-	stateDB, err := database.New(database.Config{
-		Path:    "../data/state.db",
-		Profile: database.ProfileStandard,
-		Name:    "state",
-	})
-	if err != nil {
-		// Note: log.Fatal calls os.Exit, preventing deferred cleanup
-		// In practice, OS cleans up file handles on exit, so risk is low
-		//nolint:gocritic // exitAfterDefer: Accepted tradeoff for simpler code
-		log.Fatal().Err(err).Msg("Failed to initialize state database")
-	}
-	defer stateDB.Close()
-
-	// snapshots.db - portfolio snapshots
-	snapshotsDB, err := database.New(database.Config{
-		Path:    "../data/snapshots.db",
-		Profile: database.ProfileStandard,
-		Name:    "snapshots",
-	})
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to initialize snapshots database")
-	}
-	defer snapshotsDB.Close()
-
-	// ledger.db - trades (append-only ledger)
+	// 3. ledger.db - Immutable financial audit trail (EXPANDED: trades, cash flows, dividends)
 	ledgerDB, err := database.New(database.Config{
 		Path:    "../data/ledger.db",
 		Profile: database.ProfileLedger, // Maximum safety for immutable audit trail
@@ -96,18 +85,19 @@ func main() {
 	}
 	defer ledgerDB.Close()
 
-	// dividends.db - dividend records with DRIP tracking
-	dividendsDB, err := database.New(database.Config{
-		Path:    "../data/dividends.db",
+	// 4. portfolio.db - Current portfolio state (positions, scores, metrics, snapshots)
+	portfolioDB, err := database.New(database.Config{
+		Path:    "../data/portfolio.db",
 		Profile: database.ProfileStandard,
-		Name:    "dividends",
+		Name:    "portfolio",
 	})
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to initialize dividends database")
+		//nolint:gocritic // exitAfterDefer: Accepted tradeoff for simpler code
+		log.Fatal().Err(err).Msg("Failed to initialize portfolio database")
 	}
-	defer dividendsDB.Close()
+	defer portfolioDB.Close()
 
-	// satellites.db - bucket management and satellite accounts
+	// 5. satellites.db - Multi-bucket portfolio system (UPDATED: added agent_id)
 	satellitesDB, err := database.New(database.Config{
 		Path:    "../data/satellites.db",
 		Profile: database.ProfileStandard,
@@ -118,9 +108,44 @@ func main() {
 	}
 	defer satellitesDB.Close()
 
-	// Run migrations
-	if err := configDB.Migrate(); err != nil {
-		log.Fatal().Err(err).Msg("Failed to run migrations")
+	// 6. agents.db - Strategy management (TOML configs, sequences, evaluations)
+	agentsDB, err := database.New(database.Config{
+		Path:    "../data/agents.db",
+		Profile: database.ProfileStandard,
+		Name:    "agents",
+	})
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize agents database")
+	}
+	defer agentsDB.Close()
+
+	// 7. history.db - Historical time-series data (prices, rates, cleanup tracking)
+	historyDB, err := database.New(database.Config{
+		Path:    "../data/history.db",
+		Profile: database.ProfileStandard,
+		Name:    "history",
+	})
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize history database")
+	}
+	defer historyDB.Close()
+
+	// 8. cache.db - Ephemeral operational data (recommendations, cache)
+	cacheDB, err := database.New(database.Config{
+		Path:    "../data/cache.db",
+		Profile: database.ProfileCache, // Maximum speed for ephemeral data
+		Name:    "cache",
+	})
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize cache database")
+	}
+	defer cacheDB.Close()
+
+	// Run migrations on all databases
+	for _, db := range []*database.DB{universeDB, configDB, ledgerDB, portfolioDB, satellitesDB, agentsDB, historyDB, cacheDB} {
+		if err := db.Migrate(); err != nil {
+			log.Fatal().Err(err).Str("database", db.Name()).Msg("Failed to run migrations")
+		}
 	}
 
 	// Initialize scheduler
@@ -129,7 +154,7 @@ func main() {
 	defer sched.Stop()
 
 	// Register background jobs
-	jobs, err := registerJobs(sched, configDB, stateDB, snapshotsDB, ledgerDB, dividendsDB, satellitesDB, cfg, log)
+	jobs, err := registerJobs(sched, universeDB, configDB, ledgerDB, portfolioDB, satellitesDB, agentsDB, historyDB, cacheDB, cfg, log)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to register jobs")
 	}
@@ -138,12 +163,14 @@ func main() {
 	srv := server.New(server.Config{
 		Port:         cfg.Port,
 		Log:          log,
+		UniverseDB:   universeDB,
 		ConfigDB:     configDB,
-		StateDB:      stateDB,
-		SnapshotsDB:  snapshotsDB,
 		LedgerDB:     ledgerDB,
-		DividendsDB:  dividendsDB,
+		PortfolioDB:  portfolioDB,
 		SatellitesDB: satellitesDB,
+		AgentsDB:     agentsDB,
+		HistoryDB:    historyDB,
+		CacheDB:      cacheDB,
 		Config:       cfg,
 		DevMode:      cfg.DevMode,
 		Scheduler:    sched,
@@ -200,14 +227,14 @@ type JobInstances struct {
 	EventBasedTrading       scheduler.Job
 }
 
-func registerJobs(sched *scheduler.Scheduler, configDB, stateDB, snapshotsDB, ledgerDB, dividendsDB, satellitesDB *database.DB, cfg *config.Config, log zerolog.Logger) (*JobInstances, error) {
+func registerJobs(sched *scheduler.Scheduler, universeDB, configDB, ledgerDB, portfolioDB, satellitesDB, agentsDB, historyDB, cacheDB *database.DB, cfg *config.Config, log zerolog.Logger) (*JobInstances, error) {
 	// Initialize required repositories and services for jobs
 
-	// Repositories
-	positionRepo := portfolio.NewPositionRepository(stateDB.Conn(), configDB.Conn(), log)
-	securityRepo := universe.NewSecurityRepository(configDB.Conn(), log)
-	scoreRepo := universe.NewScoreRepository(stateDB.Conn(), log)
-	dividendRepo := dividends.NewDividendRepository(dividendsDB.Conn(), log)
+	// Repositories - NEW 8-database architecture
+	positionRepo := portfolio.NewPositionRepository(portfolioDB.Conn(), universeDB.Conn(), log)
+	securityRepo := universe.NewSecurityRepository(universeDB.Conn(), log)
+	scoreRepo := universe.NewScoreRepository(portfolioDB.Conn(), log)
+	dividendRepo := dividends.NewDividendRepository(ledgerDB.Conn(), log)
 	bucketRepo := satellites.NewBucketRepository(satellitesDB.Conn(), log)
 	balanceRepo := satellites.NewBalanceRepository(satellitesDB.Conn(), log)
 
@@ -247,11 +274,11 @@ func registerJobs(sched *scheduler.Scheduler, configDB, stateDB, snapshotsDB, le
 		log,
 	)
 
-	portfolioRepo := portfolio.NewPortfolioRepository(snapshotsDB.Conn(), log)
+	portfolioRepo := portfolio.NewPortfolioRepository(portfolioDB.Conn(), log)
 	allocRepo := allocation.NewRepository(configDB.Conn(), log)
-	turnoverTracker := portfolio.NewTurnoverTracker(ledgerDB.Conn(), snapshotsDB.Conn(), log)
-	attributionCalc := portfolio.NewAttributionCalculator(tradeRepo, configDB.Conn(), cfg.HistoryPath, log)
-	portfolioService := portfolio.NewPortfolioService(portfolioRepo, positionRepo, allocRepo, turnoverTracker, attributionCalc, configDB.Conn(), log)
+	turnoverTracker := portfolio.NewTurnoverTracker(ledgerDB.Conn(), portfolioDB.Conn(), log)
+	attributionCalc := portfolio.NewAttributionCalculator(tradeRepo, historyDB.Conn(), cfg.HistoryPath, log)
+	portfolioService := portfolio.NewPortfolioService(portfolioRepo, positionRepo, allocRepo, turnoverTracker, attributionCalc, universeDB.Conn(), log)
 
 	// Cash flows service
 	cashFlowsService := cash_flows.NewCashFlowsService(log)
@@ -264,14 +291,17 @@ func registerJobs(sched *scheduler.Scheduler, configDB, stateDB, snapshotsDB, le
 
 	// Register Job 1: Health Check (daily at 4:00 AM)
 	healthCheck := scheduler.NewHealthCheckJob(scheduler.HealthCheckConfig{
-		Log:         log,
-		DataDir:     "../data",
-		ConfigDB:    configDB,
-		StateDB:     stateDB,
-		SnapshotsDB: snapshotsDB,
-		LedgerDB:    ledgerDB,
-		DividendsDB: dividendsDB,
-		HistoryPath: cfg.HistoryPath,
+		Log:          log,
+		DataDir:      "../data",
+		UniverseDB:   universeDB,
+		ConfigDB:     configDB,
+		LedgerDB:     ledgerDB,
+		PortfolioDB:  portfolioDB,
+		SatellitesDB: satellitesDB,
+		AgentsDB:     agentsDB,
+		HistoryDB:    historyDB,
+		CacheDB:      cacheDB,
+		HistoryPath:  cfg.HistoryPath,
 	})
 	if err := sched.AddJob("0 0 4 * * *", healthCheck); err != nil {
 		return nil, fmt.Errorf("failed to register health_check job: %w", err)
@@ -327,9 +357,9 @@ func registerJobs(sched *scheduler.Scheduler, configDB, stateDB, snapshotsDB, le
 	}
 
 	// Planning module repositories and services
-	recommendationRepo := planning.NewRecommendationRepository(configDB.Conn(), log)
+	recommendationRepo := planning.NewRecommendationRepository(cacheDB.Conn(), log)
 	configLoader := planningconfig.NewLoader(log)
-	plannerConfigRepo := planningrepo.NewConfigRepository(configDB, configLoader, log)
+	plannerConfigRepo := planningrepo.NewConfigRepository(agentsDB, configLoader, log)
 	opportunitiesService := opportunities.NewService(log)
 	sequencesService := sequences.NewService(log)
 	evaluationService := planningevaluation.NewService(4, log) // 4 workers

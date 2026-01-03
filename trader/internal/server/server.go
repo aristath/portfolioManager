@@ -39,32 +39,36 @@ import (
 	"github.com/aristath/arduino-trader/internal/services"
 )
 
-// Config holds server configuration
+// Config holds server configuration - NEW 8-database architecture
 type Config struct {
 	Log          zerolog.Logger
+	UniverseDB   *database.DB
 	ConfigDB     *database.DB
-	StateDB      *database.DB
-	SnapshotsDB  *database.DB
 	LedgerDB     *database.DB
-	DividendsDB  *database.DB
+	PortfolioDB  *database.DB
 	SatellitesDB *database.DB
+	AgentsDB     *database.DB
+	HistoryDB    *database.DB
+	CacheDB      *database.DB
 	Config       *config.Config
 	Port         int
 	DevMode      bool
 	Scheduler    *scheduler.Scheduler
 }
 
-// Server represents the HTTP server
+// Server represents the HTTP server - NEW 8-database architecture
 type Server struct {
 	router         *chi.Mux
 	server         *http.Server
 	log            zerolog.Logger
+	universeDB     *database.DB
 	configDB       *database.DB
-	stateDB        *database.DB
-	snapshotsDB    *database.DB
 	ledgerDB       *database.DB
-	dividendsDB    *database.DB
+	portfolioDB    *database.DB
 	satellitesDB   *database.DB
+	agentsDB       *database.DB
+	historyDB      *database.DB
+	cacheDB        *database.DB
 	cfg            *config.Config
 	systemHandlers *SystemHandlers
 	scheduler      *scheduler.Scheduler
@@ -77,22 +81,23 @@ func New(cfg Config) *Server {
 	systemHandlers := NewSystemHandlers(
 		cfg.Log,
 		dataDir,
-		cfg.StateDB,
-		cfg.StateDB, // settingsDB (using stateDB for now)
-		cfg.SnapshotsDB,
+		cfg.PortfolioDB,
 		cfg.ConfigDB,
+		cfg.UniverseDB,
 		cfg.Scheduler,
 	)
 
 	s := &Server{
 		router:         chi.NewRouter(),
 		log:            cfg.Log.With().Str("component", "server").Logger(),
+		universeDB:     cfg.UniverseDB,
 		configDB:       cfg.ConfigDB,
-		stateDB:        cfg.StateDB,
-		snapshotsDB:    cfg.SnapshotsDB,
 		ledgerDB:       cfg.LedgerDB,
-		dividendsDB:    cfg.DividendsDB,
+		portfolioDB:    cfg.PortfolioDB,
 		satellitesDB:   cfg.SatellitesDB,
+		agentsDB:       cfg.AgentsDB,
+		historyDB:      cfg.HistoryDB,
+		cacheDB:        cfg.CacheDB,
 		cfg:            cfg.Config,
 		systemHandlers: systemHandlers,
 		scheduler:      cfg.Scheduler,
@@ -243,9 +248,9 @@ func (s *Server) setupSystemRoutes(r chi.Router) {
 	logHandlers := NewLogHandlers(s.log, dataDir)
 
 	// Initialize universe handlers for sync operations
-	securityRepo := universe.NewSecurityRepository(s.configDB.Conn(), s.log)
-	scoreRepo := universe.NewScoreRepository(s.stateDB.Conn(), s.log)
-	positionRepo := portfolio.NewPositionRepository(s.stateDB.Conn(), s.configDB.Conn(), s.log)
+	securityRepo := universe.NewSecurityRepository(s.universeDB.Conn(), s.log)
+	scoreRepo := universe.NewScoreRepository(s.portfolioDB.Conn(), s.log)
+	positionRepo := portfolio.NewPositionRepository(s.portfolioDB.Conn(), s.universeDB.Conn(), s.log)
 	yahooClient := yahoo.NewClient(s.log)
 	securityScorer := scorers.NewSecurityScorer()
 	historyDB := universe.NewHistoryDB("../data/history", s.log)
@@ -274,17 +279,17 @@ func (s *Server) setupSystemRoutes(r chi.Router) {
 		securityRepo,
 		historicalSync1,
 		yahooClient,
-		nil,              // scoreCalculator - Will be set after handlers are created
-		tradernetClient,  // For RebuildUniverseFromPortfolio
-		setupService1,    // For adding missing securities
-		s.stateDB.Conn(), // For SyncAllPrices position updates
+		nil,                  // scoreCalculator - Will be set after handlers are created
+		tradernetClient,      // For RebuildUniverseFromPortfolio
+		setupService1,        // For adding missing securities
+		s.portfolioDB.Conn(), // For SyncAllPrices position updates
 		s.log,
 	)
 
 	universeHandlers := universe.NewUniverseHandlers(
 		securityRepo,
 		scoreRepo,
-		s.stateDB.Conn(),
+		s.portfolioDB.Conn(),
 		positionRepo,
 		securityScorer,
 		yahooClient,
@@ -344,13 +349,13 @@ func (s *Server) setupSystemRoutes(r chi.Router) {
 func (s *Server) setupAllocationRoutes(r chi.Router) {
 	// Initialize allocation module components
 	allocRepo := allocation.NewRepository(s.configDB.Conn(), s.log)
-	groupingRepo := allocation.NewGroupingRepository(s.configDB.Conn(), s.log)
-	alertService := allocation.NewConcentrationAlertService(s.stateDB.Conn(), s.log)
+	groupingRepo := allocation.NewGroupingRepository(s.universeDB.Conn(), s.log)
+	alertService := allocation.NewConcentrationAlertService(s.portfolioDB.Conn(), s.log)
 
 	// Portfolio service (needed for allocation calculations)
-	positionRepo := portfolio.NewPositionRepository(s.stateDB.Conn(), s.configDB.Conn(), s.log)
-	portfolioRepo := portfolio.NewPortfolioRepository(s.snapshotsDB.Conn(), s.log)
-	turnoverTracker := portfolio.NewTurnoverTracker(s.ledgerDB.Conn(), s.snapshotsDB.Conn(), s.log)
+	positionRepo := portfolio.NewPositionRepository(s.portfolioDB.Conn(), s.universeDB.Conn(), s.log)
+	portfolioRepo := portfolio.NewPortfolioRepository(s.portfolioDB.Conn(), s.log)
+	turnoverTracker := portfolio.NewTurnoverTracker(s.ledgerDB.Conn(), s.portfolioDB.Conn(), s.log)
 	tradeRepo := portfolio.NewTradeRepository(s.ledgerDB.Conn(), s.log)
 	attributionCalc := portfolio.NewAttributionCalculator(tradeRepo, s.configDB.Conn(), s.cfg.HistoryPath, s.log)
 	portfolioService := portfolio.NewPortfolioService(
@@ -359,7 +364,7 @@ func (s *Server) setupAllocationRoutes(r chi.Router) {
 		allocRepo,
 		turnoverTracker,
 		attributionCalc,
-		s.configDB.Conn(),
+		s.universeDB.Conn(),
 		s.log,
 	)
 
@@ -393,10 +398,10 @@ func (s *Server) setupAllocationRoutes(r chi.Router) {
 // setupPortfolioRoutes configures portfolio module routes
 func (s *Server) setupPortfolioRoutes(r chi.Router) {
 	// Initialize portfolio module components
-	positionRepo := portfolio.NewPositionRepository(s.stateDB.Conn(), s.configDB.Conn(), s.log)
-	portfolioRepo := portfolio.NewPortfolioRepository(s.snapshotsDB.Conn(), s.log)
+	positionRepo := portfolio.NewPositionRepository(s.portfolioDB.Conn(), s.universeDB.Conn(), s.log)
+	portfolioRepo := portfolio.NewPortfolioRepository(s.portfolioDB.Conn(), s.log)
 	allocRepo := allocation.NewRepository(s.configDB.Conn(), s.log)
-	turnoverTracker := portfolio.NewTurnoverTracker(s.ledgerDB.Conn(), s.snapshotsDB.Conn(), s.log)
+	turnoverTracker := portfolio.NewTurnoverTracker(s.ledgerDB.Conn(), s.portfolioDB.Conn(), s.log)
 	tradeRepo := portfolio.NewTradeRepository(s.ledgerDB.Conn(), s.log)
 	attributionCalc := portfolio.NewAttributionCalculator(tradeRepo, s.configDB.Conn(), s.cfg.HistoryPath, s.log)
 	portfolioService := portfolio.NewPortfolioService(
@@ -405,7 +410,7 @@ func (s *Server) setupPortfolioRoutes(r chi.Router) {
 		allocRepo,
 		turnoverTracker,
 		attributionCalc,
-		s.configDB.Conn(),
+		s.universeDB.Conn(),
 		s.log,
 	)
 
@@ -435,10 +440,10 @@ func (s *Server) setupPortfolioRoutes(r chi.Router) {
 // setupUniverseRoutes configures universe/securities module routes
 func (s *Server) setupUniverseRoutes(r chi.Router) {
 	// Initialize universe module components
-	securityRepo := universe.NewSecurityRepository(s.configDB.Conn(), s.log)
-	scoreRepo := universe.NewScoreRepository(s.stateDB.Conn(), s.log)
+	securityRepo := universe.NewSecurityRepository(s.universeDB.Conn(), s.log)
+	scoreRepo := universe.NewScoreRepository(s.portfolioDB.Conn(), s.log)
 	// Position repo for joining position data (optional for now)
-	positionRepo := portfolio.NewPositionRepository(s.stateDB.Conn(), s.configDB.Conn(), s.log)
+	positionRepo := portfolio.NewPositionRepository(s.portfolioDB.Conn(), s.universeDB.Conn(), s.log)
 
 	// Yahoo Finance client for fundamental data
 	yahooClient := yahoo.NewClient(s.log)
@@ -476,17 +481,17 @@ func (s *Server) setupUniverseRoutes(r chi.Router) {
 		securityRepo,
 		historicalSync,
 		yahooClient,
-		scoreCalculator,  // Will be set after handlers are created
-		tradernetClient,  // For RebuildUniverseFromPortfolio
-		setupService,     // For adding missing securities
-		s.stateDB.Conn(), // For SyncAllPrices position updates
+		scoreCalculator,      // Will be set after handlers are created
+		tradernetClient,      // For RebuildUniverseFromPortfolio
+		setupService,         // For adding missing securities
+		s.portfolioDB.Conn(), // For SyncAllPrices position updates
 		s.log,
 	)
 
 	handler := universe.NewUniverseHandlers(
 		securityRepo,
 		scoreRepo,
-		s.stateDB.Conn(), // Pass stateDB for GetWithScores
+		s.portfolioDB.Conn(), // Pass portfolioDB for GetWithScores
 		positionRepo,
 		securityScorer,
 		yahooClient,
@@ -544,14 +549,14 @@ func (s *Server) setupTradingRoutes(r chi.Router) {
 	tradeRepo := trading.NewTradeRepository(s.ledgerDB.Conn(), s.log)
 
 	// Security repo for enriching trade data with security names
-	securityRepo := universe.NewSecurityRepository(s.configDB.Conn(), s.log)
+	securityRepo := universe.NewSecurityRepository(s.universeDB.Conn(), s.log)
 	securityFetcher := &securityFetcherAdapter{repo: securityRepo}
 
 	// Portfolio service (needed for allocation endpoint)
 	allocRepo := allocation.NewRepository(s.configDB.Conn(), s.log)
-	positionRepo := portfolio.NewPositionRepository(s.stateDB.Conn(), s.configDB.Conn(), s.log)
-	portfolioRepo := portfolio.NewPortfolioRepository(s.snapshotsDB.Conn(), s.log)
-	turnoverTracker := portfolio.NewTurnoverTracker(s.ledgerDB.Conn(), s.snapshotsDB.Conn(), s.log)
+	positionRepo := portfolio.NewPositionRepository(s.portfolioDB.Conn(), s.universeDB.Conn(), s.log)
+	portfolioRepo := portfolio.NewPortfolioRepository(s.portfolioDB.Conn(), s.log)
+	turnoverTracker := portfolio.NewTurnoverTracker(s.ledgerDB.Conn(), s.portfolioDB.Conn(), s.log)
 	portfolioTradeRepo := portfolio.NewTradeRepository(s.ledgerDB.Conn(), s.log)
 	attributionCalc := portfolio.NewAttributionCalculator(portfolioTradeRepo, s.configDB.Conn(), s.cfg.HistoryPath, s.log)
 	portfolioService := portfolio.NewPortfolioService(
@@ -560,12 +565,12 @@ func (s *Server) setupTradingRoutes(r chi.Router) {
 		allocRepo,
 		turnoverTracker,
 		attributionCalc,
-		s.configDB.Conn(),
+		s.universeDB.Conn(),
 		s.log,
 	)
 
 	// Concentration alert service (needed for allocation endpoint)
-	alertService := allocation.NewConcentrationAlertService(s.stateDB.Conn(), s.log)
+	alertService := allocation.NewConcentrationAlertService(s.portfolioDB.Conn(), s.log)
 
 	// Tradernet microservice client
 	tradernetClient := tradernet.NewClient(s.cfg.TradernetServiceURL, s.log)
@@ -617,7 +622,7 @@ func (s *Server) setupTradingRoutes(r chi.Router) {
 // setupDividendRoutes configures dividend module routes
 func (s *Server) setupDividendRoutes(r chi.Router) {
 	// Initialize dividend module components
-	dividendRepo := dividends.NewDividendRepository(s.dividendsDB.Conn(), s.log)
+	dividendRepo := dividends.NewDividendRepository(s.ledgerDB.Conn(), s.log)
 	handler := dividends.NewDividendHandlers(dividendRepo, s.log)
 
 	// Dividend routes (faithful translation of Python repository to HTTP API)
@@ -674,7 +679,7 @@ func (s *Server) setupOptimizationRoutes(r chi.Router) {
 	// Initialize shared clients
 	yahooClient := yahoo.NewClient(s.log)
 	tradernetClient := tradernet.NewClient(s.cfg.TradernetServiceURL, s.log)
-	dividendRepo := dividends.NewDividendRepository(s.dividendsDB.Conn(), s.log)
+	dividendRepo := dividends.NewDividendRepository(s.ledgerDB.Conn(), s.log)
 
 	// Initialize PyPFOpt client
 	pypfoptClient := optimization.NewPyPFOptClient(s.cfg.PyPFOptServiceURL, s.log)
@@ -814,10 +819,10 @@ func (s *Server) setupRebalancingRoutes(r chi.Router) {
 	tradernetClient := tradernet.NewClient(s.cfg.TradernetServiceURL, s.log)
 
 	// Initialize portfolio service (needed for rebalancing)
-	positionRepo := portfolio.NewPositionRepository(s.stateDB.Conn(), s.configDB.Conn(), s.log)
-	portfolioRepo := portfolio.NewPortfolioRepository(s.snapshotsDB.Conn(), s.log)
+	positionRepo := portfolio.NewPositionRepository(s.portfolioDB.Conn(), s.universeDB.Conn(), s.log)
+	portfolioRepo := portfolio.NewPortfolioRepository(s.portfolioDB.Conn(), s.log)
 	allocRepo := allocation.NewRepository(s.configDB.Conn(), s.log)
-	turnoverTracker := portfolio.NewTurnoverTracker(s.ledgerDB.Conn(), s.snapshotsDB.Conn(), s.log)
+	turnoverTracker := portfolio.NewTurnoverTracker(s.ledgerDB.Conn(), s.portfolioDB.Conn(), s.log)
 	tradeRepo := portfolio.NewTradeRepository(s.ledgerDB.Conn(), s.log)
 	attributionCalc := portfolio.NewAttributionCalculator(tradeRepo, s.configDB.Conn(), s.cfg.HistoryPath, s.log)
 	portfolioService := portfolio.NewPortfolioService(
@@ -826,7 +831,7 @@ func (s *Server) setupRebalancingRoutes(r chi.Router) {
 		allocRepo,
 		turnoverTracker,
 		attributionCalc,
-		s.configDB.Conn(),
+		s.universeDB.Conn(),
 		s.log,
 	)
 
@@ -834,7 +839,7 @@ func (s *Server) setupRebalancingRoutes(r chi.Router) {
 	triggerChecker := rebalancing.NewTriggerChecker(s.log)
 
 	// Initialize repositories for negative balance rebalancer
-	securityRepo := universe.NewSecurityRepository(s.configDB.Conn(), s.log)
+	securityRepo := universe.NewSecurityRepository(s.universeDB.Conn(), s.log)
 	settingsRepo := settings.NewRepository(s.configDB.Conn(), s.log)
 
 	// Initialize services for emergency rebalancing
@@ -846,7 +851,7 @@ func (s *Server) setupRebalancingRoutes(r chi.Router) {
 		positionRepo,
 		s.log,
 	)
-	recommendationRepo := planning.NewRecommendationRepository(s.stateDB.Conn(), s.log)
+	recommendationRepo := planning.NewRecommendationRepository(s.cacheDB.Conn(), s.log)
 
 	// Initialize market hours service for market open/close checking
 	marketHoursService := scheduler.NewMarketHoursService(s.log)

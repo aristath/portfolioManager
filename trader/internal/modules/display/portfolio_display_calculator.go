@@ -15,10 +15,8 @@ import (
 
 // PortfolioDisplayCalculator calculates portfolio display state from metrics
 type PortfolioDisplayCalculator struct {
-	configDB      *sql.DB
-	stateDB       *sql.DB
-	snapshotsDB   *sql.DB
-	settingsDB    *sql.DB
+	universeDB    *sql.DB
+	portfolioDB   *sql.DB
 	portfolioPerf *PortfolioPerformanceService
 	dataDir       string
 	log           zerolog.Logger
@@ -26,16 +24,14 @@ type PortfolioDisplayCalculator struct {
 
 // NewPortfolioDisplayCalculator creates a new portfolio display calculator
 func NewPortfolioDisplayCalculator(
-	configDB, stateDB, snapshotsDB, settingsDB *sql.DB,
+	universeDB, portfolioDB *sql.DB,
 	portfolioPerf *PortfolioPerformanceService,
 	dataDir string,
 	log zerolog.Logger,
 ) *PortfolioDisplayCalculator {
 	return &PortfolioDisplayCalculator{
-		configDB:      configDB,
-		stateDB:       stateDB,
-		snapshotsDB:   snapshotsDB,
-		settingsDB:    settingsDB,
+		universeDB:    universeDB,
+		portfolioDB:   portfolioDB,
 		portfolioPerf: portfolioPerf,
 		dataDir:       dataDir,
 		log:           log.With().Str("service", "portfolio_display_calculator").Logger(),
@@ -221,7 +217,7 @@ func (c *PortfolioDisplayCalculator) getTopHoldings(n int) ([]struct {
 	Symbol      string
 	MarketValue float64
 }, error) {
-	rows, err := c.stateDB.Query(`
+	rows, err := c.portfolioDB.Query(`
 		SELECT symbol, market_value_eur
 		FROM positions
 		WHERE quantity > 0
@@ -255,7 +251,7 @@ func (c *PortfolioDisplayCalculator) getTopHoldings(n int) ([]struct {
 // getTotalPortfolioValue calculates total portfolio market value
 func (c *PortfolioDisplayCalculator) getTotalPortfolioValue() (float64, error) {
 	var total float64
-	err := c.stateDB.QueryRow(`
+	err := c.portfolioDB.QueryRow(`
 		SELECT COALESCE(SUM(market_value_eur), 0)
 		FROM positions
 		WHERE quantity > 0
@@ -283,7 +279,7 @@ func (c *PortfolioDisplayCalculator) getSecurityPerformance(symbol string, targe
 	defer historyDB.Close()
 
 	// Create security performance service
-	securityPerf := NewSecurityPerformanceService(historyDB, c.settingsDB, c.log)
+	securityPerf := NewSecurityPerformanceService(historyDB, c.log)
 
 	// Calculate trailing 12mo CAGR
 	cagr, err := securityPerf.CalculateTrailing12MoCAGR(symbol)
@@ -334,7 +330,7 @@ func (c *PortfolioDisplayCalculator) calculateBackgroundPerformance(topHoldings 
 	}
 
 	// Query all positions excluding top holdings
-	rows, err := c.stateDB.Query(`
+	rows, err := c.portfolioDB.Query(`
 		SELECT symbol, market_value_eur
 		FROM positions
 		WHERE quantity > 0
@@ -416,7 +412,7 @@ func (c *PortfolioDisplayCalculator) mapRange(value, inMin, inMax, outMin, outMa
 // getSettingFloat retrieves a float setting with fallback to default
 func (c *PortfolioDisplayCalculator) getSettingFloat(key string, defaultVal float64) float64 {
 	var value float64
-	err := c.settingsDB.QueryRow("SELECT value FROM settings WHERE key = ?", key).Scan(&value)
+	err := c.universeDB.QueryRow("SELECT value FROM settings WHERE key = ?", key).Scan(&value)
 	if err != nil {
 		// Fallback to SettingDefaults
 		if val, ok := settings.SettingDefaults[key]; ok {

@@ -113,7 +113,7 @@ func roundFloat(val float64, precision int) float64 {
 // UniverseHandlers contains HTTP handlers for universe API
 type UniverseHandlers struct {
 	log            zerolog.Logger
-	stateDB        interface{}
+	portfolioDB    interface{}
 	positionRepo   interface{}
 	securityRepo   *SecurityRepository
 	scoreRepo      *ScoreRepository
@@ -129,7 +129,7 @@ type UniverseHandlers struct {
 func NewUniverseHandlers(
 	securityRepo *SecurityRepository,
 	scoreRepo *ScoreRepository,
-	stateDB interface{},
+	portfolioDB interface{},
 	positionRepo interface{},
 	securityScorer *scorers.SecurityScorer,
 	yahooClient *yahoo.Client,
@@ -142,7 +142,7 @@ func NewUniverseHandlers(
 	return &UniverseHandlers{
 		securityRepo:   securityRepo,
 		scoreRepo:      scoreRepo,
-		stateDB:        stateDB,
+		portfolioDB:    portfolioDB,
 		positionRepo:   positionRepo,
 		securityScorer: securityScorer,
 		yahooClient:    yahooClient,
@@ -160,15 +160,15 @@ func NewUniverseHandlers(
 func (h *UniverseHandlers) HandleGetStocks(w http.ResponseWriter, r *http.Request) {
 	// Fetch securities with scores from repository
 	// This method joins data from config.db (securities), state.db (scores and positions)
-	// Type assertion for stateDB
-	stateDB, ok := h.stateDB.(*sql.DB)
+	// Type assertion for portfolioDB
+	portfolioDB, ok := h.portfolioDB.(*sql.DB)
 	if !ok {
-		h.log.Error().Msg("Invalid stateDB type")
+		h.log.Error().Msg("Invalid portfolioDB type")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	securitiesData, err := h.securityRepo.GetWithScores(stateDB)
+	securitiesData, err := h.securityRepo.GetWithScores(portfolioDB)
 	if err != nil {
 		h.log.Error().Err(err).Msg("Failed to fetch securities with scores")
 		http.Error(w, "Failed to fetch securities", http.StatusInternalServerError)

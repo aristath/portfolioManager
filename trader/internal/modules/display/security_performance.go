@@ -11,17 +11,15 @@ import (
 
 // SecurityPerformanceService calculates individual security performance metrics for display
 type SecurityPerformanceService struct {
-	historyDB  *sql.DB // Database for individual security price history (history/{isin}.db)
-	settingsDB *sql.DB
-	log        zerolog.Logger
+	historyDB *sql.DB // Database for individual security price history (history/{isin}.db)
+	log       zerolog.Logger
 }
 
 // NewSecurityPerformanceService creates a new security performance service
-func NewSecurityPerformanceService(historyDB, settingsDB *sql.DB, log zerolog.Logger) *SecurityPerformanceService {
+func NewSecurityPerformanceService(historyDB *sql.DB, log zerolog.Logger) *SecurityPerformanceService {
 	return &SecurityPerformanceService{
-		historyDB:  historyDB,
-		settingsDB: settingsDB,
-		log:        log.With().Str("service", "security_performance").Logger(),
+		historyDB: historyDB,
+		log:       log.With().Str("service", "security_performance").Logger(),
 	}
 }
 

@@ -9,13 +9,13 @@ import (
 // setupChartsRoutes configures charts module routes
 func (s *Server) setupChartsRoutes(r chi.Router) {
 	// Initialize security repository
-	securityRepo := universe.NewSecurityRepository(s.configDB.Conn(), s.log)
+	securityRepo := universe.NewSecurityRepository(s.universeDB.Conn(), s.log)
 
 	// Initialize charts service
 	chartsService := charts.NewService(
 		s.cfg.HistoryPath,
 		securityRepo,
-		s.configDB.Conn(),
+		s.universeDB.Conn(),
 		s.log,
 	)
 

@@ -11,13 +11,14 @@ import (
 
 // PortfolioRepository handles portfolio snapshot database operations
 // Faithful translation from Python: app/modules/portfolio/database/portfolio_repository.py
-// Note: This accesses snapshots database (snapshots.db)
+// Database: portfolio.db (portfolio_snapshots table)
 type PortfolioRepository struct {
-	db  *sql.DB
+	db  *sql.DB // portfolio.db
 	log zerolog.Logger
 }
 
 // NewPortfolioRepository creates a new portfolio repository
+// db parameter should be portfolio.db connection
 func NewPortfolioRepository(db *sql.DB, log zerolog.Logger) *PortfolioRepository {
 	return &PortfolioRepository{
 		db:  db,

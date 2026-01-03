@@ -14,14 +14,13 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// SystemHandlers handles system-wide monitoring and operations endpoints
+// SystemHandlers handles system-wide monitoring and operations endpoints - NEW 8-database architecture
 type SystemHandlers struct {
 	log                  zerolog.Logger
 	dataDir              string
-	stateDB              *database.DB
-	settingsDB           *database.DB
-	snapshotsDB          *database.DB
+	portfolioDB          *database.DB
 	configDB             *database.DB
+	universeDB           *database.DB
 	marketHours          *scheduler.MarketHoursService
 	scheduler            *scheduler.Scheduler
 	portfolioDisplayCalc *display.PortfolioDisplayCalculator
@@ -40,22 +39,20 @@ type SystemHandlers struct {
 func NewSystemHandlers(
 	log zerolog.Logger,
 	dataDir string,
-	stateDB, settingsDB, snapshotsDB, configDB *database.DB,
+	portfolioDB, configDB, universeDB *database.DB,
 	sched *scheduler.Scheduler,
 ) *SystemHandlers {
 	// Create portfolio performance service
 	portfolioPerf := display.NewPortfolioPerformanceService(
-		snapshotsDB.Conn(),
-		settingsDB.Conn(),
+		portfolioDB.Conn(),
+		configDB.Conn(),
 		log,
 	)
 
 	// Create portfolio display calculator
 	portfolioDisplayCalc := display.NewPortfolioDisplayCalculator(
-		configDB.Conn(),
-		stateDB.Conn(),
-		snapshotsDB.Conn(),
-		settingsDB.Conn(),
+		universeDB.Conn(),
+		portfolioDB.Conn(),
 		portfolioPerf,
 		dataDir,
 		log,
@@ -64,10 +61,9 @@ func NewSystemHandlers(
 	return &SystemHandlers{
 		log:                  log.With().Str("component", "system_handlers").Logger(),
 		dataDir:              dataDir,
-		stateDB:              stateDB,
-		settingsDB:           settingsDB,
-		snapshotsDB:          snapshotsDB,
+		portfolioDB:          portfolioDB,
 		configDB:             configDB,
+		universeDB:           universeDB,
 		marketHours:          scheduler.NewMarketHoursService(log),
 		scheduler:            sched,
 		portfolioDisplayCalc: portfolioDisplayCalc,
@@ -186,7 +182,7 @@ func (h *SystemHandlers) HandleSystemStatus(w http.ResponseWriter, r *http.Reque
 	var lastSync string
 	var positionCount int
 
-	err := h.stateDB.Conn().QueryRow(`
+	err := h.portfolioDB.Conn().QueryRow(`
 		SELECT COUNT(*), MAX(last_updated)
 		FROM positions
 	`).Scan(&positionCount, &lastSync)
@@ -205,8 +201,8 @@ func (h *SystemHandlers) HandleSystemStatus(w http.ResponseWriter, r *http.Reque
 
 	// Query securities count
 	var securityCount int
-	err = h.stateDB.Conn().QueryRow(`
-		SELECT COUNT(*) FROM securities WHERE is_active = 1
+	err = h.universeDB.Conn().QueryRow(`
+		SELECT COUNT(*) FROM securities WHERE active = 1
 	`).Scan(&securityCount)
 
 	if err != nil && err != sql.ErrNoRows {
@@ -237,7 +233,7 @@ func (h *SystemHandlers) HandleLEDDisplay(w http.ResponseWriter, r *http.Request
 
 	// Get display mode from settings
 	var displayMode string
-	err := h.settingsDB.Conn().QueryRow("SELECT value FROM settings WHERE key = 'display_mode'").Scan(&displayMode)
+	err := h.configDB.Conn().QueryRow("SELECT value FROM settings WHERE key = 'display_mode'").Scan(&displayMode)
 	if err != nil {
 		// Default to STATS if setting not found
 		displayMode = "STATS"

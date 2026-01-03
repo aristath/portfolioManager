@@ -10,12 +10,14 @@ import (
 
 // GroupingRepository handles country and industry grouping operations
 // Faithful translation from Python: app/repositories/grouping.py
+// Database: universe.db (country_groups, industry_groups tables)
 type GroupingRepository struct {
-	db  *sql.DB
+	db  *sql.DB // universe.db
 	log zerolog.Logger
 }
 
 // NewGroupingRepository creates a new grouping repository
+// db parameter should be universe.db connection
 func NewGroupingRepository(db *sql.DB, log zerolog.Logger) *GroupingRepository {
 	return &GroupingRepository{
 		db:  db,

@@ -12,16 +12,16 @@ import (
 
 // PortfolioPerformanceService calculates portfolio performance metrics for display visualization
 type PortfolioPerformanceService struct {
-	snapshotsDB *sql.DB
-	settingsDB  *sql.DB
+	portfolioDB *sql.DB
+	configDB    *sql.DB
 	log         zerolog.Logger
 }
 
 // NewPortfolioPerformanceService creates a new portfolio performance service
-func NewPortfolioPerformanceService(snapshotsDB, settingsDB *sql.DB, log zerolog.Logger) *PortfolioPerformanceService {
+func NewPortfolioPerformanceService(portfolioDB, configDB *sql.DB, log zerolog.Logger) *PortfolioPerformanceService {
 	return &PortfolioPerformanceService{
-		snapshotsDB: snapshotsDB,
-		settingsDB:  settingsDB,
+		portfolioDB: portfolioDB,
+		configDB:    configDB,
 		log:         log.With().Str("service", "portfolio_performance").Logger(),
 	}
 }
@@ -81,7 +81,7 @@ func (s *PortfolioPerformanceService) CalculateTrailing12MoReturn() (*float64, e
 	startDate := time.Now().AddDate(-1, 0, 0).Format("2006-01-02")
 
 	// Get snapshots in range
-	rows, err := s.snapshotsDB.Query(`
+	rows, err := s.portfolioDB.Query(`
 		SELECT date, total_value
 		FROM portfolio_snapshots
 		WHERE date >= ? AND date <= ?
@@ -156,7 +156,7 @@ func (s *PortfolioPerformanceService) CalculateTrailing12MoReturn() (*float64, e
 // CalculateSinceInceptionCAGR calculates since-inception CAGR from first to latest portfolio snapshot
 func (s *PortfolioPerformanceService) CalculateSinceInceptionCAGR() (*float64, error) {
 	// Get first and last snapshot
-	rows, err := s.snapshotsDB.Query(`
+	rows, err := s.portfolioDB.Query(`
 		SELECT date, total_value
 		FROM portfolio_snapshots
 		WHERE date >= '2020-01-01'
@@ -243,7 +243,7 @@ func (s *PortfolioPerformanceService) GetPerformanceVsTarget() (float64, error) 
 // getSettingFloat retrieves a float setting with fallback to default
 func (s *PortfolioPerformanceService) getSettingFloat(key string, defaultVal float64) float64 {
 	var value float64
-	err := s.settingsDB.QueryRow("SELECT value FROM settings WHERE key = ?", key).Scan(&value)
+	err := s.configDB.QueryRow("SELECT value FROM settings WHERE key = ?", key).Scan(&value)
 	if err != nil {
 		// Fallback to SettingDefaults
 		if val, ok := settings.SettingDefaults[key]; ok {

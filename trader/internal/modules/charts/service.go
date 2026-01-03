@@ -22,7 +22,7 @@ type ChartDataPoint struct {
 type Service struct {
 	historyPath  string
 	securityRepo *universe.SecurityRepository
-	configDB     *sql.DB
+	universeDB   *sql.DB // For querying securities (universe.db)
 	log          zerolog.Logger
 }
 
@@ -30,13 +30,13 @@ type Service struct {
 func NewService(
 	historyPath string,
 	securityRepo *universe.SecurityRepository,
-	configDB *sql.DB,
+	universeDB *sql.DB,
 	log zerolog.Logger,
 ) *Service {
 	return &Service{
 		historyPath:  historyPath,
 		securityRepo: securityRepo,
-		configDB:     configDB,
+		universeDB:   universeDB,
 		log:          log.With().Str("service", "charts").Logger(),
 	}
 }
@@ -47,7 +47,7 @@ func (s *Service) GetSparklines() (map[string][]ChartDataPoint, error) {
 	startDate := time.Now().AddDate(-1, 0, 0).Format("2006-01-02")
 
 	// Get all active securities
-	rows, err := s.configDB.Query("SELECT symbol FROM securities WHERE active = 1")
+	rows, err := s.universeDB.Query("SELECT symbol FROM securities WHERE active = 1")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get active securities: %w", err)
 	}

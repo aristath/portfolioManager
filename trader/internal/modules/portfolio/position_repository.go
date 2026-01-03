@@ -12,17 +12,17 @@ import (
 // PositionRepository handles position database operations
 // Faithful translation from Python: app/modules/portfolio/database/position_repository.py
 type PositionRepository struct {
-	stateDB  *sql.DB // state.db - positions
-	configDB *sql.DB // config.db - securities
-	log      zerolog.Logger
+	portfolioDB *sql.DB // portfolio.db - positions
+	universeDB  *sql.DB // universe.db - securities
+	log         zerolog.Logger
 }
 
 // NewPositionRepository creates a new position repository
-func NewPositionRepository(stateDB, configDB *sql.DB, log zerolog.Logger) *PositionRepository {
+func NewPositionRepository(portfolioDB, universeDB *sql.DB, log zerolog.Logger) *PositionRepository {
 	return &PositionRepository{
-		stateDB:  stateDB,
-		configDB: configDB,
-		log:      log.With().Str("repo", "position").Logger(),
+		portfolioDB: portfolioDB,
+		universeDB:  universeDB,
+		log:         log.With().Str("repo", "position").Logger(),
 	}
 }
 
@@ -31,7 +31,7 @@ func NewPositionRepository(stateDB, configDB *sql.DB, log zerolog.Logger) *Posit
 func (r *PositionRepository) GetAll() ([]Position, error) {
 	query := "SELECT * FROM positions"
 
-	rows, err := r.stateDB.Query(query)
+	rows, err := r.portfolioDB.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query positions: %w", err)
 	}
@@ -58,7 +58,7 @@ func (r *PositionRepository) GetAll() ([]Position, error) {
 // Note: This method accesses both state.db (positions) and config.db (securities)
 func (r *PositionRepository) GetWithSecurityInfo() ([]PositionWithSecurity, error) {
 	// Get positions from state.db
-	positionRows, err := r.stateDB.Query("SELECT * FROM positions")
+	positionRows, err := r.portfolioDB.Query("SELECT * FROM positions")
 	if err != nil {
 		return nil, fmt.Errorf("failed to query positions: %w", err)
 	}
@@ -83,7 +83,7 @@ func (r *PositionRepository) GetWithSecurityInfo() ([]PositionWithSecurity, erro
 	}
 
 	// Get securities from config.db
-	securityRows, err := r.configDB.Query(`
+	securityRows, err := r.universeDB.Query(`
 		SELECT symbol, name, country, fullExchangeName, industry, currency, allow_sell
 		FROM securities
 		WHERE active = 1
@@ -171,7 +171,7 @@ func (r *PositionRepository) GetWithSecurityInfo() ([]PositionWithSecurity, erro
 func (r *PositionRepository) GetBySymbol(symbol string) (*Position, error) {
 	query := "SELECT * FROM positions WHERE symbol = ?"
 
-	rows, err := r.stateDB.Query(query, strings.ToUpper(strings.TrimSpace(symbol)))
+	rows, err := r.portfolioDB.Query(query, strings.ToUpper(strings.TrimSpace(symbol)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query position by symbol: %w", err)
 	}
@@ -194,7 +194,7 @@ func (r *PositionRepository) GetBySymbol(symbol string) (*Position, error) {
 func (r *PositionRepository) GetByISIN(isin string) (*Position, error) {
 	query := "SELECT * FROM positions WHERE isin = ?"
 
-	rows, err := r.stateDB.Query(query, strings.ToUpper(strings.TrimSpace(isin)))
+	rows, err := r.portfolioDB.Query(query, strings.ToUpper(strings.TrimSpace(isin)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query position by ISIN: %w", err)
 	}
@@ -242,7 +242,7 @@ func (r *PositionRepository) GetCount() (int, error) {
 	query := "SELECT COUNT(*) as count FROM positions"
 
 	var count int
-	err := r.stateDB.QueryRow(query).Scan(&count)
+	err := r.portfolioDB.QueryRow(query).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get position count: %w", err)
 	}
@@ -256,7 +256,7 @@ func (r *PositionRepository) GetTotalValue() (float64, error) {
 	query := "SELECT COALESCE(SUM(market_value_eur), 0) as total FROM positions"
 
 	var total float64
-	err := r.stateDB.QueryRow(query).Scan(&total)
+	err := r.portfolioDB.QueryRow(query).Scan(&total)
 	if err != nil {
 		return 0.0, fmt.Errorf("failed to get total value: %w", err)
 	}
@@ -364,7 +364,7 @@ func (r *PositionRepository) Upsert(position Position) error {
 	}
 
 	// Begin transaction
-	tx, err := r.stateDB.Begin()
+	tx, err := r.portfolioDB.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
@@ -414,7 +414,7 @@ func (r *PositionRepository) Delete(symbol string) error {
 	symbol = strings.ToUpper(strings.TrimSpace(symbol))
 
 	// Begin transaction
-	tx, err := r.stateDB.Begin()
+	tx, err := r.portfolioDB.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
@@ -439,7 +439,7 @@ func (r *PositionRepository) Delete(symbol string) error {
 // Faithful translation of Python: async def delete_all(self) -> None
 func (r *PositionRepository) DeleteAll() error {
 	// Begin transaction
-	tx, err := r.stateDB.Begin()
+	tx, err := r.portfolioDB.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
@@ -471,7 +471,7 @@ func (r *PositionRepository) UpdatePrice(symbol string, price float64, currencyR
 	}
 
 	// Begin transaction
-	tx, err := r.stateDB.Begin()
+	tx, err := r.portfolioDB.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
@@ -527,7 +527,7 @@ func (r *PositionRepository) UpdateLastSoldAt(symbol string) error {
 	now := time.Now().Format(time.RFC3339)
 
 	// Begin transaction
-	tx, err := r.stateDB.Begin()
+	tx, err := r.portfolioDB.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}

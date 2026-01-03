@@ -12,15 +12,15 @@ import (
 // ScoreRepository handles score database operations
 // Faithful translation from Python: app/repositories/score.py
 type ScoreRepository struct {
-	stateDB *sql.DB // state.db - scores table
-	log     zerolog.Logger
+	portfolioDB *sql.DB // portfolio.db - scores table
+	log         zerolog.Logger
 }
 
 // NewScoreRepository creates a new score repository
-func NewScoreRepository(stateDB *sql.DB, log zerolog.Logger) *ScoreRepository {
+func NewScoreRepository(portfolioDB *sql.DB, log zerolog.Logger) *ScoreRepository {
 	return &ScoreRepository{
-		stateDB: stateDB,
-		log:     log.With().Str("repo", "score").Logger(),
+		portfolioDB: portfolioDB,
+		log:         log.With().Str("repo", "score").Logger(),
 	}
 }
 
@@ -29,7 +29,7 @@ func NewScoreRepository(stateDB *sql.DB, log zerolog.Logger) *ScoreRepository {
 func (r *ScoreRepository) GetBySymbol(symbol string) (*SecurityScore, error) {
 	query := "SELECT * FROM scores WHERE symbol = ?"
 
-	rows, err := r.stateDB.Query(query, strings.ToUpper(strings.TrimSpace(symbol)))
+	rows, err := r.portfolioDB.Query(query, strings.ToUpper(strings.TrimSpace(symbol)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query score by symbol: %w", err)
 	}
@@ -61,7 +61,7 @@ func (r *ScoreRepository) GetByIdentifier(identifier string) (*SecurityScore, er
 func (r *ScoreRepository) GetAll() ([]SecurityScore, error) {
 	query := "SELECT * FROM scores"
 
-	rows, err := r.stateDB.Query(query)
+	rows, err := r.portfolioDB.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query all scores: %w", err)
 	}
@@ -93,7 +93,7 @@ func (r *ScoreRepository) GetTop(limit int) ([]SecurityScore, error) {
 		LIMIT ?
 	`
 
-	rows, err := r.stateDB.Query(query, limit)
+	rows, err := r.portfolioDB.Query(query, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query top scores: %w", err)
 	}
@@ -128,7 +128,7 @@ func (r *ScoreRepository) Upsert(score SecurityScore) error {
 	score.Symbol = strings.ToUpper(strings.TrimSpace(score.Symbol))
 
 	// Begin transaction
-	tx, err := r.stateDB.Begin()
+	tx, err := r.portfolioDB.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
@@ -182,7 +182,7 @@ func (r *ScoreRepository) Delete(symbol string) error {
 	symbol = strings.ToUpper(strings.TrimSpace(symbol))
 
 	// Begin transaction
-	tx, err := r.stateDB.Begin()
+	tx, err := r.portfolioDB.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
@@ -207,7 +207,7 @@ func (r *ScoreRepository) Delete(symbol string) error {
 // Faithful translation of Python: async def delete_all(self) -> None
 func (r *ScoreRepository) DeleteAll() error {
 	// Begin transaction
-	tx, err := r.stateDB.Begin()
+	tx, err := r.portfolioDB.Begin()
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
