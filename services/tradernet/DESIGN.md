@@ -415,11 +415,6 @@ Health check endpoint (required by blueprint).
 - Single connection shared across all requests (singleton pattern)
 - Connection established on startup, health check monitors connection status
 
-### Research Mode Support
-- Automatically injects TEST currency in research mode
-- Returns mock order results when `TRADING_MODE=research`
-- Uses settings database to get virtual_test_cash amount
-
 ### Error Handling
 - All connection errors return `success: false` with clear error messages
 - No crashes - degrade gracefully
@@ -457,7 +452,6 @@ python-dateutil==2.8.2
 | TRADERNET_API_SECRET | Yes | Tradernet API secret | - |
 | PORT | No | Service port | 9001 |
 | LOG_LEVEL | No | Logging level | INFO |
-| TRADING_MODE | No | Trading mode (production/research) | production |
 
 ---
 

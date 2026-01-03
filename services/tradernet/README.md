@@ -189,7 +189,6 @@ uvicorn app.main:app --reload --port 9001
 | TRADERNET_API_SECRET | Yes | Tradernet API secret | - |
 | PORT | No | Service port | 9001 |
 | LOG_LEVEL | No | Logging level | INFO |
-| TRADING_MODE | No | Trading mode (production/research) | production |
 
 ---
 
@@ -388,13 +387,6 @@ healthCheck:
 2. Check API credentials are valid
 3. Ensure network connectivity to Tradernet API
 4. Check service logs: `docker-compose logs tradernet`
-
-### Research Mode
-
-In research mode (`TRADING_MODE=research`):
-- Order execution returns mock results
-- TEST currency appears in cash balances
-- No real trades are placed
 
 ### API Errors
 

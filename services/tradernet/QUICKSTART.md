@@ -23,7 +23,6 @@ TRADERNET_API_SECRET=your-tradernet-api-secret
 # Service Configuration
 PORT=9001
 LOG_LEVEL=INFO
-TRADING_MODE=production  # or 'research' for testing
 ```
 
 ### 2. Start Tradernet Microservice
@@ -170,30 +169,6 @@ curl http://localhost:8001/api/trades/pending-orders
    ping localhost
    ```
 
-### Research Mode Testing
-
-To test without real trades:
-
-1. Set environment variable:
-   ```bash
-   export TRADING_MODE=research
-   ```
-
-2. Restart microservice:
-   ```bash
-   docker-compose restart tradernet
-   ```
-
-3. Verify mode:
-   ```bash
-   curl http://localhost:9001/health
-   ```
-
-In research mode:
-- Orders return mock results
-- TEST currency appears in cash balances
-- No real trades executed
-
 ---
 
 ## Monitoring
@@ -255,7 +230,6 @@ docker run -d \
   -p 9001:9001 \
   -e TRADERNET_API_KEY="${TRADERNET_API_KEY}" \
   -e TRADERNET_API_SECRET="${TRADERNET_API_SECRET}" \
-  -e TRADING_MODE=production \
   --name tradernet \
   --restart unless-stopped \
   tradernet-service:1.0.0
@@ -343,7 +317,6 @@ http://localhost:9001/redoc
 TRADERNET_API_KEY=...
 TRADERNET_API_SECRET=...
 PORT=9001
-TRADING_MODE=production
 
 # Go Service
 TRADERNET_SERVICE_URL=http://localhost:9001

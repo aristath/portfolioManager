@@ -10,7 +10,6 @@ services:
       - LOG_LEVEL=INFO
       - TRADERNET_API_KEY=${TRADERNET_API_KEY}
       - TRADERNET_API_SECRET=${TRADERNET_API_SECRET}
-      - TRADING_MODE=${TRADING_MODE:-production}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:9001/health').raise_for_status()"]

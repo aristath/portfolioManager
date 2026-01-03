@@ -16,9 +16,6 @@ class Settings(BaseSettings):
     tradernet_api_key: str = ""
     tradernet_api_secret: str = ""
 
-    # Trading mode
-    trading_mode: str = "production"  # production or research
-
     # Service limits
     max_batch_symbols: int = 100
     default_trade_history_limit: int = 500
