@@ -67,11 +67,9 @@ func (wp *WorkerPool) EvaluateBatch(
 	}
 	close(jobs)
 
-	// Wait for all workers to finish
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
+	// Wait for all workers to finish, then close results
+	wg.Wait()
+	close(results)
 
 	// Collect results
 	resultSlice := make([]SequenceEvaluationResult, numSequences)
@@ -160,11 +158,9 @@ func (wp *WorkerPool) SimulateBatch(
 	}
 	close(jobs)
 
-	// Wait for all workers to finish
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
+	// Wait for all workers to finish, then close results
+	wg.Wait()
+	close(results)
 
 	// Collect results
 	resultSlice := make([]SimulationResult, numSequences)
