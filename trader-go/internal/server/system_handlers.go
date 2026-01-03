@@ -54,6 +54,7 @@ func NewSystemHandlers(
 		snapshotsDB.Conn(),
 		settingsDB.Conn(),
 		portfolioPerf,
+		dataDir,
 		log,
 	)
 
