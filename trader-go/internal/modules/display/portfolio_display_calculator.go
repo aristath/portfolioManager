@@ -327,10 +327,70 @@ func (c *PortfolioDisplayCalculator) calculateBackgroundPerformance(topHoldings 
 	Symbol      string
 	MarketValue float64
 }, target float64) float64 {
-	// TODO: Implement aggregate background performance calculation
-	// For now, return 0
-	c.log.Debug().Msg("Background performance calculation not yet implemented")
-	return 0
+	// Get symbols of top holdings to exclude them
+	topSymbols := make(map[string]bool)
+	for _, h := range topHoldings {
+		topSymbols[h.Symbol] = true
+	}
+
+	// Query all positions excluding top holdings
+	rows, err := c.stateDB.Query(`
+		SELECT symbol, market_value_eur
+		FROM positions
+		WHERE quantity > 0
+		ORDER BY market_value_eur DESC
+	`)
+	if err != nil {
+		c.log.Warn().Err(err).Msg("Failed to query background positions")
+		return 0
+	}
+	defer rows.Close()
+
+	var totalValue float64
+	var weightedPerformance float64
+
+	for rows.Next() {
+		var symbol string
+		var marketValue float64
+		if err := rows.Scan(&symbol, &marketValue); err != nil {
+			c.log.Warn().Err(err).Msg("Failed to scan background position")
+			continue
+		}
+
+		// Skip top holdings
+		if topSymbols[symbol] {
+			continue
+		}
+
+		// Get security performance
+		cagr, err := c.getSecurityPerformance(symbol, target)
+		if err != nil {
+			c.log.Warn().
+				Err(err).
+				Str("symbol", symbol).
+				Msg("Failed to get background position performance")
+			continue
+		}
+
+		// Add to weighted sum
+		weightedPerformance += cagr * marketValue
+		totalValue += marketValue
+	}
+
+	if totalValue == 0 {
+		c.log.Debug().Msg("No background positions found")
+		return 0
+	}
+
+	// Calculate weighted average
+	avgPerformance := weightedPerformance / totalValue
+
+	c.log.Debug().
+		Float64("avg_performance", avgPerformance).
+		Float64("total_value", totalValue).
+		Msg("Calculated background performance")
+
+	return avgPerformance
 }
 
 // adjustBackgroundBrightness reduces brightness for background cluster
