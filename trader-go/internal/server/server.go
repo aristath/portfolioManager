@@ -23,8 +23,7 @@ import (
 	"github.com/aristath/arduino-trader/internal/modules/dividends"
 	"github.com/aristath/arduino-trader/internal/modules/evaluation"
 	"github.com/aristath/arduino-trader/internal/modules/optimization"
-	// TODO: Re-enable planning imports after fixing handler initialization
-	// "github.com/aristath/arduino-trader/internal/modules/planning"
+	"github.com/aristath/arduino-trader/internal/modules/planning"
 	// planningHandlers "github.com/aristath/arduino-trader/internal/modules/planning/handlers"
 	// "github.com/aristath/arduino-trader/internal/modules/planning/repository"
 	"github.com/aristath/arduino-trader/internal/modules/portfolio"
@@ -35,6 +34,7 @@ import (
 	"github.com/aristath/arduino-trader/internal/modules/settings"
 	"github.com/aristath/arduino-trader/internal/modules/trading"
 	"github.com/aristath/arduino-trader/internal/modules/universe"
+	"github.com/aristath/arduino-trader/internal/services"
 )
 
 // Config holds server configuration
@@ -698,12 +698,26 @@ func (s *Server) setupRebalancingRoutes(r chi.Router) {
 	securityRepo := universe.NewSecurityRepository(s.configDB.Conn(), s.log)
 	settingsRepo := settings.NewRepository(s.configDB.Conn(), s.log)
 
+	// Initialize services for emergency rebalancing
+	currencyExchangeService := services.NewCurrencyExchangeService(tradernetClient, s.log)
+	tradingRepo := trading.NewTradeRepository(s.ledgerDB.Conn(), s.log)
+	tradeExecutionService := services.NewTradeExecutionService(
+		tradernetClient,
+		tradingRepo,
+		positionRepo,
+		s.log,
+	)
+	recommendationRepo := planning.NewRecommendationRepository(s.stateDB.Conn(), s.log)
+
 	negativeRebalancer := rebalancing.NewNegativeBalanceRebalancer(
 		s.log,
 		tradernetClient,
 		securityRepo,
 		positionRepo,
 		settingsRepo,
+		currencyExchangeService,
+		tradeExecutionService,
+		recommendationRepo,
 	)
 
 	// Initialize rebalancing service

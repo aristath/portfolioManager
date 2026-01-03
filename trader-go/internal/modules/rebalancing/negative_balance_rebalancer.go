@@ -2,11 +2,14 @@ package rebalancing
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/aristath/arduino-trader/internal/clients/tradernet"
+	"github.com/aristath/arduino-trader/internal/modules/planning"
 	"github.com/aristath/arduino-trader/internal/modules/portfolio"
 	"github.com/aristath/arduino-trader/internal/modules/settings"
 	"github.com/aristath/arduino-trader/internal/modules/universe"
+	"github.com/aristath/arduino-trader/internal/services"
 	"github.com/rs/zerolog"
 )
 
@@ -16,22 +19,19 @@ const MinCurrencyReserve = 5.0
 // NegativeBalanceRebalancer automatically fixes negative cash balances
 // Faithful translation from Python: app/modules/rebalancing/services/negative_balance_rebalancer.py
 //
-// Detects negative balances and currencies below minimum reserve.
-// Creates emergency sell recommendations visible in UI.
-//
-// IMPLEMENTATION STATUS:
-// ✅ Negative balance detection
-// ✅ Currency minimum checks
-// ✅ Trading currency identification
-// ✅ Emergency recommendation creation
-// ⚠️ Currency exchange execution (requires CurrencyExchangeService)
-// ⚠️ Position sales execution (requires TradeExecutionService with 7-layer validation)
+// Executes 3-step rebalancing process:
+// 1. Currency exchange from other currencies
+// 2. Position sales (if exchange insufficient)
+// 3. Final currency exchange to ensure all currencies have minimum
 type NegativeBalanceRebalancer struct {
-	log             zerolog.Logger
-	tradernetClient *tradernet.Client
-	securityRepo    *universe.SecurityRepository
-	positionRepo    *portfolio.PositionRepository
-	settingsRepo    *settings.Repository
+	log                    zerolog.Logger
+	tradernetClient        *tradernet.Client
+	securityRepo           *universe.SecurityRepository
+	positionRepo           *portfolio.PositionRepository
+	settingsRepo           *settings.Repository
+	currencyExchangeService *services.CurrencyExchangeService
+	tradeExecutionService  *services.TradeExecutionService
+	recommendationRepo     *planning.RecommendationRepository
 }
 
 // NewNegativeBalanceRebalancer creates a new negative balance rebalancer
@@ -41,13 +41,19 @@ func NewNegativeBalanceRebalancer(
 	securityRepo *universe.SecurityRepository,
 	positionRepo *portfolio.PositionRepository,
 	settingsRepo *settings.Repository,
+	currencyExchangeService *services.CurrencyExchangeService,
+	tradeExecutionService *services.TradeExecutionService,
+	recommendationRepo *planning.RecommendationRepository,
 ) *NegativeBalanceRebalancer {
 	return &NegativeBalanceRebalancer{
-		log:             log.With().Str("service", "negative_balance_rebalancer").Logger(),
-		tradernetClient: tradernetClient,
-		securityRepo:    securityRepo,
-		positionRepo:    positionRepo,
-		settingsRepo:    settingsRepo,
+		log:                    log.With().Str("service", "negative_balance_rebalancer").Logger(),
+		tradernetClient:        tradernetClient,
+		securityRepo:           securityRepo,
+		positionRepo:           positionRepo,
+		settingsRepo:           settingsRepo,
+		currencyExchangeService: currencyExchangeService,
+		tradeExecutionService:  tradeExecutionService,
+		recommendationRepo:     recommendationRepo,
 	}
 }
 
@@ -165,21 +171,13 @@ func (r *NegativeBalanceRebalancer) HasCurrenciesBelowMinimum() (bool, error) {
 	return len(shortfalls) > 0, nil
 }
 
-// RebalanceNegativeBalances executes the rebalancing process
+// RebalanceNegativeBalances executes the 3-step rebalancing process
 //
-// CURRENT IMPLEMENTATION:
-// - Detects negative balances and currencies below minimum
-// - Creates emergency sell recommendations in database (visible in UI)
-// - Supports research mode (recommendations only, no execution)
+// Step 1: Currency exchange from other currencies
+// Step 2: Position sales (if exchange insufficient)
+// Step 3: Final currency exchange to ensure all currencies have minimum
 //
-// TODO FOR FULL AUTONOMOUS OPERATION:
-// - Implement CurrencyExchangeService for FX operations
-// - Implement TradeExecutionService with 7-layer validation
-// - Add automatic execution in live mode (bypass cooldown/min-hold)
-// - Add position selection algorithm (largest positions first)
-// - Add multi-step rebalancing: currency exchange → position sales → final exchange
-//
-// Returns true if rebalancing completed/recommendations created, false otherwise
+// Returns true if rebalancing completed, false otherwise
 func (r *NegativeBalanceRebalancer) RebalanceNegativeBalances() (bool, error) {
 	if !r.tradernetClient.IsConnected() {
 		r.log.Error().Msg("Cannot connect to Tradernet for rebalancing")
@@ -207,9 +205,9 @@ func (r *NegativeBalanceRebalancer) RebalanceNegativeBalances() (bool, error) {
 		r.log.Info().Msg("All currencies meet minimum reserve requirements")
 
 		// TODO: Clean up any existing emergency recommendations
-		// Requires RecommendationRepository implementation:
+		// TODO: Implement DismissAllByPortfolioHash in RecommendationRepository
 		// emergencyPortfolioHash := "EMERGENCY:negative_balance_rebalancing"
-		// dismissedCount, err := recommendationRepo.DismissAllByPortfolioHash(emergencyPortfolioHash)
+		// dismissedCount, err := r.recommendationRepo.DismissAllByPortfolioHash(emergencyPortfolioHash)
 
 		return true, nil
 	}
@@ -228,34 +226,217 @@ func (r *NegativeBalanceRebalancer) RebalanceNegativeBalances() (bool, error) {
 		tradingMode = *tradingModePtr
 	}
 
-	// Create emergency sell recommendations
-	if err := r.createEmergencySellRecommendations(shortfalls, cashBalances, tradingMode); err != nil {
-		return false, fmt.Errorf("failed to create emergency recommendations: %w", err)
+	// Step 1: Try currency exchange
+	remainingShortfalls, err := r.step1CurrencyExchange(shortfalls, cashBalances, tradingMode)
+	if err != nil {
+		return false, fmt.Errorf("failed in currency exchange step: %w", err)
 	}
 
-	// TODO: Implement automatic execution in live mode
-	// For now, recommendations are created for UI visibility and manual approval
-	if tradingMode == "live" {
-		r.log.Warn().Msg("Live mode: Emergency recommendations created for manual review")
-		r.log.Warn().Msg("TODO: Implement automatic execution (requires TradeExecutionService)")
-	} else {
-		r.log.Info().Msg("Research mode: Emergency recommendations created (not executed)")
+	if len(remainingShortfalls) == 0 {
+		r.log.Info().Msg("Currency exchange resolved all shortfalls")
+		// TODO: Clean up emergency recommendations
+		return true, nil
 	}
 
+	// Step 2: Position sales if exchange insufficient
+	if err := r.step2PositionSales(remainingShortfalls, tradingMode); err != nil {
+		return false, fmt.Errorf("failed in position sales step: %w", err)
+	}
+
+	// Step 3: Final currency exchange
+	if err := r.step3FinalExchange(tradingMode); err != nil {
+		return false, fmt.Errorf("failed in final exchange step: %w", err)
+	}
+
+	r.log.Info().Msg("Negative balance rebalancing completed")
 	return true, nil
 }
 
-// createEmergencySellRecommendations creates emergency sell recommendations
-func (r *NegativeBalanceRebalancer) createEmergencySellRecommendations(
+// step1CurrencyExchange tries to resolve shortfalls via currency exchange
+func (r *NegativeBalanceRebalancer) step1CurrencyExchange(
 	shortfalls map[string]float64,
 	cashBalances map[string]float64,
 	tradingMode string,
+) (map[string]float64, error) {
+	// Research mode: skip execution
+	if tradingMode == "research" {
+		r.log.Info().Msg("Research mode: Currency exchanges recommended but NOT executed")
+		return shortfalls, nil
+	}
+
+	remainingShortfalls := make(map[string]float64)
+	for k, v := range shortfalls {
+		remainingShortfalls[k] = v
+	}
+
+	maxIterations := 20
+	iteration := 0
+
+	// Keep trying until all shortfalls resolved or no more cash available
+	for len(remainingShortfalls) > 0 && iteration < maxIterations {
+		iteration++
+		progressMade := false
+
+		// Refresh balances at start of each iteration
+		balancesRaw, err := r.tradernetClient.GetCashBalances()
+		if err != nil {
+			return remainingShortfalls, fmt.Errorf("failed to refresh balances: %w", err)
+		}
+
+		cashBalances = make(map[string]float64)
+		for _, balance := range balancesRaw {
+			cashBalances[balance.Currency] = balance.Amount
+		}
+
+		// Check if there's any cash available to exchange
+		totalAvailableCash := 0.0
+		for _, balance := range cashBalances {
+			if balance > MinCurrencyReserve {
+				totalAvailableCash += balance - MinCurrencyReserve
+			}
+		}
+
+		if totalAvailableCash <= 0 {
+			r.log.Info().
+				Int("remaining_shortfalls", len(remainingShortfalls)).
+				Msg("No more cash available for currency exchange")
+			break
+		}
+
+		// Try to cover each remaining shortfall
+		for currency, needed := range remainingShortfalls {
+			// Find currencies with excess (balance > minimum)
+			type ExcessCurrency struct {
+				Currency string
+				Balance  float64
+			}
+			var excessCurrencies []ExcessCurrency
+
+			for otherCurrency, balance := range cashBalances {
+				if otherCurrency == currency {
+					continue
+				}
+				if balance > MinCurrencyReserve {
+					excessCurrencies = append(excessCurrencies, ExcessCurrency{
+						Currency: otherCurrency,
+						Balance:  balance,
+					})
+				}
+			}
+
+			// Try to exchange from currencies with excess
+			for _, excess := range excessCurrencies {
+				if _, exists := remainingShortfalls[currency]; !exists {
+					break // Already covered
+				}
+
+				needed = remainingShortfalls[currency]
+				available := excess.Balance - MinCurrencyReserve
+
+				// Simple conversion (CurrencyExchangeService handles rate lookups internally)
+				// For now assume we can exchange enough from available balance
+				sourceAmountNeeded := needed * 1.02 // 2% buffer for safety
+
+				if available < sourceAmountNeeded {
+					continue // Not enough in this currency
+				}
+
+				r.log.Info().
+					Str("from", excess.Currency).
+					Str("to", currency).
+					Float64("amount", sourceAmountNeeded).
+					Msg("Exchanging currency to cover shortfall")
+
+				// Execute exchange
+				err := r.currencyExchangeService.Exchange(excess.Currency, currency, sourceAmountNeeded)
+				if err != nil {
+					r.log.Warn().
+						Err(err).
+						Str("from", excess.Currency).
+						Str("to", currency).
+						Msg("Currency exchange failed")
+					continue
+				}
+
+				r.log.Info().
+					Str("from", excess.Currency).
+					Str("to", currency).
+					Msg("Currency exchange successful")
+				progressMade = true
+
+				// Refresh balances after successful exchange
+				balancesRaw, err = r.tradernetClient.GetCashBalances()
+				if err != nil {
+					return remainingShortfalls, fmt.Errorf("failed to refresh balances: %w", err)
+				}
+
+				cashBalances = make(map[string]float64)
+				for _, balance := range balancesRaw {
+					cashBalances[balance.Currency] = balance.Amount
+				}
+
+				// Check if shortfall is resolved
+				if cashBalances[currency] >= MinCurrencyReserve {
+					delete(remainingShortfalls, currency)
+					r.log.Info().
+						Str("currency", currency).
+						Msg("Shortfall resolved via currency exchange")
+				}
+			}
+		}
+
+		// If no progress was made in this iteration, break to avoid infinite loop
+		if !progressMade {
+			r.log.Info().
+				Int("remaining_shortfalls", len(remainingShortfalls)).
+				Msg("No progress made in currency exchange iteration")
+			break
+		}
+	}
+
+	if iteration >= maxIterations {
+		r.log.Warn().
+			Int("max_iterations", maxIterations).
+			Int("remaining_shortfalls", len(remainingShortfalls)).
+			Msg("Reached maximum iterations in currency exchange")
+	}
+
+	return remainingShortfalls, nil
+}
+
+// step2PositionSales sells positions to cover remaining shortfalls
+func (r *NegativeBalanceRebalancer) step2PositionSales(
+	remainingShortfalls map[string]float64,
+	tradingMode string,
 ) error {
-	// Calculate total cash needed in EUR
+	if len(remainingShortfalls) == 0 {
+		return nil
+	}
+
+	// Get positions with security info
+	positions, err := r.positionRepo.GetWithSecurityInfo()
+	if err != nil {
+		return fmt.Errorf("failed to get positions: %w", err)
+	}
+
+	// Filter to sellable positions (allow_sell=true)
+	// TODO: Add market hours checking (is_market_open)
+	var sellablePositions []portfolio.PositionWithSecurity
+	for _, pos := range positions {
+		if pos.AllowSell {
+			sellablePositions = append(sellablePositions, pos)
+		}
+	}
+
+	if len(sellablePositions) == 0 {
+		r.log.Warn().Msg("No sellable positions available")
+		return nil
+	}
+
+	// Calculate total cash needed in EUR (convert all shortfalls to EUR)
 	totalNeededEUR := 0.0
-	for currency, shortfall := range shortfalls {
-		// TODO: Use ExchangeRateService for proper conversion
-		// For now, simple heuristic: assume 1:1 for EUR, 1.1 for USD, 0.85 for GBP, 0.13 for HKD
+	for currency, shortfall := range remainingShortfalls {
+		// Simple conversion (TODO: use ExchangeRateService for precise conversion)
 		eurValue := shortfall
 		switch currency {
 		case "EUR":
@@ -272,32 +453,194 @@ func (r *NegativeBalanceRebalancer) createEmergencySellRecommendations(
 		totalNeededEUR += eurValue
 	}
 
-	r.log.Info().
-		Float64("total_needed_eur", totalNeededEUR).
-		Msg("Calculated total cash needed for emergency rebalancing")
+	// Sort positions by market_value_eur descending (largest first)
+	sort.Slice(sellablePositions, func(i, j int) bool {
+		return sellablePositions[i].MarketValueEUR > sellablePositions[j].MarketValueEUR
+	})
 
-	// Get positions that can be sold
-	// TODO: Implement market hours check (is_market_open)
-	// TODO: Implement position selection algorithm (largest first, allow_sell=true)
-	// For now, log that position selection needs implementation
+	// Select positions to sell
+	var sellRecommendations []services.TradeRecommendation
+	totalSellValue := 0.0
 
-	r.log.Warn().Msg("Emergency sell recommendations require implementation of:")
-	r.log.Warn().Msg("  1. Position repository with allow_sell flag")
-	r.log.Warn().Msg("  2. Market hours checking")
-	r.log.Warn().Msg("  3. Position selection algorithm")
-	r.log.Warn().Msg("  4. Recommendation creation in database")
+	for _, pos := range sellablePositions {
+		if totalSellValue >= totalNeededEUR*1.1 { // 10% buffer
+			break
+		}
 
-	// Store emergency portfolio hash for later cleanup
+		// Sell partial or full position
+		positionValue := pos.MarketValueEUR
+		sellValueEUR := positionValue
+		if totalSellValue+positionValue > totalNeededEUR*1.1 {
+			sellValueEUR = (totalNeededEUR * 1.1) - totalSellValue
+		}
+
+		sellQuantity := pos.Quantity
+		if sellValueEUR < positionValue && pos.CurrentPrice > 0 {
+			// Partial sell
+			sellQuantity = sellValueEUR / (pos.CurrentPrice / pos.CurrencyRate)
+		}
+
+		if sellQuantity > 0 {
+			rec := services.TradeRecommendation{
+				Symbol:         pos.Symbol,
+				Side:           "SELL",
+				Quantity:       sellQuantity,
+				EstimatedPrice: pos.CurrentPrice,
+				Currency:       pos.Currency,
+				Reason:         "Emergency rebalancing: negative cash balance",
+			}
+			sellRecommendations = append(sellRecommendations, rec)
+			totalSellValue += sellValueEUR
+		}
+	}
+
+	if len(sellRecommendations) == 0 {
+		r.log.Warn().Msg("No sell recommendations generated")
+		return nil
+	}
+
+	// Store emergency recommendations in database for UI visibility
 	emergencyPortfolioHash := "EMERGENCY:negative_balance_rebalancing"
+	for _, rec := range sellRecommendations {
+		planningRec := planning.Recommendation{
+			Symbol:         rec.Symbol,
+			Name:           rec.Symbol, // Use symbol as name for now
+			Side:           rec.Side,
+			Quantity:       rec.Quantity,
+			EstimatedPrice: rec.EstimatedPrice,
+			Currency:       rec.Currency,
+			Reason:         rec.Reason,
+			Priority:       999.0, // High priority for emergency
+			PortfolioHash:  emergencyPortfolioHash,
+			Status:         "pending",
+		}
 
-	// TODO: Create recommendations using RecommendationRepository
-	// For now, log the shortfalls
-	for currency, shortfall := range shortfalls {
-		r.log.Warn().
-			Str("currency", currency).
-			Float64("shortfall", shortfall).
-			Str("portfolio_hash", emergencyPortfolioHash).
-			Msg("Emergency rebalancing needed")
+		_, err := r.recommendationRepo.CreateOrUpdate(planningRec)
+		if err != nil {
+			r.log.Warn().Err(err).Msg("Failed to store emergency recommendation")
+		}
+	}
+
+	r.log.Info().
+		Int("recommendation_count", len(sellRecommendations)).
+		Float64("total_value_eur", totalSellValue).
+		Msg("Emergency sell recommendations created")
+
+	// Research mode: create recommendations but don't execute
+	if tradingMode == "research" {
+		r.log.Info().Msg("Research mode: Emergency sales recommended but NOT executed (shown in UI only)")
+		return nil
+	}
+
+	// Live mode: execute trades
+	r.log.Info().
+		Int("trade_count", len(sellRecommendations)).
+		Msg("Executing emergency trades in live mode")
+
+	results := r.tradeExecutionService.ExecuteTrades(sellRecommendations)
+
+	// Mark successfully executed recommendations
+	for i, result := range results {
+		if result.Status == "success" && i < len(sellRecommendations) {
+			rec := sellRecommendations[i]
+
+			// Find matching recommendation and mark as executed
+			matchingRecs, err := r.recommendationRepo.FindMatchingForExecution(
+				rec.Symbol,
+				rec.Side,
+				emergencyPortfolioHash,
+			)
+			if err != nil {
+				r.log.Warn().Err(err).Msg("Failed to find matching recommendation")
+				continue
+			}
+
+			for _, matchingRec := range matchingRecs {
+				if err := r.recommendationRepo.MarkExecuted(matchingRec.UUID); err != nil {
+					r.log.Warn().Err(err).Msg("Failed to mark recommendation as executed")
+				} else {
+					r.log.Info().
+						Str("uuid", matchingRec.UUID).
+						Str("symbol", rec.Symbol).
+						Msg("Marked emergency recommendation as executed")
+				}
+			}
+		}
+	}
+
+	successCount := 0
+	for _, result := range results {
+		if result.Status == "success" {
+			successCount++
+		}
+	}
+
+	r.log.Info().
+		Int("successful", successCount).
+		Int("total", len(results)).
+		Msg("Emergency sales completed")
+
+	return nil
+}
+
+// step3FinalExchange performs final currency exchange after sales
+func (r *NegativeBalanceRebalancer) step3FinalExchange(tradingMode string) error {
+	// Research mode: skip execution
+	if tradingMode == "research" {
+		r.log.Info().Msg("Research mode: Final currency exchanges recommended but NOT executed")
+		return nil
+	}
+
+	// Refresh balances after sales
+	balancesRaw, err := r.tradernetClient.GetCashBalances()
+	if err != nil {
+		return fmt.Errorf("failed to refresh balances: %w", err)
+	}
+
+	cashBalances := make(map[string]float64)
+	for _, balance := range balancesRaw {
+		cashBalances[balance.Currency] = balance.Amount
+	}
+
+	// Check for remaining shortfalls
+	shortfalls, err := r.CheckCurrencyMinimums(cashBalances)
+	if err != nil {
+		return fmt.Errorf("failed to check currency minimums: %w", err)
+	}
+
+	if len(shortfalls) == 0 {
+		r.log.Info().Msg("All currencies now meet minimum reserve after rebalancing")
+		return nil
+	}
+
+	// Try one more round of currency exchange
+	finalShortfalls, err := r.step1CurrencyExchange(shortfalls, cashBalances, tradingMode)
+	if err != nil {
+		return fmt.Errorf("failed in final currency exchange: %w", err)
+	}
+
+	// Final check
+	balancesRaw, err = r.tradernetClient.GetCashBalances()
+	if err != nil {
+		return fmt.Errorf("failed to refresh balances: %w", err)
+	}
+
+	cashBalances = make(map[string]float64)
+	for _, balance := range balancesRaw {
+		cashBalances[balance.Currency] = balance.Amount
+	}
+
+	finalShortfalls, err = r.CheckCurrencyMinimums(cashBalances)
+	if err != nil {
+		return fmt.Errorf("failed to check final currency minimums: %w", err)
+	}
+
+	if len(finalShortfalls) > 0 {
+		r.log.Error().
+			Int("remaining_shortfalls", len(finalShortfalls)).
+			Msg("Some currencies still below minimum after rebalancing")
+	} else {
+		r.log.Info().Msg("Negative balance rebalancing completed successfully")
 	}
 
 	return nil

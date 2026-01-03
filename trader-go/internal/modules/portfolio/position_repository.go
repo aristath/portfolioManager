@@ -84,7 +84,7 @@ func (r *PositionRepository) GetWithSecurityInfo() ([]PositionWithSecurity, erro
 
 	// Get securities from config.db
 	securityRows, err := r.configDB.Query(`
-		SELECT symbol, name, country, fullExchangeName, industry, currency
+		SELECT symbol, name, country, fullExchangeName, industry, currency, allow_sell
 		FROM securities
 		WHERE active = 1
 	`)
@@ -101,6 +101,7 @@ func (r *PositionRepository) GetWithSecurityInfo() ([]PositionWithSecurity, erro
 		FullExchangeName sql.NullString
 		Industry         sql.NullString
 		Currency         sql.NullString
+		AllowSell        bool
 	}
 
 	securitiesBySymbol := make(map[string]SecurityInfo)
@@ -113,6 +114,7 @@ func (r *PositionRepository) GetWithSecurityInfo() ([]PositionWithSecurity, erro
 			&sec.FullExchangeName,
 			&sec.Industry,
 			&sec.Currency,
+			&sec.AllowSell,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan security: %w", err)
 		}
@@ -142,6 +144,7 @@ func (r *PositionRepository) GetWithSecurityInfo() ([]PositionWithSecurity, erro
 
 		if found {
 			merged.StockName = sec.Name
+			merged.AllowSell = sec.AllowSell
 			if sec.Country.Valid {
 				merged.Country = sec.Country.String
 			}
@@ -154,6 +157,7 @@ func (r *PositionRepository) GetWithSecurityInfo() ([]PositionWithSecurity, erro
 		} else {
 			// Fallback: use symbol as name if security not found
 			merged.StockName = symbol
+			merged.AllowSell = false // Default to not allowing sell if security not found
 		}
 
 		result = append(result, merged)

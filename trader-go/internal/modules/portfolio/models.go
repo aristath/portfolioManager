@@ -71,6 +71,7 @@ type PositionWithSecurity struct {
 	CurrencyRate     float64 `db:"currency_rate"`
 	AvgPrice         float64 `db:"avg_price"`
 	Quantity         float64 `db:"quantity"`
+	AllowSell        bool    `db:"allow_sell"`
 }
 
 // Analytics Response Models
