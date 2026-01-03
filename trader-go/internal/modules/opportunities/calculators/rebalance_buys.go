@@ -224,8 +224,3 @@ func (c *RebalanceBuysCalculator) Calculate(
 
 	return candidates, nil
 }
-
-func init() {
-	// Auto-register on import
-	DefaultCalculatorRegistry.Register(NewRebalanceBuysCalculator(zerolog.Nop()))
-}

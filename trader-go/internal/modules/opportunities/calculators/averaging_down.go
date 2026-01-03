@@ -35,11 +35,11 @@ func (c *AveragingDownCalculator) Calculate(
 	params map[string]interface{},
 ) ([]domain.ActionCandidate, error) {
 	// Parameters with defaults
-	minLossThreshold := GetFloatParam(params, "min_loss_threshold", -0.10)    // -10% minimum loss
-	maxLossThreshold := GetFloatParam(params, "max_loss_threshold", -0.30)    // -30% maximum loss (safety)
-	minScore := GetFloatParam(params, "min_score", 0.6)                        // Minimum security score
+	minLossThreshold := GetFloatParam(params, "min_loss_threshold", -0.10) // -10% minimum loss
+	maxLossThreshold := GetFloatParam(params, "max_loss_threshold", -0.30) // -30% maximum loss (safety)
+	minScore := GetFloatParam(params, "min_score", 0.6)                    // Minimum security score
 	maxValuePerPosition := GetFloatParam(params, "max_value_per_position", 500.0)
-	maxPositions := GetIntParam(params, "max_positions", 0)                    // 0 = unlimited
+	maxPositions := GetIntParam(params, "max_positions", 0) // 0 = unlimited
 
 	if !ctx.AllowBuy {
 		c.log.Debug().Msg("Buying not allowed, skipping averaging down")
@@ -177,9 +177,4 @@ func (c *AveragingDownCalculator) Calculate(
 		Msg("Averaging-down opportunities identified")
 
 	return candidates, nil
-}
-
-func init() {
-	// Auto-register on import
-	DefaultCalculatorRegistry.Register(NewAveragingDownCalculator(zerolog.Nop()))
 }

@@ -37,7 +37,7 @@ func (c *WeightBasedCalculator) Calculate(
 	params map[string]interface{},
 ) ([]planningdomain.ActionCandidate, error) {
 	// Parameters with defaults
-	minWeightDiff := GetFloatParam(params, "min_weight_diff", 0.02)       // 2% minimum difference
+	minWeightDiff := GetFloatParam(params, "min_weight_diff", 0.02) // 2% minimum difference
 	maxValuePerTrade := GetFloatParam(params, "max_value_per_trade", 500.0)
 	maxBuyPositions := GetIntParam(params, "max_buy_positions", 5)
 	maxSellPositions := GetIntParam(params, "max_sell_positions", 5)
@@ -70,11 +70,11 @@ func (c *WeightBasedCalculator) Calculate(
 
 	// Identify weight differences
 	type weightDiff struct {
-		symbol      string
-		current     float64
-		target      float64
-		diff        float64
-		absSignal   float64 // Absolute difference (for sorting)
+		symbol    string
+		current   float64
+		target    float64
+		diff      float64
+		absSignal float64 // Absolute difference (for sorting)
 	}
 	var diffs []weightDiff
 
@@ -269,9 +269,4 @@ func abs(x float64) float64 {
 		return -x
 	}
 	return x
-}
-
-func init() {
-	// Auto-register on import
-	DefaultCalculatorRegistry.Register(NewWeightBasedCalculator(zerolog.Nop()))
 }

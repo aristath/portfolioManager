@@ -35,11 +35,11 @@ func (c *ProfitTakingCalculator) Calculate(
 	params map[string]interface{},
 ) ([]domain.ActionCandidate, error) {
 	// Parameters with defaults
-	minGainThreshold := GetFloatParam(params, "min_gain_threshold", 0.15)     // 15% minimum gain
-	windfallThreshold := GetFloatParam(params, "windfall_threshold", 0.30)    // 30% for windfall
-	minHoldDays := GetIntParam(params, "min_hold_days", 90)                   // Minimum holding period
-	sellPercentage := GetFloatParam(params, "sell_percentage", 1.0)           // Sell 100% by default
-	maxPositions := GetIntParam(params, "max_positions", 0)                   // 0 = unlimited
+	minGainThreshold := GetFloatParam(params, "min_gain_threshold", 0.15)  // 15% minimum gain
+	windfallThreshold := GetFloatParam(params, "windfall_threshold", 0.30) // 30% for windfall
+	minHoldDays := GetIntParam(params, "min_hold_days", 90)                // Minimum holding period
+	sellPercentage := GetFloatParam(params, "sell_percentage", 1.0)        // Sell 100% by default
+	maxPositions := GetIntParam(params, "max_positions", 0)                // 0 = unlimited
 
 	if !ctx.AllowSell {
 		c.log.Debug().Msg("Selling not allowed, skipping profit taking")
@@ -162,10 +162,4 @@ func (c *ProfitTakingCalculator) Calculate(
 		Msg("Profit-taking opportunities identified")
 
 	return candidates, nil
-}
-
-func init() {
-	// Auto-register on import
-	// Will be replaced with actual logger when registry is initialized
-	DefaultCalculatorRegistry.Register(NewProfitTakingCalculator(zerolog.Nop()))
 }

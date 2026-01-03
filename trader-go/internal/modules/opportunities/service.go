@@ -17,7 +17,7 @@ type Service struct {
 // NewService creates a new opportunities service.
 func NewService(log zerolog.Logger) *Service {
 	return &Service{
-		registry: calculators.NewCalculatorRegistry(log),
+		registry: calculators.NewPopulatedRegistry(log),
 		log:      log.With().Str("module", "opportunities").Logger(),
 	}
 }

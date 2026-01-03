@@ -27,29 +27,68 @@
 
 ---
 
-### CASH FLOWS Module ⚠️ NEEDS VERIFICATION
+### CASH FLOWS Module ✅ VERIFIED (commit 2935da9)
 
 **Status:** Completely rewritten (2,034 lines added)
 
-**Original Bugs** (need verification in new code):
-1. Deposit currency bug (was passing `created.Currency` instead of `"EUR"`)
-2. Missing fallback to core bucket
-3. Deduplication performance (O(N) vs O(1))
+**Bugs Fixed** (verified and patched):
+1. ✅ **Deposit currency bug** - FIXED in sync.go line 148
+   - Was passing `created.Currency` (original transaction currency)
+   - Now correctly passes `"EUR"` (amount is already converted)
+2. ✅ **Missing fallback to core bucket** - FIXED in balance_service.go lines 534-544
+   - Added fallback allocation when satellites don't need funds
+   - Ensures 100% of every deposit is always allocated
+3. ✅ **Deduplication performance** - VERIFIED as O(1)
+   - Uses database UNIQUE constraint on transaction_id (schema.go line 10)
+   - Confirmed by TestCreateDuplicateTransactionID test
 
-**Action Required:** Test new implementation
+**Impact:** Cash flow processing production-ready with all bugs resolved
 
 ---
 
-### TRADING Module ⚠️ NEEDS VERIFICATION
+### TRADING Module ❌ CRITICAL GAPS
 
-**Status:** Service layer added (103 lines)
+**Status:** Basic sync operational (103 lines), execution unsafe
 
-**Original Issues** (need verification):
-1. No trade recording to database
-2. Missing 7-layer validation
-3. Missing safety checks
+**Implemented**:
+- ✅ Trade history sync from Tradernet (SyncFromTradernet)
+- ✅ GET /api/trades - Trade history retrieval
+- ✅ Database recording for synced trades
 
-**Action Required:** Verify service includes validation and recording
+**MISSING** (HandleExecuteTrade has ZERO safety checks):
+1. ❌ **No trade recording** - Executes via Tradernet but doesn't record locally
+2. ❌ **NO validation** - Missing all 7 safety layers from Python:
+   - Market hours check (ensure market is open)
+   - Cooldown check (prevent buying same security within cooldown period)
+   - Pending orders check (prevent duplicate orders)
+   - Minimum hold time check (prevent selling too quickly)
+   - Position validation (ensure sufficient position to sell)
+   - Cash balance check (ensure sufficient funds for buy)
+   - Security lookup (validate ISIN exists)
+3. ❌ **NO safety service** - Python has TradeSafetyService with comprehensive validation
+
+**Python Implementation** (app/modules/trading/api/trades.py):
+```python
+await safety_service.validate_trade(
+    symbol=symbol,
+    side=trade.side,
+    quantity=trade.quantity,
+    client=client,
+    raise_on_error=True,
+)
+result = client.place_order(...)
+await trade_execution_service.record_trade(...)
+```
+
+**Go Implementation** (internal/modules/trading/handlers.go:132):
+```go
+result, err := h.tradernetClient.PlaceOrder(req.Symbol, req.Side, req.Quantity)
+// NO VALIDATION, NO RECORDING - Just passes through to broker!
+```
+
+**Risk Level:** CRITICAL - Unsafe for production use
+**Impact:** Cannot enable manual trade execution without safety validation
+**Estimated Work:** 1-2 weeks to implement full TradeSafetyService + TradeExecutionService
 
 ---
 
@@ -421,23 +460,24 @@
 
 ---
 
-## Verification Required
+## Verification Completed
 
-### Cash Flows - Needs Testing
-- [ ] Verify deposit currency handling fixed
-- [ ] Verify fallback to core bucket fixed
-- [ ] Verify deduplication performance fixed
+### Cash Flows ✅ ALL VERIFIED (commit 2935da9)
+- [x] Deposit currency handling fixed (sync.go line 148: always "EUR")
+- [x] Fallback to core bucket fixed (balance_service.go lines 534-544)
+- [x] Deduplication performance verified O(1) (database UNIQUE constraint)
 
-### Trading - Needs Testing
-- [ ] Verify trade recording to database works
-- [ ] Verify 7-layer validation implemented
-- [ ] Verify safety checks in place
+### Trading ❌ CRITICAL GAPS IDENTIFIED
+- [x] Trade recording: MISSING in HandleExecuteTrade
+- [x] 7-layer validation: MISSING in HandleExecuteTrade
+- [x] Safety checks: MISSING in HandleExecuteTrade
+- **Conclusion:** Manual trade execution UNSAFE for production - requires TradeSafetyService implementation
 
 ---
 
 ## Migration Roadmap
 
-### Phase 1: Unblock Auto-Trading - P0 ⚠️ **95% COMPLETE**
+### Phase 1: Unblock Auto-Trading - P0 ✅ **100% COMPLETE**
 
 **Completed:**
 1. ✅ Planning/Recommendations module - **DONE**
@@ -451,10 +491,15 @@
    - All 15 endpoints operational
 4. ✅ Market Regime Detection - **DONE**
    - Full implementation with tests
+5. ✅ Emergency Rebalancing migration - **COMPLETE**
+6. ✅ Cash flows verification - **COMPLETE (commit 2935da9)**
+   - All 3 bugs verified and fixed
+   - Production-ready
 
-**Remaining:**
-1. ✅ Emergency Rebalancing migration - **COMPLETE**
-2. Cash flows + trading verification - 2-3 days
+**Manual Trading Execution:**
+- ⚠️ Not required for autonomous operation
+- ❌ HandleExecuteTrade unsafe for production (missing safety validation)
+- **Note:** Autonomous trading uses planning/recommendations (complete), not manual execution
 
 **Deliverable:** Autonomous trading operational ✅ **ACHIEVED**
 

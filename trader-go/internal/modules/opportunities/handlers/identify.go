@@ -25,26 +25,26 @@ func NewIdentifyHandler(service *opportunities.Service, log zerolog.Logger) *Ide
 
 // IdentifyRequest represents the request body for identifying opportunities.
 type IdentifyRequest struct {
-	OpportunityContext *domain.OpportunityContext    `json:"opportunity_context"`
-	Config             *domain.PlannerConfiguration  `json:"config"`
+	OpportunityContext *domain.OpportunityContext   `json:"opportunity_context"`
+	Config             *domain.PlannerConfiguration `json:"config"`
 }
 
 // IdentifyResponse represents the response for identifying opportunities.
 type IdentifyResponse struct {
 	Opportunities domain.OpportunitiesByCategory `json:"opportunities"`
-	Summary       OpportunitySummary              `json:"summary"`
+	Summary       OpportunitySummary             `json:"summary"`
 }
 
 // OpportunitySummary provides a summary of identified opportunities.
 type OpportunitySummary struct {
-	TotalCandidates int                       `json:"total_candidates"`
+	TotalCandidates int                        `json:"total_candidates"`
 	ByCategory      map[string]CategorySummary `json:"by_category"`
 }
 
 // CategorySummary provides summary stats for a category.
 type CategorySummary struct {
-	Count        int     `json:"count"`
-	TotalBuyValue float64 `json:"total_buy_value,omitempty"`
+	Count          int     `json:"count"`
+	TotalBuyValue  float64 `json:"total_buy_value,omitempty"`
 	TotalSellValue float64 `json:"total_sell_value,omitempty"`
 }
 
