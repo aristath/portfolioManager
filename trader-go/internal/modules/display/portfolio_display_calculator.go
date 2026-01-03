@@ -4,6 +4,10 @@ import (
 	"database/sql"
 	"fmt"
 	"math"
+	"path/filepath"
+	"strings"
+
+	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/aristath/arduino-trader/internal/modules/settings"
 	"github.com/rs/zerolog"
@@ -16,6 +20,7 @@ type PortfolioDisplayCalculator struct {
 	snapshotsDB   *sql.DB
 	settingsDB    *sql.DB
 	portfolioPerf *PortfolioPerformanceService
+	dataDir       string
 	log           zerolog.Logger
 }
 
@@ -23,6 +28,7 @@ type PortfolioDisplayCalculator struct {
 func NewPortfolioDisplayCalculator(
 	configDB, stateDB, snapshotsDB, settingsDB *sql.DB,
 	portfolioPerf *PortfolioPerformanceService,
+	dataDir string,
 	log zerolog.Logger,
 ) *PortfolioDisplayCalculator {
 	return &PortfolioDisplayCalculator{
@@ -31,6 +37,7 @@ func NewPortfolioDisplayCalculator(
 		snapshotsDB:   snapshotsDB,
 		settingsDB:    settingsDB,
 		portfolioPerf: portfolioPerf,
+		dataDir:       dataDir,
 		log:           log.With().Str("service", "portfolio_display_calculator").Logger(),
 	}
 }
@@ -258,14 +265,49 @@ func (c *PortfolioDisplayCalculator) getTotalPortfolioValue() (float64, error) {
 
 // getSecurityPerformance gets trailing 12mo CAGR for a security
 func (c *PortfolioDisplayCalculator) getSecurityPerformance(symbol string, target float64) (float64, error) {
-	// Note: This requires opening the per-security history database
-	// For now, returning a placeholder. In production, we'd use SecurityPerformanceService
-	// with the appropriate history DB connection
+	// Build history database path
+	// Symbol format: "AETF.GR" -> filename: "AETF_GR.db"
+	dbFilename := strings.ReplaceAll(symbol, ".", "_") + ".db"
+	historyDBPath := filepath.Join(c.dataDir, "history", dbFilename)
 
-	// TODO: Implement proper per-security history DB access
-	// For now, return 0 to avoid blocking the implementation
-	c.log.Debug().Str("symbol", symbol).Msg("Security performance calculation not yet implemented")
-	return 0, nil
+	// Open security-specific history database
+	historyDB, err := sql.Open("sqlite3", historyDBPath)
+	if err != nil {
+		c.log.Warn().
+			Err(err).
+			Str("symbol", symbol).
+			Str("path", historyDBPath).
+			Msg("Failed to open history database")
+		return 0, nil // Return 0 instead of error to avoid blocking display
+	}
+	defer historyDB.Close()
+
+	// Create security performance service
+	securityPerf := NewSecurityPerformanceService(historyDB, c.settingsDB, c.log)
+
+	// Calculate trailing 12mo CAGR
+	cagr, err := securityPerf.CalculateTrailing12MoCAGR(symbol)
+	if err != nil {
+		c.log.Warn().
+			Err(err).
+			Str("symbol", symbol).
+			Msg("Failed to calculate security performance")
+		return 0, nil // Return 0 instead of error to avoid blocking display
+	}
+
+	if cagr == nil {
+		c.log.Debug().
+			Str("symbol", symbol).
+			Msg("No CAGR data available for security")
+		return 0, nil
+	}
+
+	c.log.Debug().
+		Str("symbol", symbol).
+		Float64("cagr", *cagr).
+		Msg("Calculated security performance")
+
+	return *cagr, nil
 }
 
 // calculateBackgroundPercentage calculates % of portfolio in positions 6+
