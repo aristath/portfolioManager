@@ -32,7 +32,7 @@ type ConfigRecord struct {
 	ID          int64
 	Name        string
 	Description string
-	ConfigData  string // TOML string
+	ConfigData  string  // TOML string
 	BucketID    *string // Associated bucket (nullable for templates)
 	IsDefault   bool
 	CreatedAt   time.Time

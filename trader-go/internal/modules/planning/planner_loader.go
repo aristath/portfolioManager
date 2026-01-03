@@ -20,8 +20,8 @@ type PlannerLoader struct {
 	evaluationClient     *evaluation.Client
 	log                  zerolog.Logger
 
-	mu     sync.RWMutex
-	cache  map[string]*planner.Planner // bucket_id -> planner instance
+	mu    sync.RWMutex
+	cache map[string]*planner.Planner // bucket_id -> planner instance
 }
 
 // NewPlannerLoader creates a new planner loader.

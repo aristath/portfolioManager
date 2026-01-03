@@ -10,21 +10,21 @@ import (
 type OpportunityContext struct {
 	// Portfolio state
 	PortfolioContext       *scoringdomain.PortfolioContext `json:"portfolio_context"`
-	Positions              []domain.Position                `json:"positions"`
-	Securities             []domain.Security                `json:"securities"`
-	AvailableCashEUR       float64                          `json:"available_cash_eur"`
-	TotalPortfolioValueEUR float64                          `json:"total_portfolio_value_eur"`
+	Positions              []domain.Position               `json:"positions"`
+	Securities             []domain.Security               `json:"securities"`
+	AvailableCashEUR       float64                         `json:"available_cash_eur"`
+	TotalPortfolioValueEUR float64                         `json:"total_portfolio_value_eur"`
 
 	// Market data
-	CurrentPrices  map[string]float64     `json:"current_prices"`
+	CurrentPrices  map[string]float64         `json:"current_prices"`
 	StocksBySymbol map[string]domain.Security `json:"stocks_by_symbol"`
 
 	// Optional enrichment data
-	SecurityScores     map[string]float64 `json:"security_scores,omitempty"`      // Final scores by symbol
-	CountryAllocations map[string]float64 `json:"country_allocations,omitempty"`  // Current allocations
-	CountryToGroup     map[string]string  `json:"country_to_group,omitempty"`     // Country groupings
-	CountryWeights     map[string]float64 `json:"country_weights,omitempty"`      // Target weights by country
-	TargetWeights      map[string]float64 `json:"target_weights,omitempty"`       // Optimizer target weights
+	SecurityScores     map[string]float64 `json:"security_scores,omitempty"`     // Final scores by symbol
+	CountryAllocations map[string]float64 `json:"country_allocations,omitempty"` // Current allocations
+	CountryToGroup     map[string]string  `json:"country_to_group,omitempty"`    // Country groupings
+	CountryWeights     map[string]float64 `json:"country_weights,omitempty"`     // Target weights by country
+	TargetWeights      map[string]float64 `json:"target_weights,omitempty"`      // Optimizer target weights
 
 	// Constraints
 	IneligibleSymbols map[string]bool `json:"ineligible_symbols"` // Can't sell these
@@ -75,13 +75,13 @@ func NewOpportunityContext(
 type EvaluationContext struct {
 	// Portfolio state (same as OpportunityContext)
 	PortfolioContext       *scoringdomain.PortfolioContext `json:"portfolio_context"`
-	Positions              []domain.Position                `json:"positions"`
-	Securities             []domain.Security                `json:"securities"`
-	AvailableCashEUR       float64                          `json:"available_cash_eur"`
-	TotalPortfolioValueEUR float64                          `json:"total_portfolio_value_eur"`
+	Positions              []domain.Position               `json:"positions"`
+	Securities             []domain.Security               `json:"securities"`
+	AvailableCashEUR       float64                         `json:"available_cash_eur"`
+	TotalPortfolioValueEUR float64                         `json:"total_portfolio_value_eur"`
 
 	// Market data
-	CurrentPrices  map[string]float64     `json:"current_prices"`
+	CurrentPrices  map[string]float64         `json:"current_prices"`
 	StocksBySymbol map[string]domain.Security `json:"stocks_by_symbol"`
 
 	// Configuration
@@ -129,17 +129,17 @@ type PlanningContext struct {
 	EvaluationContext *EvaluationContext `json:"evaluation_context"`
 
 	// Planner configuration
-	MaxDepth                     int     `json:"max_depth"`
-	MaxOpportunitiesPerCategory  int     `json:"max_opportunities_per_category"`
-	PriorityThreshold            float64 `json:"priority_threshold"`
-	EnableDiverseSelection       bool    `json:"enable_diverse_selection"`
-	DiversityWeight              float64 `json:"diversity_weight"`
+	MaxDepth                    int     `json:"max_depth"`
+	MaxOpportunitiesPerCategory int     `json:"max_opportunities_per_category"`
+	PriorityThreshold           float64 `json:"priority_threshold"`
+	EnableDiverseSelection      bool    `json:"enable_diverse_selection"`
+	DiversityWeight             float64 `json:"diversity_weight"`
 
 	// Advanced settings
-	BeamWidth          int       `json:"beam_width"`           // For beam search in multi-objective mode
-	EvaluationMode     string    `json:"evaluation_mode"`      // "single_objective", "multi_objective", "stochastic", "monte_carlo"
-	StochasticShifts   []float64 `json:"stochastic_shifts"`    // Price shift scenarios
-	MonteCarloPathCount int      `json:"monte_carlo_path_count"`
+	BeamWidth           int       `json:"beam_width"`        // For beam search in multi-objective mode
+	EvaluationMode      string    `json:"evaluation_mode"`   // "single_objective", "multi_objective", "stochastic", "monte_carlo"
+	StochasticShifts    []float64 `json:"stochastic_shifts"` // Price shift scenarios
+	MonteCarloPathCount int       `json:"monte_carlo_path_count"`
 
 	// Module enablement (can be overridden by configuration)
 	EnableCombinatorial    bool `json:"enable_combinatorial"`
