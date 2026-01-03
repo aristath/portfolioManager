@@ -359,3 +359,33 @@ func (c *Client) GetQuote(symbol string) (*Quote, error) {
 
 	return &result.Quote, nil
 }
+
+// PendingOrder represents a pending order in the broker
+type PendingOrder struct {
+	OrderID  string  `json:"order_id"`
+	Symbol   string  `json:"symbol"`
+	Side     string  `json:"side"`
+	Quantity float64 `json:"quantity"`
+	Price    float64 `json:"price"`
+	Currency string  `json:"currency"`
+}
+
+// PendingOrdersResponse is the response for GetPendingOrders
+type PendingOrdersResponse struct {
+	Orders []PendingOrder `json:"orders"`
+}
+
+// GetPendingOrders retrieves all pending orders from the broker
+func (c *Client) GetPendingOrders() ([]PendingOrder, error) {
+	resp, err := c.get("/api/orders/pending")
+	if err != nil {
+		return nil, err
+	}
+
+	var result PendingOrdersResponse
+	if err := json.Unmarshal(resp.Data, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse pending orders: %w", err)
+	}
+
+	return result.Orders, nil
+}

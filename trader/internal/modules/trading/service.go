@@ -14,18 +14,21 @@ type TradingService struct {
 	log             zerolog.Logger
 	tradeRepo       *TradeRepository
 	tradernetClient *tradernet.Client
+	safetyService   *TradeSafetyService
 }
 
 // NewTradingService creates a new trading service
 func NewTradingService(
 	tradeRepo *TradeRepository,
 	tradernetClient *tradernet.Client,
+	safetyService *TradeSafetyService,
 	log zerolog.Logger,
 ) *TradingService {
 	return &TradingService{
 		log:             log.With().Str("service", "trading").Logger(),
 		tradeRepo:       tradeRepo,
 		tradernetClient: tradernetClient,
+		safetyService:   safetyService,
 	}
 }
 
@@ -100,4 +103,98 @@ func (s *TradingService) SyncFromTradernet() error {
 		Msg("Trade sync completed")
 
 	return nil
+}
+
+// TradeRequest represents a request to execute a trade
+type TradeRequest struct {
+	Symbol   string
+	Side     string
+	Quantity int
+	Reason   string
+}
+
+// TradeResult represents the result of a trade execution attempt
+type TradeResult struct {
+	Success bool
+	OrderID string
+	Reason  string // Rejection reason if not successful
+}
+
+// ExecuteTrade executes a trade through the Tradernet microservice
+// Includes all safety validations before execution
+func (s *TradingService) ExecuteTrade(req TradeRequest) (*TradeResult, error) {
+	s.log.Info().
+		Str("symbol", req.Symbol).
+		Str("side", req.Side).
+		Int("quantity", req.Quantity).
+		Str("reason", req.Reason).
+		Msg("Executing trade")
+
+	// Run safety validations if safety service is available
+	if s.safetyService != nil {
+		if err := s.safetyService.ValidateTrade(req.Symbol, req.Side, float64(req.Quantity)); err != nil {
+			s.log.Warn().
+				Err(err).
+				Str("symbol", req.Symbol).
+				Str("side", req.Side).
+				Msg("Trade rejected by safety validations")
+			return &TradeResult{
+				Success: false,
+				Reason:  fmt.Sprintf("Safety validation failed: %v", err),
+			}, nil // Return nil error - validation failure is not a system error
+		}
+	} else {
+		s.log.Warn().Msg("Safety service not available - executing trade without validations")
+	}
+
+	// Execute trade via Tradernet microservice
+	orderResult, err := s.tradernetClient.PlaceOrder(req.Symbol, req.Side, float64(req.Quantity))
+	if err != nil {
+		return &TradeResult{
+			Success: false,
+			Reason:  fmt.Sprintf("Failed to place order: %v", err),
+		}, nil // Return nil error since we handled it in TradeResult
+	}
+
+	// Record trade in local database
+	side, err := TradeSideFromString(req.Side)
+	if err != nil {
+		return &TradeResult{
+			Success: false,
+			Reason:  fmt.Sprintf("Invalid trade side: %v", err),
+		}, nil
+	}
+
+	trade := Trade{
+		OrderID:    orderResult.OrderID,
+		Symbol:     orderResult.Symbol,
+		Side:       side,
+		Quantity:   orderResult.Quantity,
+		Price:      orderResult.Price,
+		ExecutedAt: time.Now(),
+		Source:     "autonomous",
+		Currency:   "EUR",
+		BucketID:   "",
+		Mode:       "live",
+	}
+
+	if err := s.tradeRepo.Create(trade); err != nil {
+		s.log.Error().
+			Err(err).
+			Str("order_id", orderResult.OrderID).
+			Msg("Failed to record trade in database")
+		// Don't fail the execution - trade was placed successfully
+	}
+
+	s.log.Info().
+		Str("order_id", orderResult.OrderID).
+		Str("symbol", orderResult.Symbol).
+		Float64("price", orderResult.Price).
+		Msg("Trade executed successfully")
+
+	return &TradeResult{
+		Success: true,
+		OrderID: orderResult.OrderID,
+		Reason:  "Trade executed successfully",
+	}, nil
 }

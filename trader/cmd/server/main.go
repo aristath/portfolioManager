@@ -16,8 +16,15 @@ import (
 	"github.com/aristath/arduino-trader/internal/modules/cash_flows"
 	"github.com/aristath/arduino-trader/internal/modules/display"
 	"github.com/aristath/arduino-trader/internal/modules/dividends"
+	"github.com/aristath/arduino-trader/internal/modules/opportunities"
+	"github.com/aristath/arduino-trader/internal/modules/planning"
+	planningconfig "github.com/aristath/arduino-trader/internal/modules/planning/config"
+	planningevaluation "github.com/aristath/arduino-trader/internal/modules/planning/evaluation"
+	planningplanner "github.com/aristath/arduino-trader/internal/modules/planning/planner"
+	planningrepo "github.com/aristath/arduino-trader/internal/modules/planning/repository"
 	"github.com/aristath/arduino-trader/internal/modules/portfolio"
 	"github.com/aristath/arduino-trader/internal/modules/satellites"
+	"github.com/aristath/arduino-trader/internal/modules/sequences"
 	"github.com/aristath/arduino-trader/internal/modules/trading"
 	"github.com/aristath/arduino-trader/internal/modules/universe"
 	"github.com/aristath/arduino-trader/internal/scheduler"
@@ -43,14 +50,22 @@ func main() {
 	}
 
 	// Initialize databases (Python uses multiple SQLite databases)
-	configDB, err := database.New(cfg.DatabasePath) // config.db
+	configDB, err := database.New(database.Config{
+		Path:    cfg.DatabasePath,
+		Profile: database.ProfileStandard,
+		Name:    "config",
+	})
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialize config database")
 	}
 	defer configDB.Close()
 
 	// state.db - positions, scores
-	stateDB, err := database.New("../data/state.db")
+	stateDB, err := database.New(database.Config{
+		Path:    "../data/state.db",
+		Profile: database.ProfileStandard,
+		Name:    "state",
+	})
 	if err != nil {
 		// Note: log.Fatal calls os.Exit, preventing deferred cleanup
 		// In practice, OS cleans up file handles on exit, so risk is low
@@ -60,28 +75,44 @@ func main() {
 	defer stateDB.Close()
 
 	// snapshots.db - portfolio snapshots
-	snapshotsDB, err := database.New("../data/snapshots.db")
+	snapshotsDB, err := database.New(database.Config{
+		Path:    "../data/snapshots.db",
+		Profile: database.ProfileStandard,
+		Name:    "snapshots",
+	})
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialize snapshots database")
 	}
 	defer snapshotsDB.Close()
 
 	// ledger.db - trades (append-only ledger)
-	ledgerDB, err := database.New("../data/ledger.db")
+	ledgerDB, err := database.New(database.Config{
+		Path:    "../data/ledger.db",
+		Profile: database.ProfileLedger, // Maximum safety for immutable audit trail
+		Name:    "ledger",
+	})
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialize ledger database")
 	}
 	defer ledgerDB.Close()
 
 	// dividends.db - dividend records with DRIP tracking
-	dividendsDB, err := database.New("../data/dividends.db")
+	dividendsDB, err := database.New(database.Config{
+		Path:    "../data/dividends.db",
+		Profile: database.ProfileStandard,
+		Name:    "dividends",
+	})
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialize dividends database")
 	}
 	defer dividendsDB.Close()
 
 	// satellites.db - bucket management and satellite accounts
-	satellitesDB, err := database.New("../data/satellites.db")
+	satellitesDB, err := database.New(database.Config{
+		Path:    "../data/satellites.db",
+		Profile: database.ProfileStandard,
+		Name:    "satellites",
+	})
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialize satellites database")
 	}
@@ -126,6 +157,8 @@ func main() {
 		jobs.SatelliteMaintenance,
 		jobs.SatelliteReconciliation,
 		jobs.SatelliteEvaluation,
+		jobs.PlannerBatch,
+		jobs.EventBasedTrading,
 	)
 
 	// Start server in goroutine
@@ -163,6 +196,8 @@ type JobInstances struct {
 	SatelliteMaintenance    scheduler.Job
 	SatelliteReconciliation scheduler.Job
 	SatelliteEvaluation     scheduler.Job
+	PlannerBatch            scheduler.Job
+	EventBasedTrading       scheduler.Job
 }
 
 func registerJobs(sched *scheduler.Scheduler, configDB, stateDB, snapshotsDB, ledgerDB, dividendsDB, satellitesDB *database.DB, cfg *config.Config, log zerolog.Logger) (*JobInstances, error) {
@@ -183,6 +218,9 @@ func registerJobs(sched *scheduler.Scheduler, configDB, stateDB, snapshotsDB, le
 	// Currency exchange service
 	currencyExchangeService := services.NewCurrencyExchangeService(tradernetClient, log)
 
+	// Market hours service
+	marketHours := scheduler.NewMarketHoursService(log)
+
 	// Satellite services
 	balanceService := satellites.NewBalanceService(balanceRepo, bucketRepo, log)
 	bucketService := satellites.NewBucketService(bucketRepo, balanceRepo, currencyExchangeService, log)
@@ -191,7 +229,23 @@ func registerJobs(sched *scheduler.Scheduler, configDB, stateDB, snapshotsDB, le
 
 	// Trading and portfolio services
 	tradeRepo := portfolio.NewTradeRepository(ledgerDB.Conn(), log)
-	tradingService := trading.NewTradingService(trading.NewTradeRepository(ledgerDB.Conn(), log), tradernetClient, log)
+
+	// Trade safety service with all validation layers
+	tradeSafetyService := trading.NewTradeSafetyService(
+		trading.NewTradeRepository(ledgerDB.Conn(), log),
+		positionRepo,
+		securityRepo,
+		nil, // settingsService - will use defaults
+		marketHours,
+		log,
+	)
+
+	tradingService := trading.NewTradingService(
+		trading.NewTradeRepository(ledgerDB.Conn(), log),
+		tradernetClient,
+		tradeSafetyService,
+		log,
+	)
 
 	portfolioRepo := portfolio.NewPortfolioRepository(snapshotsDB.Conn(), log)
 	allocRepo := allocation.NewRepository(configDB.Conn(), log)
@@ -207,9 +261,6 @@ func registerJobs(sched *scheduler.Scheduler, configDB, stateDB, snapshotsDB, le
 
 	// Display manager (can be nil for now if not available)
 	var displayManager *display.StateManager // TODO: Initialize if display is enabled
-
-	// Market hours service
-	marketHours := scheduler.NewMarketHoursService(log)
 
 	// Register Job 1: Health Check (daily at 4:00 AM)
 	healthCheck := scheduler.NewHealthCheckJob(scheduler.HealthCheckConfig{
@@ -275,7 +326,46 @@ func registerJobs(sched *scheduler.Scheduler, configDB, stateDB, snapshotsDB, le
 		return nil, fmt.Errorf("failed to register satellite_evaluation job: %w", err)
 	}
 
-	log.Info().Int("jobs", 6).Msg("Background jobs registered successfully")
+	// Planning module repositories and services
+	recommendationRepo := planning.NewRecommendationRepository(configDB.Conn(), log)
+	configLoader := planningconfig.NewLoader(log)
+	plannerConfigRepo := planningrepo.NewConfigRepository(configDB, configLoader, log)
+	opportunitiesService := opportunities.NewService(log)
+	sequencesService := sequences.NewService(log)
+	evaluationService := planningevaluation.NewService(4, log) // 4 workers
+	plannerService := planningplanner.NewPlanner(opportunitiesService, sequencesService, evaluationService, log)
+
+	// Register Job 7: Planner Batch (every 15 minutes)
+	plannerBatch := scheduler.NewPlannerBatchJob(scheduler.PlannerBatchConfig{
+		Log:                    log,
+		PositionRepo:           positionRepo,
+		SecurityRepo:           securityRepo,
+		AllocRepo:              allocRepo,
+		TradernetClient:        tradernetClient,
+		OpportunitiesService:   opportunitiesService,
+		SequencesService:       sequencesService,
+		EvaluationService:      evaluationService,
+		PlannerService:         plannerService,
+		ConfigRepo:             plannerConfigRepo,
+		RecommendationRepo:     recommendationRepo,
+		MinPlanningIntervalMin: 15, // Minimum 15 minutes between planning cycles
+	})
+	if err := sched.AddJob("0 */15 * * * *", plannerBatch); err != nil {
+		return nil, fmt.Errorf("failed to register planner_batch job: %w", err)
+	}
+
+	// Register Job 8: Event-Based Trading (every 5 minutes)
+	eventBasedTrading := scheduler.NewEventBasedTradingJob(scheduler.EventBasedTradingConfig{
+		Log:                     log,
+		RecommendationRepo:      recommendationRepo,
+		TradingService:          tradingService,
+		MinExecutionIntervalMin: 30, // Minimum 30 minutes between trade executions
+	})
+	if err := sched.AddJob("0 */5 * * * *", eventBasedTrading); err != nil {
+		return nil, fmt.Errorf("failed to register event_based_trading job: %w", err)
+	}
+
+	log.Info().Int("jobs", 8).Msg("Background jobs registered successfully")
 
 	return &JobInstances{
 		HealthCheck:             healthCheck,
@@ -284,5 +374,7 @@ func registerJobs(sched *scheduler.Scheduler, configDB, stateDB, snapshotsDB, le
 		SatelliteMaintenance:    satelliteMaintenance,
 		SatelliteReconciliation: satelliteReconciliation,
 		SatelliteEvaluation:     satelliteEvaluation,
+		PlannerBatch:            plannerBatch,
+		EventBasedTrading:       eventBasedTrading,
 	}, nil
 }

@@ -120,6 +120,8 @@ func (s *Server) SetJobs(
 	satelliteMaintenance scheduler.Job,
 	satelliteReconciliation scheduler.Job,
 	satelliteEvaluation scheduler.Job,
+	plannerBatch scheduler.Job,
+	eventBasedTrading scheduler.Job,
 ) {
 	s.systemHandlers.SetJobs(
 		healthCheck,
@@ -128,6 +130,8 @@ func (s *Server) SetJobs(
 		satelliteMaintenance,
 		satelliteReconciliation,
 		satelliteEvaluation,
+		plannerBatch,
+		eventBasedTrading,
 	)
 }
 
@@ -330,6 +334,8 @@ func (s *Server) setupSystemRoutes(r chi.Router) {
 			r.Post("/satellite-maintenance", systemHandlers.HandleTriggerSatelliteMaintenance)
 			r.Post("/satellite-reconciliation", systemHandlers.HandleTriggerSatelliteReconciliation)
 			r.Post("/satellite-evaluation", systemHandlers.HandleTriggerSatelliteEvaluation)
+			r.Post("/planner-batch", systemHandlers.HandleTriggerPlannerBatch)
+			r.Post("/event-based-trading", systemHandlers.HandleTriggerEventBasedTrading)
 		})
 	})
 }
