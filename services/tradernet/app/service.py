@@ -223,11 +223,6 @@ class TradernetService:
                 if amount < 0:
                     logger.warning(f"Negative cash balance: {amount:.2f} {currency}")
 
-            # Add TEST currency in research mode
-            if settings.trading_mode == "research":
-                # Default test amount - in production this would read from settings DB
-                balances.append(CashBalance(currency="TEST", amount=10000.0))
-
             return balances
         except Exception as e:
             logger.error(f"Failed to get cash balances: {e}")

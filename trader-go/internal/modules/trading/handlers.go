@@ -11,6 +11,7 @@ import (
 	"github.com/aristath/arduino-trader/internal/clients/tradernet"
 	"github.com/aristath/arduino-trader/internal/modules/allocation"
 	"github.com/aristath/arduino-trader/internal/modules/portfolio"
+	"github.com/aristath/arduino-trader/internal/modules/settings"
 	"github.com/rs/zerolog"
 )
 
@@ -28,6 +29,7 @@ type TradingHandlers struct {
 	alertService     *allocation.ConcentrationAlertService
 	tradernetClient  *tradernet.Client
 	safetyService    *TradeSafetyService
+	settingsService  *settings.Service
 }
 
 // NewTradingHandlers creates a new trading handlers instance
@@ -38,6 +40,7 @@ func NewTradingHandlers(
 	alertService *allocation.ConcentrationAlertService,
 	tradernetClient *tradernet.Client,
 	safetyService *TradeSafetyService,
+	settingsService *settings.Service,
 	log zerolog.Logger,
 ) *TradingHandlers {
 	return &TradingHandlers{
@@ -47,6 +50,7 @@ func NewTradingHandlers(
 		alertService:     alertService,
 		tradernetClient:  tradernetClient,
 		safetyService:    safetyService,
+		settingsService:  settingsService,
 		log:              log.With().Str("handler", "trading").Logger(),
 	}
 }
@@ -132,6 +136,24 @@ func (h *TradingHandlers) HandleExecuteTrade(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Check trading mode - block real trades in research mode
+	tradingMode, err := h.settingsService.GetTradingMode()
+	if err != nil {
+		h.log.Error().Err(err).Msg("Failed to get trading mode")
+		h.writeError(w, http.StatusInternalServerError, "Failed to get trading mode")
+		return
+	}
+
+	if tradingMode == "research" {
+		h.log.Warn().
+			Str("symbol", req.Symbol).
+			Str("side", req.Side).
+			Float64("quantity", req.Quantity).
+			Msg("Trade blocked - system in research mode")
+		h.writeError(w, http.StatusForbidden, "Trading is disabled in research mode")
+		return
+	}
+
 	// SAFETY LAYER: Validate trade before execution
 	if h.safetyService != nil {
 		if err := h.safetyService.ValidateTrade(req.Symbol, req.Side, req.Quantity); err != nil {
@@ -155,7 +177,7 @@ func (h *TradingHandlers) HandleExecuteTrade(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Record trade in database
-	if err := h.recordTrade(req.Symbol, req.Side, req.Quantity, result); err != nil {
+	if err := h.recordTrade(req.Symbol, req.Side, req.Quantity, result, tradingMode); err != nil {
 		h.log.Error().Err(err).Msg("Failed to record trade")
 		// Don't fail the request - trade already executed
 	}
@@ -180,6 +202,7 @@ func (h *TradingHandlers) recordTrade(
 	side string,
 	quantity float64,
 	result *tradernet.OrderResult,
+	tradingMode string,
 ) error {
 	now := time.Now()
 
@@ -192,7 +215,7 @@ func (h *TradingHandlers) recordTrade(
 		OrderID:    result.OrderID,
 		Source:     "manual",
 		BucketID:   "core",
-		Mode:       "live", // TODO: Get from settings
+		Mode:       tradingMode,
 		CreatedAt:  &now,
 	}
 

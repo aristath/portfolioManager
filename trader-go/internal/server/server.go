@@ -567,6 +567,7 @@ func (s *Server) setupTradingRoutes(r chi.Router) {
 		alertService,
 		tradernetClient,
 		safetyService,
+		settingsService,
 		s.log,
 	)
 
