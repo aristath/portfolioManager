@@ -19,13 +19,15 @@
 - **Partially Migrated:** planning, portfolio, rebalancing, satellites, scoring, trading, universe
 - **Not Migrated:** analytics (actively used), jobs (8 files), core infrastructure
 
-### Blocking Issues
-1. **Portfolio hash generation** - Critical, referenced in Go but not implemented
-2. **Analytics module** - Actively used by scoring and rebalancing
-3. **Trade execution workflow** - 851 lines of safety logic missing
-4. **Rebalancing service** - 853 lines of planning integration missing
-5. **Database repositories** - All 7 Python repositories still active
-6. **Job schedulers** - 8 jobs not migrated, 4 partially migrated
+### Blocking Issues (UPDATED 2026-01-03)
+1. ✅ **Portfolio hash generation** - ~~RESOLVED: Fully implemented in Go (trader/internal/modules/planning/hash/)~~
+2. ✅ **Job schedulers** - ~~RESOLVED: 6 jobs now scheduled and running~~
+3. ✅ **Database repositories** - ~~RESOLVED: All 7 repositories FULLY MIGRATED to Go~~
+4. **Analytics module** - Actively used by scoring and rebalancing
+5. **Trade execution workflow** - Simplified version exists (176 lines), full 7-layer validation pending
+6. **Rebalancing service** - Negative balance fully implemented (716 lines), general rebalancing pending
+7. **Event-based trading job** - Not migrated (714 lines)
+8. **Planner batch job** - Not migrated (619 lines)
 
 ---
 
