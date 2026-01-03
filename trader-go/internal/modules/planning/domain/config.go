@@ -56,9 +56,10 @@ type FiltersConfig struct {
 // Each bucket can have its own planner configuration with different enabled modules and parameters.
 type PlannerConfiguration struct {
 	// Planner identification
-	Name                  string `toml:"name" json:"name"`
-	Description           string `toml:"description" json:"description"`
-	EnableBatchGeneration bool   `toml:"enable_batch_generation" json:"enable_batch_generation"`
+	Name                  string  `toml:"name" json:"name"`
+	Description           string  `toml:"description" json:"description"`
+	BucketID              *string `toml:"bucket_id,omitempty" json:"bucket_id,omitempty"` // Associated bucket (nullable for templates)
+	EnableBatchGeneration bool    `toml:"enable_batch_generation" json:"enable_batch_generation"`
 
 	// Global planner settings
 	MaxDepth                    int     `toml:"max_depth" json:"max_depth"`

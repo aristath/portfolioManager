@@ -33,6 +33,7 @@ type ConfigRecord struct {
 	Name        string
 	Description string
 	ConfigData  string // TOML string
+	BucketID    *string // Associated bucket (nullable for templates)
 	IsDefault   bool
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
@@ -70,9 +71,9 @@ func (r *ConfigRepository) CreateConfig(
 
 	// Insert config
 	result, err := r.db.Exec(`
-		INSERT INTO planner_configs (name, description, config_data, is_default, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, cfg.Name, cfg.Description, tomlData, isDefault, now, now)
+		INSERT INTO planner_configs (name, description, config_data, bucket_id, is_default, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, cfg.Name, cfg.Description, tomlData, cfg.BucketID, isDefault, now, now)
 
 	if err != nil {
 		return 0, fmt.Errorf("failed to insert config: %w", err)
@@ -101,7 +102,7 @@ func (r *ConfigRepository) CreateConfig(
 func (r *ConfigRepository) GetConfig(id int64) (*domain.PlannerConfiguration, error) {
 	var record ConfigRecord
 	err := r.db.QueryRow(`
-		SELECT id, name, description, config_data, is_default, created_at, updated_at
+		SELECT id, name, description, config_data, bucket_id, is_default, created_at, updated_at
 		FROM planner_configs
 		WHERE id = ?
 	`, id).Scan(
@@ -109,6 +110,7 @@ func (r *ConfigRepository) GetConfig(id int64) (*domain.PlannerConfiguration, er
 		&record.Name,
 		&record.Description,
 		&record.ConfigData,
+		&record.BucketID,
 		&record.IsDefault,
 		&record.CreatedAt,
 		&record.UpdatedAt,
@@ -134,7 +136,7 @@ func (r *ConfigRepository) GetConfig(id int64) (*domain.PlannerConfiguration, er
 func (r *ConfigRepository) GetConfigByName(name string) (*domain.PlannerConfiguration, error) {
 	var record ConfigRecord
 	err := r.db.QueryRow(`
-		SELECT id, name, description, config_data, is_default, created_at, updated_at
+		SELECT id, name, description, config_data, bucket_id, is_default, created_at, updated_at
 		FROM planner_configs
 		WHERE name = ?
 	`, name).Scan(
@@ -142,6 +144,7 @@ func (r *ConfigRepository) GetConfigByName(name string) (*domain.PlannerConfigur
 		&record.Name,
 		&record.Description,
 		&record.ConfigData,
+		&record.BucketID,
 		&record.IsDefault,
 		&record.CreatedAt,
 		&record.UpdatedAt,
@@ -167,7 +170,7 @@ func (r *ConfigRepository) GetConfigByName(name string) (*domain.PlannerConfigur
 func (r *ConfigRepository) GetDefaultConfig() (*domain.PlannerConfiguration, error) {
 	var record ConfigRecord
 	err := r.db.QueryRow(`
-		SELECT id, name, description, config_data, is_default, created_at, updated_at
+		SELECT id, name, description, config_data, bucket_id, is_default, created_at, updated_at
 		FROM planner_configs
 		WHERE is_default = 1
 		LIMIT 1
@@ -176,6 +179,7 @@ func (r *ConfigRepository) GetDefaultConfig() (*domain.PlannerConfiguration, err
 		&record.Name,
 		&record.Description,
 		&record.ConfigData,
+		&record.BucketID,
 		&record.IsDefault,
 		&record.CreatedAt,
 		&record.UpdatedAt,
@@ -186,6 +190,41 @@ func (r *ConfigRepository) GetDefaultConfig() (*domain.PlannerConfiguration, err
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to get default config: %w", err)
+	}
+
+	// Parse TOML
+	cfg, err := r.loader.LoadFromString(record.ConfigData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse config TOML: %w", err)
+	}
+
+	return cfg, nil
+}
+
+// GetByBucket retrieves the configuration for a specific bucket.
+func (r *ConfigRepository) GetByBucket(bucketID string) (*domain.PlannerConfiguration, error) {
+	var record ConfigRecord
+	err := r.db.QueryRow(`
+		SELECT id, name, description, config_data, bucket_id, is_default, created_at, updated_at
+		FROM planner_configs
+		WHERE bucket_id = ?
+		LIMIT 1
+	`).Scan(
+		&record.ID,
+		&record.Name,
+		&record.Description,
+		&record.ConfigData,
+		&record.BucketID,
+		&record.IsDefault,
+		&record.CreatedAt,
+		&record.UpdatedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get config by bucket: %w", err)
 	}
 
 	// Parse TOML
@@ -224,9 +263,9 @@ func (r *ConfigRepository) UpdateConfig(
 	// Update config
 	_, err = r.db.Exec(`
 		UPDATE planner_configs
-		SET name = ?, description = ?, config_data = ?, updated_at = ?
+		SET name = ?, description = ?, config_data = ?, bucket_id = ?, updated_at = ?
 		WHERE id = ?
-	`, cfg.Name, cfg.Description, tomlData, now, id)
+	`, cfg.Name, cfg.Description, tomlData, cfg.BucketID, now, id)
 
 	if err != nil {
 		return fmt.Errorf("failed to update config: %w", err)
@@ -283,7 +322,7 @@ func (r *ConfigRepository) DeleteConfig(id int64) error {
 // ListConfigs retrieves all configurations.
 func (r *ConfigRepository) ListConfigs() ([]ConfigRecord, error) {
 	rows, err := r.db.Query(`
-		SELECT id, name, description, config_data, is_default, created_at, updated_at
+		SELECT id, name, description, config_data, bucket_id, is_default, created_at, updated_at
 		FROM planner_configs
 		ORDER BY is_default DESC, name ASC
 	`)
@@ -301,6 +340,7 @@ func (r *ConfigRepository) ListConfigs() ([]ConfigRecord, error) {
 			&record.Name,
 			&record.Description,
 			&record.ConfigData,
+			&record.BucketID,
 			&record.IsDefault,
 			&record.CreatedAt,
 			&record.UpdatedAt,
@@ -380,7 +420,7 @@ func (r *ConfigRepository) unsetDefaultConfig() error {
 func (r *ConfigRepository) getConfigRecord(id int64) (*ConfigRecord, error) {
 	var record ConfigRecord
 	err := r.db.QueryRow(`
-		SELECT id, name, description, config_data, is_default, created_at, updated_at
+		SELECT id, name, description, config_data, bucket_id, is_default, created_at, updated_at
 		FROM planner_configs
 		WHERE id = ?
 	`, id).Scan(
@@ -388,6 +428,7 @@ func (r *ConfigRepository) getConfigRecord(id int64) (*ConfigRecord, error) {
 		&record.Name,
 		&record.Description,
 		&record.ConfigData,
+		&record.BucketID,
 		&record.IsDefault,
 		&record.CreatedAt,
 		&record.UpdatedAt,
