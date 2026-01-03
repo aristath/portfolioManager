@@ -3,16 +3,16 @@ package domain
 // ActionCandidate represents a potential trade action with associated metadata
 // for priority-based selection and sequencing.
 type ActionCandidate struct {
-	Side      string   `json:"side"`       // Trade direction ("BUY" or "SELL")
-	Symbol    string   `json:"symbol"`     // Security symbol
-	Name      string   `json:"name"`       // Security name for display
-	Quantity  int      `json:"quantity"`   // Number of units to trade
-	Price     float64  `json:"price"`      // Price per unit
-	ValueEUR  float64  `json:"value_eur"`  // Total value in EUR
-	Currency  string   `json:"currency"`   // Trading currency
-	Priority  float64  `json:"priority"`   // Higher values indicate higher priority
-	Reason    string   `json:"reason"`     // Human-readable explanation for this action
-	Tags      []string `json:"tags"`       // Classification tags (e.g., ["windfall", "underweight_asia"])
+	Side     string   `json:"side"`      // Trade direction ("BUY" or "SELL")
+	Symbol   string   `json:"symbol"`    // Security symbol
+	Name     string   `json:"name"`      // Security name for display
+	Quantity int      `json:"quantity"`  // Number of units to trade
+	Price    float64  `json:"price"`     // Price per unit
+	ValueEUR float64  `json:"value_eur"` // Total value in EUR
+	Currency string   `json:"currency"`  // Trading currency
+	Priority float64  `json:"priority"`  // Higher values indicate higher priority
+	Reason   string   `json:"reason"`    // Human-readable explanation for this action
+	Tags     []string `json:"tags"`      // Classification tags (e.g., ["windfall", "underweight_asia"])
 }
 
 // HolisticStep represents a single step in a holistic plan.
@@ -34,15 +34,15 @@ type HolisticStep struct {
 
 // HolisticPlan represents a complete holistic plan with end-state scoring.
 type HolisticPlan struct {
-	Steps            []HolisticStep     `json:"steps"`              // Sequence of actions to execute
-	CurrentScore     float64            `json:"current_score"`      // Current portfolio score
-	EndStateScore    float64            `json:"end_state_score"`    // Expected score after execution
-	Improvement      float64            `json:"improvement"`        // Score improvement (end - current)
-	NarrativeSummary string             `json:"narrative_summary"`  // Human-readable plan summary
-	ScoreBreakdown   map[string]float64 `json:"score_breakdown"`    // Detailed score components
-	CashRequired     float64            `json:"cash_required"`      // Total cash needed for buys
-	CashGenerated    float64            `json:"cash_generated"`     // Total cash from sells
-	Feasible         bool               `json:"feasible"`           // Whether plan can be executed
+	Steps            []HolisticStep     `json:"steps"`             // Sequence of actions to execute
+	CurrentScore     float64            `json:"current_score"`     // Current portfolio score
+	EndStateScore    float64            `json:"end_state_score"`   // Expected score after execution
+	Improvement      float64            `json:"improvement"`       // Score improvement (end - current)
+	NarrativeSummary string             `json:"narrative_summary"` // Human-readable plan summary
+	ScoreBreakdown   map[string]float64 `json:"score_breakdown"`   // Detailed score components
+	CashRequired     float64            `json:"cash_required"`     // Total cash needed for buys
+	CashGenerated    float64            `json:"cash_generated"`    // Total cash from sells
+	Feasible         bool               `json:"feasible"`          // Whether plan can be executed
 }
 
 // ActionSequence represents a sequence of actions for evaluation.
@@ -57,27 +57,28 @@ type ActionSequence struct {
 
 // EvaluationResult represents the result of evaluating an action sequence.
 type EvaluationResult struct {
-	SequenceHash          string             `json:"sequence_hash"`
-	EndScore              float64            `json:"end_score"`                // Final portfolio score
-	ScoreBreakdown        map[string]float64 `json:"breakdown"`                // Detailed score components
-	EndCash               float64            `json:"end_cash"`                 // Cash balance after sequence
-	EndContextPositions   map[string]float64 `json:"end_context_positions"`    // Position quantities after sequence
-	DiversificationScore  float64            `json:"div_score"`                // Diversification component
-	TotalValue            float64            `json:"total_value"`              // Total portfolio value
-	Feasible              bool               `json:"feasible"`                 // Whether sequence is executable
-	Error                 string             `json:"error,omitempty"`          // Error message if evaluation failed
+	SequenceHash         string             `json:"sequence_hash"`
+	PortfolioHash        string             `json:"portfolio_hash,omitempty"` // Portfolio snapshot this evaluation is for
+	EndScore             float64            `json:"end_score"`                // Final portfolio score
+	ScoreBreakdown       map[string]float64 `json:"breakdown"`                // Detailed score components
+	EndCash              float64            `json:"end_cash"`                 // Cash balance after sequence
+	EndContextPositions  map[string]float64 `json:"end_context_positions"`    // Position quantities after sequence
+	DiversificationScore float64            `json:"div_score"`                // Diversification component
+	TotalValue           float64            `json:"total_value"`              // Total portfolio value
+	Feasible             bool               `json:"feasible"`                 // Whether sequence is executable
+	Error                string             `json:"error,omitempty"`          // Error message if evaluation failed
 }
 
 // OpportunityCategory represents different types of trading opportunities.
 type OpportunityCategory string
 
 const (
-	OpportunityCategoryProfitTaking OpportunityCategory = "profit_taking"
-	OpportunityCategoryAveragingDown OpportunityCategory = "averaging_down"
+	OpportunityCategoryProfitTaking    OpportunityCategory = "profit_taking"
+	OpportunityCategoryAveragingDown   OpportunityCategory = "averaging_down"
 	OpportunityCategoryOpportunityBuys OpportunityCategory = "opportunity_buys"
-	OpportunityCategoryRebalanceSells OpportunityCategory = "rebalance_sells"
-	OpportunityCategoryRebalanceBuys OpportunityCategory = "rebalance_buys"
-	OpportunityCategoryWeightBased OpportunityCategory = "weight_based"
+	OpportunityCategoryRebalanceSells  OpportunityCategory = "rebalance_sells"
+	OpportunityCategoryRebalanceBuys   OpportunityCategory = "rebalance_buys"
+	OpportunityCategoryWeightBased     OpportunityCategory = "weight_based"
 )
 
 // OpportunitiesByCategory organizes action candidates by their category.

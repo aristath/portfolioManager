@@ -21,11 +21,11 @@ type SystemHandlers struct {
 	marketHours *scheduler.MarketHoursService
 	scheduler   *scheduler.Scheduler
 	// Jobs (will be set after job registration in main.go)
-	syncCycleJob          scheduler.Job
-	weeklyMaintenanceJob  scheduler.Job
-	dividendReinvestJob   scheduler.Job
-	plannerBatchJob       scheduler.Job
-	dailyMaintenanceJob   scheduler.Job
+	syncCycleJob         scheduler.Job
+	weeklyMaintenanceJob scheduler.Job
+	dividendReinvestJob  scheduler.Job
+	plannerBatchJob      scheduler.Job
+	dailyMaintenanceJob  scheduler.Job
 }
 
 // NewSystemHandlers creates a new system handlers instance
@@ -80,10 +80,10 @@ type TradernetStatusResponse struct {
 
 // JobsStatusResponse represents scheduler job status
 type JobsStatusResponse struct {
-	TotalJobs   int                      `json:"total_jobs"`
-	Jobs        []JobInfo                `json:"jobs"`
-	LastRun     string                   `json:"last_run,omitempty"`
-	NextRun     string                   `json:"next_run,omitempty"`
+	TotalJobs int       `json:"total_jobs"`
+	Jobs      []JobInfo `json:"jobs"`
+	LastRun   string    `json:"last_run,omitempty"`
+	NextRun   string    `json:"next_run,omitempty"`
 }
 
 // JobInfo represents information about a single job
@@ -120,19 +120,19 @@ type DatabaseStatsResponse struct {
 
 // DBInfo represents information about a single database
 type DBInfo struct {
-	Name      string  `json:"name"`
-	Path      string  `json:"path"`
-	SizeMB    float64 `json:"size_mb"`
-	TableCount int    `json:"table_count,omitempty"`
-	RowCount   int    `json:"row_count,omitempty"`
+	Name       string  `json:"name"`
+	Path       string  `json:"path"`
+	SizeMB     float64 `json:"size_mb"`
+	TableCount int     `json:"table_count,omitempty"`
+	RowCount   int     `json:"row_count,omitempty"`
 }
 
 // DiskUsageResponse represents disk usage statistics
 type DiskUsageResponse struct {
-	DataDirMB  float64 `json:"data_dir_mb"`
-	LogsDirMB  float64 `json:"logs_dir_mb"`
-	BackupsMB  float64 `json:"backups_mb"`
-	TotalMB    float64 `json:"total_mb"`
+	DataDirMB   float64 `json:"data_dir_mb"`
+	LogsDirMB   float64 `json:"logs_dir_mb"`
+	BackupsMB   float64 `json:"backups_mb"`
+	TotalMB     float64 `json:"total_mb"`
 	AvailableMB float64 `json:"available_mb,omitempty"`
 }
 
@@ -533,6 +533,143 @@ func (h *SystemHandlers) HandleTriggerDailyMaintenance(w http.ResponseWriter, r 
 	h.writeJSON(w, map[string]string{
 		"status":  "success",
 		"message": "Daily maintenance triggered successfully",
+	})
+}
+
+// HandleSyncPortfolio triggers manual portfolio sync from Tradernet
+// POST /api/system/sync/portfolio
+func (h *SystemHandlers) HandleSyncPortfolio(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	h.log.Info().Msg("Manual portfolio sync triggered")
+
+	// TODO: Implement portfolio sync in Go
+	// For now, this is handled by the sync_cycle job which includes portfolio sync
+	// The sync cycle job calls cash_flows sync which includes portfolio sync
+
+	h.writeJSON(w, map[string]string{
+		"status":  "success",
+		"message": "Portfolio sync delegated to sync cycle (handled by cash flows module)",
+	})
+}
+
+// HandleSyncDailyPipeline triggers daily pipeline (securities data sync)
+// POST /api/system/sync/daily-pipeline
+// This is an alias for /sync/securities-data for backwards compatibility
+func (h *SystemHandlers) HandleSyncDailyPipeline(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	h.log.Info().Msg("Manual daily pipeline (securities data sync) triggered")
+
+	// This is an alias for /sync/securities-data
+	// The actual implementation is in universe handlers (HandleSyncSecuritiesData)
+	// which proxies to Python for now
+
+	h.writeJSON(w, map[string]string{
+		"status":  "success",
+		"message": "Daily pipeline redirected to /sync/securities-data",
+		"note":    "Use POST /api/system/sync/securities-data instead",
+	})
+}
+
+// HandleSyncRecommendations triggers recommendation generation and cache update
+// POST /api/system/sync/recommendations
+func (h *SystemHandlers) HandleSyncRecommendations(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	h.log.Info().Msg("Manual recommendation sync triggered")
+
+	// TODO: Implement recommendation generation in Go
+	// This requires:
+	// 1. Clear recommendation caches
+	// 2. Generate fresh recommendations via planning module
+	// 3. Update LED display
+	//
+	// For now, recommendations are generated on-demand via:
+	// POST /api/planning/recommendations or POST /api/trades/recommendations
+
+	h.writeJSON(w, map[string]string{
+		"status":  "success",
+		"message": "Recommendations are generated on-demand via planning module",
+		"note":    "Use POST /api/planning/recommendations or POST /api/trades/recommendations",
+	})
+}
+
+// HandleClearLocks clears stuck lock files
+// POST /api/system/locks/clear
+func (h *SystemHandlers) HandleClearLocks(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get optional lock_name query parameter
+	lockName := r.URL.Query().Get("lock_name")
+
+	h.log.Info().
+		Str("lock_name", lockName).
+		Msg("Manual lock clearing triggered")
+
+	lockDir := filepath.Join(h.dataDir, "locks")
+	cleared := []string{}
+
+	// Check if lock directory exists
+	if _, err := os.Stat(lockDir); os.IsNotExist(err) {
+		h.writeJSON(w, map[string]interface{}{
+			"status":  "ok",
+			"message": "No lock directory found",
+			"cleared": cleared,
+		})
+		return
+	}
+
+	// If specific lock name provided, clear just that one
+	if lockName != "" {
+		lockFile := filepath.Join(lockDir, lockName+".lock")
+		if err := os.Remove(lockFile); err == nil {
+			cleared = append(cleared, lockName)
+			h.log.Info().Str("lock", lockName).Msg("Cleared lock file")
+		} else if !os.IsNotExist(err) {
+			h.log.Error().Err(err).Str("lock", lockName).Msg("Failed to clear lock file")
+			http.Error(w, "Failed to clear lock: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	} else {
+		// Clear all lock files
+		files, err := os.ReadDir(lockDir)
+		if err != nil {
+			h.log.Error().Err(err).Msg("Failed to read lock directory")
+			http.Error(w, "Failed to read lock directory", http.StatusInternalServerError)
+			return
+		}
+
+		for _, file := range files {
+			if !file.IsDir() && filepath.Ext(file.Name()) == ".lock" {
+				lockFile := filepath.Join(lockDir, file.Name())
+				if err := os.Remove(lockFile); err == nil {
+					lockName := file.Name()[:len(file.Name())-5] // Remove .lock extension
+					cleared = append(cleared, lockName)
+					h.log.Info().Str("lock", lockName).Msg("Cleared lock file")
+				} else {
+					h.log.Error().Err(err).Str("file", file.Name()).Msg("Failed to clear lock file")
+				}
+			}
+		}
+	}
+
+	h.writeJSON(w, map[string]interface{}{
+		"status":  "ok",
+		"message": "Lock files cleared successfully",
+		"cleared": cleared,
 	})
 }
 

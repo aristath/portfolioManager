@@ -44,10 +44,10 @@ type ExecuteRequest struct {
 
 // ExecuteResponse represents the response after executing a step.
 type ExecuteResponse struct {
-	Success       bool   `json:"success"`
-	Message       string `json:"message"`
-	StepNumber    int    `json:"step_number"`
-	NextStep      int    `json:"next_step,omitempty"`
+	Success          bool   `json:"success"`
+	Message          string `json:"message"`
+	StepNumber       int    `json:"step_number"`
+	NextStep         int    `json:"next_step,omitempty"`
 	ExecutionDetails string `json:"execution_details,omitempty"`
 }
 
@@ -84,17 +84,17 @@ func (h *ExecuteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 2. Validate the step number
-	if req.StepNumber < 1 || req.StepNumber > len(bestResult.Plan.Steps) {
+	if req.StepNumber < 1 || req.StepNumber > len(bestResult.Steps) {
 		h.log.Warn().
 			Int("step_number", req.StepNumber).
-			Int("total_steps", len(bestResult.Plan.Steps)).
+			Int("total_steps", len(bestResult.Steps)).
 			Msg("Invalid step number")
-		http.Error(w, fmt.Sprintf("Invalid step number: must be between 1 and %d", len(bestResult.Plan.Steps)), http.StatusBadRequest)
+		http.Error(w, fmt.Sprintf("Invalid step number: must be between 1 and %d", len(bestResult.Steps)), http.StatusBadRequest)
 		return
 	}
 
 	// Get the step (convert to 0-indexed)
-	step := bestResult.Plan.Steps[req.StepNumber-1]
+	step := bestResult.Steps[req.StepNumber-1]
 
 	// 3. Execute the trade via trading service
 	if h.executor != nil {
@@ -102,14 +102,14 @@ func (h *ExecuteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.log.Error().
 				Err(err).
 				Str("symbol", step.Symbol).
-				Str("action", string(step.Action)).
+				Str("side", step.Side).
 				Msg("Trade execution failed")
 
 			response := ExecuteResponse{
 				Success:          false,
 				Message:          fmt.Sprintf("Trade execution failed: %v", err),
 				StepNumber:       req.StepNumber,
-				ExecutionDetails: fmt.Sprintf("Failed to execute %s %s", step.Action, step.Symbol),
+				ExecutionDetails: fmt.Sprintf("Failed to execute %s %s", step.Side, step.Symbol),
 			}
 
 			w.Header().Set("Content-Type", "application/json")
@@ -123,18 +123,19 @@ func (h *ExecuteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// 4. Build execution details
 	executionDetails := fmt.Sprintf(
-		"Executed step %d: %s %s (shares: %.2f, price: $%.2f, value: $%.2f)",
+		"Executed step %d: %s %s (quantity: %d, price: $%.2f, value: $%.2f %s)",
 		req.StepNumber,
-		step.Action,
+		step.Side,
 		step.Symbol,
-		step.Shares,
-		step.Price,
-		step.Value,
+		step.Quantity,
+		step.EstimatedPrice,
+		step.EstimatedValue,
+		step.Currency,
 	)
 
 	// 5. Return success response
 	nextStep := 0
-	if req.StepNumber < len(bestResult.Plan.Steps) {
+	if req.StepNumber < len(bestResult.Steps) {
 		nextStep = req.StepNumber + 1
 	}
 
@@ -148,8 +149,8 @@ func (h *ExecuteHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	h.log.Info().
 		Str("symbol", step.Symbol).
-		Str("action", string(step.Action)).
-		Float64("value", step.Value).
+		Str("side", step.Side).
+		Float64("value", step.EstimatedValue).
 		Msg("Step executed successfully")
 
 	w.Header().Set("Content-Type", "application/json")

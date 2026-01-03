@@ -73,7 +73,7 @@ func (c *Client) BatchEvaluate(ctx context.Context, sequences []domain.ActionSeq
 	}
 
 	// Create HTTP request
-	url := fmt.Sprintf("%s/api/evaluation/batch", c.baseURL)
+	url := fmt.Sprintf("%s/api/v1/evaluate/batch", c.baseURL)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(reqBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -177,7 +177,7 @@ func (c *Client) BatchEvaluateWithOptions(ctx context.Context, sequences []domai
 	}
 
 	// Create HTTP request
-	url := fmt.Sprintf("%s/api/evaluation/batch", c.baseURL)
+	url := fmt.Sprintf("%s/api/v1/evaluate/batch", c.baseURL)
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(reqBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)

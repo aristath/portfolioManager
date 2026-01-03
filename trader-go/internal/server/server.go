@@ -23,6 +23,10 @@ import (
 	"github.com/aristath/arduino-trader/internal/modules/dividends"
 	"github.com/aristath/arduino-trader/internal/modules/evaluation"
 	"github.com/aristath/arduino-trader/internal/modules/optimization"
+	// TODO: Re-enable planning imports after fixing handler initialization
+	// "github.com/aristath/arduino-trader/internal/modules/planning"
+	// planningHandlers "github.com/aristath/arduino-trader/internal/modules/planning/handlers"
+	// "github.com/aristath/arduino-trader/internal/modules/planning/repository"
 	"github.com/aristath/arduino-trader/internal/modules/portfolio"
 	"github.com/aristath/arduino-trader/internal/modules/rebalancing"
 	"github.com/aristath/arduino-trader/internal/modules/satellites"
@@ -167,8 +171,8 @@ func (s *Server) setupRoutes() {
 		// Rebalancing module (MIGRATED TO GO!)
 		s.setupRebalancingRoutes(r)
 
-		// TODO: Add more routes as modules are migrated
-		// r.Route("/planning", func(r chi.Router) { ... })
+		// Planning module (MIGRATED TO GO!)
+		s.setupPlanningRoutes(r)
 	})
 
 	// Evaluation module routes (MIGRATED TO GO!)
@@ -185,8 +189,28 @@ func (s *Server) setupSystemRoutes(r chi.Router) {
 	// Initialize system handlers
 	// Data directory is the parent of DatabasePath (e.g., "./data" from "./data/portfolio.db")
 	dataDir := filepath.Dir(s.cfg.DatabasePath)
-	systemHandlers := NewSystemHandlers(s.log, dataDir, s.stateDB)
+	systemHandlers := NewSystemHandlers(s.log, dataDir, s.stateDB, nil) // TODO: Pass scheduler when available
 	logHandlers := NewLogHandlers(s.log, dataDir)
+
+	// Initialize universe handlers for sync operations
+	securityRepo := universe.NewSecurityRepository(s.configDB.Conn(), s.log)
+	scoreRepo := universe.NewScoreRepository(s.stateDB.Conn(), s.log)
+	positionRepo := portfolio.NewPositionRepository(s.stateDB.Conn(), s.configDB.Conn(), s.log)
+	yahooClient := yahoo.NewClient(s.log)
+	securityScorer := scorers.NewSecurityScorer()
+	historyDB := universe.NewHistoryDB("../data/history", s.log)
+
+	universeHandlers := universe.NewUniverseHandlers(
+		securityRepo,
+		scoreRepo,
+		s.stateDB.Conn(),
+		positionRepo,
+		securityScorer,
+		yahooClient,
+		historyDB,
+		s.cfg.PythonServiceURL,
+		s.log,
+	)
 
 	// System routes (complete Phase 1 implementation)
 	r.Route("/system", func(r chi.Router) {
@@ -203,6 +227,35 @@ func (s *Server) setupSystemRoutes(r chi.Router) {
 		r.Get("/logs/list", logHandlers.HandleListLogs)
 		r.Get("/logs", logHandlers.HandleGetLogs)
 		r.Get("/logs/errors", logHandlers.HandleGetErrors)
+
+		// Sync operation triggers
+		r.Route("/sync", func(r chi.Router) {
+			r.Post("/prices", universeHandlers.HandleSyncPrices)
+			r.Post("/historical", universeHandlers.HandleSyncHistorical)
+			r.Post("/rebuild-universe", universeHandlers.HandleRebuildUniverse)
+			r.Post("/securities-data", universeHandlers.HandleSyncSecuritiesData)
+			r.Post("/portfolio", systemHandlers.HandleSyncPortfolio)
+			r.Post("/daily-pipeline", systemHandlers.HandleSyncDailyPipeline)
+			r.Post("/recommendations", systemHandlers.HandleSyncRecommendations)
+		})
+
+		// Lock management
+		r.Route("/locks", func(r chi.Router) {
+			r.Post("/clear", systemHandlers.HandleClearLocks)
+		})
+
+		// Job triggers (manual operation triggers)
+		r.Route("/jobs", func(r chi.Router) {
+			r.Post("/sync-cycle", systemHandlers.HandleTriggerSyncCycle)
+			r.Post("/weekly-maintenance", systemHandlers.HandleTriggerWeeklyMaintenance)
+			r.Post("/dividend-reinvestment", systemHandlers.HandleTriggerDividendReinvestment)
+			r.Post("/planner-batch", systemHandlers.HandleTriggerPlannerBatch)
+		})
+
+		// Maintenance triggers
+		r.Route("/maintenance", func(r chi.Router) {
+			r.Post("/daily", systemHandlers.HandleTriggerDailyMaintenance)
+		})
 	})
 }
 
@@ -410,6 +463,14 @@ func (s *Server) setupTradingRoutes(r chi.Router) {
 		r.Get("/", handler.HandleGetTrades)               // Trade history
 		r.Post("/execute", handler.HandleExecuteTrade)    // Execute trade (via Tradernet microservice)
 		r.Get("/allocation", handler.HandleGetAllocation) // Portfolio allocation
+
+		// TODO: Recommendations subroute will be added after planning module is properly configured
+		// r.Route("/recommendations", func(r chi.Router) {
+		// 	r.Post("/", recommendationsHandler.ServeHTTP)
+		// 	r.Get("/", ...)  // Fetch existing recommendations
+		// 	r.Post("/execute", ...) // Execute recommendation
+		// 	r.Get("/stream", ...) // SSE streaming
+		// })
 	})
 }
 
@@ -473,7 +534,7 @@ func (s *Server) setupOptimizationRoutes(r chi.Router) {
 	// Initialize shared clients
 	yahooClient := yahoo.NewClient(s.log)
 	tradernetClient := tradernet.NewClient(s.cfg.TradernetServiceURL, s.log)
-	dividendRepo := dividends.NewRepository(s.ledgerDB.Conn(), s.log)
+	dividendRepo := dividends.NewDividendRepository(s.dividendsDB.Conn(), s.log)
 
 	// Initialize PyPFOpt client
 	pypfoptClient := optimization.NewPyPFOptClient(s.cfg.PyPFOptServiceURL, s.log)
@@ -586,7 +647,7 @@ func (s *Server) setupSatellitesRoutes(r chi.Router) {
 
 	// Initialize services
 	bucketService := satellites.NewBucketService(bucketRepo, balanceRepo, s.log)
-	balanceService := satellites.NewBalanceService(balanceRepo, s.log)
+	balanceService := satellites.NewBalanceService(balanceRepo, bucketRepo, s.log)
 	reconciliationService := satellites.NewReconciliationService(balanceRepo, bucketRepo, s.log)
 
 	// Initialize handlers

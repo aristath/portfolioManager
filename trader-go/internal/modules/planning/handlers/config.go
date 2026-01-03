@@ -42,7 +42,7 @@ type ConfigListResponse struct {
 
 // ConfigSummary provides a summary of a configuration.
 type ConfigSummary struct {
-	ID        int    `json:"id"`
+	ID        int64  `json:"id"`
 	Name      string `json:"name"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
@@ -173,7 +173,7 @@ func (h *ConfigHandler) handleList(w http.ResponseWriter, r *http.Request) {
 func (h *ConfigHandler) handleGet(w http.ResponseWriter, r *http.Request, configID string) {
 	h.log.Debug().Str("config_id", configID).Msg("Getting configuration")
 
-	id, err := strconv.Atoi(configID)
+	id, err := strconv.ParseInt(configID, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid config ID", http.StatusBadRequest)
 		return
@@ -181,7 +181,7 @@ func (h *ConfigHandler) handleGet(w http.ResponseWriter, r *http.Request, config
 
 	config, err := h.configRepo.GetConfig(id)
 	if err != nil {
-		h.log.Error().Err(err).Int("config_id", id).Msg("Failed to retrieve configuration")
+		h.log.Error().Err(err).Int64("config_id", id).Msg("Failed to retrieve configuration")
 		http.Error(w, "Configuration not found", http.StatusNotFound)
 		return
 	}
@@ -192,18 +192,24 @@ func (h *ConfigHandler) handleGet(w http.ResponseWriter, r *http.Request, config
 	json.NewEncoder(w).Encode(response)
 }
 
+// CreateConfigRequest represents a request to create a configuration.
+type CreateConfigRequest struct {
+	Config    domain.PlannerConfiguration `json:"config"`
+	IsDefault bool                        `json:"is_default,omitempty"`
+}
+
 func (h *ConfigHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 	h.log.Debug().Msg("Creating configuration")
 
-	var config domain.PlannerConfiguration
-	if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
+	var req CreateConfigRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	// Validate configuration before creating
 	if h.validator != nil {
-		if err := h.validator.Validate(&config); err != nil {
+		if err := h.validator.Validate(&req.Config); err != nil {
 			h.log.Warn().Err(err).Msg("Configuration validation failed")
 			http.Error(w, fmt.Sprintf("Invalid configuration: %v", err), http.StatusBadRequest)
 			return
@@ -211,60 +217,70 @@ func (h *ConfigHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create configuration in database
-	createdConfig, err := h.configRepo.CreateConfig(&config)
+	configID, err := h.configRepo.CreateConfig(&req.Config, req.IsDefault)
 	if err != nil {
 		h.log.Error().Err(err).Msg("Failed to create configuration")
 		http.Error(w, "Failed to create configuration", http.StatusInternalServerError)
 		return
 	}
 
-	h.log.Info().Int("config_id", createdConfig.ID).Str("name", createdConfig.Name).Msg("Configuration created")
+	h.log.Info().Int64("config_id", configID).Str("name", req.Config.Name).Msg("Configuration created")
 
-	response := ConfigResponse{Config: createdConfig}
+	response := ConfigResponse{Config: &req.Config}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(response)
 }
 
+// UpdateConfigRequest represents a request to update a configuration.
+type UpdateConfigRequest struct {
+	Config     domain.PlannerConfiguration `json:"config"`
+	ChangedBy  string                      `json:"changed_by,omitempty"`
+	ChangeNote string                      `json:"change_note,omitempty"`
+}
+
 func (h *ConfigHandler) handleUpdate(w http.ResponseWriter, r *http.Request, configID string) {
 	h.log.Debug().Str("config_id", configID).Msg("Updating configuration")
 
-	id, err := strconv.Atoi(configID)
+	id, err := strconv.ParseInt(configID, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid config ID", http.StatusBadRequest)
 		return
 	}
 
-	var config domain.PlannerConfiguration
-	if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
+	var req UpdateConfigRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	// Ensure ID matches URL parameter
-	config.ID = id
-
 	// Validate configuration before updating
 	if h.validator != nil {
-		if err := h.validator.Validate(&config); err != nil {
-			h.log.Warn().Err(err).Int("config_id", id).Msg("Configuration validation failed")
+		if err := h.validator.Validate(&req.Config); err != nil {
+			h.log.Warn().Err(err).Int64("config_id", id).Msg("Configuration validation failed")
 			http.Error(w, fmt.Sprintf("Invalid configuration: %v", err), http.StatusBadRequest)
 			return
 		}
 	}
 
+	// Default changedBy to "api" if not provided
+	changedBy := req.ChangedBy
+	if changedBy == "" {
+		changedBy = "api"
+	}
+
 	// Update configuration in database
-	updatedConfig, err := h.configRepo.UpdateConfig(&config)
+	err = h.configRepo.UpdateConfig(id, &req.Config, changedBy, req.ChangeNote)
 	if err != nil {
-		h.log.Error().Err(err).Int("config_id", id).Msg("Failed to update configuration")
+		h.log.Error().Err(err).Int64("config_id", id).Msg("Failed to update configuration")
 		http.Error(w, "Failed to update configuration", http.StatusInternalServerError)
 		return
 	}
 
-	h.log.Info().Int("config_id", id).Str("name", updatedConfig.Name).Msg("Configuration updated")
+	h.log.Info().Int64("config_id", id).Str("name", req.Config.Name).Msg("Configuration updated")
 
-	response := ConfigResponse{Config: updatedConfig}
+	response := ConfigResponse{Config: &req.Config}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
@@ -273,28 +289,26 @@ func (h *ConfigHandler) handleUpdate(w http.ResponseWriter, r *http.Request, con
 func (h *ConfigHandler) handleDelete(w http.ResponseWriter, r *http.Request, configID string) {
 	h.log.Debug().Str("config_id", configID).Msg("Deleting configuration")
 
-	id, err := strconv.Atoi(configID)
+	id, err := strconv.ParseInt(configID, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid config ID", http.StatusBadRequest)
 		return
 	}
 
-	// Check if config is the default config
-	defaultConfig, err := h.configRepo.GetDefaultConfig()
-	if err == nil && defaultConfig != nil && defaultConfig.ID == id {
-		h.log.Warn().Int("config_id", id).Msg("Cannot delete default configuration")
-		http.Error(w, "Cannot delete the default configuration", http.StatusForbidden)
-		return
-	}
-
 	// Delete configuration from database
+	// Note: DeleteConfig checks if the config is the default and returns an error if so
 	if err := h.configRepo.DeleteConfig(id); err != nil {
-		h.log.Error().Err(err).Int("config_id", id).Msg("Failed to delete configuration")
+		h.log.Error().Err(err).Int64("config_id", id).Msg("Failed to delete configuration")
+		// Check if error is due to trying to delete default config
+		if err.Error() == "cannot delete default config" {
+			http.Error(w, "Cannot delete the default configuration", http.StatusForbidden)
+			return
+		}
 		http.Error(w, "Failed to delete configuration", http.StatusInternalServerError)
 		return
 	}
 
-	h.log.Info().Int("config_id", id).Msg("Configuration deleted")
+	h.log.Info().Int64("config_id", id).Msg("Configuration deleted")
 
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -302,7 +316,7 @@ func (h *ConfigHandler) handleDelete(w http.ResponseWriter, r *http.Request, con
 func (h *ConfigHandler) handleValidate(w http.ResponseWriter, r *http.Request, configID string) {
 	h.log.Debug().Str("config_id", configID).Msg("Validating configuration")
 
-	id, err := strconv.Atoi(configID)
+	id, err := strconv.ParseInt(configID, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid config ID", http.StatusBadRequest)
 		return
@@ -311,7 +325,7 @@ func (h *ConfigHandler) handleValidate(w http.ResponseWriter, r *http.Request, c
 	// Retrieve configuration from database
 	config, err := h.configRepo.GetConfig(id)
 	if err != nil {
-		h.log.Error().Err(err).Int("config_id", id).Msg("Failed to retrieve configuration")
+		h.log.Error().Err(err).Int64("config_id", id).Msg("Failed to retrieve configuration")
 		http.Error(w, "Configuration not found", http.StatusNotFound)
 		return
 	}
@@ -322,7 +336,7 @@ func (h *ConfigHandler) handleValidate(w http.ResponseWriter, r *http.Request, c
 		if err := h.validator.Validate(config); err != nil {
 			// Collect validation errors
 			validationErrors = append(validationErrors, err.Error())
-			h.log.Warn().Err(err).Int("config_id", id).Msg("Configuration validation failed")
+			h.log.Warn().Err(err).Int64("config_id", id).Msg("Configuration validation failed")
 		}
 	}
 
@@ -332,7 +346,7 @@ func (h *ConfigHandler) handleValidate(w http.ResponseWriter, r *http.Request, c
 	}
 
 	h.log.Info().
-		Int("config_id", id).
+		Int64("config_id", id).
 		Bool("valid", response.Valid).
 		Int("error_count", len(validationErrors)).
 		Msg("Configuration validation complete")
@@ -344,27 +358,27 @@ func (h *ConfigHandler) handleValidate(w http.ResponseWriter, r *http.Request, c
 func (h *ConfigHandler) handleHistory(w http.ResponseWriter, r *http.Request, configID string) {
 	h.log.Debug().Str("config_id", configID).Msg("Getting configuration history")
 
-	id, err := strconv.Atoi(configID)
+	id, err := strconv.ParseInt(configID, 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid config ID", http.StatusBadRequest)
 		return
 	}
 
-	// Retrieve configuration history from database
-	history, err := h.configRepo.GetConfigHistory(id)
+	// Retrieve configuration history from database (limit 0 = no limit)
+	history, err := h.configRepo.GetConfigHistory(id, 0)
 	if err != nil {
-		h.log.Error().Err(err).Int("config_id", id).Msg("Failed to retrieve configuration history")
+		h.log.Error().Err(err).Int64("config_id", id).Msg("Failed to retrieve configuration history")
 		http.Error(w, "Failed to retrieve configuration history", http.StatusInternalServerError)
 		return
 	}
 
 	// Build history entries
 	entries := make([]HistoryEntry, len(history))
-	for i, h := range history {
+	for i, record := range history {
 		entries[i] = HistoryEntry{
-			Version:   h.Version,
-			CreatedAt: h.CreatedAt.Format(time.RFC3339),
-			Changes:   h.Changes,
+			Version:   i + 1, // Use index as version number (records are sorted by created_at DESC)
+			CreatedAt: record.CreatedAt.Format(time.RFC3339),
+			Changes:   record.ChangeNote,
 		}
 	}
 
@@ -374,7 +388,7 @@ func (h *ConfigHandler) handleHistory(w http.ResponseWriter, r *http.Request, co
 	}
 
 	h.log.Info().
-		Int("config_id", id).
+		Int64("config_id", id).
 		Int("history_count", len(entries)).
 		Msg("Configuration history retrieved")
 

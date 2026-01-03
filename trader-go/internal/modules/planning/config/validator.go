@@ -329,9 +329,7 @@ func getRequiredParams(moduleName string) map[string]string {
 
 		// Pattern Generators
 		"direct_buy":        {},
-		"profit_taking":     {},
 		"rebalance":         {},
-		"averaging_down":    {},
 		"single_best":       {},
 		"multi_sell":        {},
 		"mixed_strategy":    {},

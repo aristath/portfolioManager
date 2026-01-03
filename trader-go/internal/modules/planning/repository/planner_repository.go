@@ -63,8 +63,8 @@ type BestResultRecord struct {
 // InsertSequence inserts a new sequence into the database.
 func (r *PlannerRepository) InsertSequence(
 	portfolioHash string,
-	sequence *domain.ActionSequence,
-) (int64, error) {
+	sequence domain.ActionSequence,
+) (int, error) {
 	sequenceData, err := json.Marshal(sequence)
 	if err != nil {
 		return 0, fmt.Errorf("failed to marshal sequence: %w", err)
@@ -90,7 +90,7 @@ func (r *PlannerRepository) InsertSequence(
 		Str("pattern_type", sequence.PatternType).
 		Msg("Inserted sequence")
 
-	return id, nil
+	return int(id), nil
 }
 
 // GetSequence retrieves a sequence by ID.
@@ -239,40 +239,34 @@ func (r *PlannerRepository) DeleteSequencesByPortfolioHash(portfolioHash string)
 
 // InsertEvaluation inserts a new evaluation into the database.
 func (r *PlannerRepository) InsertEvaluation(
-	portfolioHash string,
-	evaluation *domain.EvaluationResult,
-) (int64, error) {
+	evaluation domain.EvaluationResult,
+) error {
 	metricsData, err := json.Marshal(evaluation.ScoreBreakdown)
 	if err != nil {
-		return 0, fmt.Errorf("failed to marshal metrics: %w", err)
+		return fmt.Errorf("failed to marshal metrics: %w", err)
 	}
 
 	// Calculate delta score (improvement over baseline)
 	// For now we'll use 0.0 as delta since we don't have baseline score here
 	deltaScore := 0.0
 
-	result, err := r.db.Exec(`
+	_, err = r.db.Exec(`
 		INSERT INTO evaluations (sequence_hash, portfolio_hash, end_score, delta_score, metrics, completed, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`, evaluation.SequenceHash, portfolioHash, evaluation.EndScore, deltaScore,
+	`, evaluation.SequenceHash, evaluation.PortfolioHash, evaluation.EndScore, deltaScore,
 		string(metricsData), true, time.Now())
 
 	if err != nil {
-		return 0, fmt.Errorf("failed to insert evaluation: %w", err)
-	}
-
-	id, err := result.LastInsertId()
-	if err != nil {
-		return 0, fmt.Errorf("failed to get last insert id: %w", err)
+		return fmt.Errorf("failed to insert evaluation: %w", err)
 	}
 
 	r.log.Debug().
-		Int64("id", id).
 		Str("sequence_hash", evaluation.SequenceHash).
+		Str("portfolio_hash", evaluation.PortfolioHash).
 		Float64("end_score", evaluation.EndScore).
 		Msg("Inserted evaluation")
 
-	return id, nil
+	return nil
 }
 
 // GetEvaluation retrieves an evaluation by sequence hash.
@@ -370,13 +364,13 @@ func (r *PlannerRepository) DeleteEvaluationsByPortfolioHash(portfolioHash strin
 // UpsertBestResult inserts or updates the best result for a portfolio hash.
 func (r *PlannerRepository) UpsertBestResult(
 	portfolioHash string,
-	sequenceHash string,
-	plan *domain.HolisticPlan,
-	score float64,
+	result domain.EvaluationResult,
+	sequence domain.ActionSequence,
 ) error {
-	planData, err := json.Marshal(plan)
+	// Marshal the sequence (plan data)
+	sequenceData, err := json.Marshal(sequence)
 	if err != nil {
-		return fmt.Errorf("failed to marshal plan: %w", err)
+		return fmt.Errorf("failed to marshal sequence: %w", err)
 	}
 
 	// Check if a record exists
@@ -392,7 +386,7 @@ func (r *PlannerRepository) UpsertBestResult(
 		_, err = r.db.Exec(`
 			INSERT INTO best_result (portfolio_hash, sequence_hash, plan_data, score, created_at, updated_at)
 			VALUES (?, ?, ?, ?, ?, ?)
-		`, portfolioHash, sequenceHash, string(planData), score, now, now)
+		`, portfolioHash, result.SequenceHash, string(sequenceData), result.EndScore, now, now)
 
 		if err != nil {
 			return fmt.Errorf("failed to insert best result: %w", err)
@@ -400,8 +394,8 @@ func (r *PlannerRepository) UpsertBestResult(
 
 		r.log.Info().
 			Str("portfolio_hash", portfolioHash).
-			Str("sequence_hash", sequenceHash).
-			Float64("score", score).
+			Str("sequence_hash", result.SequenceHash).
+			Float64("score", result.EndScore).
 			Msg("Inserted best result")
 	} else if err == nil {
 		// Update existing record
@@ -409,7 +403,7 @@ func (r *PlannerRepository) UpsertBestResult(
 			UPDATE best_result
 			SET sequence_hash = ?, plan_data = ?, score = ?, updated_at = ?
 			WHERE portfolio_hash = ?
-		`, sequenceHash, string(planData), score, now, portfolioHash)
+		`, result.SequenceHash, string(sequenceData), result.EndScore, now, portfolioHash)
 
 		if err != nil {
 			return fmt.Errorf("failed to update best result: %w", err)
@@ -417,8 +411,8 @@ func (r *PlannerRepository) UpsertBestResult(
 
 		r.log.Info().
 			Str("portfolio_hash", portfolioHash).
-			Str("sequence_hash", sequenceHash).
-			Float64("score", score).
+			Str("sequence_hash", result.SequenceHash).
+			Float64("score", result.EndScore).
 			Msg("Updated best result")
 	} else {
 		return fmt.Errorf("failed to check existing best result: %w", err)

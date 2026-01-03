@@ -34,22 +34,22 @@ func NewIncrementalPlanner(planner *Planner, repository Repository, log zerolog.
 
 // BatchGenerationConfig configures batch generation behavior.
 type BatchGenerationConfig struct {
-	BatchSize         int           // Number of sequences to evaluate per batch
-	MaxBatches        int           // Maximum number of batches (0 = unlimited)
-	BatchDelay        time.Duration // Delay between batches
-	SaveProgress      bool          // Save progress to database after each batch
-	StopOnBestFound   bool          // Stop if best sequence exceeds threshold
+	BatchSize          int           // Number of sequences to evaluate per batch
+	MaxBatches         int           // Maximum number of batches (0 = unlimited)
+	BatchDelay         time.Duration // Delay between batches
+	SaveProgress       bool          // Save progress to database after each batch
+	StopOnBestFound    bool          // Stop if best sequence exceeds threshold
 	BestScoreThreshold float64       // Threshold for early stopping
 }
 
 // DefaultBatchConfig returns sensible defaults for batch generation.
 func DefaultBatchConfig() BatchGenerationConfig {
 	return BatchGenerationConfig{
-		BatchSize:         100, // 100 sequences per batch
-		MaxBatches:        0,   // Unlimited batches
-		BatchDelay:        1 * time.Second,
-		SaveProgress:      true,
-		StopOnBestFound:   false,
+		BatchSize:          100, // 100 sequences per batch
+		MaxBatches:         0,   // Unlimited batches
+		BatchDelay:         1 * time.Second,
+		SaveProgress:       true,
+		StopOnBestFound:    false,
 		BestScoreThreshold: 0.9,
 	}
 }
@@ -64,11 +64,11 @@ func (ip *IncrementalPlanner) GenerateBatch(
 
 	startTime := time.Now()
 	result := &BatchResult{
-		PortfolioHash:   ip.planner.generatePortfolioHash(ctx),
-		StartTime:       startTime,
-		SequencesTotal:  0,
+		PortfolioHash:      ip.planner.generatePortfolioHash(ctx),
+		StartTime:          startTime,
+		SequencesTotal:     0,
 		SequencesEvaluated: 0,
-		Batches:         []BatchInfo{},
+		Batches:            []BatchInfo{},
 	}
 
 	// Step 1: Identify opportunities
@@ -164,11 +164,11 @@ func (ip *IncrementalPlanner) GenerateBatch(
 
 		// Record batch info
 		batchInfo := BatchInfo{
-			BatchNumber:    batchNum,
-			Size:           len(batchSequences),
-			Evaluated:      len(batchResults),
-			BestScore:      batchBestScore,
-			Elapsed:        batchElapsed,
+			BatchNumber: batchNum,
+			Size:        len(batchSequences),
+			Evaluated:   len(batchResults),
+			BestScore:   batchBestScore,
+			Elapsed:     batchElapsed,
 		}
 		result.Batches = append(result.Batches, batchInfo)
 
@@ -195,6 +195,9 @@ func (ip *IncrementalPlanner) GenerateBatch(
 		if batchConfig.SaveProgress && ip.repository != nil {
 			// Persist evaluation results and update best if improved
 			for i, evalResult := range batchResults {
+				// Set portfolio hash on evaluation result
+				evalResult.PortfolioHash = result.PortfolioHash
+
 				// Insert evaluation result
 				if err := ip.repository.InsertEvaluation(evalResult); err != nil {
 					ip.log.Warn().

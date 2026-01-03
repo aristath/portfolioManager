@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -36,7 +35,7 @@ func NewBatchHandler(
 // BatchRequest represents a request to trigger batch generation.
 type BatchRequest struct {
 	OpportunityContext *domain.OpportunityContext `json:"opportunity_context"`
-	ConfigID           int                        `json:"config_id,omitempty"`
+	ConfigID           int64                      `json:"config_id,omitempty"`
 	ConfigName         string                     `json:"config_name,omitempty"`
 	Force              bool                       `json:"force,omitempty"` // Force regeneration
 	BatchSize          int                        `json:"batch_size,omitempty"`

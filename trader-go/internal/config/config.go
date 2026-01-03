@@ -15,6 +15,7 @@ type Config struct {
 	PythonServiceURL    string
 	TradernetServiceURL string
 	PyPFOptServiceURL   string
+	EvaluatorServiceURL string
 	TradernetAPIKey     string
 	TradernetAPISecret  string
 	LogLevel            string
@@ -31,10 +32,11 @@ func Load() (*Config, error) {
 		Port:                getEnvAsInt("GO_PORT", 8001), // Default 8001 (Python uses 8000)
 		DevMode:             getEnvAsBool("DEV_MODE", false),
 		DatabasePath:        getEnv("DATABASE_PATH", "./data/portfolio.db"),
-		HistoryPath:         getEnv("HISTORY_PATH", "./data/history"), // Per-symbol price databases
+		HistoryPath:         getEnv("HISTORY_PATH", "./data/history"),                 // Per-symbol price databases
 		PythonServiceURL:    getEnv("PYTHON_SERVICE_URL", "http://localhost:8000"),    // Python on 8000
 		TradernetServiceURL: getEnv("TRADERNET_SERVICE_URL", "http://localhost:9001"), // Tradernet microservice on 9001
 		PyPFOptServiceURL:   getEnv("PYPFOPT_SERVICE_URL", "http://localhost:9002"),   // PyPFOpt microservice on 9002
+		EvaluatorServiceURL: getEnv("EVALUATOR_SERVICE_URL", "http://localhost:9000"), // Evaluator-go microservice on 9000
 		TradernetAPIKey:     getEnv("TRADERNET_API_KEY", ""),
 		TradernetAPISecret:  getEnv("TRADERNET_API_SECRET", ""),
 		LogLevel:            getEnv("LOG_LEVEL", "info"),

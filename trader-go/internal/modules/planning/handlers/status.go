@@ -26,8 +26,8 @@ func NewStatusHandler(repo *repository.PlannerRepository, log zerolog.Logger) *S
 // StatusResponse represents the planning status response.
 type StatusResponse struct {
 	PortfolioHash      string  `json:"portfolio_hash"`
-	Status             string  `json:"status"`             // "idle", "generating", "evaluating", "complete"
-	Progress           float64 `json:"progress"`           // 0.0 to 1.0
+	Status             string  `json:"status"`   // "idle", "generating", "evaluating", "complete"
+	Progress           float64 `json:"progress"` // 0.0 to 1.0
 	SequencesTotal     int     `json:"sequences_total"`
 	SequencesEvaluated int     `json:"sequences_evaluated"`
 	BestScoreFound     float64 `json:"best_score_found,omitempty"`
@@ -73,8 +73,8 @@ func (h *StatusHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var lastUpdated string
 	bestResult, err := h.repository.GetBestResult(portfolioHash)
 	if err == nil && bestResult != nil {
-		bestScore = bestResult.EndScore
-		lastUpdated = bestResult.CreatedAt.Format(time.RFC3339)
+		bestScore = bestResult.EndStateScore
+		lastUpdated = time.Now().Format(time.RFC3339) // Use current time since HolisticPlan doesn't have timestamp
 	}
 
 	// Determine status

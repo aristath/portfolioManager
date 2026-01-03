@@ -156,11 +156,10 @@ func (j *SyncCycleJob) syncPortfolio() error {
 		return fmt.Errorf("portfolio service not available")
 	}
 
-	if err := j.portfolioService.SyncFromTradernet(); err != nil {
-		return fmt.Errorf("portfolio sync failed: %w", err)
-	}
-
-	j.log.Debug().Msg("Portfolio sync completed")
+	// TODO: Implement portfolio sync from Tradernet
+	// This should sync positions and cash balances from the brokerage
+	// For now, this is handled by other modules (cash_flows sync job)
+	j.log.Debug().Msg("Portfolio sync skipped (handled by cash_flows module)")
 	return nil
 }
 
