@@ -123,13 +123,13 @@ var SettingDefaults = map[string]interface{}{
 	"display_background_brightness_max": 120.0,
 
 	// Animation behavior
-	"display_clustering_strength_base":       4.0,   // Base clustering strength (1-10)
-	"display_clustering_chaos_multiplier":    2.5,   // Multiply for imbalanced states
-	"display_animation_speed_smooth":         100.0, // ms per frame for smooth states
-	"display_animation_speed_chaotic":        40.0,  // ms per frame for chaotic states
-	"display_transition_smoothing_seconds":   300.0, // 5min smooth transitions
-	"display_enable_vertical_bias":           1.0,   // Enable rising/sinking effect (1.0 = yes)
-	"display_momentum_sensitivity":           0.5,   // How much recent trend affects drift (0-1)
+	"display_clustering_strength_base":     4.0,   // Base clustering strength (1-10)
+	"display_clustering_chaos_multiplier":  2.5,   // Multiply for imbalanced states
+	"display_animation_speed_smooth":       100.0, // ms per frame for smooth states
+	"display_animation_speed_chaotic":      40.0,  // ms per frame for chaotic states
+	"display_transition_smoothing_seconds": 300.0, // 5min smooth transitions
+	"display_enable_vertical_bias":         1.0,   // Enable rising/sinking effect (1.0 = yes)
+	"display_momentum_sensitivity":         0.5,   // How much recent trend affects drift (0-1)
 }
 
 // StringSettings defines which settings should be treated as strings rather than floats
