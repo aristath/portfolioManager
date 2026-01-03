@@ -44,7 +44,7 @@ func NewPlannerLoader(
 
 // LoadPlannerForBucket loads or retrieves from cache a planner for a specific bucket.
 func (l *PlannerLoader) LoadPlannerForBucket(bucketID string) (*planner.Planner, error) {
-	// Check cache first
+	// Fast path: check cache with read lock
 	l.mu.RLock()
 	cached, exists := l.cache[bucketID]
 	l.mu.RUnlock()
@@ -54,8 +54,18 @@ func (l *PlannerLoader) LoadPlannerForBucket(bucketID string) (*planner.Planner,
 		return cached, nil
 	}
 
-	// Not in cache, create new planner
-	return l.createAndCachePlanner(bucketID)
+	// Slow path: acquire write lock and double-check
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	// Double-check: another goroutine may have created it while we waited for the lock
+	if cached, exists := l.cache[bucketID]; exists {
+		l.log.Debug().Str("bucket_id", bucketID).Msg("Returning planner created by another goroutine")
+		return cached, nil
+	}
+
+	// Create new planner while holding write lock
+	return l.createAndCachePlannerLocked(bucketID)
 }
 
 // ReloadPlannerForBucket forces a reload of the planner for a specific bucket.
@@ -83,7 +93,17 @@ func (l *PlannerLoader) ClearCache() {
 }
 
 // createAndCachePlanner creates a new planner instance and stores it in cache.
+// DEPRECATED: Use LoadPlannerForBucket instead, which handles locking correctly.
+// This method is kept for ReloadPlannerForBucket which manages its own locking.
 func (l *PlannerLoader) createAndCachePlanner(bucketID string) (*planner.Planner, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.createAndCachePlannerLocked(bucketID)
+}
+
+// createAndCachePlannerLocked creates a new planner instance and stores it in cache.
+// Caller must hold l.mu write lock.
+func (l *PlannerLoader) createAndCachePlannerLocked(bucketID string) (*planner.Planner, error) {
 	// Fetch configuration for this bucket
 	cfg, err := l.configRepo.GetByBucket(bucketID)
 	if err != nil {
@@ -114,10 +134,8 @@ func (l *PlannerLoader) createAndCachePlanner(bucketID string) (*planner.Planner
 		l.log,
 	)
 
-	// Cache it
-	l.mu.Lock()
+	// Cache it (caller holds lock)
 	l.cache[bucketID] = p
-	l.mu.Unlock()
 
 	l.log.Info().
 		Str("bucket_id", bucketID).
@@ -130,7 +148,7 @@ func (l *PlannerLoader) createAndCachePlanner(bucketID string) (*planner.Planner
 // GetDefaultPlanner returns a planner using the default configuration.
 // Used for main portfolio (non-satellite) planning.
 func (l *PlannerLoader) GetDefaultPlanner() (*planner.Planner, error) {
-	// Check if we have a cached "default" planner
+	// Fast path: check cache with read lock
 	l.mu.RLock()
 	cached, exists := l.cache["__default__"]
 	l.mu.RUnlock()
@@ -139,7 +157,16 @@ func (l *PlannerLoader) GetDefaultPlanner() (*planner.Planner, error) {
 		return cached, nil
 	}
 
-	// Create default planner
+	// Slow path: acquire write lock and double-check
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	// Double-check: another goroutine may have created it while we waited for the lock
+	if cached, exists := l.cache["__default__"]; exists {
+		return cached, nil
+	}
+
+	// Create default planner while holding write lock
 	p := planner.NewPlanner(
 		l.opportunitiesService,
 		l.sequencesService,
@@ -147,11 +174,7 @@ func (l *PlannerLoader) GetDefaultPlanner() (*planner.Planner, error) {
 		l.log,
 	)
 
-	// Cache it
-	l.mu.Lock()
 	l.cache["__default__"] = p
-	l.mu.Unlock()
-
 	l.log.Info().Msg("Created and cached default planner instance")
 
 	return p, nil
