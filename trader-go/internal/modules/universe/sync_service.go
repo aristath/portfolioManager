@@ -1,9 +1,11 @@
 package universe
 
 import (
+	"database/sql"
 	"fmt"
 	"time"
 
+	"github.com/aristath/arduino-trader/internal/clients/tradernet"
 	"github.com/aristath/arduino-trader/internal/clients/yahoo"
 	"github.com/rs/zerolog"
 )
@@ -15,6 +17,9 @@ type SyncService struct {
 	historicalSync  *HistoricalSyncService
 	yahooClient     *yahoo.Client
 	scoreCalculator ScoreCalculator
+	tradernetClient *tradernet.Client
+	setupService    *SecuritySetupService
+	db              *sql.DB
 	log             zerolog.Logger
 }
 
@@ -24,6 +29,9 @@ func NewSyncService(
 	historicalSync *HistoricalSyncService,
 	yahooClient *yahoo.Client,
 	scoreCalculator ScoreCalculator,
+	tradernetClient *tradernet.Client,
+	setupService *SecuritySetupService,
+	db *sql.DB,
 	log zerolog.Logger,
 ) *SyncService {
 	return &SyncService{
@@ -31,8 +39,16 @@ func NewSyncService(
 		historicalSync:  historicalSync,
 		yahooClient:     yahooClient,
 		scoreCalculator: scoreCalculator,
+		tradernetClient: tradernetClient,
+		setupService:    setupService,
+		db:              db,
 		log:             log.With().Str("service", "sync").Logger(),
 	}
+}
+
+// SetScoreCalculator sets the score calculator (for deferred wiring)
+func (s *SyncService) SetScoreCalculator(calculator ScoreCalculator) {
+	s.scoreCalculator = calculator
 }
 
 // SyncThresholdHours is how old last_synced must be to require processing (24 hours)
@@ -315,4 +331,205 @@ func (s *SyncService) updateLastSynced(symbol string) error {
 	}
 
 	return nil
+}
+
+// SyncAllPrices syncs current prices for all active securities
+// Faithful translation from Python: app/jobs/daily_sync.py -> sync_prices()
+//
+// This gets current quotes from Yahoo Finance and updates position prices.
+func (s *SyncService) SyncAllPrices() (int, error) {
+	s.log.Info().Msg("Starting price sync for all active securities")
+
+	// 1. Get all active securities
+	securities, err := s.securityRepo.GetAllActive()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get active securities: %w", err)
+	}
+
+	if len(securities) == 0 {
+		s.log.Info().Msg("No securities to sync prices for")
+		return 0, nil
+	}
+
+	// 2. Build symbol map (tradernet_symbol -> yahoo_override)
+	symbolMap := make(map[string]*string)
+	for _, security := range securities {
+		var yahooSymbolPtr *string
+		if security.YahooSymbol != "" {
+			// Create new string to avoid range variable issues
+			yahooSymbol := security.YahooSymbol
+			yahooSymbolPtr = &yahooSymbol
+		}
+		symbolMap[security.Symbol] = yahooSymbolPtr
+	}
+
+	// 3. Fetch batch quotes from Yahoo
+	quotes, err := s.yahooClient.GetBatchQuotes(symbolMap)
+	if err != nil {
+		return 0, fmt.Errorf("failed to fetch batch quotes: %w", err)
+	}
+
+	// 4. Update position prices in state.db
+	updated := 0
+	now := time.Now()
+
+	for symbol, price := range quotes {
+		if price == nil {
+			s.log.Warn().Str("symbol", symbol).Msg("No price data received")
+			continue
+		}
+
+		// Update positions table
+		result, err := s.db.Exec(`
+			UPDATE positions
+			SET current_price = ?,
+				market_value_eur = quantity * ? / currency_rate,
+				last_updated = ?
+			WHERE symbol = ?
+		`, *price, *price, now, symbol)
+
+		if err != nil {
+			s.log.Error().Err(err).Str("symbol", symbol).Msg("Failed to update position price")
+			continue
+		}
+
+		rowsAffected, _ := result.RowsAffected()
+		if rowsAffected > 0 {
+			updated++
+		}
+	}
+
+	s.log.Info().
+		Int("total", len(securities)).
+		Int("updated", updated).
+		Msg("Price sync complete")
+
+	return updated, nil
+}
+
+// SyncAllHistoricalData syncs historical price data for all active securities
+// Faithful translation from Python: app/jobs/historical_data_sync.py -> sync_historical_data()
+//
+// This syncs historical prices for all securities (not just those needing sync).
+func (s *SyncService) SyncAllHistoricalData() (int, int, error) {
+	s.log.Info().Msg("Starting historical data sync for all securities")
+
+	securities, err := s.securityRepo.GetAllActive()
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to get active securities: %w", err)
+	}
+
+	if len(securities) == 0 {
+		s.log.Info().Msg("No securities to sync")
+		return 0, 0, nil
+	}
+
+	s.log.Info().Int("count", len(securities)).Msg("Syncing historical data for all securities")
+
+	processed := 0
+	errors := 0
+
+	for _, security := range securities {
+		if s.historicalSync != nil {
+			err := s.historicalSync.SyncHistoricalPrices(security.Symbol)
+			if err != nil {
+				s.log.Error().Err(err).Str("symbol", security.Symbol).Msg("Failed to sync historical prices")
+				errors++
+			} else {
+				processed++
+			}
+		}
+	}
+
+	s.log.Info().
+		Int("processed", processed).
+		Int("errors", errors).
+		Msg("Historical data sync complete")
+
+	return processed, errors, nil
+}
+
+// RebuildUniverseFromPortfolio rebuilds the universe from current portfolio positions
+// Faithful translation from Python: app/modules/system/api/status.py -> rebuild_universe_from_portfolio()
+//
+// This gets all securities from the portfolio and adds any missing ones to the universe.
+func (s *SyncService) RebuildUniverseFromPortfolio() (int, error) {
+	s.log.Info().Msg("Rebuilding universe from portfolio")
+
+	// Step 1: Check tradernet client availability
+	if s.tradernetClient == nil {
+		return 0, fmt.Errorf("tradernet client not available")
+	}
+
+	// Step 2: Fetch current portfolio positions
+	positions, err := s.tradernetClient.GetPortfolio()
+	if err != nil {
+		return 0, fmt.Errorf("failed to fetch portfolio: %w", err)
+	}
+
+	s.log.Info().Int("positions", len(positions)).Msg("Fetched portfolio positions")
+
+	// Step 3: Identify missing securities
+	missingSymbols := []string{}
+	for _, pos := range positions {
+		existing, err := s.securityRepo.GetBySymbol(pos.Symbol)
+		if err != nil {
+			s.log.Error().Err(err).Str("symbol", pos.Symbol).Msg("Failed to check security")
+			continue
+		}
+		if existing == nil {
+			missingSymbols = append(missingSymbols, pos.Symbol)
+		}
+	}
+
+	if len(missingSymbols) == 0 {
+		s.log.Info().Msg("All portfolio securities are already in universe")
+		return 0, nil
+	}
+
+	// Step 4: Add missing securities using SecuritySetupService
+	if s.setupService == nil {
+		return 0, fmt.Errorf("setup service not available")
+	}
+
+	added := 0
+	failed := 0
+
+	for _, symbol := range missingSymbols {
+		s.log.Info().Str("symbol", symbol).Msg("Adding missing security to universe")
+
+		// Use AddSecurityByIdentifier (handles full data pipeline)
+		security, err := s.setupService.AddSecurityByIdentifier(
+			symbol, // identifier
+			1,      // minLot
+			true,   // allowBuy
+			true,   // allowSell
+		)
+
+		if err != nil {
+			s.log.Error().Err(err).Str("symbol", symbol).Msg("Failed to add security")
+			failed++
+			continue
+		}
+
+		yahooSymbol := security.YahooSymbol
+		if yahooSymbol == "" {
+			yahooSymbol = "<none>"
+		}
+
+		s.log.Info().
+			Str("symbol", security.Symbol).
+			Str("isin", security.ISIN).
+			Str("yahoo_symbol", yahooSymbol).
+			Msg("Successfully added security to universe")
+		added++
+	}
+
+	s.log.Info().
+		Int("added", added).
+		Int("failed", failed).
+		Int("total_missing", len(missingSymbols)).
+		Msg("Universe rebuild complete")
+
+	return added, nil
 }

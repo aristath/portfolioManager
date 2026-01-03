@@ -9,6 +9,7 @@ import (
 	"github.com/aristath/arduino-trader/internal/modules/portfolio"
 	"github.com/aristath/arduino-trader/internal/modules/settings"
 	"github.com/aristath/arduino-trader/internal/modules/universe"
+	"github.com/aristath/arduino-trader/internal/scheduler"
 	"github.com/aristath/arduino-trader/internal/services"
 	"github.com/rs/zerolog"
 )
@@ -24,14 +25,15 @@ const MinCurrencyReserve = 5.0
 // 2. Position sales (if exchange insufficient)
 // 3. Final currency exchange to ensure all currencies have minimum
 type NegativeBalanceRebalancer struct {
-	log                    zerolog.Logger
-	tradernetClient        *tradernet.Client
-	securityRepo           *universe.SecurityRepository
-	positionRepo           *portfolio.PositionRepository
-	settingsRepo           *settings.Repository
+	log                     zerolog.Logger
+	tradernetClient         *tradernet.Client
+	securityRepo            *universe.SecurityRepository
+	positionRepo            *portfolio.PositionRepository
+	settingsRepo            *settings.Repository
 	currencyExchangeService *services.CurrencyExchangeService
-	tradeExecutionService  *services.TradeExecutionService
-	recommendationRepo     *planning.RecommendationRepository
+	tradeExecutionService   *services.TradeExecutionService
+	recommendationRepo      *planning.RecommendationRepository
+	marketHoursService      *scheduler.MarketHoursService
 }
 
 // NewNegativeBalanceRebalancer creates a new negative balance rebalancer
@@ -44,16 +46,18 @@ func NewNegativeBalanceRebalancer(
 	currencyExchangeService *services.CurrencyExchangeService,
 	tradeExecutionService *services.TradeExecutionService,
 	recommendationRepo *planning.RecommendationRepository,
+	marketHoursService *scheduler.MarketHoursService,
 ) *NegativeBalanceRebalancer {
 	return &NegativeBalanceRebalancer{
-		log:                    log.With().Str("service", "negative_balance_rebalancer").Logger(),
-		tradernetClient:        tradernetClient,
-		securityRepo:           securityRepo,
-		positionRepo:           positionRepo,
-		settingsRepo:           settingsRepo,
+		log:                     log.With().Str("service", "negative_balance_rebalancer").Logger(),
+		tradernetClient:         tradernetClient,
+		securityRepo:            securityRepo,
+		positionRepo:            positionRepo,
+		settingsRepo:            settingsRepo,
 		currencyExchangeService: currencyExchangeService,
-		tradeExecutionService:  tradeExecutionService,
-		recommendationRepo:     recommendationRepo,
+		tradeExecutionService:   tradeExecutionService,
+		recommendationRepo:      recommendationRepo,
+		marketHoursService:      marketHoursService,
 	}
 }
 
@@ -204,10 +208,16 @@ func (r *NegativeBalanceRebalancer) RebalanceNegativeBalances() (bool, error) {
 	if len(shortfalls) == 0 {
 		r.log.Info().Msg("All currencies meet minimum reserve requirements")
 
-		// TODO: Clean up any existing emergency recommendations
-		// TODO: Implement DismissAllByPortfolioHash in RecommendationRepository
-		// emergencyPortfolioHash := "EMERGENCY:negative_balance_rebalancing"
-		// dismissedCount, err := r.recommendationRepo.DismissAllByPortfolioHash(emergencyPortfolioHash)
+		// Clean up any existing emergency recommendations
+		emergencyPortfolioHash := "EMERGENCY:negative_balance_rebalancing"
+		dismissedCount, err := r.recommendationRepo.DismissAllByPortfolioHash(emergencyPortfolioHash)
+		if err != nil {
+			r.log.Warn().Err(err).Msg("Failed to dismiss emergency recommendations")
+		} else if dismissedCount > 0 {
+			r.log.Info().
+				Int("dismissed_count", dismissedCount).
+				Msg("Dismissed emergency recommendations after successful rebalancing")
+		}
 
 		return true, nil
 	}
@@ -234,7 +244,18 @@ func (r *NegativeBalanceRebalancer) RebalanceNegativeBalances() (bool, error) {
 
 	if len(remainingShortfalls) == 0 {
 		r.log.Info().Msg("Currency exchange resolved all shortfalls")
-		// TODO: Clean up emergency recommendations
+
+		// Clean up emergency recommendations
+		emergencyPortfolioHash := "EMERGENCY:negative_balance_rebalancing"
+		dismissedCount, err := r.recommendationRepo.DismissAllByPortfolioHash(emergencyPortfolioHash)
+		if err != nil {
+			r.log.Warn().Err(err).Msg("Failed to dismiss emergency recommendations")
+		} else if dismissedCount > 0 {
+			r.log.Info().
+				Int("dismissed_count", dismissedCount).
+				Msg("Dismissed emergency recommendations after currency exchange")
+		}
+
 		return true, nil
 	}
 
@@ -419,13 +440,26 @@ func (r *NegativeBalanceRebalancer) step2PositionSales(
 		return fmt.Errorf("failed to get positions: %w", err)
 	}
 
-	// Filter to sellable positions (allow_sell=true)
-	// TODO: Add market hours checking (is_market_open)
+	// Filter to sellable positions (allow_sell=true AND market is open for strict exchanges)
 	var sellablePositions []portfolio.PositionWithSecurity
 	for _, pos := range positions {
-		if pos.AllowSell {
-			sellablePositions = append(sellablePositions, pos)
+		if !pos.AllowSell {
+			continue
 		}
+
+		// Check market hours for SELL orders
+		// ShouldCheckMarketHours returns true for all SELL orders
+		if r.marketHoursService != nil && r.marketHoursService.ShouldCheckMarketHours(pos.FullExchangeName, "SELL") {
+			if !r.marketHoursService.IsMarketOpen(pos.FullExchangeName) {
+				r.log.Debug().
+					Str("symbol", pos.Symbol).
+					Str("exchange", pos.FullExchangeName).
+					Msg("Skipping position - market closed")
+				continue
+			}
+		}
+
+		sellablePositions = append(sellablePositions, pos)
 	}
 
 	if len(sellablePositions) == 0 {
@@ -433,24 +467,39 @@ func (r *NegativeBalanceRebalancer) step2PositionSales(
 		return nil
 	}
 
-	// Calculate total cash needed in EUR (convert all shortfalls to EUR)
+	// Calculate total cash needed in EUR (convert all shortfalls to EUR using precise rates)
 	totalNeededEUR := 0.0
 	for currency, shortfall := range remainingShortfalls {
-		// Simple conversion (TODO: use ExchangeRateService for precise conversion)
-		eurValue := shortfall
-		switch currency {
-		case "EUR":
-			eurValue = shortfall
-		case "USD":
-			eurValue = shortfall * 0.9 // Rough conversion
-		case "GBP":
-			eurValue = shortfall * 1.2 // Rough conversion
-		case "HKD":
-			eurValue = shortfall * 0.11 // Rough conversion
-		default:
-			eurValue = shortfall
+		if currency == "EUR" {
+			totalNeededEUR += shortfall
+			continue
 		}
-		totalNeededEUR += eurValue
+
+		// Get precise exchange rate
+		rate, err := r.currencyExchangeService.GetRate(currency, "EUR")
+		if err != nil {
+			r.log.Warn().
+				Err(err).
+				Str("from", currency).
+				Str("to", "EUR").
+				Msg("Failed to get exchange rate, using fallback")
+
+			// Fallback to rough conversion if rate lookup fails
+			eurValue := shortfall
+			switch currency {
+			case "USD":
+				eurValue = shortfall * 0.9 // Rough fallback
+			case "GBP":
+				eurValue = shortfall * 1.2 // Rough fallback
+			case "HKD":
+				eurValue = shortfall * 0.11 // Rough fallback
+			default:
+				eurValue = shortfall
+			}
+			totalNeededEUR += eurValue
+		} else {
+			totalNeededEUR += shortfall * rate
+		}
 	}
 
 	// Sort positions by market_value_eur descending (largest first)

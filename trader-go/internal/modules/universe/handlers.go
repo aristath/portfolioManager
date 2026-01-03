@@ -120,6 +120,8 @@ type UniverseHandlers struct {
 	securityScorer *scorers.SecurityScorer
 	yahooClient    *yahoo.Client
 	historyDB      *HistoryDB
+	setupService   *SecuritySetupService
+	syncService    *SyncService
 	pythonURL      string
 }
 
@@ -132,6 +134,8 @@ func NewUniverseHandlers(
 	securityScorer *scorers.SecurityScorer,
 	yahooClient *yahoo.Client,
 	historyDB *HistoryDB,
+	setupService *SecuritySetupService,
+	syncService *SyncService,
 	pythonURL string,
 	log zerolog.Logger,
 ) *UniverseHandlers {
@@ -143,6 +147,8 @@ func NewUniverseHandlers(
 		securityScorer: securityScorer,
 		yahooClient:    yahooClient,
 		historyDB:      historyDB,
+		setupService:   setupService,
+		syncService:    syncService,
 		pythonURL:      pythonURL,
 		log:            log.With().Str("module", "universe_handlers").Logger(),
 	}
@@ -369,18 +375,139 @@ func (h *UniverseHandlers) HandleGetStock(w http.ResponseWriter, r *http.Request
 	_ = json.NewEncoder(w).Encode(result) // Ignore encode error - already committed response
 }
 
-// HandleCreateStock proxies to Python for security creation
-// POST /api/securities
-func (h *UniverseHandlers) HandleCreateStock(w http.ResponseWriter, r *http.Request) {
-	// Proxy to Python - requires Yahoo Finance integration
-	h.proxyToPython(w, r, "/api/securities")
+// SecurityCreateRequest represents the request to create a security
+type SecurityCreateRequest struct {
+	Symbol      string `json:"symbol"`
+	Name        string `json:"name"`
+	YahooSymbol string `json:"yahoo_symbol"`
+	MinLot      int    `json:"min_lot"`
+	AllowBuy    bool   `json:"allow_buy"`
+	AllowSell   bool   `json:"allow_sell"`
 }
 
-// HandleAddStockByIdentifier proxies to Python for auto-setup by identifier
+// HandleCreateStock creates a new security in the universe
+// POST /api/securities
+func (h *UniverseHandlers) HandleCreateStock(w http.ResponseWriter, r *http.Request) {
+	var req SecurityCreateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Validate required fields
+	if req.Symbol == "" {
+		http.Error(w, "Symbol is required", http.StatusBadRequest)
+		return
+	}
+	if req.Name == "" {
+		http.Error(w, "Name is required", http.StatusBadRequest)
+		return
+	}
+
+	// Set defaults
+	if req.MinLot == 0 {
+		req.MinLot = 1
+	}
+
+	h.log.Info().
+		Str("symbol", req.Symbol).
+		Str("name", req.Name).
+		Int("min_lot", req.MinLot).
+		Bool("allow_buy", req.AllowBuy).
+		Bool("allow_sell", req.AllowSell).
+		Msg("Creating security")
+
+	// Call SecuritySetupService
+	security, err := h.setupService.CreateSecurity(
+		req.Symbol,
+		req.Name,
+		req.YahooSymbol,
+		req.MinLot,
+		req.AllowBuy,
+		req.AllowSell,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Str("symbol", req.Symbol).Msg("Failed to create security")
+		http.Error(w, fmt.Sprintf("Failed to create security: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Get the calculated score
+	score, err := h.scoreRepo.GetBySymbol(security.Symbol)
+	if err != nil {
+		h.log.Warn().Err(err).Str("symbol", security.Symbol).Msg("Failed to get score")
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	response := map[string]interface{}{
+		"message":  fmt.Sprintf("Security %s added successfully", security.Symbol),
+		"security": security,
+	}
+	if score != nil {
+		response["score"] = score
+	}
+	_ = json.NewEncoder(w).Encode(response)
+}
+
+// AddByIdentifierRequest represents the request to add a security by identifier
+type AddByIdentifierRequest struct {
+	Identifier string `json:"identifier"`
+	MinLot     int    `json:"min_lot"`
+	AllowBuy   bool   `json:"allow_buy"`
+	AllowSell  bool   `json:"allow_sell"`
+}
+
+// HandleAddStockByIdentifier adds a security to the universe by symbol or ISIN
 // POST /api/securities/add-by-identifier
 func (h *UniverseHandlers) HandleAddStockByIdentifier(w http.ResponseWriter, r *http.Request) {
-	// Proxy to Python - requires Tradernet + Yahoo Finance + scoring
-	h.proxyToPython(w, r, "/api/securities/add-by-identifier")
+	var req AddByIdentifierRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Set defaults
+	if req.MinLot == 0 {
+		req.MinLot = 1
+	}
+
+	h.log.Info().
+		Str("identifier", req.Identifier).
+		Int("min_lot", req.MinLot).
+		Bool("allow_buy", req.AllowBuy).
+		Bool("allow_sell", req.AllowSell).
+		Msg("Adding security by identifier")
+
+	if h.setupService == nil {
+		h.log.Error().Msg("SecuritySetupService not available")
+		http.Error(w, "Service not available", http.StatusInternalServerError)
+		return
+	}
+
+	// Call SecuritySetupService
+	security, err := h.setupService.AddSecurityByIdentifier(
+		req.Identifier,
+		req.MinLot,
+		req.AllowBuy,
+		req.AllowSell,
+	)
+	if err != nil {
+		h.log.Error().Err(err).Str("identifier", req.Identifier).Msg("Failed to add security")
+		http.Error(w, fmt.Sprintf("Failed to add security: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	h.log.Info().
+		Str("symbol", security.Symbol).
+		Str("identifier", req.Identifier).
+		Msg("Security added successfully")
+
+	w.Header().Set("Content-Type", "application/json")
+	response := map[string]interface{}{
+		"message":  fmt.Sprintf("Security %s added successfully", security.Symbol),
+		"security": security,
+	}
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // HandleRefreshAllScores recalculates scores for all active securities
@@ -440,9 +567,45 @@ func (h *UniverseHandlers) HandleRefreshAllScores(w http.ResponseWriter, r *http
 // POST /api/securities/{isin}/refresh-data
 func (h *UniverseHandlers) HandleRefreshSecurityData(w http.ResponseWriter, r *http.Request) {
 	isin := chi.URLParam(r, "isin")
-	h.log.Info().Str("isin", isin).Msg("Proxying refresh data request to Python")
-	// Proxy to Python - requires full pipeline (Yahoo sync + scoring)
-	h.proxyToPython(w, r, fmt.Sprintf("/api/securities/%s/refresh-data", isin))
+
+	// Validate ISIN format
+	isin = strings.TrimSpace(strings.ToUpper(isin))
+	if !isISIN(isin) {
+		http.Error(w, "Invalid ISIN format", http.StatusBadRequest)
+		return
+	}
+
+	h.log.Info().Str("isin", isin).Msg("Refreshing security data")
+
+	// Get security by ISIN
+	security, err := h.securityRepo.GetByISIN(isin)
+	if err != nil {
+		h.log.Error().Err(err).Str("isin", isin).Msg("Failed to get security")
+		http.Error(w, fmt.Sprintf("Failed to get security: %v", err), http.StatusInternalServerError)
+		return
+	}
+	if security == nil {
+		http.Error(w, "Security not found", http.StatusNotFound)
+		return
+	}
+
+	symbol := security.Symbol
+
+	// Call SecuritySetupService to refresh data
+	err = h.setupService.RefreshSecurityData(symbol)
+	if err != nil {
+		h.log.Error().Err(err).Str("symbol", symbol).Msg("Failed to refresh security data")
+		http.Error(w, fmt.Sprintf("Data refresh failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	response := map[string]interface{}{
+		"status":  "success",
+		"symbol":  symbol,
+		"message": fmt.Sprintf("Full data refresh completed for %s", symbol),
+	}
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // HandleRefreshStockScore recalculates score for a single security
@@ -885,9 +1048,21 @@ func (h *UniverseHandlers) HandleSyncPrices(w http.ResponseWriter, r *http.Reque
 
 	h.log.Info().Msg("Manual price sync triggered")
 
-	// Delegate to Python service for now
-	// Full Go implementation will be in Phase 4 (sync_cycle.go)
-	h.proxyToPython(w, r, "/api/system/sync/prices")
+	// Call SyncService
+	quotesCount, err := h.syncService.SyncAllPrices()
+	if err != nil {
+		h.log.Error().Err(err).Msg("Price sync failed")
+		http.Error(w, fmt.Sprintf("Price sync failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	response := map[string]interface{}{
+		"status":  "success",
+		"message": "Price sync completed",
+		"quotes":  quotesCount,
+	}
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // HandleSyncHistorical triggers manual historical data sync
@@ -900,9 +1075,22 @@ func (h *UniverseHandlers) HandleSyncHistorical(w http.ResponseWriter, r *http.R
 
 	h.log.Info().Msg("Manual historical data sync triggered")
 
-	// Delegate to Python service for now
-	// Full Go implementation will be in Phase 4 (sync_cycle.go)
-	h.proxyToPython(w, r, "/api/system/sync/historical")
+	// Call SyncService
+	processed, errors, err := h.syncService.SyncAllHistoricalData()
+	if err != nil {
+		h.log.Error().Err(err).Msg("Historical data sync failed")
+		http.Error(w, fmt.Sprintf("Historical data sync failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	response := map[string]interface{}{
+		"status":    "success",
+		"message":   "Historical data sync completed",
+		"processed": processed,
+		"errors":    errors,
+	}
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // HandleRebuildUniverse rebuilds universe from portfolio and populates all databases
@@ -915,9 +1103,21 @@ func (h *UniverseHandlers) HandleRebuildUniverse(w http.ResponseWriter, r *http.
 
 	h.log.Info().Msg("Universe rebuild from portfolio triggered")
 
-	// Delegate to Python service for now
-	// Full Go implementation will be in Phase 4 (sync_cycle.go)
-	h.proxyToPython(w, r, "/api/system/sync/rebuild-universe")
+	// Call SyncService
+	addedCount, err := h.syncService.RebuildUniverseFromPortfolio()
+	if err != nil {
+		h.log.Error().Err(err).Msg("Universe rebuild failed")
+		http.Error(w, fmt.Sprintf("Universe rebuild failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	response := map[string]interface{}{
+		"status":  "success",
+		"message": "Universe rebuild completed",
+		"added":   addedCount,
+	}
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // HandleSyncSecuritiesData triggers securities data sync (historical, industry, metrics, scores)
@@ -930,7 +1130,20 @@ func (h *UniverseHandlers) HandleSyncSecuritiesData(w http.ResponseWriter, r *ht
 
 	h.log.Info().Msg("Manual securities data sync triggered")
 
-	// Delegate to Python service for now
-	// Full Go implementation will be in Phase 4 (sync_cycle.go)
-	h.proxyToPython(w, r, "/api/system/sync/securities-data")
+	// Call SyncService
+	processed, errors, err := h.syncService.SyncSecuritiesData()
+	if err != nil {
+		h.log.Error().Err(err).Msg("Securities data sync failed")
+		http.Error(w, fmt.Sprintf("Securities data sync failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	response := map[string]interface{}{
+		"status":    "success",
+		"message":   "Securities data sync completed",
+		"processed": processed,
+		"errors":    errors,
+	}
+	_ = json.NewEncoder(w).Encode(response)
 }

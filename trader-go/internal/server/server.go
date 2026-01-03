@@ -17,6 +17,7 @@ import (
 	"github.com/aristath/arduino-trader/internal/clients/yahoo"
 	"github.com/aristath/arduino-trader/internal/config"
 	"github.com/aristath/arduino-trader/internal/database"
+	"github.com/aristath/arduino-trader/internal/events"
 	"github.com/aristath/arduino-trader/internal/modules/allocation"
 	"github.com/aristath/arduino-trader/internal/modules/cash_flows"
 	"github.com/aristath/arduino-trader/internal/modules/display"
@@ -34,6 +35,7 @@ import (
 	"github.com/aristath/arduino-trader/internal/modules/settings"
 	"github.com/aristath/arduino-trader/internal/modules/trading"
 	"github.com/aristath/arduino-trader/internal/modules/universe"
+	"github.com/aristath/arduino-trader/internal/scheduler"
 	"github.com/aristath/arduino-trader/internal/services"
 )
 
@@ -215,6 +217,37 @@ func (s *Server) setupSystemRoutes(r chi.Router) {
 	securityScorer := scorers.NewSecurityScorer()
 	historyDB := universe.NewHistoryDB("../data/history", s.log)
 
+	// Tradernet client for symbol resolution and data fetching
+	tradernetClient := tradernet.NewClient(s.cfg.TradernetServiceURL, s.log)
+
+	// Create SecuritySetupService for adding securities (system routes)
+	symbolResolver1 := universe.NewSymbolResolver(tradernetClient, securityRepo, s.log)
+	historicalSync1 := universe.NewHistoricalSyncService(yahooClient, securityRepo, historyDB, 2*time.Second, s.log)
+	eventManager1 := events.NewManager(s.log)
+
+	setupService1 := universe.NewSecuritySetupService(
+		symbolResolver1,
+		securityRepo,
+		tradernetClient,
+		yahooClient,
+		historicalSync1,
+		eventManager1,
+		nil, // Will be set after handlers are created
+		s.log,
+	)
+
+	// Create SyncService for bulk sync operations
+	syncService1 := universe.NewSyncService(
+		securityRepo,
+		historicalSync1,
+		yahooClient,
+		nil,              // scoreCalculator - Will be set after handlers are created
+		tradernetClient,  // For RebuildUniverseFromPortfolio
+		setupService1,    // For adding missing securities
+		s.stateDB.Conn(), // For SyncAllPrices position updates
+		s.log,
+	)
+
 	universeHandlers := universe.NewUniverseHandlers(
 		securityRepo,
 		scoreRepo,
@@ -223,9 +256,15 @@ func (s *Server) setupSystemRoutes(r chi.Router) {
 		securityScorer,
 		yahooClient,
 		historyDB,
+		setupService1,
+		syncService1,
 		s.cfg.PythonServiceURL,
 		s.log,
 	)
+
+	// Wire score calculator
+	setupService1.SetScoreCalculator(universeHandlers)
+	syncService1.SetScoreCalculator(universeHandlers)
 
 	// System routes (complete Phase 1 implementation)
 	r.Route("/system", func(r chi.Router) {
@@ -383,6 +422,40 @@ func (s *Server) setupUniverseRoutes(r chi.Router) {
 	// History database for historical price data
 	historyDB := universe.NewHistoryDB("../data/history", s.log)
 
+	// Tradernet client for symbol resolution and data fetching
+	tradernetClient := tradernet.NewClient(s.cfg.TradernetServiceURL, s.log)
+
+	// Create SecuritySetupService for adding securities
+	symbolResolver := universe.NewSymbolResolver(tradernetClient, securityRepo, s.log)
+	historicalSync := universe.NewHistoricalSyncService(yahooClient, securityRepo, historyDB, 2*time.Second, s.log)
+	eventManager := events.NewManager(s.log)
+
+	// Create score calculator adapter (UniverseHandlers implements ScoreCalculator)
+	var scoreCalculator universe.ScoreCalculator
+
+	setupService := universe.NewSecuritySetupService(
+		symbolResolver,
+		securityRepo,
+		tradernetClient,
+		yahooClient,
+		historicalSync,
+		eventManager,
+		scoreCalculator, // Will be set after handlers are created
+		s.log,
+	)
+
+	// Create SyncService for bulk sync operations
+	syncService := universe.NewSyncService(
+		securityRepo,
+		historicalSync,
+		yahooClient,
+		scoreCalculator,  // Will be set after handlers are created
+		tradernetClient,  // For RebuildUniverseFromPortfolio
+		setupService,     // For adding missing securities
+		s.stateDB.Conn(), // For SyncAllPrices position updates
+		s.log,
+	)
+
 	handler := universe.NewUniverseHandlers(
 		securityRepo,
 		scoreRepo,
@@ -391,9 +464,15 @@ func (s *Server) setupUniverseRoutes(r chi.Router) {
 		securityScorer,
 		yahooClient,
 		historyDB,
+		setupService,
+		syncService,
 		s.cfg.PythonServiceURL,
 		s.log,
 	)
+
+	// Now wire the score calculator (handler implements the interface)
+	setupService.SetScoreCalculator(handler)
+	syncService.SetScoreCalculator(handler)
 
 	// Universe/Securities routes (faithful translation of Python routes)
 	r.Route("/securities", func(r chi.Router) {
@@ -464,12 +543,30 @@ func (s *Server) setupTradingRoutes(r chi.Router) {
 	// Tradernet microservice client
 	tradernetClient := tradernet.NewClient(s.cfg.TradernetServiceURL, s.log)
 
+	// Settings service (needed for trade safety validation)
+	settingsRepo := settings.NewRepository(s.configDB.Conn(), s.log)
+	settingsService := settings.NewService(settingsRepo, s.log)
+
+	// Market hours service (needed for trade safety validation)
+	marketHoursService := scheduler.NewMarketHoursService(s.log)
+
+	// Trade safety service (validates all manual trades)
+	safetyService := trading.NewTradeSafetyService(
+		tradeRepo,
+		positionRepo,
+		securityRepo,
+		settingsService,
+		marketHoursService,
+		s.log,
+	)
+
 	handler := trading.NewTradingHandlers(
 		tradeRepo,
 		securityFetcher,
 		portfolioService,
 		alertService,
 		tradernetClient,
+		safetyService,
 		s.log,
 	)
 
@@ -723,6 +820,9 @@ func (s *Server) setupRebalancingRoutes(r chi.Router) {
 	)
 	recommendationRepo := planning.NewRecommendationRepository(s.stateDB.Conn(), s.log)
 
+	// Initialize market hours service for market open/close checking
+	marketHoursService := scheduler.NewMarketHoursService(s.log)
+
 	negativeRebalancer := rebalancing.NewNegativeBalanceRebalancer(
 		s.log,
 		tradernetClient,
@@ -732,6 +832,7 @@ func (s *Server) setupRebalancingRoutes(r chi.Router) {
 		currencyExchangeService,
 		tradeExecutionService,
 		recommendationRepo,
+		marketHoursService,
 	)
 
 	// Initialize rebalancing service

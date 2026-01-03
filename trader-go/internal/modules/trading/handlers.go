@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/aristath/arduino-trader/internal/clients/tradernet"
 	"github.com/aristath/arduino-trader/internal/modules/allocation"
@@ -26,6 +27,7 @@ type TradingHandlers struct {
 	portfolioService *portfolio.PortfolioService
 	alertService     *allocation.ConcentrationAlertService
 	tradernetClient  *tradernet.Client
+	safetyService    *TradeSafetyService
 }
 
 // NewTradingHandlers creates a new trading handlers instance
@@ -35,6 +37,7 @@ func NewTradingHandlers(
 	portfolioService *portfolio.PortfolioService,
 	alertService *allocation.ConcentrationAlertService,
 	tradernetClient *tradernet.Client,
+	safetyService *TradeSafetyService,
 	log zerolog.Logger,
 ) *TradingHandlers {
 	return &TradingHandlers{
@@ -43,6 +46,7 @@ func NewTradingHandlers(
 		portfolioService: portfolioService,
 		alertService:     alertService,
 		tradernetClient:  tradernetClient,
+		safetyService:    safetyService,
 		log:              log.With().Str("handler", "trading").Logger(),
 	}
 }
@@ -128,12 +132,32 @@ func (h *TradingHandlers) HandleExecuteTrade(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// SAFETY LAYER: Validate trade before execution
+	if h.safetyService != nil {
+		if err := h.safetyService.ValidateTrade(req.Symbol, req.Side, req.Quantity); err != nil {
+			h.log.Warn().
+				Err(err).
+				Str("symbol", req.Symbol).
+				Str("side", req.Side).
+				Float64("quantity", req.Quantity).
+				Msg("Trade validation failed")
+			h.writeError(w, http.StatusBadRequest, fmt.Sprintf("Trade validation failed: %v", err))
+			return
+		}
+	}
+
 	// Execute trade via Tradernet microservice
 	result, err := h.tradernetClient.PlaceOrder(req.Symbol, req.Side, req.Quantity)
 	if err != nil {
 		h.log.Error().Err(err).Msg("Failed to place order")
 		h.writeError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to place order: %v", err))
 		return
+	}
+
+	// Record trade in database
+	if err := h.recordTrade(req.Symbol, req.Side, req.Quantity, result); err != nil {
+		h.log.Error().Err(err).Msg("Failed to record trade")
+		// Don't fail the request - trade already executed
 	}
 
 	// Return success response matching Python format
@@ -147,6 +171,42 @@ func (h *TradingHandlers) HandleExecuteTrade(w http.ResponseWriter, r *http.Requ
 	}
 
 	h.writeJSON(w, http.StatusOK, response)
+}
+
+// recordTrade records a trade in the database after execution
+// Faithful translation from Python: app/modules/trading/services/trade_execution/trade_recorder.py -> record_trade()
+func (h *TradingHandlers) recordTrade(
+	symbol string,
+	side string,
+	quantity float64,
+	result *tradernet.OrderResult,
+) error {
+	now := time.Now()
+
+	trade := Trade{
+		Symbol:     symbol,
+		Side:       TradeSide(strings.ToUpper(side)),
+		Quantity:   quantity,
+		Price:      result.Price,
+		ExecutedAt: now,
+		OrderID:    result.OrderID,
+		Source:     "manual",
+		BucketID:   "core",
+		Mode:       "live", // TODO: Get from settings
+		CreatedAt:  &now,
+	}
+
+	if err := h.tradeRepo.Create(trade); err != nil {
+		return fmt.Errorf("failed to create trade record: %w", err)
+	}
+
+	h.log.Info().
+		Str("symbol", symbol).
+		Str("order_id", result.OrderID).
+		Float64("price", result.Price).
+		Msg("Trade recorded successfully")
+
+	return nil
 }
 
 // HandleGetAllocation returns current portfolio allocation vs targets

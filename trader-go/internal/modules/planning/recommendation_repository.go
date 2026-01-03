@@ -263,3 +263,33 @@ func (r *RecommendationRepository) MarkExecuted(recUUID string) error {
 
 	return nil
 }
+
+// DismissAllByPortfolioHash dismisses all recommendations for a given portfolio hash
+func (r *RecommendationRepository) DismissAllByPortfolioHash(portfolioHash string) (int, error) {
+	now := time.Now()
+	result, err := r.db.Exec(`
+		UPDATE recommendations
+		SET status = 'dismissed',
+			updated_at = ?
+		WHERE portfolio_hash = ? AND status = 'pending'
+	`,
+		now,
+		portfolioHash,
+	)
+
+	if err != nil {
+		return 0, fmt.Errorf("failed to dismiss recommendations: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	r.log.Info().
+		Str("portfolio_hash", portfolioHash).
+		Int64("dismissed_count", rowsAffected).
+		Msg("Dismissed recommendations by portfolio hash")
+
+	return int(rowsAffected), nil
+}

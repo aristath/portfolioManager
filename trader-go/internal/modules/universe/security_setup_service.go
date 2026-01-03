@@ -52,6 +52,146 @@ func NewSecuritySetupService(
 	}
 }
 
+// SetScoreCalculator sets the score calculator (for deferred wiring)
+func (s *SecuritySetupService) SetScoreCalculator(calculator ScoreCalculator) {
+	s.scoreCalculator = calculator
+}
+
+// CreateSecurity creates a security with explicit symbol and name
+// Faithful translation from Python: app/modules/universe/api/securities.py -> create_stock()
+//
+// This method:
+// 1. Validates symbol is unique
+// 2. Auto-detects country, exchange, industry from Yahoo Finance
+// 3. Creates the security in the database
+// 4. Publishes SecurityAdded event
+// 5. Calculates and saves the initial security score
+//
+// Unlike AddSecurityByIdentifier, this does NOT:
+// - Fetch historical price data (handled by background sync jobs)
+// - Fetch Tradernet metadata (currency, ISIN)
+// - Resolve identifiers (symbol is already provided)
+func (s *SecuritySetupService) CreateSecurity(
+	symbol string,
+	name string,
+	yahooSymbol string,
+	minLot int,
+	allowBuy bool,
+	allowSell bool,
+) (*Security, error) {
+	symbol = strings.TrimSpace(strings.ToUpper(symbol))
+	if symbol == "" {
+		return nil, fmt.Errorf("symbol cannot be empty")
+	}
+	if name == "" {
+		return nil, fmt.Errorf("name cannot be empty")
+	}
+
+	s.log.Info().
+		Str("symbol", symbol).
+		Str("name", name).
+		Msg("Creating security")
+
+	// Check if security already exists
+	existing, err := s.securityRepo.GetBySymbol(symbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check existing security: %w", err)
+	}
+	if existing != nil {
+		return nil, fmt.Errorf("security already exists: %s", existing.Symbol)
+	}
+
+	// Auto-detect country, exchange, and industry from Yahoo Finance
+	var yahooSymbolPtr *string
+	if yahooSymbol != "" {
+		yahooSymbolPtr = &yahooSymbol
+	}
+
+	country, fullExchangeName, err := s.yahooClient.GetSecurityCountryAndExchange(symbol, yahooSymbolPtr)
+	if err != nil {
+		s.log.Warn().Err(err).Str("symbol", symbol).Msg("Failed to get country/exchange from Yahoo")
+	}
+
+	industry, err := s.yahooClient.GetSecurityIndustry(symbol, yahooSymbolPtr)
+	if err != nil {
+		s.log.Warn().Err(err).Str("symbol", symbol).Msg("Failed to get industry from Yahoo")
+	}
+
+	// Detect product type using Yahoo Finance with heuristics
+	productType, err := s.detectProductType(symbol, yahooSymbolPtr, name)
+	if err != nil {
+		s.log.Warn().Err(err).Str("symbol", symbol).Msg("Failed to detect product type, using UNKNOWN")
+		productType = ProductTypeUnknown
+	}
+
+	// Determine final yahoo symbol
+	finalYahooSymbol := yahooSymbol
+	if finalYahooSymbol == "" {
+		finalYahooSymbol = symbol
+	}
+
+	// Create security
+	security := Security{
+		Symbol:             symbol,
+		Name:               name,
+		ProductType:        string(productType),
+		Country:            stringValue(country),
+		FullExchangeName:   stringValue(fullExchangeName),
+		YahooSymbol:        finalYahooSymbol,
+		Industry:           stringValue(industry),
+		PriorityMultiplier: 1.0,
+		MinLot:             minLot,
+		Active:             true,
+		AllowBuy:           allowBuy,
+		AllowSell:          allowSell,
+	}
+
+	err = s.securityRepo.Create(security)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create security in database: %w", err)
+	}
+
+	s.log.Info().
+		Str("symbol", security.Symbol).
+		Str("name", security.Name).
+		Str("product_type", security.ProductType).
+		Msg("Created security in database")
+
+	// Publish domain event
+	if s.eventManager != nil {
+		s.eventManager.Emit(events.SecurityAdded, "universe", map[string]interface{}{
+			"symbol": security.Symbol,
+			"isin":   security.ISIN,
+			"name":   security.Name,
+		})
+	}
+
+	// Calculate initial score
+	// Non-fatal - continue if this fails
+	if s.scoreCalculator != nil {
+		err = s.scoreCalculator.CalculateAndSaveScore(
+			security.Symbol,
+			security.YahooSymbol,
+			security.Country,
+			security.Industry,
+		)
+		if err != nil {
+			s.log.Warn().
+				Err(err).
+				Str("symbol", security.Symbol).
+				Msg("Failed to calculate initial score - continuing anyway")
+		} else {
+			s.log.Info().Str("symbol", security.Symbol).Msg("Calculated initial score")
+		}
+	}
+
+	s.log.Info().
+		Str("symbol", security.Symbol).
+		Msg("Security creation complete")
+
+	return &security, nil
+}
+
 // AddSecurityByIdentifier adds a security to the universe by symbol or ISIN
 // Faithful translation from Python: app/modules/universe/services/security_setup_service.py -> add_security_by_identifier()
 //
@@ -412,6 +552,57 @@ func (s *SecuritySetupService) detectProductType(symbol string, yahooSymbol *str
 
 	// Default to EQUITY for now
 	return ProductTypeEquity, nil
+}
+
+// RefreshSecurityData triggers full data refresh for a security
+// Faithful translation from Python: app/modules/universe/api/securities.py -> refresh_security_data()
+//
+// This method:
+// 1. Syncs historical prices from Yahoo Finance
+// 2. Recalculates security score
+//
+// This is a full pipeline refresh that bypasses last_synced checks.
+func (s *SecuritySetupService) RefreshSecurityData(symbol string) error {
+	s.log.Info().Str("symbol", symbol).Msg("Refreshing security data")
+
+	// Step 1: Sync historical prices
+	if s.historicalSync != nil {
+		err := s.historicalSync.SyncHistoricalPrices(symbol)
+		if err != nil {
+			return fmt.Errorf("failed to sync historical prices: %w", err)
+		}
+		s.log.Info().Str("symbol", symbol).Msg("Synced historical prices")
+	} else {
+		s.log.Warn().Msg("Historical sync service not available, skipping price sync")
+	}
+
+	// Step 2: Recalculate score
+	// Get security details for score calculation
+	security, err := s.securityRepo.GetBySymbol(symbol)
+	if err != nil {
+		return fmt.Errorf("failed to get security: %w", err)
+	}
+	if security == nil {
+		return fmt.Errorf("security not found: %s", symbol)
+	}
+
+	if s.scoreCalculator != nil {
+		err = s.scoreCalculator.CalculateAndSaveScore(
+			security.Symbol,
+			security.YahooSymbol,
+			security.Country,
+			security.Industry,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to recalculate score: %w", err)
+		}
+		s.log.Info().Str("symbol", symbol).Msg("Recalculated security score")
+	} else {
+		s.log.Warn().Msg("Score calculator not available, skipping score recalculation")
+	}
+
+	s.log.Info().Str("symbol", symbol).Msg("Security data refresh complete")
+	return nil
 }
 
 // Helper function to get string value from pointer
