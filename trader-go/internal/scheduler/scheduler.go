@@ -17,11 +17,16 @@ type Scheduler struct {
 	log  zerolog.Logger
 }
 
-// New creates a new scheduler
+// New creates a new scheduler with SkipIfStillRunning to prevent concurrent job execution
 func New(log zerolog.Logger) *Scheduler {
 	return &Scheduler{
-		cron: cron.New(cron.WithSeconds()),
-		log:  log.With().Str("component", "scheduler").Logger(),
+		cron: cron.New(
+			cron.WithSeconds(),
+			cron.WithChain(
+				cron.SkipIfStillRunning(cron.DefaultLogger),
+			),
+		),
+		log: log.With().Str("component", "scheduler").Logger(),
 	}
 }
 

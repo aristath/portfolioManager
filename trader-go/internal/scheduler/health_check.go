@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/aristath/arduino-trader/internal/database"
-	"github.com/aristath/arduino-trader/internal/locking"
 	"github.com/rs/zerolog"
 )
 
@@ -17,7 +16,6 @@ import (
 // Runs every 6 hours to ensure database health
 type HealthCheckJob struct {
 	log         zerolog.Logger
-	lockManager *locking.Manager
 	dataDir     string
 	configDB    *database.DB
 	stateDB     *database.DB
@@ -30,7 +28,6 @@ type HealthCheckJob struct {
 // HealthCheckConfig holds configuration for health check job
 type HealthCheckConfig struct {
 	Log         zerolog.Logger
-	LockManager *locking.Manager
 	DataDir     string
 	ConfigDB    *database.DB
 	StateDB     *database.DB
@@ -44,7 +41,6 @@ type HealthCheckConfig struct {
 func NewHealthCheckJob(cfg HealthCheckConfig) *HealthCheckJob {
 	return &HealthCheckJob{
 		log:         cfg.Log.With().Str("job", "health_check").Logger(),
-		lockManager: cfg.LockManager,
 		dataDir:     cfg.DataDir,
 		configDB:    cfg.ConfigDB,
 		stateDB:     cfg.StateDB,
@@ -61,14 +57,8 @@ func (j *HealthCheckJob) Name() string {
 }
 
 // Run executes the health check
+// Note: Concurrent execution is prevented by the scheduler's SkipIfStillRunning wrapper
 func (j *HealthCheckJob) Run() error {
-	// Acquire lock to prevent concurrent execution
-	if err := j.lockManager.Acquire("health_check"); err != nil {
-		j.log.Warn().Err(err).Msg("Health check already running")
-		return nil // Don't fail, just skip this run
-	}
-	defer j.lockManager.Release("health_check")
-
 	j.log.Info().Msg("Starting database health check")
 	startTime := time.Now()
 
@@ -83,9 +73,6 @@ func (j *HealthCheckJob) Run() error {
 
 	// Step 3: Check WAL checkpoints
 	j.checkWALCheckpoints()
-
-	// Step 4: Clear stuck locks (older than 1 hour)
-	j.clearStuckLocks()
 
 	duration := time.Since(startTime)
 	j.log.Info().
@@ -241,26 +228,5 @@ func (j *HealthCheckJob) checkWALCheckpoints() {
 				Int("wal_frames", log).
 				Msg("WAL checkpoint status OK")
 		}
-	}
-}
-
-// clearStuckLocks removes locks older than 1 hour
-func (j *HealthCheckJob) clearStuckLocks() {
-	if j.lockManager == nil {
-		return
-	}
-
-	clearedLocks, err := j.lockManager.ClearStuckLocks(1 * time.Hour)
-	if err != nil {
-		j.log.Error().Err(err).Msg("Failed to clear stuck locks")
-		return
-	}
-
-	if len(clearedLocks) > 0 {
-		j.log.Warn().
-			Strs("locks", clearedLocks).
-			Msg("Cleared stuck locks")
-	} else {
-		j.log.Debug().Msg("No stuck locks found")
 	}
 }

@@ -293,11 +293,6 @@ func (s *Server) setupSystemRoutes(r chi.Router) {
 			r.Post("/recommendations", systemHandlers.HandleSyncRecommendations)
 		})
 
-		// Lock management
-		r.Route("/locks", func(r chi.Router) {
-			r.Post("/clear", systemHandlers.HandleClearLocks)
-		})
-
 		// Job triggers (manual operation triggers)
 		r.Route("/jobs", func(r chi.Router) {
 			r.Post("/sync-cycle", systemHandlers.HandleTriggerSyncCycle)

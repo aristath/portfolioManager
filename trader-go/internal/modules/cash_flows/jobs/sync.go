@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/aristath/arduino-trader/internal/events"
-	"github.com/aristath/arduino-trader/internal/locking"
 	"github.com/aristath/arduino-trader/internal/modules/cash_flows"
 	"github.com/aristath/arduino-trader/internal/modules/display"
 	"github.com/rs/zerolog"
@@ -19,7 +18,6 @@ type SyncJob struct {
 	dividendCreator  *cash_flows.DividendCreator
 	tradernetClient  cash_flows.TradernetClient
 	displayManager   *display.StateManager
-	lockManager      *locking.Manager
 	eventManager     *events.Manager
 	log              zerolog.Logger
 }
@@ -31,7 +29,6 @@ func NewSyncJob(
 	dividendCreator *cash_flows.DividendCreator,
 	tradernetClient cash_flows.TradernetClient,
 	displayManager *display.StateManager,
-	lockManager *locking.Manager,
 	eventManager *events.Manager,
 	log zerolog.Logger,
 ) *SyncJob {
@@ -41,7 +38,6 @@ func NewSyncJob(
 		dividendCreator:  dividendCreator,
 		tradernetClient:  tradernetClient,
 		displayManager:   displayManager,
-		lockManager:      lockManager,
 		eventManager:     eventManager,
 		log:              log.With().Str("job", "cash_flow_sync").Logger(),
 	}
@@ -49,23 +45,13 @@ func NewSyncJob(
 
 // SyncCashFlows performs cash flow synchronization from Tradernet API
 // Faithful translation from Python: app/modules/cash_flows/jobs/cash_flow_sync.py
+// Note: If this is called from a scheduled job, concurrent execution is prevented by the scheduler's SkipIfStillRunning wrapper
 func (j *SyncJob) SyncCashFlows() error {
-	// 1. Acquire file lock (timeout 120s)
-	lock, err := j.lockManager.AcquireLock("cash_flow_sync", 120*time.Second)
-	if err != nil {
-		j.log.Error().Err(err).Msg("Failed to acquire lock")
-		j.eventManager.EmitError("cash_flows", err, map[string]interface{}{
-			"step": "acquire_lock",
-		})
-		return fmt.Errorf("failed to acquire lock: %w", err)
-	}
-	defer lock.Release()
-
-	// 2. Set LED4 to green
+	// 1. Set LED4 to green
 	j.displayManager.SetLED4(0, 255, 0)
 	defer j.displayManager.SetLED4(0, 0, 0) // Clear on completion
 
-	// 3. Emit CASH_FLOW_SYNC_START event
+	// 2. Emit CASH_FLOW_SYNC_START event
 	j.eventManager.Emit(events.CashFlowSyncStart, "cash_flows", map[string]interface{}{
 		"timestamp": time.Now().Format(time.RFC3339),
 	})

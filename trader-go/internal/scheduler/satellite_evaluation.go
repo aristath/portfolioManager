@@ -5,7 +5,6 @@ import (
 	"math"
 	"time"
 
-	"github.com/aristath/arduino-trader/internal/locking"
 	"github.com/aristath/arduino-trader/internal/modules/satellites"
 	"github.com/rs/zerolog"
 )
@@ -21,19 +20,16 @@ import (
 // 5. Log results and notify if significant changes
 type SatelliteEvaluationJob struct {
 	log           zerolog.Logger
-	lockManager   *locking.Manager
 	metaAllocator *satellites.MetaAllocator
 }
 
 // NewSatelliteEvaluationJob creates a new satellite evaluation job
 func NewSatelliteEvaluationJob(
 	log zerolog.Logger,
-	lockManager *locking.Manager,
 	metaAllocator *satellites.MetaAllocator,
 ) *SatelliteEvaluationJob {
 	return &SatelliteEvaluationJob{
 		log:           log.With().Str("job", "satellite_evaluation").Logger(),
-		lockManager:   lockManager,
 		metaAllocator: metaAllocator,
 	}
 }
@@ -52,18 +48,12 @@ func (j *SatelliteEvaluationJob) Run() error {
 // evaluationMonths: Months of history to evaluate (default 3)
 // dampeningFactor: How much to move toward target (default 0.5 = 50%)
 // dryRun: If true, preview changes without applying (default false)
+// Note: Concurrent execution is prevented by the scheduler's SkipIfStillRunning wrapper
 func (j *SatelliteEvaluationJob) RunWithOptions(
 	evaluationMonths int,
 	dampeningFactor float64,
 	dryRun bool,
 ) error {
-	// Acquire lock to prevent concurrent execution
-	if err := j.lockManager.Acquire("satellite_evaluation"); err != nil {
-		j.log.Warn().Err(err).Msg("Satellite evaluation job already running")
-		return nil
-	}
-	defer j.lockManager.Release("satellite_evaluation")
-
 	j.log.Info().
 		Int("evaluation_months", evaluationMonths).
 		Float64("dampening_factor", dampeningFactor).
