@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/config.sh"
 
 # Parse arguments
-SERVICE="${1:-trader-go}"
+SERVICE="${1:-trader}"
 LINES="${2:-50}"
 FOLLOW="${3:-no}"
 
@@ -26,10 +26,10 @@ show_logs() {
 }
 
 case "$SERVICE" in
-    trader|trader-go)
+    trader)
         show_logs "$SERVICE_TRADER_GO" "$LINES" "$FOLLOW"
         ;;
-    bridge|bridge-go)
+    display-bridge|bridge)
         show_logs "$SERVICE_BRIDGE_GO" "$LINES" "$FOLLOW"
         ;;
     router|arduino-router)
@@ -45,15 +45,15 @@ case "$SERVICE" in
         echo "Usage: $0 [SERVICE] [LINES] [follow]"
         echo ""
         echo "Services:"
-        echo "  trader-go       - Show trader-go logs (default)"
-        echo "  bridge-go       - Show bridge-go logs"
-        echo "  arduino-router  - Show arduino-router logs"
-        echo "  all             - Show logs from all services"
+        echo "  trader         - Show trader logs (default)"
+        echo "  display-bridge - Show display bridge logs"
+        echo "  arduino-router - Show arduino-router logs"
+        echo "  all            - Show logs from all services"
         echo ""
         echo "Examples:"
-        echo "  $0 trader-go          # Last 50 lines"
-        echo "  $0 bridge-go 100      # Last 100 lines"
-        echo "  $0 trader-go 50 -f    # Follow logs"
+        echo "  $0 trader              # Last 50 lines"
+        echo "  $0 display-bridge 100  # Last 100 lines"
+        echo "  $0 trader 50 -f        # Follow logs"
         exit 1
         ;;
 esac

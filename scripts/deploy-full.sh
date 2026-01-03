@@ -37,4 +37,4 @@ echo ""
 "${SCRIPT_DIR}/status.sh"
 
 log_success "All done! Services are running."
-log_info "Monitor logs with: ./scripts/logs.sh trader-go 50 -f"
+log_info "Monitor logs with: ./scripts/logs.sh trader 50 -f"

@@ -42,10 +42,10 @@ case "$SERVICE" in
         restart_service "$SERVICE_BRIDGE_GO"
         log_success "All services restarted!"
         ;;
-    trader|trader-go)
+    trader)
         restart_service "$SERVICE_TRADER_GO"
         ;;
-    bridge|bridge-go)
+    display-bridge|bridge)
         restart_service "$SERVICE_BRIDGE_GO"
         ;;
     router|arduino-router)
@@ -57,9 +57,9 @@ case "$SERVICE" in
         echo "Usage: $0 [SERVICE]"
         echo ""
         echo "Services:"
-        echo "  all          - Restart all services (default)"
-        echo "  trader-go    - Restart trader-go service"
-        echo "  bridge-go    - Restart bridge-go service"
+        echo "  all            - Restart all services (default)"
+        echo "  trader         - Restart trader service"
+        echo "  display-bridge - Restart display bridge service"
         echo "  arduino-router - Restart arduino-router service"
         exit 1
         ;;

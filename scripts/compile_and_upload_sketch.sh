@@ -6,7 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-SKETCH_DIR="$REPO_DIR/arduino-app/sketch"
+SKETCH_DIR="$REPO_DIR/display/sketch"
 SKETCH_FILE="$SKETCH_DIR/sketch.ino"
 FQBN="arduino:zephyr:unoq"
 LOG_FILE="/home/arduino/logs/sketch-compile.log"

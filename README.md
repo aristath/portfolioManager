@@ -31,7 +31,7 @@ Arduino Trader is a production-ready autonomous trading system that manages a re
 │                    Arduino Uno Q (ARM64)                      │
 │                                                                │
 │  ┌───────────────────────────────────────────────────────┐   │
-│  │           trader-go (Main Application)                 │   │
+│  │           trader (Main Application)                 │   │
 │  │                                                         │   │
 │  │  • Portfolio Management                                 │   │
 │  │  • Autonomous Trading                                   │   │
@@ -89,7 +89,7 @@ Arduino Trader is a production-ready autonomous trading system that manages a re
 
 ## Technology Stack
 
-### Main Application (trader-go)
+### Main Application (trader)
 
 **Language:** Go 1.22+
 - **HTTP Router:** Chi (stdlib-based, lightweight)
@@ -122,7 +122,7 @@ Arduino Trader is a production-ready autonomous trading system that manages a re
    - Purpose: Trading execution, portfolio sync, market data
    - Library: Tradernet SDK v1.0.5
 
-**Note:** Planning evaluation is now built into the main trader-go application (no separate microservice needed).
+**Note:** Planning evaluation is now built into the main trader application (no separate microservice needed).
 
 ### Hardware
 
@@ -138,7 +138,7 @@ Arduino Trader is a production-ready autonomous trading system that manages a re
 
 ### Prerequisites
 
-- Go 1.22+ (for building trader-go)
+- Go 1.22+ (for building trader)
 - Python 3.10+ (for microservices)
 - Existing SQLite databases (portfolio.db, state.db, ledger.db, etc.)
 - Tradernet API credentials
@@ -155,7 +155,7 @@ cd /path/to/arduino-trader
 #### 2. Build Main Application
 
 ```bash
-cd trader-go
+cd trader
 
 # Install dependencies
 go mod download
@@ -167,10 +167,10 @@ cp .env.example .env
 nano .env
 
 # Build
-go build -o trader-go ./cmd/server
+go build -o trader ./cmd/server
 
 # Or build for Arduino Uno Q (ARM64)
-GOOS=linux GOARCH=arm64 go build -o trader-go-arm64 ./cmd/server
+GOOS=linux GOARCH=arm64 go build -o trader-arm64 ./cmd/server
 ```
 
 #### 3. Configure Environment
@@ -218,14 +218,14 @@ docker-compose down
 ```bash
 
 # Terminal 1: pypfopt
-cd services/pypfopt
+cd microservices/pypfopt
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 uvicorn app.main:app --port 9001
 
 # Terminal 2: tradernet
-cd services/tradernet
+cd microservices/tradernet
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
@@ -237,8 +237,8 @@ uvicorn app.main:app --port 9002
 #### 5. Run Main Application
 
 ```bash
-cd trader-go
-./trader-go
+cd trader
+./trader
 ```
 
 ### Verify Installation
@@ -288,7 +288,7 @@ curl http://localhost:8080/api/portfolio/summary
 **Integration:**
 Used by the planning module to optimize portfolio allocations based on expected returns and risk constraints.
 
-**Documentation:** See `services/pypfopt/README.md`
+**Documentation:** See `microservices/pypfopt/README.md`
 
 ---
 
@@ -343,7 +343,7 @@ PORT=9002
 LOG_LEVEL=INFO
 ```
 
-**Documentation:** See `services/tradernet/README.md`
+**Documentation:** See `microservices/tradernet/README.md`
 
 ---
 
@@ -761,47 +761,53 @@ Job names: `sync_cycle`, `dividend_reinvestment`, `satellite_maintenance`, `sate
 
 ```
 arduino-trader/
-├── trader-go/                    # Main Go application
-│   ├── cmd/server/              # Application entry point
-│   ├── internal/                # Private application code
-│   │   ├── config/             # Configuration management
-│   │   ├── database/           # SQLite access layer
-│   │   ├── domain/             # Domain models
-│   │   ├── modules/            # Business modules
-│   │   │   ├── allocation/    # Allocation management
-│   │   │   ├── analytics/     # Analytics & metrics
-│   │   │   ├── dividends/     # Dividend processing
-│   │   │   ├── planning/      # Planning & recommendations
-│   │   │   ├── portfolio/     # Portfolio management
-│   │   │   ├── satellites/    # Multi-bucket strategies
-│   │   │   ├── scoring/       # Security scoring
-│   │   │   ├── settings/      # Settings management
-│   │   │   ├── trading/       # Trade execution
-│   │   │   └── universe/      # Security universe
-│   │   ├── services/          # External service clients
-│   │   ├── scheduler/         # Background job scheduler
-│   │   ├── middleware/        # HTTP middleware
-│   │   └── server/            # HTTP server & routes
-│   ├── pkg/                   # Public reusable packages
-│   │   ├── cache/            # In-memory cache
-│   │   ├── events/           # Event system
-│   │   └── logger/           # Structured logging
-│   └── scripts/              # Build & deployment scripts
-├── services/                  # Microservices
-│   ├── evaluator/         # Planning evaluation (Go)
-│   ├── pypfopt/              # Portfolio optimization (Python)
-│   └── tradernet/            # Broker API gateway (Python)
-├── docs/                     # Documentation (if needed)
-├── docker-compose.yml        # Multi-service orchestration
-└── README.md                 # This file
+├── trader/                      # Main Go application
+│   ├── cmd/server/             # Application entry point
+│   ├── internal/               # Private application code
+│   │   ├── config/            # Configuration management
+│   │   ├── database/          # SQLite access layer
+│   │   ├── domain/            # Domain models
+│   │   ├── modules/           # Business modules
+│   │   │   ├── allocation/   # Allocation management
+│   │   │   ├── analytics/    # Analytics & metrics
+│   │   │   ├── dividends/    # Dividend processing
+│   │   │   ├── planning/     # Planning & recommendations
+│   │   │   ├── portfolio/    # Portfolio management
+│   │   │   ├── satellites/   # Multi-bucket strategies
+│   │   │   ├── scoring/      # Security scoring
+│   │   │   ├── settings/     # Settings management
+│   │   │   ├── trading/      # Trade execution
+│   │   │   └── universe/     # Security universe
+│   │   ├── services/         # External service clients
+│   │   ├── scheduler/        # Background job scheduler
+│   │   ├── middleware/       # HTTP middleware
+│   │   └── server/           # HTTP server & routes
+│   ├── pkg/                  # Public reusable packages
+│   │   ├── cache/           # In-memory cache
+│   │   ├── events/          # Event system
+│   │   └── logger/          # Structured logging
+│   └── static/              # Static web assets
+├── display/                  # Display system
+│   ├── bridge/              # Go bridge service
+│   ├── sketch/              # Arduino C++ sketch
+│   └── app/                 # Docker Python display app
+├── microservices/           # Python microservices
+│   ├── pypfopt/            # Portfolio optimization (Python)
+│   └── tradernet/          # Broker API gateway (Python)
+├── legacy/                  # Legacy Python code (migration reference)
+│   ├── app/                # Old Python application
+│   └── tests/              # Old Python tests
+├── scripts/                 # Build & deployment scripts
+├── docs/                    # Documentation
+└── README.md                # This file
 ```
 
 ### Development Workflow
 
-#### Main Application (trader-go)
+#### Main Application (trader)
 
 ```bash
-cd trader-go
+cd trader
 
 # Install dependencies
 go mod download
@@ -829,15 +835,15 @@ go fmt ./...
 golangci-lint run
 
 # Build
-go build -o trader-go ./cmd/server
+go build -o trader ./cmd/server
 ```
 
 #### Microservices
 
 See individual service READMEs:
-- `services/evaluator/README.md`
-- `services/pypfopt/README.md`
-- `services/tradernet/README.md`
+- `microservices/evaluator/README.md`
+- `microservices/pypfopt/README.md`
+- `microservices/tradernet/README.md`
 
 ### Code Guidelines
 
@@ -911,22 +917,22 @@ log.Error().
 
 **Main Application:**
 ```bash
-cd trader-go
+cd trader
 go test ./...
 ```
 
 **Microservices:**
 ```bash
 # evaluator
-cd services/evaluator
+cd microservices/evaluator
 go test ./...
 
 # pypfopt
-cd services/pypfopt
+cd microservices/pypfopt
 pytest
 
 # tradernet
-cd services/tradernet
+cd microservices/tradernet
 pytest
 ```
 
@@ -948,10 +954,10 @@ pytest --cov=app tests/
 #### Main Application (ARM64 for Arduino Uno Q)
 
 ```bash
-cd trader-go
+cd trader
 
 # Cross-compile for ARM64
-GOOS=linux GOARCH=arm64 go build -o trader-go-arm64 ./cmd/server
+GOOS=linux GOARCH=arm64 go build -o trader-arm64 ./cmd/server
 
 # Or use build script
 ./scripts/build.sh arm64
@@ -964,15 +970,15 @@ GOOS=linux GOARCH=arm64 go build -o trader-go-arm64 ./cmd/server
 docker-compose build
 
 # Build specific service
-docker build -t pypfopt:latest services/pypfopt
-docker build -t tradernet:latest services/tradernet
+docker build -t pypfopt:latest microservices/pypfopt
+docker build -t tradernet:latest microservices/tradernet
 ```
 
 ### Systemd Services
 
 #### Main Application
 
-Create `/etc/systemd/system/trader-go.service`:
+Create `/etc/systemd/system/trader.service`:
 
 ```ini
 [Unit]
@@ -982,9 +988,9 @@ After=network.target
 [Service]
 Type=simple
 User=aristath
-WorkingDirectory=/home/aristath/arduino-trader/trader-go
+WorkingDirectory=/home/aristath/arduino-trader/trader
 Environment="PATH=/usr/local/bin:/usr/bin:/bin"
-ExecStart=/home/aristath/arduino-trader/trader-go/trader-go
+ExecStart=/home/aristath/arduino-trader/trader/trader
 Restart=always
 RestartSec=10
 
@@ -1020,7 +1026,7 @@ sudo systemctl enable docker
 1. Stop existing services
 2. Deploy new binary
 3. Start microservices (docker-compose up -d)
-4. Start main application (systemctl start trader-go)
+4. Start main application (systemctl start trader)
 5. Verify health endpoints
 6. Monitor logs for 24 hours
 
@@ -1057,7 +1063,7 @@ curl http://localhost:8080/api/system/jobs
 **Logs:**
 ```bash
 # Systemd logs
-journalctl -u trader-go -f
+journalctl -u trader -f
 
 # Docker logs
 docker-compose logs -f
@@ -1067,7 +1073,7 @@ docker-compose logs -f
 
 **Emergency Stop:**
 ```bash
-sudo systemctl stop trader-go
+sudo systemctl stop trader
 ```
 
 **Switch to Research Mode:**
@@ -1078,9 +1084,9 @@ curl -X POST http://localhost:8080/api/settings/trading-mode \
 ```
 
 **Full Rollback:**
-1. Stop Go service: `sudo systemctl stop trader-go`
+1. Stop Go service: `sudo systemctl stop trader`
 2. Restore previous binary
-3. Restart: `sudo systemctl start trader-go`
+3. Restart: `sudo systemctl start trader`
 4. Verify: `curl http://localhost:8080/health`
 
 ---
@@ -1189,7 +1195,7 @@ PUT /api/securities/{isin}
 
 ```bash
 # Run main app with auto-reload
-cd trader-go && air
+cd trader && air
 
 # Run tests
 go test ./...
@@ -1201,25 +1207,25 @@ go fmt ./...
 golangci-lint run
 
 # Build
-go build -o trader-go ./cmd/server
+go build -o trader ./cmd/server
 ```
 
 ### Production
 
 ```bash
 # Build for Arduino Uno Q
-GOOS=linux GOARCH=arm64 go build -o trader-go-arm64 ./cmd/server
+GOOS=linux GOARCH=arm64 go build -o trader-arm64 ./cmd/server
 
 # Start services
-sudo systemctl start trader-go
+sudo systemctl start trader
 docker-compose up -d
 
 # Stop services
-sudo systemctl stop trader-go
+sudo systemctl stop trader
 docker-compose down
 
 # View logs
-journalctl -u trader-go -f
+journalctl -u trader -f
 docker-compose logs -f
 
 # Health checks
