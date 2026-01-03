@@ -139,10 +139,21 @@ func (r *CalculatorRegistry) IdentifyOpportunities(
 	return opportunities, nil
 }
 
-// DefaultCalculatorRegistry is the global calculator registry.
-var DefaultCalculatorRegistry *CalculatorRegistry
+// NewPopulatedRegistry creates a new calculator registry with all calculators registered.
+func NewPopulatedRegistry(log zerolog.Logger) *CalculatorRegistry {
+	registry := NewCalculatorRegistry(log)
 
-func init() {
-	// Initialize with a no-op logger; will be replaced by actual logger in main
-	DefaultCalculatorRegistry = NewCalculatorRegistry(zerolog.Nop())
+	// Register all calculators
+	registry.Register(NewAveragingDownCalculator(log))
+	registry.Register(NewOpportunityBuysCalculator(log))
+	registry.Register(NewProfitTakingCalculator(log))
+	registry.Register(NewRebalanceBuysCalculator(log))
+	registry.Register(NewRebalanceSellsCalculator(log))
+	registry.Register(NewWeightBasedCalculator(log))
+
+	log.Info().
+		Int("calculators", len(registry.calculators)).
+		Msg("Calculator registry initialized")
+
+	return registry
 }

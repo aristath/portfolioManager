@@ -36,11 +36,11 @@ func (c *OpportunityBuysCalculator) Calculate(
 	params map[string]interface{},
 ) ([]domain.ActionCandidate, error) {
 	// Parameters with defaults
-	minScore := GetFloatParam(params, "min_score", 0.7)                        // Minimum score threshold
+	minScore := GetFloatParam(params, "min_score", 0.7) // Minimum score threshold
 	maxValuePerPosition := GetFloatParam(params, "max_value_per_position", 500.0)
 	minValuePerPosition := GetFloatParam(params, "min_value_per_position", 100.0)
-	maxPositions := GetIntParam(params, "max_positions", 5)                    // Default to top 5
-	excludeExisting := GetBoolParam(params, "exclude_existing", false)         // Exclude positions we already have
+	maxPositions := GetIntParam(params, "max_positions", 5)            // Default to top 5
+	excludeExisting := GetBoolParam(params, "exclude_existing", false) // Exclude positions we already have
 
 	if !ctx.AllowBuy {
 		c.log.Debug().Msg("Buying not allowed, skipping opportunity buys")
@@ -187,9 +187,4 @@ func (c *OpportunityBuysCalculator) Calculate(
 		Msg("Opportunity buy candidates identified")
 
 	return candidates, nil
-}
-
-func init() {
-	// Auto-register on import
-	DefaultCalculatorRegistry.Register(NewOpportunityBuysCalculator(zerolog.Nop()))
 }

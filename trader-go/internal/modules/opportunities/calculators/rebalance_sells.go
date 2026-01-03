@@ -190,8 +190,3 @@ func (c *RebalanceSellsCalculator) Calculate(
 
 	return candidates, nil
 }
-
-func init() {
-	// Auto-register on import
-	DefaultCalculatorRegistry.Register(NewRebalanceSellsCalculator(zerolog.Nop()))
-}
