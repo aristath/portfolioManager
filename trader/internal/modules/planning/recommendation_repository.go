@@ -134,7 +134,7 @@ func (r *RecommendationRepository) CreateOrUpdate(rec Recommendation) (string, e
 // findExisting finds an existing recommendation by matching criteria
 func (r *RecommendationRepository) findExisting(symbol, side, reason, portfolioHash string) (*Recommendation, error) {
 	var rec Recommendation
-	var executedAt sql.NullTime
+	var createdAt, updatedAt, executedAt sql.NullTime
 
 	err := r.db.QueryRow(`
 		SELECT uuid, symbol, name, side, quantity, estimated_price, estimated_value,
@@ -164,8 +164,8 @@ func (r *RecommendationRepository) findExisting(symbol, side, reason, portfolioH
 		&rec.ScoreChange,
 		&rec.Status,
 		&rec.PortfolioHash,
-		&rec.CreatedAt,
-		&rec.UpdatedAt,
+		&createdAt,
+		&updatedAt,
 		&executedAt,
 	)
 
@@ -176,6 +176,13 @@ func (r *RecommendationRepository) findExisting(symbol, side, reason, portfolioH
 		return nil, err
 	}
 
+	// Convert sql.NullTime to time.Time
+	if createdAt.Valid {
+		rec.CreatedAt = createdAt.Time
+	}
+	if updatedAt.Valid {
+		rec.UpdatedAt = updatedAt.Time
+	}
 	if executedAt.Valid {
 		rec.ExecutedAt = &executedAt.Time
 	}
@@ -205,7 +212,7 @@ func (r *RecommendationRepository) FindMatchingForExecution(symbol, side, portfo
 	var recs []Recommendation
 	for rows.Next() {
 		var rec Recommendation
-		var executedAt sql.NullTime
+		var createdAt, updatedAt, executedAt sql.NullTime
 
 		err := rows.Scan(
 			&rec.UUID,
@@ -223,8 +230,8 @@ func (r *RecommendationRepository) FindMatchingForExecution(symbol, side, portfo
 			&rec.ScoreChange,
 			&rec.Status,
 			&rec.PortfolioHash,
-			&rec.CreatedAt,
-			&rec.UpdatedAt,
+			&createdAt,
+			&updatedAt,
 			&executedAt,
 		)
 
@@ -232,6 +239,13 @@ func (r *RecommendationRepository) FindMatchingForExecution(symbol, side, portfo
 			return nil, err
 		}
 
+		// Convert sql.NullTime to time.Time
+		if createdAt.Valid {
+			rec.CreatedAt = createdAt.Time
+		}
+		if updatedAt.Valid {
+			rec.UpdatedAt = updatedAt.Time
+		}
 		if executedAt.Valid {
 			rec.ExecutedAt = &executedAt.Time
 		}
@@ -292,4 +306,76 @@ func (r *RecommendationRepository) DismissAllByPortfolioHash(portfolioHash strin
 		Msg("Dismissed recommendations by portfolio hash")
 
 	return int(rowsAffected), nil
+}
+
+// GetPendingRecommendations retrieves all pending recommendations ordered by priority
+func (r *RecommendationRepository) GetPendingRecommendations(limit int) ([]Recommendation, error) {
+	query := `
+		SELECT uuid, symbol, name, side, quantity, estimated_price, estimated_value,
+			   reason, currency, priority, current_portfolio_score, new_portfolio_score,
+			   score_change, status, portfolio_hash, created_at, updated_at, executed_at
+		FROM recommendations
+		WHERE status = 'pending'
+		ORDER BY priority ASC, created_at ASC
+	`
+
+	if limit > 0 {
+		query += fmt.Sprintf(" LIMIT %d", limit)
+	}
+
+	rows, err := r.db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query pending recommendations: %w", err)
+	}
+	defer rows.Close()
+
+	var recs []Recommendation
+	for rows.Next() {
+		var rec Recommendation
+		var createdAt, updatedAt, executedAt sql.NullTime
+
+		err := rows.Scan(
+			&rec.UUID,
+			&rec.Symbol,
+			&rec.Name,
+			&rec.Side,
+			&rec.Quantity,
+			&rec.EstimatedPrice,
+			&rec.EstimatedValue,
+			&rec.Reason,
+			&rec.Currency,
+			&rec.Priority,
+			&rec.CurrentPortfolioScore,
+			&rec.NewPortfolioScore,
+			&rec.ScoreChange,
+			&rec.Status,
+			&rec.PortfolioHash,
+			&createdAt,
+			&updatedAt,
+			&executedAt,
+		)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan recommendation: %w", err)
+		}
+
+		// Convert sql.NullTime to time.Time
+		if createdAt.Valid {
+			rec.CreatedAt = createdAt.Time
+		}
+		if updatedAt.Valid {
+			rec.UpdatedAt = updatedAt.Time
+		}
+		if executedAt.Valid {
+			rec.ExecutedAt = &executedAt.Time
+		}
+
+		recs = append(recs, rec)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating recommendations: %w", err)
+	}
+
+	return recs, nil
 }

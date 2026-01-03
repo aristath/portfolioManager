@@ -32,6 +32,8 @@ type SystemHandlers struct {
 	satelliteMaintenanceJob    scheduler.Job
 	satelliteReconciliationJob scheduler.Job
 	satelliteEvaluationJob     scheduler.Job
+	plannerBatchJob            scheduler.Job
+	eventBasedTradingJob       scheduler.Job
 }
 
 // NewSystemHandlers creates a new system handlers instance
@@ -81,6 +83,8 @@ func (h *SystemHandlers) SetJobs(
 	satelliteMaintenance scheduler.Job,
 	satelliteReconciliation scheduler.Job,
 	satelliteEvaluation scheduler.Job,
+	plannerBatch scheduler.Job,
+	eventBasedTrading scheduler.Job,
 ) {
 	h.healthCheckJob = healthCheck
 	h.syncCycleJob = syncCycle
@@ -88,6 +92,8 @@ func (h *SystemHandlers) SetJobs(
 	h.satelliteMaintenanceJob = satelliteMaintenance
 	h.satelliteReconciliationJob = satelliteReconciliation
 	h.satelliteEvaluationJob = satelliteEvaluation
+	h.plannerBatchJob = plannerBatch
+	h.eventBasedTradingJob = eventBasedTrading
 }
 
 // SystemStatusResponse represents the system status response
@@ -630,6 +636,68 @@ func (h *SystemHandlers) HandleTriggerSatelliteEvaluation(w http.ResponseWriter,
 	h.writeJSON(w, map[string]string{
 		"status":  "success",
 		"message": "Satellite evaluation triggered successfully",
+	})
+}
+
+// HandleTriggerPlannerBatch triggers the planner batch job immediately
+// POST /api/jobs/planner-batch
+func (h *SystemHandlers) HandleTriggerPlannerBatch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if h.plannerBatchJob == nil {
+		h.log.Warn().Msg("Planner batch job not registered yet")
+		h.writeJSON(w, map[string]string{
+			"status":  "error",
+			"message": "Planner batch job not registered",
+		})
+		return
+	}
+
+	h.log.Info().Msg("Manual planner batch triggered")
+
+	if err := h.scheduler.RunNow(h.plannerBatchJob); err != nil {
+		h.log.Error().Err(err).Msg("Failed to trigger planner batch")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	h.writeJSON(w, map[string]string{
+		"status":  "success",
+		"message": "Planner batch triggered successfully",
+	})
+}
+
+// HandleTriggerEventBasedTrading triggers the event-based trading job immediately
+// POST /api/jobs/event-based-trading
+func (h *SystemHandlers) HandleTriggerEventBasedTrading(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if h.eventBasedTradingJob == nil {
+		h.log.Warn().Msg("Event-based trading job not registered yet")
+		h.writeJSON(w, map[string]string{
+			"status":  "error",
+			"message": "Event-based trading job not registered",
+		})
+		return
+	}
+
+	h.log.Info().Msg("Manual event-based trading triggered")
+
+	if err := h.scheduler.RunNow(h.eventBasedTradingJob); err != nil {
+		h.log.Error().Err(err).Msg("Failed to trigger event-based trading")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	h.writeJSON(w, map[string]string{
+		"status":  "success",
+		"message": "Event-based trading triggered successfully",
 	})
 }
 
