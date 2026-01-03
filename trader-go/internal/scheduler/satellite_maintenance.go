@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aristath/arduino-trader/internal/locking"
 	"github.com/aristath/arduino-trader/internal/modules/portfolio"
 	"github.com/aristath/arduino-trader/internal/modules/satellites"
 	"github.com/rs/zerolog"
@@ -20,7 +19,6 @@ import (
 // 4. Reset consecutive losses if bucket recovers
 type SatelliteMaintenanceJob struct {
 	log           zerolog.Logger
-	lockManager   *locking.Manager
 	bucketService *satellites.BucketService
 	positionRepo  *portfolio.PositionRepository
 }
@@ -28,13 +26,11 @@ type SatelliteMaintenanceJob struct {
 // NewSatelliteMaintenanceJob creates a new satellite maintenance job
 func NewSatelliteMaintenanceJob(
 	log zerolog.Logger,
-	lockManager *locking.Manager,
 	bucketService *satellites.BucketService,
 	positionRepo *portfolio.PositionRepository,
 ) *SatelliteMaintenanceJob {
 	return &SatelliteMaintenanceJob{
 		log:           log.With().Str("job", "satellite_maintenance").Logger(),
-		lockManager:   lockManager,
 		bucketService: bucketService,
 		positionRepo:  positionRepo,
 	}
@@ -46,14 +42,8 @@ func (j *SatelliteMaintenanceJob) Name() string {
 }
 
 // Run executes the satellite maintenance job
+// Note: Concurrent execution is prevented by the scheduler's SkipIfStillRunning wrapper
 func (j *SatelliteMaintenanceJob) Run() error {
-	// Acquire lock to prevent concurrent execution
-	if err := j.lockManager.Acquire("satellite_maintenance"); err != nil {
-		j.log.Warn().Err(err).Msg("Satellite maintenance job already running")
-		return nil
-	}
-	defer j.lockManager.Release("satellite_maintenance")
-
 	j.log.Info().Msg("=== Starting satellite maintenance ===")
 	startTime := time.Now()
 

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aristath/arduino-trader/internal/locking"
 	"github.com/aristath/arduino-trader/internal/modules/cash_flows"
 	"github.com/aristath/arduino-trader/internal/modules/display"
 	"github.com/aristath/arduino-trader/internal/modules/portfolio"
@@ -17,7 +16,6 @@ import (
 // Runs every 5 minutes to keep portfolio, cash, and prices up to date
 type SyncCycleJob struct {
 	log                 zerolog.Logger
-	lockManager         *locking.Manager
 	portfolioService    *portfolio.PortfolioService
 	cashFlowsService    *cash_flows.CashFlowsService
 	tradingService      *trading.TradingService
@@ -31,7 +29,6 @@ type SyncCycleJob struct {
 // SyncCycleConfig holds configuration for sync cycle job
 type SyncCycleConfig struct {
 	Log                 zerolog.Logger
-	LockManager         *locking.Manager
 	PortfolioService    *portfolio.PortfolioService
 	CashFlowsService    *cash_flows.CashFlowsService
 	TradingService      *trading.TradingService
@@ -46,7 +43,6 @@ type SyncCycleConfig struct {
 func NewSyncCycleJob(cfg SyncCycleConfig) *SyncCycleJob {
 	return &SyncCycleJob{
 		log:                 cfg.Log.With().Str("job", "sync_cycle").Logger(),
-		lockManager:         cfg.LockManager,
 		portfolioService:    cfg.PortfolioService,
 		cashFlowsService:    cfg.CashFlowsService,
 		tradingService:      cfg.TradingService,
@@ -64,14 +60,8 @@ func (j *SyncCycleJob) Name() string {
 }
 
 // Run executes the sync cycle
+// Note: Concurrent execution is prevented by the scheduler's SkipIfStillRunning wrapper
 func (j *SyncCycleJob) Run() error {
-	// Acquire lock to prevent concurrent execution
-	if err := j.lockManager.Acquire("sync_cycle"); err != nil {
-		j.log.Warn().Err(err).Msg("Sync cycle already running")
-		return nil // Don't fail, just skip this cycle
-	}
-	defer j.lockManager.Release("sync_cycle")
-
 	j.log.Info().Msg("Starting sync cycle")
 	startTime := time.Now()
 

@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/aristath/arduino-trader/internal/clients/tradernet"
-	"github.com/aristath/arduino-trader/internal/locking"
 	"github.com/aristath/arduino-trader/internal/modules/satellites"
 	"github.com/rs/zerolog"
 )
@@ -23,7 +22,6 @@ import (
 // SUM(bucket_balances for currency X) == Actual brokerage balance for currency X
 type SatelliteReconciliationJob struct {
 	log                   zerolog.Logger
-	lockManager           *locking.Manager
 	tradernetClient       *tradernet.Client
 	reconciliationService *satellites.ReconciliationService
 }
@@ -31,13 +29,11 @@ type SatelliteReconciliationJob struct {
 // NewSatelliteReconciliationJob creates a new satellite reconciliation job
 func NewSatelliteReconciliationJob(
 	log zerolog.Logger,
-	lockManager *locking.Manager,
 	tradernetClient *tradernet.Client,
 	reconciliationService *satellites.ReconciliationService,
 ) *SatelliteReconciliationJob {
 	return &SatelliteReconciliationJob{
 		log:                   log.With().Str("job", "satellite_reconciliation").Logger(),
-		lockManager:           lockManager,
 		tradernetClient:       tradernetClient,
 		reconciliationService: reconciliationService,
 	}
@@ -49,14 +45,8 @@ func (j *SatelliteReconciliationJob) Name() string {
 }
 
 // Run executes the satellite reconciliation job
+// Note: Concurrent execution is prevented by the scheduler's SkipIfStillRunning wrapper
 func (j *SatelliteReconciliationJob) Run() error {
-	// Acquire lock to prevent concurrent execution
-	if err := j.lockManager.Acquire("satellite_reconciliation"); err != nil {
-		j.log.Warn().Err(err).Msg("Satellite reconciliation job already running")
-		return nil
-	}
-	defer j.lockManager.Release("satellite_reconciliation")
-
 	j.log.Info().Msg("Starting daily bucket reconciliation")
 	startTime := time.Now()
 

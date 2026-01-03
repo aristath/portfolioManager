@@ -6,7 +6,6 @@ import (
 
 	"github.com/aristath/arduino-trader/internal/clients/tradernet"
 	"github.com/aristath/arduino-trader/internal/clients/yahoo"
-	"github.com/aristath/arduino-trader/internal/locking"
 	"github.com/aristath/arduino-trader/internal/modules/dividends"
 	"github.com/aristath/arduino-trader/internal/modules/planning/domain"
 	"github.com/aristath/arduino-trader/internal/modules/portfolio"
@@ -31,7 +30,6 @@ import (
 // Simplified to focus on core DRIP functionality (high-yield reinvestment)
 type DividendReinvestmentJob struct {
 	log                  zerolog.Logger
-	lockManager          *locking.Manager
 	dividendRepo         *dividends.DividendRepository
 	securityRepo         *universe.SecurityRepository
 	scoreRepo            *universe.ScoreRepository
@@ -47,7 +45,6 @@ type DividendReinvestmentJob struct {
 // DividendReinvestmentConfig holds configuration for dividend reinvestment job
 type DividendReinvestmentConfig struct {
 	Log              zerolog.Logger
-	LockManager      *locking.Manager
 	DividendRepo     *dividends.DividendRepository
 	SecurityRepo     *universe.SecurityRepository
 	ScoreRepo        *universe.ScoreRepository
@@ -61,7 +58,6 @@ type DividendReinvestmentConfig struct {
 func NewDividendReinvestmentJob(cfg DividendReinvestmentConfig) *DividendReinvestmentJob {
 	return &DividendReinvestmentJob{
 		log:              cfg.Log.With().Str("job", "dividend_reinvestment").Logger(),
-		lockManager:      cfg.LockManager,
 		dividendRepo:     cfg.DividendRepo,
 		securityRepo:     cfg.SecurityRepo,
 		scoreRepo:        cfg.ScoreRepo,
@@ -82,14 +78,8 @@ func (j *DividendReinvestmentJob) Name() string {
 }
 
 // Run executes the dividend reinvestment job
+// Note: Concurrent execution is prevented by the scheduler's SkipIfStillRunning wrapper
 func (j *DividendReinvestmentJob) Run() error {
-	// Acquire lock to prevent concurrent execution
-	if err := j.lockManager.Acquire("dividend_reinvestment"); err != nil {
-		j.log.Warn().Err(err).Msg("Dividend reinvestment job already running")
-		return nil // Don't fail, just skip this run
-	}
-	defer j.lockManager.Release("dividend_reinvestment")
-
 	j.log.Info().Msg("Starting automatic dividend reinvestment")
 	startTime := time.Now()
 

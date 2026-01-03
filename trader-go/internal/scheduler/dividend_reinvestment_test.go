@@ -5,7 +5,6 @@ import (
 
 	"github.com/aristath/arduino-trader/internal/clients/tradernet"
 	"github.com/aristath/arduino-trader/internal/clients/yahoo"
-	"github.com/aristath/arduino-trader/internal/locking"
 	"github.com/aristath/arduino-trader/internal/modules/dividends"
 	"github.com/aristath/arduino-trader/internal/modules/portfolio"
 	"github.com/aristath/arduino-trader/internal/modules/trading"
@@ -141,11 +140,8 @@ func TestGroupDividendsBySymbol(t *testing.T) {
 }
 
 func TestNewDividendReinvestmentJob(t *testing.T) {
-	lockMgr, _ := locking.NewManager("", zerolog.Nop())
-
 	cfg := DividendReinvestmentConfig{
 		Log:              zerolog.Nop(),
-		LockManager:      lockMgr,
 		DividendRepo:     &dividends.DividendRepository{},
 		SecurityRepo:     &universe.SecurityRepository{},
 		ScoreRepo:        &universe.ScoreRepository{},
