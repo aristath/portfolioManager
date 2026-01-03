@@ -79,6 +79,55 @@ SETTING_DEFAULTS = {
     "market_regime_bear_threshold": -0.05,  # Threshold for bear market (-5% below MA)
     # Virtual test currency (for testing planner in research mode)
     "virtual_test_cash": 0.0,  # TEST currency amount (only visible in research mode)
+    # Portfolio Display Mode settings
+    "display_mode": "STATS",  # Display mode: "STATS" (CPU/RAM), "TICKER", or "PORTFOLIO"
+    "display_min_cluster_size": 5.0,  # Minimum pixels per top holding cluster
+    "display_top_holdings_count": 5.0,  # Number of top holdings to show as clusters
+    # Performance calculation weights
+    "display_performance_trailing12mo_weight": 0.70,  # Weight for trailing 12mo CAGR
+    "display_performance_inception_weight": 0.30,  # Weight for since-inception CAGR
+    # Performance thresholds (vs target)
+    "display_performance_thriving_threshold": 0.03,  # +3% above target = thriving
+    "display_performance_on_target_threshold": 0.00,  # ±0% from target = on target
+    "display_performance_below_threshold": -0.03,  # -3% below target = below
+    # Diversification health thresholds
+    "display_diversification_healthy_deviation": 0.05,  # ±5% from target = healthy
+    "display_diversification_warning_deviation": 0.10,  # ±10% = warning
+    "display_diversification_critical_deviation": 0.15,  # >15% = critical
+    # Concentration risk thresholds
+    "display_concentration_warning_threshold": 0.25,  # 25% in one holding = warning
+    "display_concentration_critical_threshold": 0.40,  # 40% = critical
+    # Visual parameter ranges - Thriving state (≥ +3% above target)
+    "display_pixels_thriving_min": 70.0,
+    "display_pixels_thriving_max": 104.0,
+    "display_brightness_thriving_min": 180.0,
+    "display_brightness_thriving_max": 220.0,
+    # Visual parameter ranges - On Target state (±0% from target)
+    "display_pixels_on_target_min": 50.0,
+    "display_pixels_on_target_max": 70.0,
+    "display_brightness_on_target_min": 150.0,
+    "display_brightness_on_target_max": 180.0,
+    # Visual parameter ranges - Below Target state (-3% to 0%)
+    "display_pixels_below_min": 30.0,
+    "display_pixels_below_max": 50.0,
+    "display_brightness_below_min": 120.0,
+    "display_brightness_below_max": 150.0,
+    # Visual parameter ranges - Critical state (< -3%)
+    "display_pixels_critical_min": 10.0,
+    "display_pixels_critical_max": 30.0,
+    "display_brightness_critical_min": 100.0,
+    "display_brightness_critical_max": 120.0,
+    # Background visual ranges
+    "display_background_brightness_min": 80.0,
+    "display_background_brightness_max": 120.0,
+    # Animation behavior
+    "display_clustering_strength_base": 4.0,  # Base clustering strength (1-10)
+    "display_clustering_chaos_multiplier": 2.5,  # Multiply for imbalanced states
+    "display_animation_speed_smooth": 100.0,  # ms per frame for smooth states
+    "display_animation_speed_chaotic": 40.0,  # ms per frame for chaotic states
+    "display_transition_smoothing_seconds": 300.0,  # 5min smooth transitions
+    "display_enable_vertical_bias": 1.0,  # Enable rising/sinking effect (1.0 = yes)
+    "display_momentum_sensitivity": 0.5,  # How much recent trend affects drift (0-1)
 }
 
 
