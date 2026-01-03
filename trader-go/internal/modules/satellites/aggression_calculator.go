@@ -10,15 +10,15 @@ import (
 // AggressionResult represents the result of aggression calculation
 // Faithful translation from Python: app/modules/satellites/domain/aggression_calculator.py
 type AggressionResult struct {
-	Aggression           float64 `json:"aggression"`             // Final aggression level (0.0-1.0)
-	AllocationAggression float64 `json:"allocation_aggression"`  // Aggression based on allocation
-	DrawdownAggression   float64 `json:"drawdown_aggression"`    // Aggression based on drawdown
-	LimitingFactor       string  `json:"limiting_factor"`        // 'allocation', 'drawdown', or 'equal'
-	CurrentValue         float64 `json:"current_value"`          // Current bucket value
-	TargetValue          float64 `json:"target_value"`           // Target bucket value
-	PctOfTarget          float64 `json:"pct_of_target"`          // Current as % of target (0.0-1.0+)
-	Drawdown             float64 `json:"drawdown"`               // Current drawdown (0.0-1.0)
-	InHibernation        bool    `json:"in_hibernation"`         // True if aggression is 0.0
+	Aggression           float64 `json:"aggression"`            // Final aggression level (0.0-1.0)
+	AllocationAggression float64 `json:"allocation_aggression"` // Aggression based on allocation
+	DrawdownAggression   float64 `json:"drawdown_aggression"`   // Aggression based on drawdown
+	LimitingFactor       string  `json:"limiting_factor"`       // 'allocation', 'drawdown', or 'equal'
+	CurrentValue         float64 `json:"current_value"`         // Current bucket value
+	TargetValue          float64 `json:"target_value"`          // Target bucket value
+	PctOfTarget          float64 `json:"pct_of_target"`         // Current as % of target (0.0-1.0+)
+	Drawdown             float64 `json:"drawdown"`              // Current drawdown (0.0-1.0)
+	InHibernation        bool    `json:"in_hibernation"`        // True if aggression is 0.0
 }
 
 // AggressionCalculator calculates dynamic position sizing based on allocation and drawdown
@@ -45,12 +45,14 @@ func NewAggressionCalculator(log zerolog.Logger) *AggressionCalculator {
 // CalculateAggression calculates aggression level for a satellite bucket
 //
 // Args:
-//   currentValue: Current total value of bucket (positions + cash)
-//   targetValue: Target allocation value for this bucket
-//   highWaterMark: Highest value achieved (for drawdown calculation), use nil if not tracking
+//
+//	currentValue: Current total value of bucket (positions + cash)
+//	targetValue: Target allocation value for this bucket
+//	highWaterMark: Highest value achieved (for drawdown calculation), use nil if not tracking
 //
 // Returns:
-//   AggressionResult with final aggression and breakdown
+//
+//	AggressionResult with final aggression and breakdown
 func (c *AggressionCalculator) CalculateAggression(
 	currentValue float64,
 	targetValue float64,

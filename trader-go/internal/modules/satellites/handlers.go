@@ -91,6 +91,11 @@ type SatelliteSettingsRequest struct {
 	AutoHarvest         bool    `json:"auto_harvest"`
 	PauseHighVolatility bool    `json:"pause_high_volatility"`
 	DividendHandling    string  `json:"dividend_handling"`
+	// Risk metric parameters
+	RiskFreeRate         float64 `json:"risk_free_rate"`
+	SortinoMAR           float64 `json:"sortino_mar"`
+	EvaluationPeriodDays int     `json:"evaluation_period_days"`
+	VolatilityWindow     int     `json:"volatility_window"`
 }
 
 // TransferRequest represents request to transfer cash between buckets
@@ -168,6 +173,11 @@ type SettingsResponse struct {
 	AutoHarvest         bool    `json:"auto_harvest"`
 	PauseHighVolatility bool    `json:"pause_high_volatility"`
 	DividendHandling    string  `json:"dividend_handling"`
+	// Risk metric parameters
+	RiskFreeRate         float64 `json:"risk_free_rate"`
+	SortinoMAR           float64 `json:"sortino_mar"`
+	EvaluationPeriodDays int     `json:"evaluation_period_days"`
+	VolatilityWindow     int     `json:"volatility_window"`
 }
 
 // ReconciliationResultResponse represents response model for reconciliation result
@@ -389,18 +399,22 @@ func (h *Handlers) GetSatelliteSettings(w http.ResponseWriter, r *http.Request) 
 	}
 
 	respondJSON(w, http.StatusOK, &SettingsResponse{
-		SatelliteID:         settings.SatelliteID,
-		Preset:              settings.Preset,
-		RiskAppetite:        settings.RiskAppetite,
-		HoldDuration:        settings.HoldDuration,
-		EntryStyle:          settings.EntryStyle,
-		PositionSpread:      settings.PositionSpread,
-		ProfitTaking:        settings.ProfitTaking,
-		TrailingStops:       settings.TrailingStops,
-		FollowRegime:        settings.FollowRegime,
-		AutoHarvest:         settings.AutoHarvest,
-		PauseHighVolatility: settings.PauseHighVolatility,
-		DividendHandling:    settings.DividendHandling,
+		SatelliteID:          settings.SatelliteID,
+		Preset:               settings.Preset,
+		RiskAppetite:         settings.RiskAppetite,
+		HoldDuration:         settings.HoldDuration,
+		EntryStyle:           settings.EntryStyle,
+		PositionSpread:       settings.PositionSpread,
+		ProfitTaking:         settings.ProfitTaking,
+		TrailingStops:        settings.TrailingStops,
+		FollowRegime:         settings.FollowRegime,
+		AutoHarvest:          settings.AutoHarvest,
+		PauseHighVolatility:  settings.PauseHighVolatility,
+		DividendHandling:     settings.DividendHandling,
+		RiskFreeRate:         settings.RiskFreeRate,
+		SortinoMAR:           settings.SortinoMAR,
+		EvaluationPeriodDays: settings.EvaluationPeriodDays,
+		VolatilityWindow:     settings.VolatilityWindow,
 	})
 }
 
@@ -415,18 +429,22 @@ func (h *Handlers) UpdateSatelliteSettings(w http.ResponseWriter, r *http.Reques
 	}
 
 	settings := &SatelliteSettings{
-		SatelliteID:         satelliteID,
-		Preset:              req.Preset,
-		RiskAppetite:        req.RiskAppetite,
-		HoldDuration:        req.HoldDuration,
-		EntryStyle:          req.EntryStyle,
-		PositionSpread:      req.PositionSpread,
-		ProfitTaking:        req.ProfitTaking,
-		TrailingStops:       req.TrailingStops,
-		FollowRegime:        req.FollowRegime,
-		AutoHarvest:         req.AutoHarvest,
-		PauseHighVolatility: req.PauseHighVolatility,
-		DividendHandling:    req.DividendHandling,
+		SatelliteID:          satelliteID,
+		Preset:               req.Preset,
+		RiskAppetite:         req.RiskAppetite,
+		HoldDuration:         req.HoldDuration,
+		EntryStyle:           req.EntryStyle,
+		PositionSpread:       req.PositionSpread,
+		ProfitTaking:         req.ProfitTaking,
+		TrailingStops:        req.TrailingStops,
+		FollowRegime:         req.FollowRegime,
+		AutoHarvest:          req.AutoHarvest,
+		PauseHighVolatility:  req.PauseHighVolatility,
+		DividendHandling:     req.DividendHandling,
+		RiskFreeRate:         req.RiskFreeRate,
+		SortinoMAR:           req.SortinoMAR,
+		EvaluationPeriodDays: req.EvaluationPeriodDays,
+		VolatilityWindow:     req.VolatilityWindow,
 	}
 
 	saved, err := h.bucketService.SaveSettings(settings)

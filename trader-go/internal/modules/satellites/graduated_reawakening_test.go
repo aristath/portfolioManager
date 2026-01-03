@@ -164,11 +164,11 @@ func TestGraduatedReawakening_RecordTradeResult_LossResetsToStage1(t *testing.T)
 	// Record loss
 	afterLoss := calc.RecordTradeResult(stage3, false)
 
-	assert.True(t, afterLoss.InReawakening) // Still in reawakening
-	assert.Equal(t, 1, afterLoss.CurrentStage) // Reset to stage 1
-	assert.Equal(t, 0, afterLoss.ConsecutiveWins) // Reset wins
+	assert.True(t, afterLoss.InReawakening)               // Still in reawakening
+	assert.Equal(t, 1, afterLoss.CurrentStage)            // Reset to stage 1
+	assert.Equal(t, 0, afterLoss.ConsecutiveWins)         // Reset wins
 	assert.Equal(t, 0.25, afterLoss.AggressionMultiplier) // Back to 25%
-	assert.Equal(t, 3, afterLoss.TradesSinceAwakening) // Increment trades
+	assert.Equal(t, 3, afterLoss.TradesSinceAwakening)    // Increment trades
 	assert.False(t, afterLoss.ReadyForFullAggression)
 }
 
@@ -196,7 +196,7 @@ func TestGraduatedReawakening_ApplyReawakeningToAggression(t *testing.T) {
 
 	// Not in reawakening
 	notReawakening := ReawakeningStatus{
-		InReawakening: false,
+		InReawakening:        false,
 		AggressionMultiplier: 1.0,
 	}
 	assert.Equal(t, 0.8, calc.ApplyReawakeningToAggression(0.8, notReawakening))

@@ -15,10 +15,10 @@ import (
 // Handles creation, updates, status transitions, and retirement
 // of both core and satellite buckets.
 type BucketService struct {
-	bucketRepo        *BucketRepository
-	balanceRepo       *BalanceRepository
-	exchangeService   *services.CurrencyExchangeService
-	log               zerolog.Logger
+	bucketRepo      *BucketRepository
+	balanceRepo     *BalanceRepository
+	exchangeService *services.CurrencyExchangeService
+	log             zerolog.Logger
 }
 
 // NewBucketService creates a new bucket service

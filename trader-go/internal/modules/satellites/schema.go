@@ -45,6 +45,11 @@ CREATE TABLE IF NOT EXISTS satellite_settings (
     auto_harvest INTEGER DEFAULT 0,
     pause_high_volatility INTEGER DEFAULT 0,
     dividend_handling TEXT DEFAULT 'reinvest_same',  -- 'reinvest_same', 'send_to_core', 'accumulate_cash'
+    -- Risk metric parameters (per-agent configuration)
+    risk_free_rate REAL DEFAULT 0.035,     -- Annual risk-free rate (default 3.5%)
+    sortino_mar REAL DEFAULT 0.05,         -- Minimum Acceptable Return for Sortino (default 5%)
+    evaluation_period_days INTEGER DEFAULT 90,  -- Performance evaluation window (default 90 days)
+    volatility_window INTEGER DEFAULT 60,  -- Volatility calculation window (default 60 days)
     FOREIGN KEY (satellite_id) REFERENCES buckets(id) ON DELETE CASCADE
 );
 
@@ -122,6 +127,10 @@ CREATE TABLE IF NOT EXISTS schema_version (
 		{"satellite_max_pct", 0.15, "Maximum any single satellite can reach"},
 		{"evaluation_months", 3, "Months between reallocation cycles"},
 		{"reallocation_dampening", 0.5, "Dampening factor for allocation changes (0.0-1.0)"},
+		// Global risk metric defaults
+		{"default_risk_free_rate", 0.035, "Default annual risk-free rate (3.5%)"},
+		{"default_sortino_mar", 0.05, "Default Sortino Minimum Acceptable Return (5%)"},
+		{"default_evaluation_days", 90, "Default performance evaluation period (days)"},
 	}
 
 	for _, setting := range defaultSettings {

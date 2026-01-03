@@ -69,7 +69,7 @@ func TestWinCooldown_AlreadyInCooldown_NotExpired(t *testing.T) {
 	assert.True(t, status.InCooldown)
 	assert.Equal(t, &startStr, status.CooldownStart)
 	assert.NotNil(t, status.CooldownEnd)
-	assert.Nil(t, status.TriggerGain) // Don't know original trigger
+	assert.Nil(t, status.TriggerGain)         // Don't know original trigger
 	assert.Equal(t, 19, status.DaysRemaining) // ~20 days remaining (30 - 10)
 	assert.Equal(t, 0.75, status.AggressionReduction)
 }
@@ -141,39 +141,39 @@ func TestWinCooldown_CalculateRecentReturn(t *testing.T) {
 	calc := NewWinCooldownCalculator(zerolog.Nop())
 
 	tests := []struct {
-		name          string
-		currentValue  float64
-		startingValue float64
+		name           string
+		currentValue   float64
+		startingValue  float64
 		expectedReturn float64
 	}{
 		{
-			name: "25% gain",
-			currentValue: 12500,
-			startingValue: 10000,
+			name:           "25% gain",
+			currentValue:   12500,
+			startingValue:  10000,
 			expectedReturn: 0.25,
 		},
 		{
-			name: "10% loss",
-			currentValue: 9000,
-			startingValue: 10000,
+			name:           "10% loss",
+			currentValue:   9000,
+			startingValue:  10000,
 			expectedReturn: -0.10,
 		},
 		{
-			name: "No change",
-			currentValue: 10000,
-			startingValue: 10000,
+			name:           "No change",
+			currentValue:   10000,
+			startingValue:  10000,
 			expectedReturn: 0.0,
 		},
 		{
-			name: "Zero starting value",
-			currentValue: 5000,
-			startingValue: 0,
+			name:           "Zero starting value",
+			currentValue:   5000,
+			startingValue:  0,
 			expectedReturn: 0.0,
 		},
 		{
-			name: "Negative starting value",
-			currentValue: 5000,
-			startingValue: -1000,
+			name:           "Negative starting value",
+			currentValue:   5000,
+			startingValue:  -1000,
 			expectedReturn: 0.0,
 		},
 	}
@@ -233,7 +233,7 @@ func TestWinCooldown_CustomThresholds(t *testing.T) {
 		"sat1",
 		0.18, // 18% return
 		nil,
-		45, // 45 days cooldown
+		45,   // 45 days cooldown
 		0.15, // 15% threshold
 		0.30, // 30% reduction
 	)

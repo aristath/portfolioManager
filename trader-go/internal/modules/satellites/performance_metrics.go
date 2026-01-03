@@ -8,12 +8,12 @@ import (
 
 // PerformanceMetrics represents performance metrics for a satellite bucket
 type PerformanceMetrics struct {
-	BucketID     string  `json:"bucket_id"`
-	PeriodDays   int     `json:"period_days"`
+	BucketID   string `json:"bucket_id"`
+	PeriodDays int    `json:"period_days"`
 
 	// Returns
-	TotalReturn       float64 `json:"total_return"`       // Total return over period (%)
-	AnnualizedReturn  float64 `json:"annualized_return"`  // Annualized return (%)
+	TotalReturn      float64 `json:"total_return"`      // Total return over period (%)
+	AnnualizedReturn float64 `json:"annualized_return"` // Annualized return (%)
 
 	// Risk metrics
 	Volatility         float64 `json:"volatility"`          // Standard deviation of returns (%)
@@ -29,14 +29,14 @@ type PerformanceMetrics struct {
 	TotalTrades   int     `json:"total_trades"`
 	WinningTrades int     `json:"winning_trades"`
 	LosingTrades  int     `json:"losing_trades"`
-	WinRate       float64 `json:"win_rate"`       // % of profitable trades
-	ProfitFactor  float64 `json:"profit_factor"`  // Gross profit / gross loss
+	WinRate       float64 `json:"win_rate"`      // % of profitable trades
+	ProfitFactor  float64 `json:"profit_factor"` // Gross profit / gross loss
 
 	// Additional metrics
-	AvgWin      float64 `json:"avg_win"`       // Average winning trade (%)
-	AvgLoss     float64 `json:"avg_loss"`      // Average losing trade (%)
-	LargestWin  float64 `json:"largest_win"`   // Largest winning trade (%)
-	LargestLoss float64 `json:"largest_loss"`  // Largest losing trade (%)
+	AvgWin      float64 `json:"avg_win"`      // Average winning trade (%)
+	AvgLoss     float64 `json:"avg_loss"`     // Average losing trade (%)
+	LargestWin  float64 `json:"largest_win"`  // Largest winning trade (%)
+	LargestLoss float64 `json:"largest_loss"` // Largest losing trade (%)
 
 	// Score for meta-allocator
 	CompositeScore float64 `json:"composite_score"` // Weighted combination of metrics
@@ -291,8 +291,7 @@ func CalculateProfitFactor(profitLosses []float64) float64 {
 //	PerformanceMetrics object or nil if insufficient data
 func CalculateBucketPerformance(
 	bucketID string,
-	periodDays int,
-	riskFreeRate float64,
+	settings *SatelliteSettings,
 	balanceService *BalanceService,
 	log zerolog.Logger,
 ) (*PerformanceMetrics, error) {
@@ -304,9 +303,15 @@ func CalculateBucketPerformance(
 	// allTrades, err := tradeRepo.GetAll()
 	// bucketTrades := filterTradesByBucket(allTrades, bucketID, startDate, endDate)
 
+	// Extract risk parameters from settings
+	periodDays := settings.EvaluationPeriodDays
+	riskFreeRate := settings.RiskFreeRate
+	// sortinoMAR := settings.SortinoMAR // Will be used when calculating Sortino ratio
+
 	log.Info().
 		Str("bucket_id", bucketID).
 		Int("period_days", periodDays).
+		Float64("risk_free_rate", riskFreeRate).
 		Msg("Performance calculation requires trade repository integration (not yet implemented)")
 
 	// Return nil to indicate insufficient data (matches Python behavior)

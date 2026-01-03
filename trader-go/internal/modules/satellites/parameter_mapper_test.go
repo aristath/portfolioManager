@@ -22,7 +22,7 @@ func TestParameterMapper_MapSettings_MomentumHunter(t *testing.T) {
 	assert.Equal(t, 0.3, params.PatienceFactor)
 
 	// Entry style (entry_style = 0.8, breakout buyer)
-	assert.InDelta(t, 0.2, params.BuyDipThreshold, 0.0001)     // 1.0 - 0.8
+	assert.InDelta(t, 0.2, params.BuyDipThreshold, 0.0001) // 1.0 - 0.8
 	assert.InDelta(t, 0.8, params.BreakoutThreshold, 0.0001)
 
 	// Diversification (position_spread = 0.4)
@@ -30,8 +30,8 @@ func TestParameterMapper_MapSettings_MomentumHunter(t *testing.T) {
 	assert.Equal(t, 0.4, params.DiversificationFactor)
 
 	// Profit taking (profit_taking = 0.6)
-	assert.InDelta(t, 0.20, params.TakeProfitThreshold, 0.01)   // 0.05 + (0.25 * 0.6)
-	assert.InDelta(t, 0.04, params.TrailingStopDistance, 0.01)  // 0.10 * (1.0 - 0.6)
+	assert.InDelta(t, 0.20, params.TakeProfitThreshold, 0.01)  // 0.05 + (0.25 * 0.6)
+	assert.InDelta(t, 0.04, params.TrailingStopDistance, 0.01) // 0.10 * (1.0 - 0.6)
 
 	// Toggles
 	assert.True(t, params.TrailingStops)
@@ -75,7 +75,7 @@ func TestParameterMapper_MapSettings_DipBuyer(t *testing.T) {
 	params := mapper.MapSettingsToParameters(*settings)
 
 	// Entry style (entry_style = 0.2, pure dip buyer)
-	assert.Equal(t, 0.8, params.BuyDipThreshold)     // 1.0 - 0.2
+	assert.Equal(t, 0.8, params.BuyDipThreshold) // 1.0 - 0.2
 	assert.Equal(t, 0.2, params.BreakoutThreshold)
 }
 
@@ -93,8 +93,8 @@ func TestParameterMapper_MapSettings_DividendCatcher(t *testing.T) {
 	assert.Equal(t, 19, params.MaxPositions) // 3 + (20 * 0.8)
 
 	// Profit taking (profit_taking = 0.8, aggressive)
-	assert.InDelta(t, 0.25, params.TakeProfitThreshold, 0.001)   // 0.05 + (0.25 * 0.8)
-	assert.InDelta(t, 0.02, params.TrailingStopDistance, 0.001)  // 0.10 * (1.0 - 0.8)
+	assert.InDelta(t, 0.25, params.TakeProfitThreshold, 0.001)  // 0.05 + (0.25 * 0.8)
+	assert.InDelta(t, 0.02, params.TrailingStopDistance, 0.001) // 0.10 * (1.0 - 0.8)
 
 	assert.Equal(t, "accumulate_cash", params.DividendHandling)
 }
@@ -144,9 +144,9 @@ func TestParameterMapper_GetTargetHoldDays(t *testing.T) {
 		holdDuration float64
 		expected     int
 	}{
-		{0.0, 1},    // Minimum: 1 day
-		{0.5, 91},   // Mid: 91 days
-		{1.0, 181},  // Maximum: 181 days
+		{0.0, 1},   // Minimum: 1 day
+		{0.5, 91},  // Mid: 91 days
+		{1.0, 181}, // Maximum: 181 days
 	}
 
 	for _, tt := range tests {
@@ -163,9 +163,9 @@ func TestParameterMapper_GetMaxPositions(t *testing.T) {
 		positionSpread float64
 		expected       int
 	}{
-		{0.0, 3},   // Minimum: 3 positions (concentrated)
-		{0.5, 13},  // Mid: 13 positions
-		{1.0, 23},  // Maximum: 23 positions (diversified)
+		{0.0, 3},  // Minimum: 3 positions (concentrated)
+		{0.5, 13}, // Mid: 13 positions
+		{1.0, 23}, // Maximum: 23 positions (diversified)
 	}
 
 	for _, tt := range tests {

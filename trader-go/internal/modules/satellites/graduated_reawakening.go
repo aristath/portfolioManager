@@ -11,9 +11,9 @@ import (
 type ReawakeningStatus struct {
 	BucketID               string  `json:"bucket_id"`
 	InReawakening          bool    `json:"in_reawakening"`
-	CurrentStage           int     `json:"current_stage"`            // 0=not started, 1=25%, 2=50%, 3=75%, 4=100%
+	CurrentStage           int     `json:"current_stage"` // 0=not started, 1=25%, 2=50%, 3=75%, 4=100%
 	ConsecutiveWins        int     `json:"consecutive_wins"`
-	AggressionMultiplier   float64 `json:"aggression_multiplier"`    // 0.25, 0.5, 0.75, or 1.0
+	AggressionMultiplier   float64 `json:"aggression_multiplier"` // 0.25, 0.5, 0.75, or 1.0
 	TradesSinceAwakening   int     `json:"trades_since_awakening"`
 	ReadyForFullAggression bool    `json:"ready_for_full_aggression"`
 }
@@ -52,14 +52,16 @@ func NewGraduatedReawakeningCalculator(log zerolog.Logger) *GraduatedReawakening
 // CheckReawakeningStatus checks current re-awakening status
 //
 // Args:
-//   bucketID: Bucket ID
-//   currentlyInReawakening: Whether bucket is currently in re-awakening
-//   currentStage: Current stage (1-4)
-//   consecutiveWins: Consecutive wins since awakening
-//   tradesSinceAwakening: Total trades since awakening
+//
+//	bucketID: Bucket ID
+//	currentlyInReawakening: Whether bucket is currently in re-awakening
+//	currentStage: Current stage (1-4)
+//	consecutiveWins: Consecutive wins since awakening
+//	tradesSinceAwakening: Total trades since awakening
 //
 // Returns:
-//   ReawakeningStatus with current state
+//
+//	ReawakeningStatus with current state
 func (c *GraduatedReawakeningCalculator) CheckReawakeningStatus(
 	bucketID string,
 	currentlyInReawakening bool,
@@ -118,10 +120,12 @@ func (c *GraduatedReawakeningCalculator) CheckReawakeningStatus(
 // Called when a bucket exits hibernation.
 //
 // Args:
-//   bucketID: Bucket ID
+//
+//	bucketID: Bucket ID
 //
 // Returns:
-//   ReawakeningStatus at initial stage (25%)
+//
+//	ReawakeningStatus at initial stage (25%)
 func (c *GraduatedReawakeningCalculator) StartReawakening(bucketID string) ReawakeningStatus {
 	c.log.Warn().
 		Str("bucket_id", bucketID).
@@ -141,11 +145,13 @@ func (c *GraduatedReawakeningCalculator) StartReawakening(bucketID string) Reawa
 // RecordTradeResult records a trade result and updates re-awakening status
 //
 // Args:
-//   currentStatus: Current re-awakening status
-//   isWin: Whether the trade was profitable
+//
+//	currentStatus: Current re-awakening status
+//	isWin: Whether the trade was profitable
 //
 // Returns:
-//   Updated ReawakeningStatus
+//
+//	Updated ReawakeningStatus
 func (c *GraduatedReawakeningCalculator) RecordTradeResult(
 	currentStatus ReawakeningStatus,
 	isWin bool,
@@ -220,11 +226,13 @@ func (c *GraduatedReawakeningCalculator) RecordTradeResult(
 // ApplyReawakeningToAggression applies re-awakening multiplier to aggression
 //
 // Args:
-//   baseAggression: Base aggression from aggression_calculator
-//   reawakeningStatus: Current re-awakening status
+//
+//	baseAggression: Base aggression from aggression_calculator
+//	reawakeningStatus: Current re-awakening status
 //
 // Returns:
-//   Adjusted aggression (reduced if in re-awakening)
+//
+//	Adjusted aggression (reduced if in re-awakening)
 func (c *GraduatedReawakeningCalculator) ApplyReawakeningToAggression(
 	baseAggression float64,
 	reawakeningStatus ReawakeningStatus,

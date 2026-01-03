@@ -144,6 +144,12 @@ type SatelliteSettings struct {
 	AutoHarvest         bool    `json:"auto_harvest"`          // Auto-harvest gains to core
 	PauseHighVolatility bool    `json:"pause_high_volatility"` // Pause during high volatility
 	DividendHandling    string  `json:"dividend_handling"`     // reinvest_same, send_to_core, accumulate_cash
+
+	// Risk Metric Parameters - Parameterize risk calculations per agent
+	RiskFreeRate         float64 `json:"risk_free_rate"`         // Annual risk-free rate (default: 0.035)
+	SortinoMAR           float64 `json:"sortino_mar"`            // Minimum Acceptable Return for Sortino (default: 0.05)
+	EvaluationPeriodDays int     `json:"evaluation_period_days"` // Days for performance evaluation (default: 90)
+	VolatilityWindow     int     `json:"volatility_window"`      // Days for volatility calculation (default: 60)
 }
 
 // NewSatelliteSettings creates a new SatelliteSettings with default values
@@ -160,6 +166,11 @@ func NewSatelliteSettings(satelliteID string) *SatelliteSettings {
 		AutoHarvest:         false,
 		PauseHighVolatility: false,
 		DividendHandling:    "reinvest_same",
+		// Risk metric defaults (moderate/balanced)
+		RiskFreeRate:         0.035, // 3.5% annual risk-free rate
+		SortinoMAR:           0.05,  // 5% minimum acceptable return for retirement
+		EvaluationPeriodDays: 90,    // Quarterly evaluation
+		VolatilityWindow:     60,    // 60-day volatility window
 	}
 }
 

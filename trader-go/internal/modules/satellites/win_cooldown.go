@@ -12,11 +12,11 @@ import (
 type CooldownStatus struct {
 	BucketID            string   `json:"bucket_id"`
 	InCooldown          bool     `json:"in_cooldown"`
-	CooldownStart       *string  `json:"cooldown_start"`        // ISO timestamp
-	CooldownEnd         *string  `json:"cooldown_end"`          // ISO timestamp
-	TriggerGain         *float64 `json:"trigger_gain"`          // Gain % that triggered cooldown
+	CooldownStart       *string  `json:"cooldown_start"` // ISO timestamp
+	CooldownEnd         *string  `json:"cooldown_end"`   // ISO timestamp
+	TriggerGain         *float64 `json:"trigger_gain"`   // Gain % that triggered cooldown
 	DaysRemaining       int      `json:"days_remaining"`
-	AggressionReduction float64  `json:"aggression_reduction"`  // Multiplier (e.g., 0.75 for 25% reduction)
+	AggressionReduction float64  `json:"aggression_reduction"` // Multiplier (e.g., 0.75 for 25% reduction)
 }
 
 // WinCooldownCalculator prevents overconfidence after hot streaks
@@ -38,15 +38,17 @@ func NewWinCooldownCalculator(log zerolog.Logger) *WinCooldownCalculator {
 // CheckWinCooldown checks if bucket should enter or is in win cooldown
 //
 // Args:
-//   bucketID: Bucket ID
-//   recentReturn: Recent return (e.g., 0.25 for 25%)
-//   currentCooldownStart: Existing cooldown start date (if any)
-//   cooldownDays: How long cooldown lasts (default 30 days)
-//   triggerThreshold: Return threshold to trigger (default 20%)
-//   aggressionReduction: How much to reduce aggression (default 25%)
+//
+//	bucketID: Bucket ID
+//	recentReturn: Recent return (e.g., 0.25 for 25%)
+//	currentCooldownStart: Existing cooldown start date (if any)
+//	cooldownDays: How long cooldown lasts (default 30 days)
+//	triggerThreshold: Return threshold to trigger (default 20%)
+//	aggressionReduction: How much to reduce aggression (default 25%)
 //
 // Returns:
-//   CooldownStatus indicating current state
+//
+//	CooldownStatus indicating current state
 func (c *WinCooldownCalculator) CheckWinCooldown(
 	bucketID string,
 	recentReturn float64,
@@ -151,11 +153,13 @@ func (c *WinCooldownCalculator) CheckWinCooldown(
 // ApplyCooldownToAggression applies cooldown reduction to aggression level
 //
 // Args:
-//   baseAggression: Base aggression from aggression_calculator
-//   cooldownStatus: Current cooldown status
+//
+//	baseAggression: Base aggression from aggression_calculator
+//	cooldownStatus: Current cooldown status
 //
 // Returns:
-//   Adjusted aggression (reduced if in cooldown)
+//
+//	Adjusted aggression (reduced if in cooldown)
 func (c *WinCooldownCalculator) ApplyCooldownToAggression(
 	baseAggression float64,
 	cooldownStatus CooldownStatus,
@@ -180,11 +184,13 @@ func (c *WinCooldownCalculator) ApplyCooldownToAggression(
 // CalculateRecentReturn calculates return over a period
 //
 // Args:
-//   currentValue: Current bucket value
-//   startingValue: Starting bucket value
+//
+//	currentValue: Current bucket value
+//	startingValue: Starting bucket value
 //
 // Returns:
-//   Return as decimal (e.g., 0.25 for 25%)
+//
+//	Return as decimal (e.g., 0.25 for 25%)
 func (c *WinCooldownCalculator) CalculateRecentReturn(
 	currentValue float64,
 	startingValue float64,

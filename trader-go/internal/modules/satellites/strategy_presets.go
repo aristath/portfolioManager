@@ -64,23 +64,26 @@ var (
 
 	// StrategyPresets is the registry of all available presets
 	StrategyPresets = map[string]map[string]interface{}{
-		"momentum_hunter":   MomentumHunter,
-		"steady_eddy":       SteadyEddy,
-		"dip_buyer":         DipBuyer,
-		"dividend_catcher":  DividendCatcher,
+		"momentum_hunter":  MomentumHunter,
+		"steady_eddy":      SteadyEddy,
+		"dip_buyer":        DipBuyer,
+		"dividend_catcher": DividendCatcher,
 	}
 )
 
 // GetPreset returns a strategy preset by name
 //
 // Args:
-//   presetName: Name of the preset (momentum_hunter, steady_eddy, dip_buyer, dividend_catcher)
+//
+//	presetName: Name of the preset (momentum_hunter, steady_eddy, dip_buyer, dividend_catcher)
 //
 // Returns:
-//   Dictionary of satellite settings
+//
+//	Dictionary of satellite settings
 //
 // Errors:
-//   Returns error if preset_name is not recognized
+//
+//	Returns error if preset_name is not recognized
 func GetPreset(presetName string) (map[string]interface{}, error) {
 	preset, exists := StrategyPresets[presetName]
 	if !exists {
@@ -140,14 +143,17 @@ func GetPresetDescription(presetName string) (string, error) {
 // ApplyPresetToSettings applies a preset to satellite settings
 //
 // Args:
-//   settings: Satellite settings to modify
-//   presetName: Name of the preset to apply
+//
+//	settings: Satellite settings to modify
+//	presetName: Name of the preset to apply
 //
 // Returns:
-//   Modified settings with preset applied
+//
+//	Modified settings with preset applied
 //
 // Errors:
-//   Returns error if preset name is not recognized
+//
+//	Returns error if preset name is not recognized
 func ApplyPresetToSettings(settings *SatelliteSettings, presetName string) error {
 	preset, err := GetPreset(presetName)
 	if err != nil {

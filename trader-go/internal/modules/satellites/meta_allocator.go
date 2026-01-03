@@ -21,14 +21,14 @@ type AllocationRecommendation struct {
 
 // ReallocationResult represents result of meta-allocator rebalancing
 type ReallocationResult struct {
-	TotalSatelliteBudget  float64                     `json:"total_satellite_budget"` // Total % allocated to satellites
-	Recommendations       []*AllocationRecommendation `json:"recommendations"`
-	DampeningFactor       float64                     `json:"dampening_factor"`
-	EvaluationPeriodDays  int                         `json:"evaluation_period_days"`
-	SatellitesEvaluated   int                         `json:"satellites_evaluated"`
-	SatellitesImproved    int                         `json:"satellites_improved"`
-	SatellitesReduced     int                         `json:"satellites_reduced"`
-	Timestamp             string                      `json:"timestamp"`
+	TotalSatelliteBudget float64                     `json:"total_satellite_budget"` // Total % allocated to satellites
+	Recommendations      []*AllocationRecommendation `json:"recommendations"`
+	DampeningFactor      float64                     `json:"dampening_factor"`
+	EvaluationPeriodDays int                         `json:"evaluation_period_days"`
+	SatellitesEvaluated  int                         `json:"satellites_evaluated"`
+	SatellitesImproved   int                         `json:"satellites_improved"`
+	SatellitesReduced    int                         `json:"satellites_reduced"`
+	Timestamp            string                      `json:"timestamp"`
 }
 
 // MetaAllocator manages performance-based allocation rebalancing.
@@ -97,14 +97,14 @@ func (m *MetaAllocator) EvaluateAndReallocate(
 	if len(satellites) == 0 {
 		m.log.Info().Msg("No satellites to evaluate")
 		return &ReallocationResult{
-			TotalSatelliteBudget:  0.0,
-			Recommendations:       []*AllocationRecommendation{},
-			DampeningFactor:       dampeningFactor,
-			EvaluationPeriodDays:  evaluationDays,
-			SatellitesEvaluated:   0,
-			SatellitesImproved:    0,
-			SatellitesReduced:     0,
-			Timestamp:             time.Now().Format(time.RFC3339),
+			TotalSatelliteBudget: 0.0,
+			Recommendations:      []*AllocationRecommendation{},
+			DampeningFactor:      dampeningFactor,
+			EvaluationPeriodDays: evaluationDays,
+			SatellitesEvaluated:  0,
+			SatellitesImproved:   0,
+			SatellitesReduced:    0,
+			Timestamp:            time.Now().Format(time.RFC3339),
 		}, nil
 	}
 
@@ -123,13 +123,23 @@ func (m *MetaAllocator) EvaluateAndReallocate(
 	performanceScores := make(map[string]float64)
 
 	for _, satellite := range satellites {
+		// Load satellite-specific settings (with default fallback)
+		settings, err := m.bucketService.GetSettings(satellite.ID)
+		if err != nil {
+			m.log.Warn().
+				Err(err).
+				Str("bucket_id", satellite.ID).
+				Msg("Failed to load settings, using defaults")
+			// Use default settings if load fails
+			settings = NewSatelliteSettings(satellite.ID)
+		}
+
 		// NOTE: Performance calculation requires trade repository integration
 		// For now, using neutral score (0.0) for all satellites
 		// TODO: Wire up to CalculateBucketPerformance once trade repo is integrated
 		metrics, err := CalculateBucketPerformance(
 			satellite.ID,
-			evaluationDays,
-			0.03, // 3% risk-free rate
+			settings, // Pass full settings struct with risk parameters
 			m.balanceService,
 			m.log,
 		)
@@ -198,14 +208,14 @@ func (m *MetaAllocator) EvaluateAndReallocate(
 	}
 
 	return &ReallocationResult{
-		TotalSatelliteBudget:  satelliteBudgetPct,
-		Recommendations:       recommendations,
-		DampeningFactor:       dampeningFactor,
-		EvaluationPeriodDays:  evaluationDays,
-		SatellitesEvaluated:   len(satellites),
-		SatellitesImproved:    improved,
-		SatellitesReduced:     reduced,
-		Timestamp:             time.Now().Format(time.RFC3339),
+		TotalSatelliteBudget: satelliteBudgetPct,
+		Recommendations:      recommendations,
+		DampeningFactor:      dampeningFactor,
+		EvaluationPeriodDays: evaluationDays,
+		SatellitesEvaluated:  len(satellites),
+		SatellitesImproved:   improved,
+		SatellitesReduced:    reduced,
+		Timestamp:            time.Now().Format(time.RFC3339),
 	}, nil
 }
 

@@ -160,19 +160,19 @@ func (r *BucketRepository) Update(bucketID string, updates map[string]interface{
 
 	// Whitelist allowed columns
 	allowedColumns := map[string]bool{
-		"name":                    true,
-		"notes":                   true,
-		"type":                    true,
-		"status":                  true,
-		"target_pct":              true,
-		"min_pct":                 true,
-		"max_pct":                 true,
-		"high_water_mark":         true,
-		"high_water_mark_date":    true,
-		"consecutive_losses":      true,
-		"max_consecutive_losses":  true,
-		"loss_streak_paused_at":   true,
-		"updated_at":              true,
+		"name":                   true,
+		"notes":                  true,
+		"type":                   true,
+		"status":                 true,
+		"target_pct":             true,
+		"min_pct":                true,
+		"max_pct":                true,
+		"high_water_mark":        true,
+		"high_water_mark_date":   true,
+		"consecutive_losses":     true,
+		"max_consecutive_losses": true,
+		"loss_streak_paused_at":  true,
+		"updated_at":             true,
 	}
 
 	// Validate all column names
@@ -336,8 +336,9 @@ func (r *BucketRepository) SaveSettings(settings *SatelliteSettings) error {
 	query := `INSERT OR REPLACE INTO satellite_settings
 	          (satellite_id, preset, risk_appetite, hold_duration, entry_style,
 	           position_spread, profit_taking, trailing_stops, follow_regime,
-	           auto_harvest, pause_high_volatility, dividend_handling)
-	          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+	           auto_harvest, pause_high_volatility, dividend_handling,
+	           risk_free_rate, sortino_mar, evaluation_period_days, volatility_window)
+	          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	_, err := r.satellitesDB.Exec(query,
 		settings.SatelliteID,
@@ -352,6 +353,10 @@ func (r *BucketRepository) SaveSettings(settings *SatelliteSettings) error {
 		boolToInt(settings.AutoHarvest),
 		boolToInt(settings.PauseHighVolatility),
 		settings.DividendHandling,
+		settings.RiskFreeRate,
+		settings.SortinoMAR,
+		settings.EvaluationPeriodDays,
+		settings.VolatilityWindow,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to save satellite settings: %w", err)
@@ -476,6 +481,10 @@ func (r *BucketRepository) scanSettings(row interface{ Scan(...interface{}) erro
 		&autoHarvest,
 		&pauseHighVolatility,
 		&settings.DividendHandling,
+		&settings.RiskFreeRate,
+		&settings.SortinoMAR,
+		&settings.EvaluationPeriodDays,
+		&settings.VolatilityWindow,
 	)
 	if err != nil {
 		return nil, err

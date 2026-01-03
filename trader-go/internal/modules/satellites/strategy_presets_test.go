@@ -59,7 +59,7 @@ func TestStrategyPresets_GetPreset_DividendCatcher(t *testing.T) {
 	assert.Equal(t, 0.2, preset["hold_duration"]) // Short duration
 	assert.Equal(t, 0.5, preset["entry_style"])
 	assert.Equal(t, 0.8, preset["position_spread"]) // Wide diversification
-	assert.Equal(t, 0.8, preset["profit_taking"]) // Aggressive profit taking
+	assert.Equal(t, 0.8, preset["profit_taking"])   // Aggressive profit taking
 	assert.Equal(t, "accumulate_cash", preset["dividend_handling"])
 }
 

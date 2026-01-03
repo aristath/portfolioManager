@@ -80,7 +80,7 @@ func TestAggressionCalculator_Hibernation_Below40Pct(t *testing.T) {
 
 	assert.Equal(t, 0.0, result.Aggression)
 	assert.Equal(t, 0.0, result.AllocationAggression) // <40% → hibernation
-	assert.Equal(t, 1.0, result.DrawdownAggression) // No drawdown
+	assert.Equal(t, 1.0, result.DrawdownAggression)   // No drawdown
 	assert.Equal(t, 0.35, result.PctOfTarget)
 	assert.Equal(t, "allocation", result.LimitingFactor) // Allocation limits (0.0 < 1.0)
 	assert.True(t, result.InHibernation)
@@ -94,9 +94,9 @@ func TestAggressionCalculator_ModerateDrawdown_15Pct(t *testing.T) {
 
 	result := calc.CalculateAggression(currentValue, 10000, &hwm)
 
-	assert.Equal(t, 0.7, result.Aggression) // Limited by drawdown
+	assert.Equal(t, 0.7, result.Aggression)           // Limited by drawdown
 	assert.Equal(t, 0.8, result.AllocationAggression) // 80% of target
-	assert.Equal(t, 0.7, result.DrawdownAggression) // 20% drawdown → 0.7
+	assert.Equal(t, 0.7, result.DrawdownAggression)   // 20% drawdown → 0.7
 	assert.Equal(t, "drawdown", result.LimitingFactor)
 	assert.Equal(t, 0.2, result.Drawdown)
 	assert.False(t, result.InHibernation)
@@ -110,9 +110,9 @@ func TestAggressionCalculator_MajorDrawdown_25Pct(t *testing.T) {
 
 	result := calc.CalculateAggression(currentValue, 10000, &hwm)
 
-	assert.Equal(t, 0.3, result.Aggression) // Limited by drawdown
+	assert.Equal(t, 0.3, result.Aggression)           // Limited by drawdown
 	assert.Equal(t, 0.6, result.AllocationAggression) // 70% of target
-	assert.Equal(t, 0.3, result.DrawdownAggression) // 30% drawdown → 0.3
+	assert.Equal(t, 0.3, result.DrawdownAggression)   // 30% drawdown → 0.3
 	assert.Equal(t, "drawdown", result.LimitingFactor)
 	assert.Equal(t, 0.3, result.Drawdown)
 	assert.False(t, result.InHibernation)
@@ -126,9 +126,9 @@ func TestAggressionCalculator_SevereDrawdown_35Pct(t *testing.T) {
 
 	result := calc.CalculateAggression(currentValue, 10000, &hwm)
 
-	assert.Equal(t, 0.0, result.Aggression) // Hibernation due to severe drawdown
+	assert.Equal(t, 0.0, result.Aggression)           // Hibernation due to severe drawdown
 	assert.Equal(t, 0.6, result.AllocationAggression) // 60% of target
-	assert.Equal(t, 0.0, result.DrawdownAggression) // ≥35% drawdown → 0.0
+	assert.Equal(t, 0.0, result.DrawdownAggression)   // ≥35% drawdown → 0.0
 	assert.Equal(t, "drawdown", result.LimitingFactor)
 	assert.Equal(t, 0.4, result.Drawdown)
 	assert.True(t, result.InHibernation)
@@ -164,7 +164,7 @@ func TestAggressionCalculator_ZeroTargetValue(t *testing.T) {
 	// Target less than 1 cent
 	result := calc.CalculateAggression(5000, 0.005, nil)
 
-	assert.Equal(t, 0.0, result.PctOfTarget) // Protected against division by zero
+	assert.Equal(t, 0.0, result.PctOfTarget)          // Protected against division by zero
 	assert.Equal(t, 0.0, result.AllocationAggression) // Hibernation
 	assert.True(t, result.InHibernation)
 }
@@ -176,9 +176,9 @@ func TestAggressionCalculator_LimitingFactorAllocation(t *testing.T) {
 	// 90% of target (0.8 allocation aggression), ~14% drawdown (1.0 drawdown aggression)
 	result := calc.CalculateAggression(9000, 10000, &hwm)
 
-	assert.Equal(t, 0.8, result.Aggression) // Limited by allocation
+	assert.Equal(t, 0.8, result.Aggression)           // Limited by allocation
 	assert.Equal(t, 0.8, result.AllocationAggression) // 90% of target
-	assert.Equal(t, 1.0, result.DrawdownAggression) // <15% drawdown
+	assert.Equal(t, 1.0, result.DrawdownAggression)   // <15% drawdown
 	assert.Equal(t, "allocation", result.LimitingFactor)
 }
 
@@ -235,39 +235,39 @@ func TestAggressionCalculator_BoundaryConditions(t *testing.T) {
 	calc := NewAggressionCalculator(zerolog.Nop())
 
 	tests := []struct {
-		name            string
-		currentValue    float64
-		targetValue     float64
-		highWaterMark   *float64
-		expectedAgg     float64
+		name          string
+		currentValue  float64
+		targetValue   float64
+		highWaterMark *float64
+		expectedAgg   float64
 	}{
 		{
-			name: "Exactly 40% of target (boundary)",
-			currentValue: 4000,
-			targetValue: 10000,
+			name:          "Exactly 40% of target (boundary)",
+			currentValue:  4000,
+			targetValue:   10000,
 			highWaterMark: nil,
-			expectedAgg: 0.4,
+			expectedAgg:   0.4,
 		},
 		{
-			name: "Just below 40% of target",
-			currentValue: 3999,
-			targetValue: 10000,
+			name:          "Just below 40% of target",
+			currentValue:  3999,
+			targetValue:   10000,
 			highWaterMark: nil,
-			expectedAgg: 0.0,
+			expectedAgg:   0.0,
 		},
 		{
-			name: "Exactly 60% of target (boundary)",
-			currentValue: 6000,
-			targetValue: 10000,
+			name:          "Exactly 60% of target (boundary)",
+			currentValue:  6000,
+			targetValue:   10000,
 			highWaterMark: nil,
-			expectedAgg: 0.6,
+			expectedAgg:   0.6,
 		},
 		{
-			name: "Exactly 80% of target (boundary)",
-			currentValue: 8000,
-			targetValue: 10000,
+			name:          "Exactly 80% of target (boundary)",
+			currentValue:  8000,
+			targetValue:   10000,
 			highWaterMark: nil,
-			expectedAgg: 0.8,
+			expectedAgg:   0.8,
 		},
 	}
 
