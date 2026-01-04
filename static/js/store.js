@@ -308,7 +308,7 @@ document.addEventListener('alpine:init', () => {
       }
 
       // Connect to SSE stream for planner status updates
-      const eventSource = new EventSource('/api/planner/status/stream');
+      const eventSource = new EventSource('/api/planning/stream');
       this.plannerStatusEventSource = eventSource;
 
       eventSource.onmessage = (event) => {
@@ -341,7 +341,7 @@ document.addEventListener('alpine:init', () => {
       }
 
       // Connect to SSE stream for recommendation updates
-      const eventSource = new EventSource('/api/trades/recommendations/stream');
+      const eventSource = new EventSource('/api/planning/stream');
       this.recommendationEventSource = eventSource;
 
       eventSource.onmessage = (event) => {
@@ -1104,8 +1104,12 @@ enable_combinatorial = true
       this.plannerError = null;
       try {
         const result = await API.applyPlanner(this.plannerForm.id);
+
+        // Clear old sequences so new ones are generated with updated config
+        await API.regenerateSequences();
+
         this.showMessage(
-          `Planner applied successfully for bucket ${result.bucket_id}`,
+          `Planner applied and sequences regenerated for bucket ${result.bucket_id}`,
           'success'
         );
       } catch (e) {
