@@ -10,10 +10,10 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// BalanceServiceInterface defines the minimal interface for balance operations
-// This avoids import cycles with the satellites package
-type BalanceServiceInterface interface {
-	GetBalanceAmount(bucketID string, currency string) (float64, error)
+// CashManagerInterface defines the minimal interface for cash operations
+// This avoids import cycles with the cash_flows package
+type CashManagerInterface interface {
+	GetCashBalance(bucketID string, currency string) (float64, error)
 }
 
 // CurrencyExchangeServiceInterface defines the minimal interface for currency exchange
@@ -61,7 +61,7 @@ type TradeExecutionService struct {
 	tradernetClient TradernetClientInterface
 	tradeRepo       TradeRepositoryInterface
 	positionRepo    *portfolio.PositionRepository
-	balanceService  BalanceServiceInterface
+	cashManager     CashManagerInterface
 	exchangeService CurrencyExchangeServiceInterface
 	log             zerolog.Logger
 }
@@ -78,7 +78,7 @@ func NewTradeExecutionService(
 	tradernetClient TradernetClientInterface,
 	tradeRepo TradeRepositoryInterface,
 	positionRepo *portfolio.PositionRepository,
-	balanceService BalanceServiceInterface,
+	cashManager CashManagerInterface,
 	exchangeService CurrencyExchangeServiceInterface,
 	log zerolog.Logger,
 ) *TradeExecutionService {
@@ -86,7 +86,7 @@ func NewTradeExecutionService(
 		tradernetClient: tradernetClient,
 		tradeRepo:       tradeRepo,
 		positionRepo:    positionRepo,
-		balanceService:  balanceService,
+		cashManager:     cashManager,
 		exchangeService: exchangeService,
 		log:             log.With().Str("service", "trade_execution").Logger(),
 	}
@@ -198,7 +198,7 @@ func (s *TradeExecutionService) recordTrade(orderResult *tradernet.OrderResult, 
 		Price:      orderResult.Price,
 		Currency:   rec.Currency,
 		Source:     "emergency_rebalancing",
-		BucketID:   "core", // Default to core bucket
+		BucketID:   "", // Empty - buckets removed, single portfolio
 		Mode:       "live",
 		ExecutedAt: time.Now(),
 		OrderID:    orderResult.OrderID,
@@ -265,16 +265,19 @@ func (s *TradeExecutionService) calculateCommission(
 // app/modules/trading/services/trade_execution_service.py:152-217
 func (s *TradeExecutionService) validateBuyCashBalance(rec TradeRecommendation) *ExecuteResult {
 	// Get current balance for the trade currency
-	// For now, use "core" bucket - TODO: make bucket configurable
-	bucketID := "core"
-	balance, err := s.balanceService.GetBalanceAmount(bucketID, rec.Currency)
+	// Use CashSecurityManager directly (bucketID parameter is ignored in single-portfolio system)
+	if s.cashManager == nil {
+		s.log.Warn().Msg("CashSecurityManager not available, skipping cash validation")
+		return nil // Allow trade to proceed if cash manager unavailable
+	}
+
+	balance, err := s.cashManager.GetCashBalance("core", rec.Currency)
 	if err != nil {
 		s.log.Error().
 			Err(err).
-			Str("bucket", bucketID).
 			Str("currency", rec.Currency).
-			Msg("Failed to get balance")
-		errMsg := fmt.Sprintf("Failed to get balance: %v", err)
+			Msg("Failed to get cash balance")
+		errMsg := fmt.Sprintf("Failed to get cash balance: %v", err)
 		return &ExecuteResult{
 			Symbol: rec.Symbol,
 			Status: "error",

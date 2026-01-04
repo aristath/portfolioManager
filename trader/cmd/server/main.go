@@ -408,12 +408,11 @@ func registerJobs(sched *scheduler.Scheduler, universeDB, configDB, ledgerDB, po
 	log.Info().Msg("Ticker content service initialized")
 
 	// Trade execution service for emergency rebalancing
-	// TODO: Create adapter for TradeExecutionService to use CashSecurityManager directly
 	tradeExecutionService := services.NewTradeExecutionService(
 		tradernetClient,
 		tradeRepo,
 		positionRepo,
-		nil, // balanceService - TODO: implement adapter
+		cashManager, // Use CashSecurityManager directly
 		currencyExchangeService,
 		log,
 	)

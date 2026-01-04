@@ -904,13 +904,12 @@ func (s *Server) setupRebalancingRoutes(r chi.Router) {
 	settingsRepo := settings.NewRepository(s.configDB.Conn(), s.log)
 
 	// Trade execution service for rebalancing
-	// TODO: Create adapter for TradeExecutionService to use CashSecurityManager directly
 	tradingRepo := trading.NewTradeRepository(s.ledgerDB.Conn(), s.log)
 	tradeExecutionService := services.NewTradeExecutionService(
 		tradernetClient,
 		tradingRepo,
 		positionRepo,
-		nil, // balanceService - TODO: implement adapter
+		cashManagerForRebalancing, // Use CashSecurityManager directly
 		currencyExchangeService,
 		s.log,
 	)

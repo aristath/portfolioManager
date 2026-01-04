@@ -101,9 +101,9 @@ void parseClusterData(const char* json) {
 }
 
 // Set portfolio mode with cluster configuration
-void setPortfolioMode(const char* clustersJSON) {
-  // Parse cluster data
-  parseClusterData(clustersJSON);
+void setPortfolioMode(String clustersJSON) {
+  // Parse cluster data (convert String to const char* for parsing)
+  parseClusterData(clustersJSON.c_str());
 
   if (numClusters == 0) {
     inPortfolioMode = false;

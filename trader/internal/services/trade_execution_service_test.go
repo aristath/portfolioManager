@@ -11,17 +11,17 @@ import (
 
 // Mock implementations for testing
 
-type mockBalanceService struct {
+type mockCashManager struct {
 	balances map[string]float64 // currency -> balance
 }
 
-func newMockBalanceService(balances map[string]float64) *mockBalanceService {
-	return &mockBalanceService{
+func newMockCashManager(balances map[string]float64) *mockCashManager {
+	return &mockCashManager{
 		balances: balances,
 	}
 }
 
-func (m *mockBalanceService) GetBalanceAmount(bucketID string, currency string) (float64, error) {
+func (m *mockCashManager) GetCashBalance(bucketID string, currency string) (float64, error) {
 	if balance, ok := m.balances[currency]; ok {
 		return balance, nil
 	}
@@ -112,14 +112,14 @@ func TestValidateBuyCashBalance_AlreadyNegative(t *testing.T) {
 	log := logger.New(logger.Config{Level: "error", Pretty: false})
 
 	// Balance is negative
-	balanceService := newMockBalanceService(map[string]float64{
+	cashManager := newMockCashManager(map[string]float64{
 		"EUR": -100.0,
 	})
 
 	exchangeService := newMockCurrencyExchangeService(map[string]float64{})
 
 	service := &TradeExecutionService{
-		balanceService:  balanceService,
+		cashManager:     cashManager,
 		exchangeService: exchangeService,
 		log:             log,
 	}
@@ -153,14 +153,14 @@ func TestValidateBuyCashBalance_InsufficientFunds(t *testing.T) {
 	log := logger.New(logger.Config{Level: "error", Pretty: false})
 
 	// Balance is 1000 EUR, but trade needs more
-	balanceService := newMockBalanceService(map[string]float64{
+	cashManager := newMockCashManager(map[string]float64{
 		"EUR": 1000.0,
 	})
 
 	exchangeService := newMockCurrencyExchangeService(map[string]float64{})
 
 	service := &TradeExecutionService{
-		balanceService:  balanceService,
+		cashManager:     cashManager,
 		exchangeService: exchangeService,
 		log:             log,
 	}
@@ -199,14 +199,14 @@ func TestValidateBuyCashBalance_SufficientFunds(t *testing.T) {
 	log := logger.New(logger.Config{Level: "error", Pretty: false})
 
 	// Balance is 2000 EUR, enough for the trade
-	balanceService := newMockBalanceService(map[string]float64{
+	cashManager := newMockCashManager(map[string]float64{
 		"EUR": 2000.0,
 	})
 
 	exchangeService := newMockCurrencyExchangeService(map[string]float64{})
 
 	service := &TradeExecutionService{
-		balanceService:  balanceService,
+		cashManager:     cashManager,
 		exchangeService: exchangeService,
 		log:             log,
 	}
@@ -235,14 +235,14 @@ func TestValidateBuyCashBalance_EdgeCase_ExactBalance(t *testing.T) {
 	log := logger.New(logger.Config{Level: "error", Pretty: false})
 
 	// Balance is exactly what's needed
-	balanceService := newMockBalanceService(map[string]float64{
+	cashManager := newMockCashManager(map[string]float64{
 		"EUR": 1505.0,
 	})
 
 	exchangeService := newMockCurrencyExchangeService(map[string]float64{})
 
 	service := &TradeExecutionService{
-		balanceService:  balanceService,
+		cashManager:     cashManager,
 		exchangeService: exchangeService,
 		log:             log,
 	}
@@ -271,14 +271,14 @@ func TestValidateBuyCashBalance_SmallTrade(t *testing.T) {
 	log := logger.New(logger.Config{Level: "error", Pretty: false})
 
 	// Small balance but trade is even smaller
-	balanceService := newMockBalanceService(map[string]float64{
+	cashManager := newMockCashManager(map[string]float64{
 		"EUR": 50.0,
 	})
 
 	exchangeService := newMockCurrencyExchangeService(map[string]float64{})
 
 	service := &TradeExecutionService{
-		balanceService:  balanceService,
+		cashManager:     cashManager,
 		exchangeService: exchangeService,
 		log:             log,
 	}
@@ -412,13 +412,13 @@ func TestExecuteTrades_SingleBuySuccess(t *testing.T) {
 
 	mockClient := newMockTradernetClient(true)
 	mockTradeRepo := newMockTradeRepository()
-	balanceService := newMockBalanceService(map[string]float64{"EUR": 2000.0})
+	cashManager := newMockCashManager(map[string]float64{"EUR": 2000.0})
 	exchangeService := newMockCurrencyExchangeService(map[string]float64{})
 
 	service := &TradeExecutionService{
 		tradernetClient: mockClient,
 		tradeRepo:       mockTradeRepo,
-		balanceService:  balanceService,
+		cashManager:     cashManager,
 		exchangeService: exchangeService,
 		log:             log,
 	}
@@ -504,12 +504,12 @@ func TestExecuteTrades_BuyBlockedByNegativeBalance(t *testing.T) {
 	log := logger.New(logger.Config{Level: "error", Pretty: false})
 
 	mockClient := newMockTradernetClient(true)
-	balanceService := newMockBalanceService(map[string]float64{"EUR": -100.0}) // Negative balance
+	cashManager := newMockCashManager(map[string]float64{"EUR": -100.0}) // Negative balance
 	exchangeService := newMockCurrencyExchangeService(map[string]float64{})
 
 	service := &TradeExecutionService{
 		tradernetClient: mockClient,
-		balanceService:  balanceService,
+		cashManager:     cashManager,
 		exchangeService: exchangeService,
 		log:             log,
 	}
@@ -543,12 +543,12 @@ func TestExecuteTrades_BuyBlockedByInsufficientFunds(t *testing.T) {
 	log := logger.New(logger.Config{Level: "error", Pretty: false})
 
 	mockClient := newMockTradernetClient(true)
-	balanceService := newMockBalanceService(map[string]float64{"EUR": 500.0}) // Insufficient
+	cashManager := newMockCashManager(map[string]float64{"EUR": 500.0}) // Insufficient
 	exchangeService := newMockCurrencyExchangeService(map[string]float64{})
 
 	service := &TradeExecutionService{
 		tradernetClient: mockClient,
-		balanceService:  balanceService,
+		cashManager:     cashManager,
 		exchangeService: exchangeService,
 		log:             log,
 	}
@@ -581,12 +581,12 @@ func TestExecuteTrades_PlaceOrderFailure(t *testing.T) {
 	mockClient := newMockTradernetClient(true)
 	mockClient.placeOrderErr = fmt.Errorf("market closed")
 
-	balanceService := newMockBalanceService(map[string]float64{"EUR": 2000.0})
+	cashManager := newMockCashManager(map[string]float64{"EUR": 2000.0})
 	exchangeService := newMockCurrencyExchangeService(map[string]float64{})
 
 	service := &TradeExecutionService{
 		tradernetClient: mockClient,
-		balanceService:  balanceService,
+		cashManager:     cashManager,
 		exchangeService: exchangeService,
 		log:             log,
 	}
@@ -623,7 +623,7 @@ func TestExecuteTrades_MultipleTrades_MixedResults(t *testing.T) {
 
 	mockClient := newMockTradernetClient(true)
 	mockTradeRepo := newMockTradeRepository()
-	balanceService := newMockBalanceService(map[string]float64{
+	cashManager := newMockCashManager(map[string]float64{
 		"EUR": 2000.0,  // Enough for AAPL, not for MSFT
 		"USD": 10000.0, // Enough for GOOGL
 	})
@@ -632,7 +632,7 @@ func TestExecuteTrades_MultipleTrades_MixedResults(t *testing.T) {
 	service := &TradeExecutionService{
 		tradernetClient: mockClient,
 		tradeRepo:       mockTradeRepo,
-		balanceService:  balanceService,
+		cashManager:     cashManager,
 		exchangeService: exchangeService,
 		log:             log,
 	}
@@ -707,13 +707,13 @@ func TestExecuteTrades_TradeRecordingFailure(t *testing.T) {
 	mockTradeRepo := newMockTradeRepository()
 	mockTradeRepo.createErr = fmt.Errorf("database connection lost")
 
-	balanceService := newMockBalanceService(map[string]float64{"EUR": 2000.0})
+	cashManager := newMockCashManager(map[string]float64{"EUR": 2000.0})
 	exchangeService := newMockCurrencyExchangeService(map[string]float64{})
 
 	service := &TradeExecutionService{
 		tradernetClient: mockClient,
 		tradeRepo:       mockTradeRepo,
-		balanceService:  balanceService,
+		cashManager:     cashManager,
 		exchangeService: exchangeService,
 		log:             log,
 	}

@@ -26,7 +26,7 @@ extern int numClusters;
 extern uint8_t pixelClusterID[8][13];  // Which cluster each pixel belongs to
 
 // Portfolio mode functions
-void setPortfolioMode(const char* clustersJSON);
+void setPortfolioMode(String clustersJSON);
 void updatePortfolioPattern();
 void parseClusterData(const char* json);
 int countClusterNeighbors(uint8_t x, uint8_t y, int targetClusterID);
