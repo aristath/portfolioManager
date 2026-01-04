@@ -56,3 +56,5 @@ display/bridge/bridge
 display/bridge/display-bridge
 
 .claude/
+
+build/
