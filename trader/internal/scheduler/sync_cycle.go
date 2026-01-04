@@ -8,7 +8,6 @@ import (
 	"github.com/aristath/arduino-trader/internal/modules/display"
 	"github.com/aristath/arduino-trader/internal/modules/portfolio"
 	"github.com/aristath/arduino-trader/internal/modules/trading"
-	"github.com/aristath/arduino-trader/internal/modules/universe"
 	"github.com/rs/zerolog"
 )
 
@@ -19,9 +18,10 @@ type SyncCycleJob struct {
 	portfolioService    *portfolio.PortfolioService
 	cashFlowsService    *cash_flows.CashFlowsService
 	tradingService      *trading.TradingService
-	universeService     *universe.UniverseService
+	universeService     UniverseServiceInterface
+	balanceService      BalanceServiceInterface
 	displayManager      *display.StateManager
-	marketHours         *MarketHoursService
+	marketHours         MarketHoursServiceInterface
 	emergencyRebalance  func() error // Callback for emergency rebalance
 	updateDisplayTicker func() error // Callback for display ticker update
 }
@@ -32,9 +32,10 @@ type SyncCycleConfig struct {
 	PortfolioService    *portfolio.PortfolioService
 	CashFlowsService    *cash_flows.CashFlowsService
 	TradingService      *trading.TradingService
-	UniverseService     *universe.UniverseService
+	UniverseService     UniverseServiceInterface
+	BalanceService      BalanceServiceInterface
 	DisplayManager      *display.StateManager
-	MarketHours         *MarketHoursService
+	MarketHours         MarketHoursServiceInterface
 	EmergencyRebalance  func() error
 	UpdateDisplayTicker func() error
 }
@@ -47,6 +48,7 @@ func NewSyncCycleJob(cfg SyncCycleConfig) *SyncCycleJob {
 		cashFlowsService:    cfg.CashFlowsService,
 		tradingService:      cfg.TradingService,
 		universeService:     cfg.UniverseService,
+		balanceService:      cfg.BalanceService,
 		displayManager:      cfg.DisplayManager,
 		marketHours:         cfg.MarketHours,
 		emergencyRebalance:  cfg.EmergencyRebalance,
@@ -146,10 +148,11 @@ func (j *SyncCycleJob) syncPortfolio() error {
 		return fmt.Errorf("portfolio service not available")
 	}
 
-	// TODO: Implement portfolio sync from Tradernet
-	// This should sync positions and cash balances from the brokerage
-	// For now, this is handled by other modules (cash_flows sync job)
-	j.log.Debug().Msg("Portfolio sync skipped (handled by cash_flows module)")
+	if err := j.portfolioService.SyncFromTradernet(); err != nil {
+		return fmt.Errorf("portfolio sync from Tradernet failed: %w", err)
+	}
+
+	j.log.Debug().Msg("Portfolio sync completed")
 	return nil
 }
 
@@ -158,18 +161,52 @@ func (j *SyncCycleJob) syncPortfolio() error {
 func (j *SyncCycleJob) checkNegativeBalances() {
 	j.log.Debug().Msg("Checking for negative balances")
 
-	// This functionality requires:
-	// 1. Get current cash balance for each currency
-	// 2. Check if any balance is negative
-	// 3. If negative, trigger emergency rebalance
-	// Full implementation will depend on cash flows module
+	if j.balanceService == nil {
+		j.log.Warn().Msg("Balance service not available, skipping negative balance check")
+		return
+	}
 
-	if j.emergencyRebalance != nil {
-		// Placeholder - in production this would:
-		// 1. Check if any currency has negative balance
-		// 2. If yes, call emergencyRebalance()
-		// For now, we skip this check
-		j.log.Debug().Msg("Negative balance check not yet implemented")
+	// Get all currencies that have balances
+	currencies, err := j.balanceService.GetAllCurrencies()
+	if err != nil {
+		j.log.Error().Err(err).Msg("Failed to get currencies for negative balance check")
+		return
+	}
+
+	// Check each currency for negative balance
+	hasNegativeBalance := false
+	for _, currency := range currencies {
+		total, err := j.balanceService.GetTotalByCurrency(currency)
+		if err != nil {
+			j.log.Error().
+				Err(err).
+				Str("currency", currency).
+				Msg("Failed to get total balance for currency")
+			continue
+		}
+
+		if total < 0 {
+			hasNegativeBalance = true
+			j.log.Error().
+				Str("currency", currency).
+				Float64("balance", total).
+				Msg("CRITICAL: Negative cash balance detected")
+		}
+	}
+
+	// Trigger emergency rebalance if negative balance detected
+	if hasNegativeBalance {
+		j.log.Error().Msg("CRITICAL: Negative balance detected, triggering emergency rebalance")
+
+		if j.emergencyRebalance != nil {
+			if err := j.emergencyRebalance(); err != nil {
+				j.log.Error().Err(err).Msg("Emergency rebalance failed")
+			} else {
+				j.log.Info().Msg("Emergency rebalance completed successfully")
+			}
+		} else {
+			j.log.Error().Msg("Emergency rebalance callback not configured")
+		}
 	}
 }
 
@@ -184,22 +221,38 @@ func (j *SyncCycleJob) syncPricesForOpenMarkets() {
 	}
 
 	if j.marketHours == nil {
-		j.log.Warn().Msg("Market hours service not available, skipping price sync")
+		j.log.Warn().Msg("Market hours service not available, syncing all prices")
+		// Fallback: sync all prices if market hours not available
+		if err := j.universeService.SyncPrices(); err != nil {
+			j.log.Error().Err(err).Msg("Price sync failed")
+		}
 		return
 	}
 
-	// Get all securities grouped by exchange
-	// For each exchange, check if market is open
-	// Only sync prices for securities on open markets
+	// Get market statuses for all exchanges
+	statuses := j.marketHours.GetAllMarketStatuses()
 
-	// Simplified version - sync all prices
-	// Full implementation would:
-	// 1. Get securities by exchange
-	// 2. Check IsMarketOpen() for each exchange
-	// 3. Only sync prices for securities on open exchanges
+	// Filter to open exchanges
+	var openExchanges []string
+	for _, status := range statuses {
+		if status.IsOpen {
+			openExchanges = append(openExchanges, status.Exchange)
+		}
+	}
 
-	if err := j.universeService.SyncPrices(); err != nil {
-		j.log.Error().Err(err).Msg("Price sync failed")
+	if len(openExchanges) == 0 {
+		j.log.Debug().Msg("No markets currently open, skipping price sync")
+		return
+	}
+
+	j.log.Info().
+		Int("open_markets", len(openExchanges)).
+		Int("total_markets", len(statuses)).
+		Msg("Market hours filtering enabled")
+
+	// Sync prices only for open exchanges
+	if err := j.universeService.SyncPricesForExchanges(openExchanges); err != nil {
+		j.log.Error().Err(err).Msg("Market-aware price sync failed")
 		// Continue - non-critical
 	} else {
 		j.log.Debug().Msg("Price sync completed")

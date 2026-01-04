@@ -12,6 +12,7 @@ import (
 	"github.com/aristath/arduino-trader/internal/modules/scoring"
 	"github.com/aristath/arduino-trader/internal/modules/trading"
 	"github.com/aristath/arduino-trader/internal/modules/universe"
+	"github.com/aristath/arduino-trader/internal/services"
 	"github.com/rs/zerolog"
 )
 
@@ -29,42 +30,45 @@ import (
 // Based on Python implementation: app/modules/dividends/jobs/dividend_reinvestment.py
 // Simplified to focus on core DRIP functionality (high-yield reinvestment)
 type DividendReinvestmentJob struct {
-	log                  zerolog.Logger
-	dividendRepo         *dividends.DividendRepository
-	securityRepo         *universe.SecurityRepository
-	scoreRepo            *universe.ScoreRepository
-	portfolioService     *portfolio.PortfolioService
-	tradingService       *trading.TradingService
-	tradernetClient      *tradernet.Client
-	yahooClient          *yahoo.Client
-	transactionCostFixed float64 // Freedom24 fixed cost (€2.00)
-	transactionCostPct   float64 // Freedom24 variable cost (0.2%)
-	maxCostRatio         float64 // Maximum acceptable cost ratio (1%)
+	log                   zerolog.Logger
+	dividendRepo          *dividends.DividendRepository
+	securityRepo          *universe.SecurityRepository
+	scoreRepo             *universe.ScoreRepository
+	portfolioService      *portfolio.PortfolioService
+	tradingService        *trading.TradingService
+	tradeExecutionService *services.TradeExecutionService
+	tradernetClient       *tradernet.Client
+	yahooClient           *yahoo.Client
+	transactionCostFixed  float64 // Freedom24 fixed cost (€2.00)
+	transactionCostPct    float64 // Freedom24 variable cost (0.2%)
+	maxCostRatio          float64 // Maximum acceptable cost ratio (1%)
 }
 
 // DividendReinvestmentConfig holds configuration for dividend reinvestment job
 type DividendReinvestmentConfig struct {
-	Log              zerolog.Logger
-	DividendRepo     *dividends.DividendRepository
-	SecurityRepo     *universe.SecurityRepository
-	ScoreRepo        *universe.ScoreRepository
-	PortfolioService *portfolio.PortfolioService
-	TradingService   *trading.TradingService
-	TradernetClient  *tradernet.Client
-	YahooClient      *yahoo.Client
+	Log                   zerolog.Logger
+	DividendRepo          *dividends.DividendRepository
+	SecurityRepo          *universe.SecurityRepository
+	ScoreRepo             *universe.ScoreRepository
+	PortfolioService      *portfolio.PortfolioService
+	TradingService        *trading.TradingService
+	TradeExecutionService *services.TradeExecutionService
+	TradernetClient       *tradernet.Client
+	YahooClient           *yahoo.Client
 }
 
 // NewDividendReinvestmentJob creates a new dividend reinvestment job
 func NewDividendReinvestmentJob(cfg DividendReinvestmentConfig) *DividendReinvestmentJob {
 	return &DividendReinvestmentJob{
-		log:              cfg.Log.With().Str("job", "dividend_reinvestment").Logger(),
-		dividendRepo:     cfg.DividendRepo,
-		securityRepo:     cfg.SecurityRepo,
-		scoreRepo:        cfg.ScoreRepo,
-		portfolioService: cfg.PortfolioService,
-		tradingService:   cfg.TradingService,
-		tradernetClient:  cfg.TradernetClient,
-		yahooClient:      cfg.YahooClient,
+		log:                   cfg.Log.With().Str("job", "dividend_reinvestment").Logger(),
+		dividendRepo:          cfg.DividendRepo,
+		securityRepo:          cfg.SecurityRepo,
+		scoreRepo:             cfg.ScoreRepo,
+		portfolioService:      cfg.PortfolioService,
+		tradingService:        cfg.TradingService,
+		tradeExecutionService: cfg.TradeExecutionService,
+		tradernetClient:       cfg.TradernetClient,
+		yahooClient:           cfg.YahooClient,
 		// Standard Freedom24 transaction costs for dividend reinvestment
 		transactionCostFixed: 2.0,
 		transactionCostPct:   0.002, // 0.2%
@@ -339,42 +343,69 @@ func (j *DividendReinvestmentJob) executeTrades(
 ) int {
 	executedCount := 0
 
+	// Convert domain.HolisticStep to services.TradeRecommendation
+	tradeRecs := make([]services.TradeRecommendation, 0, len(recommendations))
 	for _, rec := range recommendations {
-		// Execute trade via trading service
-		// Note: This is simplified - real implementation would call trading service
-		// to execute the trade via Tradernet API
-		j.log.Info().
-			Str("symbol", rec.Symbol).
-			Str("side", rec.Side).
-			Int("quantity", rec.Quantity).
-			Float64("estimated_value", rec.EstimatedValue).
-			Msg("Executing dividend reinvestment trade")
+		tradeRecs = append(tradeRecs, services.TradeRecommendation{
+			Symbol:         rec.Symbol,
+			Side:           rec.Side,
+			Quantity:       float64(rec.Quantity),
+			EstimatedPrice: rec.EstimatedPrice,
+			Currency:       rec.Currency,
+			Reason:         rec.Reason,
+		})
+	}
 
-		// For now, just log - actual trade execution would be:
-		// result, err := j.tradingService.ExecuteTrade(rec)
+	// Execute all trades via trade execution service
+	if j.tradeExecutionService != nil {
+		results := j.tradeExecutionService.ExecuteTrades(tradeRecs)
 
-		// Simulate successful execution for now
-		// TODO: Implement actual trade execution via trading service
+		// Process results and mark dividends as reinvested
+		for i, result := range results {
+			rec := recommendations[i]
 
-		// Mark dividends as reinvested
-		if dividendIDs, ok := dividendsToMark[rec.Symbol]; ok {
-			for _, dividendID := range dividendIDs {
-				if err := j.dividendRepo.MarkReinvested(dividendID, rec.Quantity); err != nil {
-					j.log.Error().
-						Err(err).
-						Int("dividend_id", dividendID).
+			if result.Status == "success" {
+				j.log.Info().
+					Str("symbol", rec.Symbol).
+					Str("side", rec.Side).
+					Int("quantity", rec.Quantity).
+					Float64("estimated_value", rec.EstimatedValue).
+					Msg("Successfully executed dividend reinvestment trade")
+
+				// Mark dividends as reinvested
+				if dividendIDs, ok := dividendsToMark[rec.Symbol]; ok {
+					for _, dividendID := range dividendIDs {
+						if err := j.dividendRepo.MarkReinvested(dividendID, rec.Quantity); err != nil {
+							j.log.Error().
+								Err(err).
+								Int("dividend_id", dividendID).
+								Str("symbol", rec.Symbol).
+								Msg("Failed to mark dividend as reinvested")
+						}
+					}
+
+					j.log.Info().
 						Str("symbol", rec.Symbol).
-						Msg("Failed to mark dividend as reinvested")
+						Int("dividends_marked", len(dividendIDs)).
+						Msg("Marked dividends as reinvested")
+
+					executedCount++
 				}
+			} else {
+				j.log.Warn().
+					Str("symbol", rec.Symbol).
+					Str("status", result.Status).
+					Str("error", func() string {
+						if result.Error != nil {
+							return *result.Error
+						}
+						return ""
+					}()).
+					Msg("Failed to execute dividend reinvestment trade")
 			}
-
-			j.log.Info().
-				Str("symbol", rec.Symbol).
-				Int("dividends_marked", len(dividendIDs)).
-				Msg("Marked dividends as reinvested")
-
-			executedCount++
 		}
+	} else {
+		j.log.Warn().Msg("Trade execution service not available, skipping trade execution")
 	}
 
 	return executedCount

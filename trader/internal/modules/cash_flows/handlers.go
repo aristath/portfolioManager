@@ -82,7 +82,9 @@ func (h *Handler) HandleGetCashFlows(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(cashFlows)
+	if err := json.NewEncoder(w).Encode(cashFlows); err != nil {
+		h.log.Error().Err(err).Msg("Failed to encode cash flows response")
+	}
 }
 
 // HandleSyncCashFlows handles GET /sync - sync from Tradernet API
@@ -117,7 +119,9 @@ func (h *Handler) HandleSyncCashFlows(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		h.log.Error().Err(err).Msg("Failed to encode sync response")
+	}
 }
 
 // HandleGetSummary handles GET /summary - aggregate statistics
@@ -169,7 +173,9 @@ func (h *Handler) HandleGetSummary(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(summary)
+	if err := json.NewEncoder(w).Encode(summary); err != nil {
+		h.log.Error().Err(err).Msg("Failed to encode summary response")
+	}
 }
 
 // isValidDate validates YYYY-MM-DD format

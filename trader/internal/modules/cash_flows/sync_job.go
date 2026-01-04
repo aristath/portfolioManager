@@ -1,4 +1,4 @@
-package jobs
+package cash_flows
 
 import (
 	"encoding/json"
@@ -6,17 +6,16 @@ import (
 	"time"
 
 	"github.com/aristath/arduino-trader/internal/events"
-	"github.com/aristath/arduino-trader/internal/modules/cash_flows"
 	"github.com/aristath/arduino-trader/internal/modules/display"
 	"github.com/rs/zerolog"
 )
 
 // SyncJob handles background cash flow synchronization
 type SyncJob struct {
-	repo             *cash_flows.Repository
-	depositProcessor *cash_flows.DepositProcessor
-	dividendCreator  *cash_flows.DividendCreator
-	tradernetClient  cash_flows.TradernetClient
+	repo             *Repository
+	depositProcessor *DepositProcessor
+	dividendCreator  *DividendCreator
+	tradernetClient  TradernetClient
 	displayManager   *display.StateManager
 	eventManager     *events.Manager
 	log              zerolog.Logger
@@ -24,10 +23,10 @@ type SyncJob struct {
 
 // NewSyncJob creates a new sync job
 func NewSyncJob(
-	repo *cash_flows.Repository,
-	depositProcessor *cash_flows.DepositProcessor,
-	dividendCreator *cash_flows.DividendCreator,
-	tradernetClient cash_flows.TradernetClient,
+	repo *Repository,
+	depositProcessor *DepositProcessor,
+	dividendCreator *DividendCreator,
+	tradernetClient TradernetClient,
 	displayManager *display.StateManager,
 	eventManager *events.Manager,
 	log zerolog.Logger,
@@ -95,7 +94,7 @@ func (j *SyncJob) SyncCashFlows() error {
 		}
 
 		// Create cash flow record
-		cashFlow := &cash_flows.CashFlow{
+		cashFlow := &CashFlow{
 			TransactionID:   tx.TransactionID,
 			TypeDocID:       tx.TypeDocID,
 			TransactionType: &tx.TransactionType,
