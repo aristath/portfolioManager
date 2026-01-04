@@ -199,21 +199,7 @@ func (j *DailyMaintenanceJob) analyzeDatabaseGrowth() {
 			Str("database", name).
 			Float64("size_mb", metrics.SizeMB).
 			Float64("wal_size_mb", metrics.WALSizeMB).
-			Float64("growth_rate_24h", metrics.GrowthRate24h).
 			Msg("Database metrics")
-
-		// Alert on unusual growth
-		if metrics.GrowthRate24h > 50.0 {
-			j.log.Error().
-				Str("database", name).
-				Float64("growth_rate_24h", metrics.GrowthRate24h).
-				Msg("ERROR: Anomalous database growth > 50% in 24h")
-		} else if metrics.GrowthRate24h > 20.0 {
-			j.log.Warn().
-				Str("database", name).
-				Float64("growth_rate_24h", metrics.GrowthRate24h).
-				Msg("WARNING: High database growth > 20% in 24h")
-		}
 	}
 }
 
@@ -258,12 +244,6 @@ func (j *WeeklyMaintenanceJob) Run() error {
 		}
 	}
 
-	// Step 2: Archive old cleanup logs (>1 year)
-	if err := j.archiveOldCleanupLogs(); err != nil {
-		j.log.Error().Err(err).Msg("Failed to archive old cleanup logs")
-		// Continue - not critical
-	}
-
 	duration := time.Since(startTime)
 	j.log.Info().
 		Dur("duration_ms", duration).
@@ -304,44 +284,6 @@ func (j *WeeklyMaintenanceJob) vacuumDatabase(db *database.DB, name string) erro
 		Float64("size_after_mb", sizeAfter).
 		Float64("space_reclaimed_mb", spaceReclaimed).
 		Msg("VACUUM completed")
-
-	return nil
-}
-
-// archiveOldCleanupLogs archives cleanup logs older than 1 year
-func (j *WeeklyMaintenanceJob) archiveOldCleanupLogs() error {
-	oneYearAgo := time.Now().AddDate(-1, 0, 0).Unix()
-
-	// Count rows to be archived
-	var count int
-	err := j.historyDB.Conn().QueryRow(`
-		SELECT COUNT(*) FROM cleanup_log
-		WHERE deleted_at < ?
-	`, oneYearAgo).Scan(&count)
-
-	if err != nil {
-		return fmt.Errorf("failed to count old logs: %w", err)
-	}
-
-	if count == 0 {
-		j.log.Debug().Msg("No old cleanup logs to archive")
-		return nil
-	}
-
-	// Delete old logs
-	result, err := j.historyDB.Conn().Exec(`
-		DELETE FROM cleanup_log
-		WHERE deleted_at < ?
-	`, oneYearAgo)
-
-	if err != nil {
-		return fmt.Errorf("failed to delete old logs: %w", err)
-	}
-
-	rowsDeleted, _ := result.RowsAffected()
-	j.log.Info().
-		Int64("rows_deleted", rowsDeleted).
-		Msg("Archived old cleanup logs")
 
 	return nil
 }
@@ -596,32 +538,9 @@ func (j *MonthlyMaintenanceJob) analyzeGrowthTrends() {
 			continue
 		}
 
-		// Get historical size from 30 days ago
-		thirtyDaysAgo := time.Now().AddDate(0, 0, -30).Unix()
-		var oldSize sql.NullInt64
-		healthService.db.Conn().QueryRow(`
-			SELECT size_bytes FROM _database_health
-			WHERE checked_at >= ?
-			ORDER BY checked_at ASC
-			LIMIT 1
-		`, thirtyDaysAgo).Scan(&oldSize)
-
-		var growthRate30d float64
-		if oldSize.Valid && oldSize.Int64 > 0 {
-			currentSize := metrics.SizeMB * 1024 * 1024
-			oldSizeMB := float64(oldSize.Int64) / 1024 / 1024
-			growthRate30d = ((currentSize - float64(oldSize.Int64)) / float64(oldSize.Int64)) * 100
-			j.log.Info().
-				Str("database", name).
-				Float64("size_mb", metrics.SizeMB).
-				Float64("size_30d_ago_mb", oldSizeMB).
-				Float64("growth_rate_30d_pct", growthRate30d).
-				Msg("Monthly growth analysis")
-		} else {
-			j.log.Info().
-				Str("database", name).
-				Float64("size_mb", metrics.SizeMB).
-				Msg("Monthly growth analysis (no historical data)")
-		}
+		j.log.Info().
+			Str("database", name).
+			Float64("size_mb", metrics.SizeMB).
+			Msg("Monthly growth analysis")
 	}
 }
