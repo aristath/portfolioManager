@@ -378,7 +378,7 @@ func (r *SecurityRepository) GetWithScores(portfolioDB *sql.DB) ([]SecurityWithS
 	// Fetch positions from portfolio.db (exclude bucket_id which was removed)
 	positionRows, err := portfolioDB.Query(`SELECT symbol, quantity, avg_price, current_price, currency,
 		currency_rate, market_value_eur, cost_basis_eur, unrealized_pnl,
-		unrealized_pnl_pct, last_updated, first_bought_at, last_sold_at, isin
+		unrealized_pnl_pct, last_updated, first_bought, last_sold, isin
 		FROM positions`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query positions: %w", err)

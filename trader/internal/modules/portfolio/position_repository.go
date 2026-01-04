@@ -31,7 +31,7 @@ func NewPositionRepository(portfolioDB, universeDB *sql.DB, log zerolog.Logger) 
 func (r *PositionRepository) GetAll() ([]Position, error) {
 	query := `SELECT symbol, quantity, avg_price, current_price, currency,
 		currency_rate, market_value_eur, cost_basis_eur, unrealized_pnl,
-		unrealized_pnl_pct, last_updated, first_bought_at, last_sold_at, isin
+		unrealized_pnl_pct, last_updated, first_bought, last_sold, isin
 		FROM positions`
 
 	rows, err := r.portfolioDB.Query(query)
@@ -519,7 +519,7 @@ func (r *PositionRepository) Upsert(position Position) error {
 		(symbol, quantity, avg_price, current_price, currency,
 		 currency_rate, market_value_eur, cost_basis_eur,
 		 unrealized_pnl, unrealized_pnl_pct, last_updated,
-		 first_bought_at, last_sold_at, isin)
+		 first_bought, last_sold, isin)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
@@ -676,7 +676,7 @@ func (r *PositionRepository) UpdateLastSoldAt(symbol string) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	query := "UPDATE positions SET last_sold_at = ? WHERE symbol = ?"
+	query := "UPDATE positions SET last_sold = ? WHERE symbol = ?"
 	result, err := tx.Exec(query, now, symbol)
 	if err != nil {
 		return fmt.Errorf("failed to update last_sold_at: %w", err)
