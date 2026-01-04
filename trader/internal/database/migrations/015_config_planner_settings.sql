@@ -10,6 +10,9 @@
 -- Planner settings: Direct storage of planner configuration
 -- Single row table (only one config exists)
 CREATE TABLE IF NOT EXISTS planner_settings (
+    -- Primary key (constant value - only one row exists)
+    id TEXT PRIMARY KEY DEFAULT 'main',
+
     -- Basic identification
     name TEXT NOT NULL DEFAULT 'default',
     description TEXT DEFAULT '',
@@ -70,6 +73,6 @@ CREATE TABLE IF NOT EXISTS planner_settings (
     updated_at TEXT NOT NULL
 ) STRICT;
 
--- Insert default row if table is empty
-INSERT OR IGNORE INTO planner_settings (name, description, updated_at)
-VALUES ('default', 'Default planner configuration', datetime('now'));
+-- Insert default row (single row table - use INSERT OR REPLACE)
+INSERT OR REPLACE INTO planner_settings (id, name, description, updated_at)
+VALUES ('main', 'default', 'Default planner configuration', datetime('now'));
