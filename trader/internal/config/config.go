@@ -202,7 +202,7 @@ func loadDeploymentConfig() *DeploymentConfig {
 		LockTimeout:            300, // 5 minutes
 		HealthCheckTimeout:     10,
 		HealthCheckMaxAttempts: 3,
-		GitBranch:              "main",
+		GitBranch:              "", // Empty = auto-detect at runtime (deployment manager has fallback logic)
 		TraderBinaryName:       "trader",
 		TraderServiceName:      "trader",
 		BridgeBinaryName:       "display-bridge",

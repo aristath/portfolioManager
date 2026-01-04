@@ -26,7 +26,7 @@ func NewDeploymentHandlers(deploymentManager *deployment.Manager, log zerolog.Lo
 
 // RegisterRoutes registers deployment routes
 func (h *DeploymentHandlers) RegisterRoutes(r chi.Router) {
-	r.Route("/api/system/deployment", func(r chi.Router) {
+	r.Route("/system/deployment", func(r chi.Router) {
 		r.Get("/status", h.HandleGetStatus)
 		r.Post("/deploy", h.HandleTriggerDeployment)
 	})
