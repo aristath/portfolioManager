@@ -393,6 +393,7 @@ func (r *BucketRepository) scanBucket(row interface{ Scan(...interface{}) error 
 	var typeStr, statusStr string
 	var notes, targetPct, minPct, maxPct sql.NullString
 	var highWaterMarkDate, lossStreakPausedAt sql.NullString
+	var agentID sql.NullString // Scan agent_id but ignore it (not in Bucket struct)
 
 	err := row.Scan(
 		&bucket.ID,
@@ -410,6 +411,7 @@ func (r *BucketRepository) scanBucket(row interface{ Scan(...interface{}) error 
 		&statusStr,
 		&bucket.CreatedAt,
 		&bucket.UpdatedAt,
+		&agentID, // Scan agent_id (16th column) but ignore it
 	)
 	if err != nil {
 		return nil, err
