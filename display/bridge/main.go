@@ -1,36 +1,34 @@
 // Arduino Display Bridge (Go)
-// Polls the trader API and sends display updates to Arduino MCU via raw serial communication
+// Polls the trader API and sends display updates to Arduino MCU via arduino-router MessagePack RPC
 
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
-	"io"
+	"net"
 	"net/http"
+	"net/rpc"
 	"os"
-	"strings"
 	"time"
 
+	"github.com/hashicorp/net-rpc-msgpackrpc"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"go.bug.st/serial"
 )
 
 const (
 	// API endpoint for display data
 	APIURL = "http://localhost:8080/api/system/led/display"
 
-	// Serial port for Arduino MCU communication
-	SerialPort = "/dev/ttyHS1"
-	SerialBaud = 115200
+	// Router socket path
+	RouterSocket = "/var/run/arduino-router.sock"
 
 	// Poll interval
 	PollInterval = 2 * time.Second
 
-	// Serial read timeout
-	SerialReadTimeout = 500 * time.Millisecond
+	// RPC call timeout
+	RPCTimeout = 5 * time.Second
 )
 
 // DisplayState represents the API response
@@ -85,182 +83,181 @@ type ClusterData struct {
 	PortfolioPct float64 `json:"portfolio_pct"`
 }
 
-// Bridge wraps the serial connection for Arduino communication
+// Bridge wraps the RPC client for arduino-router communication
 type Bridge struct {
-	port   serial.Port
-	reader *bufio.Reader
-	writer *bufio.Writer
+	client *rpc.Client
 	log    zerolog.Logger
 }
 
-// NewBridge creates a connection to the Arduino MCU via serial
-func NewBridge(portPath string, baudRate int) (*Bridge, error) {
-	log.Info().Str("port", portPath).Int("baud", baudRate).Msg("Opening serial port")
+// NewBridge creates a connection to arduino-router via Unix socket
+func NewBridge(socketPath string) (*Bridge, error) {
+	log.Info().Str("socket", socketPath).Msg("Connecting to arduino-router")
 
-	mode := &serial.Mode{
-		BaudRate: baudRate,
-		DataBits: 8,
-		Parity:   serial.NoParity,
-		StopBits: serial.OneStopBit,
-	}
-
-	port, err := serial.Open(portPath, mode)
+	conn, err := net.DialTimeout("unix", socketPath, 5*time.Second)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open serial port: %w", err)
+		return nil, fmt.Errorf("failed to connect to arduino-router: %w", err)
 	}
 
-	// Set read timeout
-	if err := port.SetReadTimeout(SerialReadTimeout); err != nil {
-		port.Close()
-		return nil, fmt.Errorf("failed to set read timeout: %w", err)
-	}
-
-	reader := bufio.NewReader(port)
-	writer := bufio.NewWriter(port)
-
-	// Wait for Arduino to be ready (it sends "READY" on startup)
-	log.Info().Msg("Waiting for Arduino to be ready...")
-	deadline := time.Now().Add(5 * time.Second)
-	arduinoReady := false
-	for time.Now().Before(deadline) {
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			if err == io.EOF {
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
-			// If we get a read error but we're close to the deadline, just continue
-			// The Arduino might not be sending "READY" but we can still try to communicate
-			if time.Until(deadline) < 1*time.Second {
-				log.Warn().Err(err).Msg("Read error while waiting for READY, continuing anyway")
-				break
-			}
-			time.Sleep(100 * time.Millisecond)
-			continue
-		}
-		line = strings.TrimSpace(line)
-		if line == "READY" {
-			log.Info().Msg("Arduino is ready")
-			arduinoReady = true
-			break
-		}
-	}
-	if !arduinoReady {
-		log.Warn().Msg("Arduino did not send READY within timeout, continuing anyway")
-	}
+	// Create MessagePack RPC client
+	client := msgpackrpc.NewClient(conn)
 
 	return &Bridge{
-		port:   port,
-		reader: reader,
-		writer: writer,
+		client: client,
 		log:    log.With().Str("component", "bridge").Logger(),
 	}, nil
 }
 
-// SendCommand sends a command to the Arduino and waits for response
-func (br *Bridge) SendCommand(cmd string) error {
-	// Send command
-	if _, err := br.writer.WriteString(cmd + "\n"); err != nil {
-		return fmt.Errorf("failed to write command: %w", err)
-	}
-	if err := br.writer.Flush(); err != nil {
-		return fmt.Errorf("failed to flush command: %w", err)
-	}
+// Call makes an RPC call to the Arduino sketch
+func (br *Bridge) Call(method string, args interface{}, reply interface{}) error {
+	// Use Call with timeout
+	done := make(chan error, 1)
+	go func() {
+		done <- br.client.Call(method, args, reply)
+	}()
 
-	// Read response (with timeout)
-	response, err := br.reader.ReadString('\n')
-	if err != nil {
-		if err == io.EOF {
-			// No response, but command might have been sent
-			br.log.Debug().Str("cmd", cmd).Msg("No response from Arduino")
-			return nil
-		}
-		return fmt.Errorf("failed to read response: %w", err)
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(RPCTimeout):
+		return fmt.Errorf("RPC call timeout: %s", method)
 	}
-
-	response = strings.TrimSpace(response)
-	if !strings.HasPrefix(response, "OK") {
-		return fmt.Errorf("Arduino returned error: %s", response)
-	}
-
-	return nil
 }
 
 // ScrollText sends text to scroll on LED matrix
 func (br *Bridge) ScrollText(text string, speed int) error {
-	// Replace colons in text with semicolons to avoid command parsing issues
-	escapedText := strings.ReplaceAll(text, ":", ";")
-	cmd := fmt.Sprintf("SCROLL:%s:%d", escapedText, speed)
-	return br.SendCommand(cmd)
+	type Args struct {
+		Text  string
+		Speed int
+	}
+	var reply interface{}
+	args := Args{Text: text, Speed: speed}
+	return br.Call("scrollText", args, &reply)
 }
 
 // SetRGB3 sets RGB LED 3 color
 func (br *Bridge) SetRGB3(r, g, b int) error {
-	cmd := fmt.Sprintf("RGB3:%d:%d:%d", r, g, b)
-	return br.SendCommand(cmd)
+	type Args struct {
+		R uint8
+		G uint8
+		B uint8
+	}
+	var reply interface{}
+	args := Args{R: uint8(r), G: uint8(g), B: uint8(b)}
+	return br.Call("setRGB3", args, &reply)
 }
 
 // SetRGB4 sets RGB LED 4 color
 func (br *Bridge) SetRGB4(r, g, b int) error {
-	cmd := fmt.Sprintf("RGB4:%d:%d:%d", r, g, b)
-	return br.SendCommand(cmd)
+	type Args struct {
+		R uint8
+		G uint8
+		B uint8
+	}
+	var reply interface{}
+	args := Args{R: uint8(r), G: uint8(g), B: uint8(b)}
+	return br.Call("setRGB4", args, &reply)
 }
 
 // SetBlink3 sets LED3 to blink mode
 func (br *Bridge) SetBlink3(r, g, b, intervalMs int) error {
-	cmd := fmt.Sprintf("BLINK3:%d:%d:%d:%d", r, g, b, intervalMs)
-	return br.SendCommand(cmd)
+	type Args struct {
+		R          uint8
+		G          uint8
+		B          uint8
+		IntervalMs uint32
+	}
+	var reply interface{}
+	args := Args{R: uint8(r), G: uint8(g), B: uint8(b), IntervalMs: uint32(intervalMs)}
+	return br.Call("setBlink3", args, &reply)
 }
 
 // SetBlink4 sets LED4 to simple blink mode
 func (br *Bridge) SetBlink4(r, g, b, intervalMs int) error {
-	cmd := fmt.Sprintf("BLINK4:%d:%d:%d:%d", r, g, b, intervalMs)
-	return br.SendCommand(cmd)
+	type Args struct {
+		R          uint8
+		G          uint8
+		B          uint8
+		IntervalMs uint32
+	}
+	var reply interface{}
+	args := Args{R: uint8(r), G: uint8(g), B: uint8(b), IntervalMs: uint32(intervalMs)}
+	return br.Call("setBlink4", args, &reply)
 }
 
 // SetBlink4Alternating sets LED4 to alternating color mode
 func (br *Bridge) SetBlink4Alternating(r1, g1, b1, r2, g2, b2, intervalMs int) error {
-	cmd := fmt.Sprintf("BLINK4ALT:%d:%d:%d:%d:%d:%d:%d", r1, g1, b1, r2, g2, b2, intervalMs)
-	return br.SendCommand(cmd)
+	type Args struct {
+		R1         uint8
+		G1         uint8
+		B1         uint8
+		R2         uint8
+		G2         uint8
+		B2         uint8
+		IntervalMs uint32
+	}
+	var reply interface{}
+	args := Args{
+		R1: uint8(r1), G1: uint8(g1), B1: uint8(b1),
+		R2: uint8(r2), G2: uint8(g2), B2: uint8(b2),
+		IntervalMs: uint32(intervalMs),
+	}
+	return br.Call("setBlink4Alternating", args, &reply)
 }
 
 // SetBlink4Coordinated sets LED4 to coordinated mode with LED3
 func (br *Bridge) SetBlink4Coordinated(r, g, b, intervalMs int, led3Phase bool) error {
-	phase := 0
-	if led3Phase {
-		phase = 1
+	type Args struct {
+		R          uint8
+		G          uint8
+		B          uint8
+		IntervalMs uint32
+		Led3Phase  bool
 	}
-	cmd := fmt.Sprintf("BLINK4COORD:%d:%d:%d:%d:%d", r, g, b, intervalMs, phase)
-	return br.SendCommand(cmd)
+	var reply interface{}
+	args := Args{R: uint8(r), G: uint8(g), B: uint8(b), IntervalMs: uint32(intervalMs), Led3Phase: led3Phase}
+	return br.Call("setBlink4Coordinated", args, &reply)
 }
 
 // StopBlink3 stops LED3 blinking
 func (br *Bridge) StopBlink3() error {
-	return br.SendCommand("STOP3")
+	var reply interface{}
+	return br.Call("stopBlink3", struct{}{}, &reply)
 }
 
 // StopBlink4 stops LED4 blinking
 func (br *Bridge) StopBlink4() error {
-	return br.SendCommand("STOP4")
+	var reply interface{}
+	return br.Call("stopBlink4", struct{}{}, &reply)
 }
 
 // SetSystemStats sets system stats visualization
 func (br *Bridge) SetSystemStats(pixelsOn, brightness, intervalMs int) error {
-	cmd := fmt.Sprintf("STATS:%d:%d:%d", pixelsOn, brightness, intervalMs)
-	return br.SendCommand(cmd)
+	type Args struct {
+		PixelsOn   int
+		Brightness int
+		IntervalMs int
+	}
+	var reply interface{}
+	args := Args{PixelsOn: pixelsOn, Brightness: brightness, IntervalMs: intervalMs}
+	return br.Call("setSystemStats", args, &reply)
 }
 
 // SetPortfolioMode sets portfolio visualization mode
 func (br *Bridge) SetPortfolioMode(clustersJSON string) error {
-	// JSON can contain colons (inside quoted strings), but our Arduino parser
-	// takes everything after "PORTFOLIO:" as the JSON, so it should work fine
-	cmd := fmt.Sprintf("PORTFOLIO:%s", clustersJSON)
-	return br.SendCommand(cmd)
+	type Args struct {
+		ClustersJSON string
+	}
+	var reply interface{}
+	args := Args{ClustersJSON: clustersJSON}
+	return br.Call("setPortfolioMode", args, &reply)
 }
 
-// Close closes the serial connection
+// Close closes the RPC connection
 func (br *Bridge) Close() error {
-	return br.port.Close()
+	if br.client != nil {
+		return br.client.Close()
+	}
+	return nil
 }
 
 // DisplayClient polls the API and updates the display
@@ -293,13 +290,8 @@ func (d *DisplayClient) FetchDisplayState() (*DisplayState, error) {
 		return nil, fmt.Errorf("API returned status %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
 	var state DisplayState
-	if err := json.Unmarshal(body, &state); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&state); err != nil {
 		return nil, err
 	}
 
@@ -475,16 +467,16 @@ func main() {
 
 	log.Info().Msg("Arduino Display Bridge (Go) starting...")
 
-	// Get serial port from environment or use default
-	serialPort := os.Getenv("SERIAL_PORT")
-	if serialPort == "" {
-		serialPort = SerialPort
+	// Get router socket from environment or use default
+	routerSocket := os.Getenv("ROUTER_SOCKET")
+	if routerSocket == "" {
+		routerSocket = RouterSocket
 	}
 
-	// Connect to Arduino MCU via serial
-	bridge, err := NewBridge(serialPort, SerialBaud)
+	// Connect to arduino-router via Unix socket
+	bridge, err := NewBridge(routerSocket)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to connect to Arduino MCU")
+		log.Fatal().Err(err).Msg("Failed to connect to arduino-router")
 	}
 	defer bridge.Close()
 

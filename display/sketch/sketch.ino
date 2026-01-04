@@ -1,7 +1,8 @@
 // Arduino Trader LED Display
 // Controls 8x13 LED matrix and RGB LEDs 3 & 4 on Arduino UNO Q
-// Uses simple text-based serial protocol (no RouterBridge dependency)
+// Uses Router Bridge for communication with Linux MPU
 
+#include <Arduino_RouterBridge.h>
 #include "ArduinoGraphics.h"
 #include "Arduino_LED_Matrix.h"
 #include "portfolio_mode.h"
@@ -73,9 +74,6 @@ bool currentAltColor4 = false;  // false = color1, true = color2
 
 // LED4 coordinated mode (alternates with LED3)
 bool isCoordinated4 = false;
-
-// Serial command buffer
-String commandBuffer = "";
 
 // Set RGB LED 4 color (active-low, digital only)
 void setRGB4(uint8_t r, uint8_t g, uint8_t b) {
@@ -315,185 +313,11 @@ void renderPortfolioFrame() {
   renderBrightnessFrame();
 }
 
-// Parse command from serial
-void processCommand(String cmd) {
-  cmd.trim();
-  if (cmd.length() == 0) return;
-
-  // Find command and arguments (format: COMMAND:arg1:arg2:arg3)
-  int firstColon = cmd.indexOf(':');
-  String command = firstColon > 0 ? cmd.substring(0, firstColon) : cmd;
-  command.toUpperCase();
-
-  if (command == "SCROLL") {
-    // SCROLL:text:speed
-    int secondColon = cmd.indexOf(':', firstColon + 1);
-    if (secondColon > 0) {
-      String text = cmd.substring(firstColon + 1, secondColon);
-      int speed = cmd.substring(secondColon + 1).toInt();
-      if (speed == 0) speed = 50;  // Default
-      scrollText(text, speed);
-      Serial.println("OK");
-    } else {
-      Serial.println("ERROR:Invalid format");
-    }
-  }
-  else if (command == "RGB3") {
-    // RGB3:r:g:b
-    int colons[3];
-    colons[0] = firstColon;
-    for (int i = 1; i < 3; i++) {
-      colons[i] = cmd.indexOf(':', colons[i-1] + 1);
-    }
-    if (colons[2] > 0) {
-      uint8_t r = cmd.substring(colons[0] + 1, colons[1]).toInt();
-      uint8_t g = cmd.substring(colons[1] + 1, colons[2]).toInt();
-      uint8_t b = cmd.substring(colons[2] + 1).toInt();
-      setRGB3(r, g, b);
-      Serial.println("OK");
-    } else {
-      Serial.println("ERROR:Invalid format");
-    }
-  }
-  else if (command == "RGB4") {
-    // RGB4:r:g:b
-    int colons[3];
-    colons[0] = firstColon;
-    for (int i = 1; i < 3; i++) {
-      colons[i] = cmd.indexOf(':', colons[i-1] + 1);
-    }
-    if (colons[2] > 0) {
-      uint8_t r = cmd.substring(colons[0] + 1, colons[1]).toInt();
-      uint8_t g = cmd.substring(colons[1] + 1, colons[2]).toInt();
-      uint8_t b = cmd.substring(colons[2] + 1).toInt();
-      setRGB4(r, g, b);
-      Serial.println("OK");
-    } else {
-      Serial.println("ERROR:Invalid format");
-    }
-  }
-  else if (command == "BLINK3") {
-    // BLINK3:r:g:b:interval
-    int colons[4];
-    colons[0] = firstColon;
-    for (int i = 1; i < 4; i++) {
-      colons[i] = cmd.indexOf(':', colons[i-1] + 1);
-    }
-    if (colons[3] > 0) {
-      uint8_t r = cmd.substring(colons[0] + 1, colons[1]).toInt();
-      uint8_t g = cmd.substring(colons[1] + 1, colons[2]).toInt();
-      uint8_t b = cmd.substring(colons[2] + 1, colons[3]).toInt();
-      unsigned long interval = cmd.substring(colons[3] + 1).toInt();
-      setBlink3(r, g, b, interval);
-      Serial.println("OK");
-    } else {
-      Serial.println("ERROR:Invalid format");
-    }
-  }
-  else if (command == "BLINK4") {
-    // BLINK4:r:g:b:interval
-    int colons[4];
-    colons[0] = firstColon;
-    for (int i = 1; i < 4; i++) {
-      colons[i] = cmd.indexOf(':', colons[i-1] + 1);
-    }
-    if (colons[3] > 0) {
-      uint8_t r = cmd.substring(colons[0] + 1, colons[1]).toInt();
-      uint8_t g = cmd.substring(colons[1] + 1, colons[2]).toInt();
-      uint8_t b = cmd.substring(colons[2] + 1, colons[3]).toInt();
-      unsigned long interval = cmd.substring(colons[3] + 1).toInt();
-      setBlink4(r, g, b, interval);
-      Serial.println("OK");
-    } else {
-      Serial.println("ERROR:Invalid format");
-    }
-  }
-  else if (command == "BLINK4ALT") {
-    // BLINK4ALT:r1:g1:b1:r2:g2:b2:interval
-    int colons[7];
-    colons[0] = firstColon;
-    for (int i = 1; i < 7; i++) {
-      colons[i] = cmd.indexOf(':', colons[i-1] + 1);
-    }
-    if (colons[6] > 0) {
-      uint8_t r1 = cmd.substring(colons[0] + 1, colons[1]).toInt();
-      uint8_t g1 = cmd.substring(colons[1] + 1, colons[2]).toInt();
-      uint8_t b1 = cmd.substring(colons[2] + 1, colons[3]).toInt();
-      uint8_t r2 = cmd.substring(colons[3] + 1, colons[4]).toInt();
-      uint8_t g2 = cmd.substring(colons[4] + 1, colons[5]).toInt();
-      uint8_t b2 = cmd.substring(colons[5] + 1, colons[6]).toInt();
-      unsigned long interval = cmd.substring(colons[6] + 1).toInt();
-      setBlink4Alternating(r1, g1, b1, r2, g2, b2, interval);
-      Serial.println("OK");
-    } else {
-      Serial.println("ERROR:Invalid format");
-    }
-  }
-  else if (command == "BLINK4COORD") {
-    // BLINK4COORD:r:g:b:interval:phase
-    int colons[5];
-    colons[0] = firstColon;
-    for (int i = 1; i < 5; i++) {
-      colons[i] = cmd.indexOf(':', colons[i-1] + 1);
-    }
-    if (colons[4] > 0) {
-      uint8_t r = cmd.substring(colons[0] + 1, colons[1]).toInt();
-      uint8_t g = cmd.substring(colons[1] + 1, colons[2]).toInt();
-      uint8_t b = cmd.substring(colons[2] + 1, colons[3]).toInt();
-      unsigned long interval = cmd.substring(colons[3] + 1, colons[4]).toInt();
-      bool phase = cmd.substring(colons[4] + 1).toInt() != 0;
-      setBlink4Coordinated(r, g, b, interval, phase);
-      Serial.println("OK");
-    } else {
-      Serial.println("ERROR:Invalid format");
-    }
-  }
-  else if (command == "STOP3") {
-    stopBlink3();
-    Serial.println("OK");
-  }
-  else if (command == "STOP4") {
-    stopBlink4();
-    Serial.println("OK");
-  }
-  else if (command == "STATS") {
-    // STATS:pixels:brightness:interval
-    int colons[3];
-    colons[0] = firstColon;
-    for (int i = 1; i < 3; i++) {
-      colons[i] = cmd.indexOf(':', colons[i-1] + 1);
-    }
-    if (colons[2] > 0) {
-      int pixels = cmd.substring(colons[0] + 1, colons[1]).toInt();
-      int brightness = cmd.substring(colons[1] + 1, colons[2]).toInt();
-      int interval = cmd.substring(colons[2] + 1).toInt();
-      setSystemStats(pixels, brightness, interval);
-      Serial.println("OK");
-    } else {
-      Serial.println("ERROR:Invalid format");
-    }
-  }
-  else if (command == "PORTFOLIO") {
-    // PORTFOLIO:json_string
-    String json = cmd.substring(firstColon + 1);
-    setPortfolioMode(json.c_str());
-    Serial.println("OK");
-  }
-  else {
-    Serial.print("ERROR:Unknown command: ");
-    Serial.println(command);
-  }
-}
-
 void setup() {
-  // Initialize Serial communication
-  Serial.begin(115200);
-  while (!Serial && millis() < 3000) {
-    // Wait for serial port to connect (max 3 seconds)
-  }
-
   // Initialize LED matrix
   matrix.begin();
+  // Note: Serial.begin() removed - Router Bridge uses its own serial communication
+  // and Serial can conflict with Bridge message processing
   matrix.setGrayscaleBits(8);  // Enable hardware brightness support (0-255 values)
   matrix.clear();
 
@@ -528,27 +352,24 @@ void setup() {
   setRGB3(0, 0, 0);
   setRGB4(0, 0, 0);
 
-  Serial.println("READY");
+  // Setup Router Bridge
+  Bridge.begin();
+  Bridge.provide("setRGB3", setRGB3);
+  Bridge.provide("setRGB4", setRGB4);
+  Bridge.provide("scrollText", scrollText);
+  Bridge.provide("setSystemStats", setSystemStats);  // System stats mode
+  Bridge.provide("setPortfolioMode", setPortfolioMode);  // Portfolio mode
+  Bridge.provide("setBlink3", setBlink3);
+  Bridge.provide("setBlink4", setBlink4);
+  Bridge.provide("setBlink4Alternating", setBlink4Alternating);
+  Bridge.provide("setBlink4Coordinated", setBlink4Coordinated);
+  Bridge.provide("stopBlink3", stopBlink3);
+  Bridge.provide("stopBlink4", stopBlink4);
 }
 
 void loop() {
-  // Read serial commands
-  while (Serial.available() > 0) {
-    char c = Serial.read();
-    if (c == '\n' || c == '\r') {
-      if (commandBuffer.length() > 0) {
-        processCommand(commandBuffer);
-        commandBuffer = "";
-      }
-    } else {
-      commandBuffer += c;
-      // Prevent buffer overflow
-      if (commandBuffer.length() > 512) {
-        commandBuffer = "";
-        Serial.println("ERROR:Command too long");
-      }
-    }
-  }
+  // Bridge handles RPC messages automatically in background thread
+  // No need to call Bridge.loop() - it's handled by __loopHook()
 
   // Render in portfolio mode at 40 FPS
   if (inPortfolioMode) {
@@ -642,4 +463,7 @@ void loop() {
     // Clear pending flag
     hasPendingText = false;
   }
+
+  // Bridge handles RPC in background thread - no delay needed
+  // Removed delay(10) for instant RPC response and lower CPU usage
 }

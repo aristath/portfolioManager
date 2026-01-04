@@ -4,5 +4,6 @@ profiles:
     platforms:
       - platform: arduino:zephyr
     libraries:
-      # No external libraries needed - using Serial directly
+      - ArduinoGraphics
+      # RouterBridge is included with arduino:zephyr platform, no need to install separately
 default_profile: default
