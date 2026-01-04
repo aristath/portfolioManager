@@ -1,9 +1,7 @@
 package universe
 
 import (
-	"database/sql"
 	"fmt"
-	"time"
 
 	"github.com/aristath/arduino-trader/internal/database"
 	"github.com/rs/zerolog"
@@ -35,20 +33,12 @@ func NewUniverseService(
 	}
 }
 
-// DeactivateSecurity marks a security as inactive and initiates grace period for cleanup
-// Implements 30-day grace period as specified in architecture plan
-func (s *UniverseService) DeactivateSecurity(symbol string, gracePeriodDays int) error {
-	s.log.Info().
-		Str("symbol", symbol).
-		Int("grace_period_days", gracePeriodDays).
-		Msg("Deactivating security")
+// DeactivateSecurity marks a security as inactive
+// Historical data will be cleaned up by the cleanup job if the symbol becomes orphaned
+func (s *UniverseService) DeactivateSecurity(symbol string) error {
+	s.log.Info().Str("symbol", symbol).Msg("Deactivating security")
 
-	// Default grace period
-	if gracePeriodDays <= 0 {
-		gracePeriodDays = 30
-	}
-
-	// Step 1: Mark security as inactive in universe.db
+	// Mark security as inactive in universe.db
 	err := s.securityRepo.Update(symbol, map[string]interface{}{
 		"active": false,
 	})
@@ -56,27 +46,16 @@ func (s *UniverseService) DeactivateSecurity(symbol string, gracePeriodDays int)
 		return fmt.Errorf("failed to mark security as inactive: %w", err)
 	}
 
-	// Step 2: Mark for removal in history.db (30-day grace period)
-	err = s.markForRemoval(symbol, gracePeriodDays)
-	if err != nil {
-		return fmt.Errorf("failed to mark for removal: %w", err)
-	}
-
-	// Step 3: Portfolio and positions are kept during grace period to allow reactivation
-
-	s.log.Info().
-		Str("symbol", symbol).
-		Int("grace_period_days", gracePeriodDays).
-		Msg("Security deactivated successfully - grace period started")
+	s.log.Info().Str("symbol", symbol).Msg("Security deactivated successfully")
 
 	return nil
 }
 
-// ReactivateSecurity cancels deactivation during grace period
+// ReactivateSecurity reactivates a previously deactivated security
 func (s *UniverseService) ReactivateSecurity(symbol string) error {
 	s.log.Info().Str("symbol", symbol).Msg("Reactivating security")
 
-	// Step 1: Mark security as active in universe.db
+	// Mark security as active in universe.db
 	err := s.securityRepo.Update(symbol, map[string]interface{}{
 		"active": true,
 	})
@@ -84,68 +63,7 @@ func (s *UniverseService) ReactivateSecurity(symbol string) error {
 		return fmt.Errorf("failed to mark security as active: %w", err)
 	}
 
-	// Step 2: Remove from symbol_removals to cancel cleanup
-	err = s.cancelRemoval(symbol)
-	if err != nil {
-		return fmt.Errorf("failed to cancel removal: %w", err)
-	}
-
-	s.log.Info().Str("symbol", symbol).Msg("Security reactivated - cleanup cancelled")
-
-	return nil
-}
-
-// markForRemoval adds symbol to symbol_removals table with grace period
-func (s *UniverseService) markForRemoval(symbol string, gracePeriodDays int) error {
-	// Count rows that will be deleted for logging
-	var rowCount int
-	err := s.historyDB.Conn().QueryRow(
-		"SELECT COUNT(*) FROM daily_prices WHERE symbol = ?",
-		symbol,
-	).Scan(&rowCount)
-	if err != nil && err != sql.ErrNoRows {
-		return fmt.Errorf("failed to count rows: %w", err)
-	}
-
-	// Insert into symbol_removals
-	_, err = s.historyDB.Conn().Exec(`
-		INSERT OR REPLACE INTO symbol_removals (symbol, removed_at, grace_period_days, row_count, marked_by)
-		VALUES (?, ?, ?, ?, ?)
-	`, symbol, time.Now().Unix(), gracePeriodDays, rowCount, "universe_service")
-
-	if err != nil {
-		return fmt.Errorf("failed to insert into symbol_removals: %w", err)
-	}
-
-	s.log.Debug().
-		Str("symbol", symbol).
-		Int("grace_period_days", gracePeriodDays).
-		Int("row_count", rowCount).
-		Msg("Symbol marked for removal")
-
-	return nil
-}
-
-// cancelRemoval removes symbol from symbol_removals table
-func (s *UniverseService) cancelRemoval(symbol string) error {
-	result, err := s.historyDB.Conn().Exec(
-		"DELETE FROM symbol_removals WHERE symbol = ?",
-		symbol,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to delete from symbol_removals: %w", err)
-	}
-
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
-		s.log.Debug().
-			Str("symbol", symbol).
-			Msg("Symbol was not marked for removal")
-	} else {
-		s.log.Debug().
-			Str("symbol", symbol).
-			Msg("Removal cancelled successfully")
-	}
+	s.log.Info().Str("symbol", symbol).Msg("Security reactivated successfully")
 
 	return nil
 }

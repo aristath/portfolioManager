@@ -1,7 +1,6 @@
 package reliability
 
 import (
-	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -74,41 +73,10 @@ func (s *MonitoringService) CollectMetrics() (map[string]*DatabaseMetrics, error
 			continue
 		}
 
-		// Calculate 24h growth rate
-		dbMetrics.GrowthRate24h = s.calculate24hGrowth(name, dbMetrics.SizeMB)
-
 		metrics[name] = dbMetrics
 	}
 
 	return metrics, nil
-}
-
-// calculate24hGrowth calculates database growth rate over last 24 hours
-func (s *MonitoringService) calculate24hGrowth(dbName string, currentSizeMB float64) float64 {
-	healthService, ok := s.healthServices[dbName]
-	if !ok {
-		return 0
-	}
-
-	// Get size from 24 hours ago
-	twentyFourHoursAgo := time.Now().Add(-24 * time.Hour).Unix()
-	var oldSize sql.NullInt64
-
-	err := healthService.db.Conn().QueryRow(`
-		SELECT size_bytes FROM _database_health
-		WHERE checked_at >= ?
-		ORDER BY checked_at ASC
-		LIMIT 1
-	`, twentyFourHoursAgo).Scan(&oldSize)
-
-	if err != nil || !oldSize.Valid || oldSize.Int64 == 0 {
-		return 0
-	}
-
-	oldSizeMB := float64(oldSize.Int64) / 1024 / 1024
-	growthRate := ((currentSizeMB - oldSizeMB) / oldSizeMB) * 100
-
-	return growthRate
 }
 
 // CheckAlerts evaluates all alert conditions and generates alerts
@@ -186,19 +154,6 @@ func (s *MonitoringService) checkDatabaseAlerts(dbName string, metrics *Database
 		})
 	}
 
-	// Check growth rate (24h)
-	if metrics.GrowthRate24h > 50.0 {
-		s.addAlert(AlertError, dbName, "Anomalous database growth > 50% in 24h", map[string]interface{}{
-			"growth_rate_pct": metrics.GrowthRate24h,
-			"size_mb":         metrics.SizeMB,
-		})
-	} else if metrics.GrowthRate24h > 20.0 {
-		s.addAlert(AlertWarning, dbName, "High database growth > 20% in 24h", map[string]interface{}{
-			"growth_rate_pct": metrics.GrowthRate24h,
-			"size_mb":         metrics.SizeMB,
-		})
-	}
-
 	// Info: Large database (consider archival)
 	if metrics.SizeMB > 100.0 {
 		s.addAlert(AlertInfo, dbName, "Database size > 100MB - consider archival strategy", map[string]interface{}{
@@ -206,13 +161,6 @@ func (s *MonitoringService) checkDatabaseAlerts(dbName string, metrics *Database
 		})
 	}
 
-	// Info: Ledger growth (normal, just tracking)
-	if dbName == "ledger" && metrics.GrowthRate24h > 0 {
-		s.addAlert(AlertInfo, dbName, "Ledger database growth (normal)", map[string]interface{}{
-			"growth_rate_pct": metrics.GrowthRate24h,
-			"size_mb":         metrics.SizeMB,
-		})
-	}
 }
 
 // checkWALSizeAlerts checks WAL file sizes
@@ -373,9 +321,9 @@ func (s *MonitoringService) HasCriticalAlerts() bool {
 	return false
 }
 
-// AnalyzeDatabaseGrowth analyzes long-term database growth trends
+// AnalyzeDatabaseGrowth logs current database sizes
 func (s *MonitoringService) AnalyzeDatabaseGrowth() error {
-	s.log.Info().Msg("Analyzing database growth trends")
+	s.log.Info().Msg("Analyzing database sizes")
 
 	for dbName, healthService := range s.healthServices {
 		// Get current metrics
@@ -388,66 +336,14 @@ func (s *MonitoringService) AnalyzeDatabaseGrowth() error {
 			continue
 		}
 
-		// Get historical sizes (30 days, 90 days, 1 year)
-		growth30d := s.calculateGrowth(healthService, 30)
-		growth90d := s.calculateGrowth(healthService, 90)
-		growth1y := s.calculateGrowth(healthService, 365)
-
-		// Project 10-year size
-		var projected10y float64
-		if growth1y > 0 {
-			// Use 1-year growth rate to project 10 years
-			projected10y = metrics.SizeMB * (1 + growth1y/100) * 10
-		}
-
 		s.log.Info().
 			Str("database", dbName).
 			Float64("current_size_mb", metrics.SizeMB).
-			Float64("growth_30d_pct", growth30d).
-			Float64("growth_90d_pct", growth90d).
-			Float64("growth_1y_pct", growth1y).
-			Float64("projected_10y_mb", projected10y).
-			Msg("Database growth analysis")
-
-		// Alert if projected 10-year size is concerning
-		if projected10y > 1000.0 { // > 1GB
-			s.addAlert(AlertWarning, dbName, "Projected 10-year size > 1GB", map[string]interface{}{
-				"current_size_mb":  metrics.SizeMB,
-				"projected_10y_mb": projected10y,
-				"growth_1y_pct":    growth1y,
-			})
-		}
+			Float64("wal_size_mb", metrics.WALSizeMB).
+			Msg("Database size analysis")
 	}
 
 	return nil
-}
-
-// calculateGrowth calculates growth rate over specified number of days
-func (s *MonitoringService) calculateGrowth(healthService *DatabaseHealthService, days int) float64 {
-	cutoff := time.Now().AddDate(0, 0, -days).Unix()
-
-	var oldSize sql.NullInt64
-	err := healthService.db.Conn().QueryRow(`
-		SELECT size_bytes FROM _database_health
-		WHERE checked_at >= ?
-		ORDER BY checked_at ASC
-		LIMIT 1
-	`, cutoff).Scan(&oldSize)
-
-	if err != nil || !oldSize.Valid || oldSize.Int64 == 0 {
-		return 0
-	}
-
-	// Get current size
-	metrics, err := healthService.GetMetrics()
-	if err != nil {
-		return 0
-	}
-
-	currentSize := metrics.SizeMB * 1024 * 1024
-	growthRate := ((currentSize - float64(oldSize.Int64)) / float64(oldSize.Int64)) * 100
-
-	return growthRate
 }
 
 // CheckConnectionPoolHealth checks for connection pool exhaustion
