@@ -6,6 +6,7 @@ import { theme } from './theme';
 import App from './App';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
+import './styles/animations.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

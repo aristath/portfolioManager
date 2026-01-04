@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { notifications } from '@mantine/notifications';
 import { api } from '../api/client';
 
 export const useSecuritiesStore = create((set, get) => ({
@@ -109,6 +110,44 @@ export const useSecuritiesStore = create((set, get) => ({
       console.error('Failed to refresh all scores:', e);
     } finally {
       set({ loading: { ...get().loading, scores: false } });
+    }
+  },
+
+  removeSecurity: async (isin) => {
+    const { securities } = get();
+    const security = securities.find(s => s.isin === isin);
+    const displaySymbol = security ? security.symbol : isin;
+    if (!confirm(`Remove ${displaySymbol} from the universe?`)) return;
+    try {
+      await api.deleteSecurity(isin);
+      await get().fetchSecurities();
+      notifications.show({
+        title: 'Success',
+        message: `${displaySymbol} removed from universe`,
+        color: 'green',
+      });
+    } catch (e) {
+      console.error('Failed to remove security:', e);
+      notifications.show({
+        title: 'Error',
+        message: 'Failed to remove security',
+        color: 'red',
+      });
+    }
+  },
+
+  updateMultiplier: async (isin, value) => {
+    const multiplier = Math.max(0.1, Math.min(3.0, parseFloat(value) || 1.0));
+    try {
+      await api.updateSecurity(isin, { priority_multiplier: multiplier });
+      await get().fetchSecurities();
+    } catch (e) {
+      console.error('Failed to update multiplier:', e);
+      notifications.show({
+        title: 'Error',
+        message: 'Failed to update multiplier',
+        color: 'red',
+      });
     }
   },
 }));

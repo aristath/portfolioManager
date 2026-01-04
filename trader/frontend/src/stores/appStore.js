@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { notifications } from '@mantine/notifications';
 import { api } from '../api/client';
 
 export const useAppStore = create((set, get) => ({
@@ -30,6 +31,12 @@ export const useAppStore = create((set, get) => ({
   showBucketHealthModal: false,
   showPlannerManagementModal: false,
 
+  closeSecurityChartModal: () => set({
+    showSecurityChart: false,
+    selectedSecuritySymbol: null,
+    selectedSecurityIsin: null,
+  }),
+
   // Selected items
   selectedSecuritySymbol: null,
   selectedSecurityIsin: null,
@@ -57,6 +64,12 @@ export const useAppStore = create((set, get) => ({
 
   showMessage: (message, type = 'success') => {
     set({ message, messageType: type });
+    notifications.show({
+      title: type === 'error' ? 'Error' : type === 'success' ? 'Success' : 'Info',
+      message,
+      color: type === 'error' ? 'red' : type === 'success' ? 'green' : 'blue',
+      autoClose: 3000,
+    });
     setTimeout(() => set({ message: '', messageType: 'success' }), 3000);
   },
 
@@ -80,6 +93,12 @@ export const useAppStore = create((set, get) => ({
 
   openUniverseManagementModal: () => set({ showUniverseManagementModal: true }),
   closeUniverseManagementModal: () => set({ showUniverseManagementModal: false }),
+
+  openSecurityChart: (symbol, isin) => set({
+    showSecurityChart: true,
+    selectedSecuritySymbol: symbol,
+    selectedSecurityIsin: isin,
+  }),
 
   openBucketHealthModal: (bucket) => set({
     showBucketHealthModal: true,
@@ -167,6 +186,17 @@ export const useAppStore = create((set, get) => ({
       get().showMessage(`Failed to test Tradernet connection: ${e.message}`, 'error');
     } finally {
       set({ loading: { ...get().loading, tradernetTest: false } });
+    }
+  },
+
+  regenerateSequences: async () => {
+    try {
+      await api.regenerateSequences();
+      get().showMessage('Sequences regenerated. New sequences will be generated on next batch run.', 'success');
+      await get().fetchRecommendations();
+    } catch (e) {
+      console.error('Failed to regenerate sequences:', e);
+      get().showMessage('Failed to regenerate sequences', 'error');
     }
   },
 

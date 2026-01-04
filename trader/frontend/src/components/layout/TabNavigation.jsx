@@ -54,6 +54,7 @@ export function TabNavigation() {
 
     document.addEventListener('keydown', handleKeydown);
     return () => document.removeEventListener('keydown', handleKeydown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const pendingCount = recommendations?.steps?.length || 0;
@@ -65,7 +66,7 @@ export function TabNavigation() {
           <Group gap="xs">
             <span>Next Actions</span>
             {pendingCount > 0 && (
-              <Badge size="xs" color="blue" variant="filled" style={{ animation: 'pulse 2s infinite' }}>
+              <Badge size="xs" color="blue" variant="filled" className="pulse">
                 {pendingCount}
               </Badge>
             )}

@@ -1,11 +1,14 @@
 import { BrowserRouter } from 'react-router-dom';
 import { Router } from './router';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 function App() {
   return (
-    <BrowserRouter>
-      <Router />
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <Router />
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }
 
