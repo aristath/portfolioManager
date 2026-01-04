@@ -263,8 +263,8 @@ func (h *Handler) HandleUpdateCountryGroupTargets(w http.ResponseWriter, r *http
 
 	// Store group targets directly (same logic as Python)
 	for groupName, groupWeight := range req.Targets {
-		if groupWeight < -1 || groupWeight > 1 {
-			h.writeError(w, http.StatusBadRequest, fmt.Sprintf("Weight for %s must be between -1 and 1", groupName))
+		if groupWeight < 0 || groupWeight > 1 {
+			h.writeError(w, http.StatusBadRequest, fmt.Sprintf("Weight for %s must be between 0 and 1", groupName))
 			return
 		}
 
@@ -332,8 +332,8 @@ func (h *Handler) HandleUpdateIndustryGroupTargets(w http.ResponseWriter, r *htt
 
 	// Store group targets directly (same logic as Python)
 	for groupName, groupWeight := range req.Targets {
-		if groupWeight < -1 || groupWeight > 1 {
-			h.writeError(w, http.StatusBadRequest, fmt.Sprintf("Weight for %s must be between -1 and 1", groupName))
+		if groupWeight < 0 || groupWeight > 1 {
+			h.writeError(w, http.StatusBadRequest, fmt.Sprintf("Weight for %s must be between 0 and 1", groupName))
 			return
 		}
 

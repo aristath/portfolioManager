@@ -77,17 +77,17 @@ func calculateGeoGapScore(country string, portfolioContext *domain.PortfolioCont
 		}
 	}
 
-	// Look up weight for the group (-1 to +1, where positive = underweight)
+	// Look up weight for the group (0 to 1, where higher = prioritize)
 	geoWeight := 0.0
 	if portfolioContext.CountryWeights != nil {
 		geoWeight = portfolioContext.CountryWeights[group]
 	}
 
-	// Convert weight to score: 0.5 + (weight * 0.4)
-	// weight=+1 (very underweight) → score=0.9
-	// weight=0 (balanced) → score=0.5
-	// weight=-1 (very overweight) → score=0.1
-	geoGapScore := 0.5 + (geoWeight * 0.4)
+	// Convert weight to score: 0.1 + (weight * 0.8)
+	// weight=1 (prioritize) → score=0.9
+	// weight=0.5 (neutral) → score=0.5
+	// weight=0 (avoid) → score=0.1
+	geoGapScore := 0.1 + (geoWeight * 0.8)
 
 	return math.Max(0.1, math.Min(0.9, geoGapScore))
 }
@@ -120,14 +120,17 @@ func calculateIndustryGapScore(industry *string, portfolioContext *domain.Portfo
 			}
 		}
 
-		// Look up weight for the group
+		// Look up weight for the group (0 to 1, where higher = prioritize)
 		indWeight := 0.0
 		if portfolioContext.IndustryWeights != nil {
 			indWeight = portfolioContext.IndustryWeights[group]
 		}
 
-		// Convert weight to score
-		indScore := 0.5 + (indWeight * 0.4)
+		// Convert weight to score: 0.1 + (weight * 0.8)
+		// weight=1 (prioritize) → score=0.9
+		// weight=0.5 (neutral) → score=0.5
+		// weight=0 (avoid) → score=0.1
+		indScore := 0.1 + (indWeight * 0.8)
 		indScores = append(indScores, math.Max(0.1, math.Min(0.9, indScore)))
 	}
 

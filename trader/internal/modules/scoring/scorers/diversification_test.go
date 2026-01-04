@@ -94,8 +94,8 @@ func TestCalculatePortfolioScore(t *testing.T) {
 				},
 				TotalValue: 10000.0,
 				CountryWeights: map[string]float64{
-					"US":     0.30,  // Underweight (want 30%, have 0%)
-					"EUROPE": -0.30, // Overweight (want 0%, have 100%)
+					"US":     1.0, // Prioritize (want 30%, have 0%)
+					"EUROPE": 0.0, // Avoid (want 0%, have 100%)
 				},
 				SecurityCountries: map[string]string{
 					"EUSTOCK": "Germany",
@@ -172,8 +172,8 @@ func TestCalculatePostTransactionScore(t *testing.T) {
 				},
 				TotalValue: 9000.0,
 				CountryWeights: map[string]float64{
-					"US":     -0.10, // Overweight
-					"EUROPE": 0.10,  // Underweight
+					"US":     0.2, // Slightly avoid (overweight)
+					"EUROPE": 0.8, // Slightly prioritize (underweight)
 				},
 				SecurityCountries: map[string]string{
 					"USSTOCK": "United States",
@@ -239,8 +239,8 @@ func TestCalculatePostTransactionScore(t *testing.T) {
 				},
 				TotalValue: 9000.0,
 				CountryWeights: map[string]float64{
-					"US":     -0.20, // Already overweight
-					"EUROPE": 0.20,  // Underweight
+					"US":     0.0, // Avoid (already overweight)
+					"EUROPE": 0.8, // Prioritize (underweight)
 				},
 				SecurityCountries: map[string]string{
 					"USSTOCK1": "United States",

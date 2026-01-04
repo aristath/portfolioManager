@@ -6,6 +6,7 @@ const jobs = [
   { id: 'sync-cycle', name: 'Sync Cycle', api: 'triggerSyncCycle' },
   { id: 'daily-pipeline', name: 'Daily Pipeline', api: 'triggerDailyPipeline' },
   { id: 'dividend-reinvestment', name: 'Dividend Reinvestment', api: 'triggerDividendReinvestment' },
+  { id: 'hard-update', name: 'Hard Update', api: 'hardUpdate' },
 ];
 
 export function JobFooter() {
@@ -23,10 +24,18 @@ export function JobFooter() {
       setMessages((prev) => ({
         ...prev,
         [job.id]: {
-          type: result.status === 'success' ? 'success' : 'error',
-          text: result.message || result.status,
+          type: result.status === 'success' || result.success ? 'success' : 'error',
+          text: result.message || result.status || (result.success ? 'Success' : 'Error'),
         },
       }));
+
+      // For hard update, refresh page on success
+      if (job.id === 'hard-update' && (result.status === 'success' || result.success)) {
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000); // Wait 2 seconds to show success message
+        return;
+      }
 
       setTimeout(() => {
         setMessages((prev) => {

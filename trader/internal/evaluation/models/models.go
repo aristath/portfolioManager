@@ -57,8 +57,8 @@ type Position struct {
 // PortfolioContext contains portfolio state for allocation fit calculations
 type PortfolioContext struct {
 	// Core portfolio weights and positions
-	CountryWeights  map[string]float64 `json:"country_weights"`  // group_name -> weight (-1 to +1)
-	IndustryWeights map[string]float64 `json:"industry_weights"` // group_name -> weight (-1 to +1)
+	CountryWeights  map[string]float64 `json:"country_weights"`  // group_name -> weight (0 to 1)
+	IndustryWeights map[string]float64 `json:"industry_weights"` // group_name -> weight (0 to 1)
 	Positions       map[string]float64 `json:"positions"`        // symbol -> position_value in EUR
 	TotalValue      float64            `json:"total_value"`      // Total portfolio value in EUR
 

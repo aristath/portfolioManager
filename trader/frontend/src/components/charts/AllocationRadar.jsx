@@ -8,16 +8,15 @@ import { usePortfolioStore } from '../../stores/portfolioStore';
  */
 // Helper function to convert weights to percentages
 function getTargetPcts(weights, activeItems) {
-  const shifted = {};
   let total = 0;
   for (const name of activeItems) {
     const weight = weights[name] || 0;
-    shifted[name] = weight + 1; // -1→0, 0→1, +1→2
-    total += shifted[name];
+    total += weight;
   }
   const targets = {};
-  for (const [name, val] of Object.entries(shifted)) {
-    targets[name] = total > 0 ? val / total : 0;
+  for (const name of activeItems) {
+    const weight = weights[name] || 0;
+    targets[name] = total > 0 ? weight / total : 0;
   }
   return targets;
 }
@@ -109,4 +108,3 @@ export function AllocationRadar({ type = 'both' }) {
     </div>
   );
 }
-

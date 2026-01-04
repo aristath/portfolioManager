@@ -282,6 +282,209 @@ func (m *Manager) Deploy() (*DeploymentResult, error) {
 	return result, nil
 }
 
+// HardUpdate performs a complete deployment without change detection
+// It forces all components to be rebuilt, deployed, and restarted
+func (m *Manager) HardUpdate() (*DeploymentResult, error) {
+	startTime := time.Now()
+	result := &DeploymentResult{
+		Success:          false,
+		Deployed:         true, // Hard update always deploys
+		ServicesDeployed: []ServiceDeployment{},
+	}
+
+	m.log.Info().Msg("Starting hard update - forcing all deployments")
+
+	// Ensure safe directory
+	if err := m.gitChecker.EnsureSafeDirectory(); err != nil {
+		m.log.Warn().Err(err).Msg("Failed to ensure git safe directory")
+	}
+
+	// Acquire lock
+	if err := m.lock.AcquireLock(m.config.LockTimeout); err != nil {
+		result.Error = fmt.Sprintf("failed to acquire lock: %v", err)
+		result.Duration = time.Since(startTime)
+		return result, fmt.Errorf("deployment locked: %w", err)
+	}
+	defer func() {
+		if err := m.lock.ReleaseLock(); err != nil {
+			m.log.Error().Err(err).Msg("Failed to release deployment lock")
+		}
+	}()
+
+	// Get current commit
+	currentBranch := m.config.GitBranch
+	if currentBranch == "" {
+		var err error
+		currentBranch, err = m.gitChecker.GetCurrentBranch()
+		if err != nil {
+			currentBranch = "main"
+		}
+	}
+
+	// Get current commit before update
+	_, localCommit, remoteCommit, err := m.gitChecker.HasChanges(currentBranch)
+	if err != nil {
+		m.log.Warn().Err(err).Msg("Failed to get current commits")
+		localCommit = "unknown"
+		remoteCommit = "unknown"
+	}
+	result.CommitBefore = localCommit
+
+	// Fetch updates
+	if err := m.gitChecker.FetchUpdates(3); err != nil {
+		result.Error = fmt.Sprintf("failed to fetch updates: %v", err)
+		result.Duration = time.Since(startTime)
+		return result, err
+	}
+
+	// Pull changes (skip change detection - always pull)
+	if err := m.gitChecker.PullChanges(currentBranch); err != nil {
+		result.Error = fmt.Sprintf("failed to pull changes: %v", err)
+		result.Duration = time.Since(startTime)
+		return result, err
+	}
+
+	// Get commit after update (should be same as remote now)
+	_, _, newRemoteCommit, err := m.gitChecker.HasChanges(currentBranch)
+	if err != nil {
+		m.log.Warn().Err(err).Msg("Failed to get commit after pull")
+		result.CommitAfter = remoteCommit // Use the remote commit we got earlier
+	} else {
+		result.CommitAfter = newRemoteCommit
+	}
+
+	deploymentErrors := make(map[string]error)
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
+	// Deploy trader service (always)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		deployment := m.deployGoService(m.config.TraderConfig, "trader")
+		mu.Lock()
+		result.ServicesDeployed = append(result.ServicesDeployed, deployment)
+		if !deployment.Success {
+			deploymentErrors[deployment.ServiceName] = fmt.Errorf(deployment.Error)
+		}
+		mu.Unlock()
+	}()
+
+	// Deploy display-bridge service (always)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		deployment := m.deployGoService(m.config.DisplayBridgeConfig, "display-bridge")
+		mu.Lock()
+		result.ServicesDeployed = append(result.ServicesDeployed, deployment)
+		if !deployment.Success {
+			deploymentErrors[deployment.ServiceName] = fmt.Errorf(deployment.Error)
+		}
+		mu.Unlock()
+	}()
+
+	wg.Wait()
+
+	// Deploy microservices (always, with rebuild)
+	if m.config.MicroservicesEnabled {
+		servicesToDeploy := map[string]bool{
+			"pypfopt":   true, // Always rebuild
+			"tradernet": true, // Always rebuild
+		}
+
+		for serviceName, rebuildImage := range servicesToDeploy {
+			deployment := ServiceDeployment{
+				ServiceName: serviceName,
+				ServiceType: "docker",
+				Success:     true,
+			}
+
+			if err := m.microDeployer.DeployMicroservice(serviceName, m.config.RepoDir, rebuildImage); err != nil {
+				deployment.Success = false
+				deployment.Error = err.Error()
+				deploymentErrors[serviceName] = err
+				m.log.Error().Err(err).Str("service", serviceName).Msg("Failed to deploy microservice")
+			} else {
+				// Health check
+				healthURL := m.microDeployer.GetMicroserviceHealthURL(serviceName)
+				if err := m.microDeployer.CheckMicroserviceHealth(serviceName, m.config.RepoDir, healthURL); err != nil {
+					m.log.Warn().Err(err).Str("service", serviceName).Msg("Health check failed")
+				}
+			}
+
+			result.ServicesDeployed = append(result.ServicesDeployed, deployment)
+		}
+	}
+
+	// Deploy frontend (always)
+	if err := m.frontendDeployer.DeployFrontend(m.config.RepoDir, m.config.DeployDir); err != nil {
+		m.log.Error().Err(err).Msg("Failed to deploy frontend")
+		deploymentErrors["frontend"] = err
+	}
+
+	// Deploy sketch (always, non-fatal)
+	sketchPaths := []string{"display/sketch/sketch.ino", "arduino-app/sketch/sketch.ino"}
+	for _, sketchPath := range sketchPaths {
+		if err := m.sketchDeployer.DeploySketch(sketchPath, m.config.RepoDir); err != nil {
+			m.log.Warn().Err(err).Str("sketch", sketchPath).Msg("Failed to deploy sketch (non-fatal)")
+		} else {
+			result.SketchDeployed = true
+			break // Only deploy first found sketch
+		}
+	}
+
+	// Restart all services
+	servicesToRestart := []string{
+		m.config.TraderConfig.ServiceName,
+		m.config.DisplayBridgeConfig.ServiceName,
+	}
+
+	// Restart Go services via systemd
+	restartErrors := m.serviceManager.RestartServices(servicesToRestart)
+	for serviceName, err := range restartErrors {
+		m.log.Error().Err(err).Str("service", serviceName).Msg("Failed to restart service")
+		deploymentErrors[serviceName+"_restart"] = err
+	}
+
+	// Note: Python microservices are already restarted by DeployMicroservice above,
+	// so no explicit restart needed here
+
+	// Mark as deployed
+	if err := m.MarkDeployed(); err != nil {
+		m.log.Warn().Err(err).Msg("Failed to mark deployment")
+	}
+
+	// Determine overall success
+	successCount := 0
+	for _, svc := range result.ServicesDeployed {
+		if svc.Success {
+			successCount++
+		}
+	}
+
+	if len(deploymentErrors) > 0 {
+		errorMsgs := []string{}
+		for svc, err := range deploymentErrors {
+			errorMsgs = append(errorMsgs, fmt.Sprintf("%s: %v", svc, err))
+		}
+		result.Error = fmt.Sprintf("hard update completed with errors: %v", errorMsgs)
+		result.Success = successCount > 0 // Partial success is still success
+	} else {
+		result.Success = true
+	}
+
+	result.Duration = time.Since(startTime)
+
+	m.log.Info().
+		Bool("success", result.Success).
+		Bool("deployed", result.Deployed).
+		Dur("duration", result.Duration).
+		Int("services", len(result.ServicesDeployed)).
+		Msg("Hard update completed")
+
+	return result, nil
+}
+
 // deployServices deploys services based on change categories
 func (m *Manager) deployServices(categories *ChangeCategories, result *DeploymentResult) map[string]error {
 	errors := make(map[string]error)

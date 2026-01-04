@@ -16,17 +16,16 @@ function getCountryColor(name) {
 
 // Convert weights to target percentages
 function getTargetPcts(weights, activeCountries) {
-  const shifted = {};
   let total = 0;
   for (const name of activeCountries) {
     const weight = weights[name] || 0;
-    shifted[name] = weight + 1; // -1→0, 0→1, +1→2
-    total += shifted[name];
+    total += weight;
   }
 
   const targets = {};
-  for (const [name, val] of Object.entries(shifted)) {
-    targets[name] = total > 0 ? val / total : 0;
+  for (const name of activeCountries) {
+    const weight = weights[name] || 0;
+    targets[name] = total > 0 ? weight / total : 0;
   }
   return targets;
 }
@@ -67,12 +66,12 @@ function getDeviationBarStyle(deviation) {
 
 function formatWeight(weight) {
   if (weight === 0 || weight === undefined) return '0';
-  return (weight > 0 ? '+' : '') + weight.toFixed(2);
+  return weight.toFixed(2);
 }
 
 function getWeightBadgeClass(weight) {
-  if (weight > 0.1) return { color: 'green', variant: 'light' };
-  if (weight < -0.1) return { color: 'red', variant: 'light' };
+  if (weight > 0.7) return { color: 'green', variant: 'light' };
+  if (weight < 0.3) return { color: 'red', variant: 'light' };
   return { color: 'gray', variant: 'light' };
 }
 
@@ -204,9 +203,9 @@ export function GeoChart() {
         <Stack gap="md">
           {/* Weight Scale Legend */}
           <Group justify="space-between">
-            <Text size="xs" c="red">-1 Avoid</Text>
-            <Text size="xs" c="dimmed">0 Neutral</Text>
-            <Text size="xs" c="green">+1 Prioritize</Text>
+            <Text size="xs" c="red">0 Avoid</Text>
+            <Text size="xs" c="dimmed">0.5 Neutral</Text>
+            <Text size="xs" c="green">1 Prioritize</Text>
           </Group>
 
           <Divider />
@@ -242,13 +241,13 @@ export function GeoChart() {
                 <Slider
                   value={weight}
                   onChange={(val) => adjustCountrySlider(name, val)}
-                  min={-1}
+                  min={0}
                   max={1}
                   step={0.01}
                   marks={[
-                    { value: -1, label: '-1' },
                     { value: 0, label: '0' },
-                    { value: 1, label: '+1' },
+                    { value: 0.5, label: '0.5' },
+                    { value: 1, label: '1' },
                   ]}
                 />
               </div>

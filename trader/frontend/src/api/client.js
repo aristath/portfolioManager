@@ -61,6 +61,7 @@ export const api = {
   triggerSyncCycle: () => fetchJSON('/api/system/jobs/sync-cycle', { method: 'POST' }),
   triggerDailyPipeline: () => fetchJSON('/api/system/sync/daily-pipeline', { method: 'POST' }),
   triggerDividendReinvestment: () => fetchJSON('/api/system/jobs/dividend-reinvestment', { method: 'POST' }),
+  hardUpdate: () => fetchJSON('/api/system/deployment/hard-update', { method: 'POST' }),
 
   // Allocation
   fetchAllocation: () => fetchJSON('/api/allocation/groups/allocation'),
