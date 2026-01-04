@@ -1,6 +1,8 @@
 # Python to Go Database Migration Guide
 
-This guide explains how to migrate data from the legacy Python app databases to the new Go app databases.
+**NOTE: Migration is complete. The migration scripts referenced in this document have been removed as they were one-time use scripts.**
+
+This guide explains how to migrate data from the legacy Python app databases to the new Go app databases. This document is kept for historical reference.
 
 ## Prerequisites
 
@@ -151,10 +153,11 @@ After successful migration:
 
 ## Files
 
-- `migrate_python_to_go.py` - Main migration script
-- `backup_legacy_databases.sh` - Backup script for legacy databases
-- `run_migration.sh` - Complete workflow script (backup + migrate)
-- `deploy_migration.sh` - Deploy script to copy files to Arduino device
+**Note: The migration scripts have been removed after successful migration completion:**
+- ~~`migrate_python_to_go.py`~~ - Main migration script (removed - migration complete)
+- `backup_legacy_databases.sh` - Backup script for legacy databases (still available)
+- ~~`run_migration.sh`~~ - Complete workflow script (removed - migration complete)
+- ~~`deploy_migration.sh`~~ - Deploy script (removed - migration complete)
 
 ## Support
 
