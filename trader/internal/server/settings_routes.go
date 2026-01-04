@@ -15,6 +15,7 @@ import (
 	"github.com/aristath/arduino-trader/internal/modules/trading"
 	"github.com/aristath/arduino-trader/internal/modules/universe"
 	"github.com/aristath/arduino-trader/internal/scheduler"
+	"github.com/aristath/arduino-trader/internal/services"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -29,6 +30,9 @@ func (s *Server) setupSettingsRoutes(r chi.Router) {
 	// Initialize Tradernet client for onboarding
 	tradernetClient := tradernet.NewClient(s.cfg.TradernetServiceURL, s.log)
 	tradernetClient.SetCredentials(s.cfg.TradernetAPIKey, s.cfg.TradernetAPISecret)
+
+	// Initialize currency exchange service for multi-currency cash handling
+	currencyExchangeService := services.NewCurrencyExchangeService(tradernetClient, s.log)
 
 	// Initialize portfolio service for onboarding
 	positionRepo := portfolio.NewPositionRepository(s.portfolioDB.Conn(), s.universeDB.Conn(), s.log)
@@ -52,6 +56,7 @@ func (s *Server) setupSettingsRoutes(r chi.Router) {
 		cashManager,
 		s.universeDB.Conn(),
 		tradernetClient,
+		currencyExchangeService,
 		s.log,
 	)
 

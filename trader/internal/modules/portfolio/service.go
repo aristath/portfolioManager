@@ -28,15 +28,16 @@ type CashManager interface {
 // PortfolioService orchestrates portfolio operations
 // Faithful translation from Python: app/modules/portfolio/services/portfolio_service.py
 type PortfolioService struct {
-	portfolioRepo   *PortfolioRepository
-	positionRepo    PositionRepositoryInterface
-	allocRepo       AllocationTargetProvider
-	turnoverTracker *TurnoverTracker
-	attributionCalc *AttributionCalculator
-	cashManager     CashManager // Interface to break circular dependency
-	universeDB      *sql.DB     // For querying securities (universe.db)
-	tradernetClient TradernetClientInterface
-	log             zerolog.Logger
+	portfolioRepo           *PortfolioRepository
+	positionRepo            PositionRepositoryInterface
+	allocRepo               AllocationTargetProvider
+	turnoverTracker         *TurnoverTracker
+	attributionCalc         *AttributionCalculator
+	cashManager             CashManager // Interface to break circular dependency
+	universeDB              *sql.DB     // For querying securities (universe.db)
+	tradernetClient         TradernetClientInterface
+	currencyExchangeService CurrencyExchangeServiceInterface
+	log                     zerolog.Logger
 }
 
 // NewPortfolioService creates a new portfolio service
@@ -49,18 +50,20 @@ func NewPortfolioService(
 	cashManager CashManager,
 	universeDB *sql.DB,
 	tradernetClient TradernetClientInterface,
+	currencyExchangeService CurrencyExchangeServiceInterface,
 	log zerolog.Logger,
 ) *PortfolioService {
 	return &PortfolioService{
-		portfolioRepo:   portfolioRepo,
-		positionRepo:    positionRepo,
-		allocRepo:       allocRepo,
-		turnoverTracker: turnoverTracker,
-		attributionCalc: attributionCalc,
-		cashManager:     cashManager,
-		universeDB:      universeDB,
-		tradernetClient: tradernetClient,
-		log:             log.With().Str("service", "portfolio").Logger(),
+		portfolioRepo:           portfolioRepo,
+		positionRepo:            positionRepo,
+		allocRepo:               allocRepo,
+		turnoverTracker:         turnoverTracker,
+		attributionCalc:         attributionCalc,
+		cashManager:             cashManager,
+		universeDB:              universeDB,
+		tradernetClient:         tradernetClient,
+		currencyExchangeService: currencyExchangeService,
+		log:                     log.With().Str("service", "portfolio").Logger(),
 	}
 }
 
@@ -88,11 +91,100 @@ func (s *PortfolioService) GetPortfolioSummary() (PortfolioSummary, error) {
 		return PortfolioSummary{}, fmt.Errorf("failed to get securities: %w", err)
 	}
 
-	// Get cash balance from snapshot (DB fallback - no Tradernet in Go yet)
-	cashBalance, err := s.portfolioRepo.GetLatestCashBalance()
-	if err != nil {
-		s.log.Warn().Err(err).Msg("Failed to get cash balance, using 0")
-		cashBalance = 0.0
+	// Get cash balance from actual Tradernet balances (more accurate than snapshot)
+	// Fallback to snapshot if Tradernet is not connected (matches Python behavior)
+	cashBalance := 0.0
+	if s.tradernetClient != nil {
+		balances, err := s.tradernetClient.GetCashBalances()
+		if err == nil && len(balances) > 0 {
+			// Convert all currencies to EUR
+			var totalEUR float64
+			for _, balance := range balances {
+				if balance.Currency == "EUR" {
+					totalEUR += balance.Amount
+					s.log.Debug().
+						Str("currency", "EUR").
+						Float64("amount", balance.Amount).
+						Msg("Added EUR balance")
+				} else {
+					// Convert non-EUR currency to EUR
+					if s.currencyExchangeService != nil {
+						rate, err := s.currencyExchangeService.GetRate(balance.Currency, "EUR")
+						if err != nil {
+							s.log.Warn().
+								Err(err).
+								Str("currency", balance.Currency).
+								Float64("amount", balance.Amount).
+								Msg("Failed to get exchange rate, using fallback")
+
+							// Fallback rates for autonomous operation
+							eurValue := balance.Amount
+							switch balance.Currency {
+							case "USD":
+								eurValue = balance.Amount * 0.9
+							case "GBP":
+								eurValue = balance.Amount * 1.2
+							case "HKD":
+								eurValue = balance.Amount * 0.11
+							default:
+								s.log.Warn().
+									Str("currency", balance.Currency).
+									Msg("Unknown currency, assuming 1:1 with EUR")
+							}
+							totalEUR += eurValue
+
+							s.log.Info().
+								Str("currency", balance.Currency).
+								Float64("amount", balance.Amount).
+								Float64("eur_value", eurValue).
+								Msg("Converted to EUR using fallback rate")
+						} else {
+							eurValue := balance.Amount * rate
+							totalEUR += eurValue
+
+							s.log.Debug().
+								Str("currency", balance.Currency).
+								Float64("rate", rate).
+								Float64("amount", balance.Amount).
+								Float64("eur_value", eurValue).
+								Msg("Converted to EUR using live rate")
+						}
+					} else {
+						// No exchange service available, use fallback rates
+						eurValue := balance.Amount
+						switch balance.Currency {
+						case "USD":
+							eurValue = balance.Amount * 0.9
+						case "GBP":
+							eurValue = balance.Amount * 1.2
+						case "HKD":
+							eurValue = balance.Amount * 0.11
+						default:
+							s.log.Warn().
+								Str("currency", balance.Currency).
+								Msg("Exchange service not available, assuming 1:1 with EUR")
+						}
+						totalEUR += eurValue
+					}
+				}
+			}
+			cashBalance = totalEUR
+			s.log.Debug().Float64("cash_balance", cashBalance).Msg("Got cash balance from Tradernet")
+		} else {
+			s.log.Warn().Err(err).Msg("Failed to get cash balances from Tradernet, falling back to snapshot")
+		}
+	}
+
+	// Fallback to snapshot if Tradernet unavailable or failed
+	if cashBalance == 0.0 {
+		snapshotBalance, err := s.portfolioRepo.GetLatestCashBalance()
+		if err != nil {
+			s.log.Warn().Err(err).Msg("Failed to get cash balance from snapshot, using 0")
+			cashBalance = 0.0
+		} else {
+			cashBalance = snapshotBalance
+			s.log.Debug().Float64("cash_balance", cashBalance).Msg("Got cash balance from snapshot")
+		}
 	}
 
 	// Build allocations
