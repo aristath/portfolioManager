@@ -58,21 +58,6 @@ func TestGitChecker_CategorizeChanges(t *testing.T) {
 			description: "Changes to go.sum should trigger MainApp deployment",
 		},
 		{
-			name:        "trader static assets excluded from MainApp",
-			files:       []string{"trader/static/css/styles.css"},
-			want:        ChangeCategories{Static: true},
-			description: "Static assets should not trigger MainApp rebuild, only static deployment",
-		},
-		{
-			name: "trader code and static both changed",
-			files: []string{
-				"trader/internal/server/server.go",
-				"trader/static/js/app.js",
-			},
-			want:        ChangeCategories{MainApp: true, Static: true},
-			description: "Both MainApp and Static should be set when both change",
-		},
-		{
 			name:        "sketch changes in arduino-app",
 			files:       []string{"arduino-app/sketch/trader.ino"},
 			want:        ChangeCategories{Sketch: true},
@@ -161,12 +146,6 @@ func TestGitChecker_CategorizeChanges(t *testing.T) {
 			description: "Windows-style backslashes are not normalized on Unix systems (filepath.ToSlash only converts actual path separators)",
 		},
 		{
-			name:        "trader prefix but static subdirectory",
-			files:       []string{"trader/static/components/widget.js"},
-			want:        ChangeCategories{Static: true},
-			description: "trader/static should not trigger MainApp, only Static",
-		},
-		{
 			name:        "no matching patterns",
 			files:       []string{"README.md", "LICENSE", "docs/guide.md"},
 			want:        ChangeCategories{},
@@ -180,7 +159,6 @@ func TestGitChecker_CategorizeChanges(t *testing.T) {
 
 			assert.Equal(t, tt.want.MainApp, got.MainApp, "MainApp category mismatch: %s", tt.description)
 			assert.Equal(t, tt.want.DisplayApp, got.DisplayApp, "DisplayApp category mismatch: %s", tt.description)
-			assert.Equal(t, tt.want.Static, got.Static, "Static category mismatch: %s", tt.description)
 			assert.Equal(t, tt.want.Sketch, got.Sketch, "Sketch category mismatch: %s", tt.description)
 			assert.Equal(t, tt.want.PyPFOpt, got.PyPFOpt, "PyPFOpt category mismatch: %s", tt.description)
 			assert.Equal(t, tt.want.PyPFOptDeps, got.PyPFOptDeps, "PyPFOptDeps category mismatch: %s", tt.description)
@@ -210,11 +188,6 @@ func TestChangeCategories_HasAnyChanges(t *testing.T) {
 		{
 			name:     "DisplayApp true",
 			category: ChangeCategories{DisplayApp: true},
-			want:     true,
-		},
-		{
-			name:     "Static true",
-			category: ChangeCategories{Static: true},
 			want:     true,
 		},
 		{

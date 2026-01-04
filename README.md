@@ -42,8 +42,8 @@ Arduino Trader is a production-ready autonomous trading system that manages a re
 │  │  • Background Job Scheduler                            │   │
 │  │  • Planning Evaluation (built-in)                      │   │
 │  │                                                         │   │
-│  │  Port: 8080 (HTTP API)                                 │   │
-│  │  Databases: SQLite (portfolio.db, state.db, etc.)     │   │
+│  │  Port: 8001 (HTTP API)                                 │   │
+│  │  Databases: SQLite (7 databases)                       │   │
 │  └───────────┬─────────────────────────┬──────────────────┘   │
 │              │                         │                       │
 └──────────────┼─────────────────────────┼───────────────────────┘
@@ -120,7 +120,7 @@ Arduino Trader is a production-ready autonomous trading system that manages a re
    - Purpose: Trading execution, portfolio sync, market data
    - Library: Tradernet SDK v1.0.5
 
-**Note:** Planning evaluation is now built into the main trader application (no separate microservice needed).
+**Note:** Planning evaluation is built into the main trader application using an in-process worker pool (no separate microservice).
 
 ### Hardware
 
@@ -138,7 +138,7 @@ Arduino Trader is a production-ready autonomous trading system that manages a re
 
 - Go 1.22+ (for building trader)
 - Python 3.10+ (for microservices)
-- Existing SQLite databases (portfolio.db, state.db, ledger.db, etc.)
+- Existing SQLite databases (7-database architecture)
 - Tradernet API credentials
 - Docker (optional, for containerized deployment)
 
@@ -176,22 +176,19 @@ GOOS=linux GOARCH=arm64 go build -o trader-arm64 ./cmd/server
 Edit `.env` file:
 
 ```bash
-# Database paths
-STATE_DB_PATH=/path/to/state.db
-PORTFOLIO_DB_PATH=/path/to/portfolio.db
-LEDGER_DB_PATH=/path/to/ledger.db
+# Data directory (contains all 7 databases)
+DATA_DIR=../data
 
 # Microservice URLs
-EVALUATOR_GO_URL=http://localhost:9000
-PYPFOPT_URL=http://localhost:9001
-TRADERNET_URL=http://localhost:9002
+PYPFOPT_SERVICE_URL=http://localhost:9001
+TRADERNET_SERVICE_URL=http://localhost:9002
 
 # Tradernet API
 TRADERNET_API_KEY=your_api_key
 TRADERNET_API_SECRET=your_api_secret
 
 # Server
-PORT=8080
+GO_PORT=8001
 LOG_LEVEL=info
 ```
 
@@ -242,8 +239,7 @@ cd trader
 
 ```bash
 # Check main app health
-curl http://localhost:8080/health
-
+curl http://localhost:8001/health
 
 # Check pypfopt
 curl http://localhost:9001/health
@@ -252,7 +248,7 @@ curl http://localhost:9001/health
 curl http://localhost:9002/health
 
 # Get portfolio summary
-curl http://localhost:8080/api/portfolio/summary
+curl http://localhost:8001/api/portfolio/summary
 ```
 
 ---
@@ -284,8 +280,6 @@ curl http://localhost:8080/api/portfolio/summary
 
 **Integration:**
 Used by the planning module to optimize portfolio allocations based on expected returns and risk constraints.
-
-**Documentation:** See `microservices/pypfopt/README.md`
 
 ---
 
@@ -340,7 +334,21 @@ PORT=9002
 LOG_LEVEL=INFO
 ```
 
-**Documentation:** See `microservices/tradernet/README.md`
+---
+
+## Database Architecture
+
+The system uses a clean 7-database architecture:
+
+1. **universe.db** - Investment universe (securities, groups)
+2. **config.db** - Application configuration (settings, allocation targets)
+3. **ledger.db** - Immutable financial audit trail (trades, cash flows, dividends)
+4. **portfolio.db** - Current portfolio state (positions, scores, metrics, snapshots)
+5. **agents.db** - Strategy management (sequences, evaluations)
+6. **history.db** - Historical time-series data (prices, rates, cleanup tracking)
+7. **cache.db** - Ephemeral operational data (recommendations, cache)
+
+All databases use SQLite with WAL mode and profile-specific PRAGMAs for optimal performance and safety.
 
 ---
 
@@ -359,7 +367,7 @@ Cash balances are stored as positions in `portfolio.db` using synthetic securiti
 
 ### Configuration
 
-The planner configuration is stored in `config.db` and managed through the UI with settings like sliders, number inputs, and checkboxes. This replaces the previous TOML-based configuration system.
+The planner configuration is stored in `config.db` and managed through the UI with settings like sliders, number inputs, and checkboxes.
 
 ---
 
@@ -453,14 +461,26 @@ The planner configuration is stored in `config.db` and managed through the UI wi
 
 The system runs scheduled background jobs for autonomous operation:
 
-### Daily Jobs
+### Operational Jobs
 
-**sync_cycle** (Daily at 9:00 AM)
+**sync_cycle** (Every 5 minutes)
 - Sync portfolio positions from broker
 - Sync cash balances
 - Sync executed trades
-- Update security prices
+- Update security prices (market-aware)
 - Process cash flows (deposits, dividends, fees)
+- Update LED display ticker
+
+**planner_batch** (Every 15 minutes)
+- Generate trading recommendations
+- Evaluate sequences using built-in evaluation service
+- Score opportunities
+- Create optimal trade plans
+
+**event_based_trading** (Every 5 minutes)
+- Monitor for planning completion
+- Execute approved trades
+- Enforces minimum execution intervals (30 minutes)
 
 **dividend_reinvestment** (Daily at 10:00 AM)
 - Detect new dividends
@@ -468,35 +488,53 @@ The system runs scheduled background jobs for autonomous operation:
 - Auto-reinvest high-yield dividends (DRIP)
 - Accumulate low-yield as pending bonuses
 
-**planning_generation** (Daily at 2:00 PM)
-- Generate trading recommendations
-- Evaluate sequences
-- Score opportunities
-- Create optimal trade plans
+**health_check** (Daily at 4:00 AM)
+- Database integrity checks
+- Auto-recovery for corrupted databases
+- Health monitoring for all 7 databases
 
+### Reliability Jobs
 
-### On-Demand Jobs
+**history_cleanup** (Daily at midnight)
+- Clean up old historical data
+- Maintain database size
 
-**emergency_rebalancing** (Triggered on negative cash balance)
-- Detect negative balance emergency
-- Select positions to sell
-- Generate emergency sell orders
-- Execute rebalancing trades
+**hourly_backup** (Every hour)
+- Automated hourly backups of all databases
 
-**market_regime_detection** (Runs with planning)
-- Analyze market conditions
-- Detect regime changes (bull/bear/volatile)
-- Adjust strategy parameters
+**daily_backup** (Daily at 1:00 AM)
+- Daily backup before maintenance
+
+**daily_maintenance** (Daily at 2:00 AM)
+- Database maintenance tasks
+- Vacuum operations
+- Index optimization
+
+**weekly_backup** (Sunday at 1:00 AM)
+- Weekly backup
+
+**weekly_maintenance** (Sunday at 3:30 AM)
+- Weekly maintenance tasks
+
+**monthly_backup** (1st day at 1:00 AM)
+- Monthly backup
+
+**monthly_maintenance** (1st day at 4:00 AM)
+- Monthly maintenance tasks
 
 ### Manual Triggers
 
-All jobs can be manually triggered via API:
+Operational jobs can be manually triggered via API:
 
 ```bash
-POST /api/system/jobs/{job_name}/run
+POST /api/system/jobs/health-check
+POST /api/system/jobs/sync-cycle
+POST /api/system/jobs/dividend-reinvestment
+POST /api/system/jobs/planner-batch
+POST /api/system/jobs/event-based-trading
 ```
 
-Job names: `sync_cycle`, `dividend_reinvestment`, `planning_generation`
+Note: Reliability jobs (backups, maintenance, cleanup) run automatically on schedule and are not exposed for manual triggering.
 
 ---
 
@@ -522,12 +560,20 @@ arduino-trader/
 │   │   ├── domain/            # Domain models
 │   │   ├── modules/           # Business modules
 │   │   │   ├── allocation/   # Allocation management
-│   │   │   ├── analytics/    # Analytics & metrics
+│   │   │   ├── cash_flows/   # Cash flow processing
+│   │   │   ├── cash_utils/   # Cash utility functions
+│   │   │   ├── charts/       # Chart data & visualization
+│   │   │   ├── cleanup/      # Data cleanup jobs
+│   │   │   ├── display/      # LED display management
 │   │   │   ├── dividends/    # Dividend processing
+│   │   │   ├── evaluation/   # Sequence evaluation (built-in)
+│   │   │   ├── opportunities/# Opportunity identification
+│   │   │   ├── optimization/ # Portfolio optimization
 │   │   │   ├── planning/     # Planning & recommendations
 │   │   │   ├── portfolio/    # Portfolio management
-│   │   │   ├── planning/     # Planning & recommendations
+│   │   │   ├── rebalancing/  # Rebalancing logic
 │   │   │   ├── scoring/      # Security scoring
+│   │   │   ├── sequences/    # Trade sequence generation
 │   │   │   ├── settings/     # Settings management
 │   │   │   ├── trading/      # Trade execution
 │   │   │   └── universe/     # Security universe
@@ -540,18 +586,13 @@ arduino-trader/
 │   │   ├── events/          # Event system
 │   │   └── logger/          # Structured logging
 │   └── static/              # Static web assets
-├── display/                  # Display system
-│   ├── bridge/              # Go bridge service
+├── display/                  # Display system (LED matrix)
 │   ├── sketch/              # Arduino C++ sketch
-│   └── app/                 # Docker Python display app
+│   └── app/                 # Python display app (Arduino App Framework)
 ├── microservices/           # Python microservices
 │   ├── pypfopt/            # Portfolio optimization (Python)
 │   └── tradernet/          # Broker API gateway (Python)
-├── legacy/                  # Legacy Python code (migration reference)
-│   ├── app/                # Old Python application
-│   └── tests/              # Old Python tests
 ├── scripts/                 # Build & deployment scripts
-├── docs/                    # Documentation
 └── README.md                # This file
 ```
 
@@ -593,10 +634,9 @@ go build -o trader ./cmd/server
 
 #### Microservices
 
-See individual service READMEs:
-- `microservices/evaluator/README.md`
-- `microservices/pypfopt/README.md`
-- `microservices/tradernet/README.md`
+Microservices are documented in their respective directories:
+- `microservices/pypfopt/`
+- `microservices/tradernet/`
 
 ### Code Guidelines
 
@@ -665,10 +705,6 @@ go test ./...
 
 **Microservices:**
 ```bash
-# evaluator
-cd microservices/evaluator
-go test ./...
-
 # pypfopt
 cd microservices/pypfopt
 pytest
@@ -775,17 +811,16 @@ sudo systemctl enable docker
 **Post-Deployment:**
 - [ ] Verify first sync cycle completes
 - [ ] Check portfolio values match broker
-- [ ] Verify satellite balance reconciliation
 - [ ] Monitor background jobs execution
-- [ ] Check emergency rebalancing doesn't trigger
 - [ ] Validate planning recommendations
+- [ ] Check cash balances are correct
 
 ### Monitoring
 
 **Health Checks:**
 ```bash
 # Main app
-curl http://localhost:8080/health
+curl http://localhost:8001/health
 
 # Microservices
 curl http://localhost:9001/health  # pypfopt
@@ -794,12 +829,12 @@ curl http://localhost:9002/health  # tradernet
 
 **System Status:**
 ```bash
-curl http://localhost:8080/api/system/status
+curl http://localhost:8001/api/system/status
 ```
 
 **Job Status:**
 ```bash
-curl http://localhost:8080/api/system/jobs
+curl http://localhost:8001/api/system/jobs
 ```
 
 **Logs:**
@@ -820,7 +855,7 @@ sudo systemctl stop trader
 
 **Switch to Research Mode:**
 ```bash
-curl -X POST http://localhost:8080/api/settings/trading-mode \
+curl -X POST http://localhost:8001/api/settings/trading-mode \
   -H "Content-Type: application/json" \
   -d '{"mode": "research"}'
 ```
@@ -829,7 +864,7 @@ curl -X POST http://localhost:8080/api/settings/trading-mode \
 1. Stop Go service: `sudo systemctl stop trader`
 2. Restore previous binary
 3. Restart: `sudo systemctl start trader`
-4. Verify: `curl http://localhost:8080/health`
+4. Verify: `curl http://localhost:8001/health`
 
 ---
 
@@ -840,26 +875,20 @@ curl -X POST http://localhost:8080/api/settings/trading-mode \
 **Main Application (.env):**
 
 ```bash
-# Database paths
-STATE_DB_PATH=/path/to/state.db
-PORTFOLIO_DB_PATH=/path/to/portfolio.db
-LEDGER_DB_PATH=/path/to/ledger.db
+# Data directory (contains all 7 databases)
+DATA_DIR=../data
 
 # Microservice URLs
-EVALUATOR_GO_URL=http://localhost:9000
-PYPFOPT_URL=http://localhost:9001
-TRADERNET_URL=http://localhost:9002
+PYPFOPT_SERVICE_URL=http://localhost:9001
+TRADERNET_SERVICE_URL=http://localhost:9002
 
 # Tradernet API
 TRADERNET_API_KEY=your_api_key
 TRADERNET_API_SECRET=your_api_secret
 
 # Server
-PORT=8080
+GO_PORT=8001
 LOG_LEVEL=info  # debug, info, warn, error
-
-# Background Jobs
-ENABLE_SCHEDULER=true
 
 # Display (LED Matrix)
 DISPLAY_HOST=localhost
@@ -960,7 +989,7 @@ journalctl -u trader -f
 docker-compose logs -f
 
 # Health checks
-curl http://localhost:8080/health
+curl http://localhost:8001/health
 ```
 
 ---

@@ -80,7 +80,7 @@ func main() {
 
 	// 2. config.db - Application configuration (REDUCED: settings, allocation targets)
 	configDB, err := database.New(database.Config{
-		Path:    cfg.DatabasePath,
+		Path:    cfg.DataDir + "/config.db",
 		Profile: database.ProfileStandard,
 		Name:    "config",
 	})

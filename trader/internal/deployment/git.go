@@ -127,11 +127,6 @@ func (g *GitChecker) CategorizeChanges(files []string) *ChangeCategories {
 			categories.DisplayApp = true
 		}
 
-		// Static assets (old, deprecated)
-		if strings.HasPrefix(file, "trader/static/") {
-			categories.Static = true
-		}
-
 		// Frontend (React) changes
 		if strings.HasPrefix(file, "trader/frontend/") {
 			categories.Frontend = true

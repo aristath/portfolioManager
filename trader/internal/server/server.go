@@ -89,7 +89,7 @@ func New(cfg Config) *Server {
 	_ = mime.AddExtensionType(".woff", "font/woff")
 
 	// Initialize system handlers early
-	dataDir := filepath.Dir(cfg.Config.DatabasePath)
+	dataDir := cfg.Config.DataDir
 
 	// Create Tradernet client for system handlers
 	tradernetClient := tradernet.NewClient(cfg.Config.TradernetServiceURL, cfg.Log)
@@ -277,7 +277,7 @@ func (s *Server) setupSystemRoutes(r chi.Router) {
 	systemHandlers := s.systemHandlers
 
 	// Initialize log handlers
-	dataDir := filepath.Dir(s.cfg.DatabasePath)
+	dataDir := s.cfg.DataDir
 	logHandlers := NewLogHandlers(s.log, dataDir)
 
 	// Initialize universe handlers for sync operations

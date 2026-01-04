@@ -15,20 +15,6 @@ echo "Version: ${VERSION}"
 echo "Build Time: ${BUILD_TIME}"
 echo
 
-# Build frontend first
-if [ -d "frontend" ]; then
-    echo "Building frontend..."
-    cd frontend
-    if [ ! -d "node_modules" ]; then
-        echo "Installing frontend dependencies..."
-        npm install
-    fi
-    npm run build
-    cd ..
-    echo "✓ Frontend built"
-    echo
-fi
-
 # Build Go backend
 if [ "$ARCH" = "arm64" ]; then
     echo "Cross-compiling for ARM64 (Arduino Uno Q)..."

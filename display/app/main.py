@@ -367,13 +367,25 @@ def loop():
             system_stats = state.get("system_stats")
             if system_stats and isinstance(system_stats, dict):
                 # Convert system_stats to stats format expected by handle_stats_mode
-                # The API returns system_stats with cpu_percent, ram_percent
-                # but handle_stats_mode expects pixels_on, brightness, cpu_percent, ram_percent
+                # Calculate pixels_on and brightness from CPU/RAM percentages
+                cpu_percent = system_stats.get("cpu_percent", 0)
+                ram_percent = system_stats.get("ram_percent", 0)
+
+                # Calculate average load (0-100)
+                load_percent = (cpu_percent + ram_percent) / 2.0
+                load_percent = max(0, min(100, load_percent))
+
+                # Calculate pixels_on: 0-104 pixels based on load (0% = 0 pixels, 100% = 104 pixels)
+                pixels_on = int((load_percent / 100.0) * 104.0)
+
+                # Calculate brightness: 100-220 based on load (0% = 100, 100% = 220)
+                brightness = int(100 + (load_percent / 100.0) * 120.0)
+
                 stats = {
-                    "cpu_percent": system_stats.get("cpu_percent", 0),
-                    "ram_percent": system_stats.get("ram_percent", 0),
-                    "pixels_on": 0,  # TODO: Get actual pixels_on from API
-                    "brightness": 100,  # TODO: Get actual brightness from API
+                    "cpu_percent": cpu_percent,
+                    "ram_percent": ram_percent,
+                    "pixels_on": pixels_on,
+                    "brightness": brightness,
                 }
                 success = handle_stats_mode(stats)
                 if not success:

@@ -14,7 +14,6 @@ import (
 // Config holds application configuration
 type Config struct {
 	DataDir             string // Base directory for all databases (defaults to "../data" or "./data")
-	DatabasePath        string // Path to config.db (deprecated, use DataDir + "/config.db")
 	HistoryPath         string // Path to per-symbol history databases
 	PythonServiceURL    string
 	TradernetServiceURL string
@@ -33,7 +32,6 @@ type DeploymentConfig struct {
 	Enabled                bool
 	RepoDir                string
 	DeployDir              string
-	StaticDir              string // Path for static assets (app/static)
 	APIPort                int
 	APIHost                string
 	LockTimeout            int // in seconds
@@ -52,7 +50,6 @@ func (c *DeploymentConfig) ToDeploymentConfig() *deployment.DeploymentConfig {
 		Enabled:                c.Enabled,
 		RepoDir:                c.RepoDir,
 		DeployDir:              c.DeployDir,
-		StaticDir:              c.StaticDir,
 		APIPort:                c.APIPort,
 		APIHost:                c.APIHost,
 		LockTimeout:            time.Duration(c.LockTimeout) * time.Second,
@@ -89,17 +86,10 @@ func Load() (*Config, error) {
 		}
 	}
 
-	// Legacy DatabasePath support (for config.db)
-	databasePath := getEnv("DATABASE_PATH", "")
-	if databasePath == "" {
-		databasePath = dataDir + "/config.db"
-	}
-
 	cfg := &Config{
 		DataDir:             dataDir,
 		Port:                getEnvAsInt("GO_PORT", 8001), // Default 8001 (Python uses 8000)
 		DevMode:             getEnvAsBool("DEV_MODE", false),
-		DatabasePath:        databasePath,
 		HistoryPath:         getEnv("HISTORY_PATH", dataDir+"/history"),               // Per-symbol price databases
 		PythonServiceURL:    getEnv("PYTHON_SERVICE_URL", "http://localhost:8000"),    // Python on 8000
 		TradernetServiceURL: getEnv("TRADERNET_SERVICE_URL", "http://localhost:9002"), // Tradernet microservice on 9002
@@ -144,9 +134,6 @@ func (c *Config) UpdateFromSettings(settingsRepo *settings.Repository) error {
 
 // Validate checks if required configuration is present
 func (c *Config) Validate() error {
-	if c.DatabasePath == "" {
-		return fmt.Errorf("DATABASE_PATH is required")
-	}
 
 	// Note: Tradernet credentials optional for research mode
 	// if c.TradernetAPIKey == "" || c.TradernetAPISecret == "" {
@@ -188,7 +175,6 @@ func loadDeploymentConfig() *DeploymentConfig {
 		Enabled:                true,      // Enabled by default
 		RepoDir:                "../repo", // Relative to WorkingDirectory (/home/arduino/app/bin)
 		DeployDir:              ".",       // Current directory (app/bin)
-		StaticDir:              "../static",
 		APIPort:                8001,
 		APIHost:                "localhost",
 		LockTimeout:            300, // 5 minutes

@@ -15,7 +15,6 @@ import (
 type DeploymentConfig struct {
 	RepoDir                string
 	DeployDir              string
-	StaticDir              string // Path for static assets (app/static)
 	APIPort                int
 	APIHost                string
 	Enabled                bool
@@ -26,7 +25,6 @@ type DeploymentConfig struct {
 	HealthCheckTimeout     time.Duration
 	HealthCheckMaxAttempts int
 	GitBranch              string
-	StaticAssetsPath       string
 }
 
 // Manager handles deployment orchestration
@@ -43,7 +41,6 @@ type Manager struct {
 	gitChecker         *GitChecker
 	goBuilder          *GoServiceBuilder
 	binaryDeployer     *BinaryDeployer
-	staticDeployer     *StaticDeployer
 	frontendDeployer   *FrontendDeployer
 	displayAppDeployer *DisplayAppDeployer
 	serviceManager     *ServiceManager
@@ -71,10 +68,6 @@ func NewManager(config *DeploymentConfig, version string, log zerolog.Logger) *M
 
 	binaryDeployer := NewBinaryDeployer(
 		&logAdapter{log: log.With().Str("component", "binary").Logger()},
-	)
-
-	staticDeployer := NewStaticDeployer(
-		&logAdapter{log: log.With().Str("component", "static").Logger()},
 	)
 
 	frontendDeployer := NewFrontendDeployer(
@@ -110,7 +103,6 @@ func NewManager(config *DeploymentConfig, version string, log zerolog.Logger) *M
 		gitChecker:       gitChecker,
 		goBuilder:        goBuilder,
 		binaryDeployer:   binaryDeployer,
-		staticDeployer:   staticDeployer,
 		frontendDeployer: frontendDeployer,
 		displayAppDeployer: NewDisplayAppDeployer(
 			&logAdapter{log: log.With().Str("component", "display-app").Logger()},
@@ -219,13 +211,6 @@ func (m *Manager) Deploy() (*DeploymentResult, error) {
 	// Deploy based on categories
 	deploymentErrors := m.deployServices(categories, result)
 
-	// Deploy static assets (old, deprecated - kept for backwards compatibility)
-	if categories.Static {
-		if err := m.staticDeployer.DeployStatic(m.config.RepoDir, m.config.StaticDir); err != nil {
-			m.log.Error().Err(err).Msg("Failed to deploy static assets")
-		}
-	}
-
 	// Deploy frontend (pre-built, committed to git)
 	if categories.Frontend {
 		if err := m.frontendDeployer.DeployFrontend(m.config.RepoDir, m.config.DeployDir); err != nil {
@@ -261,7 +246,7 @@ func (m *Manager) Deploy() (*DeploymentResult, error) {
 		}
 	}
 
-	if successCount > 0 || categories.Static || categories.Frontend {
+	if successCount > 0 || categories.Frontend {
 		result.Deployed = true
 		if err := m.MarkDeployed(); err != nil {
 			m.log.Warn().Err(err).Msg("Failed to mark deployment")

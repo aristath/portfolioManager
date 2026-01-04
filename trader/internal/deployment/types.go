@@ -28,7 +28,6 @@ type ServiceDeployment struct {
 type ChangeCategories struct {
 	MainApp       bool
 	DisplayApp    bool // Python display app (display/app/)
-	Static        bool
 	Frontend      bool
 	Sketch        bool
 	PyPFOpt       bool
@@ -40,13 +39,13 @@ type ChangeCategories struct {
 
 // HasAnyChanges returns true if any category has changes
 func (c *ChangeCategories) HasAnyChanges() bool {
-	return c.MainApp || c.DisplayApp || c.Static || c.Frontend || c.Sketch ||
+	return c.MainApp || c.DisplayApp || c.Frontend || c.Sketch ||
 		c.PyPFOpt || c.PyPFOptDeps || c.Tradernet || c.TradernetDeps || c.Config
 }
 
 // GoServiceConfig holds configuration for a Go service
 type GoServiceConfig struct {
-	Name        string // Service identifier: "trader" or "display-bridge"
+	Name        string // Service identifier: "trader"
 	BuildPath   string // Relative path from repo root (e.g., "trader/cmd/server")
 	BinaryName  string // Output binary name (e.g., "trader")
 	ServiceName string // Systemd service name (e.g., "trader")
