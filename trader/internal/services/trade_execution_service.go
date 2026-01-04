@@ -264,7 +264,7 @@ func (s *TradeExecutionService) calculateCommission(
 // app/modules/trading/services/trade_execution_service.py:152-217
 func (s *TradeExecutionService) validateBuyCashBalance(rec TradeRecommendation) *ExecuteResult {
 	// Get current balance for the trade currency
-	// Use CashSecurityManager directly (bucketID parameter is ignored in single-portfolio system)
+	// Use CashSecurityManager directly
 	if s.cashManager == nil {
 		s.log.Warn().Msg("CashSecurityManager not available, skipping cash validation")
 		return nil // Allow trade to proceed if cash manager unavailable

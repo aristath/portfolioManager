@@ -96,7 +96,7 @@ func (s *TickerContentService) getPortfolioValue() (float64, error) {
 	return total, nil
 }
 
-// getCashBalance gets total cash balance for currency from satellites database
+// getCashBalance gets total cash balance for currency from portfolio database
 func (s *TickerContentService) getCashBalance(currency string) (float64, error) {
 	// Query balances table directly
 	var total float64

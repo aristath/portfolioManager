@@ -1,14 +1,12 @@
-import { Modal, TextInput, Select, NumberInput, Switch, Button, Group, Stack } from '@mantine/core';
+import { Modal, TextInput, NumberInput, Switch, Button, Group, Stack } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useAppStore } from '../../stores/appStore';
-import { usePortfolioStore } from '../../stores/portfolioStore';
 import { useSecuritiesStore } from '../../stores/securitiesStore';
 import { useState, useEffect } from 'react';
 import { api } from '../../api/client';
 
 export function EditSecurityModal() {
   const { showEditSecurityModal, editingSecurity, closeEditSecurityModal } = useAppStore();
-  const { buckets } = usePortfolioStore();
   const { fetchSecurities } = useSecuritiesStore();
   const [formData, setFormData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -99,13 +97,6 @@ export function EditSecurityModal() {
           placeholder="e.g., Technology, Healthcare, Financial Services"
           description="Industry classification"
         />
-        <Select
-          label="Universe / Bucket"
-          data={buckets.map(b => ({ value: b.id, label: b.name }))}
-          value={formData.bucket_id || null}
-          onChange={(val) => setFormData({ ...formData, bucket_id: val })}
-          description="Assign this security to a specific universe/bucket"
-        />
         <NumberInput
           label="Min Lot Size"
           value={formData.min_lot || 1}
@@ -136,4 +127,3 @@ export function EditSecurityModal() {
     </Modal>
   );
 }
-

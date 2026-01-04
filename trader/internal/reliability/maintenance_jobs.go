@@ -143,7 +143,7 @@ func (j *DailyMaintenanceJob) verifyBackups() error {
 	}
 
 	// Verify each database backup
-	dbNames := []string{"universe.db", "config.db", "ledger.db", "portfolio.db", "satellites.db", "agents.db", "history.db"}
+	dbNames := []string{"universe.db", "config.db", "ledger.db", "portfolio.db", "agents.db", "history.db"}
 	for _, dbName := range dbNames {
 		backupPath := filepath.Join(dailyBackupDir, dbName)
 
@@ -437,7 +437,7 @@ func (j *MonthlyMaintenanceJob) fullBackupVerification() error {
 	j.log.Info().Str("backup_date", mostRecentBackup).Msg("Verifying backup")
 
 	// Verify each database backup
-	dbNames := []string{"universe.db", "config.db", "ledger.db", "portfolio.db", "satellites.db", "agents.db", "history.db"}
+	dbNames := []string{"universe.db", "config.db", "ledger.db", "portfolio.db", "agents.db", "history.db"}
 	for _, dbName := range dbNames {
 		srcPath := filepath.Join(backupPath, dbName)
 		dstPath := filepath.Join(tempDir, dbName)

@@ -92,7 +92,7 @@ func (s *BackupService) DailyBackup() error {
 	}
 
 	// Backup all databases except cache
-	dbNames := []string{"universe", "config", "ledger", "portfolio", "satellites", "agents", "history"}
+	dbNames := []string{"universe", "config", "ledger", "portfolio", "agents", "history"}
 	for _, dbName := range dbNames {
 		backupPath := filepath.Join(dailyDir, dbName+".db")
 
@@ -145,7 +145,7 @@ func (s *BackupService) WeeklyBackup() error {
 	}
 
 	// Backup all databases (including cache)
-	dbNames := []string{"universe", "config", "ledger", "portfolio", "satellites", "agents", "history", "cache"}
+	dbNames := []string{"universe", "config", "ledger", "portfolio", "agents", "history", "cache"}
 	for _, dbName := range dbNames {
 		backupPath := filepath.Join(weekDir, dbName+".db")
 
@@ -198,7 +198,7 @@ func (s *BackupService) MonthlyBackup() error {
 	}
 
 	// Backup all databases (including cache)
-	dbNames := []string{"universe", "config", "ledger", "portfolio", "satellites", "agents", "history", "cache"}
+	dbNames := []string{"universe", "config", "ledger", "portfolio", "agents", "history", "cache"}
 	for _, dbName := range dbNames {
 		backupPath := filepath.Join(monthDir, dbName+".db")
 

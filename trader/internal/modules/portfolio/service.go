@@ -588,7 +588,7 @@ func (s *PortfolioService) SyncFromTradernet() error {
 	if err != nil {
 		s.log.Warn().Err(err).Msg("Failed to fetch cash balances from Tradernet")
 	} else {
-		// Update cash positions for each currency balance in the core bucket
+		// Update cash positions for each currency balance
 		cashUpdated := 0
 		for _, cashBalance := range balances {
 			if err := s.cashManager.UpdateCashPosition(cashBalance.Currency, cashBalance.Amount); err != nil {

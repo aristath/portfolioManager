@@ -21,7 +21,7 @@ type SecurityRepository struct {
 // Column order must match the table schema (matches SELECT * order)
 const securitiesColumns = `symbol, yahoo_symbol, isin, name, product_type, industry, country, fullExchangeName,
 priority_multiplier, min_lot, active, allow_buy, allow_sell, currency, last_synced,
-min_portfolio_target, max_portfolio_target, created_at, updated_at, bucket_id`
+min_portfolio_target, max_portfolio_target, created_at, updated_at`
 
 // NewSecurityRepository creates a new security repository
 func NewSecurityRepository(universeDB *sql.DB, log zerolog.Logger) *SecurityRepository {
@@ -382,7 +382,7 @@ func (r *SecurityRepository) GetWithScores(portfolioDB *sql.DB) ([]SecurityWithS
 		return nil, fmt.Errorf("error iterating scores: %w", err)
 	}
 
-	// Fetch positions from portfolio.db (exclude bucket_id which was removed)
+	// Fetch positions from portfolio.db
 	positionRows, err := portfolioDB.Query(`SELECT symbol, quantity, avg_price, current_price, currency,
 		currency_rate, market_value_eur, cost_basis_eur, unrealized_pnl,
 		unrealized_pnl_pct, last_updated, first_bought, last_sold, isin
@@ -470,12 +470,10 @@ func (r *SecurityRepository) scanSecurity(rows *sql.Rows) (Security, error) {
 	var minPortfolioTarget, maxPortfolioTarget sql.NullFloat64
 	var active, allowBuy, allowSell sql.NullInt64
 	var createdAt, updatedAt sql.NullString
-	var bucketID sql.NullString // Handle bucket_id if it exists (removed in migration 014 but may still be in old databases)
 
 	// Table schema: symbol, yahoo_symbol, isin, name, product_type, industry, country, fullExchangeName,
 	// priority_multiplier, min_lot, active, allow_buy, allow_sell, currency, last_synced,
 	// min_portfolio_target, max_portfolio_target, created_at, updated_at
-	// Some databases may still have bucket_id column (before migration 014)
 	err := rows.Scan(
 		&security.Symbol,
 		&yahooSymbol,
@@ -496,7 +494,6 @@ func (r *SecurityRepository) scanSecurity(rows *sql.Rows) (Security, error) {
 		&maxPortfolioTarget,
 		&createdAt,
 		&updatedAt,
-		&bucketID, // 20th column - will be NULL/ignored if column doesn't exist or is NULL
 	)
 	if err != nil {
 		return security, err
