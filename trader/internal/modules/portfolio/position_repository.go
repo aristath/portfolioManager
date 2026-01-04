@@ -61,7 +61,7 @@ func (r *PositionRepository) GetAll() ([]Position, error) {
 func (r *PositionRepository) GetAllNonCash() ([]Position, error) {
 	query := `SELECT symbol, quantity, avg_price, current_price, currency,
 		currency_rate, market_value_eur, cost_basis_eur, unrealized_pnl,
-		unrealized_pnl_pct, last_updated, first_bought_at, last_sold_at, isin
+		unrealized_pnl_pct, last_updated, first_bought, last_sold, isin
 		FROM positions WHERE symbol NOT LIKE 'CASH:%'`
 
 	rows, err := r.portfolioDB.Query(query)
@@ -93,7 +93,7 @@ func (r *PositionRepository) GetWithSecurityInfo() ([]PositionWithSecurity, erro
 	// Get positions from state.db
 	positionRows, err := r.portfolioDB.Query(`SELECT symbol, quantity, avg_price, current_price, currency,
 		currency_rate, market_value_eur, cost_basis_eur, unrealized_pnl,
-		unrealized_pnl_pct, last_updated, first_bought_at, last_sold_at, isin
+		unrealized_pnl_pct, last_updated, first_bought, last_sold, isin
 		FROM positions`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query positions: %w", err)
@@ -207,7 +207,7 @@ func (r *PositionRepository) GetWithSecurityInfoNonCash() ([]PositionWithSecurit
 	// Get non-cash positions from portfolio.db
 	positionRows, err := r.portfolioDB.Query(`SELECT symbol, quantity, avg_price, current_price, currency,
 		currency_rate, market_value_eur, cost_basis_eur, unrealized_pnl,
-		unrealized_pnl_pct, last_updated, first_bought_at, last_sold_at, isin
+		unrealized_pnl_pct, last_updated, first_bought, last_sold, isin
 		FROM positions WHERE symbol NOT LIKE 'CASH:%'`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query non-cash positions: %w", err)
@@ -321,7 +321,7 @@ func (r *PositionRepository) GetWithSecurityInfoNonCash() ([]PositionWithSecurit
 func (r *PositionRepository) GetBySymbol(symbol string) (*Position, error) {
 	query := `SELECT symbol, quantity, avg_price, current_price, currency,
 		currency_rate, market_value_eur, cost_basis_eur, unrealized_pnl,
-		unrealized_pnl_pct, last_updated, first_bought_at, last_sold_at, isin
+		unrealized_pnl_pct, last_updated, first_bought, last_sold, isin
 		FROM positions WHERE symbol = ?`
 
 	rows, err := r.portfolioDB.Query(query, strings.ToUpper(strings.TrimSpace(symbol)))
@@ -347,7 +347,7 @@ func (r *PositionRepository) GetBySymbol(symbol string) (*Position, error) {
 func (r *PositionRepository) GetByISIN(isin string) (*Position, error) {
 	query := `SELECT symbol, quantity, avg_price, current_price, currency,
 		currency_rate, market_value_eur, cost_basis_eur, unrealized_pnl,
-		unrealized_pnl_pct, last_updated, first_bought_at, last_sold_at, isin
+		unrealized_pnl_pct, last_updated, first_bought, last_sold, isin
 		FROM positions WHERE isin = ?`
 
 	rows, err := r.portfolioDB.Query(query, strings.ToUpper(strings.TrimSpace(isin)))
