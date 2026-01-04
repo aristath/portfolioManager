@@ -80,24 +80,8 @@ CREATE TABLE IF NOT EXISTS portfolio_snapshots (
     total_pnl_pct REAL,
     position_count INTEGER NOT NULL,
     bucket_id TEXT DEFAULT 'core',
-    snapshot_json TEXT,  -- Full JSON snapshot of positions
     created_at TEXT NOT NULL
 ) STRICT;
 
 CREATE INDEX IF NOT EXISTS idx_snapshots_date ON portfolio_snapshots(snapshot_date DESC);
 CREATE INDEX IF NOT EXISTS idx_snapshots_bucket ON portfolio_snapshots(bucket_id);
-
--- Database health tracking table
-CREATE TABLE IF NOT EXISTS _database_health (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    checked_at INTEGER NOT NULL,  -- Unix timestamp
-    integrity_check_passed INTEGER NOT NULL,  -- Boolean: 1 = passed, 0 = failed
-    size_bytes INTEGER NOT NULL,
-    wal_size_bytes INTEGER,
-    page_count INTEGER,
-    freelist_count INTEGER,
-    vacuum_performed INTEGER DEFAULT 0,  -- Boolean: 1 = yes, 0 = no
-    notes TEXT
-) STRICT;
-
-CREATE INDEX IF NOT EXISTS idx_health_checked_at ON _database_health(checked_at);

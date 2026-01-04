@@ -90,21 +90,6 @@ CREATE TABLE IF NOT EXISTS allocation_settings (
     description TEXT
 );
 
--- Regime performance tracking (for meta-allocator)
-CREATE TABLE IF NOT EXISTS satellite_regime_performance (
-    satellite_id TEXT NOT NULL,
-    regime TEXT NOT NULL,                  -- 'bull', 'bear', 'sideways', 'high_volatility'
-    period_start TEXT NOT NULL,
-    period_end TEXT NOT NULL,
-    return_pct REAL,
-    trades_count INTEGER,
-    win_rate REAL,
-    PRIMARY KEY (satellite_id, regime, period_start),
-    FOREIGN KEY (satellite_id) REFERENCES buckets(id) ON DELETE CASCADE
-);
-
-CREATE INDEX IF NOT EXISTS idx_regime_performance_satellite ON satellite_regime_performance(satellite_id);
-
 -- Schema version tracking
 CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER PRIMARY KEY,

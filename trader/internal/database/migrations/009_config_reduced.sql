@@ -37,18 +37,3 @@ CREATE TABLE IF NOT EXISTS allocation_targets (
 ) STRICT;
 
 CREATE INDEX IF NOT EXISTS idx_allocation_type ON allocation_targets(type);
-
--- Database health tracking table
-CREATE TABLE IF NOT EXISTS _database_health (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    checked_at INTEGER NOT NULL,  -- Unix timestamp
-    integrity_check_passed INTEGER NOT NULL,  -- Boolean: 1 = passed, 0 = failed
-    size_bytes INTEGER NOT NULL,
-    wal_size_bytes INTEGER,
-    page_count INTEGER,
-    freelist_count INTEGER,
-    vacuum_performed INTEGER DEFAULT 0,  -- Boolean: 1 = yes, 0 = no
-    notes TEXT
-) STRICT;
-
-CREATE INDEX IF NOT EXISTS idx_health_checked_at ON _database_health(checked_at);
