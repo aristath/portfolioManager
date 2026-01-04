@@ -3,6 +3,7 @@ package planning
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -402,4 +403,76 @@ func (r *RecommendationRepository) GetPendingRecommendations(limit int) ([]Recom
 	}
 
 	return recs, nil
+}
+
+// GetRecommendationsAsPlan retrieves pending recommendations and formats them as a plan structure
+// Returns a plan-like structure with steps array for frontend consumption
+func (r *RecommendationRepository) GetRecommendationsAsPlan() (map[string]interface{}, error) {
+	recs, err := r.GetPendingRecommendations(0) // Get all pending
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pending recommendations: %w", err)
+	}
+
+	if len(recs) == 0 {
+		return map[string]interface{}{
+			"steps": []interface{}{},
+		}, nil
+	}
+
+	// Convert recommendations to steps format expected by frontend
+	steps := make([]map[string]interface{}, 0, len(recs))
+	var totalScoreImprovement float64
+	var currentScore float64
+	var endScore float64
+	var finalCash float64
+
+	for i, rec := range recs {
+		// Use priority as step number (1-based)
+		stepNum := int(rec.Priority) + 1
+		if stepNum == 0 {
+			stepNum = i + 1
+		}
+
+		// Track scores from first recommendation
+		if i == 0 {
+			currentScore = rec.CurrentPortfolioScore
+			endScore = rec.NewPortfolioScore
+			totalScoreImprovement = rec.ScoreChange
+		}
+
+		// Convert side to uppercase for frontend (BUY/SELL)
+		side := strings.ToUpper(rec.Side)
+
+		step := map[string]interface{}{
+			"step":                   stepNum,
+			"symbol":                 rec.Symbol,
+			"name":                   rec.Name,
+			"side":                   side,
+			"quantity":               rec.Quantity,
+			"estimated_price":        rec.EstimatedPrice,
+			"estimated_value":        rec.EstimatedValue,
+			"currency":               rec.Currency,
+			"reason":                 rec.Reason,
+			"portfolio_score_before": rec.CurrentPortfolioScore,
+			"portfolio_score_after":  rec.NewPortfolioScore,
+			"score_change":           rec.ScoreChange,
+			"available_cash_before":  0.0,   // TODO: Calculate from portfolio state
+			"available_cash_after":   0.0,   // TODO: Calculate from portfolio state
+			"is_emergency":           false, // TODO: Determine from reason or other criteria
+		}
+
+		steps = append(steps, step)
+	}
+
+	// Build response matching frontend expectations
+	response := map[string]interface{}{
+		"steps":                   steps,
+		"current_score":           currentScore,
+		"end_state_score":         endScore,
+		"total_score_improvement": totalScoreImprovement,
+		"final_available_cash":    finalCash,
+		"evaluated_count":         nil, // TODO: Get from planner status if available
+	}
+
+	return response, nil
 }

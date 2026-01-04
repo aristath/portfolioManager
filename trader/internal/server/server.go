@@ -665,6 +665,9 @@ func (s *Server) setupTradingRoutes(r chi.Router) {
 		s.log,
 	)
 
+	// Recommendation repository (for fetching recommendations)
+	recommendationRepo := planning.NewRecommendationRepository(s.cacheDB.Conn(), s.log)
+
 	// alertService implements allocation.ConcentrationAlertProvider interface
 	handler := trading.NewTradingHandlers(
 		tradeRepo,
@@ -674,22 +677,16 @@ func (s *Server) setupTradingRoutes(r chi.Router) {
 		tradernetClient,
 		safetyService,
 		settingsService,
+		recommendationRepo,
 		s.log,
 	)
 
 	// Trading routes (faithful translation of Python routes)
 	r.Route("/trades", func(r chi.Router) {
-		r.Get("/", handler.HandleGetTrades)               // Trade history
-		r.Post("/execute", handler.HandleExecuteTrade)    // Execute trade (via Tradernet microservice)
-		r.Get("/allocation", handler.HandleGetAllocation) // Portfolio allocation
-
-		// TODO: Recommendations subroute will be added after planning module is properly configured
-		// r.Route("/recommendations", func(r chi.Router) {
-		// 	r.Post("/", recommendationsHandler.ServeHTTP)
-		// 	r.Get("/", ...)  // Fetch existing recommendations
-		// 	r.Post("/execute", ...) // Execute recommendation
-		// 	r.Get("/stream", ...) // SSE streaming
-		// })
+		r.Get("/", handler.HandleGetTrades)                         // Trade history
+		r.Post("/execute", handler.HandleExecuteTrade)              // Execute trade (via Tradernet microservice)
+		r.Get("/allocation", handler.HandleGetAllocation)           // Portfolio allocation
+		r.Get("/recommendations", handler.HandleGetRecommendations) // Fetch existing recommendations
 	})
 }
 
