@@ -463,7 +463,12 @@ func (r *SecurityRepository) scanSecurity(rows *sql.Rows) (Security, error) {
 	var minPortfolioTarget, maxPortfolioTarget sql.NullFloat64
 	var active, allowBuy, allowSell sql.NullInt64
 	var createdAt, updatedAt sql.NullString
+	var bucketID sql.NullString // Handle bucket_id if it exists (removed in migration 014 but may still be in old databases)
 
+	// Table schema: symbol, yahoo_symbol, isin, name, product_type, industry, country, fullExchangeName,
+	// priority_multiplier, min_lot, active, allow_buy, allow_sell, currency, last_synced,
+	// min_portfolio_target, max_portfolio_target, created_at, updated_at
+	// Some databases may still have bucket_id column (before migration 014)
 	err := rows.Scan(
 		&security.Symbol,
 		&yahooSymbol,
@@ -484,6 +489,7 @@ func (r *SecurityRepository) scanSecurity(rows *sql.Rows) (Security, error) {
 		&maxPortfolioTarget,
 		&createdAt,
 		&updatedAt,
+		&bucketID, // 20th column - will be NULL/ignored if column doesn't exist or is NULL
 	)
 	if err != nil {
 		return security, err

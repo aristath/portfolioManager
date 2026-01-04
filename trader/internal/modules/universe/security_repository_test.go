@@ -15,7 +15,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 	db, err := sql.Open("sqlite3", ":memory:")
 	require.NoError(t, err)
 
-	// Create securities table (without bucket_id - simplified to single universe)
+	// Create securities table (with bucket_id for backward compatibility - matches production schema)
 	_, err = db.Exec(`
 		CREATE TABLE securities (
 			symbol TEXT PRIMARY KEY,
@@ -36,7 +36,8 @@ func setupTestDB(t *testing.T) *sql.DB {
 			min_portfolio_target REAL,
 			max_portfolio_target REAL,
 			created_at TEXT,
-			updated_at TEXT
+			updated_at TEXT,
+			bucket_id TEXT
 		)
 	`)
 	require.NoError(t, err)

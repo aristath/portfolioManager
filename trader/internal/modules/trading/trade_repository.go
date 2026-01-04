@@ -31,11 +31,12 @@ func (r *TradeRepository) Create(trade Trade) error {
 	now := time.Now().Format(time.RFC3339)
 	executedAt := trade.ExecutedAt.Format(time.RFC3339)
 
+	// Table schema (after migration 017): id, symbol, isin, side, quantity, price, executed_at, order_id, currency, value_eur, source, mode, created_at
 	query := `
 		INSERT INTO trades
 		(symbol, isin, side, quantity, price, executed_at, order_id,
-		 currency, currency_rate, value_eur, source, mode, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		 currency, value_eur, source, mode, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err := r.ledgerDB.Exec(query,
@@ -47,7 +48,6 @@ func (r *TradeRepository) Create(trade Trade) error {
 		executedAt,
 		nullString(trade.OrderID),
 		nullString(trade.Currency),
-		nullFloat64Ptr(trade.CurrencyRate),
 		nullFloat64Ptr(trade.ValueEUR),
 		trade.Source,
 		trade.Mode,
@@ -764,23 +764,23 @@ func (r *TradeRepository) scanTrade(row *sql.Row) (Trade, error) {
 	var trade Trade
 	var executedAt, createdAt sql.NullString
 	var isin, orderID, currency sql.NullString
-	var currencyRate, valueEUR sql.NullFloat64
+	var valueEUR sql.NullFloat64
 
+	// Table schema (after migration 017): id, symbol, isin, side, quantity, price, executed_at, order_id, currency, value_eur, source, mode, created_at
 	err := row.Scan(
-		&trade.ID,
-		&trade.Symbol,
-		&trade.Side,
-		&trade.Quantity,
-		&trade.Price,
-		&executedAt,
-		&orderID,
-		&currency,
-		&currencyRate,
-		&valueEUR,
-		&trade.Source,
-		&createdAt,
-		&isin,
-		&trade.Mode,
+		&trade.ID,       // 0: id
+		&trade.Symbol,   // 1: symbol
+		&isin,           // 2: isin
+		&trade.Side,     // 3: side
+		&trade.Quantity, // 4: quantity
+		&trade.Price,    // 5: price
+		&executedAt,     // 6: executed_at
+		&orderID,        // 7: order_id
+		&currency,       // 8: currency
+		&valueEUR,       // 9: value_eur
+		&trade.Source,   // 10: source
+		&trade.Mode,     // 11: mode
+		&createdAt,      // 12: created_at
 	)
 
 	if err != nil {
@@ -832,9 +832,6 @@ func (r *TradeRepository) scanTrade(row *sql.Row) (Trade, error) {
 	}
 	if currency.Valid {
 		trade.Currency = currency.String
-	}
-	if currencyRate.Valid {
-		trade.CurrencyRate = &currencyRate.Float64
 	}
 	if valueEUR.Valid {
 		trade.ValueEUR = &valueEUR.Float64
@@ -850,23 +847,23 @@ func (r *TradeRepository) scanTradeFromRows(rows *sql.Rows) (Trade, error) {
 	var trade Trade
 	var executedAt, createdAt sql.NullString
 	var isin, orderID, currency sql.NullString
-	var currencyRate, valueEUR sql.NullFloat64
+	var valueEUR sql.NullFloat64
 
+	// Table schema (after migration 017): id, symbol, isin, side, quantity, price, executed_at, order_id, currency, value_eur, source, mode, created_at
 	err := rows.Scan(
-		&trade.ID,
-		&trade.Symbol,
-		&trade.Side,
-		&trade.Quantity,
-		&trade.Price,
-		&executedAt,
-		&orderID,
-		&currency,
-		&currencyRate,
-		&valueEUR,
-		&trade.Source,
-		&createdAt,
-		&isin,
-		&trade.Mode,
+		&trade.ID,       // 0: id
+		&trade.Symbol,   // 1: symbol
+		&isin,           // 2: isin
+		&trade.Side,     // 3: side
+		&trade.Quantity, // 4: quantity
+		&trade.Price,    // 5: price
+		&executedAt,     // 6: executed_at
+		&orderID,        // 7: order_id
+		&currency,       // 8: currency
+		&valueEUR,       // 9: value_eur
+		&trade.Source,   // 10: source
+		&trade.Mode,     // 11: mode
+		&createdAt,      // 12: created_at
 	)
 
 	if err != nil {
@@ -918,9 +915,6 @@ func (r *TradeRepository) scanTradeFromRows(rows *sql.Rows) (Trade, error) {
 	}
 	if currency.Valid {
 		trade.Currency = currency.String
-	}
-	if currencyRate.Valid {
-		trade.CurrencyRate = &currencyRate.Float64
 	}
 	if valueEUR.Valid {
 		trade.ValueEUR = &valueEUR.Float64

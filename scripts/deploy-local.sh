@@ -24,7 +24,7 @@ else
         ON_DEVICE=true
     else
         log_error "This script must run on the Arduino device"
-        log_info "For deployment from development machine, use: ./scripts/deploy-full.sh"
+        log_info "Deployment is handled automatically by the auto-deploy system"
         exit 1
     fi
 fi
