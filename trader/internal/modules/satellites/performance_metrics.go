@@ -1,9 +1,14 @@
 package satellites
 
 import (
+	"fmt"
 	"math"
+	"sort"
+	"time"
 
 	"github.com/rs/zerolog"
+
+	"github.com/aristath/arduino-trader/internal/modules/trading"
 )
 
 // PerformanceMetrics represents performance metrics for a satellite bucket
@@ -45,6 +50,214 @@ type PerformanceMetrics struct {
 	StartDate    string `json:"start_date"`
 	EndDate      string `json:"end_date"`
 	CalculatedAt string `json:"calculated_at"`
+}
+
+// ClosedTrade represents a matched buy-sell pair for P&L calculation
+type ClosedTrade struct {
+	Symbol     string  // Security symbol
+	BuyDate    string  // Buy execution timestamp
+	SellDate   string  // Sell execution timestamp
+	Quantity   float64 // Number of shares/units
+	BuyPrice   float64 // Purchase price per unit
+	SellPrice  float64 // Sale price per unit
+	ProfitLoss float64 // Realized P&L in EUR
+	ReturnPct  float64 // Return percentage: (SellPrice - BuyPrice) / BuyPrice
+}
+
+// PositionLot represents an open position lot for FIFO matching
+type PositionLot struct {
+	BuyDate  string  // Buy execution timestamp
+	Quantity float64 // Remaining quantity in lot
+	Price    float64 // Purchase price per unit
+	ValueEUR float64 // EUR-converted value
+}
+
+// matchTrades matches BUY and SELL trades using FIFO to calculate closed P&L.
+//
+// Groups trades by symbol, sorts chronologically, and matches SELLs against oldest BUYs first.
+// Returns array of closed trades with realized P&L.
+//
+// Args:
+//
+//	bucketTrades: All trades for the bucket
+//	log: Logger for warnings (e.g., SELL exceeds BUY)
+//
+// Returns:
+//
+//	Array of ClosedTrade with matched buy-sell pairs
+func matchTrades(bucketTrades []trading.Trade, log zerolog.Logger) []ClosedTrade {
+	// Group trades by symbol
+	tradesBySymbol := make(map[string][]trading.Trade)
+	for _, trade := range bucketTrades {
+		tradesBySymbol[trade.Symbol] = append(tradesBySymbol[trade.Symbol], trade)
+	}
+
+	var closedTrades []ClosedTrade
+
+	// Process each symbol separately
+	for symbol, trades := range tradesBySymbol {
+		// Sort by executed_at (chronological order)
+		sort.Slice(trades, func(i, j int) bool {
+			return trades[i].ExecutedAt.Before(trades[j].ExecutedAt)
+		})
+
+		// FIFO queue for open positions
+		var openPositions []PositionLot
+
+		// Process trades chronologically
+		for _, trade := range trades {
+			if trade.Side.IsBuy() {
+				// Add to open positions queue
+				openPositions = append(openPositions, PositionLot{
+					BuyDate:  trade.ExecutedAt.Format("2006-01-02 15:04:05"),
+					Quantity: trade.Quantity,
+					Price:    trade.Price,
+					ValueEUR: getValueEUR(trade),
+				})
+			} else if trade.Side.IsSell() {
+				remainingToSell := trade.Quantity
+				sellPrice := trade.Price
+				sellDate := trade.ExecutedAt.Format("2006-01-02 15:04:05")
+
+				// Match against oldest lots first (FIFO)
+				for len(openPositions) > 0 && remainingToSell > 0 {
+					lot := &openPositions[0]
+
+					if lot.Quantity <= remainingToSell {
+						// Close entire lot
+						pnl := (sellPrice - lot.Price) * lot.Quantity
+						returnPct := (sellPrice - lot.Price) / lot.Price
+
+						closedTrades = append(closedTrades, ClosedTrade{
+							Symbol:     symbol,
+							BuyDate:    lot.BuyDate,
+							SellDate:   sellDate,
+							Quantity:   lot.Quantity,
+							BuyPrice:   lot.Price,
+							SellPrice:  sellPrice,
+							ProfitLoss: pnl,
+							ReturnPct:  returnPct,
+						})
+
+						remainingToSell -= lot.Quantity
+						openPositions = openPositions[1:] // Remove closed lot
+					} else {
+						// Partial match - close part of lot
+						pnl := (sellPrice - lot.Price) * remainingToSell
+						returnPct := (sellPrice - lot.Price) / lot.Price
+
+						closedTrades = append(closedTrades, ClosedTrade{
+							Symbol:     symbol,
+							BuyDate:    lot.BuyDate,
+							SellDate:   sellDate,
+							Quantity:   remainingToSell,
+							BuyPrice:   lot.Price,
+							SellPrice:  sellPrice,
+							ProfitLoss: pnl,
+							ReturnPct:  returnPct,
+						})
+
+						lot.Quantity -= remainingToSell
+						remainingToSell = 0
+					}
+				}
+
+				// Log warning if SELL exceeds BUY (data inconsistency)
+				if remainingToSell > 0 {
+					log.Warn().
+						Str("symbol", symbol).
+						Float64("excess_quantity", remainingToSell).
+						Str("sell_date", sellDate).
+						Msg("SELL trade exceeds BUY quantity - possible data inconsistency")
+				}
+			}
+		}
+	}
+
+	return closedTrades
+}
+
+// getValueEUR safely extracts EUR value from trade.
+// Returns ValueEUR if set, otherwise calculates from Price * Quantity.
+func getValueEUR(trade trading.Trade) float64 {
+	if trade.ValueEUR != nil {
+		return *trade.ValueEUR
+	}
+	// Fallback: assume EUR if not specified
+	return trade.Price * trade.Quantity
+}
+
+// buildEquityCurve creates cumulative P&L curve from closed trades.
+//
+// Sorts trades by sell date and builds cumulative P&L starting from zero.
+// Returns array with N+1 elements (0 = starting value, 1..N = after each trade).
+//
+// Args:
+//
+//	closedTrades: Array of closed trades
+//
+// Returns:
+//
+//	Equity curve as cumulative P&L (starts at 0.0)
+func buildEquityCurve(closedTrades []ClosedTrade) []float64 {
+	if len(closedTrades) == 0 {
+		return []float64{}
+	}
+
+	// Sort by sell date (chronological)
+	sort.Slice(closedTrades, func(i, j int) bool {
+		return closedTrades[i].SellDate < closedTrades[j].SellDate
+	})
+
+	// Build cumulative P&L curve
+	equityCurve := make([]float64, len(closedTrades)+1)
+	equityCurve[0] = 0.0 // Start at zero
+
+	cumulativePnL := 0.0
+	for i, ct := range closedTrades {
+		cumulativePnL += ct.ProfitLoss
+		equityCurve[i+1] = cumulativePnL
+	}
+
+	return equityCurve
+}
+
+// calculateReturns extracts trade-level returns from closed trades.
+//
+// Returns array of return percentages (as decimals, e.g., 0.05 for 5%).
+//
+// Args:
+//
+//	closedTrades: Array of closed trades
+//
+// Returns:
+//
+//	Array of return percentages
+func calculateReturns(closedTrades []ClosedTrade) []float64 {
+	returns := make([]float64, len(closedTrades))
+	for i, ct := range closedTrades {
+		returns[i] = ct.ReturnPct
+	}
+	return returns
+}
+
+// calculateInitialCapital sums the cost basis of all BUY trades in closed positions.
+//
+// Calculates total capital invested by summing BuyPrice * Quantity for all closed trades.
+//
+// Args:
+//
+//	closedTrades: Array of closed trades
+//
+// Returns:
+//
+//	Total initial capital invested
+func calculateInitialCapital(closedTrades []ClosedTrade) float64 {
+	capital := 0.0
+	for _, ct := range closedTrades {
+		capital += ct.BuyPrice * ct.Quantity
+	}
+	return capital
 }
 
 // CalculateSharpeRatio calculates Sharpe ratio.
@@ -273,17 +486,15 @@ func CalculateProfitFactor(profitLosses []float64) float64 {
 
 // CalculateBucketPerformance calculates comprehensive performance metrics for a bucket.
 //
-// NOTE: This implementation is simplified and requires integration with the
-// trading module's repository to fetch actual trade data. The Python version
-// uses app.repositories.TradeRepository which needs to be mapped to the Go
-// trading module repository.
+// Calculates performance metrics from closed trades using FIFO matching algorithm.
+// Returns nil if insufficient data (< 5 total trades or < 3 closed trades).
 //
 // Args:
 //
 //	bucketID: Bucket ID
-//	periodDays: Evaluation period in days (default 90 for quarterly)
-//	riskFreeRate: Annual risk-free rate (default 3%)
+//	settings: Satellite settings with risk parameters (EvaluationPeriodDays, RiskFreeRate, SortinoMAR)
 //	balanceService: Balance service for current values
+//	tradeRepo: Trade repository for fetching trade data
 //	log: Logger
 //
 // Returns:
@@ -293,29 +504,191 @@ func CalculateBucketPerformance(
 	bucketID string,
 	settings *SatelliteSettings,
 	balanceService *BalanceService,
+	tradeRepo *trading.TradeRepository,
 	log zerolog.Logger,
 ) (*PerformanceMetrics, error) {
-	// TODO: Integrate with trading module repository to get actual trade data
-	// For now, return nil to indicate insufficient data
-	// This needs to be wired up to: trader/internal/modules/trading/repository.go
-	//
-	// Example integration:
-	// allTrades, err := tradeRepo.GetAll()
-	// bucketTrades := filterTradesByBucket(allTrades, bucketID, startDate, endDate)
-
-	// Extract risk parameters from settings
+	// Step 1: Calculate date range
 	periodDays := settings.EvaluationPeriodDays
-	riskFreeRate := settings.RiskFreeRate
-	// sortinoMAR := settings.SortinoMAR // Will be used when calculating Sortino ratio
+	endDate := time.Now().Format(time.RFC3339)
+	startDate := time.Now().AddDate(0, 0, -periodDays).Format(time.RFC3339)
 
+	// Step 2: Fetch trades in date range
+	allTrades, err := tradeRepo.GetAllInRange(startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch trades: %w", err)
+	}
+
+	// Step 3: Filter trades for this bucket
+	var bucketTrades []trading.Trade
+	for _, trade := range allTrades {
+		if trade.BucketID == bucketID {
+			bucketTrades = append(bucketTrades, trade)
+		}
+	}
+
+	// Step 4: Check for insufficient data
+	if len(bucketTrades) < 5 {
+		log.Info().
+			Str("bucket_id", bucketID).
+			Int("trade_count", len(bucketTrades)).
+			Msg("Insufficient trades for performance calculation")
+		return nil, nil // Return nil like Python version
+	}
+
+	// Step 5: Match trades (FIFO)
+	closedTrades := matchTrades(bucketTrades, log)
+
+	if len(closedTrades) < 3 {
+		log.Info().
+			Str("bucket_id", bucketID).
+			Int("closed_trade_count", len(closedTrades)).
+			Msg("Insufficient closed trades for performance calculation")
+		return nil, nil
+	}
+
+	// Step 6: Build equity curve (cumulative P&L)
+	equityCurve := buildEquityCurve(closedTrades)
+
+	// Step 7: Calculate returns (trade-level returns)
+	returns := calculateReturns(closedTrades)
+
+	// Step 8: Calculate total return
+	initialCapital := calculateInitialCapital(closedTrades)
+	totalPnL := equityCurve[len(equityCurve)-1]
+	totalReturn := 0.0
+	if initialCapital > 0 {
+		totalReturn = (totalPnL / initialCapital) * 100.0
+	}
+
+	// Step 9: Calculate annualized return
+	daysElapsed := float64(periodDays)
+	annualizedReturn := 0.0
+	if daysElapsed > 0 && len(returns) > 0 {
+		totalReturnDecimal := totalReturn / 100.0
+		yearsElapsed := daysElapsed / 365.0
+		if totalReturnDecimal > -1.0 { // Avoid negative base in power
+			annualizedReturn = (math.Pow(1.0+totalReturnDecimal, 1.0/yearsElapsed) - 1.0) * 100.0
+		}
+	}
+
+	// Step 10: Calculate volatility
+	volatility := stdDev(returns) * 100.0
+
+	// Step 11: Calculate downside volatility
+	var downsideReturns []float64
+	for _, r := range returns {
+		if r < 0 {
+			downsideReturns = append(downsideReturns, r)
+		}
+	}
+	downsideVolatility := stdDev(downsideReturns) * 100.0
+
+	// Step 12: Calculate max drawdown
+	maxDD, _, _ := CalculateMaxDrawdown(equityCurve)
+	maxDrawdown := maxDD * 100.0
+
+	// Step 13: Calculate Sharpe ratio
+	sharpeRatio := CalculateSharpeRatio(returns, settings.RiskFreeRate)
+
+	// Step 14: Calculate Sortino ratio
+	sortinoRatio := CalculateSortinoRatio(returns, settings.RiskFreeRate, settings.SortinoMAR)
+
+	// Step 15: Calculate Calmar ratio
+	calmarRatio := CalculateCalmarRatio(annualizedReturn, maxDrawdown)
+
+	// Step 16: Calculate trade statistics
+	profitLosses := make([]float64, len(closedTrades))
+	for i, ct := range closedTrades {
+		profitLosses[i] = ct.ProfitLoss
+	}
+
+	winRate, winningTrades, losingTrades := CalculateWinRate(profitLosses)
+	profitFactor := CalculateProfitFactor(profitLosses)
+
+	// Step 17: Calculate win/loss details
+	var wins, losses []float64
+	for _, pnl := range profitLosses {
+		if pnl > 0 {
+			wins = append(wins, pnl)
+		} else if pnl < 0 {
+			losses = append(losses, pnl)
+		}
+	}
+
+	avgWin := 0.0
+	if len(wins) > 0 {
+		avgWin = mean(wins)
+	}
+
+	avgLoss := 0.0
+	if len(losses) > 0 {
+		avgLoss = mean(losses)
+	}
+
+	largestWin := 0.0
+	if len(wins) > 0 {
+		for _, w := range wins {
+			if w > largestWin {
+				largestWin = w
+			}
+		}
+	}
+
+	largestLoss := 0.0
+	if len(losses) > 0 {
+		for _, l := range losses {
+			if l < largestLoss {
+				largestLoss = l
+			}
+		}
+	}
+
+	// Step 18: Populate PerformanceMetrics struct
+	metrics := &PerformanceMetrics{
+		BucketID:   bucketID,
+		PeriodDays: periodDays,
+
+		TotalReturn:      totalReturn,
+		AnnualizedReturn: annualizedReturn,
+
+		Volatility:         volatility,
+		DownsideVolatility: downsideVolatility,
+		MaxDrawdown:        maxDrawdown,
+
+		SharpeRatio:  sharpeRatio,
+		SortinoRatio: sortinoRatio,
+		CalmarRatio:  calmarRatio,
+
+		TotalTrades:   len(closedTrades),
+		WinningTrades: winningTrades,
+		LosingTrades:  losingTrades,
+		WinRate:       winRate,
+		ProfitFactor:  profitFactor,
+
+		AvgWin:      avgWin,
+		AvgLoss:     avgLoss,
+		LargestWin:  largestWin,
+		LargestLoss: largestLoss,
+
+		StartDate:    startDate,
+		EndDate:      endDate,
+		CalculatedAt: time.Now().Format(time.RFC3339),
+	}
+
+	// Step 19: Calculate composite score
+	metrics.CompositeScore = CalculateCompositeScore(metrics)
+
+	// Step 20: Log results
 	log.Info().
 		Str("bucket_id", bucketID).
-		Int("period_days", periodDays).
-		Float64("risk_free_rate", riskFreeRate).
-		Msg("Performance calculation requires trade repository integration (not yet implemented)")
+		Int("closed_trades", len(closedTrades)).
+		Float64("total_return", totalReturn).
+		Float64("sharpe", sharpeRatio).
+		Float64("sortino", sortinoRatio).
+		Float64("composite_score", metrics.CompositeScore).
+		Msg("Bucket performance calculated")
 
-	// Return nil to indicate insufficient data (matches Python behavior)
-	return nil, nil
+	return metrics, nil
 }
 
 // Helper functions for statistical calculations

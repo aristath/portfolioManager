@@ -186,7 +186,7 @@ func TestBalanceRepository_RecordTransaction(t *testing.T) {
 	desc := "Monthly deposit"
 	tx := NewBucketTransaction("core", TransactionTypeDeposit, 1000.0, "USD", &desc)
 
-	err := repo.RecordTransaction(tx)
+	err := repo.RecordTransaction(tx, nil)
 	require.NoError(t, err)
 	assert.NotNil(t, tx.ID)
 	assert.NotEmpty(t, tx.CreatedAt)
@@ -200,13 +200,13 @@ func TestBalanceRepository_GetTransactions(t *testing.T) {
 
 	// Record transactions
 	tx1 := NewBucketTransaction("core", TransactionTypeDeposit, 1000.0, "USD", nil)
-	repo.RecordTransaction(tx1)
+	repo.RecordTransaction(tx1, nil)
 
 	tx2 := NewBucketTransaction("core", TransactionTypeTradeBuy, -500.0, "USD", nil)
-	repo.RecordTransaction(tx2)
+	repo.RecordTransaction(tx2, nil)
 
 	tx3 := NewBucketTransaction("core", TransactionTypeDividend, 50.0, "USD", nil)
-	repo.RecordTransaction(tx3)
+	repo.RecordTransaction(tx3, nil)
 
 	// Get all transactions
 	transactions, err := repo.GetTransactions("core", 100, 0, nil)
@@ -230,7 +230,7 @@ func TestBalanceRepository_GetTransactions_Pagination(t *testing.T) {
 	// Create 5 transactions
 	for i := 0; i < 5; i++ {
 		tx := NewBucketTransaction("core", TransactionTypeDeposit, 100.0, "USD", nil)
-		repo.RecordTransaction(tx)
+		repo.RecordTransaction(tx, nil)
 	}
 
 	// Get first 2
@@ -256,9 +256,9 @@ func TestBalanceRepository_GetTransactionsByType(t *testing.T) {
 	repo := NewBalanceRepository(db, zerolog.Nop())
 
 	// Record different types
-	repo.RecordTransaction(NewBucketTransaction("core", TransactionTypeDeposit, 1000.0, "USD", nil))
-	repo.RecordTransaction(NewBucketTransaction("sat1", TransactionTypeDeposit, 500.0, "USD", nil))
-	repo.RecordTransaction(NewBucketTransaction("core", TransactionTypeTradeBuy, -200.0, "USD", nil))
+	repo.RecordTransaction(NewBucketTransaction("core", TransactionTypeDeposit, 1000.0, "USD", nil), nil)
+	repo.RecordTransaction(NewBucketTransaction("sat1", TransactionTypeDeposit, 500.0, "USD", nil), nil)
+	repo.RecordTransaction(NewBucketTransaction("core", TransactionTypeTradeBuy, -200.0, "USD", nil), nil)
 
 	// Get all deposits across all buckets
 	transactions, err := repo.GetTransactionsByType(TransactionTypeDeposit, 100)
@@ -276,8 +276,8 @@ func TestBalanceRepository_DeleteTransactions(t *testing.T) {
 	repo := NewBalanceRepository(db, zerolog.Nop())
 
 	// Record transactions
-	repo.RecordTransaction(NewBucketTransaction("sat1", TransactionTypeDeposit, 1000.0, "USD", nil))
-	repo.RecordTransaction(NewBucketTransaction("sat1", TransactionTypeTradeBuy, -500.0, "USD", nil))
+	repo.RecordTransaction(NewBucketTransaction("sat1", TransactionTypeDeposit, 1000.0, "USD", nil), nil)
+	repo.RecordTransaction(NewBucketTransaction("sat1", TransactionTypeTradeBuy, -500.0, "USD", nil), nil)
 
 	// Delete all transactions for bucket
 	count, err := repo.DeleteTransactions("sat1")

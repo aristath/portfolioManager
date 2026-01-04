@@ -92,6 +92,34 @@ func (r *BalanceRepository) GetTotalByCurrency(currency string) (float64, error)
 	return total, nil
 }
 
+// GetAllCurrencies gets all distinct currencies that have balances
+func (r *BalanceRepository) GetAllCurrencies() ([]string, error) {
+	query := `SELECT DISTINCT currency
+	          FROM bucket_balances
+	          ORDER BY currency`
+
+	rows, err := r.satellitesDB.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all currencies: %w", err)
+	}
+	defer rows.Close()
+
+	var currencies []string
+	for rows.Next() {
+		var currency string
+		if err := rows.Scan(&currency); err != nil {
+			return nil, fmt.Errorf("failed to scan currency: %w", err)
+		}
+		currencies = append(currencies, currency)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating currencies: %w", err)
+	}
+
+	return currencies, nil
+}
+
 // GetBalanceAmount gets balance amount, returning 0 if not found
 func (r *BalanceRepository) GetBalanceAmount(bucketID string, currency string) (float64, error) {
 	balance, err := r.GetBalance(bucketID, currency)
@@ -215,15 +243,22 @@ func (r *BalanceRepository) DeleteBalances(bucketID string) (int, error) {
 // --- Transaction Operations ---
 
 // RecordTransaction records a transaction in the audit trail
-func (r *BalanceRepository) RecordTransaction(transaction *BucketTransaction) error {
+// If tx is provided, uses that transaction; otherwise creates a new one
+func (r *BalanceRepository) RecordTransaction(transaction *BucketTransaction, tx *sql.Tx) error {
 	now := time.Now().Format(time.RFC3339)
 	transaction.CreatedAt = now
 
-	tx, err := r.satellitesDB.Begin()
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
+	// If no transaction provided, create and manage our own
+	ownTx := false
+	if tx == nil {
+		var err error
+		tx, err = r.satellitesDB.Begin()
+		if err != nil {
+			return fmt.Errorf("failed to begin transaction: %w", err)
+		}
+		ownTx = true
+		defer tx.Rollback()
 	}
-	defer tx.Rollback()
 
 	query := `INSERT INTO bucket_transactions
 	          (bucket_id, type, amount, currency, description, created_at)
@@ -247,8 +282,11 @@ func (r *BalanceRepository) RecordTransaction(transaction *BucketTransaction) er
 	}
 	transaction.ID = &lastID
 
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
+	// Only commit if we created the transaction
+	if ownTx {
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("failed to commit transaction: %w", err)
+		}
 	}
 
 	r.log.Info().

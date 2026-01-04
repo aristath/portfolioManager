@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+
+	"github.com/aristath/arduino-trader/internal/modules/trading"
 )
 
 // AllocationRecommendation represents recommended allocation adjustment for a satellite
@@ -45,6 +47,7 @@ type MetaAllocator struct {
 	bucketService  *BucketService
 	balanceService *BalanceService
 	balanceRepo    *BalanceRepository
+	tradeRepo      *trading.TradeRepository
 	log            zerolog.Logger
 }
 
@@ -53,12 +56,14 @@ func NewMetaAllocator(
 	bucketService *BucketService,
 	balanceService *BalanceService,
 	balanceRepo *BalanceRepository,
+	tradeRepo *trading.TradeRepository,
 	log zerolog.Logger,
 ) *MetaAllocator {
 	return &MetaAllocator{
 		bucketService:  bucketService,
 		balanceService: balanceService,
 		balanceRepo:    balanceRepo,
+		tradeRepo:      tradeRepo,
 		log:            log,
 	}
 }
@@ -134,13 +139,12 @@ func (m *MetaAllocator) EvaluateAndReallocate(
 			settings = NewSatelliteSettings(satellite.ID)
 		}
 
-		// NOTE: Performance calculation requires trade repository integration
-		// For now, using neutral score (0.0) for all satellites
-		// TODO: Wire up to CalculateBucketPerformance once trade repo is integrated
+		// Calculate performance metrics from closed trades
 		metrics, err := CalculateBucketPerformance(
 			satellite.ID,
 			settings, // Pass full settings struct with risk parameters
 			m.balanceService,
+			m.tradeRepo,
 			m.log,
 		)
 

@@ -156,7 +156,7 @@ func (s *ReconciliationService) Reconcile(
 			Description: &desc,
 		}
 
-		err = s.balanceRepo.RecordTransaction(tx)
+		err = s.balanceRepo.RecordTransaction(tx, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to record transaction: %w", err)
 		}
@@ -281,7 +281,7 @@ func (s *ReconciliationService) InitializeFromBrokerage(
 				Description: &desc,
 			}
 
-			err = s.balanceRepo.RecordTransaction(tx)
+			err = s.balanceRepo.RecordTransaction(tx, nil)
 			if err != nil {
 				return nil, fmt.Errorf("failed to record transaction for %s: %w", currency, err)
 			}
@@ -367,7 +367,7 @@ func (s *ReconciliationService) ForceReconcileToCore(
 			Description: &desc,
 		}
 
-		err = s.balanceRepo.RecordTransaction(tx)
+		err = s.balanceRepo.RecordTransaction(tx, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to record transaction: %w", err)
 		}

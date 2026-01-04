@@ -46,11 +46,10 @@ func SimulateSequence(
 		}
 
 		// Apply price adjustment if provided (for stochastic scenarios)
-		adjustedPrice := action.Price
 		adjustedValueEUR := action.ValueEUR
 		if priceAdjustments != nil {
 			if multiplier, hasPriceAdj := priceAdjustments[action.Symbol]; hasPriceAdj {
-				adjustedPrice = action.Price * multiplier
+				adjustedPrice := action.Price * multiplier
 				// Recalculate value with adjusted price (maintain same quantity)
 				adjustedValueEUR = float64(action.Quantity) * adjustedPrice
 				// Note: Currency conversion would happen here if needed
@@ -100,7 +99,7 @@ func SimulateSequence(
 				continue // Skip if can't afford
 			}
 
-			newPositions[action.Symbol] = newPositions[action.Symbol] + buyValue
+			newPositions[action.Symbol] += buyValue
 
 			// Copy-on-write: Create copies only for maps we're about to modify.
 			// This avoids unnecessary copies when only one type of metadata exists.

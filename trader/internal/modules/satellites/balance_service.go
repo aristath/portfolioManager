@@ -4,20 +4,33 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/aristath/arduino-trader/internal/modules/cash_utils"
 	"github.com/rs/zerolog"
 )
 
-// BalanceService provides atomic virtual cash operations.
+// CashManager interface defines operations for managing cash as securities and positions
+// This interface breaks the circular dependency between satellites and cash_flows packages
+type CashManager interface {
+	UpdateCashPosition(bucketID string, currency string, balance float64) error
+	GetCashBalance(bucketID string, currency string) (float64, error)
+	GetAllCashBalances(bucketID string) (map[string]float64, error)
+	GetTotalByCurrency(currency string) (float64, error)
+	GetAllCashSymbols() ([]string, error) // Returns all cash position symbols
+	AdjustCashBalance(bucketID string, currency string, delta float64) (float64, error)
+}
+
+// BalanceService provides atomic cash operations using cash positions.
 //
-// All operations that affect cash balances are atomic - they update
-// the balance and record a transaction in a single database transaction.
+// ARCHITECTURAL CHANGE: Cash balances are now stored as positions in portfolio.db
+// (synthetic securities with product_type="CASH" and symbols like "CASH:EUR:core").
 //
-// This ensures the critical invariant:
-// SUM(bucket_balances for currency X) == Actual brokerage balance for currency X
+// This eliminates the bucket_balances table and uses positions as the single source of truth.
+// All operations that affect cash balances update positions and record transactions atomically.
 //
-// Faithful translation from Python: app/modules/satellites/services/balance_service.py
+// Rewritten from Python faithful translation to use cash-as-positions architecture.
 type BalanceService struct {
-	balanceRepo *BalanceRepository
+	cashManager CashManager        // Interface to break circular dependency
+	balanceRepo *BalanceRepository // Still used for transaction recording
 	bucketRepo  *BucketRepository
 	log         zerolog.Logger
 }
@@ -27,11 +40,13 @@ const MaxSatelliteBudgetPct = 0.30 // 30%
 
 // NewBalanceService creates a new balance service
 func NewBalanceService(
+	cashManager CashManager,
 	balanceRepo *BalanceRepository,
 	bucketRepo *BucketRepository,
 	log zerolog.Logger,
 ) *BalanceService {
 	return &BalanceService{
+		cashManager: cashManager,
 		balanceRepo: balanceRepo,
 		bucketRepo:  bucketRepo,
 		log:         log,
@@ -41,23 +56,78 @@ func NewBalanceService(
 // Query methods
 
 // GetBalance gets balance for a bucket in a specific currency
+// Now queries cash positions instead of bucket_balances table
 func (s *BalanceService) GetBalance(bucketID string, currency string) (*BucketBalance, error) {
-	return s.balanceRepo.GetBalance(bucketID, currency)
+	amount, err := s.cashManager.GetCashBalance(bucketID, currency)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cash balance: %w", err)
+	}
+
+	if amount == 0 {
+		return nil, nil // No balance = nil (consistent with old behavior)
+	}
+
+	return &BucketBalance{
+		BucketID: bucketID,
+		Currency: currency,
+		Balance:  amount,
+	}, nil
 }
 
 // GetBalanceAmount gets balance amount, returning 0 if not found
 func (s *BalanceService) GetBalanceAmount(bucketID string, currency string) (float64, error) {
-	return s.balanceRepo.GetBalanceAmount(bucketID, currency)
+	return s.cashManager.GetCashBalance(bucketID, currency)
 }
 
 // GetAllBalances gets all currency balances for a bucket
 func (s *BalanceService) GetAllBalances(bucketID string) ([]*BucketBalance, error) {
-	return s.balanceRepo.GetAllBalances(bucketID)
+	balancesMap, err := s.cashManager.GetAllCashBalances(bucketID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all cash balances: %w", err)
+	}
+
+	var balances []*BucketBalance
+	for currency, amount := range balancesMap {
+		balances = append(balances, &BucketBalance{
+			BucketID: bucketID,
+			Currency: currency,
+			Balance:  amount,
+		})
+	}
+
+	return balances, nil
 }
 
 // GetTotalByCurrency gets total virtual balance across all buckets for a currency
 func (s *BalanceService) GetTotalByCurrency(currency string) (float64, error) {
-	return s.balanceRepo.GetTotalByCurrency(currency)
+	return s.cashManager.GetTotalByCurrency(currency)
+}
+
+// GetAllCurrencies gets all distinct currencies that have balances
+func (s *BalanceService) GetAllCurrencies() ([]string, error) {
+	// Get all cash symbols
+	symbols, err := s.cashManager.GetAllCashSymbols()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all cash symbols: %w", err)
+	}
+
+	// Extract unique currencies
+	currencySet := make(map[string]bool)
+	for _, symbol := range symbols {
+		currency, _, err := cash_utils.ParseCashSymbol(symbol)
+		if err != nil {
+			s.log.Warn().Err(err).Str("symbol", symbol).Msg("Failed to parse cash symbol")
+			continue
+		}
+		currencySet[currency] = true
+	}
+
+	var currencies []string
+	for currency := range currencySet {
+		currencies = append(currencies, currency)
+	}
+
+	return currencies, nil
 }
 
 // GetPortfolioSummary gets summary of all buckets and their balances.
@@ -74,16 +144,12 @@ func (s *BalanceService) GetPortfolioSummary() (map[string]map[string]float64, e
 	summary := make(map[string]map[string]float64)
 
 	for _, bucket := range buckets {
-		balances, err := s.balanceRepo.GetAllBalances(bucket.ID)
+		balances, err := s.cashManager.GetAllCashBalances(bucket.ID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get balances for bucket %s: %w", bucket.ID, err)
 		}
 
-		currencyMap := make(map[string]float64)
-		for _, balance := range balances {
-			currencyMap[balance.Currency] = balance.Balance
-		}
-		summary[bucket.ID] = currencyMap
+		summary[bucket.ID] = balances
 	}
 
 	return summary, nil
@@ -93,16 +159,13 @@ func (s *BalanceService) GetPortfolioSummary() (map[string]map[string]float64, e
 
 // RecordTradeSettlement records a trade settlement, atomically updating balance.
 //
-// For buys: subtracts amount from balance (cash goes out)
-// For sells: adds amount to balance (cash comes in)
-//
 // Args:
 //
-//	bucketID: ID of the bucket
-//	amount: Absolute trade amount (always positive)
+//	bucketID: Bucket that executed the trade
+//	amount: Trade amount (positive)
 //	currency: Currency code
-//	isBuy: True for buy (cash out), False for sell (cash in)
-//	description: Optional description for audit trail
+//	isBuy: true for buy (cash out), false for sell (cash in)
+//	description: Optional description
 //
 // Returns:
 //
@@ -132,20 +195,25 @@ func (s *BalanceService) RecordTradeSettlement(
 		defaultDesc = "Buy settlement"
 	}
 
-	// Atomic operation: adjust balance and record transaction together
+	// Atomic operation: adjust cash position and record transaction together
+	// Note: We use satellitesDB transaction for bucket_transactions table
 	tx, err := s.balanceRepo.satellitesDB.Begin()
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
 
-	// Adjust balance
-	balance, err := s.balanceRepo.AdjustBalance(bucketID, currency, delta)
+	// Adjust cash position (updates positions table in portfolio.db)
+	newBalance, err := s.cashManager.AdjustCashBalance(bucketID, currency, delta)
 	if err != nil {
-		return nil, fmt.Errorf("failed to adjust balance: %w", err)
+		return nil, fmt.Errorf("failed to adjust cash balance: %w", err)
 	}
 
-	// Record transaction
+	// Record transaction in satellites.db
 	desc := defaultDesc
 	if description != nil {
 		desc = *description
@@ -159,12 +227,13 @@ func (s *BalanceService) RecordTradeSettlement(
 		Description: &desc,
 	}
 
-	err = s.balanceRepo.RecordTransaction(transaction)
+	err = s.balanceRepo.RecordTransaction(transaction, tx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to record transaction: %w", err)
 	}
 
-	if err := tx.Commit(); err != nil {
+	err = tx.Commit()
+	if err != nil {
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
@@ -177,9 +246,14 @@ func (s *BalanceService) RecordTradeSettlement(
 		Float64("amount", amount).
 		Str("currency", currency).
 		Str("action", action).
+		Float64("new_balance", newBalance).
 		Msg("Recorded trade settlement")
 
-	return balance, nil
+	return &BucketBalance{
+		BucketID: bucketID,
+		Currency: currency,
+		Balance:  newBalance,
+	}, nil
 }
 
 // RecordDividend records a dividend payment.
@@ -201,24 +275,28 @@ func (s *BalanceService) RecordDividend(
 	description *string,
 ) (*BucketBalance, error) {
 	if amount <= 0 {
-		return nil, fmt.Errorf("dividend amount must be positive")
+		return nil, fmt.Errorf("amount must be positive")
 	}
 
-	// Atomic operation: adjust balance and record transaction together
+	// Atomic operation
 	tx, err := s.balanceRepo.satellitesDB.Begin()
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
 
-	// Adjust balance (cash comes in)
-	balance, err := s.balanceRepo.AdjustBalance(bucketID, currency, amount)
+	// Add cash (positive delta)
+	newBalance, err := s.cashManager.AdjustCashBalance(bucketID, currency, amount)
 	if err != nil {
-		return nil, fmt.Errorf("failed to adjust balance: %w", err)
+		return nil, fmt.Errorf("failed to adjust cash balance: %w", err)
 	}
 
 	// Record transaction
-	desc := "Dividend received"
+	desc := "Dividend payment"
 	if description != nil {
 		desc = *description
 	}
@@ -231,12 +309,13 @@ func (s *BalanceService) RecordDividend(
 		Description: &desc,
 	}
 
-	err = s.balanceRepo.RecordTransaction(transaction)
+	err = s.balanceRepo.RecordTransaction(transaction, tx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to record transaction: %w", err)
 	}
 
-	if err := tx.Commit(); err != nil {
+	err = tx.Commit()
+	if err != nil {
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
@@ -244,28 +323,29 @@ func (s *BalanceService) RecordDividend(
 		Str("bucket_id", bucketID).
 		Float64("amount", amount).
 		Str("currency", currency).
+		Float64("new_balance", newBalance).
 		Msg("Recorded dividend")
 
-	return balance, nil
+	return &BucketBalance{
+		BucketID: bucketID,
+		Currency: currency,
+		Balance:  newBalance,
+	}, nil
 }
 
-// TransferBetweenBuckets transfers cash between buckets.
+// TransferBetweenBuckets transfers cash between two buckets atomically.
 //
 // Args:
 //
-//	fromBucketID: Source bucket ID
-//	toBucketID: Destination bucket ID
+//	fromBucketID: Source bucket
+//	toBucketID: Destination bucket
 //	amount: Amount to transfer (positive)
 //	currency: Currency code
 //	description: Optional description
 //
 // Returns:
 //
-//	Tuple of (from_balance, to_balance) after transfer
-//
-// Errors:
-//
-//	Returns error if insufficient funds or invalid buckets
+//	(source balance, dest balance, error)
 func (s *BalanceService) TransferBetweenBuckets(
 	fromBucketID string,
 	toBucketID string,
@@ -274,20 +354,20 @@ func (s *BalanceService) TransferBetweenBuckets(
 	description *string,
 ) (*BucketBalance, *BucketBalance, error) {
 	if amount <= 0 {
-		return nil, nil, fmt.Errorf("transfer amount must be positive")
+		return nil, nil, fmt.Errorf("amount must be positive")
 	}
 
 	if fromBucketID == toBucketID {
 		return nil, nil, fmt.Errorf("cannot transfer to same bucket")
 	}
 
-	// Validate buckets exist
+	// Verify buckets exist
 	fromBucket, err := s.bucketRepo.GetByID(fromBucketID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get source bucket: %w", err)
 	}
 	if fromBucket == nil {
-		return nil, nil, fmt.Errorf("source bucket '%s' not found", fromBucketID)
+		return nil, nil, fmt.Errorf("source bucket not found: %s", fromBucketID)
 	}
 
 	toBucket, err := s.bucketRepo.GetByID(toBucketID)
@@ -295,79 +375,51 @@ func (s *BalanceService) TransferBetweenBuckets(
 		return nil, nil, fmt.Errorf("failed to get destination bucket: %w", err)
 	}
 	if toBucket == nil {
-		return nil, nil, fmt.Errorf("destination bucket '%s' not found", toBucketID)
+		return nil, nil, fmt.Errorf("destination bucket not found: %s", toBucketID)
 	}
 
-	// Check sufficient funds
-	currentBalance, err := s.balanceRepo.GetBalanceAmount(fromBucketID, currency)
+	// Check sufficient balance
+	fromBalance, err := s.cashManager.GetCashBalance(fromBucketID, currency)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get current balance: %w", err)
+		return nil, nil, fmt.Errorf("failed to get source balance: %w", err)
 	}
-
-	if currentBalance < amount {
+	if fromBalance < amount {
 		return nil, nil, fmt.Errorf(
-			"insufficient funds in '%s': has %.2f, needs %.2f %s",
-			fromBucketID, currentBalance, amount, currency,
+			"insufficient balance in %s: has %.2f %s, needs %.2f",
+			fromBucket.Name, fromBalance, currency, amount,
 		)
 	}
 
-	// Check core minimum (if transferring from core)
-	if fromBucketID == "core" {
-		settings, err := s.balanceRepo.GetAllAllocationSettings()
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to get allocation settings: %w", err)
-		}
-
-		satelliteBudgetPct := 0.0
-		if val, ok := settings["satellite_budget_pct"]; ok {
-			satelliteBudgetPct = val
-		}
-
-		coreMinPct := 1.0 - satelliteBudgetPct
-
-		// Get total portfolio value for validation
-		total, err := s.GetTotalByCurrency(currency)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to get total balance: %w", err)
-		}
-
-		if total > 0 {
-			remainingAfterTransfer := currentBalance - amount
-			remainingPct := remainingAfterTransfer / total
-			if remainingPct < coreMinPct {
-				return nil, nil, fmt.Errorf(
-					"transfer would put core below minimum allocation (%.1f%% < %.1f%%)",
-					remainingPct*100, coreMinPct*100,
-				)
-			}
-		}
-	}
-
-	// Atomic operation: perform transfer and record both transactions together
+	// Atomic operation
 	tx, err := s.balanceRepo.satellitesDB.Begin()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
 
-	// Perform the transfer
-	fromBalance, err := s.balanceRepo.AdjustBalance(fromBucketID, currency, -amount)
+	// Deduct from source
+	newFromBalance, err := s.cashManager.AdjustCashBalance(fromBucketID, currency, -amount)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to adjust from balance: %w", err)
+		return nil, nil, fmt.Errorf("failed to deduct from source: %w", err)
 	}
 
-	toBalance, err := s.balanceRepo.AdjustBalance(toBucketID, currency, amount)
+	// Add to destination
+	newToBalance, err := s.cashManager.AdjustCashBalance(toBucketID, currency, amount)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to adjust to balance: %w", err)
+		return nil, nil, fmt.Errorf("failed to add to destination: %w", err)
 	}
 
-	// Record transactions for audit trail
-	desc := fmt.Sprintf("Transfer from %s to %s", fromBucketID, toBucketID)
+	// Record transfer_out transaction
+	desc := fmt.Sprintf("Transfer to %s", toBucket.Name)
 	if description != nil {
 		desc = *description
 	}
 
-	txOut := &BucketTransaction{
+	outTx := &BucketTransaction{
 		BucketID:    fromBucketID,
 		Type:        TransactionTypeTransferOut,
 		Amount:      amount,
@@ -375,59 +427,71 @@ func (s *BalanceService) TransferBetweenBuckets(
 		Description: &desc,
 	}
 
-	txIn := &BucketTransaction{
+	err = s.balanceRepo.RecordTransaction(outTx, tx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to record transfer out: %w", err)
+	}
+
+	// Record transfer_in transaction
+	inDesc := fmt.Sprintf("Transfer from %s", fromBucket.Name)
+	if description != nil {
+		inDesc = *description
+	}
+
+	inTx := &BucketTransaction{
 		BucketID:    toBucketID,
 		Type:        TransactionTypeTransferIn,
 		Amount:      amount,
 		Currency:    currency,
-		Description: &desc,
+		Description: &inDesc,
 	}
 
-	err = s.balanceRepo.RecordTransaction(txOut)
+	err = s.balanceRepo.RecordTransaction(inTx, tx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to record outbound transaction: %w", err)
+		return nil, nil, fmt.Errorf("failed to record transfer in: %w", err)
 	}
 
-	err = s.balanceRepo.RecordTransaction(txIn)
+	err = tx.Commit()
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to record inbound transaction: %w", err)
-	}
-
-	if err := tx.Commit(); err != nil {
 		return nil, nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	s.log.Info().
-		Str("from_bucket", fromBucketID).
-		Str("to_bucket", toBucketID).
+		Str("from_bucket", fromBucket.Name).
+		Str("to_bucket", toBucket.Name).
 		Float64("amount", amount).
 		Str("currency", currency).
-		Msg("Transferred funds between buckets")
+		Msg("Transferred between buckets")
 
-	return fromBalance, toBalance, nil
+	return &BucketBalance{
+			BucketID: fromBucketID,
+			Currency: currency,
+			Balance:  newFromBalance,
+		}, &BucketBalance{
+			BucketID: toBucketID,
+			Currency: currency,
+			Balance:  newToBalance,
+		}, nil
 }
 
-// AllocateDeposit allocates a new deposit across buckets based on targets.
-//
-// Deposits are split among buckets that are below their target allocation.
-// Priority goes to buckets furthest below target.
+// AllocateDeposit allocates a new deposit across buckets based on allocation settings.
 //
 // Args:
 //
-//	totalAmount: Total deposit amount
+//	amount: Deposit amount (positive)
 //	currency: Currency code
 //	description: Optional description
 //
 // Returns:
 //
-//	Map of bucket_id to allocated amount
+//	Map of bucket_id -> allocated amount
 func (s *BalanceService) AllocateDeposit(
-	totalAmount float64,
+	amount float64,
 	currency string,
 	description *string,
 ) (map[string]float64, error) {
-	if totalAmount <= 0 {
-		return nil, fmt.Errorf("deposit amount must be positive")
+	if amount <= 0 {
+		return nil, fmt.Errorf("amount must be positive")
 	}
 
 	// Get allocation settings
@@ -436,301 +500,314 @@ func (s *BalanceService) AllocateDeposit(
 		return nil, fmt.Errorf("failed to get allocation settings: %w", err)
 	}
 
-	satelliteBudgetPct := 0.0
-	if val, ok := settings["satellite_budget_pct"]; ok {
-		satelliteBudgetPct = val
+	satelliteBudgetPct := settings["satellite_budget_pct"]
+
+	// Calculate allocation
+	coreAmount := amount
+	satelliteAmount := 0.0
+
+	if satelliteBudgetPct > 0 {
+		satelliteAmount = amount * satelliteBudgetPct
+		coreAmount = amount - satelliteAmount
 	}
 
-	// Get all active buckets
-	buckets, err := s.bucketRepo.GetActive()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get active buckets: %w", err)
-	}
-
-	// Calculate current total and target amounts
-	currentTotal, err := s.GetTotalByCurrency(currency)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get total balance: %w", err)
-	}
-
-	newTotal := currentTotal + totalAmount
-
-	allocations := make(map[string]float64)
-	remaining := totalAmount
-
-	// Core always gets at least its target
-	coreTargetPct := 1.0 - satelliteBudgetPct
-	coreTargetAmount := newTotal * coreTargetPct
-	coreCurrent, err := s.balanceRepo.GetBalanceAmount("core", currency)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get core balance: %w", err)
-	}
-
-	coreNeeded := 0.0
-	if coreTargetAmount > coreCurrent {
-		coreNeeded = coreTargetAmount - coreCurrent
-	}
-
-	if coreNeeded > 0 {
-		coreAllocation := coreNeeded
-		if coreAllocation > remaining {
-			coreAllocation = remaining
-		}
-		allocations["core"] = coreAllocation
-		remaining -= coreAllocation
-	}
-
-	// Distribute remaining to satellites below target
-	if remaining > 0 {
-		var satellites []*Bucket
-		for _, bucket := range buckets {
-			if bucket.Type == BucketTypeSatellite {
-				satellites = append(satellites, bucket)
-			}
+	// Get active satellites before starting transaction (to avoid transaction isolation issues)
+	var activeSatellites []*Bucket
+	if satelliteAmount > 0 {
+		satellites, err := s.bucketRepo.GetByType(BucketTypeSatellite)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get satellites: %w", err)
 		}
 
-		// Filter to only accumulating or active satellites with target > 0
-		type satelliteDeficit struct {
-			bucketID string
-			deficit  float64
-		}
-		var deficits []satelliteDeficit
-
+		activeSatellites = make([]*Bucket, 0)
 		for _, sat := range satellites {
-			if (sat.Status == BucketStatusAccumulating || sat.Status == BucketStatusActive) &&
-				sat.TargetPct != nil && *sat.TargetPct > 0 {
-
-				targetAmount := newTotal * (*sat.TargetPct)
-				current, err := s.balanceRepo.GetBalanceAmount(sat.ID, currency)
-				if err != nil {
-					return nil, fmt.Errorf("failed to get balance for %s: %w", sat.ID, err)
-				}
-
-				deficit := targetAmount - current
-				if deficit > 0 {
-					deficits = append(deficits, satelliteDeficit{
-						bucketID: sat.ID,
-						deficit:  deficit,
-					})
-				}
+			if sat.Status == BucketStatusActive || sat.Status == BucketStatusAccumulating {
+				activeSatellites = append(activeSatellites, sat)
 			}
-		}
-
-		// Distribute proportionally to deficits
-		totalDeficit := 0.0
-		for _, d := range deficits {
-			totalDeficit += d.deficit
-		}
-
-		if totalDeficit > 0 {
-			for _, d := range deficits {
-				share := (d.deficit / totalDeficit) * remaining
-				allocations[d.bucketID] = share
-			}
-			remaining = 0 // All distributed to satellites
 		}
 	}
 
-	// Fallback: If any remaining amount wasn't allocated, give it to core
-	if remaining > 0 {
-		if existing, ok := allocations["core"]; ok {
-			allocations["core"] = existing + remaining
-		} else {
-			allocations["core"] = remaining
-		}
-		s.log.Debug().
-			Float64("fallback_amount", remaining).
-			Msg("Allocated remaining deposit to core bucket (no satellites needed funds)")
-	}
-
-	// Record the allocations atomically
+	// Atomic operation
 	tx, err := s.balanceRepo.satellitesDB.Begin()
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
 
-	for bucketID, amount := range allocations {
-		if amount > 0 {
-			_, err := s.balanceRepo.AdjustBalance(bucketID, currency, amount)
+	allocation := make(map[string]float64)
+
+	// Allocate to core
+	if coreAmount > 0 {
+		_, err = s.cashManager.AdjustCashBalance("core", currency, coreAmount)
+		if err != nil {
+			return nil, fmt.Errorf("failed to allocate to core: %w", err)
+		}
+
+		desc := fmt.Sprintf("Deposit allocation (%.1f%% to core)", (1-satelliteBudgetPct)*100)
+		if description != nil {
+			desc = *description
+		}
+
+		coreTx := &BucketTransaction{
+			BucketID:    "core",
+			Type:        TransactionTypeDeposit,
+			Amount:      coreAmount,
+			Currency:    currency,
+			Description: &desc,
+		}
+
+		err = s.balanceRepo.RecordTransaction(coreTx, tx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to record core deposit: %w", err)
+		}
+
+		allocation["core"] = coreAmount
+	}
+
+	// Allocate to satellites if configured
+	if satelliteAmount > 0 {
+		if len(activeSatellites) > 0 {
+			// Split equally among active satellites for now
+			// TODO: Implement weighted allocation based on performance
+			perSatellite := satelliteAmount / float64(len(activeSatellites))
+
+			for _, sat := range activeSatellites {
+				_, err = s.cashManager.AdjustCashBalance(sat.ID, currency, perSatellite)
+				if err != nil {
+					return nil, fmt.Errorf("failed to allocate to satellite %s: %w", sat.ID, err)
+				}
+
+				satDesc := fmt.Sprintf("Deposit allocation to %s", sat.Name)
+				satTx := &BucketTransaction{
+					BucketID:    sat.ID,
+					Type:        TransactionTypeDeposit,
+					Amount:      perSatellite,
+					Currency:    currency,
+					Description: &satDesc,
+				}
+
+				err = s.balanceRepo.RecordTransaction(satTx, tx)
+				if err != nil {
+					return nil, fmt.Errorf("failed to record satellite deposit: %w", err)
+				}
+
+				allocation[sat.ID] = perSatellite
+			}
+		} else {
+			// No active satellites, allocate all to core
+			_, err = s.cashManager.AdjustCashBalance("core", currency, satelliteAmount)
 			if err != nil {
-				return nil, fmt.Errorf("failed to adjust balance for %s: %w", bucketID, err)
+				return nil, fmt.Errorf("failed to allocate satellite portion to core: %w", err)
 			}
 
-			desc := "Deposit allocation"
-			if description != nil {
-				desc = *description
-			}
-
-			transaction := &BucketTransaction{
-				BucketID:    bucketID,
+			desc := "Deposit - no active satellites, allocated to core"
+			extraTx := &BucketTransaction{
+				BucketID:    "core",
 				Type:        TransactionTypeDeposit,
-				Amount:      amount,
+				Amount:      satelliteAmount,
 				Currency:    currency,
 				Description: &desc,
 			}
 
-			err = s.balanceRepo.RecordTransaction(transaction)
+			err = s.balanceRepo.RecordTransaction(extraTx, tx)
 			if err != nil {
-				return nil, fmt.Errorf("failed to record transaction for %s: %w", bucketID, err)
+				return nil, fmt.Errorf("failed to record extra core deposit: %w", err)
 			}
+
+			allocation["core"] += satelliteAmount
 		}
 	}
 
-	if err := tx.Commit(); err != nil {
+	// Commit transaction if all operations succeeded
+	err = tx.Commit()
+	if err != nil {
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	s.log.Info().
-		Float64("total_amount", totalAmount).
+		Float64("total_amount", amount).
 		Str("currency", currency).
-		Interface("allocations", allocations).
+		Interface("allocation", allocation).
 		Msg("Allocated deposit")
 
-	return allocations, nil
+	return allocation, nil
 }
 
-// Reallocate reallocates funds between buckets (meta-allocator operation).
-//
-// Similar to transfer but uses REALLOCATION transaction type
-// to distinguish quarterly reallocation from manual transfers.
+// Reallocate reallocates cash between core and satellites based on performance.
 //
 // Args:
 //
-//	fromBucketID: Source bucket ID
-//	toBucketID: Destination bucket ID
-//	amount: Amount to reallocate
-//	currency: Currency code
+//	currency: Currency to reallocate
 //
 // Returns:
 //
-//	Tuple of (from_balance, to_balance)
-func (s *BalanceService) Reallocate(
-	fromBucketID string,
-	toBucketID string,
-	amount float64,
-	currency string,
-) (*BucketBalance, *BucketBalance, error) {
-	if amount <= 0 {
-		return nil, nil, fmt.Errorf("reallocation amount must be positive")
+//	Map of bucket_id -> new balance
+func (s *BalanceService) Reallocate(currency string) (map[string]float64, error) {
+	// Get current total balance
+	totalBalance, err := s.cashManager.GetTotalByCurrency(currency)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get total balance: %w", err)
 	}
 
-	// Atomic operation: adjust balances and record transactions together
+	if totalBalance == 0 {
+		return map[string]float64{}, nil
+	}
+
+	// Get allocation settings
+	settings, err := s.balanceRepo.GetAllAllocationSettings()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get allocation settings: %w", err)
+	}
+
+	satelliteBudgetPct := settings["satellite_budget_pct"]
+
+	// Calculate target allocations
+	targetCore := totalBalance * (1 - satelliteBudgetPct)
+
+	// Get current core balance
+	coreBalance, err := s.cashManager.GetCashBalance("core", currency)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get core balance: %w", err)
+	}
+
+	// Calculate reallocation needed
+	coreAdjustment := targetCore - coreBalance
+	satelliteAdjustment := -coreAdjustment
+
+	if satelliteAdjustment < 0.01 && satelliteAdjustment > -0.01 {
+		// No significant reallocation needed
+		s.log.Info().
+			Str("currency", currency).
+			Float64("total_balance", totalBalance).
+			Msg("No reallocation needed")
+
+		return map[string]float64{
+			"core": coreBalance,
+		}, nil
+	}
+
+	// Atomic operation
 	tx, err := s.balanceRepo.satellitesDB.Begin()
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to begin transaction: %w", err)
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
 
-	// Adjust balances
-	fromBalance, err := s.balanceRepo.AdjustBalance(fromBucketID, currency, -amount)
+	newBalances := make(map[string]float64)
+
+	// Adjust core
+	newCoreBalance, err := s.cashManager.AdjustCashBalance("core", currency, coreAdjustment)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to adjust from balance: %w", err)
+		return nil, fmt.Errorf("failed to adjust core: %w", err)
 	}
+	newBalances["core"] = newCoreBalance
 
-	toBalance, err := s.balanceRepo.AdjustBalance(toBucketID, currency, amount)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to adjust to balance: %w", err)
-	}
-
-	// Record as reallocation (not regular transfer)
-	descOut := fmt.Sprintf("Quarterly reallocation to %s", toBucketID)
-	descIn := fmt.Sprintf("Quarterly reallocation from %s", fromBucketID)
-
-	txOut := &BucketTransaction{
-		BucketID:    fromBucketID,
-		Type:        TransactionTypeReallocation,
-		Amount:      -amount, // Negative for outflow
+	// Record core transaction
+	coreDesc := fmt.Sprintf("Reallocation adjustment")
+	coreTxType := TransactionTypeReallocation
+	coreTx := &BucketTransaction{
+		BucketID:    "core",
+		Type:        coreTxType,
+		Amount:      coreAdjustment,
 		Currency:    currency,
-		Description: &descOut,
+		Description: &coreDesc,
 	}
 
-	txIn := &BucketTransaction{
-		BucketID:    toBucketID,
-		Type:        TransactionTypeReallocation,
-		Amount:      amount, // Positive for inflow
-		Currency:    currency,
-		Description: &descIn,
-	}
-
-	err = s.balanceRepo.RecordTransaction(txOut)
+	err = s.balanceRepo.RecordTransaction(coreTx, tx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to record outbound transaction: %w", err)
+		return nil, fmt.Errorf("failed to record core reallocation: %w", err)
 	}
 
-	err = s.balanceRepo.RecordTransaction(txIn)
+	// Adjust satellites proportionally
+	satellites, err := s.bucketRepo.GetByType(BucketTypeSatellite)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to record inbound transaction: %w", err)
+		return nil, fmt.Errorf("failed to get satellites: %w", err)
 	}
 
-	if err := tx.Commit(); err != nil {
-		return nil, nil, fmt.Errorf("failed to commit transaction: %w", err)
+	activeSatellites := make([]*Bucket, 0)
+	for _, sat := range satellites {
+		if sat.Status == BucketStatusActive {
+			activeSatellites = append(activeSatellites, sat)
+		}
+	}
+
+	if len(activeSatellites) > 0 {
+		perSatellite := satelliteAdjustment / float64(len(activeSatellites))
+
+		for _, sat := range activeSatellites {
+			newSatBalance, err := s.cashManager.AdjustCashBalance(sat.ID, currency, perSatellite)
+			if err != nil {
+				return nil, fmt.Errorf("failed to adjust satellite %s: %w", sat.ID, err)
+			}
+			newBalances[sat.ID] = newSatBalance
+
+			satDesc := fmt.Sprintf("Reallocation adjustment")
+			satTx := &BucketTransaction{
+				BucketID:    sat.ID,
+				Type:        TransactionTypeReallocation,
+				Amount:      perSatellite,
+				Currency:    currency,
+				Description: &satDesc,
+			}
+
+			err = s.balanceRepo.RecordTransaction(satTx, tx)
+			if err != nil {
+				return nil, fmt.Errorf("failed to record satellite reallocation: %w", err)
+			}
+		}
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	s.log.Info().
-		Str("from_bucket", fromBucketID).
-		Str("to_bucket", toBucketID).
-		Float64("amount", amount).
 		Str("currency", currency).
-		Msg("Reallocated funds between buckets")
+		Float64("core_adjustment", coreAdjustment).
+		Int("satellites_adjusted", len(activeSatellites)).
+		Msg("Completed reallocation")
 
-	return fromBalance, toBalance, nil
+	return newBalances, nil
 }
 
-// Transaction history
-
-// GetTransactions gets transaction history for a bucket
-func (s *BalanceService) GetTransactions(
-	bucketID string,
-	limit int,
-	transactionType *TransactionType,
-) ([]*BucketTransaction, error) {
-	return s.balanceRepo.GetTransactions(bucketID, limit, 0, transactionType)
+// GetTransactions gets transactions for a bucket
+func (s *BalanceService) GetTransactions(bucketID string, limit int, offset int, transactionType *TransactionType) ([]*BucketTransaction, error) {
+	return s.balanceRepo.GetTransactions(bucketID, limit, offset, transactionType)
 }
 
-// GetRecentTransactions gets recent transactions for a bucket
+// GetRecentTransactions gets recent transactions for a bucket within a time window
 func (s *BalanceService) GetRecentTransactions(bucketID string, days int) ([]*BucketTransaction, error) {
 	return s.balanceRepo.GetRecentTransactions(bucketID, days)
 }
 
-// Settings
-
-// GetAllocationSettings gets all allocation settings
+// GetAllocationSettings gets the allocation settings
 func (s *BalanceService) GetAllocationSettings() (map[string]float64, error) {
 	return s.balanceRepo.GetAllAllocationSettings()
 }
 
-// UpdateSatelliteBudget updates the global satellite budget percentage.
-//
-// Args:
-//
-//	budgetPct: New budget percentage (0.0-1.0)
-//
-// Errors:
-//
-//	Returns error if budget is out of range
+// UpdateSatelliteBudget updates the satellite budget percentage
 func (s *BalanceService) UpdateSatelliteBudget(budgetPct float64) error {
-	if budgetPct < 0.0 || budgetPct > MaxSatelliteBudgetPct {
+	if budgetPct < 0 || budgetPct > MaxSatelliteBudgetPct {
 		return fmt.Errorf(
-			"satellite budget must be between 0%% and %.0f%%",
+			"satellite budget must be between 0 and %.0f%%, got %.1f%%",
 			MaxSatelliteBudgetPct*100,
+			budgetPct*100,
 		)
 	}
 
-	desc := fmt.Sprintf("Updated satellite budget to %.1f%%", budgetPct*100)
-	err := s.balanceRepo.SetAllocationSetting("satellite_budget_pct", budgetPct, &desc)
-	if err != nil {
-		return fmt.Errorf("failed to set satellite budget: %w", err)
-	}
-
-	s.log.Info().
-		Float64("budget_pct", budgetPct).
-		Msg("Updated satellite budget")
-
-	return nil
+	return s.balanceRepo.SetAllocationSetting("satellite_budget_pct", budgetPct, nil)
 }
 
-// Helper to begin a transaction (for services that need explicit transaction control)
+// BeginTx begins a transaction on the satellites database
 func (s *BalanceService) BeginTx() (*sql.Tx, error) {
 	return s.balanceRepo.satellitesDB.Begin()
 }

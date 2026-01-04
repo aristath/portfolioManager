@@ -97,7 +97,7 @@ func calculateGeoDiversification(portfolioContext models.PortfolioContext, total
 			group = "OTHER"
 		}
 
-		groupValues[group] = groupValues[group] + value
+		groupValues[group] += value
 	}
 
 	// Calculate deviations from target weights
@@ -149,7 +149,7 @@ func calculateIndustryDiversification(portfolioContext models.PortfolioContext, 
 			group = "OTHER"
 		}
 
-		groupValues[group] = groupValues[group] + value
+		groupValues[group] += value
 	}
 
 	// Calculate deviations from target weights
@@ -207,13 +207,14 @@ func calculateQualityScore(portfolioContext models.PortfolioContext, totalValue 
 
 	// Combine quality and dividend scores
 	qualityScore := 0.5
-	if hasQuality && hasDividend {
+	switch {
+	case hasQuality && hasDividend:
 		// Quality is 0-1, dividend is yield (normalize to 0-1 by capping at 10%)
 		normalizedDividend := math.Min(1.0, weightedDividend*10)
 		qualityScore = weightedQuality*SecurityQualityWeight + normalizedDividend*DividendYieldWeight
-	} else if hasQuality {
+	case hasQuality:
 		qualityScore = weightedQuality
-	} else if hasDividend {
+	case hasDividend:
 		// Normalize dividend yield to 0-1 scale
 		qualityScore = math.Min(1.0, weightedDividend*10)
 	}

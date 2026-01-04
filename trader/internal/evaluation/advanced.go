@@ -5,7 +5,6 @@ import (
 	"math"
 	"math/rand"
 	"sort"
-	"strconv"
 
 	"github.com/aristath/arduino-trader/internal/evaluation/models"
 	"gonum.org/v1/gonum/floats"
@@ -250,9 +249,4 @@ func formatShift(shift float64) string {
 	default:
 		return fmt.Sprintf("%.2f", shift)
 	}
-}
-
-// Helper function to convert string shift keys back to float
-func parseShift(shiftStr string) (float64, error) {
-	return strconv.ParseFloat(shiftStr, 64)
 }

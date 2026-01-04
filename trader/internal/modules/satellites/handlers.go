@@ -599,7 +599,7 @@ func (h *Handlers) GetBucketTransactions(w http.ResponseWriter, r *http.Request)
 		txType = &tt
 	}
 
-	transactions, err := h.balanceService.GetTransactions(bucketID, limit, txType)
+	transactions, err := h.balanceService.GetTransactions(bucketID, limit, 0, txType)
 	if err != nil {
 		h.log.Error().Err(err).Str("bucket_id", bucketID).Msg("Failed to get transactions")
 		respondError(w, http.StatusInternalServerError, "Failed to get transactions")
