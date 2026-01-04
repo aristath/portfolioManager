@@ -98,6 +98,7 @@ func (h *SystemHandlers) SetJobs(
 
 // SystemStatusResponse represents the system status response
 type SystemStatusResponse struct {
+	Status           string  `json:"status"`             // "healthy" or "unhealthy"
 	CashBalanceEUR   float64 `json:"cash_balance_eur"`   // EUR-only cash balance
 	CashBalanceTotal float64 `json:"cash_balance_total"` // Total cash in EUR (all currencies converted)
 	CashBalance      float64 `json:"cash_balance"`       // Backward compatibility: alias for cash_balance_total
@@ -374,6 +375,7 @@ func (h *SystemHandlers) HandleSystemStatus(w http.ResponseWriter, r *http.Reque
 	}
 
 	response := SystemStatusResponse{
+		Status:           "healthy",
 		CashBalanceEUR:   cashBalanceEUR,
 		CashBalanceTotal: totalCashEUR,
 		CashBalance:      totalCashEUR, // Backward compatibility

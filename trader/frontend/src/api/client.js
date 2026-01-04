@@ -127,23 +127,20 @@ export const api = {
   regenerateSequences: () => fetchJSON('/api/planner/regenerate-sequences', { method: 'POST' }),
 
   // Planner Configuration
-  fetchPlanners: () => fetchJSON('/api/planners/'),
-  fetchPlannerById: (id) => fetchJSON(`/api/planners/${id}`),
-  createPlanner: (data) => fetchJSON('/api/planners/', {
+  fetchPlannerConfigs: () => fetchJSON('/api/planning/configs'),
+  fetchPlannerConfig: (id) => fetchJSON(`/api/planning/configs/${id}`),
+  createPlannerConfig: (config, isDefault) => fetchJSON('/api/planning/configs', {
     method: 'POST',
-    body: JSON.stringify(data),
+    body: JSON.stringify({ config, is_default: isDefault }),
   }),
-  updatePlanner: (id, data) => fetchJSON(`/api/planners/${id}`, {
+  updatePlannerConfig: (id, config, changedBy, changeNote) => fetchJSON(`/api/planning/configs/${id}`, {
     method: 'PUT',
-    body: JSON.stringify(data),
+    body: JSON.stringify({ config, changed_by: changedBy, change_note: changeNote }),
   }),
-  deletePlanner: (id) => fetchJSON(`/api/planners/${id}`, { method: 'DELETE' }),
-  validatePlannerToml: (toml) => fetchJSON('/api/planners/validate', {
+  deletePlannerConfig: (id) => fetchJSON(`/api/planning/configs/${id}`, { method: 'DELETE' }),
+  validatePlannerConfig: (id) => fetchJSON(`/api/planning/configs/${id}/validate`, {
     method: 'POST',
-    body: JSON.stringify({ toml }),
   }),
-  applyPlanner: (id) => fetchJSON(`/api/planners/${id}/apply`, { method: 'POST' }),
-  fetchPlannerHistory: (id) => fetchJSON(`/api/planners/${id}/history`),
 
   // Markets
   fetchMarkets: () => fetchJSON('/api/system/markets'),
