@@ -1,8 +1,7 @@
 // Arduino Trader LED Display
 // Controls 8x13 LED matrix and RGB LEDs 3 & 4 on Arduino UNO Q
-// Uses Router Bridge for communication with Linux MPU
+// Uses simple text-based serial protocol (no RouterBridge dependency)
 
-#include <Arduino_RouterBridge.h>
 #include "ArduinoGraphics.h"
 #include "Arduino_LED_Matrix.h"
 #include "portfolio_mode.h"
@@ -44,18 +43,134 @@ uint8_t targetBrightness = 100;  // Target brightness for lit pixels (100-220)
 // Efficient random pixel selection - smooth animation
 uint8_t pixelIndices[TOTAL_PIXELS];  // Array of pixel positions [0, 1, 2, ..., 103]
 
-// Set RGB LED 3 color (active-low, digital only)
+// LED3 blink state
+bool isBlinking3 = false;
+uint8_t blinkColor3R = 0;
+uint8_t blinkColor3G = 0;
+uint8_t blinkColor3B = 0;
+unsigned long blinkInterval3 = 1000;  // milliseconds
+unsigned long lastBlinkTime3 = 0;
+bool currentState3 = false;  // false = OFF, true = ON
+
+// LED4 blink state
+bool isBlinking4 = false;
+uint8_t blinkColor4R = 0;
+uint8_t blinkColor4G = 0;
+uint8_t blinkColor4B = 0;
+unsigned long blinkInterval4 = 1000;  // milliseconds
+unsigned long lastBlinkTime4 = 0;
+bool currentState4 = false;  // false = OFF, true = ON
+
+// LED4 alternating color state
+bool isAlternating4 = false;
+uint8_t altColor4R1 = 0;
+uint8_t altColor4G1 = 0;
+uint8_t altColor4B1 = 0;
+uint8_t altColor4R2 = 0;
+uint8_t altColor4G2 = 0;
+uint8_t altColor4B2 = 0;
+bool currentAltColor4 = false;  // false = color1, true = color2
+
+// LED4 coordinated mode (alternates with LED3)
+bool isCoordinated4 = false;
+
+// Serial command buffer
+String commandBuffer = "";
+
+// Set RGB LED 4 color (active-low, digital only)
+void setRGB4(uint8_t r, uint8_t g, uint8_t b) {
+  // Stop blinking when solid color is set
+  isBlinking4 = false;
+  isAlternating4 = false;
+  isCoordinated4 = false;
+  digitalWrite(LED_BUILTIN + 3, r > 0 ? LOW : HIGH);
+  digitalWrite(LED_BUILTIN + 4, g > 0 ? LOW : HIGH);
+  digitalWrite(LED_BUILTIN + 5, b > 0 ? LOW : HIGH);
+}
+
+// Set RGB LED 3 color (active-low, digital only) - stops blinking
 void setRGB3(uint8_t r, uint8_t g, uint8_t b) {
+  // Stop blinking when solid color is set
+  isBlinking3 = false;
   digitalWrite(LED_BUILTIN, r > 0 ? LOW : HIGH);
   digitalWrite(LED_BUILTIN + 1, g > 0 ? LOW : HIGH);
   digitalWrite(LED_BUILTIN + 2, b > 0 ? LOW : HIGH);
 }
 
-// Set RGB LED 4 color (active-low, digital only)
-void setRGB4(uint8_t r, uint8_t g, uint8_t b) {
-  digitalWrite(LED_BUILTIN + 3, r > 0 ? LOW : HIGH);
-  digitalWrite(LED_BUILTIN + 4, g > 0 ? LOW : HIGH);
-  digitalWrite(LED_BUILTIN + 5, b > 0 ? LOW : HIGH);
+// Start blinking LED3
+void setBlink3(uint8_t r, uint8_t g, uint8_t b, unsigned long intervalMs) {
+  isBlinking3 = true;
+  blinkColor3R = r;
+  blinkColor3G = g;
+  blinkColor3B = b;
+  blinkInterval3 = intervalMs;
+  lastBlinkTime3 = millis();
+  currentState3 = true;  // Start ON
+  setRGB3(r, g, b);
+}
+
+// Stop blinking LED3
+void stopBlink3() {
+  isBlinking3 = false;
+  setRGB3(0, 0, 0);
+}
+
+// Start blinking LED4 (simple blink)
+void setBlink4(uint8_t r, uint8_t g, uint8_t b, unsigned long intervalMs) {
+  isBlinking4 = true;
+  isAlternating4 = false;
+  isCoordinated4 = false;
+  blinkColor4R = r;
+  blinkColor4G = g;
+  blinkColor4B = b;
+  blinkInterval4 = intervalMs;
+  lastBlinkTime4 = millis();
+  currentState4 = true;  // Start ON
+  setRGB4(r, g, b);
+}
+
+// Start LED4 alternating between two colors
+void setBlink4Alternating(uint8_t r1, uint8_t g1, uint8_t b1, uint8_t r2, uint8_t g2, uint8_t b2, unsigned long intervalMs) {
+  isBlinking4 = false;
+  isAlternating4 = true;
+  isCoordinated4 = false;
+  altColor4R1 = r1;
+  altColor4G1 = g1;
+  altColor4B1 = b1;
+  altColor4R2 = r2;
+  altColor4G2 = g2;
+  altColor4B2 = b2;
+  blinkInterval4 = intervalMs;
+  lastBlinkTime4 = millis();
+  currentAltColor4 = false;  // Start with color1
+  setRGB4(r1, g1, b1);
+}
+
+// Start LED4 coordinated with LED3 (LED4 ON when LED3 OFF)
+void setBlink4Coordinated(uint8_t r, uint8_t g, uint8_t b, unsigned long intervalMs, bool led3Phase) {
+  isBlinking4 = false;
+  isAlternating4 = false;
+  isCoordinated4 = true;
+  blinkColor4R = r;
+  blinkColor4G = g;
+  blinkColor4B = b;
+  blinkInterval4 = intervalMs;
+  lastBlinkTime4 = millis();
+  // LED4 state is inverse of LED3 state
+  currentState4 = !led3Phase;
+  if (currentState4) {
+    setRGB4(r, g, b);
+  } else {
+    setRGB4(0, 0, 0);
+  }
+}
+
+// Stop blinking LED4
+void stopBlink4() {
+  isBlinking4 = false;
+  isAlternating4 = false;
+  isCoordinated4 = false;
+  setRGB4(0, 0, 0);
 }
 
 // Scroll text across LED matrix using native ArduinoGraphics
@@ -200,11 +315,185 @@ void renderPortfolioFrame() {
   renderBrightnessFrame();
 }
 
+// Parse command from serial
+void processCommand(String cmd) {
+  cmd.trim();
+  if (cmd.length() == 0) return;
+
+  // Find command and arguments (format: COMMAND:arg1:arg2:arg3)
+  int firstColon = cmd.indexOf(':');
+  String command = firstColon > 0 ? cmd.substring(0, firstColon) : cmd;
+  command.toUpperCase();
+
+  if (command == "SCROLL") {
+    // SCROLL:text:speed
+    int secondColon = cmd.indexOf(':', firstColon + 1);
+    if (secondColon > 0) {
+      String text = cmd.substring(firstColon + 1, secondColon);
+      int speed = cmd.substring(secondColon + 1).toInt();
+      if (speed == 0) speed = 50;  // Default
+      scrollText(text, speed);
+      Serial.println("OK");
+    } else {
+      Serial.println("ERROR:Invalid format");
+    }
+  }
+  else if (command == "RGB3") {
+    // RGB3:r:g:b
+    int colons[3];
+    colons[0] = firstColon;
+    for (int i = 1; i < 3; i++) {
+      colons[i] = cmd.indexOf(':', colons[i-1] + 1);
+    }
+    if (colons[2] > 0) {
+      uint8_t r = cmd.substring(colons[0] + 1, colons[1]).toInt();
+      uint8_t g = cmd.substring(colons[1] + 1, colons[2]).toInt();
+      uint8_t b = cmd.substring(colons[2] + 1).toInt();
+      setRGB3(r, g, b);
+      Serial.println("OK");
+    } else {
+      Serial.println("ERROR:Invalid format");
+    }
+  }
+  else if (command == "RGB4") {
+    // RGB4:r:g:b
+    int colons[3];
+    colons[0] = firstColon;
+    for (int i = 1; i < 3; i++) {
+      colons[i] = cmd.indexOf(':', colons[i-1] + 1);
+    }
+    if (colons[2] > 0) {
+      uint8_t r = cmd.substring(colons[0] + 1, colons[1]).toInt();
+      uint8_t g = cmd.substring(colons[1] + 1, colons[2]).toInt();
+      uint8_t b = cmd.substring(colons[2] + 1).toInt();
+      setRGB4(r, g, b);
+      Serial.println("OK");
+    } else {
+      Serial.println("ERROR:Invalid format");
+    }
+  }
+  else if (command == "BLINK3") {
+    // BLINK3:r:g:b:interval
+    int colons[4];
+    colons[0] = firstColon;
+    for (int i = 1; i < 4; i++) {
+      colons[i] = cmd.indexOf(':', colons[i-1] + 1);
+    }
+    if (colons[3] > 0) {
+      uint8_t r = cmd.substring(colons[0] + 1, colons[1]).toInt();
+      uint8_t g = cmd.substring(colons[1] + 1, colons[2]).toInt();
+      uint8_t b = cmd.substring(colons[2] + 1, colons[3]).toInt();
+      unsigned long interval = cmd.substring(colons[3] + 1).toInt();
+      setBlink3(r, g, b, interval);
+      Serial.println("OK");
+    } else {
+      Serial.println("ERROR:Invalid format");
+    }
+  }
+  else if (command == "BLINK4") {
+    // BLINK4:r:g:b:interval
+    int colons[4];
+    colons[0] = firstColon;
+    for (int i = 1; i < 4; i++) {
+      colons[i] = cmd.indexOf(':', colons[i-1] + 1);
+    }
+    if (colons[3] > 0) {
+      uint8_t r = cmd.substring(colons[0] + 1, colons[1]).toInt();
+      uint8_t g = cmd.substring(colons[1] + 1, colons[2]).toInt();
+      uint8_t b = cmd.substring(colons[2] + 1, colons[3]).toInt();
+      unsigned long interval = cmd.substring(colons[3] + 1).toInt();
+      setBlink4(r, g, b, interval);
+      Serial.println("OK");
+    } else {
+      Serial.println("ERROR:Invalid format");
+    }
+  }
+  else if (command == "BLINK4ALT") {
+    // BLINK4ALT:r1:g1:b1:r2:g2:b2:interval
+    int colons[7];
+    colons[0] = firstColon;
+    for (int i = 1; i < 7; i++) {
+      colons[i] = cmd.indexOf(':', colons[i-1] + 1);
+    }
+    if (colons[6] > 0) {
+      uint8_t r1 = cmd.substring(colons[0] + 1, colons[1]).toInt();
+      uint8_t g1 = cmd.substring(colons[1] + 1, colons[2]).toInt();
+      uint8_t b1 = cmd.substring(colons[2] + 1, colons[3]).toInt();
+      uint8_t r2 = cmd.substring(colons[3] + 1, colons[4]).toInt();
+      uint8_t g2 = cmd.substring(colons[4] + 1, colons[5]).toInt();
+      uint8_t b2 = cmd.substring(colons[5] + 1, colons[6]).toInt();
+      unsigned long interval = cmd.substring(colons[6] + 1).toInt();
+      setBlink4Alternating(r1, g1, b1, r2, g2, b2, interval);
+      Serial.println("OK");
+    } else {
+      Serial.println("ERROR:Invalid format");
+    }
+  }
+  else if (command == "BLINK4COORD") {
+    // BLINK4COORD:r:g:b:interval:phase
+    int colons[5];
+    colons[0] = firstColon;
+    for (int i = 1; i < 5; i++) {
+      colons[i] = cmd.indexOf(':', colons[i-1] + 1);
+    }
+    if (colons[4] > 0) {
+      uint8_t r = cmd.substring(colons[0] + 1, colons[1]).toInt();
+      uint8_t g = cmd.substring(colons[1] + 1, colons[2]).toInt();
+      uint8_t b = cmd.substring(colons[2] + 1, colons[3]).toInt();
+      unsigned long interval = cmd.substring(colons[3] + 1, colons[4]).toInt();
+      bool phase = cmd.substring(colons[4] + 1).toInt() != 0;
+      setBlink4Coordinated(r, g, b, interval, phase);
+      Serial.println("OK");
+    } else {
+      Serial.println("ERROR:Invalid format");
+    }
+  }
+  else if (command == "STOP3") {
+    stopBlink3();
+    Serial.println("OK");
+  }
+  else if (command == "STOP4") {
+    stopBlink4();
+    Serial.println("OK");
+  }
+  else if (command == "STATS") {
+    // STATS:pixels:brightness:interval
+    int colons[3];
+    colons[0] = firstColon;
+    for (int i = 1; i < 3; i++) {
+      colons[i] = cmd.indexOf(':', colons[i-1] + 1);
+    }
+    if (colons[2] > 0) {
+      int pixels = cmd.substring(colons[0] + 1, colons[1]).toInt();
+      int brightness = cmd.substring(colons[1] + 1, colons[2]).toInt();
+      int interval = cmd.substring(colons[2] + 1).toInt();
+      setSystemStats(pixels, brightness, interval);
+      Serial.println("OK");
+    } else {
+      Serial.println("ERROR:Invalid format");
+    }
+  }
+  else if (command == "PORTFOLIO") {
+    // PORTFOLIO:json_string
+    String json = cmd.substring(firstColon + 1);
+    setPortfolioMode(json.c_str());
+    Serial.println("OK");
+  }
+  else {
+    Serial.print("ERROR:Unknown command: ");
+    Serial.println(command);
+  }
+}
+
 void setup() {
+  // Initialize Serial communication
+  Serial.begin(115200);
+  while (!Serial && millis() < 3000) {
+    // Wait for serial port to connect (max 3 seconds)
+  }
+
   // Initialize LED matrix
   matrix.begin();
-  // Note: Serial.begin() removed - Router Bridge uses its own serial communication
-  // and Serial can conflict with Bridge message processing
   matrix.setGrayscaleBits(8);  // Enable hardware brightness support (0-255 values)
   matrix.clear();
 
@@ -239,18 +528,27 @@ void setup() {
   setRGB3(0, 0, 0);
   setRGB4(0, 0, 0);
 
-  // Setup Router Bridge
-  Bridge.begin();
-  Bridge.provide("setRGB3", setRGB3);
-  Bridge.provide("setRGB4", setRGB4);
-  Bridge.provide("scrollText", scrollText);
-  Bridge.provide("setSystemStats", setSystemStats);  // System stats mode
-  Bridge.provide("setPortfolioMode", setPortfolioMode);  // Portfolio mode
+  Serial.println("READY");
 }
 
 void loop() {
-  // Bridge handles RPC messages automatically in background thread
-  // No need to call Bridge.loop() - it's handled by __loopHook()
+  // Read serial commands
+  while (Serial.available() > 0) {
+    char c = Serial.read();
+    if (c == '\n' || c == '\r') {
+      if (commandBuffer.length() > 0) {
+        processCommand(commandBuffer);
+        commandBuffer = "";
+      }
+    } else {
+      commandBuffer += c;
+      // Prevent buffer overflow
+      if (commandBuffer.length() > 512) {
+        commandBuffer = "";
+        Serial.println("ERROR:Command too long");
+      }
+    }
+  }
 
   // Render in portfolio mode at 40 FPS
   if (inPortfolioMode) {
@@ -265,6 +563,58 @@ void loop() {
   }
 
   unsigned long currentMillis = millis();
+
+  // Handle LED3 blinking
+  if (isBlinking3) {
+    if (currentMillis - lastBlinkTime3 >= blinkInterval3) {
+      currentState3 = !currentState3;
+      lastBlinkTime3 = currentMillis;
+      if (currentState3) {
+        setRGB3(blinkColor3R, blinkColor3G, blinkColor3B);
+      } else {
+        setRGB3(0, 0, 0);
+      }
+    }
+  }
+
+  // Handle LED4 blinking modes
+  if (isAlternating4) {
+    // Alternating color mode
+    if (currentMillis - lastBlinkTime4 >= blinkInterval4) {
+      currentAltColor4 = !currentAltColor4;
+      lastBlinkTime4 = currentMillis;
+      if (currentAltColor4) {
+        setRGB4(altColor4R2, altColor4G2, altColor4B2);
+      } else {
+        setRGB4(altColor4R1, altColor4G1, altColor4B1);
+      }
+    }
+  } else if (isCoordinated4) {
+    // Coordinated mode: LED4 is inverse of LED3
+    if (isBlinking3) {
+      // LED4 state should be inverse of LED3 state
+      bool desiredState4 = !currentState3;
+      if (desiredState4 != currentState4) {
+        currentState4 = desiredState4;
+        if (currentState4) {
+          setRGB4(blinkColor4R, blinkColor4G, blinkColor4B);
+        } else {
+          setRGB4(0, 0, 0);
+        }
+      }
+    }
+  } else if (isBlinking4) {
+    // Simple blink mode
+    if (currentMillis - lastBlinkTime4 >= blinkInterval4) {
+      currentState4 = !currentState4;
+      lastBlinkTime4 = currentMillis;
+      if (currentState4) {
+        setRGB4(blinkColor4R, blinkColor4G, blinkColor4B);
+      } else {
+        setRGB4(0, 0, 0);
+      }
+    }
+  }
 
   // Check if scrolling has completed (ticker mode)
   if (isScrolling && (currentMillis - scrollStartTime >= estimatedScrollDuration)) {
@@ -292,7 +642,4 @@ void loop() {
     // Clear pending flag
     hasPendingText = false;
   }
-
-  // Bridge handles RPC in background thread - no delay needed
-  // Removed delay(10) for instant RPC response and lower CPU usage
 }

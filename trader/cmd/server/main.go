@@ -242,18 +242,37 @@ func main() {
 
 	log.Info().Int("port", cfg.Port).Msg("Server started successfully")
 
+	// Start LED status monitors
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Start service heartbeat monitor (LED3)
+	serviceMonitor := display.NewServiceMonitor("trader", displayManager, log)
+	go serviceMonitor.MonitorService(ctx)
+	log.Info().Msg("Service heartbeat monitor started (LED3)")
+
+	// Start planner action monitor (LED4)
+	recommendationRepo := planning.NewRecommendationRepository(cacheDB.Conn(), log)
+	plannerMonitor := display.NewPlannerMonitor(recommendationRepo, displayManager, log)
+	go plannerMonitor.MonitorPlannerActions(ctx)
+	log.Info().Msg("Planner action monitor started (LED4)")
+
 	// Wait for interrupt signal
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
+	// Cancel context to stop monitors
+	cancel()
+	log.Info().Msg("Stopping LED monitors...")
+
 	log.Info().Msg("Shutting down server...")
 
 	// Graceful shutdown
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
 
-	if err := srv.Shutdown(ctx); err != nil {
+	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Error().Err(err).Msg("Server forced to shutdown")
 	}
 

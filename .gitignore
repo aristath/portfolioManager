@@ -58,3 +58,5 @@ display/bridge/display-bridge
 .claude/
 
 build/
+
+trader/app/bin/.deploy.lock

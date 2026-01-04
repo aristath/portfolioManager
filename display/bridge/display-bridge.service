@@ -1,20 +1,19 @@
 [Unit]
 Description=Arduino Display Bridge (Go)
-Documentation=https://github.com/aristath/arduino-trader
-After=network.target arduino-router.service trader.service
-Requires=arduino-router.service
+After=network.target trader.service
 Wants=trader.service
 
 [Service]
 Type=simple
 User=arduino
 Group=arduino
-WorkingDirectory=/opt/arduino-trader
-ExecStart=/opt/arduino-trader/display/bridge/bridge
+WorkingDirectory=/home/arduino/app/bin
+Environment="PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/go/bin"
+Environment="SERIAL_PORT=/dev/ttyHS1"
+Environment="API_URL=http://localhost:8080/api/system/led/display"
+ExecStart=/home/arduino/app/bin/display-bridge
 Restart=always
 RestartSec=5
-
-# Logging
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=display-bridge
@@ -22,12 +21,9 @@ SyslogIdentifier=display-bridge
 # Security hardening
 NoNewPrivileges=true
 PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=/var/log
 
 # Resource limits
-MemoryMax=50M
+MemoryMax=100M
 CPUQuota=10%
 
 [Install]
