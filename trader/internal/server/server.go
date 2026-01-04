@@ -231,9 +231,6 @@ func (s *Server) setupRoutes() {
 		// Cash-flows module (MIGRATED TO GO!)
 		s.setupCashFlowsRoutes(r)
 
-		// Satellites module (MIGRATED TO GO!)
-		s.setupSatellitesRoutes(r)
-
 		// Rebalancing module (MIGRATED TO GO!)
 		s.setupRebalancingRoutes(r)
 
@@ -867,46 +864,6 @@ func (s *Server) setupEvaluationRoutes(r chi.Router) {
 			r.Post("/batch", handler.HandleSimulateBatch)
 		})
 	})
-}
-
-// setupSatellitesRoutes configures satellites module routes
-func (s *Server) setupSatellitesRoutes(r chi.Router) {
-	// Initialize satellites database schema
-	if err := satellites.InitSchema(s.satellitesDB.Conn()); err != nil {
-		s.log.Fatal().Err(err).Msg("Failed to initialize satellites schema")
-	}
-
-	// Initialize Tradernet client for exchange rates
-	tradernetClient := tradernet.NewClient(s.cfg.TradernetServiceURL, s.log)
-	tradernetClient.SetCredentials(s.cfg.TradernetAPIKey, s.cfg.TradernetAPISecret)
-
-	// Initialize currency exchange service for multi-currency cash conversion
-	currencyExchangeService := services.NewCurrencyExchangeService(tradernetClient, s.log)
-
-	// Initialize repositories
-	bucketRepo := satellites.NewBucketRepository(s.satellitesDB.Conn(), s.log)
-	balanceRepo := satellites.NewBalanceRepository(s.satellitesDB.Conn(), s.log)
-
-	// Cash manager (needed for balance service)
-	securityRepo := universe.NewSecurityRepository(s.universeDB.Conn(), s.log)
-	positionRepo := portfolio.NewPositionRepository(s.portfolioDB.Conn(), s.universeDB.Conn(), s.log)
-	cashManager := cash_flows.NewCashSecurityManager(securityRepo, positionRepo, bucketRepo, s.universeDB.Conn(), s.portfolioDB.Conn(), s.log)
-
-	// Initialize services
-	balanceService := satellites.NewBalanceService(cashManager, balanceRepo, bucketRepo, s.log)
-	bucketService := satellites.NewBucketService(bucketRepo, balanceService, balanceRepo, currencyExchangeService, s.log)
-	reconciliationService := satellites.NewReconciliationService(balanceService, balanceRepo, bucketRepo, s.log)
-
-	// Initialize handlers
-	handlers := satellites.NewHandlers(
-		bucketService,
-		balanceService,
-		reconciliationService,
-		s.log,
-	)
-
-	// Register routes
-	handlers.RegisterRoutes(r)
 }
 
 // setupRebalancingRoutes configures rebalancing module routes
