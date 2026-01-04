@@ -64,9 +64,10 @@ arduino-cli core install arduino:zephyr >> "$LOG_FILE" 2>&1 || {
     error_exit "Failed to install arduino:zephyr platform"
 }
 
-# Install required libraries (only ArduinoGraphics needed now - no RouterBridge/MsgPack)
+# Install required libraries (ArduinoGraphics and MsgPack needed for RouterBridge)
 log "Installing required libraries..."
 arduino-cli lib install "ArduinoGraphics" >> "$LOG_FILE" 2>&1 || log "WARNING: Failed to install ArduinoGraphics"
+arduino-cli lib install "MsgPack@0.4.2" >> "$LOG_FILE" 2>&1 || log "WARNING: Failed to install MsgPack"
 
 # Compile sketch
 log "Compiling sketch: $SKETCH_FILE"
