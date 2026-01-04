@@ -300,9 +300,6 @@ class SettingsModal extends HTMLElement {
 
               <!-- Display Tab -->
               <div x-show="activeTab === 'display'" x-transition class="space-y-6">
-
-              <!-- Display Tab -->
-              <div x-show="activeTab === 'display'" x-transition class="space-y-6">
                 <!-- LED Matrix -->
                 <div class="bg-gray-800 border border-gray-700 rounded p-4">
                   <h3 class="text-sm font-medium text-gray-300 uppercase tracking-wide mb-3">LED Matrix</h3>

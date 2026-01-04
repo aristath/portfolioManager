@@ -49,30 +49,30 @@ const API = {
   },
 
   // Status
-  fetchStatus: () => fetch('/api/status').then(r => r.json()),
-  fetchTradernet: () => fetch('/api/status/tradernet').then(r => r.json()),
-  syncPrices: () => API._post('/api/status/sync/prices'),
-  syncHistorical: () => API._post('/api/status/sync/historical'),
+  fetchStatus: () => fetch('/api/system/status').then(r => r.json()),
+  fetchTradernet: () => fetch('/api/system/tradernet').then(r => r.json()),
+  syncPrices: () => API._post('/api/system/sync/prices'),
+  syncHistorical: () => API._post('/api/system/sync/historical'),
 
   // Logs
   fetchLogs: (logFile = 'arduino-trader.log', lines = 100, level = null, search = null) => {
     const params = new URLSearchParams({ log_file: logFile, lines: lines.toString() });
     if (level) params.append('level', level);
     if (search) params.append('search', search);
-    return fetch(`/api/status/logs?${params}`).then(r => r.json());
+    return fetch(`/api/system/logs?${params}`).then(r => r.json());
   },
   fetchErrorLogs: (logFile = 'arduino-trader.log', lines = 50) => {
     const params = new URLSearchParams({ log_file: logFile, lines: lines.toString() });
-    return fetch(`/api/status/logs/errors?${params}`).then(r => r.json());
+    return fetch(`/api/system/logs/errors?${params}`).then(r => r.json());
   },
-  fetchAvailableLogFiles: () => fetch('/api/status/logs/list').then(r => r.json()),
+  fetchAvailableLogFiles: () => fetch('/api/system/logs/list').then(r => r.json()),
 
   // Jobs
-  triggerSyncCycle: () => API._post('/api/status/jobs/sync-cycle'),
-  triggerDailyPipeline: () => API._post('/api/status/sync/daily-pipeline'),
-  triggerDailyMaintenance: () => API._post('/api/status/maintenance/daily'),
-  triggerWeeklyMaintenance: () => API._post('/api/status/jobs/weekly-maintenance'),
-  triggerDividendReinvestment: () => API._post('/api/status/jobs/dividend-reinvestment'),
+  triggerSyncCycle: () => API._post('/api/system/jobs/sync-cycle'),
+  triggerDailyPipeline: () => API._post('/api/system/sync/daily-pipeline'),
+  triggerDailyMaintenance: () => API._post('/api/system/jobs/health-check'), // Using health-check as daily maintenance
+  triggerWeeklyMaintenance: () => API._post('/api/system/jobs/health-check'), // Using health-check as weekly maintenance
+  triggerDividendReinvestment: () => API._post('/api/system/jobs/dividend-reinvestment'),
 
   // Allocation
   fetchAllocation: () => fetch('/api/allocation/groups/allocation').then(r => r.json()),
@@ -117,7 +117,7 @@ const API = {
   restartSystem: () => API._post('/api/settings/restart'),
   resetCache: () => API._post('/api/settings/reset-cache'),
   rescheduleJobs: () => API._post('/api/settings/reschedule-jobs'),
-  testTradernetConnection: () => fetch('/api/status/tradernet').then(r => r.json()),
+  testTradernetConnection: () => API._fetch('/api/system/tradernet'),
 
   // Planner
   regenerateSequences: () => API._post('/api/planner/regenerate-sequences'),

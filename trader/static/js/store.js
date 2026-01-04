@@ -268,7 +268,7 @@ document.addEventListener('alpine:init', () => {
 
     async fetchMarkets() {
       try {
-        const response = await fetch('/api/status/markets');
+        const response = await fetch('/api/system/markets');
         const data = await response.json();
         this.markets = data.markets || {};
       } catch (e) {
@@ -433,19 +433,23 @@ document.addEventListener('alpine:init', () => {
     },
 
     async testTradernetConnection() {
+      console.log('testTradernetConnection called');
       this.loading.tradernetTest = true;
       this.tradernetConnectionStatus = null;
       try {
+        console.log('Calling API.testTradernetConnection()');
         const result = await API.testTradernetConnection();
+        console.log('API result:', result);
         this.tradernetConnectionStatus = result.connected || false;
         if (this.tradernetConnectionStatus) {
           this.showMessage('Tradernet connection successful', 'success');
         } else {
-          this.showMessage('Tradernet connection failed - check credentials', 'error');
+          this.showMessage(`Tradernet connection failed: ${result.message || 'check credentials'}`, 'error');
         }
       } catch (e) {
+        console.error('Error testing Tradernet connection:', e);
         this.tradernetConnectionStatus = false;
-        this.showMessage('Failed to test Tradernet connection', 'error');
+        this.showMessage(`Failed to test Tradernet connection: ${e.message}`, 'error');
       } finally {
         this.loading.tradernetTest = false;
       }
