@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/aristath/arduino-trader/internal/clients/tradernet"
+	"github.com/aristath/arduino-trader/internal/clients/yahoo"
 	"github.com/aristath/arduino-trader/internal/domain"
 	"github.com/aristath/arduino-trader/internal/modules/allocation"
 	"github.com/aristath/arduino-trader/internal/modules/planning"
@@ -60,6 +61,7 @@ type Service struct {
 	securityRepo       *universe.SecurityRepository
 	allocRepo          *allocation.Repository
 	tradernetClient    *tradernet.Client
+	yahooClient        *yahoo.Client
 	configRepo         *planningrepo.ConfigRepository
 	recommendationRepo *planning.RecommendationRepository
 
@@ -75,6 +77,7 @@ func NewService(
 	securityRepo *universe.SecurityRepository,
 	allocRepo *allocation.Repository,
 	tradernetClient *tradernet.Client,
+	yahooClient *yahoo.Client,
 	configRepo *planningrepo.ConfigRepository,
 	recommendationRepo *planning.RecommendationRepository,
 	log zerolog.Logger,
@@ -87,6 +90,7 @@ func NewService(
 		securityRepo:       securityRepo,
 		allocRepo:          allocRepo,
 		tradernetClient:    tradernetClient,
+		yahooClient:        yahooClient,
 		configRepo:         configRepo,
 		recommendationRepo: recommendationRepo,
 		log:                log.With().Str("service", "rebalancing").Logger(),
@@ -284,31 +288,52 @@ func (s *Service) buildOpportunityContext(availableCash float64) (*planningdomai
 	return ctx, nil
 }
 
-// fetchCurrentPrices fetches current prices for all securities
-// Following pattern from scheduler/planner_batch.go:266-298
+// fetchCurrentPrices fetches current prices for all securities from Yahoo Finance
 func (s *Service) fetchCurrentPrices(securities []universe.Security) map[string]float64 {
 	prices := make(map[string]float64)
 
-	if s.tradernetClient == nil || !s.tradernetClient.IsConnected() {
-		s.log.Warn().Msg("Tradernet not available, using empty prices")
+	// Skip if Yahoo client is not available
+	if s.yahooClient == nil {
+		s.log.Warn().Msg("Yahoo client not available, using empty prices")
 		return prices
 	}
 
-	successCount := 0
-	for _, sec := range securities {
-		quote, err := s.tradernetClient.GetQuote(sec.Symbol)
-		if err != nil {
-			s.log.Debug().Err(err).Str("symbol", sec.Symbol).Msg("Failed to fetch price")
-			continue
+	if len(securities) == 0 {
+		return prices
+	}
+
+	// Build symbol map (tradernet_symbol -> yahoo_symbol override)
+	symbolMap := make(map[string]*string)
+	for _, security := range securities {
+		var yahooSymbolPtr *string
+		if security.YahooSymbol != "" {
+			// Create new string to avoid range variable issues
+			yahooSymbol := security.YahooSymbol
+			yahooSymbolPtr = &yahooSymbol
 		}
-		prices[sec.Symbol] = quote.Price
-		successCount++
+		symbolMap[security.Symbol] = yahooSymbolPtr
+	}
+
+	// Fetch batch quotes from Yahoo
+	quotes, err := s.yahooClient.GetBatchQuotes(symbolMap)
+	if err != nil {
+		s.log.Warn().Err(err).Msg("Failed to fetch batch quotes from Yahoo, using empty prices")
+		return prices
+	}
+
+	// Convert quotes map to prices map (convert *float64 to float64)
+	successCount := 0
+	for symbol, price := range quotes {
+		if price != nil {
+			prices[symbol] = *price
+			successCount++
+		}
 	}
 
 	s.log.Debug().
 		Int("total", len(securities)).
 		Int("fetched", successCount).
-		Msg("Fetched current prices")
+		Msg("Fetched current prices from Yahoo")
 
 	return prices
 }

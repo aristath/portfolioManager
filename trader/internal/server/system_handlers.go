@@ -816,7 +816,6 @@ func (h *SystemHandlers) HandleDatabaseStats(w http.ResponseWriter, r *http.Requ
 		{"config.db", filepath.Join(h.dataDir, "config.db")},
 		{"state.db", filepath.Join(h.dataDir, "state.db")},
 		{"ledger.db", filepath.Join(h.dataDir, "ledger.db")},
-		{"snapshots.db", filepath.Join(h.dataDir, "snapshots.db")},
 		{"dividends.db", filepath.Join(h.dataDir, "dividends.db")},
 	}
 

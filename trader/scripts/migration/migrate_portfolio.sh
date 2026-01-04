@@ -63,23 +63,6 @@ if [ -f "calculations.db" ]; then
     fi
 fi
 
-# Migrate portfolio_snapshots from snapshots.db or state.db
-if [ -f "snapshots.db" ]; then
-    echo "[Portfolio Migration] Copying portfolio_snapshots from snapshots.db..."
-    if sqlite3 snapshots.db "SELECT name FROM sqlite_master WHERE type='table' AND name='portfolio_snapshots'" | grep -q portfolio_snapshots; then
-        sqlite3 snapshots.db ".dump portfolio_snapshots" | grep -v "^CREATE TABLE" | sqlite3 portfolio.db
-        SNAPSHOTS_COUNT=$(sqlite3 portfolio.db "SELECT COUNT(*) FROM portfolio_snapshots")
-        echo "[Portfolio Migration] Snapshots migrated: $SNAPSHOTS_COUNT"
-    fi
-elif [ -f "state.db" ]; then
-    echo "[Portfolio Migration] Copying portfolio_snapshots from state.db..."
-    if sqlite3 state.db "SELECT name FROM sqlite_master WHERE type='table' AND name='portfolio_snapshots'" | grep -q portfolio_snapshots; then
-        sqlite3 state.db ".dump portfolio_snapshots" | grep -v "^CREATE TABLE" | sqlite3 portfolio.db
-        SNAPSHOTS_COUNT=$(sqlite3 portfolio.db "SELECT COUNT(*) FROM portfolio_snapshots")
-        echo "[Portfolio Migration] Snapshots migrated: $SNAPSHOTS_COUNT"
-    fi
-fi
-
 # Integrity check
 INTEGRITY=$(sqlite3 portfolio.db "PRAGMA integrity_check")
 if [ "$INTEGRITY" != "ok" ]; then

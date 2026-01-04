@@ -385,10 +385,6 @@ func (s *Server) setupAllocationRoutes(r chi.Router) {
 
 	// Portfolio service (needed for allocation calculations)
 	positionRepo := portfolio.NewPositionRepository(s.portfolioDB.Conn(), s.universeDB.Conn(), s.log)
-	portfolioRepo := portfolio.NewPortfolioRepository(s.portfolioDB.Conn(), s.log)
-	turnoverTracker := portfolio.NewTurnoverTracker(s.ledgerDB.Conn(), s.portfolioDB.Conn(), s.log)
-	tradeRepo := portfolio.NewTradeRepository(s.ledgerDB.Conn(), s.log)
-	attributionCalc := portfolio.NewAttributionCalculator(tradeRepo, s.configDB.Conn(), s.cfg.HistoryPath, s.log)
 	tradernetClient := tradernet.NewClient(s.cfg.TradernetServiceURL, s.log)
 	tradernetClient.SetCredentials(s.cfg.TradernetAPIKey, s.cfg.TradernetAPISecret)
 
@@ -400,11 +396,8 @@ func (s *Server) setupAllocationRoutes(r chi.Router) {
 	cashManager := cash_flows.NewCashSecurityManager(securityRepo, positionRepo, s.universeDB.Conn(), s.portfolioDB.Conn(), s.log)
 
 	portfolioService := portfolio.NewPortfolioService(
-		portfolioRepo,
 		positionRepo,
 		allocRepo,
-		turnoverTracker,
-		attributionCalc,
 		cashManager,
 		s.universeDB.Conn(),
 		tradernetClient,
@@ -446,11 +439,7 @@ func (s *Server) setupAllocationRoutes(r chi.Router) {
 func (s *Server) setupPortfolioRoutes(r chi.Router) {
 	// Initialize portfolio module components
 	positionRepo := portfolio.NewPositionRepository(s.portfolioDB.Conn(), s.universeDB.Conn(), s.log)
-	portfolioRepo := portfolio.NewPortfolioRepository(s.portfolioDB.Conn(), s.log)
 	allocRepo := allocation.NewRepository(s.configDB.Conn(), s.log)
-	turnoverTracker := portfolio.NewTurnoverTracker(s.ledgerDB.Conn(), s.portfolioDB.Conn(), s.log)
-	tradeRepo := portfolio.NewTradeRepository(s.ledgerDB.Conn(), s.log)
-	attributionCalc := portfolio.NewAttributionCalculator(tradeRepo, s.configDB.Conn(), s.cfg.HistoryPath, s.log)
 
 	// Tradernet microservice client
 	tradernetClient := tradernet.NewClient(s.cfg.TradernetServiceURL, s.log)
@@ -464,11 +453,8 @@ func (s *Server) setupPortfolioRoutes(r chi.Router) {
 	cashManager := cash_flows.NewCashSecurityManager(securityRepo, positionRepo, s.universeDB.Conn(), s.portfolioDB.Conn(), s.log)
 
 	portfolioService := portfolio.NewPortfolioService(
-		portfolioRepo,
 		positionRepo,
 		allocRepo,
-		turnoverTracker,
-		attributionCalc,
 		cashManager,
 		s.universeDB.Conn(),
 		tradernetClient,
@@ -478,22 +464,18 @@ func (s *Server) setupPortfolioRoutes(r chi.Router) {
 
 	handler := portfolio.NewHandler(
 		positionRepo,
-		portfolioRepo,
 		portfolioService,
 		tradernetClient,
 		currencyExchangeService,
 		s.log,
-		s.cfg.PythonServiceURL,
 	)
 
 	// Portfolio routes (faithful translation of Python routes)
 	r.Route("/portfolio", func(r chi.Router) {
 		r.Get("/", handler.HandleGetPortfolio)                   // List positions (same as GET /portfolio)
 		r.Get("/summary", handler.HandleGetSummary)              // Portfolio summary
-		r.Get("/history", handler.HandleGetHistory)              // Historical snapshots
 		r.Get("/transactions", handler.HandleGetTransactions)    // Transaction history (via Tradernet microservice)
 		r.Get("/cash-breakdown", handler.HandleGetCashBreakdown) // Cash breakdown (via Tradernet microservice)
-		r.Get("/analytics", handler.HandleGetAnalytics)          // Proxy to Python (analytics - requires PyFolio)
 	})
 }
 
@@ -616,10 +598,6 @@ func (s *Server) setupTradingRoutes(r chi.Router) {
 	// Portfolio service (needed for allocation endpoint)
 	allocRepo := allocation.NewRepository(s.configDB.Conn(), s.log)
 	positionRepo := portfolio.NewPositionRepository(s.portfolioDB.Conn(), s.universeDB.Conn(), s.log)
-	portfolioRepo := portfolio.NewPortfolioRepository(s.portfolioDB.Conn(), s.log)
-	turnoverTracker := portfolio.NewTurnoverTracker(s.ledgerDB.Conn(), s.portfolioDB.Conn(), s.log)
-	portfolioTradeRepo := portfolio.NewTradeRepository(s.ledgerDB.Conn(), s.log)
-	attributionCalc := portfolio.NewAttributionCalculator(portfolioTradeRepo, s.configDB.Conn(), s.cfg.HistoryPath, s.log)
 
 	// Tradernet microservice client
 	tradernetClient := tradernet.NewClient(s.cfg.TradernetServiceURL, s.log)
@@ -633,11 +611,8 @@ func (s *Server) setupTradingRoutes(r chi.Router) {
 	cashManager := cash_flows.NewCashSecurityManager(securityRepoForCash, positionRepo, s.universeDB.Conn(), s.portfolioDB.Conn(), s.log)
 
 	portfolioService := portfolio.NewPortfolioService(
-		portfolioRepo,
 		positionRepo,
 		allocRepo,
-		turnoverTracker,
-		attributionCalc,
 		cashManager,
 		s.universeDB.Conn(),
 		tradernetClient,
@@ -861,17 +836,14 @@ func (s *Server) setupEvaluationRoutes(r chi.Router) {
 
 // setupRebalancingRoutes configures rebalancing module routes
 func (s *Server) setupRebalancingRoutes(r chi.Router) {
-	// Initialize Tradernet client
+	// Initialize clients
 	tradernetClient := tradernet.NewClient(s.cfg.TradernetServiceURL, s.log)
 	tradernetClient.SetCredentials(s.cfg.TradernetAPIKey, s.cfg.TradernetAPISecret)
+	yahooClient := yahoo.NewClient(s.log)
 
 	// Initialize portfolio service (needed for rebalancing)
 	positionRepo := portfolio.NewPositionRepository(s.portfolioDB.Conn(), s.universeDB.Conn(), s.log)
-	portfolioRepo := portfolio.NewPortfolioRepository(s.portfolioDB.Conn(), s.log)
 	allocRepo := allocation.NewRepository(s.configDB.Conn(), s.log)
-	turnoverTracker := portfolio.NewTurnoverTracker(s.ledgerDB.Conn(), s.portfolioDB.Conn(), s.log)
-	tradeRepo := portfolio.NewTradeRepository(s.ledgerDB.Conn(), s.log)
-	attributionCalc := portfolio.NewAttributionCalculator(tradeRepo, s.configDB.Conn(), s.cfg.HistoryPath, s.log)
 
 	// Initialize currency exchange service for multi-currency cash handling
 	currencyExchangeService := services.NewCurrencyExchangeService(tradernetClient, s.log)
@@ -881,11 +853,8 @@ func (s *Server) setupRebalancingRoutes(r chi.Router) {
 	cashManagerForRebalancing := cash_flows.NewCashSecurityManager(securityRepoForRebalancing, positionRepo, s.universeDB.Conn(), s.portfolioDB.Conn(), s.log)
 
 	portfolioService := portfolio.NewPortfolioService(
-		portfolioRepo,
 		positionRepo,
 		allocRepo,
-		turnoverTracker,
-		attributionCalc,
 		cashManagerForRebalancing,
 		s.universeDB.Conn(),
 		tradernetClient,
@@ -956,6 +925,7 @@ func (s *Server) setupRebalancingRoutes(r chi.Router) {
 		securityRepo,
 		allocRepo,
 		tradernetClient,
+		yahooClient,
 		plannerConfigRepo,
 		recommendationRepo,
 		s.log,

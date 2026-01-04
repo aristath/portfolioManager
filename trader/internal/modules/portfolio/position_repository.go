@@ -706,10 +706,3 @@ func nullString(val string) sql.NullString {
 	}
 	return sql.NullString{String: val, Valid: true}
 }
-
-func nullInt64(val int) sql.NullInt64 {
-	if val == 0 {
-		return sql.NullInt64{Valid: false}
-	}
-	return sql.NullInt64{Int64: int64(val), Valid: true}
-}

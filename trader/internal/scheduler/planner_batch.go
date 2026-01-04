@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/aristath/arduino-trader/internal/clients/tradernet"
+	"github.com/aristath/arduino-trader/internal/clients/yahoo"
 	"github.com/aristath/arduino-trader/internal/domain"
 	"github.com/aristath/arduino-trader/internal/modules/allocation"
 	"github.com/aristath/arduino-trader/internal/modules/opportunities"
@@ -28,6 +29,7 @@ type PlannerBatchJob struct {
 	securityRepo           *universe.SecurityRepository
 	allocRepo              *allocation.Repository
 	tradernetClient        *tradernet.Client
+	yahooClient            *yahoo.Client
 	opportunitiesService   *opportunities.Service
 	sequencesService       *sequences.Service
 	evaluationService      *evaluation.Service
@@ -46,6 +48,7 @@ type PlannerBatchConfig struct {
 	SecurityRepo           *universe.SecurityRepository
 	AllocRepo              *allocation.Repository
 	TradernetClient        *tradernet.Client
+	YahooClient            *yahoo.Client
 	OpportunitiesService   *opportunities.Service
 	SequencesService       *sequences.Service
 	EvaluationService      *evaluation.Service
@@ -68,6 +71,7 @@ func NewPlannerBatchJob(cfg PlannerBatchConfig) *PlannerBatchJob {
 		securityRepo:           cfg.SecurityRepo,
 		allocRepo:              cfg.AllocRepo,
 		tradernetClient:        cfg.TradernetClient,
+		yahooClient:            cfg.YahooClient,
 		opportunitiesService:   cfg.OpportunitiesService,
 		sequencesService:       cfg.SequencesService,
 		evaluationService:      cfg.EvaluationService,
@@ -263,36 +267,52 @@ func (j *PlannerBatchJob) buildOpportunityContext(
 	}
 }
 
-// fetchCurrentPrices fetches current prices for all securities from Tradernet
+// fetchCurrentPrices fetches current prices for all securities from Yahoo Finance
 func (j *PlannerBatchJob) fetchCurrentPrices(securities []universe.Security) map[string]float64 {
 	prices := make(map[string]float64)
 
-	// Skip if Tradernet is not available
-	if j.tradernetClient == nil || !j.tradernetClient.IsConnected() {
-		j.log.Warn().Msg("Tradernet not available, using empty prices")
+	// Skip if Yahoo client is not available
+	if j.yahooClient == nil {
+		j.log.Warn().Msg("Yahoo client not available, using empty prices")
 		return prices
 	}
 
-	// Fetch quote for each security
-	successCount := 0
-	for _, sec := range securities {
-		quote, err := j.tradernetClient.GetQuote(sec.Symbol)
-		if err != nil {
-			j.log.Warn().
-				Err(err).
-				Str("symbol", sec.Symbol).
-				Msg("Failed to fetch price")
-			continue
-		}
+	if len(securities) == 0 {
+		return prices
+	}
 
-		prices[sec.Symbol] = quote.Price
-		successCount++
+	// Build symbol map (tradernet_symbol -> yahoo_symbol override)
+	symbolMap := make(map[string]*string)
+	for _, security := range securities {
+		var yahooSymbolPtr *string
+		if security.YahooSymbol != "" {
+			// Create new string to avoid range variable issues
+			yahooSymbol := security.YahooSymbol
+			yahooSymbolPtr = &yahooSymbol
+		}
+		symbolMap[security.Symbol] = yahooSymbolPtr
+	}
+
+	// Fetch batch quotes from Yahoo
+	quotes, err := j.yahooClient.GetBatchQuotes(symbolMap)
+	if err != nil {
+		j.log.Warn().Err(err).Msg("Failed to fetch batch quotes from Yahoo, using empty prices")
+		return prices
+	}
+
+	// Convert quotes map to prices map (convert *float64 to float64)
+	successCount := 0
+	for symbol, price := range quotes {
+		if price != nil {
+			prices[symbol] = *price
+			successCount++
+		}
 	}
 
 	j.log.Info().
 		Int("total", len(securities)).
 		Int("fetched", successCount).
-		Msg("Fetched current prices")
+		Msg("Fetched current prices from Yahoo")
 
 	return prices
 }

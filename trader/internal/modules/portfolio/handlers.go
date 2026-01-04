@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"sort"
-	"strconv"
 
 	"github.com/aristath/arduino-trader/internal/clients/tradernet"
 	"github.com/rs/zerolog"
@@ -14,32 +13,26 @@ import (
 // Faithful translation from Python: app/modules/portfolio/api/portfolio.py
 type Handler struct {
 	positionRepo            *PositionRepository
-	portfolioRepo           *PortfolioRepository
 	service                 *PortfolioService
 	tradernetClient         *tradernet.Client
 	currencyExchangeService CurrencyExchangeServiceInterface
 	log                     zerolog.Logger
-	pythonURL               string // URL of Python service for analytics endpoint
 }
 
 // NewHandler creates a new portfolio handler
 func NewHandler(
 	positionRepo *PositionRepository,
-	portfolioRepo *PortfolioRepository,
 	service *PortfolioService,
 	tradernetClient *tradernet.Client,
 	currencyExchangeService CurrencyExchangeServiceInterface,
 	log zerolog.Logger,
-	pythonURL string,
 ) *Handler {
 	return &Handler{
 		positionRepo:            positionRepo,
-		portfolioRepo:           portfolioRepo,
 		service:                 service,
 		tradernetClient:         tradernetClient,
 		currencyExchangeService: currencyExchangeService,
 		log:                     log.With().Str("handler", "portfolio").Logger(),
-		pythonURL:               pythonURL,
 	}
 }
 
@@ -105,40 +98,6 @@ func (h *Handler) HandleGetSummary(w http.ResponseWriter, r *http.Request) {
 			"US":   countryDict["US"] * 100,
 		},
 	})
-}
-
-// HandleGetHistory returns historical portfolio snapshots
-// Faithful translation of Python: @router.get("/history")
-func (h *Handler) HandleGetHistory(w http.ResponseWriter, r *http.Request) {
-	// Default to 90 days
-	days := 90
-	if daysParam := r.URL.Query().Get("days"); daysParam != "" {
-		if parsed, err := strconv.Atoi(daysParam); err == nil {
-			days = parsed
-		}
-	}
-
-	snapshots, err := h.portfolioRepo.GetHistory(days)
-	if err != nil {
-		h.writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	// Convert to response format
-	result := make([]map[string]interface{}, 0, len(snapshots))
-	for _, s := range snapshots {
-		result = append(result, map[string]interface{}{
-			"id":           nil, // Not in domain model
-			"date":         s.Date,
-			"total_value":  s.TotalValue,
-			"cash_balance": s.CashBalance,
-			"geo_eu_pct":   s.GeoEUPct,
-			"geo_asia_pct": s.GeoAsiaPct,
-			"geo_us_pct":   s.GeoUSPct,
-		})
-	}
-
-	h.writeJSON(w, http.StatusOK, result)
 }
 
 // HandleGetTransactions gets withdrawal transaction history from Tradernet microservice
@@ -249,28 +208,6 @@ func (h *Handler) HandleGetCashBreakdown(w http.ResponseWriter, r *http.Request)
 	}
 
 	h.writeJSON(w, http.StatusOK, response)
-}
-
-// HandleGetAnalytics calculates portfolio analytics
-// Faithful translation of Python: @router.get("/analytics")
-func (h *Handler) HandleGetAnalytics(w http.ResponseWriter, r *http.Request) {
-	// Parse days parameter (default 365)
-	days := 365
-	if daysParam := r.URL.Query().Get("days"); daysParam != "" {
-		if parsed, err := strconv.Atoi(daysParam); err == nil && parsed > 0 {
-			days = parsed
-		}
-	}
-
-	// Get analytics from service
-	analytics, err := h.service.GetAnalytics(days)
-	if err != nil {
-		h.log.Error().Err(err).Int("days", days).Msg("Failed to calculate analytics")
-		h.writeError(w, http.StatusInternalServerError, "Failed to calculate analytics")
-		return
-	}
-
-	h.writeJSON(w, http.StatusOK, analytics)
 }
 
 // Helper methods

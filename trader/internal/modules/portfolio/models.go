@@ -19,21 +19,6 @@ type Position struct {
 	Quantity         float64 `json:"quantity"`
 }
 
-// PortfolioSnapshot represents daily portfolio summary
-// Faithful translation from Python: app/modules/portfolio/domain/models.py
-type PortfolioSnapshot struct {
-	Date           string  `json:"date"` // YYYY-MM-DD format
-	TotalValue     float64 `json:"total_value"`
-	CashBalance    float64 `json:"cash_balance"`
-	InvestedValue  float64 `json:"invested_value,omitempty"`
-	UnrealizedPnL  float64 `json:"unrealized_pnl,omitempty"`
-	GeoEUPct       float64 `json:"geo_eu_pct,omitempty"`
-	GeoAsiaPct     float64 `json:"geo_asia_pct,omitempty"`
-	GeoUSPct       float64 `json:"geo_us_pct,omitempty"`
-	PositionCount  int     `json:"position_count,omitempty"`
-	AnnualTurnover float64 `json:"annual_turnover,omitempty"`
-}
-
 // AllocationStatus represents current allocation vs target
 // Faithful translation from Python: app/domain/models.py
 type AllocationStatus struct {
@@ -70,82 +55,4 @@ type PositionWithSecurity struct {
 	AvgPrice         float64 `db:"avg_price"`
 	Quantity         float64 `db:"quantity"`
 	AllowSell        bool    `db:"allow_sell"`
-}
-
-// Analytics Response Models
-// Faithful translation from Python: app/api/models.py
-
-// DailyReturn represents a daily return data point
-type DailyReturn struct {
-	Date   string  `json:"date"`
-	Return float64 `json:"return"`
-}
-
-// MonthlyReturn represents a monthly return data point
-type MonthlyReturn struct {
-	Month  string  `json:"month"` // YYYY-MM format
-	Return float64 `json:"return"`
-}
-
-// ReturnsData holds all return metrics
-type ReturnsData struct {
-	Daily   []DailyReturn   `json:"daily"`
-	Monthly []MonthlyReturn `json:"monthly"`
-	Annual  float64         `json:"annual"`
-}
-
-// RiskMetrics holds portfolio risk measurements
-type RiskMetrics struct {
-	SharpeRatio  float64 `json:"sharpe_ratio"`
-	SortinoRatio float64 `json:"sortino_ratio"`
-	CalmarRatio  float64 `json:"calmar_ratio"`
-	Volatility   float64 `json:"volatility"`
-	MaxDrawdown  float64 `json:"max_drawdown"`
-}
-
-// RiskParameters holds configurable parameters for risk metric calculations
-// Allows each agent (main, satellites) to have different risk assessment criteria
-type RiskParameters struct {
-	RiskFreeRate float64 `json:"risk_free_rate"` // Annual risk-free rate (e.g., 0.035 for 3.5%)
-	SortinoMAR   float64 `json:"sortino_mar"`    // Minimum Acceptable Return for Sortino (e.g., 0.05 for 5%)
-}
-
-// NewDefaultRiskParameters returns sensible defaults for portfolio risk calculations
-// Suitable for main/core portfolio (retirement-focused)
-func NewDefaultRiskParameters() RiskParameters {
-	return RiskParameters{
-		RiskFreeRate: 0.035, // 3.5% annual risk-free rate
-		SortinoMAR:   0.05,  // 5% minimum acceptable return (inflation + modest real return)
-	}
-}
-
-// AttributionData holds performance attribution by category
-type AttributionData struct {
-	Country  map[string]float64 `json:"country"`
-	Industry map[string]float64 `json:"industry"`
-}
-
-// PeriodInfo describes the analytics time period
-type PeriodInfo struct {
-	StartDate string `json:"start_date"` // YYYY-MM-DD
-	EndDate   string `json:"end_date"`   // YYYY-MM-DD
-	Days      int    `json:"days"`
-}
-
-// TurnoverInfo describes portfolio turnover metrics
-type TurnoverInfo struct {
-	AnnualTurnover  *float64 `json:"annual_turnover"`
-	TurnoverDisplay string   `json:"turnover_display"`
-	Status          string   `json:"status"`
-	Alert           *string  `json:"alert"`
-	Reason          string   `json:"reason"`
-}
-
-// PortfolioAnalyticsResponse is the main analytics response
-type PortfolioAnalyticsResponse struct {
-	Returns     ReturnsData     `json:"returns"`
-	RiskMetrics RiskMetrics     `json:"risk_metrics"`
-	Attribution AttributionData `json:"attribution"`
-	Period      PeriodInfo      `json:"period"`
-	Turnover    *TurnoverInfo   `json:"turnover,omitempty"`
 }

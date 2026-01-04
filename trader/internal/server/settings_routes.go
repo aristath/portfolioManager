@@ -35,22 +35,15 @@ func (s *Server) setupSettingsRoutes(r chi.Router) {
 
 	// Initialize portfolio service for onboarding
 	positionRepo := portfolio.NewPositionRepository(s.portfolioDB.Conn(), s.universeDB.Conn(), s.log)
-	portfolioRepo := portfolio.NewPortfolioRepository(s.portfolioDB.Conn(), s.log)
 	allocRepo := allocation.NewRepository(s.configDB.Conn(), s.log)
-	turnoverTracker := portfolio.NewTurnoverTracker(s.ledgerDB.Conn(), s.portfolioDB.Conn(), s.log)
-	tradeRepo := portfolio.NewTradeRepository(s.ledgerDB.Conn(), s.log)
-	attributionCalc := portfolio.NewAttributionCalculator(tradeRepo, s.configDB.Conn(), s.cfg.HistoryPath, s.log)
 
 	// Cash manager (needed for portfolio service)
 	securityRepo := universe.NewSecurityRepository(s.universeDB.Conn(), s.log)
 	cashManager := cash_flows.NewCashSecurityManager(securityRepo, positionRepo, s.universeDB.Conn(), s.portfolioDB.Conn(), s.log)
 
 	portfolioService := portfolio.NewPortfolioService(
-		portfolioRepo,
 		positionRepo,
 		allocRepo,
-		turnoverTracker,
-		attributionCalc,
 		cashManager,
 		s.universeDB.Conn(),
 		tradernetClient,
