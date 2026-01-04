@@ -6,460 +6,318 @@ import (
 	"time"
 
 	"github.com/aristath/arduino-trader/internal/database"
-	"github.com/aristath/arduino-trader/internal/modules/planning/config"
 	"github.com/aristath/arduino-trader/internal/modules/planning/domain"
 	"github.com/rs/zerolog"
 )
 
 // ConfigRepository handles database operations for planner configurations.
-// Database: agents.db (agent_configs, config_history tables)
+// Database: config.db (planner_settings table - single row)
 type ConfigRepository struct {
-	db     *database.DB // agents.db
-	loader *config.Loader
-	log    zerolog.Logger
+	db  *database.DB // config.db
+	log zerolog.Logger
 }
 
 // NewConfigRepository creates a new config repository.
-// db parameter should be agents.db connection
-func NewConfigRepository(db *database.DB, loader *config.Loader, log zerolog.Logger) *ConfigRepository {
+// db parameter should be config.db connection
+func NewConfigRepository(db *database.DB, log zerolog.Logger) *ConfigRepository {
 	return &ConfigRepository{
-		db:     db,
-		loader: loader,
-		log:    log.With().Str("component", "config_repository").Logger(),
+		db:  db,
+		log: log.With().Str("component", "config_repository").Logger(),
 	}
 }
 
-// ConfigRecord represents a configuration in the database.
+// ConfigRecord represents a configuration record (for backward compatibility).
+// Note: This is simplified - we only have one config now.
 type ConfigRecord struct {
 	ID          int64
 	Name        string
 	Description string
-	ConfigData  string  // TOML string
-	BucketID    *string // Associated bucket (nullable for templates)
-	IsDefault   bool
+	BucketID    *string // Always nil now (no buckets)
+	IsDefault   bool    // Always true (only one config exists)
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
 
-// ConfigHistoryRecord represents a configuration history entry in the database.
-type ConfigHistoryRecord struct {
-	ID         int64
-	ConfigID   int64
-	ConfigData string // TOML string
-	ChangedBy  string
-	ChangeNote string
-	CreatedAt  time.Time
+// GetDefaultConfig retrieves the planner configuration (single config exists).
+func (r *ConfigRepository) GetDefaultConfig() (*domain.PlannerConfiguration, error) {
+	return r.getSettings()
 }
 
-// CreateConfig creates a new configuration.
-func (r *ConfigRepository) CreateConfig(
-	cfg *domain.PlannerConfiguration,
-	isDefault bool,
-) (int64, error) {
-	// Convert config to TOML string
-	tomlData, err := r.loader.ToString(cfg)
+// GetSettings retrieves the planner settings (single config exists).
+func (r *ConfigRepository) getSettings() (*domain.PlannerConfiguration, error) {
+	var cfg domain.PlannerConfiguration
+
+	err := r.db.QueryRow(`
+		SELECT
+			name, description,
+			enable_batch_generation,
+			max_depth, max_opportunities_per_category,
+			priority_threshold, beam_width,
+			enable_diverse_selection, diversity_weight,
+			transaction_cost_fixed, transaction_cost_percent,
+			allow_sell, allow_buy,
+			enable_profit_taking_calc,
+			enable_averaging_down_calc,
+			enable_opportunity_buys_calc,
+			enable_rebalance_sells_calc,
+			enable_rebalance_buys_calc,
+			enable_weight_based_calc,
+			enable_direct_buy_pattern,
+			enable_profit_taking_pattern,
+			enable_rebalance_pattern,
+			enable_averaging_down_pattern,
+			enable_single_best_pattern,
+			enable_multi_sell_pattern,
+			enable_mixed_strategy_pattern,
+			enable_opportunity_first_pattern,
+			enable_deep_rebalance_pattern,
+			enable_cash_generation_pattern,
+			enable_cost_optimized_pattern,
+			enable_adaptive_pattern,
+			enable_market_regime_pattern,
+			enable_combinatorial_generator,
+			enable_enhanced_combinatorial_generator,
+			enable_partial_execution_generator,
+			enable_constraint_relaxation_generator,
+			enable_correlation_aware_filter,
+			enable_diversity_filter,
+			enable_eligibility_filter,
+			enable_recently_traded_filter
+		FROM planner_settings
+		WHERE id = 'main'
+	`).Scan(
+		&cfg.Name, &cfg.Description,
+		&cfg.EnableBatchGeneration,
+		&cfg.MaxDepth, &cfg.MaxOpportunitiesPerCategory,
+		&cfg.PriorityThreshold, &cfg.BeamWidth,
+		&cfg.EnableDiverseSelection, &cfg.DiversityWeight,
+		&cfg.TransactionCostFixed, &cfg.TransactionCostPercent,
+		&cfg.AllowSell, &cfg.AllowBuy,
+		&cfg.EnableProfitTakingCalc,
+		&cfg.EnableAveragingDownCalc,
+		&cfg.EnableOpportunityBuysCalc,
+		&cfg.EnableRebalanceSellsCalc,
+		&cfg.EnableRebalanceBuysCalc,
+		&cfg.EnableWeightBasedCalc,
+		&cfg.EnableDirectBuyPattern,
+		&cfg.EnableProfitTakingPattern,
+		&cfg.EnableRebalancePattern,
+		&cfg.EnableAveragingDownPattern,
+		&cfg.EnableSingleBestPattern,
+		&cfg.EnableMultiSellPattern,
+		&cfg.EnableMixedStrategyPattern,
+		&cfg.EnableOpportunityFirstPattern,
+		&cfg.EnableDeepRebalancePattern,
+		&cfg.EnableCashGenerationPattern,
+		&cfg.EnableCostOptimizedPattern,
+		&cfg.EnableAdaptivePattern,
+		&cfg.EnableMarketRegimePattern,
+		&cfg.EnableCombinatorialGenerator,
+		&cfg.EnableEnhancedCombinatorialGenerator,
+		&cfg.EnablePartialExecutionGenerator,
+		&cfg.EnableConstraintRelaxationGenerator,
+		&cfg.EnableCorrelationAwareFilter,
+		&cfg.EnableDiversityFilter,
+		&cfg.EnableEligibilityFilter,
+		&cfg.EnableRecentlyTradedFilter,
+	)
+
+	if err == sql.ErrNoRows {
+		// No config exists, return defaults
+		return domain.NewDefaultConfiguration(), nil
+	}
 	if err != nil {
-		return 0, fmt.Errorf("failed to convert config to TOML: %w", err)
+		return nil, fmt.Errorf("failed to get planner settings: %w", err)
 	}
 
+	return &cfg, nil
+}
+
+// UpdateSettings updates the planner settings (single config exists).
+func (r *ConfigRepository) updateSettings(cfg *domain.PlannerConfiguration) error {
 	now := time.Now()
 
-	// If setting as default, unset any existing default
-	if isDefault {
-		if err := r.unsetDefaultConfig(); err != nil {
-			return 0, fmt.Errorf("failed to unset existing default: %w", err)
-		}
-	}
-
-	// Insert config
-	result, err := r.db.Exec(`
-		INSERT INTO planner_configs (name, description, config_data, bucket_id, is_default, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-	`, cfg.Name, cfg.Description, tomlData, nil, isDefault, now, now)
+	_, err := r.db.Exec(`
+		UPDATE planner_settings SET
+			name = ?,
+			description = ?,
+			enable_batch_generation = ?,
+			max_depth = ?,
+			max_opportunities_per_category = ?,
+			priority_threshold = ?,
+			beam_width = ?,
+			enable_diverse_selection = ?,
+			diversity_weight = ?,
+			transaction_cost_fixed = ?,
+			transaction_cost_percent = ?,
+			allow_sell = ?,
+			allow_buy = ?,
+			enable_profit_taking_calc = ?,
+			enable_averaging_down_calc = ?,
+			enable_opportunity_buys_calc = ?,
+			enable_rebalance_sells_calc = ?,
+			enable_rebalance_buys_calc = ?,
+			enable_weight_based_calc = ?,
+			enable_direct_buy_pattern = ?,
+			enable_profit_taking_pattern = ?,
+			enable_rebalance_pattern = ?,
+			enable_averaging_down_pattern = ?,
+			enable_single_best_pattern = ?,
+			enable_multi_sell_pattern = ?,
+			enable_mixed_strategy_pattern = ?,
+			enable_opportunity_first_pattern = ?,
+			enable_deep_rebalance_pattern = ?,
+			enable_cash_generation_pattern = ?,
+			enable_cost_optimized_pattern = ?,
+			enable_adaptive_pattern = ?,
+			enable_market_regime_pattern = ?,
+			enable_combinatorial_generator = ?,
+			enable_enhanced_combinatorial_generator = ?,
+			enable_partial_execution_generator = ?,
+			enable_constraint_relaxation_generator = ?,
+			enable_correlation_aware_filter = ?,
+			enable_diversity_filter = ?,
+			enable_eligibility_filter = ?,
+			enable_recently_traded_filter = ?,
+			updated_at = ?
+		WHERE id = 'main'
+	`,
+		cfg.Name, cfg.Description,
+		cfg.EnableBatchGeneration,
+		cfg.MaxDepth, cfg.MaxOpportunitiesPerCategory,
+		cfg.PriorityThreshold, cfg.BeamWidth,
+		cfg.EnableDiverseSelection, cfg.DiversityWeight,
+		cfg.TransactionCostFixed, cfg.TransactionCostPercent,
+		cfg.AllowSell, cfg.AllowBuy,
+		cfg.EnableProfitTakingCalc,
+		cfg.EnableAveragingDownCalc,
+		cfg.EnableOpportunityBuysCalc,
+		cfg.EnableRebalanceSellsCalc,
+		cfg.EnableRebalanceBuysCalc,
+		cfg.EnableWeightBasedCalc,
+		cfg.EnableDirectBuyPattern,
+		cfg.EnableProfitTakingPattern,
+		cfg.EnableRebalancePattern,
+		cfg.EnableAveragingDownPattern,
+		cfg.EnableSingleBestPattern,
+		cfg.EnableMultiSellPattern,
+		cfg.EnableMixedStrategyPattern,
+		cfg.EnableOpportunityFirstPattern,
+		cfg.EnableDeepRebalancePattern,
+		cfg.EnableCashGenerationPattern,
+		cfg.EnableCostOptimizedPattern,
+		cfg.EnableAdaptivePattern,
+		cfg.EnableMarketRegimePattern,
+		cfg.EnableCombinatorialGenerator,
+		cfg.EnableEnhancedCombinatorialGenerator,
+		cfg.EnablePartialExecutionGenerator,
+		cfg.EnableConstraintRelaxationGenerator,
+		cfg.EnableCorrelationAwareFilter,
+		cfg.EnableDiversityFilter,
+		cfg.EnableEligibilityFilter,
+		cfg.EnableRecentlyTradedFilter,
+		now.Format(time.RFC3339),
+	)
 
 	if err != nil {
-		return 0, fmt.Errorf("failed to insert config: %w", err)
-	}
-
-	id, err := result.LastInsertId()
-	if err != nil {
-		return 0, fmt.Errorf("failed to get last insert id: %w", err)
+		return fmt.Errorf("failed to update planner settings: %w", err)
 	}
 
 	r.log.Info().
-		Int64("id", id).
 		Str("name", cfg.Name).
-		Bool("is_default", isDefault).
-		Msg("Created config")
+		Msg("Updated planner settings")
 
-	// Create initial history entry
-	if err := r.createHistoryEntry(id, tomlData, "system", "Initial configuration created"); err != nil {
-		r.log.Warn().Err(err).Msg("Failed to create history entry")
-	}
-
-	return id, nil
+	return nil
 }
 
-// GetConfig retrieves a configuration by ID.
+// Backward compatibility methods (simplified implementations)
+
+// GetConfig retrieves a configuration by ID (always returns the single config).
 func (r *ConfigRepository) GetConfig(id int64) (*domain.PlannerConfiguration, error) {
-	var record ConfigRecord
-	err := r.db.QueryRow(`
-		SELECT id, name, description, config_data, bucket_id, is_default, created_at, updated_at
-		FROM planner_configs
-		WHERE id = ?
-	`, id).Scan(
-		&record.ID,
-		&record.Name,
-		&record.Description,
-		&record.ConfigData,
-		&record.BucketID,
-		&record.IsDefault,
-		&record.CreatedAt,
-		&record.UpdatedAt,
-	)
-
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to get config: %w", err)
-	}
-
-	// Parse TOML
-	cfg, err := r.loader.LoadFromString(record.ConfigData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse config TOML: %w", err)
-	}
-
-	return cfg, nil
+	return r.getSettings()
 }
 
-// GetConfigByName retrieves a configuration by name.
+// GetConfigByName retrieves a configuration by name (always returns the single config).
 func (r *ConfigRepository) GetConfigByName(name string) (*domain.PlannerConfiguration, error) {
-	var record ConfigRecord
-	err := r.db.QueryRow(`
-		SELECT id, name, description, config_data, bucket_id, is_default, created_at, updated_at
-		FROM planner_configs
-		WHERE name = ?
-	`, name).Scan(
-		&record.ID,
-		&record.Name,
-		&record.Description,
-		&record.ConfigData,
-		&record.BucketID,
-		&record.IsDefault,
-		&record.CreatedAt,
-		&record.UpdatedAt,
-	)
-
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to get config by name: %w", err)
-	}
-
-	// Parse TOML
-	cfg, err := r.loader.LoadFromString(record.ConfigData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse config TOML: %w", err)
-	}
-
-	return cfg, nil
+	return r.getSettings()
 }
 
-// GetDefaultConfig retrieves the default configuration.
-func (r *ConfigRepository) GetDefaultConfig() (*domain.PlannerConfiguration, error) {
-	var record ConfigRecord
-	err := r.db.QueryRow(`
-		SELECT id, name, description, config_data, bucket_id, is_default, created_at, updated_at
-		FROM planner_configs
-		WHERE is_default = 1
-		LIMIT 1
-	`).Scan(
-		&record.ID,
-		&record.Name,
-		&record.Description,
-		&record.ConfigData,
-		&record.BucketID,
-		&record.IsDefault,
-		&record.CreatedAt,
-		&record.UpdatedAt,
-	)
-
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to get default config: %w", err)
-	}
-
-	// Parse TOML
-	cfg, err := r.loader.LoadFromString(record.ConfigData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse config TOML: %w", err)
-	}
-
-	return cfg, nil
-}
-
-// GetByBucket retrieves the configuration for a specific bucket.
+// GetByBucket retrieves the configuration for a specific bucket (always returns the single config, no buckets).
 func (r *ConfigRepository) GetByBucket(bucketID string) (*domain.PlannerConfiguration, error) {
-	var record ConfigRecord
-	err := r.db.QueryRow(`
-		SELECT id, name, description, config_data, bucket_id, is_default, created_at, updated_at
-		FROM planner_configs
-		WHERE bucket_id = ?
-		LIMIT 1
-	`).Scan(
-		&record.ID,
-		&record.Name,
-		&record.Description,
-		&record.ConfigData,
-		&record.BucketID,
-		&record.IsDefault,
-		&record.CreatedAt,
-		&record.UpdatedAt,
-	)
-
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to get config by bucket: %w", err)
-	}
-
-	// Parse TOML
-	cfg, err := r.loader.LoadFromString(record.ConfigData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse config TOML: %w", err)
-	}
-
-	return cfg, nil
+	return r.getSettings()
 }
 
-// UpdateConfig updates an existing configuration.
+// UpdateConfig updates the planner configuration (single config exists).
 func (r *ConfigRepository) UpdateConfig(
 	id int64,
 	cfg *domain.PlannerConfiguration,
 	changedBy string,
 	changeNote string,
 ) error {
-	// Get existing config for history
-	existingRecord, err := r.getConfigRecord(id)
-	if err != nil {
-		return fmt.Errorf("failed to get existing config: %w", err)
-	}
-	if existingRecord == nil {
-		return fmt.Errorf("config not found")
-	}
-
-	// Convert new config to TOML string
-	tomlData, err := r.loader.ToString(cfg)
-	if err != nil {
-		return fmt.Errorf("failed to convert config to TOML: %w", err)
-	}
-
-	now := time.Now()
-
-	// Update config
-	_, err = r.db.Exec(`
-		UPDATE planner_configs
-		SET name = ?, description = ?, config_data = ?, bucket_id = ?, updated_at = ?
-		WHERE id = ?
-	`, cfg.Name, cfg.Description, tomlData, nil, now, id)
-
-	if err != nil {
-		return fmt.Errorf("failed to update config: %w", err)
-	}
-
-	r.log.Info().
-		Int64("id", id).
-		Str("name", cfg.Name).
-		Msg("Updated config")
-
-	// Create history entry
-	if err := r.createHistoryEntry(id, tomlData, changedBy, changeNote); err != nil {
-		r.log.Warn().Err(err).Msg("Failed to create history entry")
-	}
-
-	return nil
+	// Ignore id, changedBy, changeNote - single config exists, no history
+	return r.updateSettings(cfg)
 }
 
-// DeleteConfig deletes a configuration.
-func (r *ConfigRepository) DeleteConfig(id int64) error {
-	// Check if it's the default config
-	var isDefault bool
-	err := r.db.QueryRow(`SELECT is_default FROM planner_configs WHERE id = ?`, id).Scan(&isDefault)
-	if err == sql.ErrNoRows {
-		return fmt.Errorf("config not found")
+// CreateConfig creates a new configuration (actually updates the single config).
+func (r *ConfigRepository) CreateConfig(
+	cfg *domain.PlannerConfiguration,
+	isDefault bool,
+) (int64, error) {
+	// Ignore isDefault - single config exists
+	if err := r.updateSettings(cfg); err != nil {
+		return 0, err
 	}
-	if err != nil {
-		return fmt.Errorf("failed to check config: %w", err)
-	}
-
-	if isDefault {
-		return fmt.Errorf("cannot delete default config")
-	}
-
-	// Delete history entries first
-	_, err = r.db.Exec(`DELETE FROM planner_config_history WHERE config_id = ?`, id)
-	if err != nil {
-		return fmt.Errorf("failed to delete config history: %w", err)
-	}
-
-	// Delete config
-	_, err = r.db.Exec(`DELETE FROM planner_configs WHERE id = ?`, id)
-	if err != nil {
-		return fmt.Errorf("failed to delete config: %w", err)
-	}
-
-	r.log.Info().
-		Int64("id", id).
-		Msg("Deleted config")
-
-	return nil
+	// Return dummy ID (1) for backward compatibility
+	return 1, nil
 }
 
-// ListConfigs retrieves all configurations.
+// ListConfigs returns a list of configurations (always returns single config).
 func (r *ConfigRepository) ListConfigs() ([]ConfigRecord, error) {
-	rows, err := r.db.Query(`
-		SELECT id, name, description, config_data, bucket_id, is_default, created_at, updated_at
-		FROM planner_configs
-		ORDER BY is_default DESC, name ASC
-	`)
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to list configs: %w", err)
-	}
-	defer rows.Close()
-
-	var records []ConfigRecord
-	for rows.Next() {
-		var record ConfigRecord
-		if err := rows.Scan(
-			&record.ID,
-			&record.Name,
-			&record.Description,
-			&record.ConfigData,
-			&record.BucketID,
-			&record.IsDefault,
-			&record.CreatedAt,
-			&record.UpdatedAt,
-		); err != nil {
-			return nil, fmt.Errorf("failed to scan config: %w", err)
-		}
-		records = append(records, record)
-	}
-
-	return records, nil
-}
-
-// SetDefaultConfig sets a configuration as the default.
-func (r *ConfigRepository) SetDefaultConfig(id int64) error {
-	// Unset existing default
-	if err := r.unsetDefaultConfig(); err != nil {
-		return fmt.Errorf("failed to unset existing default: %w", err)
-	}
-
-	// Set new default
-	_, err := r.db.Exec(`UPDATE planner_configs SET is_default = 1 WHERE id = ?`, id)
-	if err != nil {
-		return fmt.Errorf("failed to set default config: %w", err)
-	}
-
-	r.log.Info().
-		Int64("id", id).
-		Msg("Set default config")
-
-	return nil
-}
-
-// GetConfigHistory retrieves the history for a configuration.
-func (r *ConfigRepository) GetConfigHistory(configID int64, limit int) ([]ConfigHistoryRecord, error) {
-	query := `
-		SELECT id, config_id, config_data, changed_by, change_note, created_at
-		FROM planner_config_history
-		WHERE config_id = ?
-		ORDER BY created_at DESC
-	`
-	if limit > 0 {
-		query += fmt.Sprintf(" LIMIT %d", limit)
-	}
-
-	rows, err := r.db.Query(query, configID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get config history: %w", err)
-	}
-	defer rows.Close()
-
-	var records []ConfigHistoryRecord
-	for rows.Next() {
-		var record ConfigHistoryRecord
-		if err := rows.Scan(
-			&record.ID,
-			&record.ConfigID,
-			&record.ConfigData,
-			&record.ChangedBy,
-			&record.ChangeNote,
-			&record.CreatedAt,
-		); err != nil {
-			return nil, fmt.Errorf("failed to scan history: %w", err)
-		}
-		records = append(records, record)
-	}
-
-	return records, nil
-}
-
-// Helper methods
-
-func (r *ConfigRepository) unsetDefaultConfig() error {
-	_, err := r.db.Exec(`UPDATE planner_configs SET is_default = 0 WHERE is_default = 1`)
-	return err
-}
-
-func (r *ConfigRepository) getConfigRecord(id int64) (*ConfigRecord, error) {
-	var record ConfigRecord
-	err := r.db.QueryRow(`
-		SELECT id, name, description, config_data, bucket_id, is_default, created_at, updated_at
-		FROM planner_configs
-		WHERE id = ?
-	`, id).Scan(
-		&record.ID,
-		&record.Name,
-		&record.Description,
-		&record.ConfigData,
-		&record.BucketID,
-		&record.IsDefault,
-		&record.CreatedAt,
-		&record.UpdatedAt,
-	)
-
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
+	cfg, err := r.getSettings()
 	if err != nil {
 		return nil, err
 	}
 
-	return &record, nil
-}
-
-func (r *ConfigRepository) createHistoryEntry(
-	configID int64,
-	configData string,
-	changedBy string,
-	changeNote string,
-) error {
-	_, err := r.db.Exec(`
-		INSERT INTO planner_config_history (config_id, config_data, changed_by, change_note, created_at)
-		VALUES (?, ?, ?, ?, ?)
-	`, configID, configData, changedBy, changeNote, time.Now())
-
-	if err != nil {
-		return fmt.Errorf("failed to create history entry: %w", err)
+	// Return as single record for backward compatibility
+	record := ConfigRecord{
+		ID:          1,
+		Name:        cfg.Name,
+		Description: cfg.Description,
+		BucketID:    nil,
+		IsDefault:   true,
+		CreatedAt:   time.Now(), // Not stored, use current time
+		UpdatedAt:   time.Now(), // Not stored, use current time
 	}
 
+	return []ConfigRecord{record}, nil
+}
+
+// DeleteConfig deletes a configuration (resets to defaults).
+func (r *ConfigRepository) DeleteConfig(id int64) error {
+	// Reset to defaults
+	defaultCfg := domain.NewDefaultConfiguration()
+	return r.updateSettings(defaultCfg)
+}
+
+// SetDefaultConfig sets a configuration as default (no-op, single config exists).
+func (r *ConfigRepository) SetDefaultConfig(id int64) error {
+	// No-op: single config is always default
 	return nil
+}
+
+// GetConfigHistory returns configuration history (empty, no history table).
+func (r *ConfigRepository) GetConfigHistory(configID int64, limit int) ([]ConfigHistoryRecord, error) {
+	// No history in simplified version
+	return []ConfigHistoryRecord{}, nil
+}
+
+// ConfigHistoryRecord represents a configuration history entry (for backward compatibility).
+// Note: History is removed in simplified version.
+type ConfigHistoryRecord struct {
+	ID         int64
+	ConfigID   int64
+	ConfigData string
+	ChangedBy  string
+	ChangeNote string
+	CreatedAt  time.Time
 }

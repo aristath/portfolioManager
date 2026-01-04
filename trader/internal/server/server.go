@@ -29,7 +29,6 @@ import (
 	"github.com/aristath/arduino-trader/internal/modules/opportunities"
 	"github.com/aristath/arduino-trader/internal/modules/optimization"
 	"github.com/aristath/arduino-trader/internal/modules/planning"
-	planningconfig "github.com/aristath/arduino-trader/internal/modules/planning/config"
 	planningevaluation "github.com/aristath/arduino-trader/internal/modules/planning/evaluation"
 	planningrepo "github.com/aristath/arduino-trader/internal/modules/planning/repository"
 	"github.com/aristath/arduino-trader/internal/modules/portfolio"
@@ -1008,9 +1007,8 @@ func (s *Server) setupRebalancingRoutes(r chi.Router) {
 		s.log,
 	)
 
-	// Initialize planner config loader and repository
-	planningConfigLoader := planningconfig.NewLoader(s.log)
-	plannerConfigRepo := planningrepo.NewConfigRepository(s.agentsDB, planningConfigLoader, s.log)
+	// Initialize planner config repository (uses config.db)
+	plannerConfigRepo := planningrepo.NewConfigRepository(s.configDB, s.log)
 
 	// Initialize rebalancing service with full planning integration
 	rebalancingService := rebalancing.NewService(

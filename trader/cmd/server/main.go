@@ -22,7 +22,6 @@ import (
 	"github.com/aristath/arduino-trader/internal/modules/opportunities"
 	"github.com/aristath/arduino-trader/internal/modules/optimization"
 	"github.com/aristath/arduino-trader/internal/modules/planning"
-	planningconfig "github.com/aristath/arduino-trader/internal/modules/planning/config"
 	planningevaluation "github.com/aristath/arduino-trader/internal/modules/planning/evaluation"
 	planningplanner "github.com/aristath/arduino-trader/internal/modules/planning/planner"
 	planningrepo "github.com/aristath/arduino-trader/internal/modules/planning/repository"
@@ -593,8 +592,7 @@ func registerJobs(sched *scheduler.Scheduler, universeDB, configDB, ledgerDB, po
 	}
 
 	// Planning module repositories and services
-	configLoader := planningconfig.NewLoader(log)
-	plannerConfigRepo := planningrepo.NewConfigRepository(agentsDB, configLoader, log)
+	plannerConfigRepo := planningrepo.NewConfigRepository(configDB, log)
 	opportunitiesService := opportunities.NewService(log)
 
 	// Optimization services for correlation filtering
