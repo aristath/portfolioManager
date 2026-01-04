@@ -2,6 +2,7 @@ package server
 
 import (
 	"github.com/aristath/arduino-trader/internal/modules/opportunities"
+	"github.com/aristath/arduino-trader/internal/modules/optimization"
 	"github.com/aristath/arduino-trader/internal/modules/planning"
 	"github.com/aristath/arduino-trader/internal/modules/planning/config"
 	"github.com/aristath/arduino-trader/internal/modules/planning/evaluation"
@@ -17,8 +18,12 @@ func (s *Server) setupPlanningRoutes(r chi.Router) {
 	// Initialize opportunities service
 	opportunitiesService := opportunities.NewService(s.log)
 
+	// Initialize optimization services for correlation filtering
+	pypfoptClient := optimization.NewPyPFOptClient(s.cfg.PyPFOptServiceURL, s.log)
+	riskBuilder := optimization.NewRiskModelBuilder(s.historyDB.Conn(), pypfoptClient, s.log)
+
 	// Initialize sequences service
-	sequencesService := sequences.NewService(s.log)
+	sequencesService := sequences.NewService(s.log, riskBuilder)
 
 	// Initialize evaluation service (in-process, no HTTP overhead)
 	evaluationClient := evaluation.NewService(4, s.log) // 4 workers for parallel evaluation
