@@ -124,6 +124,29 @@ type LEDDisplayResponse struct {
 	PortfolioState interface{}            `json:"portfolio_state,omitempty"` // For PORTFOLIO mode
 	DisplayText    string                 `json:"display_text,omitempty"`    // For TICKER mode
 	TickerSpeed    int                    `json:"ticker_speed,omitempty"`    // For TICKER mode
+	LED3           [3]int                 `json:"led3"`                      // RGB values for LED3
+	LED4           [3]int                 `json:"led4"`                      // RGB values for LED4
+	LED3Mode       string                 `json:"led3_mode,omitempty"`       // "solid", "blink", etc.
+	LED4Mode       string                 `json:"led4_mode,omitempty"`       // "solid", "blink", "alternating", "coordinated"
+	LED3Blink      *LED3BlinkInfo         `json:"led3_blink,omitempty"`      // Blink info for LED3
+	LED4Blink      *LED4BlinkInfo         `json:"led4_blink,omitempty"`      // Blink info for LED4
+}
+
+// LED3BlinkInfo contains LED3 blink state information
+type LED3BlinkInfo struct {
+	Color      [3]int `json:"color"`
+	IntervalMs int    `json:"interval_ms"`
+	IsOn       bool   `json:"is_on"`
+}
+
+// LED4BlinkInfo contains LED4 blink state information
+type LED4BlinkInfo struct {
+	Mode            string `json:"mode"`                 // "blink", "alternating", "coordinated"
+	Color           [3]int `json:"color,omitempty"`      // For blink/coordinated
+	AltColor1       [3]int `json:"alt_color1,omitempty"` // For alternating
+	AltColor2       [3]int `json:"alt_color2,omitempty"` // For alternating
+	IntervalMs      int    `json:"interval_ms"`
+	CoordinatedWith bool   `json:"coordinated_with,omitempty"` // LED3 state when coordinated
 }
 
 // TradernetStatusResponse represents Tradernet connection status
@@ -363,9 +386,72 @@ func (h *SystemHandlers) HandleLEDDisplay(w http.ResponseWriter, r *http.Request
 		h.log.Debug().Err(err).Msg("display_mode setting not found, defaulting to STATS")
 	}
 
+	// Get LED states from display manager
+	led3State := [3]int{0, 0, 0}
+	led4State := [3]int{0, 0, 0}
+	var led3Mode string
+	var led4Mode string
+	var led3Blink *LED3BlinkInfo
+	var led4Blink *LED4BlinkInfo
+
+	if h.displayManager != nil {
+		state := h.displayManager.GetState()
+		led3State = [3]int{state.LED3.R, state.LED3.G, state.LED3.B}
+		led4State = [3]int{state.LED4.R, state.LED4.G, state.LED4.B}
+
+		// Get LED3 blink state
+		isBlinking3, color3, interval3, isOn3 := h.displayManager.GetLED3BlinkStateInfo()
+		if isBlinking3 {
+			led3Mode = "blink"
+			led3Blink = &LED3BlinkInfo{
+				Color:      [3]int{color3.R, color3.G, color3.B},
+				IntervalMs: interval3,
+				IsOn:       isOn3,
+			}
+		} else {
+			led3Mode = "solid"
+		}
+
+		// Get LED4 state
+		mode4, color4, altColor1, altColor2, interval4, coordinatedWith := h.displayManager.GetLED4StateInfo()
+		switch mode4 {
+		case display.LEDModeBlink:
+			led4Mode = "blink"
+			led4Blink = &LED4BlinkInfo{
+				Mode:       "blink",
+				Color:      [3]int{color4.R, color4.G, color4.B},
+				IntervalMs: interval4,
+			}
+		case display.LEDModeAlternating:
+			led4Mode = "alternating"
+			led4Blink = &LED4BlinkInfo{
+				Mode:       "alternating",
+				AltColor1:  [3]int{altColor1.R, altColor1.G, altColor1.B},
+				AltColor2:  [3]int{altColor2.R, altColor2.G, altColor2.B},
+				IntervalMs: interval4,
+			}
+		case display.LEDModeCoordinated:
+			led4Mode = "coordinated"
+			led4Blink = &LED4BlinkInfo{
+				Mode:            "coordinated",
+				Color:           [3]int{color4.R, color4.G, color4.B},
+				IntervalMs:      interval4,
+				CoordinatedWith: coordinatedWith,
+			}
+		default:
+			led4Mode = "solid"
+		}
+	}
+
 	response := LEDDisplayResponse{
 		Mode:         displayMode,
 		CurrentPanel: 0,
+		LED3:         led3State,
+		LED4:         led4State,
+		LED3Mode:     led3Mode,
+		LED4Mode:     led4Mode,
+		LED3Blink:    led3Blink,
+		LED4Blink:    led4Blink,
 	}
 
 	// Return appropriate data based on mode

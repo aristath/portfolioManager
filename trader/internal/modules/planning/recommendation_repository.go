@@ -279,6 +279,29 @@ func (r *RecommendationRepository) MarkExecuted(recUUID string) error {
 	return nil
 }
 
+// CountPendingBySide counts pending recommendations by side (BUY vs SELL)
+func (r *RecommendationRepository) CountPendingBySide() (buyCount int, sellCount int, err error) {
+	// Count BUY recommendations
+	err = r.db.QueryRow(`
+		SELECT COUNT(*) FROM recommendations
+		WHERE status = 'pending' AND side = 'BUY'
+	`).Scan(&buyCount)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to count BUY recommendations: %w", err)
+	}
+
+	// Count SELL recommendations
+	err = r.db.QueryRow(`
+		SELECT COUNT(*) FROM recommendations
+		WHERE status = 'pending' AND side = 'SELL'
+	`).Scan(&sellCount)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to count SELL recommendations: %w", err)
+	}
+
+	return buyCount, sellCount, nil
+}
+
 // DismissAllByPortfolioHash dismisses all recommendations for a given portfolio hash
 func (r *RecommendationRepository) DismissAllByPortfolioHash(portfolioHash string) (int, error) {
 	now := time.Now()
