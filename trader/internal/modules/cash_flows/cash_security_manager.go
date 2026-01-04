@@ -137,7 +137,7 @@ func (m *CashSecurityManager) UpdateCashPosition(bucketID string, currency strin
 		Currency:       currency,
 		CurrencyRate:   1.0,     // TODO: Handle currency conversion rates properly
 		MarketValueEUR: balance, // Simplified - assumes EUR or 1:1 rate
-       bucketID,
+		BucketID:       bucketID,
 		LastUpdated:    now,
 	}
 
@@ -459,7 +459,7 @@ func (m *CashSecurityManager) updateCashPositionLocked(bucketID string, currency
 		Currency:       currency,
 		CurrencyRate:   1.0,
 		MarketValueEUR: balance,
-       bucketID,
+		BucketID:       bucketID,
 		LastUpdated:    now,
 	}
 
