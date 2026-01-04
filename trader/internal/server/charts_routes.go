@@ -23,7 +23,7 @@ func (s *Server) setupChartsRoutes(r chi.Router) {
 	chartsHandler := charts.NewHandler(chartsService, s.log)
 
 	// Register routes
-	r.Route("/api/charts", func(r chi.Router) {
+	r.Route("/charts", func(r chi.Router) {
 		// GET /api/charts/sparklines - Get 1-year sparkline data for all active securities
 		r.Get("/sparklines", chartsHandler.HandleGetSparklines)
 

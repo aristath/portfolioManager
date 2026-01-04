@@ -75,8 +75,9 @@ func (s *Server) setupPlanningRoutes(r chi.Router) {
 	streamHandler := handlers.NewStreamHandler(eventBroadcaster, s.log)
 
 	// Register routes
-	r.Route("/api/planning", func(r chi.Router) {
+	r.Route("/planning", func(r chi.Router) {
 		// Recommendations (main planning endpoint)
+		r.Get("/recommendations", recommendationsHandler.ServeHTTP)
 		r.Post("/recommendations", recommendationsHandler.ServeHTTP)
 
 		// Configuration management
@@ -101,10 +102,6 @@ func (s *Server) setupPlanningRoutes(r chi.Router) {
 		r.Get("/stream", streamHandler.ServeHTTP)
 	})
 
-	// Trade recommendations endpoints (aliases for compatibility)
-	r.Route("/api/trades", func(r chi.Router) {
-		r.Get("/recommendations", recommendationsHandler.ServeHTTP)
-		r.Post("/recommendations", recommendationsHandler.ServeHTTP)
-		r.Post("/recommendations/execute", executeHandler.ServeHTTP)
-	})
+	// Note: /api/trades/recommendations endpoints are handled by trading routes
+	// (see setupTradingRoutes - TODO: add recommendations endpoints there)
 }
