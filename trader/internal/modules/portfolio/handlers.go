@@ -13,12 +13,13 @@ import (
 // Handler handles portfolio HTTP requests
 // Faithful translation from Python: app/modules/portfolio/api/portfolio.py
 type Handler struct {
-	positionRepo    *PositionRepository
-	portfolioRepo   *PortfolioRepository
-	service         *PortfolioService
-	tradernetClient *tradernet.Client
-	log             zerolog.Logger
-	pythonURL       string // URL of Python service for analytics endpoint
+	positionRepo            *PositionRepository
+	portfolioRepo           *PortfolioRepository
+	service                 *PortfolioService
+	tradernetClient         *tradernet.Client
+	currencyExchangeService CurrencyExchangeServiceInterface
+	log                     zerolog.Logger
+	pythonURL               string // URL of Python service for analytics endpoint
 }
 
 // NewHandler creates a new portfolio handler
@@ -27,16 +28,18 @@ func NewHandler(
 	portfolioRepo *PortfolioRepository,
 	service *PortfolioService,
 	tradernetClient *tradernet.Client,
+	currencyExchangeService CurrencyExchangeServiceInterface,
 	log zerolog.Logger,
 	pythonURL string,
 ) *Handler {
 	return &Handler{
-		positionRepo:    positionRepo,
-		portfolioRepo:   portfolioRepo,
-		service:         service,
-		tradernetClient: tradernetClient,
-		log:             log.With().Str("handler", "portfolio").Logger(),
-		pythonURL:       pythonURL,
+		positionRepo:            positionRepo,
+		portfolioRepo:           portfolioRepo,
+		service:                 service,
+		tradernetClient:         tradernetClient,
+		currencyExchangeService: currencyExchangeService,
+		log:                     log.With().Str("handler", "portfolio").Logger(),
+		pythonURL:               pythonURL,
 	}
 }
 
@@ -165,11 +168,78 @@ func (h *Handler) HandleGetCashBreakdown(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Calculate total in EUR (simplified - real implementation would use exchange rates)
-	totalEUR := 0.0
-	for _, b := range balances {
-		if b.Currency == "EUR" {
-			totalEUR += b.Amount
+	// Calculate total in EUR by converting all currencies
+	// Matches Python implementation: exchange_rate_service.batch_convert_to_eur()
+	var totalEUR float64
+	for _, balance := range balances {
+		if balance.Currency == "EUR" {
+			totalEUR += balance.Amount
+			h.log.Debug().
+				Str("currency", "EUR").
+				Float64("amount", balance.Amount).
+				Msg("Added EUR balance")
+		} else {
+			// Convert non-EUR currency to EUR
+			if h.currencyExchangeService != nil {
+				rate, err := h.currencyExchangeService.GetRate(balance.Currency, "EUR")
+				if err != nil {
+					h.log.Warn().
+						Err(err).
+						Str("currency", balance.Currency).
+						Float64("amount", balance.Amount).
+						Msg("Failed to get exchange rate, using fallback")
+
+					// Fallback rates for autonomous operation
+					// These rates allow the system to continue operating when exchange
+					// service is unavailable. Operator can review via logs.
+					eurValue := balance.Amount
+					switch balance.Currency {
+					case "USD":
+						eurValue = balance.Amount * 0.9
+					case "GBP":
+						eurValue = balance.Amount * 1.2
+					case "HKD":
+						eurValue = balance.Amount * 0.11
+					default:
+						h.log.Warn().
+							Str("currency", balance.Currency).
+							Msg("Unknown currency, assuming 1:1 with EUR")
+					}
+					totalEUR += eurValue
+
+					h.log.Info().
+						Str("currency", balance.Currency).
+						Float64("amount", balance.Amount).
+						Float64("eur_value", eurValue).
+						Msg("Converted to EUR using fallback rate")
+				} else {
+					eurValue := balance.Amount * rate
+					totalEUR += eurValue
+
+					h.log.Debug().
+						Str("currency", balance.Currency).
+						Float64("rate", rate).
+						Float64("amount", balance.Amount).
+						Float64("eur_value", eurValue).
+						Msg("Converted to EUR using live rate")
+				}
+			} else {
+				// No exchange service available, use fallback rates
+				eurValue := balance.Amount
+				switch balance.Currency {
+				case "USD":
+					eurValue = balance.Amount * 0.9
+				case "GBP":
+					eurValue = balance.Amount * 1.2
+				case "HKD":
+					eurValue = balance.Amount * 0.11
+				default:
+					h.log.Warn().
+						Str("currency", balance.Currency).
+						Msg("Exchange service not available, assuming 1:1 with EUR")
+				}
+				totalEUR += eurValue
+			}
 		}
 	}
 

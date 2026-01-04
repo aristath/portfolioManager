@@ -385,7 +385,7 @@ func registerJobs(sched *scheduler.Scheduler, universeDB, configDB, ledgerDB, po
 	turnoverTracker := portfolio.NewTurnoverTracker(ledgerDB.Conn(), portfolioDB.Conn(), log)
 	portfolioTradeRepo := portfolio.NewTradeRepository(ledgerDB.Conn(), log)
 	attributionCalc := portfolio.NewAttributionCalculator(portfolioTradeRepo, historyDB.Conn(), cfg.HistoryPath, log)
-	portfolioService := portfolio.NewPortfolioService(portfolioRepo, positionRepo, allocRepo, turnoverTracker, attributionCalc, cashManager, universeDB.Conn(), tradernetClient, log)
+	portfolioService := portfolio.NewPortfolioService(portfolioRepo, positionRepo, allocRepo, turnoverTracker, attributionCalc, cashManager, universeDB.Conn(), tradernetClient, currencyExchangeService, log)
 
 	// Event manager (for system events)
 	eventManager := events.NewManager(log)

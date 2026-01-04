@@ -383,6 +383,9 @@ func (s *Server) setupAllocationRoutes(r chi.Router) {
 	tradernetClient := tradernet.NewClient(s.cfg.TradernetServiceURL, s.log)
 	tradernetClient.SetCredentials(s.cfg.TradernetAPIKey, s.cfg.TradernetAPISecret)
 
+	// Initialize currency exchange service for multi-currency cash handling
+	currencyExchangeService := services.NewCurrencyExchangeService(tradernetClient, s.log)
+
 	// Cash manager (needed for portfolio service)
 	securityRepo := universe.NewSecurityRepository(s.universeDB.Conn(), s.log)
 	bucketRepo := satellites.NewBucketRepository(s.satellitesDB.Conn(), s.log)
@@ -397,6 +400,7 @@ func (s *Server) setupAllocationRoutes(r chi.Router) {
 		cashManager,
 		s.universeDB.Conn(),
 		tradernetClient,
+		currencyExchangeService,
 		s.log,
 	)
 
@@ -444,6 +448,9 @@ func (s *Server) setupPortfolioRoutes(r chi.Router) {
 	tradernetClient := tradernet.NewClient(s.cfg.TradernetServiceURL, s.log)
 	tradernetClient.SetCredentials(s.cfg.TradernetAPIKey, s.cfg.TradernetAPISecret)
 
+	// Initialize currency exchange service for multi-currency cash handling
+	currencyExchangeService := services.NewCurrencyExchangeService(tradernetClient, s.log)
+
 	// Cash manager (needed for portfolio service)
 	securityRepo := universe.NewSecurityRepository(s.universeDB.Conn(), s.log)
 	bucketRepo := satellites.NewBucketRepository(s.satellitesDB.Conn(), s.log)
@@ -458,6 +465,7 @@ func (s *Server) setupPortfolioRoutes(r chi.Router) {
 		cashManager,
 		s.universeDB.Conn(),
 		tradernetClient,
+		currencyExchangeService,
 		s.log,
 	)
 
@@ -466,6 +474,7 @@ func (s *Server) setupPortfolioRoutes(r chi.Router) {
 		portfolioRepo,
 		portfolioService,
 		tradernetClient,
+		currencyExchangeService,
 		s.log,
 		s.cfg.PythonServiceURL,
 	)
@@ -609,6 +618,9 @@ func (s *Server) setupTradingRoutes(r chi.Router) {
 	tradernetClient := tradernet.NewClient(s.cfg.TradernetServiceURL, s.log)
 	tradernetClient.SetCredentials(s.cfg.TradernetAPIKey, s.cfg.TradernetAPISecret)
 
+	// Initialize currency exchange service for multi-currency cash handling
+	currencyExchangeService := services.NewCurrencyExchangeService(tradernetClient, s.log)
+
 	// Cash manager (needed for portfolio service)
 	securityRepoForCash := universe.NewSecurityRepository(s.universeDB.Conn(), s.log)
 	bucketRepoForCash := satellites.NewBucketRepository(s.satellitesDB.Conn(), s.log)
@@ -623,6 +635,7 @@ func (s *Server) setupTradingRoutes(r chi.Router) {
 		cashManager,
 		s.universeDB.Conn(),
 		tradernetClient,
+		currencyExchangeService,
 		s.log,
 	)
 
@@ -894,6 +907,9 @@ func (s *Server) setupRebalancingRoutes(r chi.Router) {
 	tradeRepo := portfolio.NewTradeRepository(s.ledgerDB.Conn(), s.log)
 	attributionCalc := portfolio.NewAttributionCalculator(tradeRepo, s.configDB.Conn(), s.cfg.HistoryPath, s.log)
 
+	// Initialize currency exchange service for multi-currency cash handling
+	currencyExchangeService := services.NewCurrencyExchangeService(tradernetClient, s.log)
+
 	// Cash manager (needed for portfolio service)
 	securityRepoForRebalancing := universe.NewSecurityRepository(s.universeDB.Conn(), s.log)
 	bucketRepoForRebalancing := satellites.NewBucketRepository(s.satellitesDB.Conn(), s.log)
@@ -908,6 +924,7 @@ func (s *Server) setupRebalancingRoutes(r chi.Router) {
 		cashManagerForRebalancing,
 		s.universeDB.Conn(),
 		tradernetClient,
+		currencyExchangeService,
 		s.log,
 	)
 
@@ -917,9 +934,6 @@ func (s *Server) setupRebalancingRoutes(r chi.Router) {
 	// Initialize repositories for negative balance rebalancer
 	securityRepo := universe.NewSecurityRepository(s.universeDB.Conn(), s.log)
 	settingsRepo := settings.NewRepository(s.configDB.Conn(), s.log)
-
-	// Initialize services for emergency rebalancing
-	currencyExchangeService := services.NewCurrencyExchangeService(tradernetClient, s.log)
 
 	// Initialize balance service for cash validation (reuse cashManagerForRebalancing created above)
 	balanceRepo := satellites.NewBalanceRepository(s.satellitesDB.Conn(), s.log)
