@@ -21,7 +21,7 @@ func newMockCashManager(balances map[string]float64) *mockCashManager {
 	}
 }
 
-func (m *mockCashManager) GetCashBalance(bucketID string, currency string) (float64, error) {
+func (m *mockCashManager) GetCashBalance(currency string) (float64, error) {
 	if balance, ok := m.balances[currency]; ok {
 		return balance, nil
 	}

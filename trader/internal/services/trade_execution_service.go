@@ -13,7 +13,7 @@ import (
 // CashManagerInterface defines the minimal interface for cash operations
 // This avoids import cycles with the cash_flows package
 type CashManagerInterface interface {
-	GetCashBalance(bucketID string, currency string) (float64, error)
+	GetCashBalance(currency string) (float64, error)
 }
 
 // CurrencyExchangeServiceInterface defines the minimal interface for currency exchange
@@ -271,7 +271,7 @@ func (s *TradeExecutionService) validateBuyCashBalance(rec TradeRecommendation) 
 		return nil // Allow trade to proceed if cash manager unavailable
 	}
 
-	balance, err := s.cashManager.GetCashBalance("core", rec.Currency)
+	balance, err := s.cashManager.GetCashBalance(rec.Currency)
 	if err != nil {
 		s.log.Error().
 			Err(err).

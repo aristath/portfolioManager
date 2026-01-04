@@ -157,7 +157,7 @@ func main() {
 		}
 
 		// Use cashManager to create cash security and position
-		err := cashManager.UpdateCashPosition(balance.BucketID, balance.Currency, balance.Balance)
+		err := cashManager.UpdateCashPosition(balance.Currency, balance.Balance)
 		if err != nil {
 			log.Error().
 				Err(err).
@@ -184,7 +184,7 @@ func main() {
 		if balance.Balance <= 0 {
 			continue
 		}
-		cashBalance, err := cashManager.GetCashBalance(balance.BucketID, balance.Currency)
+		cashBalance, err := cashManager.GetCashBalance(balance.Currency)
 		if err != nil {
 			log.Error().
 				Err(err).

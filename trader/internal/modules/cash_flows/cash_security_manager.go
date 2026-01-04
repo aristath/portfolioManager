@@ -12,11 +12,6 @@ import (
 	"github.com/rs/zerolog"
 )
 
-const (
-	// CoreBucketID is the default bucket ID used for cash positions in the simplified single-universe system
-	CoreBucketID = "core"
-)
-
 // CashSecurityManager manages cash as synthetic securities and positions
 // This is the core component for treating cash balances as positions in the portfolio
 type CashSecurityManager struct {
@@ -45,10 +40,10 @@ func NewCashSecurityManager(
 	}
 }
 
-// EnsureCashSecurity ensures a cash security exists for the given currency and bucket
+// EnsureCashSecurity ensures a cash security exists for the given currency
 // Creates the security if it doesn't exist, otherwise does nothing
 // Returns error if creation fails
-func (m *CashSecurityManager) EnsureCashSecurity(currency string, bucketID string) error {
+func (m *CashSecurityManager) EnsureCashSecurity(currency string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -65,7 +60,6 @@ func (m *CashSecurityManager) EnsureCashSecurity(currency string, bucketID strin
 		m.log.Debug().
 			Str("symbol", symbol).
 			Str("currency", currency).
-			Str("bucket_id", bucketID).
 			Msg("Cash security already exists")
 		return nil
 	}
@@ -92,17 +86,16 @@ func (m *CashSecurityManager) EnsureCashSecurity(currency string, bucketID strin
 	m.log.Info().
 		Str("symbol", symbol).
 		Str("currency", currency).
-		Str("bucket_id", bucketID).
 		Str("name", security.Name).
 		Msg("Created cash security")
 
 	return nil
 }
 
-// UpdateCashPosition updates or creates a cash position for the given bucket and currency
+// UpdateCashPosition updates or creates a cash position for the given currency
 // If balance is 0, the position is deleted
 // This is the main method for syncing cash balances from external sources
-func (m *CashSecurityManager) UpdateCashPosition(bucketID string, currency string, balance float64) error {
+func (m *CashSecurityManager) UpdateCashPosition(currency string, balance float64) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -110,11 +103,11 @@ func (m *CashSecurityManager) UpdateCashPosition(bucketID string, currency strin
 
 	// If balance is zero or negative, delete the position
 	if balance <= 0 {
-		return m.deleteCashPositionLocked(symbol, currency, bucketID, balance)
+		return m.deleteCashPositionLocked(symbol, currency, balance)
 	}
 
 	// Ensure the cash security exists
-	if err := m.ensureCashSecurityLocked(currency, bucketID); err != nil {
+	if err := m.ensureCashSecurityLocked(currency); err != nil {
 		return fmt.Errorf("failed to ensure cash security: %w", err)
 	}
 
@@ -152,7 +145,6 @@ func (m *CashSecurityManager) UpdateCashPosition(bucketID string, currency strin
 	m.log.Info().
 		Str("symbol", symbol).
 		Str("currency", currency).
-		Str("bucket_id", bucketID).
 		Float64("balance", balance).
 		Msg("Updated cash position")
 
@@ -161,7 +153,7 @@ func (m *CashSecurityManager) UpdateCashPosition(bucketID string, currency strin
 
 // ensureCashSecurityLocked is the locked version of EnsureCashSecurity
 // Must be called with m.mu held
-func (m *CashSecurityManager) ensureCashSecurityLocked(currency string, bucketID string) error {
+func (m *CashSecurityManager) ensureCashSecurityLocked(currency string) error {
 	symbol := cash_utils.MakeCashSymbol(currency)
 
 	// Check if security already exists
@@ -196,7 +188,6 @@ func (m *CashSecurityManager) ensureCashSecurityLocked(currency string, bucketID
 	m.log.Info().
 		Str("symbol", symbol).
 		Str("currency", currency).
-		Str("bucket_id", bucketID).
 		Msg("Created cash security")
 
 	return nil
@@ -204,7 +195,7 @@ func (m *CashSecurityManager) ensureCashSecurityLocked(currency string, bucketID
 
 // deleteCashPositionLocked deletes a cash position
 // Must be called with m.mu held
-func (m *CashSecurityManager) deleteCashPositionLocked(symbol string, currency string, bucketID string, balance float64) error {
+func (m *CashSecurityManager) deleteCashPositionLocked(symbol string, currency string, balance float64) error {
 	// Check if position exists
 	existing, err := m.positionRepo.GetBySymbol(symbol)
 	if err != nil {
@@ -229,16 +220,15 @@ func (m *CashSecurityManager) deleteCashPositionLocked(symbol string, currency s
 	m.log.Info().
 		Str("symbol", symbol).
 		Str("currency", currency).
-		Str("bucket_id", bucketID).
 		Float64("balance", balance).
 		Msg("Deleted cash position (zero balance)")
 
 	return nil
 }
 
-// GetCashBalance returns the cash balance for a specific bucket and currency
+// GetCashBalance returns the cash balance for the given currency
 // Returns 0 if no position exists (not an error)
-func (m *CashSecurityManager) GetCashBalance(bucketID string, currency string) (float64, error) {
+func (m *CashSecurityManager) GetCashBalance(currency string) (float64, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -256,9 +246,9 @@ func (m *CashSecurityManager) GetCashBalance(bucketID string, currency string) (
 	return position.Quantity, nil
 }
 
-// GetAllCashBalances returns all cash balances for a specific bucket
+// GetAllCashBalances returns all cash balances
 // Returns map of currency -> balance
-func (m *CashSecurityManager) GetAllCashBalances(bucketID string) (map[string]float64, error) {
+func (m *CashSecurityManager) GetAllCashBalances() (map[string]float64, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -373,12 +363,12 @@ func (m *CashSecurityManager) GetAllCashSymbols() ([]string, error) {
 
 // AdjustCashBalance adjusts a cash balance by a delta (can be positive or negative)
 // This is useful for trade settlements, dividends, etc.
-func (m *CashSecurityManager) AdjustCashBalance(bucketID string, currency string, delta float64) (float64, error) {
+func (m *CashSecurityManager) AdjustCashBalance(currency string, delta float64) (float64, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	// Get current balance
-	current, err := m.getCashBalanceLocked(bucketID, currency)
+	current, err := m.getCashBalanceLocked(currency)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get current balance: %w", err)
 	}
@@ -386,7 +376,7 @@ func (m *CashSecurityManager) AdjustCashBalance(bucketID string, currency string
 	newBalance := current + delta
 
 	// Use the locked version of UpdateCashPosition
-	err = m.updateCashPositionLocked(bucketID, currency, newBalance)
+	err = m.updateCashPositionLocked(currency, newBalance)
 	if err != nil {
 		return 0, fmt.Errorf("failed to update cash position: %w", err)
 	}
@@ -396,7 +386,7 @@ func (m *CashSecurityManager) AdjustCashBalance(bucketID string, currency string
 
 // getCashBalanceLocked is the locked version of GetCashBalance
 // Must be called with m.mu held (read or write lock)
-func (m *CashSecurityManager) getCashBalanceLocked(bucketID string, currency string) (float64, error) {
+func (m *CashSecurityManager) getCashBalanceLocked(currency string) (float64, error) {
 	symbol := cash_utils.MakeCashSymbol(currency)
 
 	position, err := m.positionRepo.GetBySymbol(symbol)
@@ -413,16 +403,16 @@ func (m *CashSecurityManager) getCashBalanceLocked(bucketID string, currency str
 
 // updateCashPositionLocked is the locked version of UpdateCashPosition
 // Must be called with m.mu held (write lock)
-func (m *CashSecurityManager) updateCashPositionLocked(bucketID string, currency string, balance float64) error {
+func (m *CashSecurityManager) updateCashPositionLocked(currency string, balance float64) error {
 	symbol := cash_utils.MakeCashSymbol(currency)
 
 	// If balance is zero or negative, delete the position
 	if balance <= 0 {
-		return m.deleteCashPositionLocked(symbol, currency, bucketID, balance)
+		return m.deleteCashPositionLocked(symbol, currency, balance)
 	}
 
 	// Ensure the cash security exists
-	if err := m.ensureCashSecurityLocked(currency, bucketID); err != nil {
+	if err := m.ensureCashSecurityLocked(currency); err != nil {
 		return fmt.Errorf("failed to ensure cash security: %w", err)
 	}
 

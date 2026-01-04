@@ -15,8 +15,8 @@ type MockCashManager struct {
 	mock.Mock
 }
 
-func (m *MockCashManager) UpdateCashPosition(bucketID string, currency string, balance float64) error {
-	args := m.Called(bucketID, currency, balance)
+func (m *MockCashManager) UpdateCashPosition(currency string, balance float64) error {
+	args := m.Called(currency, balance)
 	return args.Error(0)
 }
 
@@ -131,8 +131,8 @@ func TestSyncFromTradernet_Success(t *testing.T) {
 	mockPositionRepo.On("GetAll").Return(currentPositions, nil)
 	mockPositionRepo.On("Upsert", mock.AnythingOfType("Position")).Return(nil).Times(2)
 	mockTradernetClient.On("GetCashBalances").Return(cashBalances, nil)
-	mockCashManager.On("UpdateCashPosition", "core", "EUR", 1000.0).Return(nil).Once()
-	mockCashManager.On("UpdateCashPosition", "core", "USD", 500.0).Return(nil).Once()
+	mockCashManager.On("UpdateCashPosition", "EUR", 1000.0).Return(nil).Once()
+	mockCashManager.On("UpdateCashPosition", "USD", 500.0).Return(nil).Once()
 
 	// Execute
 	err := service.SyncFromTradernet()
@@ -183,7 +183,7 @@ func TestSyncFromTradernet_DeleteStale(t *testing.T) {
 	mockPositionRepo.On("Upsert", mock.AnythingOfType("Position")).Return(nil).Once()
 	mockPositionRepo.On("Delete", "MSFT").Return(nil).Once()
 	mockTradernetClient.On("GetCashBalances").Return(cashBalances, nil)
-	mockCashManager.On("UpdateCashPosition", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	mockCashManager.On("UpdateCashPosition", mock.Anything, mock.Anything).Return(nil)
 
 	// Execute
 	err := service.SyncFromTradernet()
@@ -231,7 +231,7 @@ func TestSyncFromTradernet_SkipZeroQuantity(t *testing.T) {
 	mockPositionRepo.On("GetAll").Return(currentPositions, nil)
 	mockPositionRepo.On("Upsert", mock.AnythingOfType("Position")).Return(nil).Once()
 	mockTradernetClient.On("GetCashBalances").Return(cashBalances, nil)
-	mockCashManager.On("UpdateCashPosition", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	mockCashManager.On("UpdateCashPosition", mock.Anything, mock.Anything).Return(nil)
 
 	// Execute
 	err := service.SyncFromTradernet()
@@ -345,7 +345,7 @@ func TestSyncFromTradernet_UpsertError(t *testing.T) {
 		return p.Symbol == "MSFT"
 	})).Return(nil).Once()
 	mockTradernetClient.On("GetCashBalances").Return(cashBalances, nil)
-	mockCashManager.On("UpdateCashPosition", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	mockCashManager.On("UpdateCashPosition", mock.Anything, mock.Anything).Return(nil)
 
 	// Execute
 	err := service.SyncFromTradernet()

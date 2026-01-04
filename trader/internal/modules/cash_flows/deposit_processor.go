@@ -36,7 +36,7 @@ func (p *DepositProcessor) ProcessDeposit(
 	}
 
 	// Get current balance
-	currentBalance, err := p.cashManager.GetCashBalance("core", currency)
+	currentBalance, err := p.cashManager.GetCashBalance(currency)
 	if err != nil {
 		p.log.Error().Err(err).Msg("Failed to get current cash balance")
 		return nil, fmt.Errorf("failed to get current cash balance: %w", err)
@@ -44,7 +44,7 @@ func (p *DepositProcessor) ProcessDeposit(
 
 	// Update cash position with new total
 	newBalance := currentBalance + amount
-	err = p.cashManager.UpdateCashPosition("core", currency, newBalance)
+	err = p.cashManager.UpdateCashPosition(currency, newBalance)
 	if err != nil {
 		p.log.Error().Err(err).Msg("Failed to update cash position")
 		return nil, fmt.Errorf("failed to update cash position: %w", err)

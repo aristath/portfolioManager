@@ -22,7 +22,7 @@ type AllocationTargetProvider interface {
 // CashManager interface defines operations for managing cash as securities and positions
 // This interface breaks the circular dependency between portfolio and cash_flows packages
 type CashManager interface {
-	UpdateCashPosition(bucketID string, currency string, balance float64) error
+	UpdateCashPosition(currency string, balance float64) error
 }
 
 // PortfolioService orchestrates portfolio operations
@@ -744,7 +744,7 @@ func (s *PortfolioService) SyncFromTradernet() error {
 		// Update cash positions for each currency balance in the core bucket
 		cashUpdated := 0
 		for _, cashBalance := range balances {
-			if err := s.cashManager.UpdateCashPosition("core", cashBalance.Currency, cashBalance.Amount); err != nil {
+			if err := s.cashManager.UpdateCashPosition(cashBalance.Currency, cashBalance.Amount); err != nil {
 				s.log.Error().
 					Err(err).
 					Str("currency", cashBalance.Currency).
