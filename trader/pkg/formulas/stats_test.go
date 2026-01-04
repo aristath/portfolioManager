@@ -103,6 +103,112 @@ func TestAnnualizedVolatility(t *testing.T) {
 	}
 }
 
+func TestCalculateReturns(t *testing.T) {
+	tests := []struct {
+		name        string
+		prices      []float64
+		want        []float64
+		tolerance   float64
+		description string
+	}{
+		{
+			name:        "empty prices",
+			prices:      []float64{},
+			want:        []float64{},
+			tolerance:   0.0,
+			description: "Empty prices should return empty returns",
+		},
+		{
+			name:        "single price",
+			prices:      []float64{100.0},
+			want:        []float64{},
+			tolerance:   0.0,
+			description: "Single price cannot calculate return",
+		},
+		{
+			name:        "two prices positive return",
+			prices:      []float64{100.0, 110.0},
+			want:        []float64{0.10},
+			tolerance:   0.0001,
+			description: "10% return from 100 to 110",
+		},
+		{
+			name:        "two prices negative return",
+			prices:      []float64{100.0, 90.0},
+			want:        []float64{-0.10},
+			tolerance:   0.0001,
+			description: "-10% return from 100 to 90",
+		},
+		{
+			name:        "three prices sequence",
+			prices:      []float64{100.0, 110.0, 105.0},
+			want:        []float64{0.10, -0.04545},
+			tolerance:   0.0001,
+			description: "10% up then ~4.5% down",
+		},
+		{
+			name:        "price sequence with zero",
+			prices:      []float64{100.0, 0.0, 110.0},
+			want:        []float64{-1.0, 0.0}, // Second return is 0 because division by zero
+			tolerance:   0.0001,
+			description: "Handles zero price (division by zero results in 0)",
+		},
+		{
+			name:        "steady prices",
+			prices:      []float64{100.0, 100.0, 100.0},
+			want:        []float64{0.0, 0.0},
+			tolerance:   0.0,
+			description: "No change means zero returns",
+		},
+		{
+			name:        "increasing sequence",
+			prices:      []float64{100.0, 105.0, 110.25, 115.76},
+			want:        []float64{0.05, 0.05, 0.05}, // 5% each period
+			tolerance:   0.0001,
+			description: "Compound 5% returns",
+		},
+		{
+			name:        "volatile sequence",
+			prices:      []float64{100.0, 120.0, 90.0, 108.0},
+			want:        []float64{0.20, -0.25, 0.20},
+			tolerance:   0.0001,
+			description: "Volatile price movements",
+		},
+		{
+			name:        "very small price changes",
+			prices:      []float64{100.0, 100.01, 100.02},
+			want:        []float64{0.0001, 0.00009999},
+			tolerance:   0.00001,
+			description: "Very small price changes",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := CalculateReturns(tt.prices)
+
+			if len(tt.want) == 0 {
+				if len(result) != 0 {
+					t.Errorf("CalculateReturns() = %v, want empty slice", result)
+				}
+				return
+			}
+
+			if len(result) != len(tt.want) {
+				t.Errorf("CalculateReturns() length = %v, want %v", len(result), len(tt.want))
+				return
+			}
+
+			for i := range result {
+				if math.Abs(result[i]-tt.want[i]) > tt.tolerance {
+					t.Errorf("CalculateReturns()[%d] = %v, want %v (±%v) - %s",
+						i, result[i], tt.want[i], tt.tolerance, tt.description)
+				}
+			}
+		})
+	}
+}
+
 // Helper function to create a slice of identical returns
 func makeReturns(value float64, count int) []float64 {
 	returns := make([]float64, count)
