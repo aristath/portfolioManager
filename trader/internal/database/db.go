@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite" // Pure Go SQLite driver
@@ -172,11 +173,40 @@ func (db *DB) Path() string {
 
 // Migrate runs database migrations from the migrations directory
 func (db *DB) Migrate() error {
-	// Migrations directory relative to database path
-	migrationsDir := filepath.Join(filepath.Dir(db.path), "../internal/database/migrations")
+	// Try multiple paths to find migrations directory
+	var migrationsDir string
+
+	// 1. Try relative to database path (for absolute paths)
+	dbDir := filepath.Dir(db.path)
+	candidates := []string{
+		filepath.Join(dbDir, "../trader/internal/database/migrations"), // From ../data to trader/internal/...
+		filepath.Join(dbDir, "../internal/database/migrations"),        // From ../data to internal/...
+		filepath.Join(dbDir, "internal/database/migrations"),           // Same directory
+		"internal/database/migrations",                                 // Relative to CWD
+		"./internal/database/migrations",                               // Explicit relative
+	}
+
+	// Also try from executable directory if available
+	if execPath, err := os.Executable(); err == nil {
+		execDir := filepath.Dir(execPath)
+		candidates = append(candidates,
+			filepath.Join(execDir, "internal/database/migrations"),
+			filepath.Join(filepath.Dir(execDir), "internal/database/migrations"),
+		)
+	}
+
+	// Find first existing migrations directory
+	for _, candidate := range candidates {
+		if absPath, err := filepath.Abs(candidate); err == nil {
+			if info, err := os.Stat(absPath); err == nil && info.IsDir() {
+				migrationsDir = absPath
+				break
+			}
+		}
+	}
 
 	// Check if migrations directory exists
-	if _, err := os.Stat(migrationsDir); os.IsNotExist(err) {
+	if migrationsDir == "" {
 		// Migrations directory doesn't exist, skip (tables may already exist from Python)
 		return nil
 	}
@@ -201,7 +231,16 @@ func (db *DB) Migrate() error {
 		}
 
 		if _, err := tx.Exec(string(content)); err != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
+
+			// Some migrations are database-specific (e.g., satellites.db only)
+			// If error is "no such table" or "no such column", skip this migration for this database
+			errStr := err.Error()
+			if strings.Contains(errStr, "no such table") || strings.Contains(errStr, "no such column") {
+				// This migration is not applicable to this database, skip it
+				continue
+			}
+
 			return fmt.Errorf("failed to execute migration %s for %s: %w", filepath.Base(file), db.name, err)
 		}
 

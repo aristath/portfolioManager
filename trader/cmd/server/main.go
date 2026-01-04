@@ -12,27 +12,43 @@ import (
 	"github.com/aristath/arduino-trader/internal/clients/yahoo"
 	"github.com/aristath/arduino-trader/internal/config"
 	"github.com/aristath/arduino-trader/internal/database"
+	"github.com/aristath/arduino-trader/internal/deployment"
+	"github.com/aristath/arduino-trader/internal/events"
 	"github.com/aristath/arduino-trader/internal/modules/allocation"
 	"github.com/aristath/arduino-trader/internal/modules/cash_flows"
+	"github.com/aristath/arduino-trader/internal/modules/cleanup"
 	"github.com/aristath/arduino-trader/internal/modules/display"
 	"github.com/aristath/arduino-trader/internal/modules/dividends"
 	"github.com/aristath/arduino-trader/internal/modules/opportunities"
+	"github.com/aristath/arduino-trader/internal/modules/optimization"
 	"github.com/aristath/arduino-trader/internal/modules/planning"
 	planningconfig "github.com/aristath/arduino-trader/internal/modules/planning/config"
 	planningevaluation "github.com/aristath/arduino-trader/internal/modules/planning/evaluation"
 	planningplanner "github.com/aristath/arduino-trader/internal/modules/planning/planner"
 	planningrepo "github.com/aristath/arduino-trader/internal/modules/planning/repository"
 	"github.com/aristath/arduino-trader/internal/modules/portfolio"
+	"github.com/aristath/arduino-trader/internal/modules/rebalancing"
 	"github.com/aristath/arduino-trader/internal/modules/satellites"
 	"github.com/aristath/arduino-trader/internal/modules/sequences"
+	"github.com/aristath/arduino-trader/internal/modules/settings"
 	"github.com/aristath/arduino-trader/internal/modules/trading"
 	"github.com/aristath/arduino-trader/internal/modules/universe"
+	"github.com/aristath/arduino-trader/internal/reliability"
 	"github.com/aristath/arduino-trader/internal/scheduler"
 	"github.com/aristath/arduino-trader/internal/server"
 	"github.com/aristath/arduino-trader/internal/services"
+	"github.com/aristath/arduino-trader/internal/ticker"
 	"github.com/aristath/arduino-trader/pkg/logger"
 	"github.com/rs/zerolog"
 )
+
+// getEnv gets environment variable with fallback
+func getEnv(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
+}
 
 func main() {
 	// Initialize logger
@@ -51,10 +67,11 @@ func main() {
 
 	// Initialize databases - NEW 8-database architecture
 	// Architecture: universe, config, ledger, portfolio, satellites, agents, history, cache
+	// All databases use cfg.DataDir which automatically detects ../data or ./data
 
 	// 1. universe.db - Investment universe (securities, groups)
 	universeDB, err := database.New(database.Config{
-		Path:    "../data/universe.db",
+		Path:    cfg.DataDir + "/universe.db",
 		Profile: database.ProfileStandard,
 		Name:    "universe",
 	})
@@ -74,9 +91,15 @@ func main() {
 	}
 	defer configDB.Close()
 
+	// Update config from settings DB (credentials, etc.)
+	settingsRepo := settings.NewRepository(configDB.Conn(), log)
+	if err := cfg.UpdateFromSettings(settingsRepo); err != nil {
+		log.Warn().Err(err).Msg("Failed to update config from settings DB, using environment variables")
+	}
+
 	// 3. ledger.db - Immutable financial audit trail (EXPANDED: trades, cash flows, dividends)
 	ledgerDB, err := database.New(database.Config{
-		Path:    "../data/ledger.db",
+		Path:    cfg.DataDir + "/ledger.db",
 		Profile: database.ProfileLedger, // Maximum safety for immutable audit trail
 		Name:    "ledger",
 	})
@@ -87,19 +110,18 @@ func main() {
 
 	// 4. portfolio.db - Current portfolio state (positions, scores, metrics, snapshots)
 	portfolioDB, err := database.New(database.Config{
-		Path:    "../data/portfolio.db",
+		Path:    cfg.DataDir + "/portfolio.db",
 		Profile: database.ProfileStandard,
 		Name:    "portfolio",
 	})
 	if err != nil {
-		//nolint:gocritic // exitAfterDefer: Accepted tradeoff for simpler code
 		log.Fatal().Err(err).Msg("Failed to initialize portfolio database")
 	}
 	defer portfolioDB.Close()
 
 	// 5. satellites.db - Multi-bucket portfolio system (UPDATED: added agent_id)
 	satellitesDB, err := database.New(database.Config{
-		Path:    "../data/satellites.db",
+		Path:    cfg.DataDir + "/satellites.db",
 		Profile: database.ProfileStandard,
 		Name:    "satellites",
 	})
@@ -110,7 +132,7 @@ func main() {
 
 	// 6. agents.db - Strategy management (TOML configs, sequences, evaluations)
 	agentsDB, err := database.New(database.Config{
-		Path:    "../data/agents.db",
+		Path:    cfg.DataDir + "/agents.db",
 		Profile: database.ProfileStandard,
 		Name:    "agents",
 	})
@@ -121,7 +143,7 @@ func main() {
 
 	// 7. history.db - Historical time-series data (prices, rates, cleanup tracking)
 	historyDB, err := database.New(database.Config{
-		Path:    "../data/history.db",
+		Path:    cfg.DataDir + "/history.db",
 		Profile: database.ProfileStandard,
 		Name:    "history",
 	})
@@ -132,7 +154,7 @@ func main() {
 
 	// 8. cache.db - Ephemeral operational data (recommendations, cache)
 	cacheDB, err := database.New(database.Config{
-		Path:    "../data/cache.db",
+		Path:    cfg.DataDir + "/cache.db",
 		Profile: database.ProfileCache, // Maximum speed for ephemeral data
 		Name:    "cache",
 	})
@@ -153,27 +175,50 @@ func main() {
 	sched.Start()
 	defer sched.Stop()
 
+	// Display manager (state holder for LED display) - must be initialized before server.New()
+	displayManager := display.NewStateManager(log)
+	log.Info().Msg("Display manager initialized")
+
 	// Register background jobs
-	jobs, err := registerJobs(sched, universeDB, configDB, ledgerDB, portfolioDB, satellitesDB, agentsDB, historyDB, cacheDB, cfg, log)
+	jobs, err := registerJobs(sched, universeDB, configDB, ledgerDB, portfolioDB, satellitesDB, agentsDB, historyDB, cacheDB, cfg, log, displayManager)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to register jobs")
 	}
 
+	// Initialize deployment manager and handlers if enabled
+	var deploymentHandlers *server.DeploymentHandlers
+	if cfg.Deployment != nil && cfg.Deployment.Enabled {
+		deployConfig := cfg.Deployment.ToDeploymentConfig()
+		version := getEnv("VERSION", "dev")
+		deploymentManager := deployment.NewManager(deployConfig, version, log)
+		deploymentHandlers = server.NewDeploymentHandlers(deploymentManager, log)
+
+		// Register deployment job (runs every 5 minutes)
+		deploymentJob := scheduler.NewDeploymentJob(deploymentManager, 5*time.Minute, true, log)
+		if err := sched.AddJob("0 */5 * * * *", deploymentJob); err != nil {
+			log.Warn().Err(err).Msg("Failed to register deployment job")
+		} else {
+			log.Info().Msg("Deployment job registered (every 5 minutes)")
+		}
+	}
+
 	// Initialize HTTP server
 	srv := server.New(server.Config{
-		Port:         cfg.Port,
-		Log:          log,
-		UniverseDB:   universeDB,
-		ConfigDB:     configDB,
-		LedgerDB:     ledgerDB,
-		PortfolioDB:  portfolioDB,
-		SatellitesDB: satellitesDB,
-		AgentsDB:     agentsDB,
-		HistoryDB:    historyDB,
-		CacheDB:      cacheDB,
-		Config:       cfg,
-		DevMode:      cfg.DevMode,
-		Scheduler:    sched,
+		Port:               cfg.Port,
+		Log:                log,
+		UniverseDB:         universeDB,
+		ConfigDB:           configDB,
+		LedgerDB:           ledgerDB,
+		PortfolioDB:        portfolioDB,
+		SatellitesDB:       satellitesDB,
+		AgentsDB:           agentsDB,
+		HistoryDB:          historyDB,
+		CacheDB:            cacheDB,
+		Config:             cfg,
+		DevMode:            cfg.DevMode,
+		Scheduler:          sched,
+		DisplayManager:     displayManager,
+		DeploymentHandlers: deploymentHandlers,
 	})
 
 	// Wire up jobs for manual triggering via API
@@ -215,8 +260,37 @@ func main() {
 	log.Info().Msg("Server stopped")
 }
 
+// balanceServiceAdapter adapts satellites.BalanceService to cash_flows.BalanceService interface
+// Placed here to avoid import cycle between cash_flows and satellites packages
+type balanceServiceAdapter struct {
+	svc *satellites.BalanceService
+}
+
+func (a *balanceServiceAdapter) AllocateDeposit(amount float64, currency, description string) (map[string]interface{}, error) {
+	// Convert description from string to *string
+	var descPtr *string
+	if description != "" {
+		descPtr = &description
+	}
+
+	// Call the satellites balance service
+	allocations, err := a.svc.AllocateDeposit(amount, currency, descPtr)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert map[string]float64 to map[string]interface{}
+	result := make(map[string]interface{})
+	for k, v := range allocations {
+		result[k] = v
+	}
+
+	return result, nil
+}
+
 // JobInstances holds references to all registered jobs for manual triggering
 type JobInstances struct {
+	// Original jobs
 	HealthCheck             scheduler.Job
 	SyncCycle               scheduler.Job
 	DividendReinvest        scheduler.Job
@@ -225,9 +299,19 @@ type JobInstances struct {
 	SatelliteEvaluation     scheduler.Job
 	PlannerBatch            scheduler.Job
 	EventBasedTrading       scheduler.Job
+
+	// Reliability jobs (Phase 11-15)
+	HistoryCleanup     scheduler.Job
+	HourlyBackup       scheduler.Job
+	DailyBackup        scheduler.Job
+	DailyMaintenance   scheduler.Job
+	WeeklyBackup       scheduler.Job
+	WeeklyMaintenance  scheduler.Job
+	MonthlyBackup      scheduler.Job
+	MonthlyMaintenance scheduler.Job
 }
 
-func registerJobs(sched *scheduler.Scheduler, universeDB, configDB, ledgerDB, portfolioDB, satellitesDB, agentsDB, historyDB, cacheDB *database.DB, cfg *config.Config, log zerolog.Logger) (*JobInstances, error) {
+func registerJobs(sched *scheduler.Scheduler, universeDB, configDB, ledgerDB, portfolioDB, satellitesDB, agentsDB, historyDB, cacheDB *database.DB, cfg *config.Config, log zerolog.Logger, displayManager *display.StateManager) (*JobInstances, error) {
 	// Initialize required repositories and services for jobs
 
 	// Repositories - NEW 8-database architecture
@@ -240,6 +324,7 @@ func registerJobs(sched *scheduler.Scheduler, universeDB, configDB, ledgerDB, po
 
 	// Clients
 	tradernetClient := tradernet.NewClient(cfg.TradernetServiceURL, log)
+	tradernetClient.SetCredentials(cfg.TradernetAPIKey, cfg.TradernetAPISecret)
 	yahooClient := yahoo.NewClient(log)
 
 	// Currency exchange service
@@ -248,18 +333,20 @@ func registerJobs(sched *scheduler.Scheduler, universeDB, configDB, ledgerDB, po
 	// Market hours service
 	marketHours := scheduler.NewMarketHoursService(log)
 
+	// Cash security manager (cash-as-positions architecture)
+	cashManager := cash_flows.NewCashSecurityManager(securityRepo, positionRepo, bucketRepo, universeDB.Conn(), portfolioDB.Conn(), log)
+
 	// Satellite services
-	balanceService := satellites.NewBalanceService(balanceRepo, bucketRepo, log)
+	tradeRepo := trading.NewTradeRepository(ledgerDB.Conn(), log)
+	balanceService := satellites.NewBalanceService(cashManager, balanceRepo, bucketRepo, log)
 	bucketService := satellites.NewBucketService(bucketRepo, balanceRepo, currencyExchangeService, log)
-	metaAllocator := satellites.NewMetaAllocator(bucketService, balanceService, balanceRepo, log)
+	metaAllocator := satellites.NewMetaAllocator(bucketService, balanceService, balanceRepo, tradeRepo, log)
 	reconciliationService := satellites.NewReconciliationService(balanceRepo, bucketRepo, log)
 
 	// Trading and portfolio services
-	tradeRepo := portfolio.NewTradeRepository(ledgerDB.Conn(), log)
-
 	// Trade safety service with all validation layers
 	tradeSafetyService := trading.NewTradeSafetyService(
-		trading.NewTradeRepository(ledgerDB.Conn(), log),
+		tradeRepo,
 		positionRepo,
 		securityRepo,
 		nil, // settingsService - will use defaults
@@ -277,22 +364,115 @@ func registerJobs(sched *scheduler.Scheduler, universeDB, configDB, ledgerDB, po
 	portfolioRepo := portfolio.NewPortfolioRepository(portfolioDB.Conn(), log)
 	allocRepo := allocation.NewRepository(configDB.Conn(), log)
 	turnoverTracker := portfolio.NewTurnoverTracker(ledgerDB.Conn(), portfolioDB.Conn(), log)
-	attributionCalc := portfolio.NewAttributionCalculator(tradeRepo, historyDB.Conn(), cfg.HistoryPath, log)
-	portfolioService := portfolio.NewPortfolioService(portfolioRepo, positionRepo, allocRepo, turnoverTracker, attributionCalc, universeDB.Conn(), log)
+	portfolioTradeRepo := portfolio.NewTradeRepository(ledgerDB.Conn(), log)
+	attributionCalc := portfolio.NewAttributionCalculator(portfolioTradeRepo, historyDB.Conn(), cfg.HistoryPath, log)
+	portfolioService := portfolio.NewPortfolioService(portfolioRepo, positionRepo, allocRepo, turnoverTracker, attributionCalc, cashManager, universeDB.Conn(), tradernetClient, log)
 
-	// Cash flows service
-	cashFlowsService := cash_flows.NewCashFlowsService(log)
+	// Event manager (for system events)
+	eventManager := events.NewManager(log)
 
-	// Universe service (simplified for jobs)
-	universeService := universe.NewUniverseService(log)
+	// === Cash Flows Module ===
 
-	// Display manager (can be nil for now if not available)
-	var displayManager *display.StateManager // TODO: Initialize if display is enabled
+	// 1. Create cash flows repository
+	cashFlowsRepo := cash_flows.NewRepository(ledgerDB.Conn(), log)
+
+	// 2. Create dividend service implementation (adapter - uses existing dividendRepo)
+	dividendService := cash_flows.NewDividendServiceImpl(dividendRepo, log)
+
+	// 3. Create dividend creator
+	dividendCreator := cash_flows.NewDividendCreator(dividendService, log)
+
+	// 4. Create deposit processor with adapter (adapts satellites.BalanceService to cash_flows.BalanceService interface)
+	// Adapter is defined at package level to avoid import cycle between cash_flows and satellites
+	depositProcessor := cash_flows.NewDepositProcessor(
+		&balanceServiceAdapter{svc: balanceService},
+		log,
+	)
+
+	// 6. Create Tradernet adapter (adapts tradernet.Client to cash_flows.TradernetClient)
+	tradernetAdapter := cash_flows.NewTradernetAdapter(tradernetClient)
+
+	// 7. Create sync job
+	syncJob := cash_flows.NewSyncJob(
+		cashFlowsRepo,
+		depositProcessor,
+		dividendCreator,
+		tradernetAdapter,
+		displayManager,
+		eventManager,
+		log,
+	)
+
+	// 8. Create cash flows service
+	cashFlowsService := cash_flows.NewCashFlowsService(syncJob, log)
+
+	// Universe sync services
+	historyDBClient := universe.NewHistoryDB(cfg.HistoryPath, log)
+	historicalSyncService := universe.NewHistoricalSyncService(
+		yahooClient,
+		securityRepo,
+		historyDBClient,
+		time.Second*2, // Rate limit delay
+		log,
+	)
+	syncService := universe.NewSyncService(
+		securityRepo,
+		historicalSyncService,
+		yahooClient,
+		nil, // scoreCalculator - will be set later if needed
+		tradernetClient,
+		nil, // setupService - will be set later if needed
+		portfolioDB.Conn(),
+		log,
+	)
+
+	// Universe service with cleanup coordination
+	universeService := universe.NewUniverseService(securityRepo, historyDB, portfolioDB, syncService, log)
+
+	// === Rebalancing Services ===
+
+	// Settings repository
+	settingsRepo := settings.NewRepository(configDB.Conn(), log)
+
+	// Planning recommendation repository
+	recommendationRepo := planning.NewRecommendationRepository(cacheDB.Conn(), log)
+
+	// Ticker content service (generates ticker text) - must be initialized before updateDisplayTicker closure
+	tickerContentService := ticker.NewTickerContentService(
+		portfolioDB.Conn(),
+		configDB.Conn(),
+		cacheDB.Conn(),
+		log,
+	)
+	log.Info().Msg("Ticker content service initialized")
+
+	// Trade execution service for emergency rebalancing
+	tradeExecutionService := services.NewTradeExecutionService(
+		tradernetClient,
+		tradeRepo,
+		positionRepo,
+		balanceService,
+		currencyExchangeService,
+		log,
+	)
+
+	// Negative balance rebalancer
+	negativeBalanceRebalancer := rebalancing.NewNegativeBalanceRebalancer(
+		log,
+		tradernetClient,
+		securityRepo,
+		positionRepo,
+		settingsRepo,
+		currencyExchangeService,
+		tradeExecutionService,
+		recommendationRepo,
+		marketHours,
+	)
 
 	// Register Job 1: Health Check (daily at 4:00 AM)
 	healthCheck := scheduler.NewHealthCheckJob(scheduler.HealthCheckConfig{
 		Log:          log,
-		DataDir:      "../data",
+		DataDir:      cfg.DataDir,
 		UniverseDB:   universeDB,
 		ConfigDB:     configDB,
 		LedgerDB:     ledgerDB,
@@ -307,6 +487,41 @@ func registerJobs(sched *scheduler.Scheduler, universeDB, configDB, ledgerDB, po
 		return nil, fmt.Errorf("failed to register health_check job: %w", err)
 	}
 
+	// Display ticker update callback (called by sync cycle)
+	updateDisplayTicker := func() error {
+		text, err := tickerContentService.GenerateTickerText()
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to generate ticker text")
+			return err
+		}
+
+		displayManager.SetText(text)
+
+		log.Debug().
+			Str("ticker_text", text).
+			Msg("Updated display ticker")
+
+		return nil
+	}
+
+	// Emergency rebalance callback (called when negative balance detected)
+	emergencyRebalance := func() error {
+		log.Warn().Msg("EMERGENCY: Executing negative balance rebalancing")
+
+		success, err := negativeBalanceRebalancer.RebalanceNegativeBalances()
+		if err != nil {
+			return fmt.Errorf("emergency rebalancing failed: %w", err)
+		}
+
+		if !success {
+			log.Warn().Msg("Emergency rebalancing completed but some issues may remain")
+		} else {
+			log.Info().Msg("Emergency rebalancing completed successfully")
+		}
+
+		return nil
+	}
+
 	// Register Job 2: Sync Cycle (every 5 minutes)
 	syncCycle := scheduler.NewSyncCycleJob(scheduler.SyncCycleConfig{
 		Log:                 log,
@@ -314,10 +529,11 @@ func registerJobs(sched *scheduler.Scheduler, universeDB, configDB, ledgerDB, po
 		CashFlowsService:    cashFlowsService,
 		TradingService:      tradingService,
 		UniverseService:     universeService,
+		BalanceService:      balanceService,
 		DisplayManager:      displayManager,
 		MarketHours:         marketHours,
-		EmergencyRebalance:  nil, // TODO: Wire up emergency rebalance callback
-		UpdateDisplayTicker: nil, // TODO: Wire up display ticker callback
+		EmergencyRebalance:  emergencyRebalance,
+		UpdateDisplayTicker: updateDisplayTicker,
 	})
 	if err := sched.AddJob("0 */5 * * * *", syncCycle); err != nil {
 		return nil, fmt.Errorf("failed to register sync_cycle job: %w", err)
@@ -325,14 +541,15 @@ func registerJobs(sched *scheduler.Scheduler, universeDB, configDB, ledgerDB, po
 
 	// Register Job 3: Dividend Reinvestment (daily at 10:00 AM)
 	dividendReinvest := scheduler.NewDividendReinvestmentJob(scheduler.DividendReinvestmentConfig{
-		Log:              log,
-		DividendRepo:     dividendRepo,
-		SecurityRepo:     securityRepo,
-		ScoreRepo:        scoreRepo,
-		PortfolioService: portfolioService,
-		TradingService:   tradingService,
-		TradernetClient:  tradernetClient,
-		YahooClient:      yahooClient,
+		Log:                   log,
+		DividendRepo:          dividendRepo,
+		SecurityRepo:          securityRepo,
+		ScoreRepo:             scoreRepo,
+		PortfolioService:      portfolioService,
+		TradingService:        tradingService,
+		TradeExecutionService: tradeExecutionService,
+		TradernetClient:       tradernetClient,
+		YahooClient:           yahooClient,
 	})
 	if err := sched.AddJob("0 0 10 * * *", dividendReinvest); err != nil {
 		return nil, fmt.Errorf("failed to register dividend_reinvestment job: %w", err)
@@ -357,11 +574,15 @@ func registerJobs(sched *scheduler.Scheduler, universeDB, configDB, ledgerDB, po
 	}
 
 	// Planning module repositories and services
-	recommendationRepo := planning.NewRecommendationRepository(cacheDB.Conn(), log)
 	configLoader := planningconfig.NewLoader(log)
 	plannerConfigRepo := planningrepo.NewConfigRepository(agentsDB, configLoader, log)
 	opportunitiesService := opportunities.NewService(log)
-	sequencesService := sequences.NewService(log)
+
+	// Optimization services for correlation filtering
+	pypfoptClient := optimization.NewPyPFOptClient(cfg.PyPFOptServiceURL, log)
+	riskBuilder := optimization.NewRiskModelBuilder(historyDB.Conn(), pypfoptClient, log)
+
+	sequencesService := sequences.NewService(log, riskBuilder)
 	evaluationService := planningevaluation.NewService(4, log) // 4 workers
 	plannerService := planningplanner.NewPlanner(opportunitiesService, sequencesService, evaluationService, log)
 
@@ -395,9 +616,93 @@ func registerJobs(sched *scheduler.Scheduler, universeDB, configDB, ledgerDB, po
 		return nil, fmt.Errorf("failed to register event_based_trading job: %w", err)
 	}
 
-	log.Info().Int("jobs", 8).Msg("Background jobs registered successfully")
+	// ==========================================
+	// RELIABILITY JOBS (Phase 11-15)
+	// ==========================================
+
+	// Initialize reliability services
+	dataDir := cfg.DataDir
+	backupDir := cfg.DataDir + "/backups"
+
+	// Create all database references map for reliability services
+	databases := map[string]*database.DB{
+		"universe":   universeDB,
+		"config":     configDB,
+		"ledger":     ledgerDB,
+		"portfolio":  portfolioDB,
+		"satellites": satellitesDB,
+		"agents":     agentsDB,
+		"history":    historyDB,
+		"cache":      cacheDB,
+	}
+
+	// Initialize health services for each database
+	healthServices := make(map[string]*reliability.DatabaseHealthService)
+	healthServices["universe"] = reliability.NewDatabaseHealthService(universeDB, "universe", dataDir+"/universe.db", log)
+	healthServices["config"] = reliability.NewDatabaseHealthService(configDB, "config", dataDir+"/config.db", log)
+	healthServices["ledger"] = reliability.NewDatabaseHealthService(ledgerDB, "ledger", dataDir+"/ledger.db", log)
+	healthServices["portfolio"] = reliability.NewDatabaseHealthService(portfolioDB, "portfolio", dataDir+"/portfolio.db", log)
+	healthServices["satellites"] = reliability.NewDatabaseHealthService(satellitesDB, "satellites", dataDir+"/satellites.db", log)
+	healthServices["agents"] = reliability.NewDatabaseHealthService(agentsDB, "agents", dataDir+"/agents.db", log)
+	healthServices["history"] = reliability.NewDatabaseHealthService(historyDB, "history", dataDir+"/history.db", log)
+	healthServices["cache"] = reliability.NewDatabaseHealthService(cacheDB, "cache", dataDir+"/cache.db", log)
+
+	// Initialize backup service
+	backupService := reliability.NewBackupService(databases, dataDir, backupDir, log)
+
+	// Register Job 9: History Cleanup (daily at midnight)
+	historyCleanup := cleanup.NewHistoryCleanupJob(historyDB, portfolioDB, universeDB, log)
+	if err := sched.AddJob("0 0 0 * * *", historyCleanup); err != nil {
+		return nil, fmt.Errorf("failed to register history_cleanup job: %w", err)
+	}
+
+	// Register Job 10: Hourly Backup (every hour at :00)
+	hourlyBackup := reliability.NewHourlyBackupJob(backupService)
+	if err := sched.AddJob("0 0 * * * *", hourlyBackup); err != nil {
+		return nil, fmt.Errorf("failed to register hourly_backup job: %w", err)
+	}
+
+	// Register Job 11: Daily Backup (daily at 1:00 AM, before maintenance)
+	dailyBackup := reliability.NewDailyBackupJob(backupService)
+	if err := sched.AddJob("0 0 1 * * *", dailyBackup); err != nil {
+		return nil, fmt.Errorf("failed to register daily_backup job: %w", err)
+	}
+
+	// Register Job 12: Daily Maintenance (daily at 2:00 AM)
+	dailyMaintenance := reliability.NewDailyMaintenanceJob(databases, healthServices, backupDir, log)
+	if err := sched.AddJob("0 0 2 * * *", dailyMaintenance); err != nil {
+		return nil, fmt.Errorf("failed to register daily_maintenance job: %w", err)
+	}
+
+	// Register Job 13: Weekly Backup (Sunday at 1:00 AM)
+	weeklyBackup := reliability.NewWeeklyBackupJob(backupService)
+	if err := sched.AddJob("0 0 1 * * 0", weeklyBackup); err != nil {
+		return nil, fmt.Errorf("failed to register weekly_backup job: %w", err)
+	}
+
+	// Register Job 14: Weekly Maintenance (Sunday at 3:30 AM, after satellite evaluation)
+	weeklyMaintenance := reliability.NewWeeklyMaintenanceJob(databases, historyDB, log)
+	if err := sched.AddJob("0 30 3 * * 0", weeklyMaintenance); err != nil {
+		return nil, fmt.Errorf("failed to register weekly_maintenance job: %w", err)
+	}
+
+	// Register Job 15: Monthly Backup (1st day at 1:00 AM)
+	// Cron: "0 0 1 1 * *" means: sec=0, min=0, hour=1, day=1, month=*, weekday=*
+	monthlyBackup := reliability.NewMonthlyBackupJob(backupService)
+	if err := sched.AddJob("0 0 1 1 * *", monthlyBackup); err != nil {
+		return nil, fmt.Errorf("failed to register monthly_backup job: %w", err)
+	}
+
+	// Register Job 16: Monthly Maintenance (1st day at 4:00 AM)
+	monthlyMaintenance := reliability.NewMonthlyMaintenanceJob(databases, healthServices, agentsDB, backupDir, log)
+	if err := sched.AddJob("0 0 4 1 * *", monthlyMaintenance); err != nil {
+		return nil, fmt.Errorf("failed to register monthly_maintenance job: %w", err)
+	}
+
+	log.Info().Int("jobs", 16).Msg("Background jobs registered successfully")
 
 	return &JobInstances{
+		// Original jobs
 		HealthCheck:             healthCheck,
 		SyncCycle:               syncCycle,
 		DividendReinvest:        dividendReinvest,
@@ -406,5 +711,15 @@ func registerJobs(sched *scheduler.Scheduler, universeDB, configDB, ledgerDB, po
 		SatelliteEvaluation:     satelliteEvaluation,
 		PlannerBatch:            plannerBatch,
 		EventBasedTrading:       eventBasedTrading,
+
+		// Reliability jobs
+		HistoryCleanup:     historyCleanup,
+		HourlyBackup:       hourlyBackup,
+		DailyBackup:        dailyBackup,
+		DailyMaintenance:   dailyMaintenance,
+		WeeklyBackup:       weeklyBackup,
+		WeeklyMaintenance:  weeklyMaintenance,
+		MonthlyBackup:      monthlyBackup,
+		MonthlyMaintenance: monthlyMaintenance,
 	}, nil
 }

@@ -8,22 +8,28 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/aristath/arduino-trader/internal/clients/tradernet"
 	"github.com/aristath/arduino-trader/internal/database"
+	"github.com/aristath/arduino-trader/internal/modules/cash_utils"
 	"github.com/aristath/arduino-trader/internal/modules/display"
 	"github.com/aristath/arduino-trader/internal/scheduler"
+	"github.com/aristath/arduino-trader/internal/services"
 	"github.com/rs/zerolog"
 )
 
 // SystemHandlers handles system-wide monitoring and operations endpoints - NEW 8-database architecture
 type SystemHandlers struct {
-	log                  zerolog.Logger
-	dataDir              string
-	portfolioDB          *database.DB
-	configDB             *database.DB
-	universeDB           *database.DB
-	marketHours          *scheduler.MarketHoursService
-	scheduler            *scheduler.Scheduler
-	portfolioDisplayCalc *display.PortfolioDisplayCalculator
+	log                     zerolog.Logger
+	dataDir                 string
+	portfolioDB             *database.DB
+	configDB                *database.DB
+	universeDB              *database.DB
+	marketHours             *scheduler.MarketHoursService
+	scheduler               *scheduler.Scheduler
+	portfolioDisplayCalc    *display.PortfolioDisplayCalculator
+	displayManager          *display.StateManager
+	tradernetClient         *tradernet.Client
+	currencyExchangeService *services.CurrencyExchangeService
 	// Jobs (will be set after job registration in main.go)
 	healthCheckJob             scheduler.Job
 	syncCycleJob               scheduler.Job
@@ -41,6 +47,9 @@ func NewSystemHandlers(
 	dataDir string,
 	portfolioDB, configDB, universeDB *database.DB,
 	sched *scheduler.Scheduler,
+	displayManager *display.StateManager,
+	tradernetClient *tradernet.Client,
+	currencyExchangeService *services.CurrencyExchangeService,
 ) *SystemHandlers {
 	// Create portfolio performance service
 	portfolioPerf := display.NewPortfolioPerformanceService(
@@ -59,14 +68,17 @@ func NewSystemHandlers(
 	)
 
 	return &SystemHandlers{
-		log:                  log.With().Str("component", "system_handlers").Logger(),
-		dataDir:              dataDir,
-		portfolioDB:          portfolioDB,
-		configDB:             configDB,
-		universeDB:           universeDB,
-		marketHours:          scheduler.NewMarketHoursService(log),
-		scheduler:            sched,
-		portfolioDisplayCalc: portfolioDisplayCalc,
+		log:                     log.With().Str("component", "system_handlers").Logger(),
+		dataDir:                 dataDir,
+		portfolioDB:             portfolioDB,
+		configDB:                configDB,
+		universeDB:              universeDB,
+		marketHours:             scheduler.NewMarketHoursService(log),
+		scheduler:               sched,
+		portfolioDisplayCalc:    portfolioDisplayCalc,
+		displayManager:          displayManager,
+		tradernetClient:         tradernetClient,
+		currencyExchangeService: currencyExchangeService,
 	}
 }
 
@@ -94,11 +106,13 @@ func (h *SystemHandlers) SetJobs(
 
 // SystemStatusResponse represents the system status response
 type SystemStatusResponse struct {
-	CashBalance    float64 `json:"cash_balance"`
-	SecurityCount  int     `json:"security_count"`
-	PositionCount  int     `json:"position_count"`
-	LastSync       string  `json:"last_sync,omitempty"`
-	UniverseActive int     `json:"universe_active"`
+	CashBalanceEUR   float64 `json:"cash_balance_eur"`   // EUR-only cash balance
+	CashBalanceTotal float64 `json:"cash_balance_total"` // Total cash in EUR (all currencies converted)
+	CashBalance      float64 `json:"cash_balance"`       // Backward compatibility: alias for cash_balance_total
+	SecurityCount    int     `json:"security_count"`
+	PositionCount    int     `json:"position_count"`
+	LastSync         string  `json:"last_sync,omitempty"`
+	UniverseActive   int     `json:"universe_active"`
 }
 
 // LEDDisplayResponse represents the LED display state
@@ -107,6 +121,8 @@ type LEDDisplayResponse struct {
 	CurrentPanel   int                    `json:"current_panel"`             // For TICKER mode
 	SystemStats    map[string]interface{} `json:"system_stats,omitempty"`    // For STATS mode
 	PortfolioState interface{}            `json:"portfolio_state,omitempty"` // For PORTFOLIO mode
+	DisplayText    string                 `json:"display_text,omitempty"`    // For TICKER mode
+	TickerSpeed    int                    `json:"ticker_speed,omitempty"`    // For TICKER mode
 }
 
 // TradernetStatusResponse represents Tradernet connection status
@@ -209,18 +225,124 @@ func (h *SystemHandlers) HandleSystemStatus(w http.ResponseWriter, r *http.Reque
 		h.log.Error().Err(err).Msg("Failed to query securities")
 	}
 
-	// Get cash balance from ledger
-	var cashBalance float64
-	// TODO: Query actual cash balance from ledger database
-	// For now, use placeholder
-	cashBalance = 0.0
+	// Get cash balances from positions (CASH is now a normal security)
+	// Cash positions have symbols like "CASH:EUR:core", "CASH:USD:core", etc.
+	// First, get EUR-only cash balance
+	var cashBalanceEUR float64
+	err = h.portfolioDB.Conn().QueryRow(`
+		SELECT COALESCE(SUM(quantity), 0)
+		FROM positions
+		WHERE symbol LIKE 'CASH:EUR:%'
+	`).Scan(&cashBalanceEUR)
+
+	if err != nil && err != sql.ErrNoRows {
+		h.log.Error().Err(err).Msg("Failed to query EUR cash balance from positions")
+		cashBalanceEUR = 0.0 // Fallback to 0 on error
+	}
+
+	// Get total cash balance in EUR (all currencies converted)
+	// Query all cash positions grouped by currency
+	var totalCashEUR float64
+	rows, err := h.portfolioDB.Conn().Query(`
+		SELECT symbol, quantity
+		FROM positions
+		WHERE symbol LIKE 'CASH:%'
+	`)
+	if err != nil && err != sql.ErrNoRows {
+		h.log.Error().Err(err).Msg("Failed to query cash positions for total balance")
+		totalCashEUR = cashBalanceEUR // Fallback to EUR-only if query fails
+	} else if err == nil {
+		defer rows.Close()
+
+		// Group by currency and sum
+		currencyBalances := make(map[string]float64)
+		for rows.Next() {
+			var symbol string
+			var quantity float64
+			if err := rows.Scan(&symbol, &quantity); err != nil {
+				h.log.Warn().Err(err).Str("symbol", symbol).Msg("Failed to scan cash position")
+				continue
+			}
+
+			// Parse currency from symbol (format: CASH:CURRENCY:BUCKET)
+			currency, _, err := cash_utils.ParseCashSymbol(symbol)
+			if err != nil {
+				h.log.Warn().Err(err).Str("symbol", symbol).Msg("Failed to parse cash symbol")
+				continue
+			}
+
+			currencyBalances[currency] += quantity
+		}
+
+		// Check for errors during iteration
+		if err := rows.Err(); err != nil {
+			h.log.Warn().Err(err).Msg("Error iterating cash positions, using partial results")
+		}
+
+		// Convert all currencies to EUR
+		for currency, balance := range currencyBalances {
+			if currency == "EUR" {
+				totalCashEUR += balance
+			} else {
+				// Convert to EUR using exchange service
+				if h.currencyExchangeService != nil {
+					rate, err := h.currencyExchangeService.GetRate(currency, "EUR")
+					if err != nil {
+						h.log.Warn().
+							Err(err).
+							Str("currency", currency).
+							Float64("balance", balance).
+							Msg("Failed to get exchange rate, using fallback")
+						// Fallback rates for autonomous operation
+						switch currency {
+						case "USD":
+							totalCashEUR += balance * 0.9
+						case "GBP":
+							totalCashEUR += balance * 1.2
+						case "HKD":
+							totalCashEUR += balance * 0.11
+						default:
+							h.log.Warn().
+								Str("currency", currency).
+								Float64("balance", balance).
+								Msg("Unknown currency, using 1:1 conversion")
+							totalCashEUR += balance // Assume 1:1 for unknown currencies
+						}
+					} else {
+						totalCashEUR += balance * rate
+					}
+				} else {
+					// No exchange service available, use fallback rates
+					h.log.Warn().
+						Str("currency", currency).
+						Float64("balance", balance).
+						Msg("Exchange service not available, using fallback rates")
+					switch currency {
+					case "USD":
+						totalCashEUR += balance * 0.9
+					case "GBP":
+						totalCashEUR += balance * 1.2
+					case "HKD":
+						totalCashEUR += balance * 0.11
+					default:
+						totalCashEUR += balance // Assume 1:1 for unknown currencies
+					}
+				}
+			}
+		}
+	} else {
+		// No rows found, use EUR-only as total
+		totalCashEUR = cashBalanceEUR
+	}
 
 	response := SystemStatusResponse{
-		CashBalance:    cashBalance,
-		SecurityCount:  securityCount,
-		PositionCount:  positionCount,
-		LastSync:       lastSync,
-		UniverseActive: securityCount,
+		CashBalanceEUR:   cashBalanceEUR,
+		CashBalanceTotal: totalCashEUR,
+		CashBalance:      totalCashEUR, // Backward compatibility
+		SecurityCount:    securityCount,
+		PositionCount:    positionCount,
+		LastSync:         lastSync,
+		UniverseActive:   securityCount,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -262,8 +384,28 @@ func (h *SystemHandlers) HandleLEDDisplay(w http.ResponseWriter, r *http.Request
 		}
 
 	case "TICKER":
-		// TODO: Implement ticker mode
-		h.log.Debug().Msg("TICKER mode not yet implemented")
+		// Get ticker speed from settings
+		var tickerSpeed float64
+		err := h.configDB.Conn().QueryRow("SELECT value FROM settings WHERE key = 'ticker_speed'").Scan(&tickerSpeed)
+		if err != nil {
+			tickerSpeed = 50.0 // Default
+			h.log.Debug().Err(err).Msg("Using default ticker speed")
+		}
+
+		// Get current ticker text from display manager
+		text := ""
+		if h.displayManager != nil {
+			text = h.displayManager.GetCurrentText()
+		}
+
+		// Return ticker state
+		response.DisplayText = text
+		response.TickerSpeed = int(tickerSpeed)
+
+		h.log.Debug().
+			Str("text", text).
+			Int("speed", int(tickerSpeed)).
+			Msg("Returning ticker display state")
 
 	default: // STATS mode
 		response.SystemStats = map[string]interface{}{
@@ -281,11 +423,32 @@ func (h *SystemHandlers) HandleLEDDisplay(w http.ResponseWriter, r *http.Request
 func (h *SystemHandlers) HandleTradernetStatus(w http.ResponseWriter, r *http.Request) {
 	h.log.Debug().Msg("Checking Tradernet status")
 
-	// TODO: Integrate with actual Tradernet client
 	response := TradernetStatusResponse{
 		Connected: false,
 		LastCheck: time.Now().Format(time.RFC3339),
-		Message:   "Tradernet client not yet implemented in Go",
+		Message:   "",
+	}
+
+	if h.tradernetClient == nil {
+		response.Message = "Tradernet client not configured"
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	healthResult, err := h.tradernetClient.HealthCheck()
+	if err != nil {
+		h.log.Error().Err(err).Msg("Failed to check Tradernet health")
+		response.Message = "Failed to check Tradernet service: " + err.Error()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	response.Connected = healthResult.Connected
+	response.LastCheck = healthResult.Timestamp
+	if !healthResult.Connected {
+		response.Message = "Tradernet service is not connected"
 	}
 
 	w.Header().Set("Content-Type", "application/json")

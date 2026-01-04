@@ -13,9 +13,11 @@ import (
 
 // Client for Tradernet microservice
 type Client struct {
-	baseURL string
-	client  *http.Client
-	log     zerolog.Logger
+	baseURL   string
+	client    *http.Client
+	log       zerolog.Logger
+	apiKey    string
+	apiSecret string
 }
 
 // ServiceResponse is the standard response format
@@ -37,6 +39,12 @@ func NewClient(baseURL string, log zerolog.Logger) *Client {
 	}
 }
 
+// SetCredentials sets the API credentials for the client
+func (c *Client) SetCredentials(apiKey, apiSecret string) {
+	c.apiKey = apiKey
+	c.apiSecret = apiSecret
+}
+
 // post makes a POST request to the microservice
 func (c *Client) post(endpoint string, request interface{}) (*ServiceResponse, error) {
 	body, err := json.Marshal(request)
@@ -45,7 +53,21 @@ func (c *Client) post(endpoint string, request interface{}) (*ServiceResponse, e
 	}
 
 	url := c.baseURL + endpoint
-	resp, err := c.client.Post(url, "application/json", bytes.NewBuffer(body))
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	// Add credentials to headers if available
+	if c.apiKey != "" {
+		req.Header.Set("X-Tradernet-API-Key", c.apiKey)
+	}
+	if c.apiSecret != "" {
+		req.Header.Set("X-Tradernet-API-Secret", c.apiSecret)
+	}
+
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
@@ -57,7 +79,20 @@ func (c *Client) post(endpoint string, request interface{}) (*ServiceResponse, e
 // get makes a GET request to the microservice
 func (c *Client) get(endpoint string) (*ServiceResponse, error) {
 	url := c.baseURL + endpoint
-	resp, err := c.client.Get(url)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Add credentials to headers if available
+	if c.apiKey != "" {
+		req.Header.Set("X-Tradernet-API-Key", c.apiKey)
+	}
+	if c.apiSecret != "" {
+		req.Header.Set("X-Tradernet-API-Secret", c.apiSecret)
+	}
+
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
@@ -316,6 +351,83 @@ func (c *Client) GetAllCashFlows(limit int) ([]CashFlowTransaction, error) {
 
 	c.log.Info().Int("count", len(result.CashFlows)).Msg("Fetched cash flows from Tradernet")
 	return result.CashFlows, nil
+}
+
+// HealthResponse represents the health check response from the microservice
+type HealthResponse struct {
+	Status             string `json:"status"`
+	Service            string `json:"service"`
+	Version            string `json:"version"`
+	Timestamp          string `json:"timestamp"`
+	TradernetConnected bool   `json:"tradernet_connected"`
+}
+
+// HealthCheckResult represents the result of a health check
+type HealthCheckResult struct {
+	Connected bool
+	Timestamp string
+}
+
+// HealthCheck checks the health of the Tradernet microservice
+// The /health endpoint returns plain JSON, not the standard ServiceResponse format
+func (c *Client) HealthCheck() (*HealthCheckResult, error) {
+	url := c.baseURL + "/health"
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return &HealthCheckResult{
+			Connected: false,
+			Timestamp: time.Now().Format(time.RFC3339),
+		}, nil
+	}
+
+	// Add credentials to headers if available (for testing connection)
+	if c.apiKey != "" {
+		req.Header.Set("X-Tradernet-API-Key", c.apiKey)
+	}
+	if c.apiSecret != "" {
+		req.Header.Set("X-Tradernet-API-Secret", c.apiSecret)
+	}
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		c.log.Debug().Err(err).Msg("Failed to connect to Tradernet microservice health endpoint")
+		return &HealthCheckResult{
+			Connected: false,
+			Timestamp: time.Now().Format(time.RFC3339),
+		}, nil // Return result, not error - service unavailable means not connected
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		c.log.Debug().Int("status_code", resp.StatusCode).Msg("Tradernet microservice health check returned non-200 status")
+		return &HealthCheckResult{
+			Connected: false,
+			Timestamp: time.Now().Format(time.RFC3339),
+		}, nil
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		c.log.Debug().Err(err).Msg("Failed to read health check response")
+		return &HealthCheckResult{
+			Connected: false,
+			Timestamp: time.Now().Format(time.RFC3339),
+		}, nil
+	}
+
+	var healthResp HealthResponse
+	if err := json.Unmarshal(body, &healthResp); err != nil {
+		c.log.Debug().Err(err).Msg("Failed to parse health check response")
+		return &HealthCheckResult{
+			Connected: false,
+			Timestamp: time.Now().Format(time.RFC3339),
+		}, nil
+	}
+
+	return &HealthCheckResult{
+		Connected: healthResp.TradernetConnected,
+		Timestamp: healthResp.Timestamp,
+	}, nil
 }
 
 // IsConnected checks if the Tradernet microservice is reachable

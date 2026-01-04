@@ -86,6 +86,9 @@ issues:
   max-issues-per-linter: 0
   # Maximum count of issues with the same text (0 = unlimited)
   max-same-issues: 0
+  # Exclude migration scripts directory (separate executables)
+  exclude-dirs:
+    - scripts/migration
 
   # Exclude some linters from running on tests
   exclude-rules:
@@ -101,6 +104,12 @@ issues:
         - gocritic
         - staticcheck
         - revive
+
+    # Exclude migration scripts (separate executables, can have duplicate main/function names)
+    - path: "scripts/migration/"
+      linters:
+        - govet
+        - typecheck
 
 output:
   formats:

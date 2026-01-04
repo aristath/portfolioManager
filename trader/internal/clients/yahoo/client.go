@@ -184,6 +184,44 @@ func (c *Client) GetSecurityCountryAndExchange(symbol string, yahooSymbolOverrid
 	return country, fullExchangeName, nil
 }
 
+// GetQuoteName gets security name (longName or shortName) from Yahoo Finance
+// Faithful translation from Python: app/infrastructure/external/yahoo/data_fetchers.py -> get_product_type()
+// (which extracts name from ticker.info.get("longName", info.get("shortName", "")))
+func (c *Client) GetQuoteName(symbol string, yahooSymbolOverride *string) (*string, error) {
+	yfSymbol := GetYahooSymbol(symbol, yahooSymbolOverride)
+
+	info, err := c.getQuoteInfo(yfSymbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get quote info: %w", err)
+	}
+
+	// Try longName first, then shortName (matching Python: info.get("longName", info.get("shortName", "")))
+	if longName := getStringPtr(info, "longName"); longName != nil {
+		return longName, nil
+	}
+
+	if shortName := getStringPtr(info, "shortName"); shortName != nil {
+		return shortName, nil
+	}
+
+	return nil, nil
+}
+
+// GetQuoteType gets quote type from Yahoo Finance
+// Faithful translation from Python: app/infrastructure/external/yahoo/data_fetchers.py -> get_product_type()
+// (which extracts quoteType from ticker.info.get("quoteType", ""))
+func (c *Client) GetQuoteType(symbol string, yahooSymbolOverride *string) (string, error) {
+	yfSymbol := GetYahooSymbol(symbol, yahooSymbolOverride)
+
+	info, err := c.getQuoteInfo(yfSymbol)
+	if err != nil {
+		return "", fmt.Errorf("failed to get quote info: %w", err)
+	}
+
+	quoteType := getString(info, "quoteType", "")
+	return quoteType, nil
+}
+
 // GetCurrentPrice gets current security price with retry logic
 // Faithful translation from Python: app/infrastructure/external/yahoo/data_fetchers.py -> get_current_price
 func (c *Client) GetCurrentPrice(symbol string, yahooSymbolOverride *string, maxRetries int) (*float64, error) {
@@ -246,14 +284,12 @@ func (c *Client) GetBatchQuotes(symbolOverrides map[string]*string) (map[string]
 		return map[string]*float64{}, nil
 	}
 
-	// Build lists: tradernet symbols and their yahoo equivalents
-	tradernetSymbols := make([]string, 0, len(symbolOverrides))
+	// Build lists: yahoo symbols and mapping
 	yahooSymbols := make([]string, 0, len(symbolOverrides))
 	symbolMap := make(map[string]string) // yahoo -> tradernet
 
 	for tradernetSymbol, yahooOverride := range symbolOverrides {
 		yahooSymbol := GetYahooSymbol(tradernetSymbol, yahooOverride)
-		tradernetSymbols = append(tradernetSymbols, tradernetSymbol)
 		yahooSymbols = append(yahooSymbols, yahooSymbol)
 		symbolMap[yahooSymbol] = tradernetSymbol
 	}
