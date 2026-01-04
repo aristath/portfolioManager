@@ -72,6 +72,19 @@ ssh "${ARDUINO_SSH}" "sudo systemctl enable trader" || log_warn "Failed to enabl
 ssh "${ARDUINO_SSH}" "sudo systemctl enable display-bridge" 2>/dev/null || log_warn "display-bridge service not enabled (may not be needed)"
 log_success "Systemd services installed"
 
+# Configure passwordless sudo for systemctl (for deploy-local.sh script)
+log_header "Step 3b: Configuring passwordless sudo for systemctl"
+log_info "Setting up passwordless sudo for systemctl commands..."
+SYSTEMCTL_PATH=$(ssh "${ARDUINO_SSH}" "which systemctl")
+SUDOERS_CONTENT="arduino ALL=(ALL) NOPASSWD: ${SYSTEMCTL_PATH}"
+ssh "${ARDUINO_SSH}" "echo '$SUDOERS_CONTENT' | sudo tee /etc/sudoers.d/arduino-systemctl > /dev/null"
+ssh "${ARDUINO_SSH}" "sudo chmod 0440 /etc/sudoers.d/arduino-systemctl"
+if ssh "${ARDUINO_SSH}" "sudo visudo -c -f /etc/sudoers.d/arduino-systemctl" 2>&1 | grep -q "OK"; then
+    log_success "Passwordless sudo for systemctl configured"
+else
+    log_warn "Failed to validate sudoers file (may need manual check)"
+fi
+
 # Step 4: Deploy microservices code
 log_header "Step 4: Deploying microservices"
 log_info "Copying microservices directory..."
