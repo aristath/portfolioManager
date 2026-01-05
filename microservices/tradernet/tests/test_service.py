@@ -54,7 +54,7 @@ def test_has_pending_order_for_symbol(service):
     """Test checking pending orders for symbol."""
     from app.models import PendingOrder
 
-    # Mock get_pending_orders - method accepts optional api_key and api_secret parameters
+    # Mock get_pending_orders - accepts optional api_key and api_secret params
     service.get_pending_orders = lambda api_key=None, api_secret=None: [
         PendingOrder(
             id="1",

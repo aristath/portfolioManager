@@ -8,7 +8,7 @@ from app.config import settings
 from app.health import router as health_router
 from app.models import BatchQuotesRequest, PlaceOrderRequest, ServiceResponse
 from app.service import get_tradernet_service
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 # Configure logging
@@ -21,7 +21,9 @@ logger = logging.getLogger(__name__)
 # Create FastAPI app
 app = FastAPI(
     title=f"{settings.service_name} API",
-    description="Microservice wrapping Tradernet SDK for portfolio management operations",
+    description=(
+        "Microservice wrapping Tradernet SDK for portfolio management operations"
+    ),
     version=settings.version,
 )
 

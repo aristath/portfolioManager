@@ -34,9 +34,9 @@ type ServiceResponse struct {
 func NewMicroserviceClient(baseURL string, log zerolog.Logger) *MicroserviceClient {
 	// Create fallback direct client
 	directClient := NewClient(log)
-	
+
 	return &MicroserviceClient{
-		baseURL:      baseURL,
+		baseURL: baseURL,
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -53,7 +53,7 @@ func (c *MicroserviceClient) post(endpoint string, request interface{}) (*Servic
 		// So we'll handle this in individual methods
 		return nil, fmt.Errorf("microservice unavailable, using direct client")
 	}
-	
+
 	body, err := json.Marshal(request)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
@@ -97,7 +97,7 @@ func (c *MicroserviceClient) get(endpoint string) (*ServiceResponse, error) {
 		// So we'll handle this in individual methods
 		return nil, fmt.Errorf("microservice unavailable, using direct client")
 	}
-	
+
 	url := c.baseURL + endpoint
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -168,7 +168,7 @@ func (c *MicroserviceClient) GetBatchQuotes(
 	if c.useDirect {
 		return c.directClient.GetBatchQuotes(symbolOverrides)
 	}
-	
+
 	// Convert to request format
 	symbols := make([]string, 0, len(symbolOverrides))
 	yahooOverrides := make(map[string]string)
@@ -215,7 +215,7 @@ func (c *MicroserviceClient) GetCurrentPrice(
 	if c.useDirect {
 		return c.directClient.GetCurrentPrice(symbol, yahooSymbolOverride, maxRetries)
 	}
-	
+
 	if maxRetries == 0 {
 		maxRetries = 3 // default
 	}
@@ -286,7 +286,7 @@ func (c *MicroserviceClient) GetCurrentPrice(
 
 // HistoricalPricesResponse is the response for historical prices
 type HistoricalPricesResponse struct {
-	Symbol string           `json:"symbol"`
+	Symbol string            `json:"symbol"`
 	Prices []HistoricalPrice `json:"prices"`
 }
 
@@ -299,7 +299,7 @@ func (c *MicroserviceClient) GetHistoricalPrices(
 	if c.useDirect {
 		return c.directClient.GetHistoricalPrices(symbol, yahooSymbolOverride, period)
 	}
-	
+
 	url := fmt.Sprintf("/api/historical/%s?period=%s&interval=1d", symbol, period)
 	if yahooSymbolOverride != nil && *yahooSymbolOverride != "" {
 		url += fmt.Sprintf("&yahoo_symbol=%s", *yahooSymbolOverride)
@@ -319,7 +319,6 @@ func (c *MicroserviceClient) GetHistoricalPrices(
 	return result.Prices, nil
 }
 
-
 // GetFundamentalData fetches fundamental analysis data
 func (c *MicroserviceClient) GetFundamentalData(
 	symbol string,
@@ -328,7 +327,7 @@ func (c *MicroserviceClient) GetFundamentalData(
 	if c.useDirect {
 		return c.directClient.GetFundamentalData(symbol, yahooSymbolOverride)
 	}
-	
+
 	url := fmt.Sprintf("/api/fundamentals/%s", symbol)
 	if yahooSymbolOverride != nil && *yahooSymbolOverride != "" {
 		url += fmt.Sprintf("?yahoo_symbol=%s", *yahooSymbolOverride)
@@ -348,7 +347,6 @@ func (c *MicroserviceClient) GetFundamentalData(
 	return &result, nil
 }
 
-
 // GetAnalystData fetches analyst recommendations and price targets
 func (c *MicroserviceClient) GetAnalystData(
 	symbol string,
@@ -357,7 +355,7 @@ func (c *MicroserviceClient) GetAnalystData(
 	if c.useDirect {
 		return c.directClient.GetAnalystData(symbol, yahooSymbolOverride)
 	}
-	
+
 	url := fmt.Sprintf("/api/analyst/%s", symbol)
 	if yahooSymbolOverride != nil && *yahooSymbolOverride != "" {
 		url += fmt.Sprintf("?yahoo_symbol=%s", *yahooSymbolOverride)
@@ -379,13 +377,13 @@ func (c *MicroserviceClient) GetAnalystData(
 
 // SecurityInfo represents security metadata
 type SecurityInfo struct {
-	Symbol            string  `json:"symbol"`
-	Industry          *string `json:"industry"`
-	Sector            *string `json:"sector"`
-	Country           *string `json:"country"`
-	FullExchangeName  *string `json:"full_exchange_name"`
-	ProductType       *string `json:"product_type"`
-	Name              *string `json:"name"`
+	Symbol           string  `json:"symbol"`
+	Industry         *string `json:"industry"`
+	Sector           *string `json:"sector"`
+	Country          *string `json:"country"`
+	FullExchangeName *string `json:"full_exchange_name"`
+	ProductType      *string `json:"product_type"`
+	Name             *string `json:"name"`
 }
 
 // GetSecurityIndustry gets security industry/sector
@@ -397,7 +395,7 @@ func (c *MicroserviceClient) GetSecurityIndustry(
 	if c.useDirect {
 		return c.directClient.GetSecurityIndustry(symbol, yahooSymbolOverride)
 	}
-	
+
 	url := fmt.Sprintf("/api/security/industry/%s", symbol)
 	if yahooSymbolOverride != nil && *yahooSymbolOverride != "" {
 		url += fmt.Sprintf("?yahoo_symbol=%s", *yahooSymbolOverride)
@@ -426,7 +424,7 @@ func (c *MicroserviceClient) GetSecurityCountryAndExchange(
 	if c.useDirect {
 		return c.directClient.GetSecurityCountryAndExchange(symbol, yahooSymbolOverride)
 	}
-	
+
 	url := fmt.Sprintf("/api/security/country-exchange/%s", symbol)
 	if yahooSymbolOverride != nil && *yahooSymbolOverride != "" {
 		url += fmt.Sprintf("?yahoo_symbol=%s", *yahooSymbolOverride)
@@ -457,13 +455,13 @@ func (c *MicroserviceClient) GetSecurityInfo(
 		country, exchange, _ := c.directClient.GetSecurityCountryAndExchange(symbol, yahooSymbolOverride)
 		quoteType, _ := c.directClient.GetQuoteType(symbol, yahooSymbolOverride)
 		name, _ := c.directClient.GetQuoteName(symbol, yahooSymbolOverride)
-		
+
 		var productType *string
 		if quoteType != "" {
 			qt := quoteType
 			productType = &qt
 		}
-		
+
 		return &SecurityInfo{
 			Symbol:           symbol,
 			Industry:         industry,
@@ -473,7 +471,7 @@ func (c *MicroserviceClient) GetSecurityInfo(
 			Name:             name,
 		}, nil
 	}
-	
+
 	url := fmt.Sprintf("/api/security/info/%s", symbol)
 	if yahooSymbolOverride != nil && *yahooSymbolOverride != "" {
 		url += fmt.Sprintf("?yahoo_symbol=%s", *yahooSymbolOverride)
@@ -486,13 +484,13 @@ func (c *MicroserviceClient) GetSecurityInfo(
 		country, exchange, _ := c.directClient.GetSecurityCountryAndExchange(symbol, yahooSymbolOverride)
 		quoteType, _ := c.directClient.GetQuoteType(symbol, yahooSymbolOverride)
 		name, _ := c.directClient.GetQuoteName(symbol, yahooSymbolOverride)
-		
+
 		var productType *string
 		if quoteType != "" {
 			qt := quoteType
 			productType = &qt
 		}
-		
+
 		return &SecurityInfo{
 			Symbol:           symbol,
 			Industry:         industry,
@@ -516,15 +514,15 @@ func (c *MicroserviceClient) LookupTickerFromISIN(isin string) (string, error) {
 	if c.useDirect {
 		return c.directClient.LookupTickerFromISIN(isin)
 	}
-	
+
 	url := fmt.Sprintf("/api/security/lookup-ticker/%s", isin)
-	
+
 	resp, err := c.get(url)
 	if err != nil {
 		// Fallback to direct client
 		return c.directClient.LookupTickerFromISIN(isin)
 	}
-	
+
 	var result struct {
 		ISIN   string `json:"isin"`
 		Ticker string `json:"ticker"`
@@ -532,11 +530,11 @@ func (c *MicroserviceClient) LookupTickerFromISIN(isin string) (string, error) {
 	if err := json.Unmarshal(resp.Data, &result); err != nil {
 		return "", fmt.Errorf("failed to parse lookup result: %w", err)
 	}
-	
+
 	if result.Ticker == "" {
 		return "", fmt.Errorf("no ticker found for ISIN: %s", isin)
 	}
-	
+
 	return result.Ticker, nil
 }
 
@@ -548,18 +546,18 @@ func (c *MicroserviceClient) GetQuoteName(
 	if c.useDirect {
 		return c.directClient.GetQuoteName(symbol, yahooSymbolOverride)
 	}
-	
+
 	url := fmt.Sprintf("/api/security/quote-name/%s", symbol)
 	if yahooSymbolOverride != nil && *yahooSymbolOverride != "" {
 		url += fmt.Sprintf("?yahoo_symbol=%s", *yahooSymbolOverride)
 	}
-	
+
 	resp, err := c.get(url)
 	if err != nil {
 		// Fallback to direct client
 		return c.directClient.GetQuoteName(symbol, yahooSymbolOverride)
 	}
-	
+
 	var result struct {
 		Symbol string `json:"symbol"`
 		Name   string `json:"name"`
@@ -567,11 +565,11 @@ func (c *MicroserviceClient) GetQuoteName(
 	if err := json.Unmarshal(resp.Data, &result); err != nil {
 		return nil, fmt.Errorf("failed to parse quote name: %w", err)
 	}
-	
+
 	if result.Name == "" {
 		return nil, nil
 	}
-	
+
 	return &result.Name, nil
 }
 
@@ -583,18 +581,18 @@ func (c *MicroserviceClient) GetQuoteType(
 	if c.useDirect {
 		return c.directClient.GetQuoteType(symbol, yahooSymbolOverride)
 	}
-	
+
 	url := fmt.Sprintf("/api/security/quote-type/%s", symbol)
 	if yahooSymbolOverride != nil && *yahooSymbolOverride != "" {
 		url += fmt.Sprintf("?yahoo_symbol=%s", *yahooSymbolOverride)
 	}
-	
+
 	resp, err := c.get(url)
 	if err != nil {
 		// Fallback to direct client
 		return c.directClient.GetQuoteType(symbol, yahooSymbolOverride)
 	}
-	
+
 	var result struct {
 		Symbol    string `json:"symbol"`
 		QuoteType string `json:"quote_type"`
@@ -602,7 +600,7 @@ func (c *MicroserviceClient) GetQuoteType(
 	if err := json.Unmarshal(resp.Data, &result); err != nil {
 		return "", fmt.Errorf("failed to parse quote type: %w", err)
 	}
-	
+
 	return result.QuoteType, nil
 }
 
@@ -611,7 +609,7 @@ func (c *MicroserviceClient) HealthCheck() (bool, error) {
 	if c.useDirect {
 		return false, fmt.Errorf("using direct client, microservice unavailable")
 	}
-	
+
 	resp, err := c.get("/health")
 	if err != nil {
 		return false, err

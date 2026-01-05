@@ -37,21 +37,21 @@ type Client struct {
 func NewClient(log zerolog.Logger) *Client {
 	// Create cookie jar to maintain session cookies
 	jar, _ := cookiejar.New(nil)
-	
+
 	client := &http.Client{
 		Timeout: 30 * time.Second,
 		Jar:     jar,
 	}
-	
+
 	c := &Client{
 		client: client,
 		log:    log.With().Str("client", "yahoo").Logger(),
 	}
-	
+
 	// Initialize cookies by visiting finance.yahoo.com
 	// This is required to get session cookies for API access
 	go c.initializeCookies()
-	
+
 	return c
 }
 
@@ -64,18 +64,18 @@ func (c *Client) initializeCookies() {
 		c.log.Warn().Err(err).Msg("Failed to create cookie initialization request")
 		return
 	}
-	
+
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
-	
+
 	resp, err := c.client.Do(req)
 	if err != nil {
 		c.log.Warn().Err(err).Msg("Failed to initialize Yahoo Finance cookies")
 		return
 	}
 	defer resp.Body.Close()
-	
+
 	c.log.Debug().Msg("Yahoo Finance cookies initialized")
 }
 

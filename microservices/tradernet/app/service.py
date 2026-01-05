@@ -216,7 +216,7 @@ class TradernetService:
                 market_value = quantity * current_price
                 currency = item.get("curr", "EUR")
 
-                # Simple exchange rate - in production this would use ExchangeRateService
+                # Simple exchange rate - in production would use ExchangeRateService
                 # For now, assume EUR or use simple conversion
                 currency_rate = 1.0  # Simplified - will be handled by Go service
                 market_value_eur = market_value
