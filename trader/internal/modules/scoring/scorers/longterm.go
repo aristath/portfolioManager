@@ -60,13 +60,23 @@ func (lts *LongTermScorer) Calculate(
 	totalScore := cagrScore*0.40 + sortinoScore*0.35 + sharpeScore*0.25
 	totalScore = math.Min(1.0, totalScore)
 
+	// Build components map with both scored and raw values
+	components := map[string]float64{
+		"cagr":    round3(cagrScore),
+		"sortino": round3(sortinoScore),
+		"sharpe":  round3(sharpeScore),
+	}
+
+	// Store raw Sharpe ratio for database storage
+	if sharpeRatio != nil {
+		components["sharpe_raw"] = *sharpeRatio
+	} else {
+		components["sharpe_raw"] = 0.0
+	}
+
 	return LongTermScore{
-		Score: round3(totalScore),
-		Components: map[string]float64{
-			"cagr":    round3(cagrScore),
-			"sortino": round3(sortinoScore),
-			"sharpe":  round3(sharpeScore),
-		},
+		Score:      round3(totalScore),
+		Components: components,
 	}
 }
 
