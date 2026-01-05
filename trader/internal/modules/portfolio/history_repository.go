@@ -3,9 +3,6 @@ package portfolio
 import (
 	"database/sql"
 	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
@@ -23,78 +20,35 @@ type DailyPrice struct {
 	Source     string  `json:"source"`
 }
 
-// HistoryRepository handles per-symbol historical price data
-// Faithful translation from Python: app/modules/portfolio/database/history_repository.py
-// TODO: Migrate to use consolidated history.db instead of per-symbol databases
-// Database: Currently history/{SYMBOL}.db, will be consolidated to history.db
+// HistoryRepository handles historical price data from consolidated history.db
+// Uses ISINs as the canonical identifier
 type HistoryRepository struct {
-	symbol      string
-	historyPath string // Base path for history databases
-	db          *sql.DB
-	log         zerolog.Logger
+	isin string // ISIN identifier
+	db   *sql.DB
+	log  zerolog.Logger
 }
 
-// NewHistoryRepository creates a new history repository for a symbol
-// historyPath is the directory where per-symbol .history.db files are stored
-// TODO: Update to use consolidated history.db with symbol column
-func NewHistoryRepository(symbol, historyPath string, log zerolog.Logger) *HistoryRepository {
+// NewHistoryRepository creates a new history repository for an ISIN
+// Uses the consolidated history.db database
+func NewHistoryRepository(isin string, historyDB *sql.DB, log zerolog.Logger) *HistoryRepository {
 	return &HistoryRepository{
-		symbol:      strings.ToUpper(strings.TrimSpace(symbol)),
-		historyPath: historyPath,
-		log:         log.With().Str("repo", "history").Str("symbol", symbol).Logger(),
+		isin: isin,
+		db:   historyDB,
+		log:  log.With().Str("repo", "history").Str("isin", isin).Logger(),
 	}
-}
-
-// getDB lazily initializes the symbol's history database connection
-func (r *HistoryRepository) getDB() (*sql.DB, error) {
-	if r.db != nil {
-		return r.db, nil
-	}
-
-	// Path: {historyPath}/{SYMBOL}.history.db
-	dbPath := filepath.Join(r.historyPath, fmt.Sprintf("%s.history.db", r.symbol))
-
-	// Check if database exists
-	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
-		return nil, fmt.Errorf("history database does not exist for %s: %s", r.symbol, dbPath)
-	}
-
-	// Open database
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open history database for %s: %w", r.symbol, err)
-	}
-
-	r.db = db
-	return db, nil
-}
-
-// Close closes the database connection
-func (r *HistoryRepository) Close() error {
-	if r.db != nil {
-		return r.db.Close()
-	}
-	return nil
 }
 
 // GetDailyRange retrieves daily prices within a date range
 // Faithful translation of Python: async def get_daily_range(self, start_date: str, end_date: str) -> List[DailyPrice]
 func (r *HistoryRepository) GetDailyRange(startDate, endDate string) ([]DailyPrice, error) {
-	db, err := r.getDB()
-	if err != nil {
-		// Database doesn't exist - return empty list (graceful degradation)
-		r.log.Debug().Err(err).Msg("History database not found, returning empty price list")
-		return []DailyPrice{}, nil
-	}
-
 	query := `
-		SELECT date, open_price, high_price, low_price, close_price, volume, source
+		SELECT date, open, high, low, close, volume
 		FROM daily_prices
-		WHERE date >= ? AND date <= ?
+		WHERE symbol = ? AND date >= ? AND date <= ?
 		ORDER BY date ASC
 	`
 
-	rows, err := db.Query(query, startDate, endDate)
+	rows, err := r.db.Query(query, r.isin, startDate, endDate)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query daily prices: %w", err)
 	}
@@ -103,7 +57,6 @@ func (r *HistoryRepository) GetDailyRange(startDate, endDate string) ([]DailyPri
 	var prices []DailyPrice
 	for rows.Next() {
 		var price DailyPrice
-		var source sql.NullString
 		var volume sql.NullInt64
 
 		err := rows.Scan(
@@ -113,7 +66,6 @@ func (r *HistoryRepository) GetDailyRange(startDate, endDate string) ([]DailyPri
 			&price.LowPrice,
 			&price.ClosePrice,
 			&volume,
-			&source,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan daily price: %w", err)
@@ -123,11 +75,8 @@ func (r *HistoryRepository) GetDailyRange(startDate, endDate string) ([]DailyPri
 			price.Volume = volume.Int64
 		}
 
-		if source.Valid {
-			price.Source = source.String
-		} else {
-			price.Source = "yahoo"
-		}
+		// Source is not stored in consolidated schema, default to yahoo
+		price.Source = "yahoo"
 
 		prices = append(prices, price)
 	}
@@ -142,32 +91,26 @@ func (r *HistoryRepository) GetDailyRange(startDate, endDate string) ([]DailyPri
 // GetLatestPrice retrieves the most recent price
 // Faithful translation of Python: async def get_latest_price(self) -> Optional[DailyPrice]
 func (r *HistoryRepository) GetLatestPrice() (*DailyPrice, error) {
-	db, err := r.getDB()
-	if err != nil {
-		return nil, err
-	}
-
 	query := `
-		SELECT date, open_price, high_price, low_price, close_price, volume, source
+		SELECT date, open, high, low, close, volume
 		FROM daily_prices
+		WHERE symbol = ?
 		ORDER BY date DESC
 		LIMIT 1
 	`
 
-	row := db.QueryRow(query)
+	row := r.db.QueryRow(query, r.isin)
 
 	var price DailyPrice
-	var source sql.NullString
 	var volume sql.NullInt64
 
-	err = row.Scan(
+	err := row.Scan(
 		&price.Date,
 		&price.OpenPrice,
 		&price.HighPrice,
 		&price.LowPrice,
 		&price.ClosePrice,
 		&volume,
-		&source,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -180,11 +123,8 @@ func (r *HistoryRepository) GetLatestPrice() (*DailyPrice, error) {
 		price.Volume = volume.Int64
 	}
 
-	if source.Valid {
-		price.Source = source.String
-	} else {
-		price.Source = "yahoo"
-	}
+	// Source is not stored in consolidated schema, default to yahoo
+	price.Source = "yahoo"
 
 	return &price, nil
 }

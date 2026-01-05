@@ -3,8 +3,6 @@ package charts
 import (
 	"database/sql"
 	"fmt"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/aristath/arduino-trader/internal/modules/universe"
@@ -20,7 +18,7 @@ type ChartDataPoint struct {
 
 // Service provides chart data operations
 type Service struct {
-	historyPath  string
+	historyDB    *sql.DB // Consolidated history.db connection
 	securityRepo *universe.SecurityRepository
 	universeDB   *sql.DB // For querying securities (universe.db)
 	log          zerolog.Logger
@@ -28,13 +26,13 @@ type Service struct {
 
 // NewService creates a new charts service
 func NewService(
-	historyPath string,
+	historyDB *sql.DB,
 	securityRepo *universe.SecurityRepository,
 	universeDB *sql.DB,
 	log zerolog.Logger,
 ) *Service {
 	return &Service{
-		historyPath:  historyPath,
+		historyDB:    historyDB,
 		securityRepo: securityRepo,
 		universeDB:   universeDB,
 		log:          log.With().Str("service", "charts").Logger(),
@@ -46,8 +44,8 @@ func NewService(
 func (s *Service) GetSparklines() (map[string][]ChartDataPoint, error) {
 	startDate := time.Now().AddDate(-1, 0, 0).Format("2006-01-02")
 
-	// Get all active securities
-	rows, err := s.universeDB.Query("SELECT symbol FROM securities WHERE active = 1")
+	// Get all active securities with ISINs
+	rows, err := s.universeDB.Query("SELECT symbol, isin FROM securities WHERE active = 1 AND isin != ''")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get active securities: %w", err)
 	}
@@ -57,17 +55,25 @@ func (s *Service) GetSparklines() (map[string][]ChartDataPoint, error) {
 
 	for rows.Next() {
 		var symbol string
-		if err := rows.Scan(&symbol); err != nil {
+		var isin sql.NullString
+		if err := rows.Scan(&symbol, &isin); err != nil {
 			s.log.Warn().Err(err).Msg("Failed to scan symbol")
 			continue
 		}
 
-		// Get price data for this symbol
-		prices, err := s.getPricesFromDB(symbol, startDate, "")
+		// Skip securities without ISIN
+		if !isin.Valid || isin.String == "" {
+			s.log.Debug().Str("symbol", symbol).Msg("Skipping security without ISIN")
+			continue
+		}
+
+		// Get price data using ISIN
+		prices, err := s.getPricesFromDB(isin.String, startDate, "")
 		if err != nil {
 			s.log.Debug().
 				Err(err).
 				Str("symbol", symbol).
+				Str("isin", isin.String).
 				Msg("Failed to get prices for symbol")
 			continue
 		}
@@ -87,20 +93,16 @@ func (s *Service) GetSparklines() (map[string][]ChartDataPoint, error) {
 // GetSecurityChart returns historical price data for a specific security
 // Faithful translation from Python: app/api/charts.py -> get_security_chart()
 func (s *Service) GetSecurityChart(isin string, dateRange string) ([]ChartDataPoint, error) {
-	// Look up security by ISIN to get symbol
-	security, err := s.securityRepo.GetByISIN(isin)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get security: %w", err)
-	}
-	if security == nil {
-		return nil, fmt.Errorf("security not found: %s", isin)
+	// Validate ISIN is not empty
+	if isin == "" {
+		return nil, fmt.Errorf("ISIN cannot be empty")
 	}
 
 	// Parse date range
 	startDate := parseDateRange(dateRange)
 
-	// Get prices from database
-	prices, err := s.getPricesFromDB(security.Symbol, startDate, "")
+	// Get prices from database using ISIN directly
+	prices, err := s.getPricesFromDB(isin, startDate, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get prices: %w", err)
 	}
@@ -108,50 +110,39 @@ func (s *Service) GetSecurityChart(isin string, dateRange string) ([]ChartDataPo
 	return prices, nil
 }
 
-// getPricesFromDB fetches price data from the history database
-func (s *Service) getPricesFromDB(symbol string, startDate string, endDate string) ([]ChartDataPoint, error) {
-	// Open the symbol's history database
-	db, err := s.openHistoryDB(symbol)
-	if err != nil {
-		// Database doesn't exist - return empty
-		s.log.Debug().
-			Err(err).
-			Str("symbol", symbol).
-			Msg("History database not found")
-		return []ChartDataPoint{}, nil
-	}
-	defer db.Close()
-
-	// Build query
+// getPricesFromDB fetches price data from the consolidated history database using ISIN
+func (s *Service) getPricesFromDB(isin string, startDate string, endDate string) ([]ChartDataPoint, error) {
+	// Build query with ISIN filter
 	var query string
 	var args []interface{}
 
 	if startDate != "" && endDate != "" {
 		query = `
-			SELECT date, close_price
+			SELECT date, close
 			FROM daily_prices
-			WHERE date >= ? AND date <= ?
+			WHERE symbol = ? AND date >= ? AND date <= ?
 			ORDER BY date ASC
 		`
-		args = []interface{}{startDate, endDate}
+		args = []interface{}{isin, startDate, endDate}
 	} else if startDate != "" {
 		query = `
-			SELECT date, close_price
+			SELECT date, close
 			FROM daily_prices
-			WHERE date >= ?
+			WHERE symbol = ? AND date >= ?
 			ORDER BY date ASC
 		`
-		args = []interface{}{startDate}
+		args = []interface{}{isin, startDate}
 	} else {
 		query = `
-			SELECT date, close_price
+			SELECT date, close
 			FROM daily_prices
+			WHERE symbol = ?
 			ORDER BY date ASC
 		`
-		args = []interface{}{}
+		args = []interface{}{isin}
 	}
 
-	rows, err := db.Query(query, args...)
+	rows, err := s.historyDB.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query daily prices: %w", err)
 	}
@@ -183,29 +174,6 @@ func (s *Service) getPricesFromDB(symbol string, startDate string, endDate strin
 	}
 
 	return prices, nil
-}
-
-// openHistoryDB opens the history database for a symbol
-func (s *Service) openHistoryDB(symbol string) (*sql.DB, error) {
-	// Use the same approach as HistoryDB in universe package
-	// Convert symbol format: AAPL.US -> AAPL_US for database filename
-	dbSymbol := strings.ReplaceAll(symbol, ".", "_")
-
-	// History databases are in data/history/{SYMBOL}.db
-	dbPath := filepath.Join(s.historyPath, dbSymbol+".db")
-
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open history database for %s: %w", symbol, err)
-	}
-
-	// Verify database is accessible
-	if err := db.Ping(); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("failed to ping history database for %s: %w", symbol, err)
-	}
-
-	return db, nil
 }
 
 // parseDateRange converts a range string to a start date
