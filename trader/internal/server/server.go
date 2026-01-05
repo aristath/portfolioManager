@@ -104,6 +104,7 @@ func New(cfg Config) *Server {
 		cfg.PortfolioDB,
 		cfg.ConfigDB,
 		cfg.UniverseDB,
+		cfg.HistoryDB,
 		cfg.Scheduler,
 		cfg.DisplayManager,
 		tradernetClient,

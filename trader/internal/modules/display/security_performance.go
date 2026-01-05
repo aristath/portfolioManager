@@ -11,7 +11,7 @@ import (
 
 // SecurityPerformanceService calculates individual security performance metrics for display
 type SecurityPerformanceService struct {
-	historyDB *sql.DB // Database for individual security price history (history/{isin}.db)
+	historyDB *sql.DB // Consolidated history.db database
 	log       zerolog.Logger
 }
 
@@ -23,21 +23,21 @@ func NewSecurityPerformanceService(historyDB *sql.DB, log zerolog.Logger) *Secur
 	}
 }
 
-// CalculateTrailing12MoCAGR calculates trailing 12-month CAGR for a specific security
-// Uses the security's price history database
-func (s *SecurityPerformanceService) CalculateTrailing12MoCAGR(symbol string) (*float64, error) {
+// CalculateTrailing12MoCAGR calculates trailing 12-month CAGR for a specific security using ISIN
+// Uses the consolidated history database
+func (s *SecurityPerformanceService) CalculateTrailing12MoCAGR(isin string) (*float64, error) {
 	endDate := time.Now().Format("2006-01-02")
 	startDate := time.Now().AddDate(-1, 0, 0).Format("2006-01-02")
 
-	// Query price history for this security
+	// Query price history for this security using ISIN
 	rows, err := s.historyDB.Query(`
-		SELECT date, close_price
+		SELECT date, close
 		FROM daily_prices
-		WHERE date >= ? AND date <= ?
+		WHERE symbol = ? AND date >= ? AND date <= ?
 		ORDER BY date ASC
-	`, startDate, endDate)
+	`, isin, startDate, endDate)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query price history for %s: %w", symbol, err)
+		return nil, fmt.Errorf("failed to query price history for %s: %w", isin, err)
 	}
 	defer rows.Close()
 
@@ -58,7 +58,7 @@ func (s *SecurityPerformanceService) CalculateTrailing12MoCAGR(symbol string) (*
 	}
 
 	if len(prices) < 2 {
-		s.log.Debug().Str("symbol", symbol).Msg("Insufficient price data for trailing 12mo calculation")
+		s.log.Debug().Str("isin", isin).Msg("Insufficient price data for trailing 12mo calculation")
 		return nil, nil
 	}
 
@@ -67,7 +67,7 @@ func (s *SecurityPerformanceService) CalculateTrailing12MoCAGR(symbol string) (*
 	endPrice := prices[len(prices)-1].Close
 
 	if startPrice <= 0 {
-		s.log.Warn().Str("symbol", symbol).Msg("Invalid start price for trailing 12mo calculation")
+		s.log.Warn().Str("isin", isin).Msg("Invalid start price for trailing 12mo calculation")
 		return nil, nil
 	}
 
@@ -77,7 +77,7 @@ func (s *SecurityPerformanceService) CalculateTrailing12MoCAGR(symbol string) (*
 	days := endDt.Sub(startDt).Hours() / 24
 
 	if days < 30 {
-		s.log.Debug().Str("symbol", symbol).Msg("Insufficient time period for trailing 12mo calculation")
+		s.log.Debug().Str("isin", isin).Msg("Insufficient time period for trailing 12mo calculation")
 		return nil, nil
 	}
 
@@ -93,7 +93,7 @@ func (s *SecurityPerformanceService) CalculateTrailing12MoCAGR(symbol string) (*
 	}
 
 	s.log.Debug().
-		Str("symbol", symbol).
+		Str("isin", isin).
 		Float64("cagr", cagr).
 		Float64("start_price", startPrice).
 		Float64("end_price", endPrice).
@@ -104,8 +104,8 @@ func (s *SecurityPerformanceService) CalculateTrailing12MoCAGR(symbol string) (*
 }
 
 // GetPerformanceVsTarget gets security performance difference vs target
-func (s *SecurityPerformanceService) GetPerformanceVsTarget(symbol string, target float64) (*float64, error) {
-	cagr, err := s.CalculateTrailing12MoCAGR(symbol)
+func (s *SecurityPerformanceService) GetPerformanceVsTarget(isin string, target float64) (*float64, error) {
+	cagr, err := s.CalculateTrailing12MoCAGR(isin)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +117,7 @@ func (s *SecurityPerformanceService) GetPerformanceVsTarget(symbol string, targe
 	difference := *cagr - target
 
 	s.log.Debug().
-		Str("symbol", symbol).
+		Str("isin", isin).
 		Float64("difference", difference).
 		Float64("cagr", *cagr).
 		Float64("target", target).

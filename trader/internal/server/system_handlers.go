@@ -25,6 +25,7 @@ type SystemHandlers struct {
 	portfolioDB             *database.DB
 	configDB                *database.DB
 	universeDB              *database.DB
+	historyDB               *database.DB
 	marketHours             *scheduler.MarketHoursService
 	scheduler               *scheduler.Scheduler
 	portfolioDisplayCalc    *display.PortfolioDisplayCalculator
@@ -43,7 +44,7 @@ type SystemHandlers struct {
 func NewSystemHandlers(
 	log zerolog.Logger,
 	dataDir string,
-	portfolioDB, configDB, universeDB *database.DB,
+	portfolioDB, configDB, universeDB, historyDB *database.DB,
 	sched *scheduler.Scheduler,
 	displayManager *display.StateManager,
 	tradernetClient *tradernet.Client,
@@ -60,8 +61,8 @@ func NewSystemHandlers(
 	portfolioDisplayCalc := display.NewPortfolioDisplayCalculator(
 		universeDB.Conn(),
 		portfolioDB.Conn(),
+		historyDB.Conn(),
 		portfolioPerf,
-		dataDir,
 		log,
 	)
 
@@ -71,6 +72,7 @@ func NewSystemHandlers(
 		portfolioDB:             portfolioDB,
 		configDB:                configDB,
 		universeDB:              universeDB,
+		historyDB:               historyDB,
 		marketHours:             scheduler.NewMarketHoursService(log),
 		scheduler:               sched,
 		portfolioDisplayCalc:    portfolioDisplayCalc,
@@ -832,17 +834,13 @@ func (h *SystemHandlers) HandleDatabaseStats(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
-	// Count history databases
-	historyDir := filepath.Join(h.dataDir, "history")
+	// Count consolidated history database
 	historyCount := 0
-	if entries, err := os.ReadDir(historyDir); err == nil {
-		for _, entry := range entries {
-			if !entry.IsDir() && filepath.Ext(entry.Name()) == ".db" {
-				historyCount++
-				if info, err := entry.Info(); err == nil {
-					totalSizeMB += float64(info.Size()) / 1024 / 1024
-				}
-			}
+	if h.historyDB != nil {
+		historyCount = 1
+		historyPath := filepath.Join(h.dataDir, "history.db")
+		if info, err := os.Stat(historyPath); err == nil {
+			totalSizeMB += float64(info.Size()) / 1024 / 1024
 		}
 	}
 

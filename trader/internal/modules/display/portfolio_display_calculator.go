@@ -4,8 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"math"
-	"path/filepath"
-	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 
@@ -17,23 +15,22 @@ import (
 type PortfolioDisplayCalculator struct {
 	universeDB    *sql.DB
 	portfolioDB   *sql.DB
+	historyDB     *sql.DB
 	portfolioPerf *PortfolioPerformanceService
-	dataDir       string
 	log           zerolog.Logger
 }
 
 // NewPortfolioDisplayCalculator creates a new portfolio display calculator
 func NewPortfolioDisplayCalculator(
-	universeDB, portfolioDB *sql.DB,
+	universeDB, portfolioDB, historyDB *sql.DB,
 	portfolioPerf *PortfolioPerformanceService,
-	dataDir string,
 	log zerolog.Logger,
 ) *PortfolioDisplayCalculator {
 	return &PortfolioDisplayCalculator{
 		universeDB:    universeDB,
 		portfolioDB:   portfolioDB,
+		historyDB:     historyDB,
 		portfolioPerf: portfolioPerf,
-		dataDir:       dataDir,
 		log:           log.With().Str("service", "portfolio_display_calculator").Logger(),
 	}
 }
@@ -261,32 +258,33 @@ func (c *PortfolioDisplayCalculator) getTotalPortfolioValue() (float64, error) {
 
 // getSecurityPerformance gets trailing 12mo CAGR for a security
 func (c *PortfolioDisplayCalculator) getSecurityPerformance(symbol string, target float64) (float64, error) {
-	// Build history database path
-	// Symbol format: "AETF.GR" -> filename: "AETF_GR.db"
-	dbFilename := strings.ReplaceAll(symbol, ".", "_") + ".db"
-	historyDBPath := filepath.Join(c.dataDir, "history", dbFilename)
-
-	// Open security-specific history database
-	historyDB, err := sql.Open("sqlite3", historyDBPath)
+	// Get ISIN from security
+	var isin sql.NullString
+	err := c.universeDB.QueryRow("SELECT isin FROM securities WHERE symbol = ?", symbol).Scan(&isin)
 	if err != nil {
-		c.log.Warn().
-			Err(err).
-			Str("symbol", symbol).
-			Str("path", historyDBPath).
-			Msg("Failed to open history database")
-		return 0, nil // Return 0 instead of error to avoid blocking display
+		if err == sql.ErrNoRows {
+			c.log.Debug().Str("symbol", symbol).Msg("Security not found in universe")
+			return 0, nil
+		}
+		c.log.Warn().Err(err).Str("symbol", symbol).Msg("Failed to get ISIN for security")
+		return 0, nil
 	}
-	defer historyDB.Close()
 
-	// Create security performance service
-	securityPerf := NewSecurityPerformanceService(historyDB, c.log)
+	if !isin.Valid || isin.String == "" {
+		c.log.Debug().Str("symbol", symbol).Msg("Security has no ISIN, skipping performance calculation")
+		return 0, nil
+	}
 
-	// Calculate trailing 12mo CAGR
-	cagr, err := securityPerf.CalculateTrailing12MoCAGR(symbol)
+	// Create security performance service with consolidated database
+	securityPerf := NewSecurityPerformanceService(c.historyDB, c.log)
+
+	// Calculate trailing 12mo CAGR using ISIN
+	cagr, err := securityPerf.CalculateTrailing12MoCAGR(isin.String)
 	if err != nil {
 		c.log.Warn().
 			Err(err).
 			Str("symbol", symbol).
+			Str("isin", isin.String).
 			Msg("Failed to calculate security performance")
 		return 0, nil // Return 0 instead of error to avoid blocking display
 	}
