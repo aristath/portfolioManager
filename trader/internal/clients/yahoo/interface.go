@@ -1,7 +1,6 @@
 package yahoo
 
 // FullClientInterface defines all methods that a Yahoo Finance client must implement
-// This allows both Client and MicroserviceClient to be used interchangeably
 type FullClientInterface interface {
 	// Batch operations
 	GetBatchQuotes(symbolMap map[string]*string) (map[string]*float64, error)
@@ -25,9 +24,6 @@ type FullClientInterface interface {
 	// ISIN lookup
 	LookupTickerFromISIN(isin string) (string, error)
 }
-
-// Ensure Client implements FullClientInterface
-var _ FullClientInterface = (*Client)(nil)
 
 // Ensure MicroserviceClient implements FullClientInterface
 var _ FullClientInterface = (*MicroserviceClient)(nil)

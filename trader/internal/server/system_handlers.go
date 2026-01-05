@@ -223,7 +223,7 @@ func (h *SystemHandlers) HandleSystemStatus(w http.ResponseWriter, r *http.Reque
 	h.log.Debug().Msg("Getting system status")
 
 	// Query positions to get last sync time and count
-	var lastSync string
+	var lastSync sql.NullString
 	var totalPositionCount int
 
 	err := h.portfolioDB.Conn().QueryRow(`
@@ -250,10 +250,13 @@ func (h *SystemHandlers) HandleSystemStatus(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Format last sync time if available
-	if lastSync != "" {
+	var lastSyncFormatted string
+	if lastSync.Valid && lastSync.String != "" {
 		// Parse and reformat to "YYYY-MM-DD HH:MM"
-		if t, err := time.Parse(time.RFC3339, lastSync); err == nil {
-			lastSync = t.Format("2006-01-02 15:04")
+		if t, err := time.Parse(time.RFC3339, lastSync.String); err == nil {
+			lastSyncFormatted = t.Format("2006-01-02 15:04")
+		} else {
+			lastSyncFormatted = lastSync.String
 		}
 	}
 
@@ -385,7 +388,7 @@ func (h *SystemHandlers) HandleSystemStatus(w http.ResponseWriter, r *http.Reque
 		SecurityCount:    securityCount,
 		PositionCount:    totalPositionCount,
 		ActivePositions:  activePositionCount,
-		LastSync:         lastSync,
+		LastSync:         lastSyncFormatted,
 		UniverseActive:   securityCount,
 	}
 

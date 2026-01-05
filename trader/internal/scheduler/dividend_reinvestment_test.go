@@ -148,7 +148,7 @@ func TestNewDividendReinvestmentJob(t *testing.T) {
 		PortfolioService: &portfolio.PortfolioService{},
 		TradingService:   &trading.TradingService{},
 		TradernetClient:  &tradernet.Client{},
-		YahooClient:      &yahoo.Client{},
+		YahooClient:      yahoo.NewMicroserviceClient("http://localhost:8000", zerolog.Nop()),
 	}
 
 	job := NewDividendReinvestmentJob(cfg)

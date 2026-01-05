@@ -285,7 +285,7 @@ func (s *Server) setupSystemRoutes(r chi.Router) {
 	securityRepo := universe.NewSecurityRepository(s.universeDB.Conn(), s.log)
 	scoreRepo := universe.NewScoreRepository(s.portfolioDB.Conn(), s.log)
 	positionRepo := portfolio.NewPositionRepository(s.portfolioDB.Conn(), s.universeDB.Conn(), s.log)
-	yahooClient := yahoo.NewClient(s.log)
+	yahooClient := yahoo.NewMicroserviceClient(s.cfg.YahooFinanceServiceURL, s.log)
 	securityScorer := scorers.NewSecurityScorer()
 	historyDB := universe.NewHistoryDB(s.historyDB.Conn(), s.log)
 
@@ -492,8 +492,8 @@ func (s *Server) setupUniverseRoutes(r chi.Router) {
 	// Position repo for joining position data (optional for now)
 	positionRepo := portfolio.NewPositionRepository(s.portfolioDB.Conn(), s.universeDB.Conn(), s.log)
 
-	// Yahoo Finance client for fundamental data
-	yahooClient := yahoo.NewClient(s.log)
+	// Yahoo Finance client for fundamental data (use microservice to avoid 401 errors)
+	yahooClient := yahoo.NewMicroserviceClient(s.cfg.YahooFinanceServiceURL, s.log)
 
 	// Security scorer for score calculation
 	securityScorer := scorers.NewSecurityScorer()
@@ -732,7 +732,7 @@ func (s *Server) setupScoringRoutes(r chi.Router) {
 // setupOptimizationRoutes configures optimization module routes
 func (s *Server) setupOptimizationRoutes(r chi.Router) {
 	// Initialize shared clients
-	yahooClient := yahoo.NewClient(s.log)
+	yahooClient := yahoo.NewMicroserviceClient(s.cfg.YahooFinanceServiceURL, s.log)
 	tradernetClient := tradernet.NewClient(s.cfg.TradernetServiceURL, s.log)
 	tradernetClient.SetCredentials(s.cfg.TradernetAPIKey, s.cfg.TradernetAPISecret)
 	dividendRepo := dividends.NewDividendRepository(s.ledgerDB.Conn(), s.log)
@@ -848,7 +848,7 @@ func (s *Server) setupRebalancingRoutes(r chi.Router) {
 	// Initialize clients
 	tradernetClient := tradernet.NewClient(s.cfg.TradernetServiceURL, s.log)
 	tradernetClient.SetCredentials(s.cfg.TradernetAPIKey, s.cfg.TradernetAPISecret)
-	yahooClient := yahoo.NewClient(s.log)
+	yahooClient := yahoo.NewMicroserviceClient(s.cfg.YahooFinanceServiceURL, s.log)
 
 	// Initialize portfolio service (needed for rebalancing)
 	positionRepo := portfolio.NewPositionRepository(s.portfolioDB.Conn(), s.universeDB.Conn(), s.log)
