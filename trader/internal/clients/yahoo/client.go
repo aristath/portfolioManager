@@ -388,9 +388,15 @@ func (c *Client) getBatchQuoteInfo(symbols []string) (map[string]map[string]inte
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Set headers to mimic browser
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
+	// Set headers to mimic browser (Yahoo Finance requires these to avoid 401 errors)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	req.Header.Set("Referer", "https://finance.yahoo.com/")
+	req.Header.Set("Origin", "https://finance.yahoo.com")
+	req.Header.Set("Sec-Fetch-Dest", "empty")
+	req.Header.Set("Sec-Fetch-Mode", "cors")
+	req.Header.Set("Sec-Fetch-Site", "same-site")
 
 	// Retry logic with exponential backoff
 	var resp *http.Response
@@ -479,9 +485,15 @@ func (c *Client) getQuoteInfo(symbol string) (map[string]interface{}, error) {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Set headers to mimic browser
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
+	// Set headers to mimic browser (Yahoo Finance requires these to avoid 401 errors)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	req.Header.Set("Referer", "https://finance.yahoo.com/")
+	req.Header.Set("Origin", "https://finance.yahoo.com")
+	req.Header.Set("Sec-Fetch-Dest", "empty")
+	req.Header.Set("Sec-Fetch-Mode", "cors")
+	req.Header.Set("Sec-Fetch-Site", "same-site")
 
 	resp, err := c.client.Do(req)
 	if err != nil {
@@ -612,9 +624,15 @@ func (c *Client) GetHistoricalPrices(symbol string, yahooSymbolOverride *string,
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Set headers to mimic browser
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
+	// Set headers to mimic browser (Yahoo Finance requires these to avoid 401 errors)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	req.Header.Set("Referer", "https://finance.yahoo.com/")
+	req.Header.Set("Origin", "https://finance.yahoo.com")
+	req.Header.Set("Sec-Fetch-Dest", "empty")
+	req.Header.Set("Sec-Fetch-Mode", "cors")
+	req.Header.Set("Sec-Fetch-Site", "same-site")
 
 	resp, err := c.client.Do(req)
 	if err != nil {
@@ -744,9 +762,15 @@ func (c *Client) LookupTickerFromISIN(isin string) (string, error) {
 		return "", fmt.Errorf("failed to create search request: %w", err)
 	}
 
-	// Set headers to mimic browser
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
+	// Set headers to mimic browser (Yahoo Finance requires these to avoid 401 errors)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	req.Header.Set("Referer", "https://finance.yahoo.com/")
+	req.Header.Set("Origin", "https://finance.yahoo.com")
+	req.Header.Set("Sec-Fetch-Dest", "empty")
+	req.Header.Set("Sec-Fetch-Mode", "cors")
+	req.Header.Set("Sec-Fetch-Site", "same-site")
 
 	resp, err := c.client.Do(req)
 	if err != nil {
