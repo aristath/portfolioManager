@@ -3,9 +3,6 @@ package scheduler
 import (
 	"database/sql"
 	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/aristath/arduino-trader/internal/database"
@@ -24,7 +21,6 @@ type HealthCheckJob struct {
 	agentsDB    *database.DB
 	historyDB   *database.DB
 	cacheDB     *database.DB
-	historyPath string
 }
 
 // HealthCheckConfig holds configuration for health check job
@@ -38,7 +34,6 @@ type HealthCheckConfig struct {
 	AgentsDB    *database.DB
 	HistoryDB   *database.DB
 	CacheDB     *database.DB
-	HistoryPath string
 }
 
 // NewHealthCheckJob creates a new health check job
@@ -53,7 +48,6 @@ func NewHealthCheckJob(cfg HealthCheckConfig) *HealthCheckJob {
 		agentsDB:    cfg.AgentsDB,
 		historyDB:   cfg.HistoryDB,
 		cacheDB:     cfg.CacheDB,
-		historyPath: cfg.DataDir + "/history", // Per-symbol databases (legacy, will be migrated)
 	}
 }
 
@@ -117,69 +111,25 @@ func (j *HealthCheckJob) checkCoreDatabases() error {
 	return nil
 }
 
-// checkHistoryDatabases verifies integrity of per-symbol history databases
+// checkHistoryDatabases verifies integrity of consolidated history database
 func (j *HealthCheckJob) checkHistoryDatabases() {
-	if j.historyPath == "" {
-		j.log.Debug().Msg("History path not configured, skipping history database checks")
+	if j.historyDB == nil {
+		j.log.Debug().Msg("History database not configured, skipping history database checks")
 		return
 	}
 
-	// List all history databases
-	entries, err := os.ReadDir(j.historyPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			j.log.Debug().Msg("History directory does not exist, skipping")
-			return
-		}
-		j.log.Error().Err(err).Msg("Failed to read history directory")
+	// Check integrity of consolidated history.db
+	db := j.historyDB.Conn()
+	if err := j.checkDatabaseIntegrity("history", db); err != nil {
+		// Consolidated history database corruption is critical - log error but don't delete
+		// The database contains all historical data and should not be auto-deleted
+		j.log.Error().
+			Err(err).
+			Msg("History database integrity check failed - manual intervention required")
 		return
 	}
 
-	corruptedCount := 0
-	rebuiltCount := 0
-
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".db") {
-			continue
-		}
-
-		dbPath := filepath.Join(j.historyPath, entry.Name())
-		symbol := strings.TrimSuffix(entry.Name(), ".db")
-
-		// Open history database
-		db, err := sql.Open("sqlite3", dbPath)
-		if err != nil {
-			j.log.Error().Err(err).Str("symbol", symbol).Msg("Failed to open history database")
-			continue
-		}
-		defer db.Close()
-
-		// Check integrity
-		if err := j.checkDatabaseIntegrity(symbol, db); err != nil {
-			corruptedCount++
-			j.log.Warn().
-				Err(err).
-				Str("symbol", symbol).
-				Str("path", dbPath).
-				Msg("History database corrupted, attempting rebuild")
-
-			// Auto-recover: Delete corrupted history database
-			// It will be rebuilt by the next historical sync
-			if err := os.Remove(dbPath); err != nil {
-				j.log.Error().Err(err).Str("symbol", symbol).Msg("Failed to delete corrupted database")
-			} else {
-				rebuiltCount++
-				j.log.Info().Str("symbol", symbol).Msg("Deleted corrupted history database for rebuild")
-			}
-		}
-	}
-
-	if corruptedCount > 0 {
-		j.log.Warn().
-			Int("corrupted", corruptedCount).
-			Int("rebuilt", rebuiltCount).
-			Msg("History database corruption detected and recovered")
-	}
+	j.log.Debug().Msg("History database integrity OK")
 }
 
 // checkDatabaseIntegrity runs SQLite's PRAGMA integrity_check
