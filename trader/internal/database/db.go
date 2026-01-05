@@ -237,9 +237,9 @@ func (db *DB) Migrate() error {
 			_ = tx.Rollback()
 
 			// Some migrations are database-specific
-			// If error is "no such table", "no such column", or "duplicate column", skip this migration for this database
+			// If error is "no such table", "no such column", "duplicate column", or syntax errors for DROP COLUMN, skip this migration for this database
 			errStr := err.Error()
-			if strings.Contains(errStr, "no such table") || strings.Contains(errStr, "no such column") || strings.Contains(errStr, "duplicate column") {
+			if strings.Contains(errStr, "no such table") || strings.Contains(errStr, "no such column") || strings.Contains(errStr, "duplicate column") || strings.Contains(errStr, "near \"EXISTS\"") {
 				// This migration is not applicable to this database or already applied, skip it
 				continue
 			}
