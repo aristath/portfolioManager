@@ -45,7 +45,11 @@ jobs:
               cd "$dir"
               python -m pip install --upgrade pip
               pip install -r requirements.txt
-              mypy app/ tests/ --ignore-missing-imports --no-error-summary || exit 1
+              if [ -d "tests" ]; then
+                mypy app/ tests/ --ignore-missing-imports --no-error-summary || exit 1
+              else
+                mypy app/ --ignore-missing-imports --no-error-summary || exit 1
+              fi
               cd - > /dev/null
             fi
           done

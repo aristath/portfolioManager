@@ -41,7 +41,10 @@ jobs:
           for dir in microservices/*/; do
             if [ -f "$dir/requirements.txt" ] && [ -d "$dir/app" ]; then
               echo "Verifying syntax in $dir..."
-              python -m compileall -q "$dir/app" "$dir/tests" || exit 1
+              python -m compileall -q "$dir/app" || exit 1
+              if [ -d "$dir/tests" ]; then
+                python -m compileall -q "$dir/tests" || exit 1
+              fi
             fi
           done
 
