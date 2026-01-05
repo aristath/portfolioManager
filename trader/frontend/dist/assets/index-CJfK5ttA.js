@@ -54,23 +54,23 @@ Error generating stack: `+s.message+`
     margin-right: `).concat(l,"px ").concat(r,`;
     `),n==="padding"&&"padding-right: ".concat(l,"px ").concat(r,";")].filter(Boolean).join(""),`
   }
-  
+
   .`).concat(ca,` {
     right: `).concat(l,"px ").concat(r,`;
   }
-  
+
   .`).concat(ua,` {
     margin-right: `).concat(l,"px ").concat(r,`;
   }
-  
+
   .`).concat(ca," .").concat(ca,` {
     right: 0 `).concat(r,`;
   }
-  
+
   .`).concat(ua," .").concat(ua,` {
     margin-right: 0 `).concat(r,`;
   }
-  
+
   body[`).concat(cs,`] {
     `).concat(hE,": ").concat(l,`px;
   }

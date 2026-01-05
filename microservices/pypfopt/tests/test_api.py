@@ -1,9 +1,8 @@
 """Tests for FastAPI endpoints."""
 
 import pytest
-from fastapi.testclient import TestClient
-
 from app.main import app
+from fastapi.testclient import TestClient
 
 client = TestClient(app)
 
@@ -12,20 +11,16 @@ client = TestClient(app)
 def mean_variance_request():
     """Sample mean-variance optimization request."""
     return {
-        "expected_returns": {
-            "AAPL": 0.12,
-            "MSFT": 0.10,
-            "GOOGL": 0.15
-        },
+        "expected_returns": {"AAPL": 0.12, "MSFT": 0.10, "GOOGL": 0.15},
         "covariance_matrix": [
             [0.04, 0.02, 0.01],
             [0.02, 0.05, 0.015],
-            [0.01, 0.015, 0.03]
+            [0.01, 0.015, 0.03],
         ],
         "symbols": ["AAPL", "MSFT", "GOOGL"],
         "weight_bounds": [[0.02, 0.50], [0.02, 0.50], [0.02, 0.50]],
         "sector_constraints": [],
-        "strategy": "min_volatility"
+        "strategy": "min_volatility",
     }
 
 
@@ -38,8 +33,8 @@ def hrp_request():
             "data": {
                 "AAPL": [0.01, -0.02, 0.015],
                 "MSFT": [0.005, 0.015, -0.01],
-                "GOOGL": [0.02, -0.005, 0.01]
-            }
+                "GOOGL": [0.02, -0.005, 0.01],
+            },
         }
     }
 
@@ -50,10 +45,7 @@ def covariance_request():
     return {
         "prices": {
             "dates": ["2025-01-01", "2025-01-02", "2025-01-03"],
-            "data": {
-                "AAPL": [150.0, 151.5, 152.0],
-                "MSFT": [380.0, 382.5, 381.0]
-            }
+            "data": {"AAPL": [150.0, 151.5, 152.0], "MSFT": [380.0, 382.5, 381.0]},
         }
     }
 
@@ -116,11 +108,13 @@ class TestMeanVarianceEndpoint:
 
     def test_with_sector_constraints(self, mean_variance_request):
         """Test optimization with sector constraints."""
-        mean_variance_request["sector_constraints"] = [{
-            "sector_mapper": {"AAPL": "US", "MSFT": "US", "GOOGL": "US"},
-            "sector_lower": {"US": 0.50},
-            "sector_upper": {"US": 1.00}
-        }]
+        mean_variance_request["sector_constraints"] = [
+            {
+                "sector_mapper": {"AAPL": "US", "MSFT": "US", "GOOGL": "US"},
+                "sector_lower": {"US": 0.50},
+                "sector_upper": {"US": 1.00},
+            }
+        ]
 
         response = client.post("/optimize/mean-variance", json=mean_variance_request)
 
@@ -159,7 +153,7 @@ class TestHRPEndpoint:
                 "data": {
                     f"STOCK{i}": [0.01 * (j % 5 - 2) for j in range(30)]
                     for i in range(1, 11)
-                }
+                },
             }
         }
 
@@ -219,11 +213,13 @@ class TestProgressiveEndpoint:
     def test_progressive_with_constraints(self, mean_variance_request):
         """Test progressive optimization with sector constraints."""
         mean_variance_request["target_return"] = 0.11
-        mean_variance_request["sector_constraints"] = [{
-            "sector_mapper": {"AAPL": "US", "MSFT": "US", "GOOGL": "US"},
-            "sector_lower": {"US": 0.80},
-            "sector_upper": {"US": 1.00}
-        }]
+        mean_variance_request["sector_constraints"] = [
+            {
+                "sector_mapper": {"AAPL": "US", "MSFT": "US", "GOOGL": "US"},
+                "sector_lower": {"US": 0.80},
+                "sector_upper": {"US": 1.00},
+            }
+        ]
 
         response = client.post("/optimize/progressive", json=mean_variance_request)
 
@@ -264,7 +260,7 @@ class TestRequestValidation:
             "covariance_matrix": [[0.04]],
             "symbols": ["AAPL"],
             "weight_bounds": [[0.02, 0.10]],
-            "strategy": "min_volatility"
+            "strategy": "min_volatility",
         }
 
         response = client.post("/optimize/mean-variance", json=invalid_request)

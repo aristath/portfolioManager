@@ -1,9 +1,10 @@
 """Core service logic for PyPortfolioOpt wrapper."""
 
-from pypfopt import EfficientFrontier, HRPOpt, risk_models, exceptions
-import pandas as pd
 import logging
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Optional, Tuple
+
+import pandas as pd
+from pypfopt import EfficientFrontier, HRPOpt, exceptions, risk_models
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,7 @@ class PyPortfolioOptService:
         sector_constraints: List[Dict],
         strategy: str,
         target_return: Optional[float] = None,
-        target_volatility: Optional[float] = None
+        target_volatility: Optional[float] = None,
     ) -> Dict[str, float]:
         """Run mean-variance optimization using EfficientFrontier.
 
@@ -51,19 +52,23 @@ class PyPortfolioOptService:
                 ef.add_sector_constraints(
                     constraint["sector_mapper"],
                     constraint["sector_lower"],
-                    constraint["sector_upper"]
+                    constraint["sector_upper"],
                 )
 
             # Run strategy
             if strategy == "efficient_return":
                 if target_return is None:
-                    raise ValueError("target_return required for efficient_return strategy")
+                    raise ValueError(
+                        "target_return required for efficient_return strategy"
+                    )
                 ef.efficient_return(target_return=target_return)
             elif strategy == "min_volatility":
                 ef.min_volatility()
             elif strategy == "efficient_risk":
                 if target_volatility is None:
-                    raise ValueError("target_volatility required for efficient_risk strategy")
+                    raise ValueError(
+                        "target_volatility required for efficient_risk strategy"
+                    )
                 ef.efficient_risk(target_volatility=target_volatility)
             elif strategy == "max_sharpe":
                 ef.max_sharpe()
@@ -81,7 +86,7 @@ class PyPortfolioOptService:
             return {
                 "weights": dict(cleaned),
                 "achieved_return": achieved_return,
-                "achieved_volatility": achieved_volatility
+                "achieved_volatility": achieved_volatility,
             }
 
         except exceptions.OptimizationError as e:
@@ -134,7 +139,7 @@ class PyPortfolioOptService:
         cov_matrix: pd.DataFrame,
         weight_bounds: List[Tuple[float, float]],
         sector_constraints: List[Dict],
-        target_return: float
+        target_return: float,
     ) -> Dict:
         """Progressive optimization with fallback strategies.
 
@@ -163,7 +168,12 @@ class PyPortfolioOptService:
         Raises:
             exceptions.OptimizationError: If all strategies fail at all constraint levels
         """
-        strategies = ["efficient_return", "min_volatility", "efficient_risk", "max_sharpe"]
+        strategies = [
+            "efficient_return",
+            "min_volatility",
+            "efficient_risk",
+            "max_sharpe",
+        ]
         constraint_levels = ["full", "relaxed", "none"]
 
         attempts = 0
@@ -182,16 +192,23 @@ class PyPortfolioOptService:
             for strategy in strategies:
                 attempts += 1
                 try:
-                    logger.info(f"Attempt {attempts}: {strategy} with {constraint_level} constraints")
-
-                    result = self.mean_variance_optimize(
-                        mu, cov_matrix, weight_bounds,
-                        adjusted_constraints, strategy,
-                        target_return=target_return,
-                        target_volatility=0.15  # Default target volatility for efficient_risk
+                    logger.info(
+                        f"Attempt {attempts}: {strategy} with {constraint_level} constraints"
                     )
 
-                    logger.info(f"Success with {strategy} at {constraint_level} constraint level")
+                    result = self.mean_variance_optimize(
+                        mu,
+                        cov_matrix,
+                        weight_bounds,
+                        adjusted_constraints,
+                        strategy,
+                        target_return=target_return,
+                        target_volatility=0.15,  # Default target volatility for efficient_risk
+                    )
+
+                    logger.info(
+                        f"Success with {strategy} at {constraint_level} constraint level"
+                    )
 
                     return {
                         "weights": result["weights"],
@@ -199,10 +216,12 @@ class PyPortfolioOptService:
                         "constraint_level": constraint_level,
                         "attempts": attempts,
                         "achieved_return": result["achieved_return"],
-                        "achieved_volatility": result["achieved_volatility"]
+                        "achieved_volatility": result["achieved_volatility"],
                     }
                 except (exceptions.OptimizationError, ValueError) as e:
-                    logger.debug(f"Strategy {strategy} failed at {constraint_level} level: {e}")
+                    logger.debug(
+                        f"Strategy {strategy} failed at {constraint_level} level: {e}"
+                    )
                     continue
 
         error_msg = f"All optimization strategies failed after {attempts} attempts"
@@ -221,9 +240,13 @@ class PyPortfolioOptService:
         """
         relaxed = []
         for c in constraints:
-            relaxed.append({
-                "sector_mapper": c["sector_mapper"],
-                "sector_lower": {k: v * factor for k, v in c["sector_lower"].items()},
-                "sector_upper": c["sector_upper"]
-            })
+            relaxed.append(
+                {
+                    "sector_mapper": c["sector_mapper"],
+                    "sector_lower": {
+                        k: v * factor for k, v in c["sector_lower"].items()
+                    },
+                    "sector_upper": c["sector_upper"],
+                }
+            )
         return relaxed

@@ -24,10 +24,10 @@ type PlannerConfiguration struct {
 	AllowBuy  bool `json:"allow_buy"`
 
 	// Risk management settings
-	MinHoldDays       int     `json:"min_hold_days"`        // Minimum days a position must be held before selling
-	SellCooldownDays  int     `json:"sell_cooldown_days"`   // Days to wait after selling before buying again
-	MaxLossThreshold  float64 `json:"max_loss_threshold"`   // Maximum loss threshold before forced selling consideration
-	MaxSellPercentage float64 `json:"max_sell_percentage"`  // Maximum percentage of position allowed to sell per transaction
+	MinHoldDays       int     `json:"min_hold_days"`       // Minimum days a position must be held before selling
+	SellCooldownDays  int     `json:"sell_cooldown_days"`  // Days to wait after selling before buying again
+	MaxLossThreshold  float64 `json:"max_loss_threshold"`  // Maximum loss threshold before forced selling consideration
+	MaxSellPercentage float64 `json:"max_sell_percentage"` // Maximum percentage of position allowed to sell per transaction
 
 	// Portfolio optimizer settings
 	OptimizerBlend float64 `json:"optimizer_blend"` // 0.0 = pure Mean-Variance, 1.0 = pure HRP

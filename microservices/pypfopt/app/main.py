@@ -1,30 +1,29 @@
 """FastAPI application for PyPortfolioOpt microservice."""
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-import pandas as pd
 import logging
 from datetime import datetime
 
+import pandas as pd
+from app.converters import (
+    dataframe_to_matrix,
+    dict_to_series,
+    matrix_to_dataframe,
+    timeseries_to_dataframe,
+)
 from app.models import (
-    ServiceResponse,
-    MeanVarianceRequest,
-    HRPRequest,
     CovarianceRequest,
-    OptimizationResult
+    HRPRequest,
+    MeanVarianceRequest,
+    OptimizationResult,
+    ServiceResponse,
 )
 from app.service import PyPortfolioOptService
-from app.converters import (
-    timeseries_to_dataframe,
-    matrix_to_dataframe,
-    dataframe_to_matrix,
-    dict_to_series
-)
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -32,7 +31,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="PyPortfolioOpt Microservice",
     description="Minimal wrapper for portfolio optimization using PyPortfolioOpt library",
-    version="1.0.0"
+    version="1.0.0",
 )
 
 # Add CORS middleware
@@ -58,7 +57,7 @@ async def health_check():
         "status": "healthy",
         "service": "pypfopt",
         "version": "1.0.0",
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.utcnow().isoformat(),
     }
 
 
@@ -89,12 +88,13 @@ async def optimize_mean_variance(request: MeanVarianceRequest) -> ServiceRespons
 
         # Run optimization
         result = service.mean_variance_optimize(
-            mu, cov,
+            mu,
+            cov,
             weight_bounds,
             sector_constraints,
             request.strategy,
             request.target_return,
-            request.target_volatility
+            request.target_volatility,
         )
 
         logger.info(f"Optimization successful: {len(result['weights'])} securities")
@@ -105,8 +105,8 @@ async def optimize_mean_variance(request: MeanVarianceRequest) -> ServiceRespons
                 "weights": result["weights"],
                 "strategy_used": request.strategy,
                 "achieved_return": result["achieved_return"],
-                "achieved_volatility": result["achieved_volatility"]
-            }
+                "achieved_volatility": result["achieved_volatility"],
+            },
         )
 
     except Exception as e:
@@ -140,10 +140,7 @@ async def optimize_hrp(request: HRPRequest) -> ServiceResponse:
 
         logger.info(f"HRP optimization successful: {len(weights)} securities")
 
-        return ServiceResponse(
-            success=True,
-            data={"weights": weights}
-        )
+        return ServiceResponse(success=True, data={"weights": weights})
 
     except Exception as e:
         logger.exception("HRP optimization failed")
@@ -166,7 +163,9 @@ async def calculate_covariance(request: CovarianceRequest) -> ServiceResponse:
         ServiceResponse with covariance matrix and symbols
     """
     try:
-        logger.info(f"Covariance calculation request: {len(request.prices.data)} securities")
+        logger.info(
+            f"Covariance calculation request: {len(request.prices.data)} securities"
+        )
 
         # Convert request to pandas DataFrame
         prices_df = timeseries_to_dataframe(request.prices)
@@ -177,14 +176,12 @@ async def calculate_covariance(request: CovarianceRequest) -> ServiceResponse:
         # Convert back to nested list
         matrix, symbols = dataframe_to_matrix(cov_df)
 
-        logger.info(f"Covariance calculation successful: {len(symbols)}x{len(symbols)} matrix")
+        logger.info(
+            f"Covariance calculation successful: {len(symbols)}x{len(symbols)} matrix"
+        )
 
         return ServiceResponse(
-            success=True,
-            data={
-                "covariance_matrix": matrix,
-                "symbols": symbols
-            }
+            success=True, data={"covariance_matrix": matrix, "symbols": symbols}
         )
 
     except Exception as e:
@@ -226,14 +223,13 @@ async def optimize_progressive(request: MeanVarianceRequest) -> ServiceResponse:
         sector_constraints = [c.model_dump() for c in request.sector_constraints]
 
         # Use target_return from request or default to 11%
-        target_return = request.target_return if request.target_return is not None else 0.11
+        target_return = (
+            request.target_return if request.target_return is not None else 0.11
+        )
 
         # Run progressive optimization
         result = service.progressive_optimize(
-            mu, cov,
-            weight_bounds,
-            sector_constraints,
-            target_return
+            mu, cov, weight_bounds, sector_constraints, target_return
         )
 
         logger.info(

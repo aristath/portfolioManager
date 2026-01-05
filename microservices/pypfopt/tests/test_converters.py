@@ -3,10 +3,10 @@
 import pandas as pd
 import pytest
 from app.converters import (
-    timeseries_to_dataframe,
-    matrix_to_dataframe,
     dataframe_to_matrix,
-    dict_to_series
+    dict_to_series,
+    matrix_to_dataframe,
+    timeseries_to_dataframe,
 )
 from app.models import TimeSeriesData
 
@@ -18,10 +18,7 @@ class TestTimeSeriesConverter:
         """Test basic time series to DataFrame conversion."""
         ts = TimeSeriesData(
             dates=["2025-01-01", "2025-01-02", "2025-01-03"],
-            data={
-                "AAPL": [150.0, 151.5, 152.0],
-                "MSFT": [380.0, 382.5, 381.0]
-            }
+            data={"AAPL": [150.0, 151.5, 152.0], "MSFT": [380.0, 382.5, 381.0]},
         )
 
         df = timeseries_to_dataframe(ts)
@@ -34,10 +31,7 @@ class TestTimeSeriesConverter:
 
     def test_index_is_datetime(self):
         """Test that index is converted to datetime."""
-        ts = TimeSeriesData(
-            dates=["2025-01-01"],
-            data={"AAPL": [150.0]}
-        )
+        ts = TimeSeriesData(dates=["2025-01-01"], data={"AAPL": [150.0]})
 
         df = timeseries_to_dataframe(ts)
 
@@ -49,11 +43,7 @@ class TestMatrixConverter:
 
     def test_matrix_to_dataframe(self):
         """Test converting nested list matrix to DataFrame."""
-        matrix = [
-            [0.04, 0.02, 0.01],
-            [0.02, 0.05, 0.015],
-            [0.01, 0.015, 0.03]
-        ]
+        matrix = [[0.04, 0.02, 0.01], [0.02, 0.05, 0.015], [0.01, 0.015, 0.03]]
         symbols = ["AAPL", "MSFT", "GOOGL"]
 
         df = matrix_to_dataframe(matrix, symbols)
@@ -69,7 +59,7 @@ class TestMatrixConverter:
         df = pd.DataFrame(
             [[0.04, 0.02], [0.02, 0.05]],
             index=["AAPL", "MSFT"],
-            columns=["AAPL", "MSFT"]
+            columns=["AAPL", "MSFT"],
         )
 
         matrix, symbols = dataframe_to_matrix(df)
@@ -81,10 +71,7 @@ class TestMatrixConverter:
 
     def test_round_trip_conversion(self):
         """Test that conversion is lossless."""
-        original_matrix = [
-            [0.04, 0.02],
-            [0.02, 0.05]
-        ]
+        original_matrix = [[0.04, 0.02], [0.02, 0.05]]
         original_symbols = ["AAPL", "MSFT"]
 
         df = matrix_to_dataframe(original_matrix, original_symbols)
