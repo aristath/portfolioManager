@@ -25,7 +25,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-lint-${{ hashFiles('requirements.txt') }}
+          key: ${{ runner.os }}-pip-lint-${{ hashFiles('microservices/**/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-lint-
             ${{ runner.os }}-pip-
@@ -37,10 +37,28 @@ jobs:
           pip install black==24.10.0 flake8==7.1.1 isort==5.13.2
 
       - name: Check code formatting with Black
-        run: black --check --diff app/ tests/
+        run: |
+          for dir in microservices/*/; do
+            if [ -f "$dir/requirements.txt" ]; then
+              echo "Checking $dir with Black..."
+              black --check --diff "$dir" || exit 1
+            fi
+          done
 
       - name: Check import sorting with isort
-        run: isort --check-only --diff --profile black app/ tests/
+        run: |
+          for dir in microservices/*/; do
+            if [ -f "$dir/requirements.txt" ]; then
+              echo "Checking $dir with isort..."
+              isort --check-only --diff --profile black "$dir" || exit 1
+            fi
+          done
 
       - name: Lint with flake8
-        run: flake8 app/ tests/
+        run: |
+          for dir in microservices/*/; do
+            if [ -f "$dir/requirements.txt" ]; then
+              echo "Linting $dir with flake8..."
+              flake8 "$dir" || exit 1
+            fi
+          done
