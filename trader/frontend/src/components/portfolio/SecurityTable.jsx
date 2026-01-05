@@ -5,6 +5,7 @@ import { useAppStore } from '../../stores/appStore';
 import { usePortfolioStore } from '../../stores/portfolioStore';
 import { SecuritySparkline } from '../charts/SecuritySparkline';
 import { formatCurrency } from '../../utils/formatters';
+import { getTagName, getTagColor } from '../../utils/tagNames';
 
 export function SecurityTable() {
   const {
@@ -179,6 +180,7 @@ export function SecurityTable() {
                   Sector {sortBy === 'industry' && (sortDesc ? '▼' : '▲')}
                 </Text>
               </Table.Th>
+              <Table.Th>Tags</Table.Th>
               <Table.Th ta="right">
                 <Text
                   size="xs"
@@ -214,14 +216,14 @@ export function SecurityTable() {
           <Table.Tbody>
             {filteredSecurities.length === 0 && securities.length > 0 && (
               <Table.Tr>
-                <Table.Td colSpan={12} ta="center" py="xl">
+                <Table.Td colSpan={13} ta="center" py="xl">
                   <Text c="dimmed" size="sm">No securities match your filters</Text>
                 </Table.Td>
               </Table.Tr>
             )}
             {securities.length === 0 && (
               <Table.Tr>
-                <Table.Td colSpan={12} ta="center" py="xl">
+                <Table.Td colSpan={13} ta="center" py="xl">
                   <Text c="dimmed" size="sm">No securities in universe</Text>
                 </Table.Td>
               </Table.Tr>
@@ -272,6 +274,24 @@ export function SecurityTable() {
                     <Text size="sm" c="dimmed" truncate style={{ maxWidth: '96px' }}>
                       {security.industry || '-'}
                     </Text>
+                  </Table.Td>
+                  <Table.Td>
+                    {security.tags && security.tags.length > 0 ? (
+                      <Group gap="xs" wrap="wrap">
+                        {security.tags.map((tagId) => (
+                          <Badge
+                            key={tagId}
+                            size="xs"
+                            {...getTagColor(tagId)}
+                            title={tagId}
+                          >
+                            {getTagName(tagId)}
+                          </Badge>
+                        ))}
+                      </Group>
+                    ) : (
+                      <Text size="sm" c="dimmed">-</Text>
+                    )}
                   </Table.Td>
                   <Table.Td ta="right">
                     <Group gap="xs" justify="flex-end">
