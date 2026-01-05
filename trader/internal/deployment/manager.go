@@ -544,20 +544,9 @@ func (m *Manager) HardUpdate() (*DeploymentResult, error) {
 		}
 	}
 
-	// Restart all services
-	servicesToRestart := []string{
-		m.config.TraderConfig.ServiceName,
-	}
-
-	// Restart Go services via systemd
-	restartErrors := m.serviceManager.RestartServices(servicesToRestart)
-	for serviceName, err := range restartErrors {
-		m.log.Error().Err(err).Str("service", serviceName).Msg("Failed to restart service")
-		deploymentErrors[serviceName+"_restart"] = err
-	}
-
-	// Note: Python microservices are already restarted by DeployMicroservice above,
-	// so no explicit restart needed here
+	// Note: Go services (trader) are already restarted by deployGoService above
+	// Python microservices are already restarted by DeployMicroservice above
+	// No additional restart needed here
 
 	// Mark as deployed
 	if err := m.MarkDeployed(); err != nil {
@@ -719,15 +708,25 @@ func (m *Manager) deployGoService(config GoServiceConfig, serviceName string, ru
 		Str("binary", tempBinary).
 		Msg("Downloaded and verified linux/arm64 artifact from GitHub Actions")
 
-	// Deploy binary (atomic swap)
-	if err := m.binaryDeployer.DeployBinary(tempBinary, m.config.DeployDir, config.BinaryName, true); err != nil {
-		deployment.Error = fmt.Sprintf("deployment failed: %v", err)
+	// Stop service before binary replacement
+	if err := m.serviceManager.StopService(config.ServiceName); err != nil {
+		deployment.Error = fmt.Sprintf("service stop failed: %v", err)
 		return deployment
 	}
 
-	// Restart service
-	if err := m.serviceManager.RestartService(config.ServiceName); err != nil {
-		deployment.Error = fmt.Sprintf("service restart failed: %v", err)
+	// Deploy binary (atomic swap)
+	if err := m.binaryDeployer.DeployBinary(tempBinary, m.config.DeployDir, config.BinaryName, true); err != nil {
+		deployment.Error = fmt.Sprintf("deployment failed: %v", err)
+		// Try to start service even if deployment failed
+		if startErr := m.serviceManager.StartService(config.ServiceName); startErr != nil {
+			m.log.Error().Err(startErr).Str("service", config.ServiceName).Msg("Failed to start service after deployment failure")
+		}
+		return deployment
+	}
+
+	// Start service after binary replacement
+	if err := m.serviceManager.StartService(config.ServiceName); err != nil {
+		deployment.Error = fmt.Sprintf("service start failed: %v", err)
 		return deployment
 	}
 

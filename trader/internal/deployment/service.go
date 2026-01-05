@@ -21,6 +21,116 @@ func NewServiceManager(log Logger) *ServiceManager {
 	}
 }
 
+// StopService stops a systemd service
+// Tries multiple methods to work around NoNewPrivileges restriction
+func (s *ServiceManager) StopService(serviceName string) error {
+	s.log.Info().
+		Str("service", serviceName).
+		Msg("Stopping systemd service")
+
+	// Method 1: Try systemctl directly (may work with polkit)
+	cmd := exec.Command("systemctl", "stop", serviceName)
+	_, err := cmd.CombinedOutput()
+	if err == nil {
+		s.log.Info().
+			Str("service", serviceName).
+			Msg("Successfully stopped systemd service (direct)")
+		return nil
+	}
+
+	// Method 2: Try sudo (may fail with NoNewPrivileges, but worth trying)
+	cmd = exec.Command("sudo", "systemctl", "stop", serviceName)
+	_, err = cmd.CombinedOutput()
+	if err == nil {
+		s.log.Info().
+			Str("service", serviceName).
+			Msg("Successfully stopped systemd service (sudo)")
+		return nil
+	}
+
+	// Method 3: Try using dbus-send (works without sudo if user has polkit permissions)
+	// Convert service name to D-Bus object path format (e.g., "trader.service" -> "trader_2eservice")
+	dbusPath := strings.ReplaceAll(serviceName, "-", "_2d")
+	if !strings.HasSuffix(dbusPath, "_2eservice") {
+		dbusPath = dbusPath + "_2eservice"
+	}
+	unitPath := fmt.Sprintf("/org/freedesktop/systemd1/unit/%s", dbusPath)
+	cmd = exec.Command("dbus-send", "--system", "--print-reply",
+		"--dest=org.freedesktop.systemd1",
+		unitPath,
+		"org.freedesktop.systemd1.Unit.Stop", "replace", "s", "")
+	dbusOutput, err := cmd.CombinedOutput()
+	if err == nil {
+		s.log.Info().
+			Str("service", serviceName).
+			Msg("Successfully stopped systemd service (dbus)")
+		return nil
+	}
+
+	// All methods failed - use last error output
+	outputStr := strings.TrimSpace(string(dbusOutput))
+	return &ServiceRestartError{
+		ServiceName: serviceName,
+		Message:     fmt.Sprintf("systemctl stop failed (NoNewPrivileges restriction): %s", outputStr),
+		Err:         err,
+	}
+}
+
+// StartService starts a systemd service
+// Tries multiple methods to work around NoNewPrivileges restriction
+func (s *ServiceManager) StartService(serviceName string) error {
+	s.log.Info().
+		Str("service", serviceName).
+		Msg("Starting systemd service")
+
+	// Method 1: Try systemctl directly (may work with polkit)
+	cmd := exec.Command("systemctl", "start", serviceName)
+	_, err := cmd.CombinedOutput()
+	if err == nil {
+		s.log.Info().
+			Str("service", serviceName).
+			Msg("Successfully started systemd service (direct)")
+		return nil
+	}
+
+	// Method 2: Try sudo (may fail with NoNewPrivileges, but worth trying)
+	cmd = exec.Command("sudo", "systemctl", "start", serviceName)
+	_, err = cmd.CombinedOutput()
+	if err == nil {
+		s.log.Info().
+			Str("service", serviceName).
+			Msg("Successfully started systemd service (sudo)")
+		return nil
+	}
+
+	// Method 3: Try using dbus-send (works without sudo if user has polkit permissions)
+	// Convert service name to D-Bus object path format (e.g., "trader.service" -> "trader_2eservice")
+	dbusPath := strings.ReplaceAll(serviceName, "-", "_2d")
+	if !strings.HasSuffix(dbusPath, "_2eservice") {
+		dbusPath = dbusPath + "_2eservice"
+	}
+	unitPath := fmt.Sprintf("/org/freedesktop/systemd1/unit/%s", dbusPath)
+	cmd = exec.Command("dbus-send", "--system", "--print-reply",
+		"--dest=org.freedesktop.systemd1",
+		unitPath,
+		"org.freedesktop.systemd1.Unit.Start", "replace", "s", "")
+	dbusOutput, err := cmd.CombinedOutput()
+	if err == nil {
+		s.log.Info().
+			Str("service", serviceName).
+			Msg("Successfully started systemd service (dbus)")
+		return nil
+	}
+
+	// All methods failed - use last error output
+	outputStr := strings.TrimSpace(string(dbusOutput))
+	return &ServiceRestartError{
+		ServiceName: serviceName,
+		Message:     fmt.Sprintf("systemctl start failed (NoNewPrivileges restriction): %s", outputStr),
+		Err:         err,
+	}
+}
+
 // RestartService restarts a systemd service
 // Tries multiple methods to work around NoNewPrivileges restriction
 func (s *ServiceManager) RestartService(serviceName string) error {
