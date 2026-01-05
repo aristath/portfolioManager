@@ -71,7 +71,6 @@ func (s *TradingService) SyncFromTradernet() error {
 		// Parse executed_at timestamp
 		// Try RFC3339 first, then try without timezone (common format from APIs)
 		var executedAt time.Time
-		var err error
 		executedAt, err = time.Parse(time.RFC3339, trade.ExecutedAt)
 		if err != nil {
 			// Try parsing without timezone (e.g., "2025-05-07T14:03:22.300")

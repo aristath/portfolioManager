@@ -48,8 +48,8 @@ SELECT
         ELSE 'buy' -- Default to buy
     END as side,
     1.0 as quantity, -- Default quantity (old schema doesn't have this)
-    0.0 as estimated_price, -- Default price (old schema doesn't have this)
-    0.0 as estimated_value, -- Default value (old schema doesn't have this)
+    0.01 as estimated_price, -- Default price (must be > 0 for CHECK constraint)
+    0.01 as estimated_value, -- Default value (must be > 0 for CHECK constraint)
     COALESCE(reason, '') as reason,
     'EUR' as currency, -- Default currency (old schema doesn't have this)
     COALESCE(priority, 0.0) as priority,
