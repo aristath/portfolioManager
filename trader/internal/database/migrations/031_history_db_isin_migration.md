@@ -23,4 +23,3 @@ After migration:
 - The functionality is correct - ISINs are already being stored and retrieved
 - This is purely a naming consistency improvement
 - Can be done as a separate migration after the main ISIN migration is complete
-
