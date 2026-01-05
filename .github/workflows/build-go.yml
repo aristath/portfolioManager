@@ -76,10 +76,10 @@ jobs:
           file_output=$(file trader-arm64)
           echo "Binary architecture check: $file_output"
 
-          # Verify Linux
-          if ! echo "$file_output" | grep -qi "linux"; then
-            echo "ERROR: Binary is not built for Linux"
-            echo "Expected: Linux, Got: $file_output"
+          # Verify Linux (ELF format indicates Linux)
+          if ! echo "$file_output" | grep -qi "elf"; then
+            echo "ERROR: Binary is not an ELF executable (not Linux)"
+            echo "Expected: ELF, Got: $file_output"
             exit 1
           fi
 

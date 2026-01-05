@@ -402,7 +402,7 @@ func EvaluateEndStateWithRegime(
 func calculateVolatilityPenalty(ctx PortfolioContext) float64 {
 	// Simplified: Use quality scores as proxy for volatility
 	// Lower quality = higher volatility risk
-	if ctx.SecurityScores == nil || len(ctx.SecurityScores) == 0 {
+	if len(ctx.SecurityScores) == 0 {
 		return 0.5 // Neutral if no data
 	}
 
@@ -529,7 +529,7 @@ func calculateOptimizerAlignment(ctx PortfolioContext) float64 {
 	}
 
 	// If no optimizer targets available, return neutral score
-	if ctx.OptimizerTargetWeights == nil || len(ctx.OptimizerTargetWeights) == 0 {
+	if len(ctx.OptimizerTargetWeights) == 0 {
 		return 0.5 // No targets = neutral (can't measure alignment)
 	}
 

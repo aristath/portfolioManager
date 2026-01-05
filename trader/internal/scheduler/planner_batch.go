@@ -458,7 +458,7 @@ func (j *PlannerBatchJob) buildOpportunityContext(
 
 	// Use optimizer target weights if available, otherwise fall back to allocations
 	targetWeights := optimizerTargetWeights
-	if targetWeights == nil || len(targetWeights) == 0 {
+	if len(targetWeights) == 0 {
 		// Fall back to allocations (but these are country/industry level, not security level)
 		targetWeights = make(map[string]float64)
 		j.log.Warn().Msg("No optimizer target weights available, using empty map")

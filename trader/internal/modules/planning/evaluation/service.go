@@ -247,10 +247,8 @@ func convertPortfolioContext(
 
 	// Copy optimizer targets if available
 	optimizerTargetWeights := make(map[string]float64)
-	if optimizerTargets != nil {
-		for symbol, weight := range optimizerTargets {
-			optimizerTargetWeights[symbol] = weight
-		}
+	for symbol, weight := range optimizerTargets {
+		optimizerTargetWeights[symbol] = weight
 	}
 
 	return models.PortfolioContext{

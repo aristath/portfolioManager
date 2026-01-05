@@ -151,7 +151,7 @@ func (s *DatabaseHealthService) restoreFromBackup() error {
 	var result string
 	err = s.db.Conn().QueryRow("PRAGMA integrity_check").Scan(&result)
 	if err != nil || result != "ok" {
-		return fmt.Errorf("restored backup is also corrupt!")
+		return fmt.Errorf("restored backup is also corrupt")
 	}
 
 	s.log.Info().

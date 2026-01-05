@@ -59,11 +59,7 @@ func (os *OptimizerService) Optimize(state PortfolioState, settings Settings) (*
 		Msg("Starting portfolio optimization")
 
 	// Filter to active securities
-	activeSecurities := make([]Security, 0)
-	for _, sec := range state.Securities {
-		// Assume all securities in the list are active
-		activeSecurities = append(activeSecurities, sec)
-	}
+	activeSecurities := append([]Security{}, state.Securities...)
 
 	if len(activeSecurities) == 0 {
 		return os.errorResult(timestamp, settings.Blend, "No active securities"), nil

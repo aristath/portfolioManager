@@ -276,7 +276,7 @@ func (r *NegativeBalanceRebalancer) RebalanceNegativeBalances() (bool, error) {
 // step1CurrencyExchange tries to resolve shortfalls via currency exchange
 func (r *NegativeBalanceRebalancer) step1CurrencyExchange(
 	shortfalls map[string]float64,
-	cashBalances map[string]float64,
+	initialCashBalances map[string]float64,
 	tradingMode string,
 ) (map[string]float64, error) {
 	// Research mode: skip execution
@@ -304,7 +304,7 @@ func (r *NegativeBalanceRebalancer) step1CurrencyExchange(
 			return remainingShortfalls, fmt.Errorf("failed to refresh balances: %w", err)
 		}
 
-		cashBalances = make(map[string]float64)
+		cashBalances := make(map[string]float64)
 		for _, balance := range balancesRaw {
 			cashBalances[balance.Currency] = balance.Amount
 		}

@@ -33,8 +33,8 @@ func (p *MarketRegimePattern) Generate(
 	switch regime {
 	case "bull":
 		// In bull market, favor buys and averaging down
-		buyOpps, _ := opportunities[domain.OpportunityCategoryOpportunityBuys]
-		avgDown, _ := opportunities[domain.OpportunityCategoryAveragingDown]
+		buyOpps := opportunities[domain.OpportunityCategoryOpportunityBuys]
+		avgDown := opportunities[domain.OpportunityCategoryAveragingDown]
 
 		allBuys := append(buyOpps, avgDown...)
 		for i := 0; i < len(allBuys) && i < maxSequences; i++ {
@@ -44,7 +44,7 @@ func (p *MarketRegimePattern) Generate(
 
 	case "bear":
 		// In bear market, favor profit-taking and cash generation
-		profitTaking, _ := opportunities[domain.OpportunityCategoryProfitTaking]
+		profitTaking := opportunities[domain.OpportunityCategoryProfitTaking]
 		for i := 0; i < len(profitTaking) && i < maxSequences; i++ {
 			sequence := CreateSequence([]domain.ActionCandidate{profitTaking[i]}, "market_regime")
 			sequences = append(sequences, sequence)
@@ -52,8 +52,8 @@ func (p *MarketRegimePattern) Generate(
 
 	default: // neutral
 		// In neutral market, balance rebalancing
-		sells, _ := opportunities[domain.OpportunityCategoryRebalanceSells]
-		buys, _ := opportunities[domain.OpportunityCategoryRebalanceBuys]
+		sells := opportunities[domain.OpportunityCategoryRebalanceSells]
+		buys := opportunities[domain.OpportunityCategoryRebalanceBuys]
 
 		for i := 0; i < len(sells) && i < len(buys) && i < maxSequences; i++ {
 			actions := []domain.ActionCandidate{sells[i], buys[i]}

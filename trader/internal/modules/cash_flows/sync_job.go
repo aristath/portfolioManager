@@ -57,7 +57,7 @@ func (j *SyncJob) SyncCashFlows() error {
 
 	// 4. Connect to Tradernet
 	if !j.tradernetClient.IsConnected() {
-		err := fmt.Errorf("Tradernet not connected")
+		err := fmt.Errorf("tradernet not connected")
 		j.log.Error().Msg("Tradernet not connected")
 		j.eventManager.EmitError("cash_flows", err, map[string]interface{}{
 			"step": "check_connection",

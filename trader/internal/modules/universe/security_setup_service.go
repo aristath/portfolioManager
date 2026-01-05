@@ -493,11 +493,11 @@ type TradernetLookupResult struct {
 // Faithful translation from Python: SecuritySetupService._get_tradernet_symbol_from_isin()
 func (s *SecuritySetupService) getTradernetSymbolFromISIN(isin string) (*TradernetLookupResult, error) {
 	if s.tradernetClient == nil {
-		return nil, fmt.Errorf("Tradernet client not available")
+		return nil, fmt.Errorf("tradernet client not available")
 	}
 
 	if !s.tradernetClient.IsConnected() {
-		return nil, fmt.Errorf("Tradernet not connected")
+		return nil, fmt.Errorf("tradernet not connected")
 	}
 
 	securities, err := s.tradernetClient.FindSymbol(isin, nil)
@@ -530,7 +530,7 @@ func (s *SecuritySetupService) getTradernetSymbolFromISIN(isin string) (*Tradern
 // Faithful translation from Python: SecuritySetupService._get_security_name_from_yahoo()
 func (s *SecuritySetupService) getSecurityNameFromYahoo(symbol string, yahooSymbol *string) (*string, error) {
 	if s.yahooClient == nil {
-		return nil, fmt.Errorf("Yahoo client not available")
+		return nil, fmt.Errorf("yahoo client not available")
 	}
 
 	name, err := s.yahooClient.GetQuoteName(symbol, yahooSymbol)

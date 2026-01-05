@@ -306,7 +306,7 @@ func TestMigration_UpdatesForeignKeys(t *testing.T) {
 
 	// Verify security_tags foreign key references isin
 	var count int
-	err = db.QueryRow(`
+	_ = db.QueryRow(`
 		SELECT COUNT(*) FROM sqlite_master
 		WHERE type='table' AND name='security_tags'
 		AND sql LIKE '%FOREIGN KEY%isin%'

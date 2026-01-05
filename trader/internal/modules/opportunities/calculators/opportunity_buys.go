@@ -52,7 +52,7 @@ func (c *OpportunityBuysCalculator) Calculate(
 		return nil, nil
 	}
 
-	if ctx.SecurityScores == nil || len(ctx.SecurityScores) == 0 {
+	if len(ctx.SecurityScores) == 0 {
 		c.log.Debug().Msg("No security scores available")
 		return nil, nil
 	}

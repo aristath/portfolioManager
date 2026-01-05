@@ -55,7 +55,7 @@ func (c *WeightBasedCalculator) Calculate(
 	maxSellPositions := GetIntParam(params, "max_sell_positions", 5)
 
 	// Check if we have target weights
-	if ctx.TargetWeights == nil || len(ctx.TargetWeights) == 0 {
+	if len(ctx.TargetWeights) == 0 {
 		c.log.Debug().Msg("No target weights available")
 		return nil, nil
 	}

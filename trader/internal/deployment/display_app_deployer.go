@@ -69,18 +69,19 @@ func (d *DisplayAppDeployer) copyDirectory(sourceDir string, targetDir string) e
 
 		targetPath := filepath.Join(targetDir, relPath)
 
-		info, err = os.Stat(path)
+		// Re-stat to get current file info
+		fileInfo, err := os.Stat(path)
 		if err != nil {
 			return err
 		}
 
-		if info.IsDir() {
+		if fileInfo.IsDir() {
 			// Create directory
-			return os.MkdirAll(targetPath, info.Mode())
+			return os.MkdirAll(targetPath, fileInfo.Mode())
 		}
 
 		// Copy file
-		return d.copyFile(path, targetPath, info.Mode())
+		return d.copyFile(path, targetPath, fileInfo.Mode())
 	})
 }
 

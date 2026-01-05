@@ -394,8 +394,13 @@ class TradernetService:
         try:
             client = self._get_client(api_key, api_secret)
             quotes = client.get_quotes([symbol])  # type: ignore
-            if quotes and len(quotes) > 0:
-                data = quotes[0] if isinstance(quotes, list) else quotes
+            if quotes:
+                if isinstance(quotes, list) and len(quotes) > 0:
+                    data = quotes[0]
+                elif isinstance(quotes, dict):
+                    data = quotes
+                else:
+                    return None
                 return Quote(
                     symbol=symbol,
                     price=float(data.get("ltp", data.get("last_price", 0))),

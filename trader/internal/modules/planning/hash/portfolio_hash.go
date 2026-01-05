@@ -188,46 +188,42 @@ func GeneratePortfolioHash(
 	// Build a map of symbol -> security config data
 	stockConfigMap := make(map[string]map[string]interface{})
 
-	if securities != nil {
-		for _, security := range securities {
-			symbolUpper := strings.ToUpper(security.Symbol)
-			// Ensure security is in position_map (with 0 if not held)
-			if _, exists := positionMap[symbolUpper]; !exists {
-				positionMap[symbolUpper] = 0
-			}
+	for _, security := range securities {
+		symbolUpper := strings.ToUpper(security.Symbol)
+		// Ensure security is in position_map (with 0 if not held)
+		if _, exists := positionMap[symbolUpper]; !exists {
+			positionMap[symbolUpper] = 0
+		}
 
-			// Extract config fields
-			country := security.Country
-			industry := security.Industry
+		// Extract config fields
+		country := security.Country
+		industry := security.Industry
 
-			minTarget := ""
-			if security.MinPortfolioTarget > 0 {
-				minTarget = fmt.Sprintf("%v", security.MinPortfolioTarget)
-			}
-			maxTarget := ""
-			if security.MaxPortfolioTarget > 0 {
-				maxTarget = fmt.Sprintf("%v", security.MaxPortfolioTarget)
-			}
+		minTarget := ""
+		if security.MinPortfolioTarget > 0 {
+			minTarget = fmt.Sprintf("%v", security.MinPortfolioTarget)
+		}
+		maxTarget := ""
+		if security.MaxPortfolioTarget > 0 {
+			maxTarget = fmt.Sprintf("%v", security.MaxPortfolioTarget)
+		}
 
-			stockConfigMap[symbolUpper] = map[string]interface{}{
-				"allow_buy":            security.AllowBuy,
-				"allow_sell":           security.AllowSell,
-				"min_portfolio_target": minTarget,
-				"max_portfolio_target": maxTarget,
-				"country":              country,
-				"industry":             industry,
-			}
+		stockConfigMap[symbolUpper] = map[string]interface{}{
+			"allow_buy":            security.AllowBuy,
+			"allow_sell":           security.AllowSell,
+			"min_portfolio_target": minTarget,
+			"max_portfolio_target": maxTarget,
+			"country":              country,
+			"industry":             industry,
 		}
 	}
 
 	// Add cash balances as pseudo-positions (filter out zero balances)
-	if cashBalances != nil {
-		for currency, amount := range cashBalances {
-			if amount > 0 {
-				// Round to 2 decimal places for stability
-				rounded := math.Round(amount*100) / 100
-				positionMap[fmt.Sprintf("CASH.%s", strings.ToUpper(currency))] = rounded
-			}
+	for currency, amount := range cashBalances {
+		if amount > 0 {
+			// Round to 2 decimal places for stability
+			rounded := math.Round(amount*100) / 100
+			positionMap[fmt.Sprintf("CASH.%s", strings.ToUpper(currency))] = rounded
 		}
 	}
 

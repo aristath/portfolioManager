@@ -491,7 +491,7 @@ func (c *Client) getBatchQuoteInfo(symbols []string) (map[string]map[string]inte
 				} `json:"finance"`
 			}
 			if err := json.Unmarshal(bodyBytes, &errorResp); err == nil && errorResp.Finance.Error.Description != "" {
-				return nil, fmt.Errorf("Yahoo Finance API unauthorized: %s (code: %s). This may indicate Yahoo Finance has restricted access to their query API. Consider using an alternative data source.", errorResp.Finance.Error.Description, errorResp.Finance.Error.Code)
+				return nil, fmt.Errorf("yahoo finance API unauthorized: %s (code: %s). This may indicate yahoo finance has restricted access to their query API. Consider using an alternative data source", errorResp.Finance.Error.Description, errorResp.Finance.Error.Code)
 			}
 		}
 		if lastErr != nil {
@@ -513,7 +513,7 @@ func (c *Client) getBatchQuoteInfo(symbols []string) (map[string]map[string]inte
 	}
 
 	if result.QuoteResponse.Error != nil {
-		return nil, fmt.Errorf("Yahoo Finance API error: %v", result.QuoteResponse.Error)
+		return nil, fmt.Errorf("yahoo finance API error: %v", result.QuoteResponse.Error)
 	}
 
 	// Build map of symbol -> quote info
@@ -565,7 +565,7 @@ func (c *Client) getQuoteInfo(symbol string) (map[string]interface{}, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Yahoo Finance API returned status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("yahoo finance API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -579,7 +579,7 @@ func (c *Client) getQuoteInfo(symbol string) (map[string]interface{}, error) {
 	}
 
 	if result.QuoteResponse.Error != nil {
-		return nil, fmt.Errorf("Yahoo Finance API error: %v", result.QuoteResponse.Error)
+		return nil, fmt.Errorf("yahoo finance API error: %v", result.QuoteResponse.Error)
 	}
 
 	if len(result.QuoteResponse.Result) == 0 {
@@ -704,7 +704,7 @@ func (c *Client) GetHistoricalPrices(symbol string, yahooSymbolOverride *string,
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Yahoo Finance API returned status %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("yahoo finance API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -739,7 +739,7 @@ func (c *Client) GetHistoricalPrices(symbol string, yahooSymbolOverride *string,
 	}
 
 	if result.Chart.Error != nil {
-		return nil, fmt.Errorf("Yahoo Finance API error: %v", result.Chart.Error)
+		return nil, fmt.Errorf("yahoo finance API error: %v", result.Chart.Error)
 	}
 
 	if len(result.Chart.Result) == 0 {
@@ -842,7 +842,7 @@ func (c *Client) LookupTickerFromISIN(isin string) (string, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("Yahoo Finance search API returned status %d: %s", resp.StatusCode, string(body))
+		return "", fmt.Errorf("yahoo finance search API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
 	body, err := io.ReadAll(resp.Body)

@@ -24,8 +24,8 @@ func (p *DeepRebalancePattern) Generate(
 ) ([]domain.ActionSequence, error) {
 	maxSequences := GetIntParam(params, "max_sequences", 3)
 
-	sells, _ := opportunities[domain.OpportunityCategoryRebalanceSells]
-	buys, _ := opportunities[domain.OpportunityCategoryRebalanceBuys]
+	sells := opportunities[domain.OpportunityCategoryRebalanceSells]
+	buys := opportunities[domain.OpportunityCategoryRebalanceBuys]
 
 	var sequences []domain.ActionSequence
 	for i := 0; i < len(sells) && i < maxSequences; i++ {

@@ -30,7 +30,7 @@ func (s *ServiceManager) RestartService(serviceName string) error {
 
 	// Method 1: Try systemctl directly (may work with polkit)
 	cmd := exec.Command("systemctl", "restart", serviceName)
-	output, err := cmd.CombinedOutput()
+	_, err := cmd.CombinedOutput()
 	if err == nil {
 		s.log.Info().
 			Str("service", serviceName).
@@ -40,7 +40,7 @@ func (s *ServiceManager) RestartService(serviceName string) error {
 
 	// Method 2: Try sudo (may fail with NoNewPrivileges, but worth trying)
 	cmd = exec.Command("sudo", "systemctl", "restart", serviceName)
-	output, err = cmd.CombinedOutput()
+	_, err = cmd.CombinedOutput()
 	if err == nil {
 		s.log.Info().
 			Str("service", serviceName).
@@ -59,7 +59,7 @@ func (s *ServiceManager) RestartService(serviceName string) error {
 		"--dest=org.freedesktop.systemd1",
 		unitPath,
 		"org.freedesktop.systemd1.Unit.Restart", "replace", "s", "")
-	output, err = cmd.CombinedOutput()
+	dbusOutput, err := cmd.CombinedOutput()
 	if err == nil {
 		s.log.Info().
 			Str("service", serviceName).
@@ -67,8 +67,8 @@ func (s *ServiceManager) RestartService(serviceName string) error {
 		return nil
 	}
 
-	// All methods failed
-	outputStr := strings.TrimSpace(string(output))
+	// All methods failed - use last error output
+	outputStr := strings.TrimSpace(string(dbusOutput))
 	s.log.Warn().
 		Str("service", serviceName).
 		Str("error", outputStr).
