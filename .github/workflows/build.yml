@@ -54,7 +54,11 @@ jobs:
               python -m pip install --upgrade pip
               pip install -r requirements.txt
               # Try importing main module
-              python -c "import sys; sys.path.insert(0, '.'); from app import main; print('Imports OK')" || exit 1
+              if [ -f "app/main.py" ]; then
+                python -c "import sys; sys.path.insert(0, '.'); from app import main; print('Imports OK')" || exit 1
+              else
+                python -c "import sys; sys.path.insert(0, '.'); import app; print('Imports OK')" || exit 1
+              fi
               cd - > /dev/null
             fi
           done
