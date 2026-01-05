@@ -305,15 +305,21 @@ func (g *GitHubArtifactDeployer) DownloadArtifact(runID string, outputDir string
 
 // DeployLatest checks for a new build and deploys it if available
 // Returns the path to the deployed binary, or empty string if no new build
-func (g *GitHubArtifactDeployer) DeployLatest(outputDir string) (string, error) {
-	// Check for new build
-	runID, err := g.CheckForNewBuild()
-	if err != nil {
-		return "", fmt.Errorf("failed to check for new build: %w", err)
-	}
-
+// If runID is provided (non-empty), skips CheckForNewBuild() and uses the provided runID.
+// If runID is empty, calls CheckForNewBuild() as before (backward compatibility).
+// Note: MarkDeployed() is NOT called here - it should be called after successful deployment.
+func (g *GitHubArtifactDeployer) DeployLatest(outputDir string, runID string) (string, error) {
+	// If runID is not provided, check for new build
 	if runID == "" {
-		return "", nil // No new build
+		var err error
+		runID, err = g.CheckForNewBuild()
+		if err != nil {
+			return "", fmt.Errorf("failed to check for new build: %w", err)
+		}
+
+		if runID == "" {
+			return "", nil // No new build
+		}
 	}
 
 	// Download artifact
@@ -322,10 +328,8 @@ func (g *GitHubArtifactDeployer) DeployLatest(outputDir string) (string, error) 
 		return "", fmt.Errorf("failed to download artifact: %w", err)
 	}
 
-	// Mark as deployed
-	if err := g.tracker.MarkDeployed(runID); err != nil {
-		g.log.Warn().Err(err).Msg("Failed to mark artifact as deployed, but download succeeded")
-	}
+	// Note: MarkDeployed() is NOT called here - it should be called after successful deployment
+	// This prevents marking as deployed if deployment fails later
 
 	g.log.Info().
 		Str("run_id", runID).

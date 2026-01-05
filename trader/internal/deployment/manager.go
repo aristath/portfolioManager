@@ -238,12 +238,14 @@ func (m *Manager) Deploy() (*DeploymentResult, error) {
 
 	// Check for GitHub artifacts if enabled (for Go services)
 	var hasNewArtifact bool
+	var artifactRunID string // Store runID to pass through call chain
 	if m.githubArtifactDeployer != nil {
 		runID, err := m.githubArtifactDeployer.CheckForNewBuild()
 		if err != nil {
 			m.log.Warn().Err(err).Msg("Failed to check for GitHub artifacts, falling back to git check")
 		} else if runID != "" {
 			hasNewArtifact = true
+			artifactRunID = runID // Store runID to pass to deployServices
 			m.log.Info().
 				Str("run_id", runID).
 				Msg("New GitHub artifact available")
@@ -319,7 +321,8 @@ func (m *Manager) Deploy() (*DeploymentResult, error) {
 	}
 
 	// Deploy based on categories
-	deploymentErrors = m.deployServices(categories, result)
+	// Pass artifactRunID to deployServices to eliminate duplicate CheckForNewBuild() call
+	deploymentErrors = m.deployServices(categories, result, artifactRunID)
 
 	// Deploy frontend (pre-built, committed to git)
 	if categories.Frontend {
@@ -463,10 +466,11 @@ func (m *Manager) HardUpdate() (*DeploymentResult, error) {
 	var mu sync.Mutex
 
 	// Deploy trader service (always)
+	// Pass empty runID - DeployLatest will call CheckForNewBuild() for HardUpdate
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		deployment := m.deployGoService(m.config.TraderConfig, "trader")
+		deployment := m.deployGoService(m.config.TraderConfig, "trader", "")
 		mu.Lock()
 		result.ServicesDeployed = append(result.ServicesDeployed, deployment)
 		if !deployment.Success {
@@ -592,7 +596,8 @@ func (m *Manager) HardUpdate() (*DeploymentResult, error) {
 }
 
 // deployServices deploys services based on change categories
-func (m *Manager) deployServices(categories *ChangeCategories, result *DeploymentResult) map[string]error {
+// runID is the GitHub Actions run ID to deploy. If empty, deployGoService will check for new builds.
+func (m *Manager) deployServices(categories *ChangeCategories, result *DeploymentResult, runID string) map[string]error {
 	errors := make(map[string]error)
 	var wg sync.WaitGroup
 	var mu sync.Mutex
@@ -602,7 +607,7 @@ func (m *Manager) deployServices(categories *ChangeCategories, result *Deploymen
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			deployment := m.deployGoService(m.config.TraderConfig, "trader")
+			deployment := m.deployGoService(m.config.TraderConfig, "trader", runID)
 			mu.Lock()
 			result.ServicesDeployed = append(result.ServicesDeployed, deployment)
 			if !deployment.Success {
@@ -665,7 +670,8 @@ func (m *Manager) deployServices(categories *ChangeCategories, result *Deploymen
 }
 
 // deployGoService deploys a single Go service
-func (m *Manager) deployGoService(config GoServiceConfig, serviceName string) ServiceDeployment {
+// runID is the GitHub Actions run ID to deploy. If empty, DeployLatest will check for new builds.
+func (m *Manager) deployGoService(config GoServiceConfig, serviceName string, runID string) ServiceDeployment {
 	deployment := ServiceDeployment{
 		ServiceName: serviceName,
 		ServiceType: "go",
@@ -691,7 +697,8 @@ func (m *Manager) deployGoService(config GoServiceConfig, serviceName string) Se
 		Msg("Checking for GitHub artifact (REQUIRED - no on-device building)")
 
 	// Download latest artifact (will verify linux/arm64 architecture)
-	downloadedPath, err := m.githubArtifactDeployer.DeployLatest(tempDir)
+	// Pass runID to DeployLatest - if provided, it will skip CheckForNewBuild()
+	downloadedPath, err := m.githubArtifactDeployer.DeployLatest(tempDir, runID)
 	if err != nil {
 		deployment.Error = fmt.Sprintf("failed to download artifact: %v", err)
 		return deployment
@@ -730,6 +737,16 @@ func (m *Manager) deployGoService(config GoServiceConfig, serviceName string) Se
 		if err := m.serviceManager.CheckHealth(healthURL, m.config.HealthCheckMaxAttempts, m.config.HealthCheckTimeout); err != nil {
 			deployment.Error = fmt.Sprintf("health check failed: %v", err)
 			return deployment
+		}
+	}
+
+	// Mark artifact as deployed ONLY after successful deployment (binary deploy, restart, health check)
+	// This ensures we don't mark as deployed if any step fails
+	if runID != "" && m.githubArtifactDeployer != nil && m.githubArtifactDeployer.tracker != nil {
+		if err := m.githubArtifactDeployer.tracker.MarkDeployed(runID); err != nil {
+			m.log.Warn().Err(err).Str("run_id", runID).Msg("Failed to mark artifact as deployed after successful deployment")
+		} else {
+			m.log.Info().Str("run_id", runID).Msg("Marked artifact as deployed after successful deployment")
 		}
 	}
 
