@@ -939,8 +939,21 @@ func (h *UniverseHandlers) CalculateAndSaveScore(symbol string, yahooSymbol stri
 // calculateAndSaveScore calculates and saves security score
 // Faithful translation from Python: app/modules/scoring/services/scoring_service.py -> calculate_and_save_score
 func (h *UniverseHandlers) calculateAndSaveScore(symbol string, yahooSymbol string, country string, industry string) (*SecurityScore, error) {
-	// Fetch price data from history database
-	dailyPrices, err := h.historyDB.GetDailyPrices(symbol, 400)
+	// Get security to extract ISIN
+	security, err := h.securityRepo.GetBySymbol(symbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get security: %w", err)
+	}
+	if security == nil {
+		return nil, fmt.Errorf("security not found: %s", symbol)
+	}
+	if security.ISIN == "" {
+		return nil, fmt.Errorf("security %s has no ISIN, cannot calculate score", symbol)
+	}
+	isin := security.ISIN
+
+	// Fetch price data from history database using ISIN
+	dailyPrices, err := h.historyDB.GetDailyPrices(isin, 400)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get daily prices: %w", err)
 	}
@@ -949,7 +962,7 @@ func (h *UniverseHandlers) calculateAndSaveScore(symbol string, yahooSymbol stri
 		return nil, fmt.Errorf("insufficient daily data: %d days (need at least 50)", len(dailyPrices))
 	}
 
-	monthlyPrices, err := h.historyDB.GetMonthlyPrices(symbol, 150)
+	monthlyPrices, err := h.historyDB.GetMonthlyPrices(isin, 150)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get monthly prices: %w", err)
 	}
