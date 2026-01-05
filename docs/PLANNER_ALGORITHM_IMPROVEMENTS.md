@@ -48,29 +48,29 @@ func EvaluateEndStateEnhanced(
 ) float64 {
     // 1. Diversification Score (30%) - KEEP IMPORTANT
     divScore := CalculateDiversificationScore(endContext)
-    
+
     // 2. Expected Return Score (30%)
     expectedReturnScore := calculateExpectedReturnScore(endContext)
-    
+
     // 3. Risk-Adjusted Return Score (20%)
     riskAdjustedScore := calculateRiskAdjustedScore(endContext)
-    
+
     // 4. Quality Score (20%)
     qualityScore := calculateQualityScore(endContext)
-    
+
     // Combined score (all components important)
-    endScore := divScore*0.30 + 
-                expectedReturnScore*0.30 + 
-                riskAdjustedScore*0.20 + 
+    endScore := divScore*0.30 +
+                expectedReturnScore*0.30 +
+                riskAdjustedScore*0.20 +
                 qualityScore*0.20
-    
+
     // Transaction cost penalty (subtractive)
     totalCost := CalculateTransactionCost(sequence, transactionCostFixed, transactionCostPercent)
     if costPenaltyFactor > 0.0 && endContext.TotalValue > 0 {
         costPenalty := (totalCost / endContext.TotalValue) * costPenaltyFactor
         endScore = math.Max(0.0, endScore-costPenalty)
     }
-    
+
     return math.Min(1.0, endScore)
 }
 ```
@@ -93,27 +93,27 @@ func calculateExpectedReturnScore(ctx models.PortfolioContext) float64 {
     if totalValue <= 0 {
         return 0.5
     }
-    
+
     weightedReturn := 0.0
     weightedDividend := 0.0
-    
+
     for symbol, value := range ctx.Positions {
         weight := value / totalValue
-        
+
         // Get expected CAGR (from security scores or optimizer)
         if expectedCAGR, ok := ctx.ExpectedReturns[symbol]; ok {
             weightedReturn += expectedCAGR * weight
         }
-        
+
         // Get dividend yield
         if dividendYield, ok := ctx.SecurityDividends[symbol]; ok {
             weightedDividend += dividendYield * weight
         }
     }
-    
+
     // Total return = growth + dividend
     totalReturn := weightedReturn + weightedDividend
-    
+
     // Score based on target (11% minimum)
     // 11% = 0.8, 15% = 1.0, 20%+ = 1.0 (capped)
     if totalReturn >= 0.20 {
@@ -134,7 +134,7 @@ func calculateRiskAdjustedScore(ctx models.PortfolioContext) float64 {
     // Calculate portfolio Sharpe ratio
     // Use portfolio returns and volatility
     portfolioSharpe := calculatePortfolioSharpe(ctx)
-    
+
     // Score based on Sharpe
     if portfolioSharpe >= 2.0 {
         return 1.0
@@ -237,13 +237,13 @@ func (ds *DividendScorer) CalculateEnhanced(
 ) DividendScore {
     // Current dividend score (yield + consistency)
     baseScore := ds.Calculate(dividendYield, payoutRatio, fiveYearAvgDivYield)
-    
+
     // Calculate total return = growth + dividend
     totalReturn := expectedCAGR
     if dividendYield != nil {
         totalReturn += *dividendYield
     }
-    
+
     // Boost score for high total return
     // Example: 5% growth + 10% dividend = 15% total (excellent)
     totalReturnBoost := 0.0
@@ -254,11 +254,11 @@ func (ds *DividendScorer) CalculateEnhanced(
     } else if totalReturn >= 0.10 {
         totalReturnBoost = 0.10
     }
-    
+
     // Enhanced score
     enhancedScore := baseScore.Score + totalReturnBoost
     enhancedScore = math.Min(1.0, enhancedScore)
-    
+
     return DividendScore{
         Score:      round3(enhancedScore),
         Components: baseScore.Components, // Keep existing components
@@ -296,7 +296,7 @@ func scoreCAGREnhanced(
     if cagr <= 0 {
         return scoring.BellCurveFloor
     }
-    
+
     // Bubble detection: High CAGR with poor risk metrics = bubble
     isBubble := false
     if cagr > target*1.5 { // 16.5%+ for 11% target
@@ -314,12 +314,12 @@ func scoreCAGREnhanced(
             isBubble = true // High return, weak fundamentals
         }
     }
-    
+
     if isBubble {
         // Penalize bubbles: cap score at 0.6 even if CAGR is high
         return 0.6
     }
-    
+
     // Quality high CAGR: reward it
     if cagr >= target {
         // Monotonic scoring above target (reward higher CAGR)
@@ -333,7 +333,7 @@ func scoreCAGREnhanced(
             return 0.8 + excess/target*0.1
         }
     }
-    
+
     // Below target: use bell curve (penalize being too low)
     sigma := scoring.BellCurveSigmaLeft
     rawScore := math.Exp(-math.Pow(cagr-target, 2) / (2 * math.Pow(sigma, 2)))
@@ -371,11 +371,11 @@ func (os *OpportunityScorer) CalculateWithQualityGate(
 ) OpportunityScore {
     // Calculate base opportunity score
     baseScore := os.Calculate(dailyPrices, peRatio, forwardPE, marketAvgPE)
-    
+
     // Quality gate: require minimum quality for value opportunities
     minQualityThreshold := 0.6 // Configurable
     minLongTermThreshold := 0.5
-    
+
     // If opportunity score is high but quality is low, reduce score
     if baseScore.Score > 0.7 {
         if fundamentalsScore < minQualityThreshold || longTermScore < minLongTermThreshold {
@@ -384,7 +384,7 @@ func (os *OpportunityScorer) CalculateWithQualityGate(
             baseScore.Components["quality_penalty"] = 0.3
         }
     }
-    
+
     return baseScore
 }
 ```
@@ -402,13 +402,13 @@ func isValueTrap(
 ) bool {
     // Cheap (low P/E)
     isCheap := peRatio != nil && *peRatio < marketAvgPE*0.8
-    
+
     // But declining quality
     isDeclining := fundamentalsScore < 0.6 || longTermScore < 0.5
-    
+
     // And negative momentum
     hasNegativeMomentum := recentMomentum < -0.05
-    
+
     return isCheap && (isDeclining || hasNegativeMomentum)
 }
 ```
@@ -454,33 +454,33 @@ func EvaluateEndStateWithOptimizerAlignment(
 ) float64 {
     // 1. Diversification (30%)
     divScore := CalculateDiversificationScore(endContext)
-    
+
     // 2. Optimizer Alignment (25%) - NEW
     alignmentScore := calculateOptimizerAlignment(endContext, optimizerTargets)
-    
+
     // 3. Expected Return (25%)
     expectedReturnScore := calculateExpectedReturnScore(endContext)
-    
+
     // 4. Risk-Adjusted Return (10%)
     riskAdjustedScore := calculateRiskAdjustedScore(endContext)
-    
+
     // 5. Quality (10%)
     qualityScore := calculateQualityScore(endContext)
-    
+
     // Combined
-    endScore := divScore*0.30 + 
-                alignmentScore*0.25 + 
-                expectedReturnScore*0.25 + 
-                riskAdjustedScore*0.10 + 
+    endScore := divScore*0.30 +
+                alignmentScore*0.25 +
+                expectedReturnScore*0.25 +
+                riskAdjustedScore*0.10 +
                 qualityScore*0.10
-    
+
     // Transaction cost penalty
     totalCost := CalculateTransactionCost(sequence, transactionCostFixed, transactionCostPercent)
     if endContext.TotalValue > 0 {
         costPenalty := (totalCost / endContext.TotalValue) * 0.5 // 0.5 penalty factor
         endScore = math.Max(0.0, endScore-costPenalty)
     }
-    
+
     return math.Min(1.0, endScore)
 }
 
@@ -493,7 +493,7 @@ func calculateOptimizerAlignment(
     if totalValue <= 0 || len(targets) == 0 {
         return 0.5
     }
-    
+
     var deviations []float64
     for symbol, targetWeight := range targets {
         currentValue, hasPosition := ctx.Positions[symbol]
@@ -501,21 +501,21 @@ func calculateOptimizerAlignment(
         if hasPosition {
             currentWeight = currentValue / totalValue
         }
-        
+
         deviation := math.Abs(currentWeight - targetWeight)
         deviations = append(deviations, deviation)
     }
-    
+
     if len(deviations) == 0 {
         return 0.5
     }
-    
+
     // Average deviation
     avgDeviation := sum(deviations) / float64(len(deviations))
-    
+
     // Score: 0 deviation = 1.0, 10% avg deviation = 0.5, 20%+ = 0.0
     alignmentScore := math.Max(0.0, 1.0-avgDeviation/0.20)
-    
+
     return alignmentScore
 }
 ```
@@ -568,18 +568,18 @@ func CalculateTransactionCostEnhanced(
     // Base costs
     fixedCost := transactionCostFixed
     variableCost := math.Abs(action.ValueEUR) * transactionCostPercent
-    
+
     // Spread cost (bid-ask spread)
     spreadCost := math.Abs(action.ValueEUR) * spreadCostPercent
-    
+
     // Slippage (price movement)
     slippageCost := math.Abs(action.ValueEUR) * slippagePercent
-    
+
     // Market impact (for large trades)
     impactCost := math.Abs(action.ValueEUR) * marketImpactPercent
-    
+
     totalCost := fixedCost + variableCost + spreadCost + slippageCost + impactCost
-    
+
     return totalCost
 }
 ```
@@ -609,7 +609,7 @@ func EvaluateEndStateWithRegime(
 ) float64 {
     // Base evaluation
     baseScore := EvaluateEndStateEnhanced(endContext, sequence, transactionCostFixed, transactionCostPercent, 0.5)
-    
+
     // Regime adjustments
     switch regime {
     case portfolio.MarketRegimeBear:
@@ -617,23 +617,23 @@ func EvaluateEndStateWithRegime(
         // Penalize high-volatility positions
         volatilityPenalty := calculateVolatilityPenalty(endContext)
         baseScore = baseScore * (1.0 - volatilityPenalty*0.2) // Up to 20% penalty
-        
+
         // Boost quality score
         qualityBoost := calculateQualityBoost(endContext)
         baseScore = baseScore + qualityBoost*0.1 // Up to 10% boost
-        
+
     case portfolio.MarketRegimeBull:
         // Bull market: Allow more risk, favor growth
         // Slight boost for growth positions
         growthBoost := calculateGrowthBoost(endContext)
         baseScore = baseScore + growthBoost*0.05 // Up to 5% boost
-        
+
     case portfolio.MarketRegimeSideways:
         // Sideways: Neutral, favor value opportunities
         valueBoost := calculateValueBoost(endContext)
         baseScore = baseScore + valueBoost*0.05 // Up to 5% boost
     }
-    
+
     return math.Min(1.0, baseScore)
 }
 ```
@@ -708,20 +708,20 @@ func EvaluateEndStateWithRegime(
 ```go
 type PlannerConfiguration struct {
     // ... existing fields ...
-    
+
     // Quality vs Opportunity ratio (default 0.85 = 85% quality)
     QualityOpportunityRatio float64 `json:"quality_opportunity_ratio"` // 0.0-1.0
-    
+
     // Minimum quality thresholds
     MinFundamentalsForOpportunity float64 `json:"min_fundamentals_for_opportunity"` // Default 0.6
     MinLongTermForOpportunity     float64 `json:"min_long_term_for_opportunity"`     // Default 0.5
-    
+
     // CAGR bubble detection thresholds
     BubbleDetectionEnabled        bool    `json:"bubble_detection_enabled"`         // Default true
     MinSharpeForHighCAGR          float64 `json:"min_sharpe_for_high_cagr"`         // Default 0.5
     MinSortinoForHighCAGR         float64 `json:"min_sortino_for_high_cagr"`        // Default 0.5
     MaxVolatilityForHighCAGR      float64 `json:"max_volatility_for_high_cagr"`     // Default 0.40
-    
+
     // Transaction cost enhancements
     SpreadCostPercent    float64 `json:"spread_cost_percent"`    // Default 0.001 (0.1%)
     SlippagePercent      float64 `json:"slippage_percent"`        // Default 0.0015 (0.15%)
@@ -745,4 +745,3 @@ These improvements will:
 8. **Realistic costs** (spread, slippage, market impact)
 
 **Expected Outcome**: Better risk-adjusted returns, fewer bad trades, better alignment with optimizer strategy, and adaptation to market conditions.
-
