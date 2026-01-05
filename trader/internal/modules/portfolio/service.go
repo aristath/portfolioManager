@@ -554,7 +554,7 @@ func (s *PortfolioService) SyncFromTradernet() error {
 		// Convert tradernet.Position to portfolio.Position
 		// Use Tradernet data for position info, but preserve Yahoo prices
 		dbPos := Position{
-			ISIN:         isin,                      // Required for Upsert (PRIMARY KEY)
+			ISIN:         isin, // Required for Upsert (PRIMARY KEY)
 			Symbol:       tradernetPos.Symbol,
 			Quantity:     tradernetPos.Quantity,     // From Tradernet
 			AvgPrice:     tradernetPos.AvgPrice,     // From Tradernet (historical)
