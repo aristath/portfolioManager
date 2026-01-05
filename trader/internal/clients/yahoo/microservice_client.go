@@ -177,6 +177,17 @@ func (c *MicroserviceClient) parseResponse(resp *http.Response) (*ServiceRespons
 	return &result, nil
 }
 
+// BatchQuotesRequest is the request for batch quotes
+type BatchQuotesRequest struct {
+	Symbols        []string          `json:"symbols"`
+	YahooOverrides map[string]string `json:"yahoo_overrides,omitempty"`
+}
+
+// BatchQuotesResponse is the response for batch quotes
+type BatchQuotesResponse struct {
+	Quotes map[string]float64 `json:"quotes"`
+}
+
 // GetBatchQuotes fetches current prices for multiple symbols efficiently
 func (c *MicroserviceClient) GetBatchQuotes(
 	symbolOverrides map[string]*string,
