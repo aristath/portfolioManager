@@ -295,18 +295,13 @@ func registerJobs(sched *scheduler.Scheduler, universeDB, configDB, ledgerDB, po
 	tradernetClient := tradernet.NewClient(cfg.TradernetServiceURL, log)
 	tradernetClient.SetCredentials(cfg.TradernetAPIKey, cfg.TradernetAPISecret)
 	// Use Yahoo Finance microservice client if URL is configured, otherwise fall back to direct client
-	// Note: For now, we use the concrete Client type for services that need additional methods
-	// (GetCurrentPrice, GetFundamentalData, LookupTickerFromISIN, etc.)
-	// TODO: Add these methods to the interface or create a full client interface
-	var yahooClient *yahoo.Client
+	var yahooClient yahoo.FullClientInterface
 	if cfg.YahooFinanceServiceURL != "" {
-		// For now, still use direct client until microservice client implements all methods
-		// yahooClient = yahoo.NewMicroserviceClient(cfg.YahooFinanceServiceURL, log)
-		yahooClient = yahoo.NewClient(log)
-		log.Info().Str("url", cfg.YahooFinanceServiceURL).Msg("Yahoo Finance microservice URL configured but not yet fully integrated")
+		yahooClient = yahoo.NewMicroserviceClient(cfg.YahooFinanceServiceURL, log)
+		log.Info().Str("url", cfg.YahooFinanceServiceURL).Msg("Using Yahoo Finance microservice")
 	} else {
 		yahooClient = yahoo.NewClient(log)
-		log.Info().Msg("Using direct Yahoo Finance client")
+		log.Info().Msg("Using direct Yahoo Finance client (no microservice URL configured)")
 	}
 
 	// Currency exchange service

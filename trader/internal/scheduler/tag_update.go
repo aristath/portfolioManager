@@ -19,7 +19,7 @@ type TagUpdateJob struct {
 	securityRepo *universe.SecurityRepository
 	scoreRepo    *universe.ScoreRepository
 	tagAssigner  *universe.TagAssigner
-	yahooClient  *yahoo.Client
+	yahooClient  yahoo.FullClientInterface
 	historyDB    *universe.HistoryDB
 	portfolioDB  *sql.DB
 	positionRepo *portfolio.PositionRepository
@@ -31,7 +31,7 @@ type TagUpdateConfig struct {
 	SecurityRepo *universe.SecurityRepository
 	ScoreRepo    *universe.ScoreRepository
 	TagAssigner  *universe.TagAssigner
-	YahooClient  *yahoo.Client
+	YahooClient  yahoo.FullClientInterface
 	HistoryDB    *universe.HistoryDB
 	PortfolioDB  *sql.DB
 	PositionRepo *portfolio.PositionRepository

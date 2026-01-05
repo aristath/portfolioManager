@@ -38,7 +38,7 @@ type DividendReinvestmentJob struct {
 	tradingService        *trading.TradingService
 	tradeExecutionService *services.TradeExecutionService
 	tradernetClient       *tradernet.Client
-	yahooClient           *yahoo.Client
+	yahooClient           yahoo.FullClientInterface
 	transactionCostFixed  float64 // Freedom24 fixed cost (€2.00)
 	transactionCostPct    float64 // Freedom24 variable cost (0.2%)
 	maxCostRatio          float64 // Maximum acceptable cost ratio (1%)
@@ -54,7 +54,7 @@ type DividendReinvestmentConfig struct {
 	TradingService        *trading.TradingService
 	TradeExecutionService *services.TradeExecutionService
 	TradernetClient       *tradernet.Client
-	YahooClient           *yahoo.Client
+	YahooClient           yahoo.FullClientInterface
 }
 
 // NewDividendReinvestmentJob creates a new dividend reinvestment job

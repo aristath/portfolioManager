@@ -32,7 +32,7 @@ type PlannerBatchJob struct {
 	securityRepo           *universe.SecurityRepository
 	allocRepo              *allocation.Repository
 	tradernetClient        *tradernet.Client
-	yahooClient            *yahoo.Client
+	yahooClient            yahoo.FullClientInterface
 	optimizerService       *optimization.OptimizerService // Added for optimizer target weights
 	opportunitiesService   *opportunities.Service
 	sequencesService       *sequences.Service
@@ -52,7 +52,7 @@ type PlannerBatchConfig struct {
 	SecurityRepo           *universe.SecurityRepository
 	AllocRepo              *allocation.Repository
 	TradernetClient        *tradernet.Client
-	YahooClient            *yahoo.Client
+	YahooClient            yahoo.FullClientInterface
 	OptimizerService       *optimization.OptimizerService // Added for optimizer target weights
 	OpportunitiesService   *opportunities.Service
 	SequencesService       *sequences.Service

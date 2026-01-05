@@ -7,8 +7,11 @@ This document compares lightweight alternatives to FastAPI/uvicorn for Python mi
 - **Framework**: FastAPI 0.109.0
 - **Server**: uvicorn 0.27.0
 - **Validation**: Pydantic 2.5.3
-- **Memory Limit**: 512MB (tradernet service)
-- **Deployment**: Systemd (native) or Docker
+- **Memory Limit**: 512MB per service
+- **Deployment**: 
+  - **tradernet** (port 9002): Systemd + venv (native)
+  - **yfinance** (port 9003): Systemd + venv (native)
+  - **pypfopt** (port 9001): Docker (dockerized)
 
 ## Alternatives Comparison
 
@@ -122,7 +125,9 @@ This document compares lightweight alternatives to FastAPI/uvicorn for Python mi
 
 ---
 
-## Recommendation: Starlette + Hypercorn
+## Recommendation
+
+### Option A: Starlette + Hypercorn (Best Balance) ⭐
 
 For your use case (resource-constrained Arduino device), **Starlette + Hypercorn** offers the best balance:
 
@@ -132,14 +137,37 @@ For your use case (resource-constrained Arduino device), **Starlette + Hypercorn
 4. **Can keep Pydantic** (use manually for validation if needed)
 5. **Production-ready** (used by FastAPI, Reddit, etc.)
 
+### Option B: Flask (Simplest, Lightest)
+
+Since your service methods are **synchronous anyway** (yfinance, PyPortfolioOpt), Flask is also a great option:
+
+1. **Lightest option** (~120-150MB savings per service)
+2. **Simplest code** - no async complexity
+3. **Mature and stable**
+4. **Minimal dependencies**
+
+**Trade-off**: Need to change `async def` → `def`, but since your underlying calls are sync, you don't lose anything.
+
+### Comparison Table
+
+| Framework | Memory Savings | Migration Effort | Async | Best For |
+|-----------|---------------|------------------|-------|----------|
+| **Starlette + Hypercorn** | ~150-200MB | Low (2-3h) | ✅ Full async | Best balance |
+| **Flask + Gunicorn** | ~120-150MB | Medium (3-4h) | ❌ Sync | Simplest, lightest |
+| **Quart** | ~100-150MB | Medium (4-6h) | ✅ Full async | Flask syntax + async |
+| **Hypercorn Only** | ~50-100MB | Very Low (30min) | ✅ Full async | Quick win |
+| **Sanic** | ~150MB | High (6-8h) | ✅ Full async | Not recommended |
+
 ### Memory Impact
 
-If you have 3 microservices:
-- **Current**: ~1.5GB total (3 × 500MB)
-- **With Starlette**: ~900MB total (3 × 300MB)
-- **Savings**: ~600MB (40% reduction)
+With 3 microservices (2 venv, 1 Docker):
+- **Current**: ~1.5GB total (3 × 500MB each)
+- **With Starlette**: ~900MB total (3 × 300MB each)
+- **With Flask**: ~1.05GB total (3 × 350MB each)
+- **Savings (Starlette)**: ~600MB (40% reduction)
+- **Savings (Flask)**: ~450MB (30% reduction)
 
-On an embedded device with limited RAM, this is significant.
+On an embedded device with limited RAM (Arduino Uno Q), this is significant.
 
 ---
 
@@ -199,20 +227,76 @@ async def get_batch_quotes(request):
 
 ## Implementation Plan
 
-### Phase 1: Quick Win (Hypercorn Only)
-- Change systemd service to use `hypercorn` instead of `uvicorn`
-- Update requirements.txt
-- Test thoroughly
-- **Time**: 30 minutes
-- **Savings**: ~50-100MB per service
+Given your deployment setup (2 venv services, 1 Docker service), here's a recommended migration strategy:
 
-### Phase 2: Full Migration (Starlette)
-- Migrate one service at a time (start with simplest: yfinance)
-- Update requirements.txt
-- Refactor endpoints to Starlette
-- Test thoroughly
-- **Time**: 2-3 hours per service
-- **Savings**: ~150-200MB per service
+### Service-Specific Considerations
+
+**Venv Services (tradernet, yfinance):**
+- Easy to migrate - just update venv and systemd service file
+- Can test locally before deploying
+- No Docker rebuild needed
+
+**Docker Service (pypfopt):**
+- Requires Dockerfile changes
+- Need to rebuild Docker image
+- Slightly more complex (but still straightforward)
+
+### Recommended Migration Order
+
+1. **yfinance** (venv) - Simplest service, good test case
+2. **tradernet** (venv) - Similar to yfinance
+3. **pypfopt** (Docker) - More complex, migrate last
+
+### Phase 1: Quick Win (Hypercorn Only)
+
+**For venv services (tradernet, yfinance):**
+```bash
+# 1. Update requirements.txt (replace uvicorn with hypercorn)
+# 2. Recreate venv or update:
+cd microservices/yfinance
+source venv/bin/activate
+pip install hypercorn
+pip uninstall uvicorn
+# 3. Update systemd service file:
+# Change: uvicorn → hypercorn
+# ExecStart=/opt/arduino-trader/microservices/yfinance/venv/bin/hypercorn app.main:app --bind 0.0.0.0:9003
+# 4. Restart service:
+sudo systemctl restart yfinance
+```
+
+**For Docker service (pypfopt):**
+```bash
+# 1. Update requirements.txt
+# 2. Rebuild Docker image:
+docker-compose build pypfopt
+# 3. Update docker-compose.yml CMD (if needed) or Dockerfile
+# 4. Restart container:
+docker-compose up -d pypfopt
+```
+
+**Time**: ~30 minutes per service
+**Savings**: ~50-100MB per service
+
+### Phase 2: Full Migration (Starlette/Flask)
+
+**For venv services:**
+1. Update requirements.txt
+2. Recreate venv: `python3 -m venv venv --clear`
+3. Install new requirements: `pip install -r requirements.txt`
+4. Refactor code (see examples)
+5. Update systemd service file (hypercorn/gunicorn command)
+6. Test locally first
+7. Deploy and restart service
+
+**For Docker service:**
+1. Update requirements.txt
+2. Refactor code
+3. Rebuild Docker image: `docker-compose build pypfopt`
+4. Update Dockerfile CMD if needed
+5. Restart container: `docker-compose up -d pypfopt`
+
+**Time**: 2-4 hours per service (depending on framework choice)
+**Savings**: ~120-200MB per service
 
 ---
 
@@ -225,6 +309,25 @@ hypercorn==0.17.1
 # Keep Pydantic if using for validation
 pydantic==2.5.3
 # Keep your domain libraries
+yfinance>=0.2.28
+```
+
+### Flask + Gunicorn
+```txt
+flask==3.0.0
+gunicorn==21.2.0
+# Optional: Keep Pydantic for validation
+pydantic==2.5.3
+# Keep your domain libraries
+yfinance>=0.2.28
+```
+
+### Quart (Async Flask)
+```txt
+quart==0.19.4
+hypercorn==0.17.1
+# Optional: Keep Pydantic for validation
+pydantic==2.5.3
 yfinance>=0.2.28
 ```
 
@@ -241,11 +344,64 @@ pydantic==2.5.3
 
 After migration, verify:
 
-1. **Health endpoints** work
+1. **Health endpoints** work:
+   ```bash
+   curl http://localhost:9001/health  # pypfopt
+   curl http://localhost:9002/health  # tradernet
+   curl http://localhost:9003/health  # yfinance
+   ```
+
 2. **All API endpoints** return expected responses
+
 3. **Error handling** works correctly
-4. **Memory usage** is reduced (check with `ps aux` or `docker stats`)
+
+4. **Memory usage** is reduced:
+   ```bash
+   # For venv services (systemd):
+   systemctl status tradernet  # Check memory usage
+   systemctl status yfinance
+   
+   # For Docker service:
+   docker stats pypfopt-service
+   ```
+
 5. **Performance** is maintained or improved
+
+## Deployment-Specific Notes
+
+### Venv Services (tradernet, yfinance)
+
+**Systemd Service Files:**
+- Located: `tradernet.service`, `yfinance.service`
+- Update `ExecStart` line to use new server (hypercorn/gunicorn)
+- Update path if venv location changes
+- Memory limits already set (MemoryMax=512M)
+
+**Example systemd update for Starlette+Hypercorn:**
+```ini
+ExecStart=/opt/arduino-trader/microservices/yfinance/venv/bin/hypercorn app.main:app --bind 0.0.0.0:9003
+```
+
+**Example systemd update for Flask+Gunicorn:**
+```ini
+ExecStart=/opt/arduino-trader/microservices/yfinance/venv/bin/gunicorn -w 2 -b 0.0.0.0:9003 app.main:app
+```
+
+### Docker Service (pypfopt)
+
+**Dockerfile:**
+- Update CMD to use new server
+- Requirements.txt changes require rebuild
+
+**Example Dockerfile CMD for Starlette+Hypercorn:**
+```dockerfile
+CMD ["hypercorn", "app.main:app", "--bind", "0.0.0.0:9001"]
+```
+
+**Example Dockerfile CMD for Flask+Gunicorn:**
+```dockerfile
+CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:9001", "app.main:app"]
+```
 
 ---
 

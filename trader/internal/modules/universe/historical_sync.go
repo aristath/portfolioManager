@@ -11,7 +11,7 @@ import (
 // HistoricalSyncService handles synchronization of historical price data from Yahoo Finance
 // Faithful translation from Python: app/jobs/securities_data_sync.py -> _sync_historical_for_symbol()
 type HistoricalSyncService struct {
-	yahooClient    *yahoo.Client
+	yahooClient    yahoo.FullClientInterface
 	securityRepo   *SecurityRepository
 	historyDB      *HistoryDB
 	rateLimitDelay time.Duration // External API rate limit delay
@@ -20,7 +20,7 @@ type HistoricalSyncService struct {
 
 // NewHistoricalSyncService creates a new historical sync service
 func NewHistoricalSyncService(
-	yahooClient *yahoo.Client,
+	yahooClient yahoo.FullClientInterface,
 	securityRepo *SecurityRepository,
 	historyDB *HistoryDB,
 	rateLimitDelay time.Duration,

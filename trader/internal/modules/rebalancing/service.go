@@ -62,7 +62,7 @@ type Service struct {
 	securityRepo       *universe.SecurityRepository
 	allocRepo          *allocation.Repository
 	tradernetClient    *tradernet.Client
-	yahooClient        *yahoo.Client
+	yahooClient        yahoo.FullClientInterface
 	configRepo         *planningrepo.ConfigRepository
 	recommendationRepo *planning.RecommendationRepository
 
@@ -78,7 +78,7 @@ func NewService(
 	securityRepo *universe.SecurityRepository,
 	allocRepo *allocation.Repository,
 	tradernetClient *tradernet.Client,
-	yahooClient *yahoo.Client,
+	yahooClient yahoo.FullClientInterface,
 	configRepo *planningrepo.ConfigRepository,
 	recommendationRepo *planning.RecommendationRepository,
 	log zerolog.Logger,

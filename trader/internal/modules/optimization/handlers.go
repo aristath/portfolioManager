@@ -27,7 +27,7 @@ type OptimizationCache struct {
 type Handler struct {
 	service                 *OptimizerService
 	db                      *sql.DB
-	yahooClient             *yahoo.Client
+	yahooClient             yahoo.FullClientInterface
 	tradernetClient         TradernetClientInterface
 	currencyExchangeService CurrencyExchangeServiceInterface
 	dividendRepo            *dividends.DividendRepository
@@ -41,7 +41,7 @@ type Handler struct {
 func NewHandler(
 	service *OptimizerService,
 	db *sql.DB,
-	yahooClient *yahoo.Client,
+	yahooClient yahoo.FullClientInterface,
 	tradernetClient *tradernet.Client,
 	currencyExchangeService *services.CurrencyExchangeService,
 	dividendRepo *dividends.DividendRepository,

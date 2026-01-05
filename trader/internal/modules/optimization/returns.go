@@ -35,12 +35,12 @@ const (
 // ReturnsCalculator calculates expected returns for portfolio optimization.
 type ReturnsCalculator struct {
 	db          *sql.DB
-	yahooClient *yahoo.Client
+	yahooClient yahoo.FullClientInterface
 	log         zerolog.Logger
 }
 
 // NewReturnsCalculator creates a new returns calculator.
-func NewReturnsCalculator(db *sql.DB, yahooClient *yahoo.Client, log zerolog.Logger) *ReturnsCalculator {
+func NewReturnsCalculator(db *sql.DB, yahooClient yahoo.FullClientInterface, log zerolog.Logger) *ReturnsCalculator {
 	return &ReturnsCalculator{
 		db:          db,
 		yahooClient: yahooClient,

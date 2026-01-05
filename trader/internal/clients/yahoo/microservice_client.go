@@ -383,6 +383,86 @@ func (c *MicroserviceClient) GetSecurityInfo(
 	return &result, nil
 }
 
+// LookupTickerFromISIN searches Yahoo Finance for a ticker symbol using an ISIN
+func (c *MicroserviceClient) LookupTickerFromISIN(isin string) (string, error) {
+	url := fmt.Sprintf("/api/security/lookup-ticker/%s", isin)
+	
+	resp, err := c.get(url)
+	if err != nil {
+		return "", err
+	}
+	
+	var result struct {
+		ISIN   string `json:"isin"`
+		Ticker string `json:"ticker"`
+	}
+	if err := json.Unmarshal(resp.Data, &result); err != nil {
+		return "", fmt.Errorf("failed to parse lookup result: %w", err)
+	}
+	
+	if result.Ticker == "" {
+		return "", fmt.Errorf("no ticker found for ISIN: %s", isin)
+	}
+	
+	return result.Ticker, nil
+}
+
+// GetQuoteName gets security name (longName or shortName) from Yahoo Finance
+func (c *MicroserviceClient) GetQuoteName(
+	symbol string,
+	yahooSymbolOverride *string,
+) (*string, error) {
+	url := fmt.Sprintf("/api/security/quote-name/%s", symbol)
+	if yahooSymbolOverride != nil && *yahooSymbolOverride != "" {
+		url += fmt.Sprintf("?yahoo_symbol=%s", *yahooSymbolOverride)
+	}
+	
+	resp, err := c.get(url)
+	if err != nil {
+		return nil, err
+	}
+	
+	var result struct {
+		Symbol string `json:"symbol"`
+		Name   string `json:"name"`
+	}
+	if err := json.Unmarshal(resp.Data, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse quote name: %w", err)
+	}
+	
+	if result.Name == "" {
+		return nil, nil
+	}
+	
+	return &result.Name, nil
+}
+
+// GetQuoteType gets quote type from Yahoo Finance
+func (c *MicroserviceClient) GetQuoteType(
+	symbol string,
+	yahooSymbolOverride *string,
+) (string, error) {
+	url := fmt.Sprintf("/api/security/quote-type/%s", symbol)
+	if yahooSymbolOverride != nil && *yahooSymbolOverride != "" {
+		url += fmt.Sprintf("?yahoo_symbol=%s", *yahooSymbolOverride)
+	}
+	
+	resp, err := c.get(url)
+	if err != nil {
+		return "", err
+	}
+	
+	var result struct {
+		Symbol    string `json:"symbol"`
+		QuoteType string `json:"quote_type"`
+	}
+	if err := json.Unmarshal(resp.Data, &result); err != nil {
+		return "", fmt.Errorf("failed to parse quote type: %w", err)
+	}
+	
+	return result.QuoteType, nil
+}
+
 // HealthCheck checks the health of the Yahoo Finance microservice
 func (c *MicroserviceClient) HealthCheck() (bool, error) {
 	resp, err := c.get("/health")

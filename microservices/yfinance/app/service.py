@@ -350,6 +350,109 @@ class YahooFinanceService:
             logger.error(f"Failed to get security info for {symbol}: {e}")
             return None
 
+    def lookup_ticker_from_isin(self, isin: str) -> Optional[str]:
+        """Lookup ticker symbol from ISIN using Yahoo Finance search API.
+
+        Args:
+            isin: ISIN identifier
+
+        Returns:
+            Ticker symbol or None if not found
+        """
+        try:
+            import requests
+            from urllib.parse import quote
+            
+            # Yahoo Finance search API endpoint
+            search_url = f"https://query1.finance.yahoo.com/v1/finance/search?q={quote(isin)}"
+            
+            # Use requests with browser-like headers (yfinance handles this internally)
+            # But we need to do it manually for the search API
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "application/json",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Referer": "https://finance.yahoo.com/",
+                "Origin": "https://finance.yahoo.com",
+            }
+            
+            response = requests.get(search_url, headers=headers, timeout=10)
+            response.raise_for_status()
+            
+            data = response.json()
+            
+            # Try to find ticker in quotes array first
+            items = data.get("quotes", [])
+            if not items:
+                items = data.get("items", [])
+            
+            # Look for the first equity result (quoteType: "EQUITY")
+            for item in items:
+                symbol = item.get("symbol")
+                quote_type = item.get("quoteType", "").upper()
+                
+                if symbol and quote_type == "EQUITY":
+                    logger.info(f"Found ticker {symbol} for ISIN {isin}")
+                    return symbol
+            
+            # If no EQUITY found, try any result with a symbol
+            for item in items:
+                symbol = item.get("symbol")
+                if symbol:
+                    quote_type = item.get("quoteType", "")
+                    logger.info(f"Found ticker {symbol} (type: {quote_type}) for ISIN {isin}")
+                    return symbol
+            
+            logger.warning(f"No ticker found for ISIN {isin}")
+            return None
+        except Exception as e:
+            logger.error(f"Failed to lookup ticker from ISIN {isin}: {e}")
+            return None
+
+    def get_quote_name(
+        self, symbol: str, yahoo_symbol: Optional[str] = None
+    ) -> Optional[str]:
+        """Get security name (longName or shortName).
+
+        Args:
+            symbol: Tradernet format symbol
+            yahoo_symbol: Optional explicit Yahoo symbol override
+
+        Returns:
+            Security name or None if unavailable
+        """
+        try:
+            yf_symbol = self._convert_symbol(symbol, yahoo_symbol)
+            ticker = yf.Ticker(yf_symbol)
+            info = ticker.info
+            
+            return info.get("longName") or info.get("shortName")
+        except Exception as e:
+            logger.error(f"Failed to get quote name for {symbol}: {e}")
+            return None
+
+    def get_quote_type(
+        self, symbol: str, yahoo_symbol: Optional[str] = None
+    ) -> Optional[str]:
+        """Get quote type from Yahoo Finance.
+
+        Args:
+            symbol: Tradernet format symbol
+            yahoo_symbol: Optional explicit Yahoo symbol override
+
+        Returns:
+            Quote type or None if unavailable
+        """
+        try:
+            yf_symbol = self._convert_symbol(symbol, yahoo_symbol)
+            ticker = yf.Ticker(yf_symbol)
+            info = ticker.info
+            
+            return info.get("quoteType")
+        except Exception as e:
+            logger.error(f"Failed to get quote type for {symbol}: {e}")
+            return None
+
 
 # Global service instance
 _service: Optional[YahooFinanceService] = None

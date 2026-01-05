@@ -16,7 +16,7 @@ type SecuritySetupService struct {
 	symbolResolver  *SymbolResolver
 	securityRepo    *SecurityRepository
 	tradernetClient *tradernet.Client
-	yahooClient     *yahoo.Client
+	yahooClient     yahoo.FullClientInterface
 	historicalSync  *HistoricalSyncService
 	eventManager    *events.Manager
 	scoreCalculator ScoreCalculator // Interface for score calculation
@@ -34,7 +34,7 @@ func NewSecuritySetupService(
 	symbolResolver *SymbolResolver,
 	securityRepo *SecurityRepository,
 	tradernetClient *tradernet.Client,
-	yahooClient *yahoo.Client,
+	yahooClient yahoo.FullClientInterface,
 	historicalSync *HistoricalSyncService,
 	eventManager *events.Manager,
 	scoreCalculator ScoreCalculator,

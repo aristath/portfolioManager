@@ -116,7 +116,7 @@ type UniverseHandlers struct {
 	securityRepo            *SecurityRepository
 	scoreRepo               *ScoreRepository
 	securityScorer          *scorers.SecurityScorer
-	yahooClient             *yahoo.Client
+	yahooClient             yahoo.FullClientInterface
 	historyDB               *HistoryDB
 	setupService            *SecuritySetupService
 	syncService             *SyncService
@@ -131,7 +131,7 @@ func NewUniverseHandlers(
 	portfolioDB interface{},
 	positionRepo interface{},
 	securityScorer *scorers.SecurityScorer,
-	yahooClient *yahoo.Client,
+	yahooClient yahoo.FullClientInterface,
 	historyDB *HistoryDB,
 	setupService *SecuritySetupService,
 	syncService *SyncService,

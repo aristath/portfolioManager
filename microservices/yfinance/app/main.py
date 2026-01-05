@@ -273,3 +273,73 @@ async def get_security_info(
             error=str(e),
         )
 
+
+@app.get("/api/security/lookup-ticker/{isin}", response_model=ServiceResponse)
+async def lookup_ticker_from_isin(isin: str) -> ServiceResponse:
+    """Lookup ticker symbol from ISIN."""
+    try:
+        ticker = service.lookup_ticker_from_isin(isin)
+        if ticker:
+            return ServiceResponse(
+                success=True,
+                data={"isin": isin, "ticker": ticker},
+            )
+        return ServiceResponse(
+            success=False,
+            error=f"No ticker found for ISIN {isin}",
+        )
+    except Exception as e:
+        logger.exception(f"Error looking up ticker for ISIN {isin}")
+        return ServiceResponse(
+            success=False,
+            error=str(e),
+        )
+
+
+@app.get("/api/security/quote-name/{symbol}", response_model=ServiceResponse)
+async def get_quote_name(
+    symbol: str, yahoo_symbol: Optional[str] = Query(default=None)
+) -> ServiceResponse:
+    """Get security name (longName or shortName)."""
+    try:
+        name = service.get_quote_name(symbol, yahoo_symbol)
+        if name:
+            return ServiceResponse(
+                success=True,
+                data={"symbol": symbol, "name": name},
+            )
+        return ServiceResponse(
+            success=False,
+            error=f"No name available for {symbol}",
+        )
+    except Exception as e:
+        logger.exception(f"Error getting quote name for {symbol}")
+        return ServiceResponse(
+            success=False,
+            error=str(e),
+        )
+
+
+@app.get("/api/security/quote-type/{symbol}", response_model=ServiceResponse)
+async def get_quote_type(
+    symbol: str, yahoo_symbol: Optional[str] = Query(default=None)
+) -> ServiceResponse:
+    """Get quote type from Yahoo Finance."""
+    try:
+        quote_type = service.get_quote_type(symbol, yahoo_symbol)
+        if quote_type:
+            return ServiceResponse(
+                success=True,
+                data={"symbol": symbol, "quote_type": quote_type},
+            )
+        return ServiceResponse(
+            success=False,
+            error=f"No quote type available for {symbol}",
+        )
+    except Exception as e:
+        logger.exception(f"Error getting quote type for {symbol}")
+        return ServiceResponse(
+            success=False,
+            error=str(e),
+        )
+
