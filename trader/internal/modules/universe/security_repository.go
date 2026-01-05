@@ -20,7 +20,8 @@ type SecurityRepository struct {
 // securitiesColumns is the list of columns for the securities table
 // Used to avoid SELECT * which can break when schema changes
 // Column order must match the table schema (matches SELECT * order)
-const securitiesColumns = `symbol, yahoo_symbol, isin, name, product_type, industry, country, fullExchangeName,
+// After migration: isin is PRIMARY KEY, column order is isin, symbol, yahoo_symbol, ...
+const securitiesColumns = `isin, symbol, yahoo_symbol, name, product_type, industry, country, fullExchangeName,
 priority_multiplier, min_lot, active, allow_buy, allow_sell, currency, last_synced,
 min_portfolio_target, max_portfolio_target, created_at, updated_at`
 
@@ -201,17 +202,22 @@ func (r *SecurityRepository) Create(security Security) error {
 
 	query := `
 		INSERT INTO securities
-		(symbol, yahoo_symbol, isin, name, product_type, industry, country, fullExchangeName,
+		(isin, symbol, yahoo_symbol, name, product_type, industry, country, fullExchangeName,
 		 priority_multiplier, min_lot, active, allow_buy, allow_sell,
 		 currency, min_portfolio_target, max_portfolio_target,
 		 created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
+	// ISIN is required (PRIMARY KEY)
+	if security.ISIN == "" {
+		return fmt.Errorf("ISIN is required for security creation")
+	}
+
 	_, err = tx.Exec(query,
+		strings.ToUpper(strings.TrimSpace(security.ISIN)),
 		security.Symbol,
 		nullString(security.YahooSymbol),
-		nullString(security.ISIN),
 		security.Name,
 		nullString(security.ProductType),
 		nullString(security.Industry),
@@ -236,13 +242,13 @@ func (r *SecurityRepository) Create(security Security) error {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	r.log.Info().Str("symbol", security.Symbol).Msg("Security created")
+	r.log.Info().Str("isin", security.ISIN).Str("symbol", security.Symbol).Msg("Security created")
 	return nil
 }
 
-// Update updates security fields
-// Faithful translation of Python: async def update(self, symbol: str, **updates) -> None
-func (r *SecurityRepository) Update(symbol string, updates map[string]interface{}) error {
+// Update updates security fields by ISIN
+// Changed from symbol to ISIN as primary identifier
+func (r *SecurityRepository) Update(isin string, updates map[string]interface{}) error {
 	if len(updates) == 0 {
 		return nil
 	}
@@ -286,7 +292,7 @@ func (r *SecurityRepository) Update(symbol string, updates map[string]interface{
 		setClauses = append(setClauses, fmt.Sprintf("%s = ?", key))
 		values = append(values, val)
 	}
-	values = append(values, strings.ToUpper(strings.TrimSpace(symbol)))
+	values = append(values, strings.ToUpper(strings.TrimSpace(isin)))
 
 	// Begin transaction
 	tx, err := r.universeDB.Begin()
@@ -297,7 +303,7 @@ func (r *SecurityRepository) Update(symbol string, updates map[string]interface{
 
 	// Safe: all keys are validated against whitelist above, values use parameterized query
 	//nolint:gosec // G201: Field names are whitelisted, values are parameterized
-	query := fmt.Sprintf("UPDATE securities SET %s WHERE symbol = ?", strings.Join(setClauses, ", "))
+	query := fmt.Sprintf("UPDATE securities SET %s WHERE isin = ?", strings.Join(setClauses, ", "))
 	result, err := tx.Exec(query, values...)
 	if err != nil {
 		return fmt.Errorf("failed to update security: %w", err)
@@ -308,14 +314,14 @@ func (r *SecurityRepository) Update(symbol string, updates map[string]interface{
 	}
 
 	rowsAffected, _ := result.RowsAffected()
-	r.log.Info().Str("symbol", symbol).Int64("rows_affected", rowsAffected).Msg("Security updated")
+	r.log.Info().Str("isin", isin).Int64("rows_affected", rowsAffected).Msg("Security updated")
 	return nil
 }
 
-// Delete soft deletes a security (sets active=0)
-// Faithful translation of Python: async def delete(self, symbol: str) -> None
-func (r *SecurityRepository) Delete(symbol string) error {
-	return r.Update(symbol, map[string]interface{}{"active": false})
+// Delete soft deletes a security by ISIN (sets active=0)
+// Changed from symbol to ISIN as primary identifier
+func (r *SecurityRepository) Delete(isin string) error {
+	return r.Update(isin, map[string]interface{}{"active": false})
 }
 
 // GetWithScores returns all active securities with their scores and positions
@@ -357,7 +363,8 @@ func (r *SecurityRepository) GetWithScores(portfolioDB *sql.DB) ([]SecurityWithS
 			MaxPortfolioTarget: security.MaxPortfolioTarget,
 			Tags:               security.Tags,
 		}
-		securitiesMap[security.Symbol] = sws
+		// Use ISIN as map key (primary identifier)
+		securitiesMap[security.ISIN] = sws
 	}
 
 	if err := securityRows.Err(); err != nil {
@@ -378,7 +385,15 @@ func (r *SecurityRepository) GetWithScores(portfolioDB *sql.DB) ([]SecurityWithS
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan score: %w", err)
 		}
-		scoresMap[score.Symbol] = score
+		// Convert symbol to ISIN for map key
+		// Lookup ISIN from securities table using symbol
+		security, err := r.GetBySymbol(score.Symbol)
+		if err == nil && security != nil && security.ISIN != "" {
+			scoresMap[security.ISIN] = score
+		} else {
+			// Fallback to symbol if ISIN lookup fails (shouldn't happen after migration)
+			scoresMap[score.Symbol] = score
+		}
 	}
 
 	if err := scoreRows.Err(); err != nil {
@@ -418,7 +433,23 @@ func (r *SecurityRepository) GetWithScores(portfolioDB *sql.DB) ([]SecurityWithS
 			return nil, fmt.Errorf("failed to scan position: %w", err)
 		}
 
-		positionsMap[symbol] = struct {
+		// Convert symbol to ISIN for map key
+		// Use ISIN from position if available, otherwise lookup
+		var mapKey string
+		if isin.Valid && isin.String != "" {
+			mapKey = isin.String
+		} else {
+			// Lookup ISIN from securities table using symbol
+			security, err := r.GetBySymbol(symbol)
+			if err == nil && security != nil && security.ISIN != "" {
+				mapKey = security.ISIN
+			} else {
+				// Fallback to symbol if ISIN lookup fails (for CASH positions)
+				mapKey = symbol
+			}
+		}
+
+		positionsMap[mapKey] = struct {
 			marketValueEUR float64
 			quantity       float64
 		}{
@@ -433,9 +464,9 @@ func (r *SecurityRepository) GetWithScores(portfolioDB *sql.DB) ([]SecurityWithS
 
 	// Merge data
 	var result []SecurityWithScore
-	for symbol, sws := range securitiesMap {
-		// Add score data
-		if score, found := scoresMap[symbol]; found {
+	for isin, sws := range securitiesMap {
+		// Add score data (scoresMap now uses ISIN as key)
+		if score, found := scoresMap[isin]; found {
 			sws.TotalScore = &score.TotalScore
 			sws.QualityScore = &score.QualityScore
 			sws.OpportunityScore = &score.OpportunityScore
@@ -449,8 +480,8 @@ func (r *SecurityRepository) GetWithScores(portfolioDB *sql.DB) ([]SecurityWithS
 			sws.FundamentalScore = &score.FundamentalScore
 		}
 
-		// Add position data
-		if pos, found := positionsMap[symbol]; found {
+		// Add position data (positionsMap now uses ISIN as key)
+		if pos, found := positionsMap[isin]; found {
 			sws.PositionValue = &pos.marketValueEUR
 			sws.PositionQuantity = &pos.quantity
 		} else {
@@ -474,40 +505,44 @@ func (r *SecurityRepository) scanSecurity(rows *sql.Rows) (Security, error) {
 	var active, allowBuy, allowSell sql.NullInt64
 	var createdAt, updatedAt sql.NullString
 
-	// Table schema: symbol, yahoo_symbol, isin, name, product_type, industry, country, fullExchangeName,
+	// Table schema after migration: isin, symbol, yahoo_symbol, name, product_type, industry, country, fullExchangeName,
 	// priority_multiplier, min_lot, active, allow_buy, allow_sell, currency, last_synced,
 	// min_portfolio_target, max_portfolio_target, created_at, updated_at
+	var symbol sql.NullString
 	err := rows.Scan(
-		&security.Symbol,
-		&yahooSymbol,
-		&isin,
-		&security.Name,
-		&productType,
-		&industry,
-		&country,
-		&fullExchangeName,
-		&security.PriorityMultiplier,
-		&security.MinLot,
-		&active,
-		&allowBuy,
-		&allowSell,
-		&currency,
-		&lastSynced,
-		&minPortfolioTarget,
-		&maxPortfolioTarget,
-		&createdAt,
-		&updatedAt,
+		&isin,           // isin (PRIMARY KEY)
+		&symbol,         // symbol
+		&yahooSymbol,    // yahoo_symbol
+		&security.Name,  // name
+		&productType,    // product_type
+		&industry,       // industry
+		&country,        // country
+		&fullExchangeName, // fullExchangeName
+		&security.PriorityMultiplier, // priority_multiplier
+		&security.MinLot, // min_lot
+		&active,         // active
+		&allowBuy,       // allow_buy
+		&allowSell,      // allow_sell
+		&currency,       // currency
+		&lastSynced,     // last_synced
+		&minPortfolioTarget, // min_portfolio_target
+		&maxPortfolioTarget, // max_portfolio_target
+		&createdAt,      // created_at
+		&updatedAt,      // updated_at
 	)
 	if err != nil {
 		return security, err
 	}
 
 	// Handle nullable fields
-	if yahooSymbol.Valid {
-		security.YahooSymbol = yahooSymbol.String
-	}
 	if isin.Valid {
 		security.ISIN = isin.String
+	}
+	if symbol.Valid {
+		security.Symbol = symbol.String
+	}
+	if yahooSymbol.Valid {
+		security.YahooSymbol = yahooSymbol.String
 	}
 	if productType.Valid {
 		security.ProductType = productType.String

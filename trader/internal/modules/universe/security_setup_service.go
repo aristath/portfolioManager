@@ -58,23 +58,26 @@ func (s *SecuritySetupService) SetScoreCalculator(calculator ScoreCalculator) {
 }
 
 // CreateSecurity creates a security with explicit symbol and name
+// DEPRECATED: Use AddSecurityByIdentifier instead, which ensures ISIN is always present
+// This method is kept for backward compatibility but requires ISIN parameter
 // Faithful translation from Python: app/modules/universe/api/securities.py -> create_stock()
 //
 // This method:
 // 1. Validates symbol is unique
 // 2. Auto-detects country, exchange, industry from Yahoo Finance
-// 3. Creates the security in the database
+// 3. Creates the security in the database (requires ISIN)
 // 4. Publishes SecurityAdded event
 // 5. Calculates and saves the initial security score
 //
 // Unlike AddSecurityByIdentifier, this does NOT:
 // - Fetch historical price data (handled by background sync jobs)
-// - Fetch Tradernet metadata (currency, ISIN)
+// - Fetch Tradernet metadata (currency, ISIN) - ISIN must be provided
 // - Resolve identifiers (symbol is already provided)
 func (s *SecuritySetupService) CreateSecurity(
 	symbol string,
 	name string,
 	yahooSymbol string,
+	isin string, // Required: PRIMARY KEY after migration 030
 	minLot int,
 	allowBuy bool,
 	allowSell bool,
@@ -85,6 +88,10 @@ func (s *SecuritySetupService) CreateSecurity(
 	}
 	if name == "" {
 		return nil, fmt.Errorf("name cannot be empty")
+	}
+	isin = strings.TrimSpace(strings.ToUpper(isin))
+	if isin == "" {
+		return nil, fmt.Errorf("ISIN is required (PRIMARY KEY after migration 030). Use AddSecurityByIdentifier to automatically fetch ISIN from Tradernet")
 	}
 
 	s.log.Info().
@@ -130,8 +137,9 @@ func (s *SecuritySetupService) CreateSecurity(
 		finalYahooSymbol = symbol
 	}
 
-	// Create security
+	// Create security (ISIN is required as PRIMARY KEY)
 	security := Security{
+		ISIN:               isin,
 		Symbol:             symbol,
 		Name:               name,
 		ProductType:        string(productType),
@@ -300,9 +308,14 @@ func (s *SecuritySetupService) AddSecurityByIdentifier(
 		}
 	}
 
+	// Validate ISIN is present (required for PRIMARY KEY after migration)
+	if isin == nil || *isin == "" {
+		return nil, fmt.Errorf("ISIN is required but could not be obtained from Tradernet API for symbol: %s. Please ensure the security exists in Tradernet and has an ISIN", tradernetSymbol)
+	}
+
 	// Step 3: Fetch data from Yahoo Finance
 	yahooSymbol := symbolInfo.YahooSymbol
-	if yahooSymbol == "" && isin != nil && *isin != "" {
+	if yahooSymbol == "" && *isin != "" {
 		yahooSymbol = *isin
 	}
 	if yahooSymbol == "" {
@@ -333,6 +346,13 @@ func (s *SecuritySetupService) AddSecurityByIdentifier(
 
 	if name == "" {
 		return nil, fmt.Errorf("could not determine security name for: %s", identifier)
+	}
+
+	// Final ISIN validation (double-check before creating security)
+	// ISIN is required as PRIMARY KEY after migration
+	// Note: isin is already validated above, but this is a safety check
+	if *isin == "" {
+		return nil, fmt.Errorf("ISIN is required but missing for security: %s (symbol: %s). Cannot create security without ISIN", name, tradernetSymbol)
 	}
 
 	// Detect product type using Yahoo Finance with heuristics

@@ -157,10 +157,19 @@ func (c *RebalanceBuysCalculator) Calculate(
 	var candidates []domain.ActionCandidate
 	for _, scored := range scoredCandidates {
 		symbol := scored.symbol
-		security := ctx.StocksBySymbol[symbol]
+		security, ok := ctx.StocksBySymbol[symbol]
+		if !ok {
+			continue
+		}
 
-		// Get current price
-		currentPrice, ok := ctx.CurrentPrices[symbol]
+		// Use ISIN if available, otherwise fallback to symbol
+		isin := security.ISIN
+		if isin == "" {
+			isin = symbol // Fallback for CASH positions or securities without ISIN
+		}
+
+		// Get current price (try ISIN first, fallback to symbol)
+		currentPrice, ok := ctx.GetPriceByISINOrSymbol(isin, symbol)
 		if !ok || currentPrice <= 0 {
 			c.log.Warn().
 				Str("symbol", symbol).

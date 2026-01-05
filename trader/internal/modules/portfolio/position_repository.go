@@ -59,9 +59,10 @@ func (r *PositionRepository) GetAll() ([]Position, error) {
 // GetAllNonCash returns all non-cash positions (excludes cash positions)
 // Used for portfolio value calculations and trading operations
 func (r *PositionRepository) GetAllNonCash() ([]Position, error) {
-	query := `SELECT symbol, quantity, avg_price, current_price, currency,
+	// Column order after migration: isin, symbol, quantity, avg_price, ...
+	query := `SELECT isin, symbol, quantity, avg_price, current_price, currency,
 		currency_rate, market_value_eur, cost_basis_eur, unrealized_pnl,
-		unrealized_pnl_pct, last_updated, first_bought, last_sold, isin
+		unrealized_pnl_pct, last_updated, first_bought, last_sold
 		FROM positions WHERE symbol NOT LIKE 'CASH:%'`
 
 	rows, err := r.portfolioDB.Query(query)
@@ -90,37 +91,44 @@ func (r *PositionRepository) GetAllNonCash() ([]Position, error) {
 // Faithful translation of Python: async def get_with_security_info(self) -> List[Dict]
 // Note: This method accesses both state.db (positions) and config.db (securities)
 func (r *PositionRepository) GetWithSecurityInfo() ([]PositionWithSecurity, error) {
-	// Get positions from state.db
-	positionRows, err := r.portfolioDB.Query(`SELECT symbol, quantity, avg_price, current_price, currency,
+	// Get positions from portfolio.db
+	// Column order after migration: isin, symbol, quantity, avg_price, ...
+	positionRows, err := r.portfolioDB.Query(`SELECT isin, symbol, quantity, avg_price, current_price, currency,
 		currency_rate, market_value_eur, cost_basis_eur, unrealized_pnl,
-		unrealized_pnl_pct, last_updated, first_bought, last_sold, isin
+		unrealized_pnl_pct, last_updated, first_bought, last_sold
 		FROM positions`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query positions: %w", err)
 	}
 	defer positionRows.Close()
 
-	// Read all positions into map
-	positionsBySymbol := make(map[string]Position)
+	// Read all positions into map (use ISIN as key)
+	positionsByISIN := make(map[string]Position)
 	for positionRows.Next() {
 		pos, err := r.scanPosition(positionRows)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan position: %w", err)
 		}
-		positionsBySymbol[pos.Symbol] = pos
+		// Use ISIN as map key (primary identifier)
+		if pos.ISIN != "" {
+			positionsByISIN[pos.ISIN] = pos
+		} else {
+			// Fallback to symbol for CASH positions
+			positionsByISIN[pos.Symbol] = pos
+		}
 	}
 
 	if err := positionRows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating positions: %w", err)
 	}
 
-	if len(positionsBySymbol) == 0 {
+	if len(positionsByISIN) == 0 {
 		return []PositionWithSecurity{}, nil
 	}
 
-	// Get securities from config.db
+	// Get securities from universe.db (by ISIN)
 	securityRows, err := r.universeDB.Query(`
-		SELECT symbol, name, country, fullExchangeName, industry, currency, allow_sell
+		SELECT isin, symbol, name, country, fullExchangeName, industry, currency, allow_sell
 		FROM securities
 		WHERE active = 1
 	`)
@@ -129,8 +137,9 @@ func (r *PositionRepository) GetWithSecurityInfo() ([]PositionWithSecurity, erro
 	}
 	defer securityRows.Close()
 
-	// Read securities into map
+	// Read securities into map (keyed by ISIN)
 	type SecurityInfo struct {
+		ISIN             string
 		Symbol           string
 		Name             string
 		Country          sql.NullString
@@ -140,10 +149,11 @@ func (r *PositionRepository) GetWithSecurityInfo() ([]PositionWithSecurity, erro
 		AllowSell        bool
 	}
 
-	securitiesBySymbol := make(map[string]SecurityInfo)
+	securitiesByISIN := make(map[string]SecurityInfo)
 	for securityRows.Next() {
 		var sec SecurityInfo
 		if err := securityRows.Scan(
+			&sec.ISIN,
 			&sec.Symbol,
 			&sec.Name,
 			&sec.Country,
@@ -154,7 +164,7 @@ func (r *PositionRepository) GetWithSecurityInfo() ([]PositionWithSecurity, erro
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan security: %w", err)
 		}
-		securitiesBySymbol[sec.Symbol] = sec
+		securitiesByISIN[sec.ISIN] = sec
 	}
 
 	if err := securityRows.Err(); err != nil {
@@ -163,8 +173,8 @@ func (r *PositionRepository) GetWithSecurityInfo() ([]PositionWithSecurity, erro
 
 	// Merge position and security data
 	var result []PositionWithSecurity
-	for symbol, pos := range positionsBySymbol {
-		sec, found := securitiesBySymbol[symbol]
+	for isin, pos := range positionsByISIN {
+		sec, found := securitiesByISIN[isin]
 
 		merged := PositionWithSecurity{
 			Symbol:         pos.Symbol,
@@ -191,7 +201,7 @@ func (r *PositionRepository) GetWithSecurityInfo() ([]PositionWithSecurity, erro
 			}
 		} else {
 			// Fallback: use symbol as name if security not found
-			merged.StockName = symbol
+			merged.StockName = pos.Symbol
 			merged.AllowSell = false // Default to not allowing sell if security not found
 		}
 
@@ -205,36 +215,43 @@ func (r *PositionRepository) GetWithSecurityInfo() ([]PositionWithSecurity, erro
 // Used for portfolio analysis and allocation calculations (excludes cash positions)
 func (r *PositionRepository) GetWithSecurityInfoNonCash() ([]PositionWithSecurity, error) {
 	// Get non-cash positions from portfolio.db
-	positionRows, err := r.portfolioDB.Query(`SELECT symbol, quantity, avg_price, current_price, currency,
+	// Column order after migration: isin, symbol, quantity, avg_price, ...
+	positionRows, err := r.portfolioDB.Query(`SELECT isin, symbol, quantity, avg_price, current_price, currency,
 		currency_rate, market_value_eur, cost_basis_eur, unrealized_pnl,
-		unrealized_pnl_pct, last_updated, first_bought, last_sold, isin
+		unrealized_pnl_pct, last_updated, first_bought, last_sold
 		FROM positions WHERE symbol NOT LIKE 'CASH:%'`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query non-cash positions: %w", err)
 	}
 	defer positionRows.Close()
 
-	// Read all positions into map
-	positionsBySymbol := make(map[string]Position)
+	// Read all positions into map (use ISIN as key)
+	positionsByISIN := make(map[string]Position)
 	for positionRows.Next() {
 		pos, err := r.scanPosition(positionRows)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan position: %w", err)
 		}
-		positionsBySymbol[pos.Symbol] = pos
+		// Use ISIN as map key (primary identifier)
+		if pos.ISIN != "" {
+			positionsByISIN[pos.ISIN] = pos
+		} else {
+			// Fallback to symbol for CASH positions
+			positionsByISIN[pos.Symbol] = pos
+		}
 	}
 
 	if err := positionRows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating positions: %w", err)
 	}
 
-	if len(positionsBySymbol) == 0 {
+	if len(positionsByISIN) == 0 {
 		return []PositionWithSecurity{}, nil
 	}
 
-	// Get securities from universe.db (excluding cash - it has no security info we need)
+	// Get securities from universe.db (by ISIN, excluding cash)
 	securityRows, err := r.universeDB.Query(`
-		SELECT symbol, name, country, fullExchangeName, industry, currency, allow_sell
+		SELECT isin, symbol, name, country, fullExchangeName, industry, currency, allow_sell
 		FROM securities
 		WHERE active = 1 AND product_type != 'CASH'
 	`)
@@ -243,8 +260,9 @@ func (r *PositionRepository) GetWithSecurityInfoNonCash() ([]PositionWithSecurit
 	}
 	defer securityRows.Close()
 
-	// Read securities into map
+	// Read securities into map (keyed by ISIN)
 	type SecurityInfo struct {
+		ISIN             string
 		Symbol           string
 		Name             string
 		Country          sql.NullString
@@ -254,10 +272,11 @@ func (r *PositionRepository) GetWithSecurityInfoNonCash() ([]PositionWithSecurit
 		AllowSell        bool
 	}
 
-	securitiesBySymbol := make(map[string]SecurityInfo)
+	securitiesByISIN := make(map[string]SecurityInfo)
 	for securityRows.Next() {
 		var sec SecurityInfo
 		err := securityRows.Scan(
+			&sec.ISIN,
 			&sec.Symbol,
 			&sec.Name,
 			&sec.Country,
@@ -269,7 +288,7 @@ func (r *PositionRepository) GetWithSecurityInfoNonCash() ([]PositionWithSecurit
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan security: %w", err)
 		}
-		securitiesBySymbol[sec.Symbol] = sec
+		securitiesByISIN[sec.ISIN] = sec
 	}
 
 	if err := securityRows.Err(); err != nil {
@@ -278,8 +297,8 @@ func (r *PositionRepository) GetWithSecurityInfoNonCash() ([]PositionWithSecurit
 
 	// Merge position and security data
 	var result []PositionWithSecurity
-	for symbol, pos := range positionsBySymbol {
-		sec, found := securitiesBySymbol[symbol]
+	for isin, pos := range positionsByISIN {
+		sec, found := securitiesByISIN[isin]
 
 		merged := PositionWithSecurity{
 			Symbol:         pos.Symbol,
@@ -306,7 +325,7 @@ func (r *PositionRepository) GetWithSecurityInfoNonCash() ([]PositionWithSecurit
 			}
 		} else {
 			// Fallback: use symbol as name if security not found
-			merged.StockName = symbol
+			merged.StockName = pos.Symbol
 			merged.AllowSell = false
 		}
 
@@ -316,38 +335,46 @@ func (r *PositionRepository) GetWithSecurityInfoNonCash() ([]PositionWithSecurit
 	return result, nil
 }
 
-// GetBySymbol returns a position by symbol
-// Faithful translation of Python: async def get_by_symbol(self, symbol: str) -> Optional[Position]
+// GetBySymbol returns a position by symbol (helper method - looks up ISIN first)
+// This requires universeDB to lookup ISIN from securities table
 func (r *PositionRepository) GetBySymbol(symbol string) (*Position, error) {
-	query := `SELECT symbol, quantity, avg_price, current_price, currency,
-		currency_rate, market_value_eur, cost_basis_eur, unrealized_pnl,
-		unrealized_pnl_pct, last_updated, first_bought, last_sold, isin
-		FROM positions WHERE symbol = ?`
+	// Handle CASH positions specially (they use symbol as ISIN)
+	if strings.HasPrefix(strings.ToUpper(symbol), "CASH:") {
+		return r.GetByISIN(strings.ToUpper(strings.TrimSpace(symbol)))
+	}
 
-	rows, err := r.portfolioDB.Query(query, strings.ToUpper(strings.TrimSpace(symbol)))
+	// Lookup ISIN from securities table
+	query := "SELECT isin FROM securities WHERE symbol = ?"
+	rows, err := r.universeDB.Query(query, strings.ToUpper(strings.TrimSpace(symbol)))
 	if err != nil {
-		return nil, fmt.Errorf("failed to query position by symbol: %w", err)
+		return nil, fmt.Errorf("failed to lookup ISIN for symbol: %w", err)
 	}
 	defer rows.Close()
 
 	if !rows.Next() {
-		return nil, nil // Position not found
+		return nil, nil // Security not found, so no position
 	}
 
-	pos, err := r.scanPosition(rows)
-	if err != nil {
-		return nil, fmt.Errorf("failed to scan position: %w", err)
+	var isin string
+	if err := rows.Scan(&isin); err != nil {
+		return nil, fmt.Errorf("failed to scan ISIN: %w", err)
 	}
 
-	return &pos, nil
+	if isin == "" {
+		return nil, nil // No ISIN found
+	}
+
+	// Query position by ISIN
+	return r.GetByISIN(isin)
 }
 
-// GetByISIN returns a position by ISIN
-// Faithful translation of Python: async def get_by_isin(self, isin: str) -> Optional[Position]
+// GetByISIN returns a position by ISIN (primary method)
+// After migration: isin is PRIMARY KEY
 func (r *PositionRepository) GetByISIN(isin string) (*Position, error) {
-	query := `SELECT symbol, quantity, avg_price, current_price, currency,
+	// Column order after migration: isin, symbol, quantity, avg_price, ...
+	query := `SELECT isin, symbol, quantity, avg_price, current_price, currency,
 		currency_rate, market_value_eur, cost_basis_eur, unrealized_pnl,
-		unrealized_pnl_pct, last_updated, first_bought, last_sold, isin
+		unrealized_pnl_pct, last_updated, first_bought, last_sold
 		FROM positions WHERE isin = ?`
 
 	rows, err := r.portfolioDB.Query(query, strings.ToUpper(strings.TrimSpace(isin)))
@@ -421,28 +448,32 @@ func (r *PositionRepository) GetTotalValue() (float64, error) {
 }
 
 // scanPosition scans a database row into a Position struct
+// Column order after migration: isin, symbol, quantity, avg_price, ...
 func (r *PositionRepository) scanPosition(rows *sql.Rows) (Position, error) {
 	var pos Position
+	var isin sql.NullString
 	var currentPrice, marketValueEUR, costBasisEUR sql.NullFloat64
 	var unrealizedPnL, unrealizedPnLPct sql.NullFloat64
 	var lastUpdated, firstBoughtAt, lastSoldAt sql.NullString
-	var isin sql.NullString
 
+	// Column order after migration: isin, symbol, quantity, avg_price, current_price, currency,
+	// currency_rate, market_value_eur, cost_basis_eur, unrealized_pnl, unrealized_pnl_pct,
+	// last_updated, first_bought, last_sold
 	err := rows.Scan(
-		&pos.Symbol,       // 1
-		&pos.Quantity,     // 2
-		&pos.AvgPrice,     // 3
-		&currentPrice,     // 4
-		&pos.Currency,     // 5
-		&pos.CurrencyRate, // 6
-		&marketValueEUR,   // 7
-		&costBasisEUR,     // 8
-		&unrealizedPnL,    // 9
-		&unrealizedPnLPct, // 10
-		&lastUpdated,      // 11
-		&firstBoughtAt,    // 12
-		&lastSoldAt,       // 13
-		&isin,             // 14
+		&isin,             // 1: isin (PRIMARY KEY)
+		&pos.Symbol,       // 2: symbol
+		&pos.Quantity,     // 3: quantity
+		&pos.AvgPrice,     // 4: avg_price
+		&currentPrice,     // 5: current_price
+		&pos.Currency,     // 6: currency
+		&pos.CurrencyRate, // 7: currency_rate
+		&marketValueEUR,   // 8: market_value_eur
+		&costBasisEUR,     // 9: cost_basis_eur
+		&unrealizedPnL,    // 10: unrealized_pnl
+		&unrealizedPnLPct, // 11: unrealized_pnl_pct
+		&lastUpdated,      // 12: last_updated
+		&firstBoughtAt,    // 13: first_bought
+		&lastSoldAt,       // 14: last_sold
 	)
 	if err != nil {
 		return pos, err
@@ -494,12 +525,23 @@ func (r *PositionRepository) scanPosition(rows *sql.Rows) (Position, error) {
 }
 
 // Upsert inserts or updates a position
-// Faithful translation of Python: async def upsert(self, position: Position) -> None
+// After migration: isin is PRIMARY KEY
 func (r *PositionRepository) Upsert(position Position) error {
 	now := time.Now().Format(time.RFC3339)
 
 	// Normalize symbol
 	position.Symbol = strings.ToUpper(strings.TrimSpace(position.Symbol))
+
+	// ISIN is required (PRIMARY KEY)
+	// For CASH positions, ISIN is the symbol itself
+	if position.ISIN == "" {
+		if strings.HasPrefix(position.Symbol, "CASH:") {
+			position.ISIN = position.Symbol
+		} else {
+			return fmt.Errorf("ISIN is required for position upsert")
+		}
+	}
+	position.ISIN = strings.ToUpper(strings.TrimSpace(position.ISIN))
 
 	// Set last_updated if not provided
 	lastUpdated := position.LastUpdated
@@ -514,16 +556,18 @@ func (r *PositionRepository) Upsert(position Position) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	// Column order after migration: isin, symbol, quantity, avg_price, ...
 	query := `
 		INSERT OR REPLACE INTO positions
-		(symbol, quantity, avg_price, current_price, currency,
+		(isin, symbol, quantity, avg_price, current_price, currency,
 		 currency_rate, market_value_eur, cost_basis_eur,
 		 unrealized_pnl, unrealized_pnl_pct, last_updated,
-		 first_bought, last_sold, isin)
+		 first_bought, last_sold)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err = tx.Exec(query,
+		position.ISIN,
 		position.Symbol,
 		position.Quantity,
 		position.AvgPrice,
@@ -547,14 +591,14 @@ func (r *PositionRepository) Upsert(position Position) error {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	r.log.Info().Str("symbol", position.Symbol).Msg("Position upserted")
+	r.log.Info().Str("isin", position.ISIN).Str("symbol", position.Symbol).Msg("Position upserted")
 	return nil
 }
 
-// Delete deletes a specific position
-// Faithful translation of Python: async def delete(self, symbol: str) -> None
-func (r *PositionRepository) Delete(symbol string) error {
-	symbol = strings.ToUpper(strings.TrimSpace(symbol))
+// Delete deletes a specific position by ISIN
+// Changed from symbol to ISIN as primary identifier
+func (r *PositionRepository) Delete(isin string) error {
+	isin = strings.ToUpper(strings.TrimSpace(isin))
 
 	// Begin transaction
 	tx, err := r.portfolioDB.Begin()
@@ -563,8 +607,8 @@ func (r *PositionRepository) Delete(symbol string) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	query := "DELETE FROM positions WHERE symbol = ?"
-	result, err := tx.Exec(query, symbol)
+	query := "DELETE FROM positions WHERE isin = ?"
+	result, err := tx.Exec(query, isin)
 	if err != nil {
 		return fmt.Errorf("failed to delete position: %w", err)
 	}
@@ -574,7 +618,7 @@ func (r *PositionRepository) Delete(symbol string) error {
 	}
 
 	rowsAffected, _ := result.RowsAffected()
-	r.log.Info().Str("symbol", symbol).Int64("rows_affected", rowsAffected).Msg("Position deleted")
+	r.log.Info().Str("isin", isin).Int64("rows_affected", rowsAffected).Msg("Position deleted")
 	return nil
 }
 
@@ -603,10 +647,10 @@ func (r *PositionRepository) DeleteAll() error {
 	return nil
 }
 
-// UpdatePrice updates current price and recalculates market value and P&L
-// Faithful translation of Python: async def update_price(self, symbol: str, price: float, currency_rate: float = 1.0)
-func (r *PositionRepository) UpdatePrice(symbol string, price float64, currencyRate float64) error {
-	symbol = strings.ToUpper(strings.TrimSpace(symbol))
+// UpdatePrice updates current price and recalculates market value and P&L by ISIN
+// Changed from symbol to ISIN as primary identifier
+func (r *PositionRepository) UpdatePrice(isin string, price float64, currencyRate float64) error {
+	isin = strings.ToUpper(strings.TrimSpace(isin))
 	now := time.Now().Format(time.RFC3339)
 
 	if currencyRate == 0 {
@@ -631,7 +675,7 @@ func (r *PositionRepository) UpdatePrice(symbol string, price float64, currencyR
 				ELSE 0
 			END,
 			last_updated = ?
-		WHERE symbol = ?
+		WHERE isin = ?
 	`
 
 	result, err := tx.Exec(query,
@@ -642,7 +686,7 @@ func (r *PositionRepository) UpdatePrice(symbol string, price float64, currencyR
 		currencyRate, // for unrealized_pnl calculation
 		price,        // for unrealized_pnl_pct calculation
 		now,          // last_updated
-		symbol,       // WHERE symbol
+		isin,         // WHERE isin
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update price: %w", err)
@@ -654,7 +698,7 @@ func (r *PositionRepository) UpdatePrice(symbol string, price float64, currencyR
 
 	rowsAffected, _ := result.RowsAffected()
 	r.log.Debug().
-		Str("symbol", symbol).
+		Str("isin", isin).
 		Float64("price", price).
 		Float64("currency_rate", currencyRate).
 		Int64("rows_affected", rowsAffected).
@@ -663,10 +707,10 @@ func (r *PositionRepository) UpdatePrice(symbol string, price float64, currencyR
 	return nil
 }
 
-// UpdateLastSoldAt updates the last_sold_at timestamp after a sell
-// Faithful translation of Python: async def update_last_sold_at(self, symbol: str) -> None
-func (r *PositionRepository) UpdateLastSoldAt(symbol string) error {
-	symbol = strings.ToUpper(strings.TrimSpace(symbol))
+// UpdateLastSoldAt updates the last_sold_at timestamp after a sell by ISIN
+// Changed from symbol to ISIN as primary identifier
+func (r *PositionRepository) UpdateLastSoldAt(isin string) error {
+	isin = strings.ToUpper(strings.TrimSpace(isin))
 	now := time.Now().Format(time.RFC3339)
 
 	// Begin transaction
@@ -676,8 +720,8 @@ func (r *PositionRepository) UpdateLastSoldAt(symbol string) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	query := "UPDATE positions SET last_sold = ? WHERE symbol = ?"
-	result, err := tx.Exec(query, now, symbol)
+	query := "UPDATE positions SET last_sold = ? WHERE isin = ?"
+	result, err := tx.Exec(query, now, isin)
 	if err != nil {
 		return fmt.Errorf("failed to update last_sold_at: %w", err)
 	}
@@ -687,7 +731,7 @@ func (r *PositionRepository) UpdateLastSoldAt(symbol string) error {
 	}
 
 	rowsAffected, _ := result.RowsAffected()
-	r.log.Debug().Str("symbol", symbol).Int64("rows_affected", rowsAffected).Msg("Position last_sold_at updated")
+	r.log.Debug().Str("isin", isin).Int64("rows_affected", rowsAffected).Msg("Position last_sold_at updated")
 	return nil
 }
 

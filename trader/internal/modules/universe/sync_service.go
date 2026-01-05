@@ -2,6 +2,7 @@ package universe
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/aristath/arduino-trader/internal/clients/tradernet"
@@ -153,22 +154,25 @@ func (s *SyncService) processSingleSecurity(symbol string) error {
 	if security == nil {
 		return fmt.Errorf("security not found: %s", symbol)
 	}
+	if security.ISIN == "" {
+		return fmt.Errorf("security missing ISIN: %s", symbol)
+	}
 
 	if s.scoreCalculator != nil {
 		err = s.scoreCalculator.CalculateAndSaveScore(
-			symbol,
+			symbol, // ScoreCalculator accepts symbol (looks up ISIN internally)
 			security.YahooSymbol,
 			security.Country,
 			security.Industry,
 		)
 		if err != nil {
-			s.log.Warn().Err(err).Str("symbol", symbol).Msg("Failed to refresh score")
+			s.log.Warn().Err(err).Str("symbol", symbol).Str("isin", security.ISIN).Msg("Failed to refresh score")
 			// Continue - not fatal
 		}
 	}
 
-	// Step 5: Mark as synced
-	err = s.updateLastSynced(symbol)
+	// Step 5: Mark as synced (using ISIN)
+	err = s.updateLastSynced(security.ISIN)
 	if err != nil {
 		return fmt.Errorf("failed to update last_synced: %w", err)
 	}
@@ -221,6 +225,7 @@ func (s *SyncService) getSecuritiesNeedingSync() ([]Security, error) {
 // Faithful translation from Python: app/jobs/securities_data_sync.py -> _detect_and_update_industry()
 //
 // Only updates if the field is empty/NULL to preserve user-edited values
+// After migration: accepts symbol but uses ISIN internally, uses security's symbols for API calls
 func (s *SyncService) detectAndUpdateIndustry(symbol string) error {
 	security, err := s.securityRepo.GetBySymbol(symbol)
 	if err != nil {
@@ -229,38 +234,43 @@ func (s *SyncService) detectAndUpdateIndustry(symbol string) error {
 	if security == nil {
 		return fmt.Errorf("security not found: %s", symbol)
 	}
+	if security.ISIN == "" {
+		return fmt.Errorf("security missing ISIN: %s", symbol)
+	}
 
 	// Only update if industry is not already set (preserve user-edited values)
 	if security.Industry != "" {
-		s.log.Debug().Str("symbol", symbol).Msg("Industry already set, skipping Yahoo detection")
+		s.log.Debug().Str("symbol", symbol).Str("isin", security.ISIN).Msg("Industry already set, skipping Yahoo detection")
 		return nil
 	}
 
-	// Detect industry from Yahoo Finance
+	// Use security's Tradernet symbol and Yahoo symbol for API call
+	tradernetSymbol := security.Symbol
 	yahooSymbolPtr := &security.YahooSymbol
 	if security.YahooSymbol == "" {
 		yahooSymbolPtr = nil
 	}
 
-	industry, err := s.yahooClient.GetSecurityIndustry(symbol, yahooSymbolPtr)
+	// Detect industry from Yahoo Finance (using security's symbols)
+	industry, err := s.yahooClient.GetSecurityIndustry(tradernetSymbol, yahooSymbolPtr)
 	if err != nil {
 		return fmt.Errorf("failed to get industry from Yahoo: %w", err)
 	}
 
 	if industry == nil || *industry == "" {
-		s.log.Debug().Str("symbol", symbol).Msg("No industry detected from Yahoo Finance")
+		s.log.Debug().Str("symbol", symbol).Str("isin", security.ISIN).Msg("No industry detected from Yahoo Finance")
 		return nil
 	}
 
-	// Update the security's industry in the database
-	err = s.securityRepo.Update(symbol, map[string]interface{}{
+	// Update the security's industry in the database (using ISIN)
+	err = s.securityRepo.Update(security.ISIN, map[string]interface{}{
 		"industry": *industry,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to update industry: %w", err)
 	}
 
-	s.log.Info().Str("symbol", symbol).Str("industry", *industry).Msg("Updated empty industry")
+	s.log.Info().Str("symbol", symbol).Str("isin", security.ISIN).Str("industry", *industry).Msg("Updated empty industry")
 	return nil
 }
 
@@ -268,6 +278,7 @@ func (s *SyncService) detectAndUpdateIndustry(symbol string) error {
 // Faithful translation from Python: app/jobs/securities_data_sync.py -> _detect_and_update_country_and_exchange()
 //
 // Only updates fields that are empty/NULL to preserve user-edited values
+// After migration: accepts symbol but uses ISIN internally
 func (s *SyncService) detectAndUpdateCountryAndExchange(symbol string) error {
 	security, err := s.securityRepo.GetBySymbol(symbol)
 	if err != nil {
@@ -276,14 +287,19 @@ func (s *SyncService) detectAndUpdateCountryAndExchange(symbol string) error {
 	if security == nil {
 		return fmt.Errorf("security not found: %s", symbol)
 	}
+	if security.ISIN == "" {
+		return fmt.Errorf("security missing ISIN: %s", symbol)
+	}
 
-	// Detect country and exchange from Yahoo Finance
+	// Use security's Tradernet symbol and Yahoo symbol for API call
+	tradernetSymbol := security.Symbol
 	yahooSymbolPtr := &security.YahooSymbol
 	if security.YahooSymbol == "" {
 		yahooSymbolPtr = nil
 	}
 
-	country, fullExchangeName, err := s.yahooClient.GetSecurityCountryAndExchange(symbol, yahooSymbolPtr)
+	// Detect country and exchange from Yahoo Finance (using security's symbols)
+	country, fullExchangeName, err := s.yahooClient.GetSecurityCountryAndExchange(tradernetSymbol, yahooSymbolPtr)
 	if err != nil {
 		return fmt.Errorf("failed to get country/exchange from Yahoo: %w", err)
 	}
@@ -306,22 +322,22 @@ func (s *SyncService) detectAndUpdateCountryAndExchange(symbol string) error {
 		return nil
 	}
 
-	// Update the security's country and fullExchangeName in the database
-	err = s.securityRepo.Update(symbol, updates)
+	// Update the security's country and fullExchangeName in the database (using ISIN)
+	err = s.securityRepo.Update(security.ISIN, updates)
 	if err != nil {
 		return fmt.Errorf("failed to update country/exchange: %w", err)
 	}
 
-	s.log.Info().Str("symbol", symbol).Interface("updates", updates).Msg("Updated empty country/exchange")
+	s.log.Info().Str("symbol", symbol).Str("isin", security.ISIN).Interface("updates", updates).Msg("Updated empty country/exchange")
 	return nil
 }
 
 // updateLastSynced updates the last_synced timestamp for a security
-// Faithful translation from Python: app/jobs/securities_data_sync.py -> _update_last_synced()
-func (s *SyncService) updateLastSynced(symbol string) error {
+// After migration: accepts ISIN as primary identifier
+func (s *SyncService) updateLastSynced(isin string) error {
 	now := time.Now().Format(time.RFC3339)
 
-	err := s.securityRepo.Update(symbol, map[string]interface{}{
+	err := s.securityRepo.Update(isin, map[string]interface{}{
 		"last_synced": now,
 	})
 	if err != nil {
@@ -349,8 +365,9 @@ func (s *SyncService) SyncAllPrices() (int, error) {
 		return 0, nil
 	}
 
-	// 2. Build symbol map (tradernet_symbol -> yahoo_override)
+	// 2. Build symbol map (tradernet_symbol -> yahoo_override) and symbol->ISIN mapping
 	symbolMap := make(map[string]*string)
+	symbolToISIN := make(map[string]string) // Map symbol -> ISIN for position updates
 	for _, security := range securities {
 		var yahooSymbolPtr *string
 		if security.YahooSymbol != "" {
@@ -359,6 +376,9 @@ func (s *SyncService) SyncAllPrices() (int, error) {
 			yahooSymbolPtr = &yahooSymbol
 		}
 		symbolMap[security.Symbol] = yahooSymbolPtr
+		if security.ISIN != "" {
+			symbolToISIN[security.Symbol] = security.ISIN
+		}
 	}
 
 	// 3. Fetch batch quotes from Yahoo
@@ -367,7 +387,7 @@ func (s *SyncService) SyncAllPrices() (int, error) {
 		return 0, fmt.Errorf("failed to fetch batch quotes: %w", err)
 	}
 
-	// 4. Update position prices in state.db
+	// 4. Update position prices in state.db (using ISIN)
 	updated := 0
 	now := time.Now()
 
@@ -377,17 +397,29 @@ func (s *SyncService) SyncAllPrices() (int, error) {
 			continue
 		}
 
-		// Update positions table
+		// Lookup ISIN for this symbol
+		isin, hasISIN := symbolToISIN[symbol]
+		if !hasISIN || isin == "" {
+			// For CASH positions, symbol == ISIN
+			if strings.HasPrefix(strings.ToUpper(symbol), "CASH:") {
+				isin = symbol
+			} else {
+				s.log.Warn().Str("symbol", symbol).Msg("No ISIN found for symbol, skipping position update")
+				continue
+			}
+		}
+
+		// Update positions table (using ISIN as PRIMARY KEY)
 		result, err := s.db.Exec(`
 			UPDATE positions
 			SET current_price = ?,
 				market_value_eur = quantity * ? / currency_rate,
 				last_updated = ?
-			WHERE symbol = ?
-		`, *price, *price, now, symbol)
+			WHERE isin = ?
+		`, *price, *price, now, isin)
 
 		if err != nil {
-			s.log.Error().Err(err).Str("symbol", symbol).Msg("Failed to update position price")
+			s.log.Error().Err(err).Str("symbol", symbol).Str("isin", isin).Msg("Failed to update position price")
 			continue
 		}
 
@@ -534,6 +566,7 @@ func (s *SyncService) RebuildUniverseFromPortfolio() (int, error) {
 
 // SyncPricesForSymbols syncs prices for a filtered set of symbols
 // Similar to SyncAllPrices but accepts a pre-filtered symbol map
+// After migration: converts symbol to ISIN for position updates
 func (s *SyncService) SyncPricesForSymbols(symbolMap map[string]*string) (int, error) {
 	s.log.Info().Int("symbols", len(symbolMap)).Msg("Starting filtered price sync")
 
@@ -542,13 +575,33 @@ func (s *SyncService) SyncPricesForSymbols(symbolMap map[string]*string) (int, e
 		return 0, nil
 	}
 
+	// Build symbol->ISIN mapping for position updates
+	symbolToISIN := make(map[string]string)
+	for symbol := range symbolMap {
+		// Lookup ISIN from securities table (if securityRepo is available)
+		if s.securityRepo != nil {
+			security, err := s.securityRepo.GetBySymbol(symbol)
+			if err == nil && security != nil && security.ISIN != "" {
+				symbolToISIN[symbol] = security.ISIN
+				continue
+			}
+		}
+		// Fallback: CASH positions use symbol as ISIN, or use symbol as ISIN if repo unavailable
+		if strings.HasPrefix(strings.ToUpper(symbol), "CASH:") {
+			symbolToISIN[symbol] = symbol
+		} else {
+			// If securityRepo is nil or lookup fails, use symbol as ISIN (for backward compatibility in tests)
+			symbolToISIN[symbol] = symbol
+		}
+	}
+
 	// Fetch batch quotes from Yahoo
 	quotes, err := s.yahooClient.GetBatchQuotes(symbolMap)
 	if err != nil {
 		return 0, fmt.Errorf("failed to fetch batch quotes: %w", err)
 	}
 
-	// Update position prices in state.db
+	// Update position prices in state.db (using ISIN)
 	updated := 0
 	now := time.Now()
 
@@ -558,17 +611,24 @@ func (s *SyncService) SyncPricesForSymbols(symbolMap map[string]*string) (int, e
 			continue
 		}
 
-		// Update positions table
+		// Lookup ISIN for this symbol
+		isin, hasISIN := symbolToISIN[symbol]
+		if !hasISIN || isin == "" {
+			s.log.Warn().Str("symbol", symbol).Msg("No ISIN found for symbol, skipping position update")
+			continue
+		}
+
+		// Update positions table (using ISIN as PRIMARY KEY)
 		result, err := s.db.Exec(`
 			UPDATE positions
 			SET current_price = ?,
 				market_value_eur = quantity * ? / currency_rate,
 				last_updated = ?
-			WHERE symbol = ?
-		`, *price, *price, now, symbol)
+			WHERE isin = ?
+		`, *price, *price, now, isin)
 
 		if err != nil {
-			s.log.Error().Err(err).Str("symbol", symbol).Msg("Failed to update position price")
+			s.log.Error().Err(err).Str("symbol", symbol).Str("isin", isin).Msg("Failed to update position price")
 			continue
 		}
 

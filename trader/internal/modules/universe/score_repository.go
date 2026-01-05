@@ -13,18 +13,15 @@ import (
 // Faithful translation from Python: app/repositories/score.py
 type ScoreRepository struct {
 	portfolioDB *sql.DB // portfolio.db - scores table
+	universeDB  *sql.DB // universe.db - securities table (for symbol->ISIN lookup, optional)
 	log         zerolog.Logger
 }
 
 // scoresColumns is the list of columns for the scores table
 // Used to avoid SELECT * which can break when schema changes
 // Column order must match scanScore() function expectations
-// Order matches database schema (migration 004 + 029):
-// symbol, total_score, quality_score, opportunity_score, analyst_score, allocation_fit_score,
-// volatility, cagr_score, consistency_score, history_years, technical_score, fundamental_score,
-// sharpe_score, drawdown_score, dividend_bonus, financial_strength_score,
-// rsi, ema_200, below_52w_high_pct, last_updated
-const scoresColumns = `symbol, total_score, quality_score, opportunity_score, analyst_score, allocation_fit_score,
+// After migration 030: isin is PRIMARY KEY, column order is isin, total_score, ...
+const scoresColumns = `isin, total_score, quality_score, opportunity_score, analyst_score, allocation_fit_score,
 volatility, cagr_score, consistency_score, history_years, technical_score, fundamental_score,
 sharpe_score, drawdown_score, dividend_bonus, financial_strength_score,
 rsi, ema_200, below_52w_high_pct, last_updated`
@@ -37,14 +34,23 @@ func NewScoreRepository(portfolioDB *sql.DB, log zerolog.Logger) *ScoreRepositor
 	}
 }
 
-// GetBySymbol returns a score by symbol
-// Faithful translation of Python: async def get_by_symbol(self, symbol: str) -> Optional[SecurityScore]
-func (r *ScoreRepository) GetBySymbol(symbol string) (*SecurityScore, error) {
-	query := "SELECT " + scoresColumns + " FROM scores WHERE symbol = ?"
+// NewScoreRepositoryWithUniverse creates a new score repository with universe DB access
+// This is needed for GetBySymbol to lookup ISIN from symbol
+func NewScoreRepositoryWithUniverse(portfolioDB *sql.DB, universeDB *sql.DB, log zerolog.Logger) *ScoreRepository {
+	return &ScoreRepository{
+		portfolioDB: portfolioDB,
+		universeDB:  universeDB,
+		log:         log.With().Str("repo", "score").Logger(),
+	}
+}
 
-	rows, err := r.portfolioDB.Query(query, strings.ToUpper(strings.TrimSpace(symbol)))
+// GetByISIN returns a score by ISIN (primary method)
+func (r *ScoreRepository) GetByISIN(isin string) (*SecurityScore, error) {
+	query := "SELECT " + scoresColumns + " FROM scores WHERE isin = ?"
+
+	rows, err := r.portfolioDB.Query(query, strings.ToUpper(strings.TrimSpace(isin)))
 	if err != nil {
-		return nil, fmt.Errorf("failed to query score by symbol: %w", err)
+		return nil, fmt.Errorf("failed to query score by ISIN: %w", err)
 	}
 	defer rows.Close()
 
@@ -60,12 +66,59 @@ func (r *ScoreRepository) GetBySymbol(symbol string) (*SecurityScore, error) {
 	return &score, nil
 }
 
+// GetBySymbol returns a score by symbol (helper method - looks up ISIN first)
+// This requires universeDB to lookup ISIN from securities table
+func (r *ScoreRepository) GetBySymbol(symbol string) (*SecurityScore, error) {
+	if r.universeDB == nil {
+		return nil, fmt.Errorf("GetBySymbol requires universeDB - use NewScoreRepositoryWithUniverse or GetByISIN directly")
+	}
+
+	// Lookup ISIN from securities table
+	query := "SELECT isin FROM securities WHERE symbol = ?"
+	rows, err := r.universeDB.Query(query, strings.ToUpper(strings.TrimSpace(symbol)))
+	if err != nil {
+		return nil, fmt.Errorf("failed to lookup ISIN for symbol: %w", err)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		return nil, nil // Security not found, so no score
+	}
+
+	var isin string
+	if err := rows.Scan(&isin); err != nil {
+		return nil, fmt.Errorf("failed to scan ISIN: %w", err)
+	}
+
+	if isin == "" {
+		return nil, nil // No ISIN found
+	}
+
+	// Query score by ISIN
+	return r.GetByISIN(isin)
+}
+
 // GetByIdentifier returns a score by symbol or ISIN
 // Faithful translation of Python: async def get_by_identifier(self, identifier: str) -> Optional[SecurityScore]
 func (r *ScoreRepository) GetByIdentifier(identifier string) (*SecurityScore, error) {
 	identifier = strings.ToUpper(strings.TrimSpace(identifier))
 
-	// For now, just use symbol (ISIN lookup would require JOIN with securities table)
+	// Check if it looks like an ISIN (12 chars, starts with 2 letters)
+	if len(identifier) == 12 && len(identifier) >= 2 {
+		firstTwo := identifier[:2]
+		if (firstTwo[0] >= 'A' && firstTwo[0] <= 'Z') && (firstTwo[1] >= 'A' && firstTwo[1] <= 'Z') {
+			// Try ISIN lookup first
+			score, err := r.GetByISIN(identifier)
+			if err != nil {
+				return nil, err
+			}
+			if score != nil {
+				return score, nil
+			}
+		}
+	}
+
+	// Fall back to symbol lookup
 	return r.GetBySymbol(identifier)
 }
 
@@ -147,9 +200,14 @@ func (r *ScoreRepository) Upsert(score SecurityScore) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	// ISIN is required (PRIMARY KEY)
+	if score.ISIN == "" {
+		return fmt.Errorf("ISIN is required for score upsert")
+	}
+
 	query := `
 		INSERT OR REPLACE INTO scores
-		(symbol, total_score, quality_score, opportunity_score, analyst_score,
+		(isin, total_score, quality_score, opportunity_score, analyst_score,
 		 allocation_fit_score, volatility, cagr_score, consistency_score,
 		 history_years, technical_score, fundamental_score,
 		 sharpe_score, drawdown_score, dividend_bonus, financial_strength_score,
@@ -158,7 +216,7 @@ func (r *ScoreRepository) Upsert(score SecurityScore) error {
 	`
 
 	_, err = tx.Exec(query,
-		score.Symbol,
+		strings.ToUpper(strings.TrimSpace(score.ISIN)),
 		nullFloat64(score.TotalScore),
 		nullFloat64(score.QualityScore),
 		nullFloat64(score.OpportunityScore),
@@ -187,14 +245,14 @@ func (r *ScoreRepository) Upsert(score SecurityScore) error {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	r.log.Info().Str("symbol", score.Symbol).Msg("Score upserted")
+	r.log.Info().Str("isin", score.ISIN).Str("symbol", score.Symbol).Msg("Score upserted")
 	return nil
 }
 
-// Delete deletes score for a symbol
-// Faithful translation of Python: async def delete(self, symbol: str) -> None
-func (r *ScoreRepository) Delete(symbol string) error {
-	symbol = strings.ToUpper(strings.TrimSpace(symbol))
+// Delete deletes score by ISIN
+// Changed from symbol to ISIN as primary identifier
+func (r *ScoreRepository) Delete(isin string) error {
+	isin = strings.ToUpper(strings.TrimSpace(isin))
 
 	// Begin transaction
 	tx, err := r.portfolioDB.Begin()
@@ -203,8 +261,8 @@ func (r *ScoreRepository) Delete(symbol string) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	query := "DELETE FROM scores WHERE symbol = ?"
-	result, err := tx.Exec(query, symbol)
+	query := "DELETE FROM scores WHERE isin = ?"
+	result, err := tx.Exec(query, isin)
 	if err != nil {
 		return fmt.Errorf("failed to delete score: %w", err)
 	}
@@ -214,7 +272,7 @@ func (r *ScoreRepository) Delete(symbol string) error {
 	}
 
 	rowsAffected, _ := result.RowsAffected()
-	r.log.Info().Str("symbol", symbol).Int64("rows_affected", rowsAffected).Msg("Score deleted")
+	r.log.Info().Str("isin", isin).Int64("rows_affected", rowsAffected).Msg("Score deleted")
 	return nil
 }
 
@@ -244,12 +302,13 @@ func (r *ScoreRepository) DeleteAll() error {
 }
 
 // scanScore scans a database row into a SecurityScore struct
-// Column order matches database schema: symbol, total_score, quality_score, opportunity_score,
+// Column order after migration: isin, total_score, quality_score, opportunity_score,
 // analyst_score, allocation_fit_score, volatility, cagr_score, consistency_score, history_years,
 // technical_score, fundamental_score, sharpe_score, drawdown_score, dividend_bonus,
 // financial_strength_score, rsi, ema_200, below_52w_high_pct, last_updated
 func (r *ScoreRepository) scanScore(rows *sql.Rows) (SecurityScore, error) {
 	var score SecurityScore
+	var isin sql.NullString
 	var totalScore, qualityScore, opportunityScore, analystScore, allocationFitScore sql.NullFloat64
 	var volatility, cagrScore, consistencyScore sql.NullFloat64
 	var historyYears sql.NullInt64
@@ -260,7 +319,7 @@ func (r *ScoreRepository) scanScore(rows *sql.Rows) (SecurityScore, error) {
 	var lastUpdated sql.NullString
 
 	err := rows.Scan(
-		&score.Symbol,
+		&isin, // isin (PRIMARY KEY)
 		&totalScore,
 		&qualityScore,
 		&opportunityScore,
@@ -352,8 +411,14 @@ func (r *ScoreRepository) scanScore(rows *sql.Rows) (SecurityScore, error) {
 		}
 	}
 
-	// Normalize symbol
-	score.Symbol = strings.ToUpper(strings.TrimSpace(score.Symbol))
+	// Handle ISIN
+	if isin.Valid {
+		score.ISIN = isin.String
+	}
+
+	// Note: Symbol is not stored in scores table after migration
+	// It should be looked up from securities table using ISIN if needed
+	// For backward compatibility, we leave Symbol empty (caller should populate from security)
 
 	return score, nil
 }

@@ -29,6 +29,7 @@ type Security struct {
 type Position struct {
 	LastUpdated  time.Time `json:"last_updated"`
 	Symbol       string    `json:"symbol"`
+	ISIN         string    `json:"isin"` // Primary identifier (after migration)
 	Currency     Currency  `json:"currency"`
 	ID           int64     `json:"id"`
 	SecurityID   int64     `json:"security_id"`

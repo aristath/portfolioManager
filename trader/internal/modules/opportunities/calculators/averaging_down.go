@@ -60,16 +60,29 @@ func (c *AveragingDownCalculator) Calculate(
 		Msg("Calculating averaging-down opportunities")
 
 	for _, position := range ctx.Positions {
+		// Use ISIN if available, otherwise fallback to symbol
+		isin := position.ISIN
+		if isin == "" {
+			isin = position.Symbol // Fallback for CASH positions
+		}
+
 		// Skip if recently bought
 		if ctx.RecentlyBought[position.Symbol] {
 			continue
 		}
 
-		// Get current price
-		currentPrice, ok := ctx.CurrentPrices[position.Symbol]
+		// Get security info (try ISIN first, fallback to symbol)
+		security, ok := ctx.GetSecurityByISINOrSymbol(isin, position.Symbol)
+		if !ok {
+			continue
+		}
+
+		// Get current price (try ISIN first, fallback to symbol)
+		currentPrice, ok := ctx.GetPriceByISINOrSymbol(isin, position.Symbol)
 		if !ok || currentPrice <= 0 {
 			c.log.Warn().
 				Str("symbol", position.Symbol).
+				Str("isin", isin).
 				Msg("No current price available")
 			continue
 		}
@@ -85,12 +98,6 @@ func (c *AveragingDownCalculator) Calculate(
 		// Check if loss is in the averaging-down range
 		if lossPercent >= minLossThreshold || lossPercent <= maxLossThreshold {
 			continue // Either not enough loss, or too much loss (safety)
-		}
-
-		// Get security info
-		security, ok := ctx.StocksBySymbol[position.Symbol]
-		if !ok {
-			continue
 		}
 
 		// Check security score if available

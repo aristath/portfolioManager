@@ -113,7 +113,8 @@ func (c *OpportunityBuysCalculator) Calculate(
 		symbol := scored.symbol
 		score := scored.score
 
-		// Get security info
+		// Get security info (try ISIN first, fallback to symbol)
+		// SecurityScores uses symbol as key, so we look up by symbol first
 		security, ok := ctx.StocksBySymbol[symbol]
 		if !ok {
 			c.log.Warn().
@@ -122,11 +123,18 @@ func (c *OpportunityBuysCalculator) Calculate(
 			continue
 		}
 
-		// Get current price
-		currentPrice, ok := ctx.CurrentPrices[symbol]
+		// Use ISIN if available, otherwise fallback to symbol
+		isin := security.ISIN
+		if isin == "" {
+			isin = symbol // Fallback for CASH positions or securities without ISIN
+		}
+
+		// Get current price (try ISIN first, fallback to symbol)
+		currentPrice, ok := ctx.GetPriceByISINOrSymbol(isin, symbol)
 		if !ok || currentPrice <= 0 {
 			c.log.Warn().
 				Str("symbol", symbol).
+				Str("isin", isin).
 				Msg("No current price available")
 			continue
 		}

@@ -21,10 +21,10 @@ func TestUpsert_InsertsAllColumns(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	// Create scores table with all columns
+	// Create scores table with all columns (ISIN as PRIMARY KEY, matching migration 030)
 	_, err = db.Conn().Exec(`
 		CREATE TABLE scores (
-			symbol TEXT PRIMARY KEY,
+			isin TEXT PRIMARY KEY,
 			total_score REAL NOT NULL,
 			quality_score REAL,
 			opportunity_score REAL,
@@ -48,9 +48,10 @@ func TestUpsert_InsertsAllColumns(t *testing.T) {
 	`)
 	require.NoError(t, err)
 
-	// Create score with all fields populated
+	// Create score with all fields populated (ISIN required)
 	now := time.Now()
 	score := SecurityScore{
+		ISIN:                   "TEST12345678",
 		Symbol:                 "TEST",
 		TotalScore:             0.75,
 		QualityScore:           0.70,
@@ -78,9 +79,9 @@ func TestUpsert_InsertsAllColumns(t *testing.T) {
 	err = repo.Upsert(score)
 	require.NoError(t, err)
 
-	// Verify all columns were inserted using scanScore
+	// Verify all columns were inserted using scanScore (using ISIN as key)
 	repo2 := NewScoreRepository(db.Conn(), zerolog.Nop())
-	rows, err := db.Conn().Query("SELECT "+scoresColumns+" FROM scores WHERE symbol = ?", "TEST")
+	rows, err := db.Conn().Query("SELECT "+scoresColumns+" FROM scores WHERE isin = ?", "TEST12345678")
 	require.NoError(t, err)
 	defer rows.Close()
 
@@ -88,8 +89,8 @@ func TestUpsert_InsertsAllColumns(t *testing.T) {
 	result, err := repo2.scanScore(rows)
 	require.NoError(t, err)
 
-	// Verify all values match
-	assert.Equal(t, "TEST", result.Symbol)
+	// Verify all values match (ISIN is primary key, symbol is not stored in scores table)
+	assert.Equal(t, "TEST12345678", result.ISIN)
 	assert.Equal(t, 0.75, result.TotalScore)
 	assert.Equal(t, 0.70, result.QualityScore)
 	assert.Equal(t, 0.65, result.OpportunityScore)
@@ -120,10 +121,10 @@ func TestUpsert_HandlesZeroValues(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	// Create scores table
+	// Create scores table (ISIN as PRIMARY KEY, matching migration 030)
 	_, err = db.Conn().Exec(`
 		CREATE TABLE scores (
-			symbol TEXT PRIMARY KEY,
+			isin TEXT PRIMARY KEY,
 			total_score REAL NOT NULL,
 			quality_score REAL,
 			opportunity_score REAL,
@@ -149,6 +150,7 @@ func TestUpsert_HandlesZeroValues(t *testing.T) {
 
 	// Create score with minimal fields
 	score := SecurityScore{
+		ISIN:       "TEST12345678",
 		Symbol:     "TEST",
 		TotalScore: 0.50,
 	}
@@ -158,12 +160,12 @@ func TestUpsert_HandlesZeroValues(t *testing.T) {
 	err = repo.Upsert(score)
 	require.NoError(t, err)
 
-	// Verify zero values are inserted as NULL
+	// Verify zero values are inserted as NULL (using ISIN as key)
 	var sharpeScore, drawdownScore, dividendBonus, rsi, ema200, below52wHighPct sql.NullFloat64
 	err = db.Conn().QueryRow(`
 		SELECT sharpe_score, drawdown_score, dividend_bonus, rsi, ema_200, below_52w_high_pct
-		FROM scores WHERE symbol = ?
-	`, "TEST").Scan(&sharpeScore, &drawdownScore, &dividendBonus, &rsi, &ema200, &below52wHighPct)
+		FROM scores WHERE isin = ?
+	`, "TEST12345678").Scan(&sharpeScore, &drawdownScore, &dividendBonus, &rsi, &ema200, &below52wHighPct)
 	require.NoError(t, err)
 
 	// Zero values should be stored as NULL

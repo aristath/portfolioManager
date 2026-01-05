@@ -534,11 +534,27 @@ func (s *PortfolioService) SyncFromTradernet() error {
 		}
 
 		// Before upserting, get existing position to preserve Yahoo prices
+		// GetBySymbol looks up ISIN first, then queries by ISIN
 		existingPos, _ := s.positionRepo.GetBySymbol(tradernetPos.Symbol)
+
+		// Lookup ISIN from securities table (required for Upsert)
+		var isin string
+		if strings.HasPrefix(strings.ToUpper(tradernetPos.Symbol), "CASH:") {
+			// CASH positions use symbol as ISIN
+			isin = tradernetPos.Symbol
+		} else {
+			// Query securities table for ISIN
+			query := "SELECT isin FROM securities WHERE symbol = ?"
+			row := s.universeDB.QueryRow(query, strings.ToUpper(strings.TrimSpace(tradernetPos.Symbol)))
+			if err := row.Scan(&isin); err != nil {
+				s.log.Warn().Err(err).Str("symbol", tradernetPos.Symbol).Msg("Failed to lookup ISIN, position may not save correctly")
+			}
+		}
 
 		// Convert tradernet.Position to portfolio.Position
 		// Use Tradernet data for position info, but preserve Yahoo prices
 		dbPos := Position{
+			ISIN:         isin,                      // Required for Upsert (PRIMARY KEY)
 			Symbol:       tradernetPos.Symbol,
 			Quantity:     tradernetPos.Quantity,     // From Tradernet
 			AvgPrice:     tradernetPos.AvgPrice,     // From Tradernet (historical)
@@ -574,11 +590,20 @@ func (s *PortfolioService) SyncFromTradernet() error {
 	deleted := 0
 	for _, currentPos := range currentPositions {
 		if !tradernetSymbols[currentPos.Symbol] {
-			if err := s.positionRepo.Delete(currentPos.Symbol); err != nil {
-				s.log.Error().Err(err).Str("symbol", currentPos.Symbol).Msg("Failed to delete stale position")
-				continue
+			// Delete by ISIN (primary identifier)
+			if currentPos.ISIN == "" {
+				// Fallback: use symbol for CASH positions (CASH positions use symbol as ISIN)
+				if err := s.positionRepo.Delete(currentPos.Symbol); err != nil {
+					s.log.Error().Err(err).Str("symbol", currentPos.Symbol).Msg("Failed to delete position")
+					continue
+				}
+			} else {
+				if err := s.positionRepo.Delete(currentPos.ISIN); err != nil {
+					s.log.Error().Err(err).Str("isin", currentPos.ISIN).Str("symbol", currentPos.Symbol).Msg("Failed to delete stale position")
+					continue
+				}
 			}
-			s.log.Info().Str("symbol", currentPos.Symbol).Msg("Deleted stale position not in Tradernet")
+			s.log.Info().Str("symbol", currentPos.Symbol).Str("isin", currentPos.ISIN).Msg("Deleted stale position not in Tradernet")
 			deleted++
 		}
 	}

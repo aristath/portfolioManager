@@ -102,28 +102,36 @@ func (s *HistoricalSyncService) SyncHistoricalPrices(symbol string) error {
 			yahooSymbolPtr = nil
 		} else {
 			// Update the database with the found ticker symbol
-			err = s.securityRepo.Update(symbol, map[string]interface{}{
-				"yahoo_symbol": ticker,
-			})
-			if err != nil {
-				s.log.Warn().
-					Err(err).
-					Str("symbol", symbol).
-					Str("ticker", ticker).
-					Msg("Failed to update yahoo_symbol in database, but will use it for this request")
+			// Lookup ISIN from symbol
+			security, err := s.securityRepo.GetBySymbol(symbol)
+			if err != nil || security == nil || security.ISIN == "" {
+				s.log.Warn().Str("symbol", symbol).Msg("Failed to lookup ISIN, skipping update")
 			} else {
-				s.log.Info().
-					Str("symbol", symbol).
-					Str("isin", *yahooSymbolPtr).
-					Str("ticker", ticker).
-					Msg("Updated yahoo_symbol from ISIN to ticker symbol")
+				err = s.securityRepo.Update(security.ISIN, map[string]interface{}{
+					"yahoo_symbol": ticker,
+				})
+				if err != nil {
+					s.log.Warn().
+						Err(err).
+						Str("symbol", symbol).
+						Str("ticker", ticker).
+						Msg("Failed to update yahoo_symbol in database, but will use it for this request")
+				} else {
+					s.log.Info().
+						Str("symbol", symbol).
+						Str("isin", security.ISIN).
+						Str("ticker", ticker).
+						Msg("Updated yahoo_symbol from ISIN to ticker symbol")
+				}
 			}
 			// Use the found ticker symbol
 			yahooSymbolPtr = &ticker
 		}
 	}
 
-	ohlcData, err := s.yahooClient.GetHistoricalPrices(symbol, yahooSymbolPtr, period)
+	// Use security's Tradernet symbol for API call (not the parameter, which might be different)
+	tradernetSymbol := security.Symbol
+	ohlcData, err := s.yahooClient.GetHistoricalPrices(tradernetSymbol, yahooSymbolPtr, period)
 	if err != nil {
 		return fmt.Errorf("failed to fetch historical prices from Yahoo: %w", err)
 	}

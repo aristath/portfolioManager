@@ -13,8 +13,9 @@ import (
 // DividendRepository handles dividend database operations
 // Faithful translation from Python: app/modules/dividends/database/dividend_repository.py
 type DividendRepository struct {
-	ledgerDB *sql.DB // dividends.db - dividend_history table
-	log      zerolog.Logger
+	ledgerDB  *sql.DB // ledger.db - dividend_history table
+	universeDB *sql.DB // universe.db - securities table (for symbol->ISIN lookup, optional)
+	log       zerolog.Logger
 }
 
 // dividendHistoryColumns is the list of columns for the dividend_history table
@@ -32,9 +33,20 @@ func NewDividendRepository(ledgerDB *sql.DB, log zerolog.Logger) *DividendReposi
 }
 
 // Create creates a new dividend record
-// Faithful translation of Python: async def create(self, dividend: DividendRecord) -> DividendRecord
+// After migration: ISIN should be populated
 func (r *DividendRepository) Create(dividend *DividendRecord) error {
 	now := time.Now().Format(time.RFC3339)
+
+	// Ensure ISIN is populated (required after migration)
+	// If not provided, try to lookup from securities table if universeDB is available
+	if dividend.ISIN == "" && r.universeDB != nil {
+		queryISIN := "SELECT isin FROM securities WHERE symbol = ?"
+		row := r.universeDB.QueryRow(queryISIN, strings.ToUpper(strings.TrimSpace(dividend.Symbol)))
+		var isin sql.NullString
+		if err := row.Scan(&isin); err == nil && isin.Valid {
+			dividend.ISIN = isin.String
+		}
+	}
 
 	query := `
 		INSERT INTO dividend_history
@@ -133,9 +145,27 @@ func (r *DividendRepository) ExistsForCashFlow(cashFlowID int) (bool, error) {
 	return true, nil
 }
 
-// GetBySymbol retrieves all dividend records for a symbol
-// Faithful translation of Python: async def get_by_symbol(self, symbol: str) -> List[DividendRecord]
+// GetBySymbol retrieves all dividend records for a symbol (helper method - looks up ISIN first)
+// This requires universeDB to lookup ISIN from securities table
+// After migration: prefer GetByISIN for internal operations
 func (r *DividendRepository) GetBySymbol(symbol string) ([]DividendRecord, error) {
+	// If universeDB is available, lookup ISIN first, then query by ISIN
+	if r.universeDB != nil {
+		query := "SELECT isin FROM securities WHERE symbol = ?"
+		rows, err := r.universeDB.Query(query, strings.ToUpper(strings.TrimSpace(symbol)))
+		if err == nil {
+			defer rows.Close()
+			if rows.Next() {
+				var isin string
+				if err := rows.Scan(&isin); err == nil && isin != "" {
+					// Query by ISIN (preferred after migration)
+					return r.GetByISIN(isin)
+				}
+			}
+		}
+	}
+
+	// Fallback to symbol lookup (for backward compatibility)
 	query := `
 		SELECT ` + dividendHistoryColumns + ` FROM dividend_history
 		WHERE symbol = ?

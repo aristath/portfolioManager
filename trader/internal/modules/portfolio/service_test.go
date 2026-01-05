@@ -1,13 +1,16 @@
 package portfolio
 
 import (
+	"database/sql"
 	"errors"
 	"testing"
 
 	"github.com/aristath/arduino-trader/internal/clients/tradernet"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 // MockCashManager is a mock cash manager for testing
@@ -90,10 +93,37 @@ func TestSyncFromTradernet_Success(t *testing.T) {
 	mockCashManager := new(MockCashManager)
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 
+	// Create test universeDB with securities (required for ISIN lookup)
+	universeDB, err := sql.Open("sqlite3", ":memory:")
+	require.NoError(t, err)
+	defer universeDB.Close()
+
+	// Create securities table with ISIN as PRIMARY KEY
+	_, err = universeDB.Exec(`
+		CREATE TABLE securities (
+			isin TEXT PRIMARY KEY,
+			symbol TEXT NOT NULL,
+			name TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)
+	`)
+	require.NoError(t, err)
+
+	// Insert test securities
+	_, err = universeDB.Exec(`
+		INSERT INTO securities (isin, symbol, name, created_at, updated_at)
+		VALUES
+			('US0378331005', 'AAPL', 'Apple Inc.', datetime('now'), datetime('now')),
+			('US5949181045', 'MSFT', 'Microsoft Corp.', datetime('now'), datetime('now'))
+	`)
+	require.NoError(t, err)
+
 	service := &PortfolioService{
 		tradernetClient: mockTradernetClient,
 		positionRepo:    mockPositionRepo,
 		cashManager:     mockCashManager,
+		universeDB:      universeDB,
 		log:             log,
 	}
 
@@ -137,7 +167,7 @@ func TestSyncFromTradernet_Success(t *testing.T) {
 	mockCashManager.On("UpdateCashPosition", "USD", 500.0).Return(nil).Once()
 
 	// Execute
-	err := service.SyncFromTradernet()
+	err = service.SyncFromTradernet()
 
 	// Assert
 	assert.NoError(t, err)
@@ -152,10 +182,36 @@ func TestSyncFromTradernet_DeleteStale(t *testing.T) {
 	mockCashManager := new(MockCashManager)
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 
+	// Create test universeDB with securities (required for ISIN lookup)
+	universeDB, err := sql.Open("sqlite3", ":memory:")
+	require.NoError(t, err)
+	defer universeDB.Close()
+
+	// Create securities table with ISIN as PRIMARY KEY
+	_, err = universeDB.Exec(`
+		CREATE TABLE securities (
+			isin TEXT PRIMARY KEY,
+			symbol TEXT NOT NULL,
+			name TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)
+	`)
+	require.NoError(t, err)
+
+	// Insert test securities
+	_, err = universeDB.Exec(`
+		INSERT INTO securities (isin, symbol, name, created_at, updated_at)
+		VALUES
+			('US0378331005', 'AAPL', 'Apple Inc.', datetime('now'), datetime('now'))
+	`)
+	require.NoError(t, err)
+
 	service := &PortfolioService{
 		tradernetClient: mockTradernetClient,
 		positionRepo:    mockPositionRepo,
 		cashManager:     mockCashManager,
+		universeDB:      universeDB,
 		log:             log,
 	}
 
@@ -173,8 +229,8 @@ func TestSyncFromTradernet_DeleteStale(t *testing.T) {
 	}
 
 	currentPositions := []Position{
-		{Symbol: "AAPL", Quantity: 10},
-		{Symbol: "MSFT", Quantity: 5}, // Stale - not in Tradernet
+		{Symbol: "AAPL", ISIN: "US0378331005", Quantity: 10},
+		{Symbol: "MSFT", ISIN: "US5949181045", Quantity: 5}, // Stale - not in Tradernet
 	}
 
 	cashBalances := []tradernet.CashBalance{}
@@ -184,18 +240,18 @@ func TestSyncFromTradernet_DeleteStale(t *testing.T) {
 	mockPositionRepo.On("GetAll").Return(currentPositions, nil)
 	mockPositionRepo.On("GetBySymbol", "AAPL").Return(nil, nil).Once()
 	mockPositionRepo.On("Upsert", mock.AnythingOfType("Position")).Return(nil).Once()
-	mockPositionRepo.On("Delete", "MSFT").Return(nil).Once()
+	mockPositionRepo.On("Delete", "US5949181045").Return(nil).Once() // Delete by ISIN
 	mockTradernetClient.On("GetCashBalances").Return(cashBalances, nil)
 	mockCashManager.On("UpdateCashPosition", mock.Anything, mock.Anything).Return(nil)
 
 	// Execute
-	err := service.SyncFromTradernet()
+	err = service.SyncFromTradernet()
 
 	// Assert
 	assert.NoError(t, err)
 	mockTradernetClient.AssertExpectations(t)
 	mockPositionRepo.AssertExpectations(t)
-	mockPositionRepo.AssertCalled(t, "Delete", "MSFT")
+	mockPositionRepo.AssertCalled(t, "Delete", "US5949181045") // Delete by ISIN
 }
 
 func TestSyncFromTradernet_SkipZeroQuantity(t *testing.T) {
@@ -205,10 +261,36 @@ func TestSyncFromTradernet_SkipZeroQuantity(t *testing.T) {
 	mockCashManager := new(MockCashManager)
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 
+	// Create test universeDB with securities (required for ISIN lookup)
+	universeDB, err := sql.Open("sqlite3", ":memory:")
+	require.NoError(t, err)
+	defer universeDB.Close()
+
+	// Create securities table with ISIN as PRIMARY KEY
+	_, err = universeDB.Exec(`
+		CREATE TABLE securities (
+			isin TEXT PRIMARY KEY,
+			symbol TEXT NOT NULL,
+			name TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)
+	`)
+	require.NoError(t, err)
+
+	// Insert test securities
+	_, err = universeDB.Exec(`
+		INSERT INTO securities (isin, symbol, name, created_at, updated_at)
+		VALUES
+			('US0378331005', 'AAPL', 'Apple Inc.', datetime('now'), datetime('now'))
+	`)
+	require.NoError(t, err)
+
 	service := &PortfolioService{
 		tradernetClient: mockTradernetClient,
 		positionRepo:    mockPositionRepo,
 		cashManager:     mockCashManager,
+		universeDB:      universeDB,
 		log:             log,
 	}
 
@@ -238,7 +320,7 @@ func TestSyncFromTradernet_SkipZeroQuantity(t *testing.T) {
 	mockCashManager.On("UpdateCashPosition", mock.Anything, mock.Anything).Return(nil)
 
 	// Execute
-	err := service.SyncFromTradernet()
+	err = service.SyncFromTradernet()
 
 	// Assert
 	assert.NoError(t, err)
@@ -324,10 +406,37 @@ func TestSyncFromTradernet_UpsertError(t *testing.T) {
 	mockCashManager := new(MockCashManager)
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 
+	// Create test universeDB with securities (required for ISIN lookup)
+	universeDB, err := sql.Open("sqlite3", ":memory:")
+	require.NoError(t, err)
+	defer universeDB.Close()
+
+	// Create securities table with ISIN as PRIMARY KEY
+	_, err = universeDB.Exec(`
+		CREATE TABLE securities (
+			isin TEXT PRIMARY KEY,
+			symbol TEXT NOT NULL,
+			name TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)
+	`)
+	require.NoError(t, err)
+
+	// Insert test securities
+	_, err = universeDB.Exec(`
+		INSERT INTO securities (isin, symbol, name, created_at, updated_at)
+		VALUES
+			('US0378331005', 'AAPL', 'Apple Inc.', datetime('now'), datetime('now')),
+			('US5949181045', 'MSFT', 'Microsoft Corp.', datetime('now'), datetime('now'))
+	`)
+	require.NoError(t, err)
+
 	service := &PortfolioService{
 		tradernetClient: mockTradernetClient,
 		positionRepo:    mockPositionRepo,
 		cashManager:     mockCashManager,
+		universeDB:      universeDB,
 		log:             log,
 	}
 
@@ -354,7 +463,7 @@ func TestSyncFromTradernet_UpsertError(t *testing.T) {
 	mockCashManager.On("UpdateCashPosition", mock.Anything, mock.Anything).Return(nil)
 
 	// Execute
-	err := service.SyncFromTradernet()
+	err = service.SyncFromTradernet()
 
 	// Assert - Should not error, just log and continue
 	assert.NoError(t, err)
@@ -369,10 +478,36 @@ func TestSyncFromTradernet_CashBalancesError(t *testing.T) {
 	mockCashManager := new(MockCashManager)
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 
+	// Create test universeDB with securities (required for ISIN lookup)
+	universeDB, err := sql.Open("sqlite3", ":memory:")
+	require.NoError(t, err)
+	defer universeDB.Close()
+
+	// Create securities table with ISIN as PRIMARY KEY
+	_, err = universeDB.Exec(`
+		CREATE TABLE securities (
+			isin TEXT PRIMARY KEY,
+			symbol TEXT NOT NULL,
+			name TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)
+	`)
+	require.NoError(t, err)
+
+	// Insert test securities
+	_, err = universeDB.Exec(`
+		INSERT INTO securities (isin, symbol, name, created_at, updated_at)
+		VALUES
+			('US0378331005', 'AAPL', 'Apple Inc.', datetime('now'), datetime('now'))
+	`)
+	require.NoError(t, err)
+
 	service := &PortfolioService{
 		tradernetClient: mockTradernetClient,
 		positionRepo:    mockPositionRepo,
 		cashManager:     mockCashManager,
+		universeDB:      universeDB,
 		log:             log,
 	}
 
@@ -390,7 +525,7 @@ func TestSyncFromTradernet_CashBalancesError(t *testing.T) {
 	mockTradernetClient.On("GetCashBalances").Return(nil, errors.New("cash balances error"))
 
 	// Execute
-	err := service.SyncFromTradernet()
+	err = service.SyncFromTradernet()
 
 	// Assert - Should not error, just warn and continue
 	assert.NoError(t, err)

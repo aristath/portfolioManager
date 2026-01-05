@@ -16,11 +16,12 @@ type OpportunityContext struct {
 	TotalPortfolioValueEUR float64                         `json:"total_portfolio_value_eur"`
 
 	// Market data
-	CurrentPrices  map[string]float64         `json:"current_prices"`
-	StocksBySymbol map[string]domain.Security `json:"stocks_by_symbol"`
+	CurrentPrices  map[string]float64         `json:"current_prices"`  // Key: ISIN (internal identifier)
+	StocksByISIN   map[string]domain.Security `json:"stocks_by_isin"`   // Key: ISIN (primary identifier)
+	StocksBySymbol map[string]domain.Security `json:"stocks_by_symbol"` // Key: Symbol (for backward compatibility, deprecated)
 
 	// Optional enrichment data
-	SecurityScores     map[string]float64 `json:"security_scores,omitempty"`     // Final scores by symbol
+	SecurityScores     map[string]float64 `json:"security_scores,omitempty"`     // Final scores by ISIN (internal identifier)
 	CountryAllocations map[string]float64 `json:"country_allocations,omitempty"` // Current allocations
 	CountryToGroup     map[string]string  `json:"country_to_group,omitempty"`    // Country groupings
 	CountryWeights     map[string]float64 `json:"country_weights,omitempty"`     // Target weights by country
@@ -47,10 +48,17 @@ func NewOpportunityContext(
 	totalPortfolioValueEUR float64,
 	currentPrices map[string]float64,
 ) *OpportunityContext {
-	// Build stocks by symbol map
+	// Build stocks by ISIN map (primary) and by symbol map (for backward compatibility)
+	stocksByISIN := make(map[string]domain.Security, len(securities))
 	stocksBySymbol := make(map[string]domain.Security, len(securities))
 	for _, sec := range securities {
-		stocksBySymbol[sec.Symbol] = sec
+		if sec.ISIN != "" {
+			stocksByISIN[sec.ISIN] = sec
+		}
+		// Also index by symbol for backward compatibility
+		if sec.Symbol != "" {
+			stocksBySymbol[sec.Symbol] = sec
+		}
 	}
 
 	return &OpportunityContext{
@@ -60,6 +68,7 @@ func NewOpportunityContext(
 		AvailableCashEUR:       availableCashEUR,
 		TotalPortfolioValueEUR: totalPortfolioValueEUR,
 		CurrentPrices:          currentPrices,
+		StocksByISIN:            stocksByISIN,
 		StocksBySymbol:         stocksBySymbol,
 		IneligibleSymbols:      make(map[string]bool),
 		RecentlySold:           make(map[string]bool),
@@ -82,6 +91,61 @@ func (ctx *OpportunityContext) ApplyConfig(config *PlannerConfiguration) {
 	ctx.AllowBuy = config.AllowBuy
 }
 
+// GetSecurityByISINOrSymbol looks up a security by ISIN (preferred) or symbol (fallback).
+// This helper ensures calculators can work with both ISIN and symbol identifiers.
+func (ctx *OpportunityContext) GetSecurityByISINOrSymbol(isin, symbol string) (domain.Security, bool) {
+	// Try ISIN first (primary identifier)
+	if isin != "" {
+		if sec, ok := ctx.StocksByISIN[isin]; ok {
+			return sec, true
+		}
+	}
+	// Fallback to symbol (backward compatibility)
+	if symbol != "" {
+		if sec, ok := ctx.StocksBySymbol[symbol]; ok {
+			return sec, true
+		}
+	}
+	return domain.Security{}, false
+}
+
+// GetPriceByISINOrSymbol looks up a price by ISIN (preferred) or symbol (fallback).
+func (ctx *OpportunityContext) GetPriceByISINOrSymbol(isin, symbol string) (float64, bool) {
+	// Try ISIN first (primary identifier)
+	if isin != "" {
+		if price, ok := ctx.CurrentPrices[isin]; ok {
+			return price, true
+		}
+	}
+	// Fallback to symbol (backward compatibility)
+	if symbol != "" {
+		if price, ok := ctx.CurrentPrices[symbol]; ok {
+			return price, true
+		}
+	}
+	return 0, false
+}
+
+// GetScoreByISINOrSymbol looks up a security score by ISIN (preferred) or symbol (fallback).
+func (ctx *OpportunityContext) GetScoreByISINOrSymbol(isin, symbol string) (float64, bool) {
+	if ctx.SecurityScores == nil {
+		return 0, false
+	}
+	// Try ISIN first (primary identifier)
+	if isin != "" {
+		if score, ok := ctx.SecurityScores[isin]; ok {
+			return score, true
+		}
+	}
+	// Fallback to symbol (backward compatibility)
+	if symbol != "" {
+		if score, ok := ctx.SecurityScores[symbol]; ok {
+			return score, true
+		}
+	}
+	return 0, false
+}
+
 // EvaluationContext contains all data needed to simulate and score action sequences.
 type EvaluationContext struct {
 	// Portfolio state (same as OpportunityContext)
@@ -92,8 +156,9 @@ type EvaluationContext struct {
 	TotalPortfolioValueEUR float64                         `json:"total_portfolio_value_eur"`
 
 	// Market data
-	CurrentPrices  map[string]float64         `json:"current_prices"`
-	StocksBySymbol map[string]domain.Security `json:"stocks_by_symbol"`
+	CurrentPrices  map[string]float64         `json:"current_prices"`  // Key: ISIN (internal identifier)
+	StocksByISIN   map[string]domain.Security `json:"stocks_by_isin"`   // Key: ISIN (primary identifier)
+	StocksBySymbol map[string]domain.Security `json:"stocks_by_symbol"` // Key: Symbol (for backward compatibility, deprecated)
 
 	// Configuration
 	TransactionCostFixed   float64 `json:"transaction_cost_fixed"`
@@ -112,10 +177,17 @@ func NewEvaluationContext(
 	totalPortfolioValueEUR float64,
 	currentPrices map[string]float64,
 ) *EvaluationContext {
-	// Build stocks by symbol map
+	// Build stocks by ISIN map (primary) and by symbol map (for backward compatibility)
+	stocksByISIN := make(map[string]domain.Security, len(securities))
 	stocksBySymbol := make(map[string]domain.Security, len(securities))
 	for _, sec := range securities {
-		stocksBySymbol[sec.Symbol] = sec
+		if sec.ISIN != "" {
+			stocksByISIN[sec.ISIN] = sec
+		}
+		// Also index by symbol for backward compatibility
+		if sec.Symbol != "" {
+			stocksBySymbol[sec.Symbol] = sec
+		}
 	}
 
 	return &EvaluationContext{
@@ -125,6 +197,7 @@ func NewEvaluationContext(
 		AvailableCashEUR:       availableCashEUR,
 		TotalPortfolioValueEUR: totalPortfolioValueEUR,
 		CurrentPrices:          currentPrices,
+		StocksByISIN:            stocksByISIN,
 		StocksBySymbol:         stocksBySymbol,
 		TransactionCostFixed:   2.0,
 		TransactionCostPercent: 0.002,
@@ -138,6 +211,41 @@ func (ctx *EvaluationContext) ApplyConfig(config *PlannerConfiguration) {
 	}
 	ctx.TransactionCostFixed = config.TransactionCostFixed
 	ctx.TransactionCostPercent = config.TransactionCostPercent
+}
+
+// GetSecurityByISINOrSymbol looks up a security by ISIN (preferred) or symbol (fallback).
+// This helper ensures calculators can work with both ISIN and symbol identifiers.
+func (ctx *EvaluationContext) GetSecurityByISINOrSymbol(isin, symbol string) (domain.Security, bool) {
+	// Try ISIN first (primary identifier)
+	if isin != "" {
+		if sec, ok := ctx.StocksByISIN[isin]; ok {
+			return sec, true
+		}
+	}
+	// Fallback to symbol (backward compatibility)
+	if symbol != "" {
+		if sec, ok := ctx.StocksBySymbol[symbol]; ok {
+			return sec, true
+		}
+	}
+	return domain.Security{}, false
+}
+
+// GetPriceByISINOrSymbol looks up a price by ISIN (preferred) or symbol (fallback).
+func (ctx *EvaluationContext) GetPriceByISINOrSymbol(isin, symbol string) (float64, bool) {
+	// Try ISIN first (primary identifier)
+	if isin != "" {
+		if price, ok := ctx.CurrentPrices[isin]; ok {
+			return price, true
+		}
+	}
+	// Fallback to symbol (backward compatibility)
+	if symbol != "" {
+		if price, ok := ctx.CurrentPrices[symbol]; ok {
+			return price, true
+		}
+	}
+	return 0, false
 }
 
 // PlanningContext combines opportunity and evaluation contexts with planner-specific settings.

@@ -299,20 +299,29 @@ func (r *SymbolResolver) ResolveAndCache(tradernetSymbol string) (*SymbolInfo, e
 		if err != nil {
 			r.log.Warn().Err(err).Str("symbol", tradernetSymbol).Msg("Error checking for existing security")
 		} else if security != nil && security.ISIN == "" {
-			// Update with ISIN
-			err = r.securityRepo.Update(tradernetSymbol, map[string]interface{}{
-				"isin": *info.ISIN,
-			})
-			if err != nil {
-				r.log.Warn().Err(err).
-					Str("symbol", tradernetSymbol).
-					Str("isin", *info.ISIN).
-					Msg("Failed to cache ISIN")
-			} else {
-				r.log.Info().
-					Str("symbol", tradernetSymbol).
-					Str("isin", *info.ISIN).
-					Msg("Cached ISIN in database")
+			// Update with ISIN - security exists but ISIN is empty
+			// Note: We can't use Update() with symbol anymore, but we need ISIN to update
+			// This is a special case - we're setting the ISIN for the first time
+			// We need to use the symbol to identify the security, but Update() now requires ISIN
+			// Since ISIN is empty, we can't update it. This should be handled during security creation.
+			r.log.Warn().Str("symbol", tradernetSymbol).Msg("Security missing ISIN, cannot update - ISIN should be set during creation")
+		} else if security != nil && security.ISIN != "" {
+			// Security already has ISIN, update it if different
+			if security.ISIN != *info.ISIN {
+				err = r.securityRepo.Update(security.ISIN, map[string]interface{}{
+					"isin": *info.ISIN,
+				})
+				if err != nil {
+					r.log.Warn().Err(err).
+						Str("symbol", tradernetSymbol).
+						Str("isin", *info.ISIN).
+						Msg("Failed to update ISIN")
+				} else {
+					r.log.Info().
+						Str("symbol", tradernetSymbol).
+						Str("isin", *info.ISIN).
+						Msg("Updated ISIN in database")
+				}
 			}
 		}
 	}

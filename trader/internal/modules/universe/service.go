@@ -35,35 +35,61 @@ func NewUniverseService(
 
 // DeactivateSecurity marks a security as inactive
 // Historical data will be cleaned up by the cleanup job if the symbol becomes orphaned
+// After migration: accepts symbol but uses ISIN internally
 func (s *UniverseService) DeactivateSecurity(symbol string) error {
 	s.log.Info().Str("symbol", symbol).Msg("Deactivating security")
 
-	// Mark security as inactive in universe.db
-	err := s.securityRepo.Update(symbol, map[string]interface{}{
+	// Lookup ISIN from symbol
+	security, err := s.securityRepo.GetBySymbol(symbol)
+	if err != nil {
+		return fmt.Errorf("failed to lookup security: %w", err)
+	}
+	if security == nil {
+		return fmt.Errorf("security not found: %s", symbol)
+	}
+	if security.ISIN == "" {
+		return fmt.Errorf("security missing ISIN: %s", symbol)
+	}
+
+	// Mark security as inactive in universe.db (using ISIN)
+	err = s.securityRepo.Update(security.ISIN, map[string]interface{}{
 		"active": false,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to mark security as inactive: %w", err)
 	}
 
-	s.log.Info().Str("symbol", symbol).Msg("Security deactivated successfully")
+	s.log.Info().Str("symbol", symbol).Str("isin", security.ISIN).Msg("Security deactivated successfully")
 
 	return nil
 }
 
 // ReactivateSecurity reactivates a previously deactivated security
+// After migration: accepts symbol but uses ISIN internally
 func (s *UniverseService) ReactivateSecurity(symbol string) error {
 	s.log.Info().Str("symbol", symbol).Msg("Reactivating security")
 
-	// Mark security as active in universe.db
-	err := s.securityRepo.Update(symbol, map[string]interface{}{
+	// Lookup ISIN from symbol
+	security, err := s.securityRepo.GetBySymbol(symbol)
+	if err != nil {
+		return fmt.Errorf("failed to lookup security: %w", err)
+	}
+	if security == nil {
+		return fmt.Errorf("security not found: %s", symbol)
+	}
+	if security.ISIN == "" {
+		return fmt.Errorf("security missing ISIN: %s", symbol)
+	}
+
+	// Mark security as active in universe.db (using ISIN)
+	err = s.securityRepo.Update(security.ISIN, map[string]interface{}{
 		"active": true,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to mark security as active: %w", err)
 	}
 
-	s.log.Info().Str("symbol", symbol).Msg("Security reactivated successfully")
+	s.log.Info().Str("symbol", symbol).Str("isin", security.ISIN).Msg("Security reactivated successfully")
 
 	return nil
 }

@@ -141,11 +141,6 @@ func (m *Manager) Deploy() (*DeploymentResult, error) {
 		ServicesDeployed: []ServiceDeployment{},
 	}
 
-	// Ensure required directories exist
-	if err := m.ensureDirectories(); err != nil {
-		return nil, fmt.Errorf("failed to ensure directories: %w", err)
-	}
-
 	// Ensure safe directory
 	if err := m.gitChecker.EnsureSafeDirectory(); err != nil {
 		m.log.Warn().Err(err).Msg("Failed to ensure git safe directory")
@@ -747,39 +742,6 @@ func (e *logEventAdapter) Bool(key string, value bool) LogEvent {
 func (e *logEventAdapter) Interface(key string, value interface{}) LogEvent {
 	e.event = e.event.Interface(key, value)
 	return e
-}
-
-// ensureDirectories creates all required directories for deployment
-func (m *Manager) ensureDirectories() error {
-	// Create deploy directory
-	if err := os.MkdirAll(m.config.DeployDir, 0755); err != nil {
-		return fmt.Errorf("failed to create deploy directory: %w", err)
-	}
-
-	// Create data directory (for databases)
-	dataDir := filepath.Join(m.config.DeployDir, "data")
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		return fmt.Errorf("failed to create data directory: %w", err)
-	}
-
-	// Create microservices directory structure
-	microservicesDir := filepath.Join(m.config.RepoDir, "microservices")
-	if err := os.MkdirAll(microservicesDir, 0755); err != nil {
-		return fmt.Errorf("failed to create microservices directory: %w", err)
-	}
-
-	// Create temp directory for builds
-	tempDir := filepath.Join(m.config.DeployDir, ".tmp")
-	if err := os.MkdirAll(tempDir, 0755); err != nil {
-		return fmt.Errorf("failed to create temp directory: %w", err)
-	}
-
-	m.log.Debug().
-		Str("deploy_dir", m.config.DeployDir).
-		Str("data_dir", dataDir).
-		Msg("Ensured required directories exist")
-
-	return nil
 }
 
 // getEnv gets environment variable with fallback

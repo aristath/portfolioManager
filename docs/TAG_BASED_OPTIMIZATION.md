@@ -4,6 +4,29 @@
 
 This document outlines the strategy for using the security tags system to dramatically improve planner performance through intelligent pre-filtering and focused calculations.
 
+**Note**: This document has been updated to incorporate the enhanced tag system (see `TAG_SYSTEM_ENHANCEMENT.md`). The enhanced tags support both performance optimization (fast filtering) and algorithm improvements (quality gates, bubble detection, value trap detection, total return, optimizer alignment, regime adaptation).
+
+## Integration with Enhanced Tags
+
+The tag-based optimization strategy now leverages **20+ new enhanced tags** that support algorithm improvements:
+
+- **Quality Gate Tags**: `quality-gate-pass`, `quality-gate-fail`, `quality-value`
+- **Bubble Detection Tags**: `bubble-risk`, `quality-high-cagr`, `high-sharpe`, `high-sortino`, `poor-risk-adjusted`
+- **Value Trap Tags**: `value-trap`
+- **Total Return Tags**: `high-total-return`, `excellent-total-return`, `dividend-total-return`, `moderate-total-return`
+- **Optimizer Alignment Tags**: `underweight`, `target-aligned`, `needs-rebalance`, `slightly-overweight`, `slightly-underweight`
+- **Regime-Specific Tags**: `regime-bear-safe`, `regime-bull-growth`, `regime-sideways-value`, `regime-volatile`
+
+These enhanced tags enable:
+1. **Fast Quality Gates**: Instant filtering using `quality-gate-pass` (no expensive calculations)
+2. **Fast Bubble Detection**: Instant rejection using `bubble-risk` tag
+3. **Fast Value Trap Detection**: Instant rejection using `value-trap` tag
+4. **Fast Total Return**: Instant prioritization using `high-total-return` tag
+5. **Fast Optimizer Alignment**: Instant scoring using `target-aligned` tag
+6. **Fast Regime Filtering**: Instant adaptation using regime tags
+
+**Result**: 5-7x faster planning + better decisions (algorithm improvements) = best of both worlds.
+
 ## Tag Update Frequency Strategy
 
 Tags are categorized by volatility and update frequency to optimize both freshness and performance:
@@ -384,21 +407,91 @@ func (c *HybridOpportunityBuysCalculator) calculatePriority(
 
 #### Step 2.2: HybridProfitTakingCalculator
 
-Similar pattern - use tags to identify profit-taking candidates:
-- `overvalued`, `near-52w-high`, `overbought` for sell signals
-- `overweight`, `concentration-risk` for rebalancing
+Enhanced with optimizer alignment tags:
+
+```go
+func (c *HybridProfitTakingCalculator) Calculate(ctx, params) {
+    // Use tags to identify profit-taking candidates
+    sellTags := []string{
+        "overvalued", "near-52w-high", "overbought", // Price-based
+        "overweight", "concentration-risk",           // Portfolio-based
+        "needs-rebalance",                           // Optimizer alignment - NEW
+        "bubble-risk",                               // Bubble detection - NEW
+    }
+    
+    candidates := c.securityRepo.GetPositionsByTags(sellTags)
+    
+    // Filter: Keep only positions with gains (profit-taking)
+    // Focused calculation on filtered set
+}
+```
+
+**Enhanced Tags Used:**
+- `needs-rebalance` - Optimizer alignment (NEW)
+- `bubble-risk` - Sell bubbles before they pop (NEW)
 
 #### Step 2.3: HybridAveragingDownCalculator
 
-Use tags to identify averaging-down opportunities:
-- `recovery-candidate` + existing position
-- `value-opportunity` + existing position with loss
+Enhanced with quality gates and value trap detection:
+
+```go
+func (c *HybridAveragingDownCalculator) Calculate(ctx, params) {
+    // Use tags to identify averaging-down opportunities
+    avgDownTags := []string{
+        "recovery-candidate",      // Quality company, temporary weakness
+        "value-opportunity",        // Cheap price
+        "quality-gate-pass",        // Quality gate - NEW
+        "quality-value",           // Quality + value - NEW
+    }
+    
+    candidates := c.securityRepo.GetPositionsByTags(avgDownTags)
+    
+    // CRITICAL: Exclude value traps
+    candidates = c.filterOutNegativeTags(candidates, []string{"value-trap"})
+    
+    // Focused calculation: Only on quality positions with losses
+}
+```
+
+**Enhanced Tags Used:**
+- `quality-gate-pass` - Only average down on quality (NEW)
+- `quality-value` - Best averaging-down candidates (NEW)
+- Exclude `value-trap` - Don't average down into traps (NEW)
 
 #### Step 2.4: HybridRebalanceCalculator
 
-Use tags for rebalancing:
-- `overweight`, `concentration-risk` for sells
-- `underweight` (calculated) + `high-quality` for buys
+Enhanced with optimizer alignment tags:
+
+```go
+func (c *HybridRebalanceCalculator) Calculate(ctx, params) {
+    // SELL tags: Overweight positions
+    sellTags := []string{
+        "overweight", "concentration-risk",
+        "needs-rebalance",           // Optimizer alignment - NEW
+        "slightly-overweight",        // Optimizer alignment - NEW
+    }
+    
+    // BUY tags: Underweight quality positions
+    buyTags := []string{
+        "underweight",                // Optimizer alignment - NEW
+        "slightly-underweight",       // Optimizer alignment - NEW
+        "high-quality",               // Quality requirement
+        "quality-gate-pass",          // Quality gate - NEW
+        "target-aligned",             // Already aligned (skip) - NEW
+    }
+    
+    sellCandidates := c.securityRepo.GetPositionsByTags(sellTags)
+    buyCandidates := c.securityRepo.GetByTags(buyTags)
+    
+    // Focused calculation: Rebalance toward optimizer targets
+}
+```
+
+**Enhanced Tags Used:**
+- `underweight`, `slightly-underweight` - Optimizer alignment (NEW)
+- `needs-rebalance`, `slightly-overweight` - Rebalancing triggers (NEW)
+- `target-aligned` - Skip already-aligned positions (NEW)
+- `quality-gate-pass` - Only rebalance into quality (NEW)
 
 ### Phase 3: Tag Update Scheduler
 
@@ -420,6 +513,7 @@ var TagUpdateFrequencies = []TagUpdateFrequency{
             "oversold", "overbought", "below-ema", "above-ema",
             "bollinger-oversold", "volatility-spike", "near-52w-high",
             "below-52w-high", "valuation-stretch",
+            "regime-volatile", // NEW
         },
         Frequency:   10 * time.Minute,
         Description: "Price/technical tags",
@@ -428,8 +522,12 @@ var TagUpdateFrequencies = []TagUpdateFrequency{
     {
         TagIDs: []string{
             "value-opportunity", "deep-value", "undervalued-pe",
+            "value-trap", "quality-value", // NEW
             "positive-momentum", "recovery-candidate", "overvalued",
-            "overweight", "concentration-risk", "unsustainable-gains",
+            "overweight", "underweight", "concentration-risk", // ENHANCED
+            "needs-rebalance", "slightly-overweight", "slightly-underweight", // NEW
+            "unsustainable-gains",
+            "regime-sideways-value", // NEW
         },
         Frequency:   1 * time.Hour,
         Description: "Opportunity/risk tags",
@@ -437,12 +535,37 @@ var TagUpdateFrequencies = []TagUpdateFrequency{
     // Stable: Daily
     {
         TagIDs: []string{
+            // Quality tags
             "high-quality", "stable", "strong-fundamentals",
-            "consistent-grower", "high-dividend", "dividend-opportunity",
-            "dividend-grower", "high-score", "good-opportunity",
+            "quality-gate-pass", "quality-gate-fail", // NEW
+            "consistent-grower",
+            
+            // Bubble detection tags
+            "bubble-risk", "quality-high-cagr", // NEW
+            "high-sharpe", "high-sortino", "poor-risk-adjusted", // NEW
+            
+            // Total return tags
+            "high-total-return", "excellent-total-return", // NEW
+            "dividend-total-return", "moderate-total-return", // NEW
+            
+            // Dividend tags
+            "high-dividend", "dividend-opportunity", "dividend-grower",
+            
+            // Score tags
+            "high-score", "good-opportunity",
+            
+            // Risk tags
             "volatile", "high-volatility", "underperforming", "stagnant",
             "high-drawdown", "low-risk", "medium-risk", "high-risk",
+            
+            // Profile tags
             "growth", "value", "dividend-focused", "short-term-opportunity",
+            
+            // Regime tags
+            "regime-bear-safe", "regime-bull-growth", // NEW
+            
+            // Optimizer tags
+            "target-aligned", // NEW
         },
         Frequency:   24 * time.Hour,
         Description: "Quality/characteristic tags",
@@ -502,6 +625,9 @@ func (j *SmartTagUpdateJob) UpdateTagsForSecurity(
 3. **Smart Prioritization**: Tag combinations boost priority intelligently
 4. **Efficient Updates**: Only update tags that need updating
 5. **No Configuration**: System adapts automatically to market conditions
+6. **Algorithm Support**: Enhanced tags enable quality gates, bubble detection, value trap detection
+7. **Optimizer Alignment**: Tags support optimizer-planner integration
+8. **Regime Adaptation**: Tags enable regime-based risk adjustments
 
 ## Migration Strategy
 
@@ -517,10 +643,97 @@ func (j *SmartTagUpdateJob) UpdateTagsForSecurity(
 3. **Performance Tests**: Verify 5-7x speedup
 4. **Validation**: Run both systems in parallel for 1 week, compare outputs
 
+## Enhanced Tag Usage Examples
+
+### Quality Gates (Algorithm Improvement)
+
+```go
+// Fast quality gate check - no expensive calculations needed
+func hasQualityGate(security Security) bool {
+    tags, _ := securityRepo.GetTagsForSecurity(security.Symbol)
+    return contains(tags, "quality-gate-pass")
+}
+
+// Reject value traps instantly
+func isValueTrap(security Security) bool {
+    tags, _ := securityRepo.GetTagsForSecurity(security.Symbol)
+    return contains(tags, "value-trap")
+}
+```
+
+### Bubble Detection (Algorithm Improvement)
+
+```go
+// Fast bubble detection - no expensive risk calculations needed
+func isBubble(security Security) bool {
+    tags, _ := securityRepo.GetTagsForSecurity(security.Symbol)
+    return contains(tags, "bubble-risk")
+}
+
+// Quality high CAGR gets monotonic scoring
+func isQualityHighCAGR(security Security) bool {
+    tags, _ := securityRepo.GetTagsForSecurity(security.Symbol)
+    return contains(tags, "quality-high-cagr")
+}
+```
+
+### Total Return (Algorithm Improvement)
+
+```go
+// Fast total return check - no expensive CAGR + dividend calculations needed
+func hasHighTotalReturn(security Security) bool {
+    tags, _ := securityRepo.GetTagsForSecurity(security.Symbol)
+    return contains(tags, "high-total-return") || 
+           contains(tags, "excellent-total-return")
+}
+
+// Your example: 5% growth + 10% dividend = 15% total
+func isDividendTotalReturn(security Security) bool {
+    tags, _ := securityRepo.GetTagsForSecurity(security.Symbol)
+    return contains(tags, "dividend-total-return")
+}
+```
+
+### Optimizer Alignment (Algorithm Improvement)
+
+```go
+// Fast optimizer alignment check
+func getOptimizerAlignmentScore(security Security) float64 {
+    tags, _ := securityRepo.GetTagsForSecurity(security.Symbol)
+    if contains(tags, "target-aligned") {
+        return 1.0
+    } else if contains(tags, "slightly-overweight") || contains(tags, "slightly-underweight") {
+        return 0.8
+    } else if contains(tags, "needs-rebalance") {
+        return 0.5
+    }
+    return 0.5 // Neutral
+}
+```
+
+### Regime-Based Filtering (Algorithm Improvement)
+
+```go
+// Fast regime-based filtering
+func getRegimeFilterTags(regime MarketRegime) []string {
+    switch regime {
+    case MarketRegimeBear:
+        return []string{"regime-bear-safe", "quality-gate-pass", "low-risk"}
+    case MarketRegimeBull:
+        return []string{"regime-bull-growth", "quality-high-cagr"}
+    case MarketRegimeSideways:
+        return []string{"regime-sideways-value", "quality-value"}
+    }
+    return []string{}
+}
+```
+
 ## Future Enhancements
 
 1. **Tag-Based Pattern Matching**: Use tags to match trading patterns
 2. **Tag-Based Evaluation Shortcuts**: Skip expensive calculations for tagged securities
 3. **Tag-Based Caching**: Cache tag queries for even faster lookups
 4. **Machine Learning**: Learn optimal tag combinations from historical performance
+5. **Tag-Based Regime Detection**: Use tag distributions to detect market regimes
+6. **Tag-Based Risk Scoring**: Use risk tags to calculate portfolio risk metrics faster
 

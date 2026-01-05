@@ -21,10 +21,10 @@ func TestScoreCalculation_SavesAllRawValues(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	// Create scores table with all columns
+	// Create scores table with all columns (ISIN as PRIMARY KEY, matching migration 030)
 	_, err = db.Conn().Exec(`
 		CREATE TABLE scores (
-			symbol TEXT PRIMARY KEY,
+			isin TEXT PRIMARY KEY,
 			total_score REAL NOT NULL,
 			quality_score REAL,
 			opportunity_score REAL,
@@ -87,7 +87,7 @@ func TestScoreCalculation_SavesAllRawValues(t *testing.T) {
 	calculatedScore := scorer.ScoreSecurityWithDefaults(scoringInput)
 
 	// Convert to SecurityScore
-	score := convertToSecurityScore("TEST", calculatedScore)
+	score := convertToSecurityScore("TEST12345678", "TEST", calculatedScore)
 
 	// Verify raw values are extracted (some may be 0.0 if calculation fails or data is insufficient)
 	assert.GreaterOrEqual(t, score.SharpeScore, 0.0, "SharpeScore should be >= 0")
@@ -104,8 +104,8 @@ func TestScoreCalculation_SavesAllRawValues(t *testing.T) {
 	err = repo.Upsert(score)
 	require.NoError(t, err)
 
-	// Retrieve from database
-	retrieved, err := repo.GetBySymbol("TEST")
+	// Retrieve from database (using ISIN directly)
+	retrieved, err := repo.GetByISIN("TEST12345678")
 	require.NoError(t, err)
 	require.NotNil(t, retrieved)
 

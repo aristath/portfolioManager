@@ -2,6 +2,7 @@ package rebalancing
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/aristath/arduino-trader/internal/clients/tradernet"
 	"github.com/aristath/arduino-trader/internal/clients/yahoo"
@@ -227,6 +228,7 @@ func (s *Service) buildOpportunityContext(availableCash float64) (*planningdomai
 	for _, pos := range positions {
 		domainPositions = append(domainPositions, domain.Position{
 			Symbol:   pos.Symbol,
+			ISIN:     pos.ISIN, // Include ISIN (primary identifier)
 			Quantity: float64(pos.Quantity),
 			Currency: domain.Currency(pos.Currency),
 		})
@@ -238,6 +240,7 @@ func (s *Service) buildOpportunityContext(availableCash float64) (*planningdomai
 	for _, sec := range securities {
 		domainSec := domain.Security{
 			Symbol:  sec.Symbol,
+			ISIN:    sec.ISIN, // Include ISIN (primary identifier)
 			Active:  sec.Active,
 			Country: sec.Country,
 			Name:    sec.Name,
@@ -289,6 +292,7 @@ func (s *Service) buildOpportunityContext(availableCash float64) (*planningdomai
 }
 
 // fetchCurrentPrices fetches current prices for all securities from Yahoo Finance
+// After migration: Returns map keyed by ISIN (internal identifier)
 func (s *Service) fetchCurrentPrices(securities []universe.Security) map[string]float64 {
 	prices := make(map[string]float64)
 
@@ -302,8 +306,10 @@ func (s *Service) fetchCurrentPrices(securities []universe.Security) map[string]
 		return prices
 	}
 
-	// Build symbol map (tradernet_symbol -> yahoo_symbol override)
+	// Build symbol map (tradernet_symbol -> yahoo_symbol override) for Yahoo API
 	symbolMap := make(map[string]*string)
+	// Build symbol -> ISIN mapping to convert API response to ISIN keys
+	symbolToISIN := make(map[string]string)
 	for _, security := range securities {
 		var yahooSymbolPtr *string
 		if security.YahooSymbol != "" {
@@ -312,19 +318,36 @@ func (s *Service) fetchCurrentPrices(securities []universe.Security) map[string]
 			yahooSymbolPtr = &yahooSymbol
 		}
 		symbolMap[security.Symbol] = yahooSymbolPtr
+		if security.ISIN != "" {
+			symbolToISIN[security.Symbol] = security.ISIN
+		}
 	}
 
-	// Fetch batch quotes from Yahoo
+	// Fetch batch quotes from Yahoo (returns map keyed by Tradernet symbol)
 	quotes, err := s.yahooClient.GetBatchQuotes(symbolMap)
 	if err != nil {
 		s.log.Warn().Err(err).Msg("Failed to fetch batch quotes from Yahoo, using empty prices")
 		return prices
 	}
 
-	// Convert quotes map to prices map (convert *float64 to float64)
+	// Convert quotes map to prices map keyed by ISIN (convert *float64 to float64)
 	successCount := 0
 	for symbol, price := range quotes {
-		if price != nil {
+		if price == nil {
+			continue
+		}
+		// Convert symbol to ISIN for internal map key
+		isin, hasISIN := symbolToISIN[symbol]
+		if hasISIN && isin != "" {
+			prices[isin] = *price
+			successCount++
+		} else if strings.HasPrefix(strings.ToUpper(symbol), "CASH:") {
+			// CASH positions use symbol as ISIN
+			prices[symbol] = *price
+			successCount++
+		} else {
+			// Fallback: use symbol as key if ISIN not found (shouldn't happen after migration)
+			s.log.Warn().Str("symbol", symbol).Msg("No ISIN found for symbol in price map, using symbol as key")
 			prices[symbol] = *price
 			successCount++
 		}

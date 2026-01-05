@@ -211,8 +211,8 @@ func (m *CashSecurityManager) deleteCashPositionLocked(symbol string, currency s
 		return nil
 	}
 
-	// Delete the position
-	err = m.positionRepo.Delete(symbol)
+	// Delete the position (CASH positions use symbol as ISIN)
+	err = m.positionRepo.Delete(symbol) // For CASH positions, symbol == ISIN
 	if err != nil {
 		return fmt.Errorf("failed to delete cash position: %w", err)
 	}

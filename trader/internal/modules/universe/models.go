@@ -10,6 +10,7 @@ type Tag struct {
 
 // Security represents a security in the investment universe
 // Faithful translation from Python: app/domain/models.py -> class Security
+// After migration 030: ISIN is PRIMARY KEY and is required for all database operations
 type Security struct {
 	Currency           string   `json:"currency,omitempty"`
 	Name               string   `json:"name"`
@@ -17,7 +18,7 @@ type Security struct {
 	Country            string   `json:"country,omitempty"`
 	FullExchangeName   string   `json:"fullExchangeName,omitempty"`
 	YahooSymbol        string   `json:"yahoo_symbol,omitempty"`
-	ISIN               string   `json:"isin,omitempty"`
+	ISIN               string   `json:"isin,omitempty"` // Required: PRIMARY KEY after migration 030
 	Industry           string   `json:"industry,omitempty"`
 	Symbol             string   `json:"symbol"`
 	LastSynced         string   `json:"last_synced,omitempty"`
@@ -33,10 +34,11 @@ type Security struct {
 
 // SecurityScore represents calculated scores for a security
 // Faithful translation from Python: app/domain/models.py -> class SecurityScore
+// After migration 030: ISIN is PRIMARY KEY and is required for all database operations
 type SecurityScore struct {
 	CalculatedAt           *time.Time `json:"calculated_at,omitempty"`
-	Symbol                 string     `json:"symbol"`
-	ISIN                   string     `json:"isin,omitempty"`
+	Symbol                 string     `json:"symbol"`         // Kept for backward compatibility, not used as key
+	ISIN                   string     `json:"isin,omitempty"` // Required: PRIMARY KEY after migration 030
 	DrawdownScore          float64    `json:"drawdown_score,omitempty"`
 	RSI                    float64    `json:"rsi,omitempty"`
 	AllocationFitScore     float64    `json:"allocation_fit_score,omitempty"`

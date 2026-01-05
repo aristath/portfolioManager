@@ -416,11 +416,13 @@ func (h *UniverseHandlers) HandleGetStock(w http.ResponseWriter, r *http.Request
 	}
 
 	symbol := security.Symbol
+	securityISIN := security.ISIN
 
-	// Get score
-	score, err := h.scoreRepo.GetBySymbol(symbol)
+	// Get score (using ISIN - primary identifier)
+	var score *SecurityScore
+	score, err = h.scoreRepo.GetByISIN(securityISIN)
 	if err != nil {
-		h.log.Error().Err(err).Str("symbol", symbol).Msg("Failed to fetch score")
+		h.log.Error().Err(err).Str("isin", securityISIN).Str("symbol", symbol).Msg("Failed to fetch score")
 		// Continue without score rather than failing
 		score = nil
 	}
@@ -474,10 +476,12 @@ func (h *UniverseHandlers) HandleGetStock(w http.ResponseWriter, r *http.Request
 }
 
 // SecurityCreateRequest represents the request to create a security
+// After migration 030: ISIN is required (PRIMARY KEY)
 type SecurityCreateRequest struct {
 	Symbol      string   `json:"symbol"`
 	Name        string   `json:"name"`
 	YahooSymbol string   `json:"yahoo_symbol"`
+	ISIN        string   `json:"isin"` // Required: PRIMARY KEY after migration 030
 	MinLot      int      `json:"min_lot"`
 	AllowBuy    bool     `json:"allow_buy"`
 	AllowSell   bool     `json:"allow_sell"`
@@ -502,6 +506,12 @@ func (h *UniverseHandlers) HandleCreateStock(w http.ResponseWriter, r *http.Requ
 		http.Error(w, "Name is required", http.StatusBadRequest)
 		return
 	}
+	if req.ISIN == "" {
+		// ISIN is required after migration 030 (PRIMARY KEY)
+		// Suggest using AddSecurityByIdentifier endpoint which automatically fetches ISIN
+		http.Error(w, "ISIN is required (PRIMARY KEY). Use /api/securities/add-by-identifier endpoint to automatically fetch ISIN from Tradernet", http.StatusBadRequest)
+		return
+	}
 
 	// Ignore tags in create request (tags are internal only, auto-assigned)
 	// No need to reject - just ignore them silently
@@ -522,11 +532,12 @@ func (h *UniverseHandlers) HandleCreateStock(w http.ResponseWriter, r *http.Requ
 		Bool("allow_sell", req.AllowSell).
 		Msg("Creating security")
 
-	// Call SecuritySetupService
+	// Call SecuritySetupService (ISIN is now required)
 	security, err := h.setupService.CreateSecurity(
 		req.Symbol,
 		req.Name,
 		req.YahooSymbol,
+		req.ISIN,
 		req.MinLot,
 		req.AllowBuy,
 		req.AllowSell,
@@ -537,8 +548,8 @@ func (h *UniverseHandlers) HandleCreateStock(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Get the calculated score
-	score, err := h.scoreRepo.GetBySymbol(security.Symbol)
+	// Get the calculated score (using ISIN - primary identifier)
+	score, err := h.scoreRepo.GetByISIN(security.ISIN)
 	if err != nil {
 		h.log.Warn().Err(err).Str("symbol", security.Symbol).Msg("Failed to get score")
 	}
@@ -635,14 +646,22 @@ func (h *UniverseHandlers) HandleRefreshAllScores(w http.ResponseWriter, r *http
 	for _, security := range securities {
 		// Update industry if missing
 		if security.Industry == "" {
-			if industry, err := h.yahooClient.GetSecurityIndustry(security.Symbol, &security.YahooSymbol); err == nil && industry != nil {
-				_ = h.securityRepo.Update(security.Symbol, map[string]interface{}{"industry": *industry})
-				h.log.Info().Str("symbol", security.Symbol).Str("industry", *industry).Msg("Updated missing industry")
+			// Use security's stored symbols for API call
+			yahooSymPtr := &security.YahooSymbol
+			if security.YahooSymbol == "" {
+				yahooSymPtr = nil
+			}
+			if industry, err := h.yahooClient.GetSecurityIndustry(security.Symbol, yahooSymPtr); err == nil && industry != nil {
+				// Update using ISIN (primary identifier)
+				if security.ISIN != "" {
+					_ = h.securityRepo.Update(security.ISIN, map[string]interface{}{"industry": *industry})
+					h.log.Info().Str("symbol", security.Symbol).Str("isin", security.ISIN).Str("industry", *industry).Msg("Updated missing industry")
+				}
 			}
 		}
 
 		// Calculate score
-		score, err := h.calculateAndSaveScore(security.Symbol, security.YahooSymbol, security.Country, security.Industry)
+		score, err := h.calculateAndSaveScore(security.ISIN, security.YahooSymbol, security.Country, security.Industry)
 		if err != nil {
 			h.log.Warn().Err(err).Str("symbol", security.Symbol).Msg("Failed to calculate score")
 			continue
@@ -742,7 +761,7 @@ func (h *UniverseHandlers) HandleRefreshStockScore(w http.ResponseWriter, r *htt
 	symbol := security.Symbol
 
 	// Calculate and save score
-	score, err := h.calculateAndSaveScore(symbol, security.YahooSymbol, security.Country, security.Industry)
+	score, err := h.calculateAndSaveScore(security.ISIN, security.YahooSymbol, security.Country, security.Industry)
 	if err != nil {
 		h.log.Error().Err(err).Str("symbol", symbol).Msg("Failed to calculate score")
 		http.Error(w, "Failed to calculate score", http.StatusInternalServerError)
@@ -798,6 +817,7 @@ func (h *UniverseHandlers) HandleUpdateStock(w http.ResponseWriter, r *http.Requ
 	}
 
 	oldSymbol := security.Symbol
+	oldISIN := security.ISIN
 
 	// Parse update request
 	var updates map[string]interface{}
@@ -817,9 +837,9 @@ func (h *UniverseHandlers) HandleUpdateStock(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Apply updates
-	if err := h.securityRepo.Update(oldSymbol, updates); err != nil {
-		h.log.Error().Err(err).Str("symbol", oldSymbol).Msg("Failed to update security")
+	// Apply updates (using ISIN as primary identifier)
+	if err := h.securityRepo.Update(oldISIN, updates); err != nil {
+		h.log.Error().Err(err).Str("isin", oldISIN).Str("symbol", oldSymbol).Msg("Failed to update security")
 
 		// Return specific error message for validation errors, generic for others
 		errorMsg := "Failed to update security"
@@ -837,23 +857,18 @@ func (h *UniverseHandlers) HandleUpdateStock(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Get updated security
-	finalSymbol := oldSymbol
-	if newSymbol, ok := updates["symbol"].(string); ok && newSymbol != oldSymbol {
-		finalSymbol = newSymbol
-	}
-
-	updatedSecurity, err := h.securityRepo.GetBySymbol(finalSymbol)
+	// Get updated security (by ISIN - ISIN doesn't change)
+	updatedSecurity, err := h.securityRepo.GetByISIN(oldISIN)
 	if err != nil || updatedSecurity == nil {
-		h.log.Error().Err(err).Str("symbol", finalSymbol).Msg("Failed to fetch updated security")
+		h.log.Error().Err(err).Str("isin", oldISIN).Msg("Failed to fetch updated security")
 		http.Error(w, "Security not found after update", http.StatusNotFound)
 		return
 	}
 
-	// Recalculate score
-	score, err := h.calculateAndSaveScore(finalSymbol, updatedSecurity.YahooSymbol, updatedSecurity.Country, updatedSecurity.Industry)
+	// Recalculate score (using ISIN internally)
+	score, err := h.calculateAndSaveScore(updatedSecurity.ISIN, updatedSecurity.YahooSymbol, updatedSecurity.Country, updatedSecurity.Industry)
 	if err != nil {
-		h.log.Warn().Err(err).Str("symbol", finalSymbol).Msg("Failed to recalculate score after update")
+		h.log.Warn().Err(err).Str("isin", updatedSecurity.ISIN).Str("symbol", updatedSecurity.Symbol).Msg("Failed to recalculate score after update")
 		// Continue without score rather than failing the update
 	}
 
@@ -931,26 +946,34 @@ func (h *UniverseHandlers) HandleDeleteStock(w http.ResponseWriter, r *http.Requ
 
 // CalculateAndSaveScore is the public interface implementation for ScoreCalculator
 // Wraps the private calculateAndSaveScore method
+// After migration: accepts symbol but looks up ISIN internally
 func (h *UniverseHandlers) CalculateAndSaveScore(symbol string, yahooSymbol string, country string, industry string) error {
-	_, err := h.calculateAndSaveScore(symbol, yahooSymbol, country, industry)
+	// Lookup ISIN from symbol
+	security, err := h.securityRepo.GetBySymbol(symbol)
+	if err != nil {
+		return fmt.Errorf("failed to lookup security: %w", err)
+	}
+	if security == nil || security.ISIN == "" {
+		return fmt.Errorf("security not found or missing ISIN: %s", symbol)
+	}
+	_, err = h.calculateAndSaveScore(security.ISIN, yahooSymbol, country, industry)
 	return err
 }
 
 // calculateAndSaveScore calculates and saves security score
 // Faithful translation from Python: app/modules/scoring/services/scoring_service.py -> calculate_and_save_score
-func (h *UniverseHandlers) calculateAndSaveScore(symbol string, yahooSymbol string, country string, industry string) (*SecurityScore, error) {
-	// Get security to extract ISIN
-	security, err := h.securityRepo.GetBySymbol(symbol)
+// calculateAndSaveScore calculates and saves a security score
+// After migration: accepts ISIN as primary identifier (first parameter)
+func (h *UniverseHandlers) calculateAndSaveScore(isin string, yahooSymbol string, country string, industry string) (*SecurityScore, error) {
+	// Get security by ISIN to extract symbol (needed for Yahoo API calls)
+	security, err := h.securityRepo.GetByISIN(isin)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get security: %w", err)
 	}
 	if security == nil {
-		return nil, fmt.Errorf("security not found: %s", symbol)
+		return nil, fmt.Errorf("security not found: %s", isin)
 	}
-	if security.ISIN == "" {
-		return nil, fmt.Errorf("security %s has no ISIN, cannot calculate score", symbol)
-	}
-	isin := security.ISIN
+	symbol := security.Symbol // Get symbol for Yahoo API calls
 
 	// Fetch price data from history database using ISIN
 	dailyPrices, err := h.historyDB.GetDailyPrices(isin, 400)
@@ -1028,20 +1051,21 @@ func (h *UniverseHandlers) calculateAndSaveScore(symbol string, yahooSymbol stri
 	// Call scoring service
 	calculatedScore := h.securityScorer.ScoreSecurityWithDefaults(scoringInput)
 
-	// Convert calculated score to SecurityScore for database storage
-	score := convertToSecurityScore(symbol, calculatedScore)
+	// Convert calculated score to SecurityScore for database storage (using ISIN)
+	score := convertToSecurityScore(isin, symbol, calculatedScore)
 
 	// Save score to database
 	if err := h.scoreRepo.Upsert(score); err != nil {
 		return nil, fmt.Errorf("failed to save score: %w", err)
 	}
 
-	h.log.Info().Str("symbol", symbol).Float64("score", score.TotalScore).Msg("Score calculated and saved")
+	h.log.Info().Str("isin", isin).Str("symbol", symbol).Float64("score", score.TotalScore).Msg("Score calculated and saved")
 	return &score, nil
 }
 
 // convertToSecurityScore converts domain.CalculatedSecurityScore to SecurityScore
-func convertToSecurityScore(symbol string, calculated *domain.CalculatedSecurityScore) SecurityScore {
+// After migration: accepts ISIN as primary identifier
+func convertToSecurityScore(isin string, symbol string, calculated *domain.CalculatedSecurityScore) SecurityScore {
 	// Extract group scores
 	groupScores := calculated.GroupScores
 	if groupScores == nil {
@@ -1127,7 +1151,8 @@ func convertToSecurityScore(symbol string, calculated *domain.CalculatedSecurity
 	}
 
 	return SecurityScore{
-		Symbol:                 symbol,
+		ISIN:                   isin, // Primary identifier after migration
+		Symbol:                 symbol, // Keep for display/backward compatibility
 		QualityScore:           qualityScore,
 		OpportunityScore:       groupScores["opportunity"],
 		AnalystScore:           groupScores["opinion"],

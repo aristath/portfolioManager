@@ -70,6 +70,7 @@ func TestSyncPricesForSymbols_Success(t *testing.T) {
 
 	service := &SyncService{
 		yahooClient: mockYahooClient,
+		securityRepo: nil, // Optional - code handles nil gracefully
 		db:          mockDB,
 		log:         log,
 	}
@@ -156,6 +157,7 @@ func TestSyncPricesForSymbols_NilPrice(t *testing.T) {
 
 	service := &SyncService{
 		yahooClient: mockYahooClient,
+		securityRepo: nil, // Optional - code handles nil gracefully
 		db:          mockDB,
 		log:         log,
 	}
@@ -196,6 +198,7 @@ func TestSyncPricesForSymbols_DatabaseError(t *testing.T) {
 
 	service := &SyncService{
 		yahooClient: mockYahooClient,
+		securityRepo: nil, // Optional - code handles nil gracefully
 		db:          mockDB,
 		log:         log,
 	}
@@ -233,6 +236,7 @@ func TestSyncPricesForSymbols_NoRowsAffected(t *testing.T) {
 
 	service := &SyncService{
 		yahooClient: mockYahooClient,
+		securityRepo: nil, // Optional - code handles nil gracefully
 		db:          mockDB,
 		log:         log,
 	}

@@ -13,8 +13,9 @@ import (
 // TradeRepository handles trade database operations
 // Faithful translation from Python: app/repositories/trade.py
 type TradeRepository struct {
-	ledgerDB *sql.DB // ledger.db - trades table
-	log      zerolog.Logger
+	ledgerDB  *sql.DB // ledger.db - trades table
+	universeDB *sql.DB // universe.db - securities table (for symbol->ISIN lookup, optional)
+	log       zerolog.Logger
 }
 
 // tradesColumns is the list of columns for the trades table
@@ -44,6 +45,17 @@ func (r *TradeRepository) Create(trade Trade) error {
 		 currency, value_eur, source, mode, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
+
+	// Ensure ISIN is populated (required after migration)
+	// If not provided, try to lookup from securities table if universeDB is available
+	if trade.ISIN == "" && r.universeDB != nil {
+		queryISIN := "SELECT isin FROM securities WHERE symbol = ?"
+		row := r.universeDB.QueryRow(queryISIN, strings.ToUpper(strings.TrimSpace(trade.Symbol)))
+		var isin sql.NullString
+		if err := row.Scan(&isin); err == nil && isin.Valid {
+			trade.ISIN = isin.String
+		}
+	}
 
 	_, err := r.ledgerDB.Exec(query,
 		strings.ToUpper(strings.TrimSpace(trade.Symbol)),
@@ -169,9 +181,27 @@ func (r *TradeRepository) GetAllInRange(startDate, endDate string) ([]Trade, err
 	return trades, nil
 }
 
-// GetBySymbol retrieves trades for a specific symbol
-// Faithful translation of Python: async def get_by_symbol(self, symbol: str, limit: int = 100) -> List[Trade]
+// GetBySymbol retrieves trades for a specific symbol (helper method - looks up ISIN first)
+// This requires universeDB to lookup ISIN from securities table
+// After migration: prefer GetByISIN for internal operations
 func (r *TradeRepository) GetBySymbol(symbol string, limit int) ([]Trade, error) {
+	// If universeDB is available, lookup ISIN first, then query by ISIN
+	if r.universeDB != nil {
+		query := "SELECT isin FROM securities WHERE symbol = ?"
+		rows, err := r.universeDB.Query(query, strings.ToUpper(strings.TrimSpace(symbol)))
+		if err == nil {
+			defer rows.Close()
+			if rows.Next() {
+				var isin string
+				if err := rows.Scan(&isin); err == nil && isin != "" {
+					// Query by ISIN (preferred after migration)
+					return r.GetByISIN(isin, limit)
+				}
+			}
+		}
+	}
+
+	// Fallback to symbol lookup (for backward compatibility)
 	query := `
 		SELECT ` + tradesColumns + ` FROM trades
 		WHERE symbol = ?

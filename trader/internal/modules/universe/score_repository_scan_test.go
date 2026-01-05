@@ -23,7 +23,7 @@ func TestScanScore_ScansAllColumns(t *testing.T) {
 	// Create scores table with all columns
 	_, err = db.Conn().Exec(`
 		CREATE TABLE scores (
-			symbol TEXT PRIMARY KEY,
+			isin TEXT PRIMARY KEY,
 			total_score REAL NOT NULL,
 			quality_score REAL,
 			opportunity_score REAL,
@@ -47,17 +47,17 @@ func TestScanScore_ScansAllColumns(t *testing.T) {
 	`)
 	require.NoError(t, err)
 
-	// Insert test data with all columns populated
+	// Insert test data with all columns populated (ISIN as first column)
 	now := time.Now().Format(time.RFC3339)
 	_, err = db.Conn().Exec(`
 		INSERT INTO scores VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, "TEST", 0.75, 0.70, 0.65, 0.60, 0.55, 0.20, 0.15, 0.10, 5, 0.50, 0.45,
+	`, "TEST12345678", 0.75, 0.70, 0.65, 0.60, 0.55, 0.20, 0.15, 0.10, 5, 0.50, 0.45,
 		1.5, -0.15, 0.10, 0.90, 45.0, 120.5, 0.20, now)
 	require.NoError(t, err)
 
-	// Query and scan
+	// Query and scan (using ISIN as key)
 	repo := NewScoreRepository(db.Conn(), zerolog.Nop())
-	rows, err := db.Conn().Query("SELECT "+scoresColumns+" FROM scores WHERE symbol = ?", "TEST")
+	rows, err := db.Conn().Query("SELECT "+scoresColumns+" FROM scores WHERE isin = ?", "TEST12345678")
 	require.NoError(t, err)
 	defer rows.Close()
 
@@ -66,8 +66,8 @@ func TestScanScore_ScansAllColumns(t *testing.T) {
 	score, err := repo.scanScore(rows)
 	require.NoError(t, err)
 
-	// Verify all columns are scanned correctly
-	assert.Equal(t, "TEST", score.Symbol)
+	// Verify all columns are scanned correctly (ISIN is primary key, symbol is not stored)
+	assert.Equal(t, "TEST12345678", score.ISIN)
 	assert.Equal(t, 0.75, score.TotalScore)
 	assert.Equal(t, 0.70, score.QualityScore)
 	assert.Equal(t, 0.65, score.OpportunityScore)
@@ -102,7 +102,7 @@ func TestScanScore_HandlesNullValues(t *testing.T) {
 	// Create scores table
 	_, err = db.Conn().Exec(`
 		CREATE TABLE scores (
-			symbol TEXT PRIMARY KEY,
+			isin TEXT PRIMARY KEY,
 			total_score REAL NOT NULL,
 			quality_score REAL,
 			opportunity_score REAL,
@@ -126,16 +126,16 @@ func TestScanScore_HandlesNullValues(t *testing.T) {
 	`)
 	require.NoError(t, err)
 
-	// Insert test data with NULL values for optional columns
+	// Insert test data with NULL values for optional columns (ISIN as key)
 	now := time.Now().Format(time.RFC3339)
 	_, err = db.Conn().Exec(`
-		INSERT INTO scores (symbol, total_score, last_updated) VALUES (?, ?, ?)
-	`, "TEST", 0.50, now)
+		INSERT INTO scores (isin, total_score, last_updated) VALUES (?, ?, ?)
+	`, "TEST12345678", 0.50, now)
 	require.NoError(t, err)
 
 	// Query and scan
 	repo := NewScoreRepository(db.Conn(), zerolog.Nop())
-	rows, err := db.Conn().Query("SELECT "+scoresColumns+" FROM scores WHERE symbol = ?", "TEST")
+	rows, err := db.Conn().Query("SELECT "+scoresColumns+" FROM scores WHERE isin = ?", "TEST12345678")
 	require.NoError(t, err)
 	defer rows.Close()
 
@@ -145,7 +145,7 @@ func TestScanScore_HandlesNullValues(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify NULL values are handled (default to 0.0)
-	assert.Equal(t, "TEST", score.Symbol)
+	assert.Equal(t, "TEST12345678", score.ISIN)
 	assert.Equal(t, 0.50, score.TotalScore)
 	assert.Equal(t, 0.0, score.QualityScore)
 	assert.Equal(t, 0.0, score.SharpeScore)

@@ -39,6 +39,8 @@ type MonthlyPrice struct {
 }
 
 // GetDailyPrices fetches daily price data for an ISIN
+// Note: History database currently uses 'symbol' column but stores ISIN values
+// TODO: Migrate history database to use 'isin' column name for consistency
 func (h *HistoryDB) GetDailyPrices(isin string, limit int) ([]DailyPrice, error) {
 	query := `
 		SELECT date, close, high, low, open, volume
@@ -79,6 +81,8 @@ func (h *HistoryDB) GetDailyPrices(isin string, limit int) ([]DailyPrice, error)
 }
 
 // GetMonthlyPrices fetches monthly price data for an ISIN
+// Note: History database currently uses 'symbol' column but stores ISIN values
+// TODO: Migrate history database to use 'isin' column name for consistency
 func (h *HistoryDB) GetMonthlyPrices(isin string, limit int) ([]MonthlyPrice, error) {
 	query := `
 		SELECT year_month, avg_adj_close
@@ -115,6 +119,7 @@ func (h *HistoryDB) GetMonthlyPrices(isin string, limit int) ([]MonthlyPrice, er
 
 // HasMonthlyData checks if the history database has monthly price data for an ISIN
 // Used to determine if initial 10-year seed has been done
+// Note: History database currently uses 'symbol' column but stores ISIN values
 func (h *HistoryDB) HasMonthlyData(isin string) (bool, error) {
 	var count int
 	err := h.db.QueryRow("SELECT COUNT(*) FROM monthly_prices WHERE symbol = ?", isin).Scan(&count)
@@ -130,6 +135,8 @@ func (h *HistoryDB) HasMonthlyData(isin string) (bool, error) {
 //
 // Inserts/replaces daily prices and aggregates to monthly prices in a single transaction
 // The isin parameter is the ISIN (e.g., US0378331005), not the Tradernet symbol
+// Note: History database currently uses 'symbol' column but stores ISIN values
+// TODO: Migrate history database to use 'isin' column name for consistency
 func (h *HistoryDB) SyncHistoricalPrices(isin string, prices []DailyPrice) error {
 	// Begin transaction
 	tx, err := h.db.Begin()
@@ -138,7 +145,7 @@ func (h *HistoryDB) SyncHistoricalPrices(isin string, prices []DailyPrice) error
 	}
 	defer tx.Rollback() // Will be no-op if Commit succeeds
 
-	// Insert/replace daily prices with ISIN
+	// Insert/replace daily prices with ISIN (stored in 'symbol' column for now)
 	stmt, err := tx.Prepare(`
 		INSERT OR REPLACE INTO daily_prices
 		(symbol, date, open, high, low, close, volume, adjusted_close)
@@ -173,7 +180,7 @@ func (h *HistoryDB) SyncHistoricalPrices(isin string, prices []DailyPrice) error
 		}
 	}
 
-	// Aggregate to monthly prices with ISIN filter
+	// Aggregate to monthly prices with ISIN filter (stored in 'symbol' column for now)
 	_, err = tx.Exec(`
 		INSERT OR REPLACE INTO monthly_prices
 		(symbol, year_month, avg_close, avg_adj_close, source, created_at)

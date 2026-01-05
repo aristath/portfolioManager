@@ -45,8 +45,24 @@ func (m *MockSecurityRepository) GetAllActive() ([]Security, error) {
 	return args.Get(0).([]Security), args.Error(1)
 }
 
-func (m *MockSecurityRepository) Update(symbol string, updates map[string]interface{}) error {
-	args := m.Called(symbol, updates)
+func (m *MockSecurityRepository) GetByISIN(isin string) (*Security, error) {
+	args := m.Called(isin)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*Security), args.Error(1)
+}
+
+func (m *MockSecurityRepository) GetBySymbol(symbol string) (*Security, error) {
+	args := m.Called(symbol)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*Security), args.Error(1)
+}
+
+func (m *MockSecurityRepository) Update(isin string, updates map[string]interface{}) error {
+	args := m.Called(isin, updates)
 	return args.Error(0)
 }
 

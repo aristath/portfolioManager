@@ -55,6 +55,12 @@ func (c *ProfitTakingCalculator) Calculate(
 		Msg("Calculating profit-taking opportunities")
 
 	for _, position := range ctx.Positions {
+		// Use ISIN if available, otherwise fallback to symbol
+		isin := position.ISIN
+		if isin == "" {
+			isin = position.Symbol // Fallback for CASH positions
+		}
+
 		// Skip if ineligible
 		if ctx.IneligibleSymbols[position.Symbol] {
 			continue
@@ -65,11 +71,18 @@ func (c *ProfitTakingCalculator) Calculate(
 			continue
 		}
 
-		// Get current price
-		currentPrice, ok := ctx.CurrentPrices[position.Symbol]
+		// Get security info (try ISIN first, fallback to symbol)
+		security, ok := ctx.GetSecurityByISINOrSymbol(isin, position.Symbol)
+		if !ok {
+			continue
+		}
+
+		// Get current price (try ISIN first, fallback to symbol)
+		currentPrice, ok := ctx.GetPriceByISINOrSymbol(isin, position.Symbol)
 		if !ok || currentPrice <= 0 {
 			c.log.Warn().
 				Str("symbol", position.Symbol).
+				Str("isin", isin).
 				Msg("No current price available")
 			continue
 		}
@@ -84,12 +97,6 @@ func (c *ProfitTakingCalculator) Calculate(
 
 		// Check if gain meets threshold
 		if gainPercent < minGainThreshold {
-			continue
-		}
-
-		// Get security info
-		security, ok := ctx.StocksBySymbol[position.Symbol]
-		if !ok {
 			continue
 		}
 

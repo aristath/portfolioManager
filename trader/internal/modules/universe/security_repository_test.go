@@ -15,12 +15,12 @@ func setupTestDB(t *testing.T) *sql.DB {
 	db, err := sql.Open("sqlite3", ":memory:")
 	require.NoError(t, err)
 
-	// Create securities table
+	// Create securities table with ISIN as PRIMARY KEY (post-migration schema)
 	_, err = db.Exec(`
 		CREATE TABLE securities (
-			symbol TEXT PRIMARY KEY,
+			isin TEXT PRIMARY KEY,
+			symbol TEXT NOT NULL,
 			yahoo_symbol TEXT,
-			isin TEXT,
 			name TEXT NOT NULL,
 			product_type TEXT,
 			industry TEXT,
@@ -35,10 +35,14 @@ func setupTestDB(t *testing.T) *sql.DB {
 			last_synced TEXT,
 			min_portfolio_target REAL,
 			max_portfolio_target REAL,
-			created_at TEXT,
-			updated_at TEXT
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
 		)
 	`)
+	require.NoError(t, err)
+
+	// Create index on symbol for lookups
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_securities_symbol ON securities(symbol)`)
 	require.NoError(t, err)
 
 	return db
@@ -52,15 +56,15 @@ func TestGetGroupedByExchange_Success(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 	repo := NewSecurityRepository(db, log)
 
-	// Insert test data
+	// Insert test data (with ISIN as PRIMARY KEY)
 	_, err := db.Exec(`
-		INSERT INTO securities (symbol, name, fullExchangeName, active)
+		INSERT INTO securities (isin, symbol, name, fullExchangeName, active, created_at, updated_at)
 		VALUES
-			('AAPL', 'Apple Inc', 'NYSE', 1),
-			('MSFT', 'Microsoft', 'NASDAQ', 1),
-			('GOOGL', 'Alphabet', 'NASDAQ', 1),
-			('BP', 'BP plc', 'LSE', 1),
-			('VOD', 'Vodafone', 'LSE', 1)
+			('US0378331005', 'AAPL', 'Apple Inc', 'NYSE', 1, datetime('now'), datetime('now')),
+			('US5949181045', 'MSFT', 'Microsoft', 'NASDAQ', 1, datetime('now'), datetime('now')),
+			('US02079K3059', 'GOOGL', 'Alphabet', 'NASDAQ', 1, datetime('now'), datetime('now')),
+			('GB0007980591', 'BP', 'BP plc', 'LSE', 1, datetime('now'), datetime('now')),
+			('GB00B1F5SH67', 'VOD', 'Vodafone', 'LSE', 1, datetime('now'), datetime('now'))
 	`)
 	require.NoError(t, err)
 
@@ -103,10 +107,10 @@ func TestGetGroupedByExchange_UnknownExchange(t *testing.T) {
 
 	// Insert test data with empty fullExchangeName
 	_, err := db.Exec(`
-		INSERT INTO securities (symbol, name, fullExchangeName, active)
+		INSERT INTO securities (isin, symbol, name, fullExchangeName, active, created_at, updated_at)
 		VALUES
-			('AAPL', 'Apple Inc', 'NYSE', 1),
-			('UNKNOWN', 'Unknown Security', '', 1)
+			('US0378331005', 'AAPL', 'Apple Inc', 'NYSE', 1, datetime('now'), datetime('now')),
+			('US0000000000', 'UNKNOWN', 'Unknown Security', '', 1, datetime('now'), datetime('now'))
 	`)
 	require.NoError(t, err)
 
@@ -131,11 +135,11 @@ func TestGetGroupedByExchange_OnlyActiveSecurities(t *testing.T) {
 
 	// Insert test data with mix of active and inactive
 	_, err := db.Exec(`
-		INSERT INTO securities (symbol, name, fullExchangeName, active)
+		INSERT INTO securities (isin, symbol, name, fullExchangeName, active, created_at, updated_at)
 		VALUES
-			('AAPL', 'Apple Inc', 'NYSE', 1),
-			('INACTIVE', 'Inactive Security', 'NYSE', 0),
-			('MSFT', 'Microsoft', 'NASDAQ', 1)
+			('US0378331005', 'AAPL', 'Apple Inc', 'NYSE', 1, datetime('now'), datetime('now')),
+			('US0000000001', 'INACTIVE', 'Inactive Security', 'NYSE', 0, datetime('now'), datetime('now')),
+			('US5949181045', 'MSFT', 'Microsoft', 'NASDAQ', 1, datetime('now'), datetime('now'))
 	`)
 	require.NoError(t, err)
 
@@ -164,13 +168,13 @@ func TestGetGroupedByExchange_MultipleSecuritiesSameExchange(t *testing.T) {
 
 	// Insert multiple securities on the same exchange
 	_, err := db.Exec(`
-		INSERT INTO securities (symbol, name, fullExchangeName, active)
+		INSERT INTO securities (isin, symbol, name, fullExchangeName, active, created_at, updated_at)
 		VALUES
-			('AAPL', 'Apple Inc', 'NASDAQ', 1),
-			('MSFT', 'Microsoft', 'NASDAQ', 1),
-			('GOOGL', 'Alphabet', 'NASDAQ', 1),
-			('NVDA', 'NVIDIA', 'NASDAQ', 1),
-			('TSLA', 'Tesla', 'NASDAQ', 1)
+			('US0378331005', 'AAPL', 'Apple Inc', 'NASDAQ', 1, datetime('now'), datetime('now')),
+			('US5949181045', 'MSFT', 'Microsoft', 'NASDAQ', 1, datetime('now'), datetime('now')),
+			('US02079K3059', 'GOOGL', 'Alphabet', 'NASDAQ', 1, datetime('now'), datetime('now')),
+			('US67066G1040', 'NVDA', 'NVIDIA', 'NASDAQ', 1, datetime('now'), datetime('now')),
+			('US88160R1014', 'TSLA', 'Tesla', 'NASDAQ', 1, datetime('now'), datetime('now'))
 	`)
 	require.NoError(t, err)
 
