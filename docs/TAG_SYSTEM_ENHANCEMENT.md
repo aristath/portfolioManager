@@ -187,28 +187,28 @@ This document outlines enhancements to the tag system to support both performanc
 // Enhanced tag assignment with algorithm support
 func (ta *TagAssigner) AssignTagsForSecurity(input AssignTagsInput) ([]string, error) {
     var tags []string
-    
+
     // ... existing tag assignment logic ...
-    
+
     // === NEW: QUALITY GATE TAGS ===
-    
+
     // Quality gate pass/fail
     fundamentalsScore := getScore(input.GroupScores, "fundamentals")
     longTermScore := getScore(input.GroupScores, "long_term")
-    
+
     if fundamentalsScore >= 0.6 && longTermScore >= 0.5 {
         tags = append(tags, "quality-gate-pass")
     } else {
         tags = append(tags, "quality-gate-fail")
     }
-    
+
     // Quality value (high quality + value opportunity)
     if contains(tags, "high-quality") && contains(tags, "value-opportunity") {
         tags = append(tags, "quality-value")
     }
-    
+
     // === NEW: BUBBLE DETECTION TAGS ===
-    
+
     cagrValue := getSubScore(input.SubScores, "long_term", "cagr")
     sharpeRatio := getSubScore(input.SubScores, "long_term", "sharpe_raw")
     sortinoRatio := getSubScore(input.SubScores, "long_term", "sortino")
@@ -216,21 +216,21 @@ func (ta *TagAssigner) AssignTagsForSecurity(input AssignTagsInput) ([]string, e
     if input.Volatility != nil {
         volatility = *input.Volatility
     }
-    
+
     // Bubble risk: High CAGR with poor risk metrics
     if cagrValue > 0.165 { // 16.5% for 11% target
         isBubble := false
         if sharpeRatio < 0.5 || sortinoRatio < 0.5 || volatility > 0.40 || fundamentalsScore < 0.6 {
             isBubble = true
         }
-        
+
         if isBubble {
             tags = append(tags, "bubble-risk")
         } else {
             tags = append(tags, "quality-high-cagr")
         }
     }
-    
+
     // Risk-adjusted tags
     if sharpeRatio >= 1.5 {
         tags = append(tags, "high-sharpe")
@@ -241,37 +241,37 @@ func (ta *TagAssigner) AssignTagsForSecurity(input AssignTagsInput) ([]string, e
     if sharpeRatio < 0.5 || sortinoRatio < 0.5 {
         tags = append(tags, "poor-risk-adjusted")
     }
-    
+
     // === NEW: VALUE TRAP TAGS ===
-    
+
     peVsMarket := 0.0
     if input.MarketAvgPE > 0 && input.PERatio != nil {
         peVsMarket = (*input.PERatio - input.MarketAvgPE) / input.MarketAvgPE
     }
-    
+
     momentumScore := getSubScore(input.SubScores, "short_term", "momentum")
-    
+
     // Value trap: Cheap but declining
     if peVsMarket < -0.20 {
         isValueTrap := false
         if fundamentalsScore < 0.6 || longTermScore < 0.5 || momentumScore < -0.05 || volatility > 0.35 {
             isValueTrap = true
         }
-        
+
         if isValueTrap {
             tags = append(tags, "value-trap")
         }
     }
-    
+
     // === NEW: TOTAL RETURN TAGS ===
-    
+
     dividendYield := 0.0
     if input.DividendYield != nil {
         dividendYield = *input.DividendYield
     }
-    
+
     totalReturn := cagrValue + dividendYield
-    
+
     if totalReturn >= 0.18 {
         tags = append(tags, "excellent-total-return")
     } else if totalReturn >= 0.15 {
@@ -279,27 +279,27 @@ func (ta *TagAssigner) AssignTagsForSecurity(input AssignTagsInput) ([]string, e
     } else if totalReturn >= 0.12 {
         tags = append(tags, "moderate-total-return")
     }
-    
+
     // Dividend total return (your example: 5% growth + 10% dividend)
     if dividendYield >= 0.08 && cagrValue >= 0.05 {
         tags = append(tags, "dividend-total-return")
     }
-    
+
     // === NEW: OPTIMIZER ALIGNMENT TAGS ===
-    
+
     positionWeight := 0.0
     if input.PositionWeight != nil {
         positionWeight = *input.PositionWeight
     }
-    
+
     targetWeight := 0.0
     if input.TargetWeight != nil {
         targetWeight = *input.TargetWeight
     }
-    
+
     if targetWeight > 0 {
         deviation := positionWeight - targetWeight
-        
+
         if math.Abs(deviation) <= 0.01 {
             tags = append(tags, "target-aligned")
         } else if deviation > 0.03 {
@@ -316,37 +316,37 @@ func (ta *TagAssigner) AssignTagsForSecurity(input AssignTagsInput) ([]string, e
             tags = append(tags, "slightly-underweight")
         }
     }
-    
+
     // === NEW: REGIME-SPECIFIC TAGS ===
-    
+
     maxDrawdown := 0.0
     if input.MaxDrawdown != nil {
         maxDrawdown = *input.MaxDrawdown
     }
-    
+
     // Bear market safe
     if volatility < 0.20 && fundamentalsScore > 0.75 && maxDrawdown < 20.0 {
         tags = append(tags, "regime-bear-safe")
     }
-    
+
     // Bull market growth
     if cagrValue > 0.12 && fundamentalsScore > 0.7 && momentumScore > 0 {
         tags = append(tags, "regime-bull-growth")
     }
-    
+
     // Sideways value
     if contains(tags, "value-opportunity") && fundamentalsScore > 0.75 {
         tags = append(tags, "regime-sideways-value")
     }
-    
+
     // Regime volatile
     if volatility > 0.30 || contains(tags, "volatility-spike") {
         tags = append(tags, "regime-volatile")
     }
-    
+
     // Remove duplicates
     tags = removeDuplicates(tags)
-    
+
     return tags, nil
 }
 ```
@@ -396,7 +396,7 @@ func isQualityHighCAGR(security Security) bool {
 ```go
 // Fast total return check using tags
 func hasHighTotalReturn(security Security) bool {
-    return security.HasTag("high-total-return") || 
+    return security.HasTag("high-total-return") ||
            security.HasTag("excellent-total-return")
 }
 
@@ -522,4 +522,3 @@ func getRegimeTags(regime MarketRegime) []string {
 6. **Update evaluation** to use new tags
 
 All existing tags remain unchanged - this is purely additive.
-

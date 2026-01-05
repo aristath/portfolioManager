@@ -201,40 +201,40 @@ func NewTagBasedFilter(securityRepo *universe.SecurityRepository, log zerolog.Lo
 // GetOpportunityCandidates uses tags to quickly identify candidates
 func (f *TagBasedFilter) GetOpportunityCandidates(ctx *domain.OpportunityContext) ([]string, error) {
     tags := f.selectOpportunityTags(ctx)
-    
+
     candidates, err := f.securityRepo.GetByTags(tags)
     if err != nil {
         return nil, err
     }
-    
+
     symbols := make([]string, len(candidates))
     for i, c := range candidates {
         symbols[i] = c.Symbol
     }
-    
+
     return symbols, nil
 }
 
 // selectOpportunityTags intelligently selects tags based on context
 func (f *TagBasedFilter) selectOpportunityTags(ctx *domain.OpportunityContext) []string {
     tags := []string{}
-    
+
     // Always include quality gates
     tags = append(tags, "high-quality", "good-opportunity")
-    
+
     // Add value opportunities if we have cash
     if ctx.AvailableCashEUR > 1000 {
         tags = append(tags, "value-opportunity", "deep-value")
     }
-    
+
     // Add technical opportunities if market is volatile
     if f.isMarketVolatile(ctx) {
         tags = append(tags, "oversold", "below-ema", "recovery-candidate")
     }
-    
+
     // Add dividend opportunities
     tags = append(tags, "dividend-opportunity", "high-dividend")
-    
+
     return tags
 }
 
@@ -280,65 +280,65 @@ func (c *HybridOpportunityBuysCalculator) Calculate(
     if err != nil {
         return nil, err
     }
-    
+
     if len(candidateSymbols) == 0 {
         return nil, nil
     }
-    
+
     c.log.Debug().
         Int("tag_candidates", len(candidateSymbols)).
         Msg("Tag-based pre-filtering complete")
-    
+
     // Step 2: Focused calculations on filtered set (100-500ms vs 2-5s)
     var candidates []domain.ActionCandidate
-    
+
     for _, symbol := range candidateSymbols {
         // Get security info
         security, ok := ctx.StocksBySymbol[symbol]
         if !ok {
             continue
         }
-        
+
         // Skip if recently bought
         if ctx.RecentlyBought[symbol] {
             continue
         }
-        
+
         // Get current price
         currentPrice, ok := ctx.CurrentPrices[symbol]
         if !ok || currentPrice <= 0 {
             continue
         }
-        
+
         // Get score (already calculated, just lookup)
         score, ok := ctx.SecurityScores[symbol]
         if !ok || score < 0.7 {
             continue
         }
-        
+
         // Focused calculation: precise quantity and value
         targetValue := 500.0
         if targetValue > ctx.AvailableCashEUR {
             targetValue = ctx.AvailableCashEUR
         }
-        
+
         quantity := int(targetValue / currentPrice)
         if quantity == 0 {
             quantity = 1
         }
-        
+
         valueEUR := float64(quantity) * currentPrice
         transactionCost := ctx.TransactionCostFixed + (valueEUR * ctx.TransactionCostPercent)
         totalCostEUR := valueEUR + transactionCost
-        
+
         if totalCostEUR > ctx.AvailableCashEUR {
             continue
         }
-        
+
         // Get tags for this security to boost priority
         tags, _ := c.securityRepo.GetTagsForSecurity(symbol)
         priority := c.calculatePriority(score, tags)
-        
+
         candidate := domain.ActionCandidate{
             Side:     "BUY",
             Symbol:   symbol,
@@ -351,26 +351,26 @@ func (c *HybridOpportunityBuysCalculator) Calculate(
             Reason:   fmt.Sprintf("Tag-filtered opportunity: score %.2f", score),
             Tags:     tags,
         }
-        
+
         candidates = append(candidates, candidate)
     }
-    
+
     // Step 3: Sort by priority
     sort.Slice(candidates, func(i, j int) bool {
         return candidates[i].Priority > candidates[j].Priority
     })
-    
+
     // Step 4: Limit to top N
     maxPositions := GetIntParam(params, "max_positions", 5)
     if maxPositions > 0 && len(candidates) > maxPositions {
         candidates = candidates[:maxPositions]
     }
-    
+
     c.log.Info().
         Int("candidates", len(candidates)).
         Int("filtered_from", len(candidateSymbols)).
         Msg("Hybrid opportunity buys calculated")
-    
+
     return candidates, nil
 }
 
@@ -380,27 +380,27 @@ func (c *HybridOpportunityBuysCalculator) calculatePriority(
     tags []string,
 ) float64 {
     priority := score
-    
+
     // High-quality value opportunities get boost
     if contains(tags, "high-quality") && contains(tags, "value-opportunity") {
         priority *= 1.3
     }
-    
+
     // Deep value gets boost
     if contains(tags, "deep-value") {
         priority *= 1.2
     }
-    
+
     // Oversold high-quality gets boost
     if contains(tags, "oversold") && contains(tags, "high-quality") {
         priority *= 1.15
     }
-    
+
     // Recovery candidates get moderate boost
     if contains(tags, "recovery-candidate") {
         priority *= 1.1
     }
-    
+
     return math.Min(1.0, priority)
 }
 ```
@@ -418,9 +418,9 @@ func (c *HybridProfitTakingCalculator) Calculate(ctx, params) {
         "needs-rebalance",                           // Optimizer alignment - NEW
         "bubble-risk",                               // Bubble detection - NEW
     }
-    
+
     candidates := c.securityRepo.GetPositionsByTags(sellTags)
-    
+
     // Filter: Keep only positions with gains (profit-taking)
     // Focused calculation on filtered set
 }
@@ -443,12 +443,12 @@ func (c *HybridAveragingDownCalculator) Calculate(ctx, params) {
         "quality-gate-pass",        // Quality gate - NEW
         "quality-value",           // Quality + value - NEW
     }
-    
+
     candidates := c.securityRepo.GetPositionsByTags(avgDownTags)
-    
+
     // CRITICAL: Exclude value traps
     candidates = c.filterOutNegativeTags(candidates, []string{"value-trap"})
-    
+
     // Focused calculation: Only on quality positions with losses
 }
 ```
@@ -470,7 +470,7 @@ func (c *HybridRebalanceCalculator) Calculate(ctx, params) {
         "needs-rebalance",           // Optimizer alignment - NEW
         "slightly-overweight",        // Optimizer alignment - NEW
     }
-    
+
     // BUY tags: Underweight quality positions
     buyTags := []string{
         "underweight",                // Optimizer alignment - NEW
@@ -479,10 +479,10 @@ func (c *HybridRebalanceCalculator) Calculate(ctx, params) {
         "quality-gate-pass",          // Quality gate - NEW
         "target-aligned",             // Already aligned (skip) - NEW
     }
-    
+
     sellCandidates := c.securityRepo.GetPositionsByTags(sellTags)
     buyCandidates := c.securityRepo.GetByTags(buyTags)
-    
+
     // Focused calculation: Rebalance toward optimizer targets
 }
 ```
@@ -539,31 +539,31 @@ var TagUpdateFrequencies = []TagUpdateFrequency{
             "high-quality", "stable", "strong-fundamentals",
             "quality-gate-pass", "quality-gate-fail", // NEW
             "consistent-grower",
-            
+
             // Bubble detection tags
             "bubble-risk", "quality-high-cagr", // NEW
             "high-sharpe", "high-sortino", "poor-risk-adjusted", // NEW
-            
+
             // Total return tags
             "high-total-return", "excellent-total-return", // NEW
             "dividend-total-return", "moderate-total-return", // NEW
-            
+
             // Dividend tags
             "high-dividend", "dividend-opportunity", "dividend-grower",
-            
+
             // Score tags
             "high-score", "good-opportunity",
-            
+
             // Risk tags
             "volatile", "high-volatility", "underperforming", "stagnant",
             "high-drawdown", "low-risk", "medium-risk", "high-risk",
-            
+
             // Profile tags
             "growth", "value", "dividend-focused", "short-term-opportunity",
-            
+
             // Regime tags
             "regime-bear-safe", "regime-bull-growth", // NEW
-            
+
             // Optimizer tags
             "target-aligned", // NEW
         },
@@ -598,12 +598,12 @@ func (j *SmartTagUpdateJob) UpdateTagsForSecurity(
 ) error {
     // Determine which tags need updating based on frequency
     tagsToUpdate := j.getTagsNeedingUpdate(security.Symbol, requiredTags)
-    
+
     if len(tagsToUpdate) == 0 {
         // All tags are fresh, skip update
         return nil
     }
-    
+
     // Update only the tags that need it
     return j.updateSpecificTags(security, tagsToUpdate)
 }
@@ -683,7 +683,7 @@ func isQualityHighCAGR(security Security) bool {
 // Fast total return check - no expensive CAGR + dividend calculations needed
 func hasHighTotalReturn(security Security) bool {
     tags, _ := securityRepo.GetTagsForSecurity(security.Symbol)
-    return contains(tags, "high-total-return") || 
+    return contains(tags, "high-total-return") ||
            contains(tags, "excellent-total-return")
 }
 
@@ -736,4 +736,3 @@ func getRegimeFilterTags(regime MarketRegime) []string {
 4. **Machine Learning**: Learn optimal tag combinations from historical performance
 5. **Tag-Based Regime Detection**: Use tag distributions to detect market regimes
 6. **Tag-Based Risk Scoring**: Use risk tags to calculate portfolio risk metrics faster
-
