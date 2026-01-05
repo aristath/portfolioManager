@@ -229,16 +229,16 @@ func TestCalculateExpectedReturnScore_HighTotalReturn(t *testing.T) {
 	// High quality securities with good dividends = high total return
 	portfolioContext := PortfolioContext{
 		Positions: map[string]float64{
-			"HIGH_QUALITY": 600.0,
+			"HIGH_QUALITY":   600.0,
 			"DIVIDEND_STOCK": 400.0,
 		},
 		TotalValue: 1000.0,
 		SecurityScores: map[string]float64{
-			"HIGH_QUALITY":  0.85, // High quality ≈ 12.75% CAGR estimate
+			"HIGH_QUALITY":   0.85, // High quality ≈ 12.75% CAGR estimate
 			"DIVIDEND_STOCK": 0.70, // Medium quality ≈ 10.5% CAGR estimate
 		},
 		SecurityDividends: map[string]float64{
-			"HIGH_QUALITY":  0.02, // 2% dividend
+			"HIGH_QUALITY":   0.02, // 2% dividend
 			"DIVIDEND_STOCK": 0.05, // 5% dividend
 		},
 	}
@@ -327,7 +327,7 @@ func TestCalculateRiskAdjustedScore_NoQualityData(t *testing.T) {
 		Positions: map[string]float64{
 			"NO_DATA": 1000.0,
 		},
-		TotalValue: 1000.0,
+		TotalValue:     1000.0,
 		SecurityScores: nil,
 	}
 
@@ -547,7 +547,7 @@ func TestCalculateOptimizerAlignment_NoTargets(t *testing.T) {
 		Positions: map[string]float64{
 			"STOCK1": 1000.0,
 		},
-		TotalValue:            1000.0,
+		TotalValue:             1000.0,
 		OptimizerTargetWeights: nil, // No targets
 	}
 
