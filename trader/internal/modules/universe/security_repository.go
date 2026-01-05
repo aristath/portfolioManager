@@ -343,6 +343,14 @@ func (r *SecurityRepository) GetWithScores(portfolioDB *sql.DB) ([]SecurityWithS
 		}
 
 		// Convert to SecurityWithScore
+		// Explicitly copy tags slice to avoid potential sharing issues
+		var tagsCopy []string
+		if len(security.Tags) > 0 {
+			tagsCopy = make([]string, len(security.Tags))
+			copy(tagsCopy, security.Tags)
+		} else {
+			tagsCopy = []string{}
+		}
 		sws := SecurityWithScore{
 			Symbol:             security.Symbol,
 			Name:               security.Name,
@@ -361,7 +369,7 @@ func (r *SecurityRepository) GetWithScores(portfolioDB *sql.DB) ([]SecurityWithS
 			LastSynced:         security.LastSynced,
 			MinPortfolioTarget: security.MinPortfolioTarget,
 			MaxPortfolioTarget: security.MaxPortfolioTarget,
-			Tags:               security.Tags,
+			Tags:               tagsCopy,
 		}
 		// Use ISIN as map key (primary identifier)
 		securitiesMap[security.ISIN] = sws
@@ -449,11 +457,29 @@ func (r *SecurityRepository) GetWithScores(portfolioDB *sql.DB) ([]SecurityWithS
 			}
 		}
 
+		// Calculate market value EUR if not set in database
+		var finalMarketValueEUR float64
+		if marketValueEUR.Valid {
+			finalMarketValueEUR = marketValueEUR.Float64
+		} else if quantity.Valid && currentPrice.Valid && currencyRate.Valid && currencyRate.Float64 > 0 {
+			// Calculate from quantity * current_price / currency_rate
+			finalMarketValueEUR = quantity.Float64 * currentPrice.Float64 / currencyRate.Float64
+		} else {
+			// No valid data, skip this position but log a warning
+			r.log.Warn().
+				Str("symbol", symbol).
+				Bool("has_quantity", quantity.Valid).
+				Bool("has_price", currentPrice.Valid).
+				Bool("has_rate", currencyRate.Valid).
+				Msg("Skipping position with invalid data (missing market_value_eur and unable to calculate)")
+			continue
+		}
+
 		positionsMap[mapKey] = struct {
 			marketValueEUR float64
 			quantity       float64
 		}{
-			marketValueEUR: marketValueEUR.Float64,
+			marketValueEUR: finalMarketValueEUR,
 			quantity:       quantity.Float64,
 		}
 	}
@@ -1033,11 +1059,12 @@ func (r *SecurityRepository) GetPositionsByTags(positionSymbols []string, tagIDs
 		}
 
 		// Ensure tags are loaded (scanSecurity should load them, but reload to be safe)
-		if security.Symbol != "" {
-			tagIDs, tagErr := r.getTagsForSecurity(security.Symbol)
+		// Use ISIN as primary identifier (security_tags table uses isin, not symbol)
+		if security.ISIN != "" {
+			tagIDs, tagErr := r.getTagsForSecurity(security.ISIN)
 			if tagErr != nil {
 				// Log error but don't fail - tags are optional
-				r.log.Warn().Str("symbol", security.Symbol).Err(tagErr).Msg("Failed to load tags for security in GetPositionsByTags")
+				r.log.Warn().Str("isin", security.ISIN).Str("symbol", security.Symbol).Err(tagErr).Msg("Failed to load tags for security in GetPositionsByTags")
 				security.Tags = []string{}
 			} else {
 				security.Tags = make([]string, len(tagIDs))
