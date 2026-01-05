@@ -2,8 +2,8 @@
 
 import logging
 from datetime import datetime
+from typing import Dict, List, Tuple, cast
 
-import pandas as pd
 from app.converters import (
     dataframe_to_matrix,
     dict_to_series,
@@ -14,7 +14,6 @@ from app.models import (
     CovarianceRequest,
     HRPRequest,
     MeanVarianceRequest,
-    OptimizationResult,
     ServiceResponse,
 )
 from app.service import PyPortfolioOptService
@@ -30,7 +29,9 @@ logger = logging.getLogger(__name__)
 # Create FastAPI app
 app = FastAPI(
     title="PyPortfolioOpt Microservice",
-    description="Minimal wrapper for portfolio optimization using PyPortfolioOpt library",
+    description=(
+        "Minimal wrapper for portfolio optimization using PyPortfolioOpt library"
+    ),
     version="1.0.0",
 )
 
@@ -83,8 +84,14 @@ async def optimize_mean_variance(request: MeanVarianceRequest) -> ServiceRespons
         # Convert request data to pandas structures
         mu = dict_to_series(request.expected_returns)
         cov = matrix_to_dataframe(request.covariance_matrix, request.symbols)
-        weight_bounds = [tuple(b) for b in request.weight_bounds]
-        sector_constraints = [c.model_dump() for c in request.sector_constraints]
+        weight_bounds = cast(
+            List[Tuple[float, float]], [tuple(b) for b in request.weight_bounds]
+        )
+        sector_constraints = (
+            [c.model_dump() for c in request.sector_constraints]
+            if request.sector_constraints
+            else []
+        )
 
         # Run optimization
         result = service.mean_variance_optimize(
@@ -97,7 +104,8 @@ async def optimize_mean_variance(request: MeanVarianceRequest) -> ServiceRespons
             request.target_volatility,
         )
 
-        logger.info(f"Optimization successful: {len(result['weights'])} securities")
+        weights: Dict[str, float] = result["weights"]
+        logger.info(f"Optimization successful: {len(weights)} securities")
 
         return ServiceResponse(
             success=True,
@@ -219,8 +227,14 @@ async def optimize_progressive(request: MeanVarianceRequest) -> ServiceResponse:
         # Convert request data to pandas structures
         mu = dict_to_series(request.expected_returns)
         cov = matrix_to_dataframe(request.covariance_matrix, request.symbols)
-        weight_bounds = [tuple(b) for b in request.weight_bounds]
-        sector_constraints = [c.model_dump() for c in request.sector_constraints]
+        weight_bounds = cast(
+            List[Tuple[float, float]], [tuple(b) for b in request.weight_bounds]
+        )
+        sector_constraints = (
+            [c.model_dump() for c in request.sector_constraints]
+            if request.sector_constraints
+            else []
+        )
 
         # Use target_return from request or default to 11%
         target_return = (

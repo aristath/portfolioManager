@@ -3,7 +3,6 @@
 import pandas as pd
 import pytest
 from app.service import PyPortfolioOptService
-from pypfopt import exceptions
 
 
 @pytest.fixture

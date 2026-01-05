@@ -47,7 +47,9 @@ class MeanVarianceRequest(BaseModel):
 
     expected_returns: Dict[str, float] = Field(
         ...,
-        description="Expected annual returns per symbol (as decimal), e.g., {'AAPL': 0.12}",
+        description=(
+            "Expected annual returns per symbol (as decimal), e.g., {'AAPL': 0.12}"
+        ),
     )
     covariance_matrix: List[List[float]] = Field(
         ..., description="Covariance matrix as nested list, must match symbols order"
@@ -57,7 +59,10 @@ class MeanVarianceRequest(BaseModel):
     )
     weight_bounds: List[List[float]] = Field(
         ...,
-        description="Weight bounds per symbol [[min, max], ...], e.g., [[0.02, 0.10], [0.01, 0.08]]",
+        description=(
+            "Weight bounds per symbol [[min, max], ...], "
+            "e.g., [[0.02, 0.10], [0.01, 0.08]]"
+        ),
     )
     sector_constraints: Optional[List[SectorConstraint]] = Field(
         default=[],

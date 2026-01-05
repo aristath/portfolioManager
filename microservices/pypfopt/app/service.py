@@ -1,7 +1,7 @@
 """Core service logic for PyPortfolioOpt wrapper."""
 
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 from pypfopt import EfficientFrontier, HRPOpt, exceptions, risk_models
@@ -25,7 +25,7 @@ class PyPortfolioOptService:
         strategy: str,
         target_return: Optional[float] = None,
         target_volatility: Optional[float] = None,
-    ) -> Dict[str, float]:
+    ) -> Dict[str, Any]:
         """Run mean-variance optimization using EfficientFrontier.
 
         Args:
@@ -38,7 +38,8 @@ class PyPortfolioOptService:
             target_volatility: Target volatility for efficient_risk strategy
 
         Returns:
-            Dict mapping symbols to optimized weights
+            Dict with 'weights' (Dict[str, float]), 'achieved_return' (float),
+            and 'achieved_volatility' (float)
 
         Raises:
             ValueError: If strategy is invalid or required params missing
@@ -83,8 +84,12 @@ class PyPortfolioOptService:
             achieved_return = perf[0]  # Expected annual return
             achieved_volatility = perf[1]  # Annual volatility
 
+            cleaned_dict = dict(cleaned)
+            weights_dict: Dict[str, float] = {}
+            for k, v in cleaned_dict.items():
+                weights_dict[str(k)] = float(v)
             return {
-                "weights": dict(cleaned),
+                "weights": weights_dict,
                 "achieved_return": achieved_return,
                 "achieved_volatility": achieved_volatility,
             }
@@ -166,7 +171,8 @@ class PyPortfolioOptService:
                 - achieved_volatility: Expected volatility achieved
 
         Raises:
-            exceptions.OptimizationError: If all strategies fail at all constraint levels
+            exceptions.OptimizationError: If all strategies fail at all "
+            "constraint levels
         """
         strategies = [
             "efficient_return",
@@ -193,7 +199,8 @@ class PyPortfolioOptService:
                 attempts += 1
                 try:
                     logger.info(
-                        f"Attempt {attempts}: {strategy} with {constraint_level} constraints"
+                        f"Attempt {attempts}: {strategy} "
+                        f"with {constraint_level} constraints"
                     )
 
                     result = self.mean_variance_optimize(
@@ -203,11 +210,12 @@ class PyPortfolioOptService:
                         adjusted_constraints,
                         strategy,
                         target_return=target_return,
-                        target_volatility=0.15,  # Default target volatility for efficient_risk
+                        target_volatility=0.15,  # Default volatility for efficient_risk
                     )
 
                     logger.info(
-                        f"Success with {strategy} at {constraint_level} constraint level"
+                        f"Success with {strategy} "
+                        f"at {constraint_level} constraint level"
                     )
 
                     return {

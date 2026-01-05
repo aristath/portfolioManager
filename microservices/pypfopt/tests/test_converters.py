@@ -1,7 +1,6 @@
 """Tests for DataFrame converters."""
 
 import pandas as pd
-import pytest
 from app.converters import (
     dataframe_to_matrix,
     dict_to_series,
