@@ -38,12 +38,23 @@ func (sts *ShortTermScorer) Calculate(
 	totalScore := momentumScore*0.50 + drawdownScore*0.50
 	totalScore = math.Min(1.0, totalScore)
 
+	// Build components map with both scored and raw values
+	components := map[string]float64{
+		"momentum": round3(momentumScore),
+		"drawdown": round3(drawdownScore),
+	}
+
+	// Store raw drawdown percentage for database storage
+	// Note: maxDrawdown is negative (e.g., -0.15 for 15% drawdown)
+	if maxDrawdown != nil {
+		components["drawdown_raw"] = *maxDrawdown
+	} else {
+		components["drawdown_raw"] = 0.0
+	}
+
 	return ShortTermScore{
-		Score: round3(totalScore),
-		Components: map[string]float64{
-			"momentum": round3(momentumScore),
-			"drawdown": round3(drawdownScore),
-		},
+		Score:      round3(totalScore),
+		Components: components,
 	}
 }
 
