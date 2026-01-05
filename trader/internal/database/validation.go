@@ -30,8 +30,8 @@ func NewISINValidator(db *sql.DB) *ISINValidator {
 // Returns list of symbols that are missing ISIN
 func (v *ISINValidator) ValidateAllSecuritiesHaveISIN() ([]string, error) {
 	query := `
-		SELECT symbol 
-		FROM securities 
+		SELECT symbol
+		FROM securities
 		WHERE isin IS NULL OR isin = '' OR TRIM(isin) = ''
 	`
 
