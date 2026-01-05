@@ -43,8 +43,60 @@ jobs:
       - name: Build ARM64 binary for Arduino Uno Q
         working-directory: trader
         run: |
-          GOOS=linux GOARCH=arm64 go build -o trader-arm64 ./cmd/server
+          # Explicitly set build environment for linux/arm64 cross-compilation
+          export GOOS=linux
+          export GOARCH=arm64
+          echo "Building for GOOS=${GOOS} GOARCH=${GOARCH}"
+          go build -o trader-arm64 ./cmd/server
           chmod +x trader-arm64
+
+          # Quick sanity check - verify binary exists and is executable
+          if [ ! -f trader-arm64 ]; then
+            echo "ERROR: Binary was not created"
+            exit 1
+          fi
+
+          if [ ! -x trader-arm64 ]; then
+            echo "ERROR: Binary is not executable"
+            exit 1
+          fi
+
+          echo "✓ Binary created successfully"
+
+      - name: Verify binary architecture
+        working-directory: trader
+        run: |
+          # Verify the binary is built for linux/arm64 using 'file' command
+          # This is critical - we MUST ensure the binary is linux/arm64
+          if ! command -v file &> /dev/null; then
+            echo "ERROR: 'file' command not found - cannot verify architecture"
+            exit 1
+          fi
+
+          file_output=$(file trader-arm64)
+          echo "Binary architecture check: $file_output"
+
+          # Verify Linux
+          if ! echo "$file_output" | grep -qi "linux"; then
+            echo "ERROR: Binary is not built for Linux"
+            echo "Expected: Linux, Got: $file_output"
+            exit 1
+          fi
+
+          # Verify ARM64 (check for both arm64 and aarch64)
+          if ! echo "$file_output" | grep -qiE "arm64|aarch64"; then
+            echo "ERROR: Binary is not built for ARM64"
+            echo "Expected: ARM64/AArch64, Got: $file_output"
+            exit 1
+          fi
+
+          # Additional check: verify it's an ELF binary (not a script or other format)
+          if ! echo "$file_output" | grep -qi "elf"; then
+            echo "WARNING: Binary does not appear to be an ELF executable"
+            echo "Got: $file_output"
+          fi
+
+          echo "✓ Verified: Binary is linux/arm64 ELF executable"
 
       - name: Upload ARM64 binary artifact
         uses: actions/upload-artifact@v4

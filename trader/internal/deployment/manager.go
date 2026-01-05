@@ -25,6 +25,11 @@ type DeploymentConfig struct {
 	HealthCheckTimeout     time.Duration
 	HealthCheckMaxAttempts int
 	GitBranch              string
+	// GitHub artifact deployment settings
+	UseGitHubArtifacts bool
+	GitHubWorkflowName string
+	GitHubArtifactName string
+	GitHubBranch       string
 }
 
 // Manager handles deployment orchestration
@@ -37,16 +42,18 @@ type Manager struct {
 	gitBranch  string
 
 	// Components
-	lock               *DeploymentLock
-	gitChecker         *GitChecker
-	goBuilder          *GoServiceBuilder
-	binaryDeployer     *BinaryDeployer
-	frontendDeployer   *FrontendDeployer
-	displayAppDeployer *DisplayAppDeployer
-	serviceManager     *ServiceManager
-	dockerManager      *DockerManager
-	microDeployer      *MicroserviceDeployer
-	sketchDeployer     *SketchDeployer
+	lock       *DeploymentLock
+	gitChecker *GitChecker
+	// goBuilder removed - we use GitHub artifacts exclusively (saves 1GB+ disk space)
+	binaryDeployer         *BinaryDeployer
+	frontendDeployer       *FrontendDeployer
+	displayAppDeployer     *DisplayAppDeployer
+	serviceManager         *ServiceManager
+	dockerManager          *DockerManager
+	microDeployer          *MicroserviceDeployer
+	sketchDeployer         *SketchDeployer
+	githubArtifactDeployer *GitHubArtifactDeployer
+	artifactTracker        *ArtifactTracker
 }
 
 // NewManager creates a new deployment manager
@@ -79,9 +86,8 @@ func NewManager(config *DeploymentConfig, version string, log zerolog.Logger) *M
 		&logAdapter{log: log.With().Str("component", "git").Logger()},
 	)
 
-	goBuilder := NewGoServiceBuilder(
-		&logAdapter{log: log.With().Str("component", "builder").Logger()},
-	)
+	// Go builder is NOT initialized - we use GitHub artifacts exclusively
+	// This saves 1GB+ disk space on the Arduino device by not requiring Go toolchain
 
 	binaryDeployer := NewBinaryDeployer(
 		&logAdapter{log: log.With().Str("component", "binary").Logger()},
@@ -110,25 +116,67 @@ func NewManager(config *DeploymentConfig, version string, log zerolog.Logger) *M
 		&logAdapter{log: log.With().Str("component", "sketch").Logger()},
 	)
 
+	// GitHub artifact deployment is REQUIRED (no fallback to on-device building)
+	// This saves 1GB+ disk space by not requiring Go toolchain on device
+	var githubArtifactDeployer *GitHubArtifactDeployer
+	var artifactTracker *ArtifactTracker
+
+	if config.GitHubWorkflowName == "" || config.GitHubArtifactName == "" {
+		log.Fatal().
+			Str("workflow", config.GitHubWorkflowName).
+			Str("artifact", config.GitHubArtifactName).
+			Msg("GitHub artifact deployment is REQUIRED but configuration is missing. Set GITHUB_WORKFLOW_NAME and GITHUB_ARTIFACT_NAME")
+	}
+
+	trackerFile := filepath.Join(config.DeployDir, "github-artifact-id.txt")
+	artifactTracker = NewArtifactTracker(
+		trackerFile,
+		&logAdapter{log: log.With().Str("component", "artifact-tracker").Logger()},
+	)
+
+	githubBranch := config.GitHubBranch
+	if githubBranch == "" {
+		githubBranch = config.GitBranch
+		if githubBranch == "" {
+			githubBranch = "main" // Default fallback
+		}
+	}
+
+	githubArtifactDeployer = NewGitHubArtifactDeployer(
+		config.GitHubWorkflowName,
+		config.GitHubArtifactName,
+		githubBranch,
+		artifactTracker,
+		&logAdapter{log: log.With().Str("component", "github-artifact").Logger()},
+	)
+
+	log.Info().
+		Str("workflow", config.GitHubWorkflowName).
+		Str("artifact", config.GitHubArtifactName).
+		Str("branch", githubBranch).
+		Msg("GitHub artifact deployment enabled (REQUIRED - no on-device building)")
+
 	return &Manager{
-		config:           config,
-		log:              log.With().Str("component", "deployment").Logger(),
-		statusFile:       filepath.Join(config.DeployDir, "deployment_status.json"),
-		version:          version,
-		gitCommit:        getEnv("GIT_COMMIT", "unknown"),
-		gitBranch:        config.GitBranch,
-		lock:             lock,
-		gitChecker:       gitChecker,
-		goBuilder:        goBuilder,
+		config:     config,
+		log:        log.With().Str("component", "deployment").Logger(),
+		statusFile: filepath.Join(config.DeployDir, "deployment_status.json"),
+		version:    version,
+		gitCommit:  getEnv("GIT_COMMIT", "unknown"),
+		gitBranch:  config.GitBranch,
+		lock:       lock,
+		gitChecker: gitChecker,
+		// goBuilder removed - using GitHub artifacts exclusively
 		binaryDeployer:   binaryDeployer,
 		frontendDeployer: frontendDeployer,
 		displayAppDeployer: NewDisplayAppDeployer(
 			&logAdapter{log: log.With().Str("component", "display-app").Logger()},
 		),
-		serviceManager: serviceManager,
-		dockerManager:  dockerManager,
-		microDeployer:  microDeployer,
-		sketchDeployer: sketchDeployer,
+		serviceManager:         serviceManager,
+		dockerManager:          dockerManager,
+		microDeployer:          microDeployer,
+		sketchDeployer:         sketchDeployer,
+		githubArtifactDeployer: githubArtifactDeployer,
+		artifactTracker:        artifactTracker,
 	}
 }
 
@@ -187,25 +235,81 @@ func (m *Manager) Deploy() (*DeploymentResult, error) {
 
 	result.CommitBefore = localCommit
 
-	if !hasChanges {
-		m.log.Info().Msg("No changes detected, skipping deployment")
+	// Check for GitHub artifacts if enabled (for Go services)
+	var hasNewArtifact bool
+	if m.githubArtifactDeployer != nil {
+		runID, err := m.githubArtifactDeployer.CheckForNewBuild()
+		if err != nil {
+			m.log.Warn().Err(err).Msg("Failed to check for GitHub artifacts, falling back to git check")
+		} else if runID != "" {
+			hasNewArtifact = true
+			m.log.Info().
+				Str("run_id", runID).
+				Msg("New GitHub artifact available")
+		}
+	}
+
+	// If using artifacts and no new artifact, and no git changes, skip deployment
+	if m.config.UseGitHubArtifacts && !hasNewArtifact && !hasChanges {
+		m.log.Info().Msg("No new artifacts and no git changes detected, skipping deployment")
 		result.Success = true
 		result.Deployed = false
 		result.Duration = time.Since(startTime)
 		return result, nil
 	}
 
-	// Get changed files
-	changedFiles, err := m.gitChecker.GetChangedFiles(localCommit, remoteCommit)
-	if err != nil {
-		result.Error = fmt.Sprintf("failed to get changed files: %v", err)
-		result.Duration = time.Since(startTime)
-		return result, err
+	// If not using artifacts, check git changes as before
+	if !m.config.UseGitHubArtifacts {
+		if !hasChanges {
+			m.log.Info().Msg("No changes detected, skipping deployment")
+			result.Success = true
+			result.Deployed = false
+			result.Duration = time.Since(startTime)
+			return result, nil
+		}
 	}
 
-	// Categorize changes
-	categories := m.gitChecker.CategorizeChanges(changedFiles)
-	if !categories.HasAnyChanges() {
+	// Get changed files (for non-Go components)
+	var categories *ChangeCategories
+	var deploymentErrors map[string]error
+
+	if hasChanges {
+		// Get changed files
+		changedFiles, err := m.gitChecker.GetChangedFiles(localCommit, remoteCommit)
+		if err != nil {
+			result.Error = fmt.Sprintf("failed to get changed files: %v", err)
+			result.Duration = time.Since(startTime)
+			return result, err
+		}
+
+		// Categorize changes
+		categories = m.gitChecker.CategorizeChanges(changedFiles)
+
+		// Pull changes
+		if err := m.gitChecker.PullChanges(currentBranch); err != nil {
+			result.Error = fmt.Sprintf("failed to pull changes: %v", err)
+			result.Duration = time.Since(startTime)
+			return result, err
+		}
+
+		result.CommitAfter = remoteCommit
+
+		m.log.Info().
+			Interface("categories", categories).
+			Msg("Git changes detected, starting deployment")
+	} else {
+		// No git changes, create empty categories
+		categories = &ChangeCategories{}
+	}
+
+	// If using artifacts and new artifact available, mark MainApp for deployment
+	if m.config.UseGitHubArtifacts && hasNewArtifact {
+		categories.MainApp = true
+		m.log.Info().Msg("New artifact available, will deploy Go service")
+	}
+
+	// Check if we have anything to deploy
+	if !categories.HasAnyChanges() && !hasNewArtifact {
 		m.log.Info().Msg("No relevant changes detected, skipping deployment")
 		result.Success = true
 		result.Deployed = false
@@ -213,21 +317,8 @@ func (m *Manager) Deploy() (*DeploymentResult, error) {
 		return result, nil
 	}
 
-	m.log.Info().
-		Interface("categories", categories).
-		Msg("Changes detected, starting deployment")
-
-	// Pull changes
-	if err := m.gitChecker.PullChanges(currentBranch); err != nil {
-		result.Error = fmt.Sprintf("failed to pull changes: %v", err)
-		result.Duration = time.Since(startTime)
-		return result, err
-	}
-
-	result.CommitAfter = remoteCommit
-
 	// Deploy based on categories
-	deploymentErrors := m.deployServices(categories, result)
+	deploymentErrors = m.deployServices(categories, result)
 
 	// Deploy frontend (pre-built, committed to git)
 	if categories.Frontend {
@@ -580,20 +671,45 @@ func (m *Manager) deployGoService(config GoServiceConfig, serviceName string) Se
 		Success:     false,
 	}
 
-	// Build to temp location
+	// Prepare temp directory
 	tempDir := filepath.Join(m.config.DeployDir, ".tmp")
 	if err := os.MkdirAll(tempDir, 0755); err != nil {
 		deployment.Error = fmt.Sprintf("failed to create temp directory: %v", err)
 		return deployment
 	}
 
-	tempBinary := filepath.Join(tempDir, fmt.Sprintf("%s.tmp", config.BinaryName))
-
-	// Build service
-	if err := m.goBuilder.BuildService(config, m.config.RepoDir, tempBinary); err != nil {
-		deployment.Error = fmt.Sprintf("build failed: %v", err)
+	// GitHub artifact deployment is REQUIRED - no fallback to on-device building
+	// This ensures we always use pre-built linux/arm64 binaries from GitHub Actions
+	if m.githubArtifactDeployer == nil {
+		deployment.Error = "GitHub artifact deployment is required but not configured. Cannot build on-device."
 		return deployment
 	}
+
+	m.log.Info().
+		Str("service", serviceName).
+		Msg("Checking for GitHub artifact (REQUIRED - no on-device building)")
+
+	// Download latest artifact (will verify linux/arm64 architecture)
+	downloadedPath, err := m.githubArtifactDeployer.DeployLatest(tempDir)
+	if err != nil {
+		deployment.Error = fmt.Sprintf("failed to download artifact: %v", err)
+		return deployment
+	}
+
+	if downloadedPath == "" {
+		m.log.Debug().
+			Str("service", serviceName).
+			Msg("No new artifact available")
+		deployment.Error = "no new artifact available"
+		deployment.Success = true // Not an error, just nothing to deploy
+		return deployment
+	}
+
+	tempBinary := downloadedPath
+	m.log.Info().
+		Str("service", serviceName).
+		Str("binary", tempBinary).
+		Msg("Downloaded and verified linux/arm64 artifact from GitHub Actions")
 
 	// Deploy binary (atomic swap)
 	if err := m.binaryDeployer.DeployBinary(tempBinary, m.config.DeployDir, config.BinaryName, true); err != nil {

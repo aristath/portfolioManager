@@ -42,10 +42,21 @@ type DeploymentConfig struct {
 	TraderServiceName      string
 	DockerComposePath      string
 	MicroservicesEnabled   bool
+	// GitHub artifact deployment settings
+	UseGitHubArtifacts bool   // Use GitHub Actions artifacts instead of building on-device
+	GitHubWorkflowName string // e.g., "build-go.yml"
+	GitHubArtifactName string // e.g., "trader-arm64"
+	GitHubBranch       string // Branch to check for builds (defaults to GitBranch if empty)
 }
 
 // ToDeploymentConfig converts config.DeploymentConfig to deployment.DeploymentConfig
 func (c *DeploymentConfig) ToDeploymentConfig() *deployment.DeploymentConfig {
+	// Determine GitHub branch (use GitHubBranch if set, otherwise GitBranch)
+	githubBranch := c.GitHubBranch
+	if githubBranch == "" {
+		githubBranch = c.GitBranch
+	}
+
 	return &deployment.DeploymentConfig{
 		Enabled:                c.Enabled,
 		RepoDir:                c.RepoDir,
@@ -64,6 +75,10 @@ func (c *DeploymentConfig) ToDeploymentConfig() *deployment.DeploymentConfig {
 		},
 		DockerComposePath:    c.DockerComposePath,
 		MicroservicesEnabled: c.MicroservicesEnabled,
+		UseGitHubArtifacts:   c.UseGitHubArtifacts,
+		GitHubWorkflowName:   c.GitHubWorkflowName,
+		GitHubArtifactName:   c.GitHubArtifactName,
+		GitHubBranch:         githubBranch,
 	}
 }
 
@@ -185,5 +200,11 @@ func loadDeploymentConfig() *DeploymentConfig {
 		TraderServiceName:      "trader",
 		DockerComposePath:      "",
 		MicroservicesEnabled:   true,
+		// GitHub artifact deployment (REQUIRED - no on-device building)
+		// This saves 1GB+ disk space by not requiring Go toolchain on device
+		UseGitHubArtifacts: true, // Always true - artifact deployment is required
+		GitHubWorkflowName: getEnv("GITHUB_WORKFLOW_NAME", "build-go.yml"),
+		GitHubArtifactName: getEnv("GITHUB_ARTIFACT_NAME", "trader-arm64"),
+		GitHubBranch:       getEnv("GITHUB_BRANCH", ""), // Defaults to GitBranch if empty
 	}
 }
