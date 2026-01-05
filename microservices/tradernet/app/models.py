@@ -19,15 +19,21 @@ class ServiceResponse(BaseModel):
 class PlaceOrderRequest(BaseModel):
     """Request model for placing an order."""
 
-    symbol: str = Field(..., min_length=1, description="Security symbol (e.g., AAPL.US)")
-    side: str = Field(..., pattern="^(BUY|SELL)$", description="Order side: BUY or SELL")
+    symbol: str = Field(
+        ..., min_length=1, description="Security symbol (e.g., AAPL.US)"
+    )
+    side: str = Field(
+        ..., pattern="^(BUY|SELL)$", description="Order side: BUY or SELL"
+    )
     quantity: float = Field(..., gt=0, description="Quantity to trade")
 
 
 class BatchQuotesRequest(BaseModel):
     """Request model for batch quote retrieval."""
 
-    symbols: list[str] = Field(..., min_items=1, max_items=100, description="List of symbols")
+    symbols: list[str] = Field(
+        ..., min_length=1, max_length=100, description="List of symbols"
+    )
 
 
 # Response models

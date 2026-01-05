@@ -1,8 +1,7 @@
 """API endpoint tests."""
 
-from fastapi.testclient import TestClient
-
 from app.main import app
+from fastapi.testclient import TestClient
 
 client = TestClient(app)
 
@@ -54,11 +53,10 @@ def test_place_order_validation():
     assert response.status_code == 422  # Validation error
 
     # Invalid side
-    response = client.post("/api/trading/place-order", json={
-        "symbol": "AAPL.US",
-        "side": "INVALID",
-        "quantity": 10
-    })
+    response = client.post(
+        "/api/trading/place-order",
+        json={"symbol": "AAPL.US", "side": "INVALID", "quantity": 10},
+    )
     assert response.status_code == 422
 
 
@@ -90,9 +88,9 @@ def test_get_executed_trades():
 
 def test_batch_quotes():
     """Test batch quotes endpoint."""
-    response = client.post("/api/market-data/quotes", json={
-        "symbols": ["AAPL.US", "TSLA.US"]
-    })
+    response = client.post(
+        "/api/market-data/quotes", json={"symbols": ["AAPL.US", "TSLA.US"]}
+    )
     assert response.status_code == 200
     data = response.json()
     assert "success" in data
