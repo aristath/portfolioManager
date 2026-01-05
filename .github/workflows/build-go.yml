@@ -32,6 +32,10 @@ jobs:
         working-directory: trader
         run: go mod download
 
+      - name: Tidy dependencies
+        working-directory: trader
+        run: go mod tidy
+
       - name: Run tests
         working-directory: trader
         run: go test ./... -v

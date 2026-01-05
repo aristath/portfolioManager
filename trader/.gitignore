@@ -14,7 +14,8 @@ htmlcov/
 
 # Go workspace
 vendor/
-*.sum
+# go.sum should be committed - it ensures reproducible builds
+# *.sum
 
 # Environment
 .env
