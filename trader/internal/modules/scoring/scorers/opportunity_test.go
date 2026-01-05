@@ -21,8 +21,8 @@ func TestOpportunityScorer_CalculateWithQualityGate_HighOpportunityHighQuality(t
 	peRatio := 10.0
 	forwardPE := 9.0
 	marketAvgPE := 20.0
-	fundamentalsScore := 0.75  // High quality
-	longTermScore := 0.70      // High quality
+	fundamentalsScore := 0.75 // High quality
+	longTermScore := 0.70     // High quality
 
 	result := scorer.CalculateWithQualityGate(
 		dailyPrices,
@@ -46,10 +46,10 @@ func TestOpportunityScorer_CalculateWithQualityGate_HighOpportunityLowQuality(t 
 	for i := range dailyPrices {
 		dailyPrices[i] = 100.0 - float64(i)*0.1 // Declining price (cheap)
 	}
-	peRatio := 8.0  // Very cheap
+	peRatio := 8.0 // Very cheap
 	forwardPE := 7.0
 	marketAvgPE := 20.0
-	fundamentalsScore := 0.45  // Low quality (below 0.6 threshold)
+	fundamentalsScore := 0.45 // Low quality (below 0.6 threshold)
 	longTermScore := 0.40     // Low quality (below 0.5 threshold)
 
 	result := scorer.CalculateWithQualityGate(
@@ -79,8 +79,8 @@ func TestOpportunityScorer_CalculateWithQualityGate_ModerateOpportunityLowQualit
 	peRatio := 15.0
 	forwardPE := 14.0
 	marketAvgPE := 20.0
-	fundamentalsScore := 0.50  // Low quality
-	longTermScore := 0.45      // Low quality
+	fundamentalsScore := 0.50 // Low quality
+	longTermScore := 0.45     // Low quality
 
 	result := scorer.CalculateWithQualityGate(
 		dailyPrices,
@@ -110,8 +110,8 @@ func TestOpportunityScorer_CalculateWithQualityGate_LowFundamentalsOnly(t *testi
 	peRatio := 8.0
 	forwardPE := 7.0
 	marketAvgPE := 20.0
-	fundamentalsScore := 0.50  // Low (below 0.6)
-	longTermScore := 0.60      // OK (above 0.5)
+	fundamentalsScore := 0.50 // Low (below 0.6)
+	longTermScore := 0.60     // OK (above 0.5)
 
 	result := scorer.CalculateWithQualityGate(
 		dailyPrices,
@@ -137,8 +137,8 @@ func TestOpportunityScorer_CalculateWithQualityGate_LowLongTermOnly(t *testing.T
 	peRatio := 8.0
 	forwardPE := 7.0
 	marketAvgPE := 20.0
-	fundamentalsScore := 0.65  // OK (above 0.6)
-	longTermScore := 0.40      // Low (below 0.5)
+	fundamentalsScore := 0.65 // OK (above 0.6)
+	longTermScore := 0.40     // Low (below 0.5)
 
 	result := scorer.CalculateWithQualityGate(
 		dailyPrices,

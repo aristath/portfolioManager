@@ -14,10 +14,10 @@ func TestScoreCAGRWithBubbleDetection_BelowTarget(t *testing.T) {
 	// Test various CAGR values below target
 	// Bell curve: closer to target = higher score
 	tests := []struct {
-		cagr         float64
-		expectedMin  float64
-		expectedMax  float64
-		description  string
+		cagr        float64
+		expectedMin float64
+		expectedMax float64
+		description string
 	}{
 		{0.05, scoring.BellCurveFloor, 0.7, "5% CAGR (well below target, should score lower)"},
 		{0.08, scoring.BellCurveFloor, 0.95, "8% CAGR (closer to target, should score higher)"},

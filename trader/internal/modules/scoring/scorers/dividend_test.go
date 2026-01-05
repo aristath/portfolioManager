@@ -371,8 +371,8 @@ func TestDividendScorer_CalculateEnhanced_HighTotalReturn(t *testing.T) {
 	scorer := NewDividendScorer()
 
 	// Example from document: 5% growth + 10% dividend = 15% total return
-	dividendYield := 0.10  // 10% dividend
-	expectedCAGR := 0.05    // 5% growth
+	dividendYield := 0.10 // 10% dividend
+	expectedCAGR := 0.05  // 5% growth
 	payoutRatio := 0.50
 	fiveYearAvgDivYield := 0.08
 
@@ -390,8 +390,8 @@ func TestDividendScorer_CalculateEnhanced_ExcellentTotalReturn(t *testing.T) {
 	scorer := NewDividendScorer()
 
 	// 20%+ total return (very high)
-	dividendYield := 0.12  // 12% dividend
-	expectedCAGR := 0.10   // 10% growth
+	dividendYield := 0.12 // 12% dividend
+	expectedCAGR := 0.10  // 10% growth
 	payoutRatio := 0.50
 	fiveYearAvgDivYield := 0.10
 
@@ -407,8 +407,8 @@ func TestDividendScorer_CalculateEnhanced_ModerateTotalReturn(t *testing.T) {
 	scorer := NewDividendScorer()
 
 	// 12% total return (moderate-high)
-	dividendYield := 0.06  // 6% dividend
-	expectedCAGR := 0.06   // 6% growth
+	dividendYield := 0.06 // 6% dividend
+	expectedCAGR := 0.06  // 6% growth
 	payoutRatio := 0.50
 	fiveYearAvgDivYield := 0.05
 
@@ -424,8 +424,8 @@ func TestDividendScorer_CalculateEnhanced_LowTotalReturn(t *testing.T) {
 	scorer := NewDividendScorer()
 
 	// 8% total return (below 10% threshold)
-	dividendYield := 0.03  // 3% dividend
-	expectedCAGR := 0.05   // 5% growth
+	dividendYield := 0.03 // 3% dividend
+	expectedCAGR := 0.05  // 5% growth
 	payoutRatio := 0.50
 	fiveYearAvgDivYield := 0.03
 
@@ -460,9 +460,9 @@ func TestCalculateTotalReturnBoost_Thresholds(t *testing.T) {
 		expectedMin float64
 		expectedMax float64
 	}{
-		{"15%+ total return", 0.10, 0.05, 0.20, 0.20},   // 15% total
-		{"12-15% total return", 0.06, 0.06, 0.15, 0.15}, // 12% total
-		{"10-12% total return", 0.05, 0.05, 0.10, 0.10}, // 10% total
+		{"15%+ total return", 0.10, 0.05, 0.20, 0.20},    // 15% total
+		{"12-15% total return", 0.06, 0.06, 0.15, 0.15},  // 12% total
+		{"10-12% total return", 0.05, 0.05, 0.10, 0.10},  // 10% total
 		{"Below 10% total return", 0.03, 0.05, 0.0, 0.0}, // 8% total
 		{"Exactly 15% total return", 0.10, 0.05, 0.20, 0.20},
 		{"Exactly 12% total return", 0.07, 0.05, 0.15, 0.15},
