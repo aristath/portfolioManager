@@ -51,6 +51,23 @@ type Manager struct {
 
 // NewManager creates a new deployment manager
 func NewManager(config *DeploymentConfig, version string, log zerolog.Logger) *Manager {
+	// Resolve paths to absolute (required for reliable path operations)
+	absRepoDir, err := filepath.Abs(config.RepoDir)
+	if err != nil {
+		log.Warn().Err(err).Str("repo_dir", config.RepoDir).Msg("Failed to resolve RepoDir to absolute path, using as-is")
+		absRepoDir = config.RepoDir
+	}
+
+	absDeployDir, err := filepath.Abs(config.DeployDir)
+	if err != nil {
+		log.Warn().Err(err).Str("deploy_dir", config.DeployDir).Msg("Failed to resolve DeployDir to absolute path, using as-is")
+		absDeployDir = config.DeployDir
+	}
+
+	// Update config with absolute paths
+	config.RepoDir = absRepoDir
+	config.DeployDir = absDeployDir
+
 	// Create components
 	lock := NewDeploymentLock(
 		filepath.Join(config.DeployDir, ".deploy.lock"),

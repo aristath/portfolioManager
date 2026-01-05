@@ -49,9 +49,19 @@ func (b *GoServiceBuilder) BuildService(config GoServiceConfig, repoDir string, 
 		versionInfo = VersionInfo{}
 	}
 
+	// Ensure outputPath is absolute (required when cmd.Dir is set)
+	absOutputPath, err := filepath.Abs(outputPath)
+	if err != nil {
+		return &BuildError{
+			ServiceName: config.Name,
+			Message:     fmt.Sprintf("failed to resolve absolute output path: %s", outputPath),
+			Err:         err,
+		}
+	}
+
 	// Build command
 	ldflags := b.buildLDFlags(versionInfo)
-	cmd := exec.Command("go", "build", "-ldflags", ldflags, "-o", outputPath, ".")
+	cmd := exec.Command("go", "build", "-ldflags", ldflags, "-o", absOutputPath, ".")
 	cmd.Dir = buildPath
 
 	// Capture build output
@@ -74,8 +84,8 @@ func (b *GoServiceBuilder) BuildService(config GoServiceConfig, repoDir string, 
 		}
 	}
 
-	// Verify binary
-	if err := b.VerifyBinary(outputPath); err != nil {
+	// Verify binary (use absolute path)
+	if err := b.VerifyBinary(absOutputPath); err != nil {
 		return &BuildError{
 			ServiceName: config.Name,
 			Message:     "binary verification failed",
@@ -85,7 +95,7 @@ func (b *GoServiceBuilder) BuildService(config GoServiceConfig, repoDir string, 
 
 	b.log.Info().
 		Str("service", config.Name).
-		Str("output", outputPath).
+		Str("output", absOutputPath).
 		Dur("duration", duration).
 		Msg("Successfully built Go service")
 
