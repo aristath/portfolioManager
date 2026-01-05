@@ -79,23 +79,31 @@ func (c *Client) post(endpoint string, request interface{}) (*ServiceResponse, e
 // get makes a GET request to the microservice
 func (c *Client) get(endpoint string) (*ServiceResponse, error) {
 	url := c.baseURL + endpoint
+	c.log.Debug().Str("endpoint", endpoint).Str("url", url).Msg("Making GET request")
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	// Add credentials to headers if available
+	hasCredentials := false
 	if c.apiKey != "" {
 		req.Header.Set("X-Tradernet-API-Key", c.apiKey)
+		hasCredentials = true
 	}
 	if c.apiSecret != "" {
 		req.Header.Set("X-Tradernet-API-Secret", c.apiSecret)
+		hasCredentials = true
 	}
+	c.log.Debug().Bool("has_credentials", hasCredentials).Msg("Request headers set")
 
+	c.log.Debug().Msg("Calling client.Do()")
 	resp, err := c.client.Do(req)
 	if err != nil {
+		c.log.Error().Err(err).Msg("client.Do() failed")
 		return nil, fmt.Errorf("failed to make request: %w", err)
 	}
+	c.log.Debug().Int("status_code", resp.StatusCode).Msg("Got response")
 	defer resp.Body.Close()
 
 	return c.parseResponse(resp)
@@ -103,15 +111,24 @@ func (c *Client) get(endpoint string) (*ServiceResponse, error) {
 
 // parseResponse parses the service response
 func (c *Client) parseResponse(resp *http.Response) (*ServiceResponse, error) {
+	c.log.Debug().Msg("parseResponse: reading body")
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		c.log.Error().Err(err).Msg("parseResponse: ReadAll failed")
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
+	c.log.Debug().Int("body_len", len(body)).Msg("parseResponse: body read, unmarshaling")
 
 	var result ServiceResponse
 	if err := json.Unmarshal(body, &result); err != nil {
+		previewLen := 100
+		if len(body) < previewLen {
+			previewLen = len(body)
+		}
+		c.log.Error().Err(err).Str("body_preview", string(body[:previewLen])).Msg("parseResponse: Unmarshal failed")
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
+	c.log.Debug().Bool("success", result.Success).Msg("parseResponse: unmarshaled")
 
 	if !result.Success {
 		errMsg := "unknown error"
@@ -181,15 +198,20 @@ type PositionsResponse struct {
 
 // GetPortfolio gets current portfolio positions
 func (c *Client) GetPortfolio() ([]Position, error) {
+	c.log.Debug().Msg("GetPortfolio: calling c.get()")
 	resp, err := c.get("/api/portfolio/positions")
 	if err != nil {
+		c.log.Error().Err(err).Msg("GetPortfolio: c.get() failed")
 		return nil, err
 	}
+	c.log.Debug().Int("data_len", len(resp.Data)).Msg("GetPortfolio: got response, parsing")
 
 	var result PositionsResponse
 	if err := json.Unmarshal(resp.Data, &result); err != nil {
+		c.log.Error().Err(err).Msg("GetPortfolio: json.Unmarshal failed")
 		return nil, fmt.Errorf("failed to parse positions: %w", err)
 	}
+	c.log.Debug().Int("positions_count", len(result.Positions)).Msg("GetPortfolio: successfully parsed")
 
 	return result.Positions, nil
 }
