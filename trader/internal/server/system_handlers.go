@@ -810,15 +810,18 @@ func (h *SystemHandlers) getDirSize(dirPath string) float64 {
 }
 
 // getSystemStats calculates CPU and RAM usage percentages
+// Uses a shorter interval (100ms) for faster response while still providing accurate readings
 func (h *SystemHandlers) getSystemStats() (float64, float64) {
-	// Get CPU percentage (average across all CPUs, over 1 second)
-	cpuPercent, err := cpu.Percent(time.Second, false)
+	// Get CPU percentage (average across all CPUs, over 100ms for faster response)
+	// Using 100ms instead of 1s to avoid blocking the API call for too long
+	// The display app polls every 2s with 2s timeout, so we need fast responses
+	cpuPercent, err := cpu.Percent(100*time.Millisecond, false)
 	if err != nil {
 		h.log.Warn().Err(err).Msg("Failed to get CPU percentage")
 		cpuPercent = []float64{0}
 	}
 
-	// Get memory statistics
+	// Get memory statistics (instant, no blocking)
 	memStat, err := mem.VirtualMemory()
 	if err != nil {
 		h.log.Warn().Err(err).Msg("Failed to get memory statistics")

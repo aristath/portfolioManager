@@ -152,7 +152,21 @@ func (j *TagUpdateJob) updateTagsForSecurity(security universe.Security) error {
 		// Map available scores to group scores
 		groupScores["opportunity"] = score.OpportunityScore
 		groupScores["fundamentals"] = score.FundamentalScore
-		groupScores["long_term"] = score.QualityScore // Approximate
+		// QualityScore is average of (long_term + fundamentals) / 2
+		// Derive long_term from QualityScore and FundamentalScore: long_term = 2 * QualityScore - fundamentals
+		// Use QualityScore as fallback if calculation would give invalid result
+		if score.FundamentalScore > 0 && score.QualityScore > 0 {
+			derivedLongTerm := 2*score.QualityScore - score.FundamentalScore
+			if derivedLongTerm > 0 && derivedLongTerm <= 1.0 {
+				groupScores["long_term"] = derivedLongTerm
+			} else {
+				// Fallback: use QualityScore if derivation gives invalid result
+				groupScores["long_term"] = score.QualityScore
+			}
+		} else {
+			// Fallback: use QualityScore if fundamentals not available
+			groupScores["long_term"] = score.QualityScore
+		}
 		groupScores["technicals"] = score.TechnicalScore
 		groupScores["dividends"] = score.DividendBonus // Approximate
 
