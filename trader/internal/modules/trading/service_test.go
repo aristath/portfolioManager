@@ -56,9 +56,11 @@ func (m *mockTradeRepository) Create(trade Trade) error {
 		return m.createErr
 	}
 
-	// Simulate UNIQUE constraint on order_id
+	// Simulate duplicate detection (matches real implementation)
+	// Real implementation checks Exists() and returns nil for duplicates
 	if m.duplicates[trade.OrderID] {
-		return errors.New("UNIQUE constraint failed: trades.order_id")
+		// Return nil (no error) for duplicates, matching real behavior
+		return nil
 	}
 
 	m.duplicates[trade.OrderID] = true
@@ -149,7 +151,8 @@ func TestSyncFromTradernet_DuplicateOrderID(t *testing.T) {
 	assert.NoError(t, err)
 	// Should only insert 2 trades (ORDER-1 once, ORDER-2 once)
 	assert.Equal(t, 2, len(mockRepo.trades))
-	// Create was called 3 times, but only 2 succeeded
+	// Create was called 3 times (ORDER-1, ORDER-1 duplicate, ORDER-2)
+	// Duplicate returns nil (no error) but doesn't insert, matching real behavior
 	assert.Equal(t, 3, mockRepo.createCalls)
 }
 

@@ -2,7 +2,6 @@ package trading
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/aristath/arduino-trader/internal/clients/tradernet"
@@ -118,12 +117,8 @@ func (s *TradingService) SyncFromTradernet() error {
 			ValueEUR:   &valueEUR,
 		}
 
-		// Insert trade to database (idempotent via order_id unique constraint)
+		// Insert trade to database (idempotent - Create() checks for existing order_id)
 		if err := s.tradeRepo.Create(dbTrade); err != nil {
-			// Skip if already exists (duplicate order_id)
-			if strings.Contains(err.Error(), "UNIQUE constraint") {
-				continue
-			}
 			s.log.Error().
 				Err(err).
 				Str("order_id", trade.OrderID).

@@ -40,6 +40,21 @@ func (r *TradeRepository) Create(trade Trade) error {
 		return fmt.Errorf("failed to create trade: %w", err)
 	}
 
+	// Check for existing trade with same order_id to prevent duplicates
+	// This is a safety check in addition to the UNIQUE index constraint
+	if trade.OrderID != "" {
+		exists, err := r.Exists(trade.OrderID)
+		if err != nil {
+			return fmt.Errorf("failed to check for existing trade: %w", err)
+		}
+		if exists {
+			r.log.Debug().
+				Str("order_id", trade.OrderID).
+				Msg("Trade with order_id already exists, skipping duplicate")
+			return nil // Silently skip duplicate - trade already recorded
+		}
+	}
+
 	now := time.Now().Format(time.RFC3339)
 	executedAt := trade.ExecutedAt.Format(time.RFC3339)
 

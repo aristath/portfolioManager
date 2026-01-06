@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS trades (
 CREATE INDEX IF NOT EXISTS idx_trades_symbol ON trades(symbol);
 CREATE INDEX IF NOT EXISTS idx_trades_isin ON trades(isin);
 CREATE INDEX IF NOT EXISTS idx_trades_executed ON trades(executed_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_trades_order_id ON trades(order_id) WHERE order_id IS NOT NULL;
 
 -- Cash flows table: deposits, withdrawals, fees, dividends, interest
 CREATE TABLE IF NOT EXISTS cash_flows (
