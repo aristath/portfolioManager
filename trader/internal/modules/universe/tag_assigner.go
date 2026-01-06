@@ -6,9 +6,21 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// AdaptiveQualityGatesProvider interface for getting adaptive quality gate thresholds
+type AdaptiveQualityGatesProvider interface {
+	CalculateAdaptiveQualityGates(regimeScore float64) *QualityGateThresholds
+}
+
+// QualityGateThresholds represents adaptive quality gate thresholds
+type QualityGateThresholds struct {
+	Fundamentals float64 // Fundamentals score threshold
+	LongTerm     float64 // Long-term score threshold
+}
+
 // TagAssigner assigns tags to securities based on analysis
 type TagAssigner struct {
-	log zerolog.Logger
+	log             zerolog.Logger
+	adaptiveService AdaptiveQualityGatesProvider // Optional: adaptive market service
 }
 
 // NewTagAssigner creates a new tag assigner
@@ -16,6 +28,11 @@ func NewTagAssigner(log zerolog.Logger) *TagAssigner {
 	return &TagAssigner{
 		log: log.With().Str("service", "tag_assigner").Logger(),
 	}
+}
+
+// SetAdaptiveService sets the adaptive market service for dynamic quality gates
+func (ta *TagAssigner) SetAdaptiveService(service AdaptiveQualityGatesProvider) {
+	ta.adaptiveService = service
 }
 
 // AssignTagsInput contains all data needed to assign tags to a security
@@ -184,7 +201,9 @@ func (ta *TagAssigner) AssignTagsForSecurity(input AssignTagsInput) ([]string, e
 	}
 
 	// Technical Opportunities
-	if rsi < 30 {
+	// Only tag as oversold if RSI is actually available (not nil) and below 30
+	// Defaulting to 0.0 when RSI is missing would incorrectly tag all securities
+	if input.RSI != nil && *input.RSI < 30 {
 		tags = append(tags, "oversold")
 	}
 
@@ -192,7 +211,8 @@ func (ta *TagAssigner) AssignTagsForSecurity(input AssignTagsInput) ([]string, e
 		tags = append(tags, "below-ema")
 	}
 
-	if bollingerPosition < 0.2 {
+	// Only tag as bollinger-oversold if Bollinger position is actually available
+	if input.BollingerPosition != nil && *input.BollingerPosition < 0.2 {
 		tags = append(tags, "bollinger-oversold")
 	}
 
@@ -259,7 +279,9 @@ func (ta *TagAssigner) AssignTagsForSecurity(input AssignTagsInput) ([]string, e
 		tags = append(tags, "above-ema")
 	}
 
-	if rsi > 70 {
+	// Only tag as overbought if RSI is actually available (not nil) and above 70
+	// Defaulting to 0.0 when RSI is missing would incorrectly tag securities
+	if input.RSI != nil && *input.RSI > 70 {
 		tags = append(tags, "overbought")
 	}
 
@@ -357,8 +379,24 @@ func (ta *TagAssigner) AssignTagsForSecurity(input AssignTagsInput) ([]string, e
 
 	// === NEW: QUALITY GATE TAGS ===
 
+	// Get adaptive quality gate thresholds if available, otherwise use defaults
+	fundamentalsThreshold := 0.6
+	longTermThreshold := 0.5
+
+	if ta.adaptiveService != nil {
+		// Try to get regime score and calculate adaptive thresholds
+		// For now, use default thresholds
+		// TODO: Integrate regime score provider
+		// If regime score is available, use it:
+		// thresholds := ta.adaptiveService.CalculateAdaptiveQualityGates(regimeScore)
+		// if thresholds != nil {
+		//     fundamentalsThreshold = thresholds.Fundamentals
+		//     longTermThreshold = thresholds.LongTerm
+		// }
+	}
+
 	// Quality gate pass/fail
-	if fundamentalsScore >= 0.6 && longTermScore >= 0.5 {
+	if fundamentalsScore >= fundamentalsThreshold && longTermScore >= longTermThreshold {
 		tags = append(tags, "quality-gate-pass")
 	} else {
 		tags = append(tags, "quality-gate-fail")
