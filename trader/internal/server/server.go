@@ -160,6 +160,7 @@ func (s *Server) SetJobs(
 	dividendReinvest scheduler.Job,
 	plannerBatch scheduler.Job,
 	eventBasedTrading scheduler.Job,
+	tagUpdate scheduler.Job,
 ) {
 	s.systemHandlers.SetJobs(
 		healthCheck,
@@ -167,7 +168,13 @@ func (s *Server) SetJobs(
 		dividendReinvest,
 		plannerBatch,
 		eventBasedTrading,
+		tagUpdate,
 	)
+}
+
+// SetTagUpdateJob sets the tag update job (called after job registration)
+func (s *Server) SetTagUpdateJob(tagUpdate scheduler.Job) {
+	s.systemHandlers.SetTagUpdateJob(tagUpdate)
 }
 
 // setupMiddleware configures middleware
@@ -412,6 +419,7 @@ func (s *Server) setupSystemRoutes(r chi.Router) {
 			r.Post("/dividend-reinvestment", systemHandlers.HandleTriggerDividendReinvestment)
 			r.Post("/planner-batch", systemHandlers.HandleTriggerPlannerBatch)
 			r.Post("/event-based-trading", systemHandlers.HandleTriggerEventBasedTrading)
+			r.Post("/tag-update", systemHandlers.HandleTriggerTagUpdate)
 		})
 	})
 }

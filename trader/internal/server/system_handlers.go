@@ -44,6 +44,7 @@ type SystemHandlers struct {
 	dividendReinvestJob  scheduler.Job
 	plannerBatchJob      scheduler.Job
 	eventBasedTradingJob scheduler.Job
+	tagUpdateJob         scheduler.Job
 }
 
 // NewSystemHandlers creates a new system handlers instance
@@ -99,12 +100,19 @@ func (h *SystemHandlers) SetJobs(
 	dividendReinvest scheduler.Job,
 	plannerBatch scheduler.Job,
 	eventBasedTrading scheduler.Job,
+	tagUpdate scheduler.Job,
 ) {
 	h.healthCheckJob = healthCheck
 	h.syncCycleJob = syncCycle
 	h.dividendReinvestJob = dividendReinvest
 	h.plannerBatchJob = plannerBatch
 	h.eventBasedTradingJob = eventBasedTrading
+	h.tagUpdateJob = tagUpdate
+}
+
+// SetTagUpdateJob sets the tag update job (called after job registration)
+func (h *SystemHandlers) SetTagUpdateJob(tagUpdate scheduler.Job) {
+	h.tagUpdateJob = tagUpdate
 }
 
 // SystemStatusResponse represents the system status response
@@ -1061,6 +1069,37 @@ func (h *SystemHandlers) HandleSyncRecommendations(w http.ResponseWriter, r *htt
 		"status":  "success",
 		"message": "Recommendations are generated on-demand via planning module",
 		"note":    "Use POST /api/planning/recommendations or POST /api/trades/recommendations",
+	})
+}
+
+// HandleTriggerTagUpdate triggers the tag update job immediately
+// POST /api/jobs/tag-update
+func (h *SystemHandlers) HandleTriggerTagUpdate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if h.tagUpdateJob == nil {
+		h.log.Warn().Msg("Tag update job not registered yet")
+		h.writeJSON(w, map[string]string{
+			"status":  "error",
+			"message": "Tag update job not registered",
+		})
+		return
+	}
+
+	h.log.Info().Msg("Manual tag update triggered")
+
+	if err := h.scheduler.RunNow(h.tagUpdateJob); err != nil {
+		h.log.Error().Err(err).Msg("Failed to trigger tag update")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	h.writeJSON(w, map[string]string{
+		"status":  "success",
+		"message": "Tag update triggered successfully",
 	})
 }
 
