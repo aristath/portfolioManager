@@ -61,3 +61,5 @@ display/bridge/display-bridge
 build/
 
 trader/app/bin/.deploy.lock
+
+trader/tradernet-sdk
