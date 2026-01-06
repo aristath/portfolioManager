@@ -14,8 +14,6 @@ import (
 // Config holds application configuration
 type Config struct {
 	DataDir             string // Base directory for all databases (defaults to "../data" or "./data")
-	PythonServiceURL    string
-	UnifiedServiceURL   string // Unified microservice (pypfopt, tradernet, yfinance) on 9000
 	EvaluatorServiceURL string
 	TradernetAPIKey     string
 	TradernetAPISecret  string
@@ -39,7 +37,6 @@ type DeploymentConfig struct {
 	TraderBinaryName       string
 	TraderServiceName      string
 	DockerComposePath      string
-	MicroservicesEnabled   bool
 	// GitHub artifact deployment settings
 	UseGitHubArtifacts bool   // Use GitHub Actions artifacts instead of building on-device
 	GitHubWorkflowName string // e.g., "build-go.yml"
@@ -71,12 +68,11 @@ func (c *DeploymentConfig) ToDeploymentConfig() *deployment.DeploymentConfig {
 			BinaryName:  c.TraderBinaryName,
 			ServiceName: c.TraderServiceName,
 		},
-		DockerComposePath:    c.DockerComposePath,
-		MicroservicesEnabled: c.MicroservicesEnabled,
-		UseGitHubArtifacts:   c.UseGitHubArtifacts,
-		GitHubWorkflowName:   c.GitHubWorkflowName,
-		GitHubArtifactName:   c.GitHubArtifactName,
-		GitHubBranch:         githubBranch,
+		DockerComposePath:  c.DockerComposePath,
+		UseGitHubArtifacts: c.UseGitHubArtifacts,
+		GitHubWorkflowName: c.GitHubWorkflowName,
+		GitHubArtifactName: c.GitHubArtifactName,
+		GitHubBranch:       githubBranch,
 	}
 }
 
@@ -103,8 +99,6 @@ func Load() (*Config, error) {
 		DataDir:             dataDir,
 		Port:                getEnvAsInt("GO_PORT", 8001), // Default 8001 (Python uses 8000)
 		DevMode:             getEnvAsBool("DEV_MODE", false),
-		PythonServiceURL:    getEnv("PYTHON_SERVICE_URL", "http://localhost:8000"),    // Python on 8000
-		UnifiedServiceURL:   getEnv("UNIFIED_SERVICE_URL", "http://localhost:9000"),   // Unified microservice on 9000
 		EvaluatorServiceURL: getEnv("EVALUATOR_SERVICE_URL", "http://localhost:9000"), // Evaluator-go microservice on 9000
 		TradernetAPIKey:     getEnv("TRADERNET_API_KEY", ""),
 		TradernetAPISecret:  getEnv("TRADERNET_API_SECRET", ""),
@@ -200,7 +194,6 @@ func loadDeploymentConfig() *DeploymentConfig {
 		TraderBinaryName:       "trader",
 		TraderServiceName:      "trader",
 		DockerComposePath:      "",
-		MicroservicesEnabled:   true,
 		// GitHub artifact deployment (REQUIRED - no on-device building)
 		// This saves 1GB+ disk space by not requiring Go toolchain on device
 		UseGitHubArtifacts: true, // Always true - artifact deployment is required

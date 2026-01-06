@@ -70,18 +70,6 @@ func TestGitChecker_CategorizeChanges(t *testing.T) {
 			description: "Display sketch changes should be detected",
 		},
 		{
-			name:        "unified service code",
-			files:       []string{"microservices/unified/app/main.py"},
-			want:        ChangeCategories{PyPFOpt: true, Tradernet: true, YahooFinance: true},
-			description: "Unified service code changes should be detected for all services",
-		},
-		{
-			name:        "unified dependencies",
-			files:       []string{"microservices/unified/requirements.txt"},
-			want:        ChangeCategories{PyPFOptDeps: true, TradernetDeps: true, YahooFinanceDeps: true},
-			description: "Unified dependency changes should be detected for all services",
-		},
-		{
 			name:        "config directory changes",
 			files:       []string{"config/settings.toml"},
 			want:        ChangeCategories{Config: true},
@@ -105,15 +93,11 @@ func TestGitChecker_CategorizeChanges(t *testing.T) {
 				"trader/internal/server/server.go",
 				"display/app/main.py",
 				"config/settings.toml",
-				"microservices/unified/app/main.py",
 			},
 			want: ChangeCategories{
-				MainApp:      true,
-				DisplayApp:   true,
-				Config:       true,
-				PyPFOpt:      true,
-				Tradernet:    true,
-				YahooFinance: true,
+				MainApp:    true,
+				DisplayApp: true,
+				Config:     true,
 			},
 			description: "Multiple change categories should be detected simultaneously",
 		},
@@ -150,10 +134,6 @@ func TestGitChecker_CategorizeChanges(t *testing.T) {
 			assert.Equal(t, tt.want.MainApp, got.MainApp, "MainApp category mismatch: %s", tt.description)
 			assert.Equal(t, tt.want.DisplayApp, got.DisplayApp, "DisplayApp category mismatch: %s", tt.description)
 			assert.Equal(t, tt.want.Sketch, got.Sketch, "Sketch category mismatch: %s", tt.description)
-			assert.Equal(t, tt.want.PyPFOpt, got.PyPFOpt, "PyPFOpt category mismatch: %s", tt.description)
-			assert.Equal(t, tt.want.PyPFOptDeps, got.PyPFOptDeps, "PyPFOptDeps category mismatch: %s", tt.description)
-			assert.Equal(t, tt.want.Tradernet, got.Tradernet, "Tradernet category mismatch: %s", tt.description)
-			assert.Equal(t, tt.want.TradernetDeps, got.TradernetDeps, "TradernetDeps category mismatch: %s", tt.description)
 			assert.Equal(t, tt.want.Config, got.Config, "Config category mismatch: %s", tt.description)
 		})
 	}
@@ -183,26 +163,6 @@ func TestChangeCategories_HasAnyChanges(t *testing.T) {
 		{
 			name:     "Sketch true",
 			category: ChangeCategories{Sketch: true},
-			want:     true,
-		},
-		{
-			name:     "PyPFOpt true",
-			category: ChangeCategories{PyPFOpt: true},
-			want:     true,
-		},
-		{
-			name:     "PyPFOptDeps true",
-			category: ChangeCategories{PyPFOptDeps: true},
-			want:     true,
-		},
-		{
-			name:     "Tradernet true",
-			category: ChangeCategories{Tradernet: true},
-			want:     true,
-		},
-		{
-			name:     "TradernetDeps true",
-			category: ChangeCategories{TradernetDeps: true},
 			want:     true,
 		},
 		{
@@ -376,13 +336,13 @@ func TestHealthCheckError(t *testing.T) {
 	t.Run("error with wrapped error", func(t *testing.T) {
 		originalErr := errors.New("connection refused")
 		err := &HealthCheckError{
-			ServiceName: "unified",
+			ServiceName: "trader",
 			Message:     "health check failed",
 			Err:         originalErr,
 		}
 
 		errMsg := err.Error()
-		assert.Contains(t, errMsg, "health check error for unified")
+		assert.Contains(t, errMsg, "health check error for trader")
 		assert.Contains(t, errMsg, "health check failed")
 		assert.Contains(t, errMsg, "connection refused")
 

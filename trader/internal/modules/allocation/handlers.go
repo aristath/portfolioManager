@@ -19,7 +19,6 @@ type Handler struct {
 	alertService             *ConcentrationAlertService
 	portfolioSummaryProvider PortfolioSummaryProvider
 	log                      zerolog.Logger
-	pythonURL                string // URL of Python service (temporary during migration)
 }
 
 // NewHandler creates a new allocation handler
@@ -29,7 +28,6 @@ func NewHandler(
 	alertService *ConcentrationAlertService,
 	portfolioSummaryProvider PortfolioSummaryProvider,
 	log zerolog.Logger,
-	pythonURL string,
 ) *Handler {
 	return &Handler{
 		allocRepo:                allocRepo,
@@ -37,7 +35,6 @@ func NewHandler(
 		alertService:             alertService,
 		portfolioSummaryProvider: portfolioSummaryProvider,
 		log:                      log.With().Str("handler", "allocation").Logger(),
-		pythonURL:                pythonURL,
 	}
 }
 

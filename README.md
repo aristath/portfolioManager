@@ -11,7 +11,6 @@ Arduino Trader is a production-ready autonomous trading system that manages a re
 - [Architecture](#architecture)
 - [Technology Stack](#technology-stack)
 - [Getting Started](#getting-started)
-- [Microservices](#microservices)
 - [API Reference](#api-reference)
 - [Background Jobs](#background-jobs)
 - [Development](#development)
@@ -48,20 +47,7 @@ Arduino Trader is a production-ready autonomous trading system that manages a re
 │              │                         │                       │
 └──────────────┼─────────────────────────┼───────────────────────┘
                │                         │
-               │ HTTP
-               ▼
-       ┌──────────────────────────────┐
-       │   unified (Python)           │
-       │                              │
-       │  • Portfolio Optimization    │
-       │    (PyPFOpt)                 │
-       │  • Market Data               │
-       │    (Yahoo Finance)           │
-       │                              │
-       │  Port: 9000                  │
-       └──────────────────────────────┘
-
-Note: Tradernet API is now integrated directly via Go SDK (no microservice)
+Note: All functionality has been migrated to Go - Tradernet API is integrated directly via Go SDK (no microservices needed).
 ```
 
 ### Design Principles
@@ -107,22 +93,10 @@ Note: Tradernet API is now integrated directly via Go SDK (no microservice)
 - Planning: 10-15s (vs 2min Python)
 - Startup: 2-3s (vs 10s Python)
 
-### Microservices
-
-1. **unified** (Python/FastAPI) - Unified microservice combining Python services
-   - Port: 9000
-   - Purpose: Portfolio optimization and market data
-   - Libraries:
-     - PyPortfolioOpt (portfolio optimization)
-     - yfinance (market data)
-   - Routes:
-     - `/api/pypfopt/*` - Portfolio optimization endpoints
-     - `/api/yfinance/api/*` - Market data endpoints
-     - `/health` - Unified health check
-
 **Note:**
 - Planning evaluation is built into the main trader application using an in-process worker pool (no separate microservice).
 - Tradernet API is now integrated directly via Go SDK embedded in the main application (no microservice needed).
+- All functionality has been migrated to Go - no Python microservices are used.
 
 ### Hardware
 
@@ -139,7 +113,6 @@ Note: Tradernet API is now integrated directly via Go SDK (no microservice)
 ### Prerequisites
 
 - Go 1.22+ (for building trader)
-- Python 3.10+ (for microservices)
 - Existing SQLite databases (7-database architecture)
 - Tradernet API credentials
 - Docker (optional, for containerized deployment)
@@ -194,36 +167,7 @@ curl -X PUT http://localhost:8001/api/settings/tradernet_api_secret \
 
 The `.env` file is no longer required. If you need to set infrastructure settings (ports, service URLs), you can create a `.env` file, but API credentials should be configured via the Settings UI.
 
-#### 4. Start Microservices
-
-**Option A: Docker Compose (Recommended)**
-
-```bash
-# Start all microservices
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
-
-# Stop services
-docker-compose down
-```
-
-**Option B: Manual Start**
-
-```bash
-
-# Unified microservice
-cd microservices/unified
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-export TRADERNET_API_KEY="your_key"  # Optional, can be passed via headers
-export TRADERNET_API_SECRET="your_secret"  # Optional, can be passed via headers
-uvicorn app.main:app --host 0.0.0.0 --port 9000
-```
-
-#### 5. Run Main Application
+#### 4. Run Main Application
 
 ```bash
 cd trader
@@ -236,85 +180,8 @@ cd trader
 # Check main app health
 curl http://localhost:8001/health
 
-# Check unified microservice
-curl http://localhost:9000/health
-
 # Get portfolio summary
 curl http://localhost:8001/api/portfolio/summary
-```
-
----
-
-## Microservices
-
-### unified (Unified Microservice)
-
-**Purpose:** Single Python service combining portfolio optimization, broker API gateway, and market data services.
-
-**Port:** 9000
-
-**Technology:** Python 3.11+ with FastAPI
-
-**Key Features:**
-- Portfolio optimization (PyPFOpt)
-- Trading execution and portfolio sync (Tradernet)
-- Market data and fundamentals (Yahoo Finance)
-
-**API Endpoints:**
-
-**Portfolio Optimization (`/api/pypfopt/*`):**
-- `POST /api/pypfopt/optimize/progressive` - Progressive optimization (used by planner)
-- `POST /api/pypfopt/optimize/mean-variance` - Classic Markowitz optimization
-- `POST /api/pypfopt/optimize/hrp` - Hierarchical Risk Parity
-- `POST /api/pypfopt/risk-model/covariance` - Calculate covariance matrix
-
-**Broker API (`/api/tradernet/api/*`):**
-- Trading execution, portfolio sync, market data via Tradernet SDK v2.0.0
-
-**Key Features:**
-- Order execution (BUY/SELL)
-- Portfolio position sync
-- Cash balance tracking
-- Trade history retrieval
-- Market data (quotes, historical OHLC)
-- Security lookup (symbol/ISIN resolution)
-
-**API Endpoints:**
-
-**Trading:**
-- `POST /api/trading/place-order` - Execute trade
-- `GET /api/trading/pending-orders` - Get pending orders
-- `GET /api/trading/pending-orders/{symbol}` - Check symbol pending orders
-- `GET /api/trading/pending-totals` - Get pending order totals by currency
-
-**Portfolio:**
-- `GET /api/portfolio/positions` - Get current positions
-- `GET /api/portfolio/cash-balances` - Get cash balances
-- `GET /api/portfolio/cash-total-eur` - Total cash in EUR
-
-**Transactions:**
-- `GET /api/transactions/cash-movements` - Withdrawal history
-- `GET /api/transactions/cash-flows` - All cash flows (dividends, fees)
-- `GET /api/transactions/executed-trades` - Trade history
-
-**Market Data:**
-- `GET /api/market-data/quote/{symbol}` - Get quote
-- `POST /api/market-data/quotes` - Batch quotes
-- `GET /api/market-data/historical/{symbol}` - Historical OHLC
-
-**Security Lookup:**
-- `GET /api/securities/find` - Find security by symbol/ISIN
-- `GET /api/securities/info/{symbol}` - Security metadata
-
-**Market Data (`/api/yfinance/api/*`):**
-- Current prices, historical data, fundamentals, analyst data via yfinance
-
-**Environment Variables:**
-```bash
-TRADERNET_API_KEY=your_api_key  # Optional, can be passed via headers
-TRADERNET_API_SECRET=your_api_secret  # Optional, can be passed via headers
-PORT=9000
-LOG_LEVEL=INFO
 ```
 
 ---
@@ -572,9 +439,6 @@ arduino-trader/
 ├── display/                  # Display system (LED matrix)
 │   ├── sketch/              # Arduino C++ sketch
 │   └── app/                 # Python display app (Arduino App Framework)
-├── microservices/           # Python microservices
-│   ├── pypfopt/            # Portfolio optimization (Python)
-│   └── tradernet/          # Broker API gateway (Python)
 ├── scripts/                 # Build & deployment scripts
 └── README.md                # This file
 ```
@@ -614,12 +478,6 @@ golangci-lint run
 # Build
 go build -o trader ./cmd/server
 ```
-
-#### Microservices
-
-Microservices are documented in their respective directories:
-- `microservices/pypfopt/`
-- `microservices/tradernet/`
 
 ### Code Guidelines
 
@@ -686,24 +544,10 @@ cd trader
 go test ./...
 ```
 
-**Microservices:**
-```bash
-# pypfopt
-cd microservices/pypfopt
-pytest
-
-# tradernet
-cd microservices/tradernet
-pytest
-```
-
 **Coverage:**
 ```bash
 # Go
 go test -cover ./...
-
-# Python
-pytest --cov=app tests/
 ```
 
 ---
@@ -722,17 +566,6 @@ GOOS=linux GOARCH=arm64 go build -o trader-arm64 ./cmd/server
 
 # Or use build script
 ./scripts/build.sh arm64
-```
-
-#### Microservices (Docker)
-
-```bash
-# Build all services
-docker-compose build
-
-# Build specific service
-docker build -t pypfopt:latest microservices/pypfopt
-docker build -t tradernet:latest microservices/tradernet
 ```
 
 ### Systemd Services
@@ -786,7 +619,7 @@ sudo systemctl enable docker
 **Deployment:**
 1. Stop existing services
 2. Deploy new binary
-3. Start microservices (docker-compose up -d)
+3. Start the trader service
 4. Start main application (systemctl start trader)
 5. Verify health endpoints
 6. Monitor logs for 24 hours
@@ -805,8 +638,6 @@ sudo systemctl enable docker
 # Main app
 curl http://localhost:8001/health
 
-# Microservices
-curl http://localhost:9000/health  # unified microservice
 ```
 
 **System Status:**
@@ -919,8 +750,6 @@ POST /api/settings/{key}
 # Data directory (contains all 7 databases)
 DATA_DIR=../data
 
-# Microservice URLs
-UNIFIED_SERVICE_URL=http://localhost:9000
 
 # Tradernet API (DEPRECATED - use Settings UI instead)
 TRADERNET_API_KEY=your_api_key

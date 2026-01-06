@@ -120,7 +120,6 @@ type UniverseHandlers struct {
 	historyDB               *HistoryDB
 	setupService            *SecuritySetupService
 	syncService             *SyncService
-	pythonURL               string
 	currencyExchangeService CurrencyExchangeServiceInterface
 }
 
@@ -135,7 +134,6 @@ func NewUniverseHandlers(
 	historyDB *HistoryDB,
 	setupService *SecuritySetupService,
 	syncService *SyncService,
-	pythonURL string,
 	currencyExchangeService CurrencyExchangeServiceInterface,
 	log zerolog.Logger,
 ) *UniverseHandlers {
@@ -149,7 +147,6 @@ func NewUniverseHandlers(
 		historyDB:               historyDB,
 		setupService:            setupService,
 		syncService:             syncService,
-		pythonURL:               pythonURL,
 		currencyExchangeService: currencyExchangeService,
 		log:                     log.With().Str("module", "universe_handlers").Logger(),
 	}

@@ -18,32 +18,24 @@ type DeploymentResult struct {
 
 // ServiceDeployment represents the deployment status of a single service
 type ServiceDeployment struct {
-	ServiceName string // "trader", "unified"
-	ServiceType string // "go", "docker"
+	ServiceName string // "trader"
+	ServiceType string // "go"
 	Success     bool
 	Error       string
 }
 
 // ChangeCategories categorizes what types of changes were detected
 type ChangeCategories struct {
-	MainApp          bool
-	DisplayApp       bool // Python display app (display/app/)
-	Frontend         bool
-	Sketch           bool
-	PyPFOpt          bool
-	PyPFOptDeps      bool
-	Tradernet        bool
-	TradernetDeps    bool
-	YahooFinance     bool
-	YahooFinanceDeps bool
-	Config           bool
+	MainApp    bool
+	DisplayApp bool // Python display app (display/app/)
+	Frontend   bool
+	Sketch     bool
+	Config     bool
 }
 
 // HasAnyChanges returns true if any category has changes
 func (c *ChangeCategories) HasAnyChanges() bool {
-	return c.MainApp || c.DisplayApp || c.Frontend || c.Sketch ||
-		c.PyPFOpt || c.PyPFOptDeps || c.Tradernet || c.TradernetDeps ||
-		c.YahooFinance || c.YahooFinanceDeps || c.Config
+	return c.MainApp || c.DisplayApp || c.Frontend || c.Sketch || c.Config
 }
 
 // GoServiceConfig holds configuration for a Go service

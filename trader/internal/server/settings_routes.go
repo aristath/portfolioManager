@@ -98,7 +98,6 @@ func (s *Server) setupSettingsRoutes(r chi.Router) {
 		historyDB,
 		setupService,
 		syncService,
-		s.cfg.PythonServiceURL,
 		currencyExchangeService,
 		s.log,
 	)

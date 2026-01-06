@@ -20,7 +20,6 @@ type DeploymentConfig struct {
 	Enabled                bool
 	TraderConfig           GoServiceConfig
 	DockerComposePath      string
-	MicroservicesEnabled   bool
 	LockTimeout            time.Duration
 	HealthCheckTimeout     time.Duration
 	HealthCheckMaxAttempts int
@@ -50,7 +49,6 @@ type Manager struct {
 	displayAppDeployer     *DisplayAppDeployer
 	serviceManager         *ServiceManager
 	dockerManager          *DockerManager
-	microDeployer          *MicroserviceDeployer
 	sketchDeployer         *SketchDeployer
 	githubArtifactDeployer *GitHubArtifactDeployer
 	artifactTracker        *ArtifactTracker
@@ -104,11 +102,6 @@ func NewManager(config *DeploymentConfig, version string, log zerolog.Logger) *M
 	dockerManager := NewDockerManager(
 		config.DockerComposePath,
 		&logAdapter{log: log.With().Str("component", "docker").Logger()},
-	)
-
-	microDeployer := NewMicroserviceDeployer(
-		dockerManager,
-		&logAdapter{log: log.With().Str("component", "microservices").Logger()},
 	)
 
 	sketchDeployer := NewSketchDeployer(
@@ -173,7 +166,6 @@ func NewManager(config *DeploymentConfig, version string, log zerolog.Logger) *M
 		),
 		serviceManager:         serviceManager,
 		dockerManager:          dockerManager,
-		microDeployer:          microDeployer,
 		sketchDeployer:         sketchDeployer,
 		githubArtifactDeployer: githubArtifactDeployer,
 		artifactTracker:        artifactTracker,
@@ -483,33 +475,6 @@ func (m *Manager) HardUpdate() (*DeploymentResult, error) {
 
 	wg.Wait()
 
-	// Deploy unified microservice (always, with rebuild)
-	if m.config.MicroservicesEnabled {
-		serviceName := "unified"
-		rebuildImage := true
-
-		deployment := ServiceDeployment{
-			ServiceName: serviceName,
-			ServiceType: "docker",
-			Success:     true,
-		}
-
-		if err := m.microDeployer.DeployMicroservice(serviceName, m.config.RepoDir, rebuildImage); err != nil {
-			deployment.Success = false
-			deployment.Error = err.Error()
-			deploymentErrors[serviceName] = err
-			m.log.Error().Err(err).Str("service", serviceName).Msg("Failed to deploy unified microservice")
-		} else {
-			// Health check
-			healthURL := m.microDeployer.GetMicroserviceHealthURL(serviceName)
-			if err := m.microDeployer.CheckMicroserviceHealth(serviceName, m.config.RepoDir, healthURL); err != nil {
-				m.log.Warn().Err(err).Str("service", serviceName).Msg("Health check failed")
-			}
-		}
-
-		result.ServicesDeployed = append(result.ServicesDeployed, deployment)
-	}
-
 	// Deploy frontend (always)
 	if err := m.frontendDeployer.DeployFrontend(m.config.RepoDir, m.config.DeployDir); err != nil {
 		m.log.Error().Err(err).Msg("Failed to deploy frontend")
@@ -534,7 +499,6 @@ func (m *Manager) HardUpdate() (*DeploymentResult, error) {
 	}
 
 	// Note: Go services (trader) are already restarted by deployGoService above
-	// Python microservices are already restarted by DeployMicroservice above
 	// No additional restart needed here
 
 	// Mark as deployed
@@ -599,39 +563,6 @@ func (m *Manager) deployServices(categories *ChangeCategories, result *Deploymen
 	// No longer deploying Go display-bridge binary
 
 	wg.Wait()
-
-	// Deploy unified microservice (sequential to avoid resource conflicts)
-	if m.config.MicroservicesEnabled {
-		// Deploy unified service if any Python microservice code changed
-		shouldDeploy := categories.PyPFOpt || categories.PyPFOptDeps ||
-			categories.Tradernet || categories.TradernetDeps ||
-			categories.YahooFinance || categories.YahooFinanceDeps
-
-		if shouldDeploy {
-			serviceName := "unified"
-			rebuildImage := categories.PyPFOptDeps || categories.TradernetDeps || categories.YahooFinanceDeps
-
-			deployment := ServiceDeployment{
-				ServiceName: serviceName,
-				ServiceType: "docker",
-				Success:     true,
-			}
-
-			if err := m.microDeployer.DeployMicroservice(serviceName, m.config.RepoDir, rebuildImage); err != nil {
-				deployment.Success = false
-				deployment.Error = err.Error()
-				errors[serviceName] = err
-			} else {
-				// Health check
-				healthURL := m.microDeployer.GetMicroserviceHealthURL(serviceName)
-				if err := m.microDeployer.CheckMicroserviceHealth(serviceName, m.config.RepoDir, healthURL); err != nil {
-					m.log.Warn().Err(err).Str("service", serviceName).Msg("Health check failed")
-				}
-			}
-
-			result.ServicesDeployed = append(result.ServicesDeployed, deployment)
-		}
-	}
 
 	return errors
 }

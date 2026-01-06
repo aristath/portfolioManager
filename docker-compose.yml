@@ -1,22 +1,4 @@
 version: '3.8'
 
-services:
-  pypfopt:
-    build:
-      context: ./microservices/pypfopt
-      dockerfile: Dockerfile
-    container_name: pypfopt-service
-    ports:
-      - "9001:9001"
-    environment:
-      - LOG_LEVEL=INFO
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9001/health')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 5s
-
-# Note: tradernet is now deployed as a native systemd service (not Docker)
-# See tradernet.service - deployment is handled by the Go trader service
+# Note: All Python microservices have been migrated to Go
+# This file is kept for reference but no services are configured

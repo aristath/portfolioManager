@@ -338,7 +338,6 @@ func (s *Server) setupSystemRoutes(r chi.Router) {
 		historyDB,
 		setupService1,
 		syncService1,
-		s.cfg.PythonServiceURL,
 		currencyExchangeService1,
 		s.log,
 	)
@@ -416,7 +415,7 @@ func (s *Server) setupAllocationRoutes(r chi.Router) {
 	// Create adapter to break circular dependency: allocation → portfolio
 	portfolioSummaryAdapter := portfolio.NewPortfolioSummaryAdapter(portfolioService)
 
-	handler := allocation.NewHandler(allocRepo, groupingRepo, alertService, portfolioSummaryAdapter, s.log, s.cfg.PythonServiceURL)
+	handler := allocation.NewHandler(allocRepo, groupingRepo, alertService, portfolioSummaryAdapter, s.log)
 
 	// Allocation routes (faithful translation of Python routes)
 	r.Route("/allocation", func(r chi.Router) {
@@ -552,7 +551,6 @@ func (s *Server) setupUniverseRoutes(r chi.Router) {
 		historyDB,
 		setupService,
 		syncService,
-		s.cfg.PythonServiceURL,
 		currencyExchangeService,
 		s.log,
 	)
