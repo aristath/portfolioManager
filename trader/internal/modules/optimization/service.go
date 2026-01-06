@@ -184,20 +184,48 @@ func (os *OptimizerService) Optimize(state PortfolioState, settings Settings) (*
 	os.log.Info().Msg("Running HRP optimization")
 	hrpCov := covMatrix
 	hrpCorrelations := correlations
-	regimeCov, _, regimeCorrs, regimeErr := os.riskBuilder.BuildRegimeAwareCovarianceMatrix(
+	// Regime-aware + multi-scale covariance for HRP.
+	//
+	// Long horizon: DefaultLookbackDays (~1y)
+	// Short horizon: 30d
+	regimeLongCov, _, _, errLong := os.riskBuilder.BuildRegimeAwareCovarianceMatrix(
 		symbols,
 		DefaultLookbackDays,
 		regimeScore,
 		RegimeAwareRiskOptions{},
 	)
-	if regimeErr == nil {
-		hrpCov = regimeCov
-		hrpCorrelations = regimeCorrs
+	if errLong != nil {
+		os.log.Warn().Err(errLong).Msg("Regime-aware covariance unavailable, falling back to standard covariance for HRP")
 	} else {
-		os.log.Warn().Err(regimeErr).Msg("Regime-aware covariance unavailable, falling back to standard covariance for HRP")
+		hrpCov = regimeLongCov
+
+		// Try building short-horizon regime-aware covariance and combine if available.
+		regimeShortCov, _, _, errShort := os.riskBuilder.BuildRegimeAwareCovarianceMatrix(
+			symbols,
+			30,
+			regimeScore,
+			RegimeAwareRiskOptions{},
+		)
+		if errShort != nil {
+			os.log.Warn().Err(errShort).Msg("Short-horizon regime covariance unavailable; using long-horizon regime covariance only")
+		} else {
+			wShort := multiScaleShortWeight(regimeScore)
+			combined, err := blendCovariances(regimeShortCov, regimeLongCov, wShort)
+			if err != nil {
+				os.log.Warn().Err(err).Msg("Failed to blend multi-scale covariances; using long-horizon regime covariance only")
+			} else {
+				hrpCov = combined
+				os.log.Info().
+					Float64("multi_scale_weight_short", wShort).
+					Float64("multi_scale_weight_long", 1.0-wShort).
+					Msg("Using multi-scale regime-aware covariance for HRP")
+			}
+		}
+
+		hrpCorrelations = os.riskBuilder.getCorrelations(hrpCov, symbols, HighCorrelationThreshold)
 	}
 
-	hrpWeights, hrpErr := os.runHRP(hrpCov, symbols)
+	hrpWeights, hrpErr := os.runHRP(hrpCov, symbols, regimeScore)
 	if hrpErr != nil {
 		os.log.Warn().Err(hrpErr).Msg("HRP optimization failed")
 	}
@@ -358,22 +386,21 @@ func (os *OptimizerService) runMeanVariance(
 }
 
 // runHRP runs Hierarchical Risk Parity optimization using native Go implementation.
-func (os *OptimizerService) runHRP(
-	covMatrix [][]float64,
-	symbols []string,
-) (map[string]float64, error) {
+func (os *OptimizerService) runHRP(covMatrix [][]float64, symbols []string, regimeScore float64) (map[string]float64, error) {
 	if len(symbols) < 2 {
 		return nil, fmt.Errorf("HRP needs at least 2 symbols, got %d", len(symbols))
 	}
 
 	// Call native HRP optimizer
-	weights, err := os.hrpOptimizer.Optimize(covMatrix, symbols)
+	opts := HRPOptions{Linkage: hrpLinkageForRegime(regimeScore)}
+	weights, err := os.hrpOptimizer.OptimizeWithOptions(covMatrix, symbols, opts)
 	if err != nil {
 		return nil, fmt.Errorf("HRP optimization failed: %w", err)
 	}
 
 	os.log.Info().
 		Int("num_symbols", len(weights)).
+		Str("hrp_linkage", string(opts.Linkage)).
 		Msg("HRP optimization succeeded")
 
 	return weights, nil

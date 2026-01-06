@@ -137,3 +137,38 @@ func TestHRPOptimizer_Deterministic(t *testing.T) {
 		assert.InDelta(t, w1[s], w2[s], 1e-12, "weights should be deterministic")
 	}
 }
+
+func TestHRPOptimizer_ClusteringDiffersByLinkage(t *testing.T) {
+	// Construct a distance matrix that produces "chaining" under single linkage:
+	// A-B close, B-C close, C-D close, but A-C/A-D/B-D far.
+	//
+	// Single linkage tends to chain into {A,B,C} + {D}
+	// Complete linkage tends to form {A,B} + {C,D}
+	dist := [][]float64{
+		{0.0, 0.1, 0.9, 0.9}, // A
+		{0.1, 0.0, 0.1, 0.9}, // B
+		{0.9, 0.1, 0.0, 0.1}, // C
+		{0.9, 0.9, 0.1, 0.0}, // D
+	}
+
+	optimizer := NewHRPOptimizer()
+
+	rootSingle := optimizer.buildDendrogram(dist, hrpLinkageSingle)
+	require.NotNil(t, rootSingle)
+	require.NotNil(t, rootSingle.left)
+	require.NotNil(t, rootSingle.right)
+	assert.True(t,
+		(len(rootSingle.left.leaves) == 3 && len(rootSingle.right.leaves) == 1) ||
+			(len(rootSingle.left.leaves) == 1 && len(rootSingle.right.leaves) == 3),
+		"single linkage should chain into a 3+1 split at the root",
+	)
+
+	rootComplete := optimizer.buildDendrogram(dist, hrpLinkageComplete)
+	require.NotNil(t, rootComplete)
+	require.NotNil(t, rootComplete.left)
+	require.NotNil(t, rootComplete.right)
+	assert.True(t,
+		(len(rootComplete.left.leaves) == 2 && len(rootComplete.right.leaves) == 2),
+		"complete linkage should produce a 2+2 split at the root",
+	)
+}

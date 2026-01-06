@@ -7,6 +7,22 @@ import (
 	"github.com/aristath/arduino-trader/pkg/formulas"
 )
 
+type hrpLinkage string
+
+const (
+	hrpLinkageSingle   hrpLinkage = "single"
+	hrpLinkageComplete hrpLinkage = "complete"
+	hrpLinkageAverage  hrpLinkage = "average"
+)
+
+type HRPOptions struct {
+	Linkage hrpLinkage
+}
+
+func defaultHRPOptions() HRPOptions {
+	return HRPOptions{Linkage: hrpLinkageSingle}
+}
+
 // HRPOptimizer performs Hierarchical Risk Parity portfolio optimization.
 type HRPOptimizer struct{}
 
@@ -25,12 +41,20 @@ type hrpClusterNode struct {
 // Optimize solves the HRP optimization problem using a full HRP implementation:
 // 1) Correlation from covariance
 // 2) Distance: d_ij = sqrt(2 * (1 - ρ_ij))
-// 3) Hierarchical clustering (single linkage, deterministic tie-break)
+// 3) Hierarchical clustering (configurable linkage, deterministic tie-break)
 // 4) Quasi-diagonalization (leaf order from dendrogram)
 // 5) Recursive bisection allocation (cluster variance via IVP)
 func (hrp *HRPOptimizer) Optimize(
 	covMatrix [][]float64,
 	symbols []string,
+) (map[string]float64, error) {
+	return hrp.OptimizeWithOptions(covMatrix, symbols, defaultHRPOptions())
+}
+
+func (hrp *HRPOptimizer) OptimizeWithOptions(
+	covMatrix [][]float64,
+	symbols []string,
+	opts HRPOptions,
 ) (map[string]float64, error) {
 	if len(symbols) == 0 {
 		return nil, fmt.Errorf("no symbols provided")
@@ -57,7 +81,12 @@ func (hrp *HRPOptimizer) Optimize(
 
 	distMatrix := formulas.CorrelationToDistance(corrMatrix)
 
-	root := hrp.singleLinkageDendrogram(distMatrix)
+	linkage := opts.Linkage
+	if linkage == "" {
+		linkage = hrpLinkageSingle
+	}
+
+	root := hrp.buildDendrogram(distMatrix, linkage)
 	order := hrp.quasiDiagonalOrder(root)
 	if len(order) != len(symbols) {
 		return nil, fmt.Errorf("invalid HRP order length %d", len(order))
@@ -86,7 +115,7 @@ func (hrp *HRPOptimizer) Optimize(
 	return result, nil
 }
 
-func (hrp *HRPOptimizer) singleLinkageDendrogram(dist [][]float64) *hrpClusterNode {
+func (hrp *HRPOptimizer) buildDendrogram(dist [][]float64, linkage hrpLinkage) *hrpClusterNode {
 	n := len(dist)
 	clusters := make([]*hrpClusterNode, 0, n)
 	for i := 0; i < n; i++ {
@@ -102,11 +131,11 @@ func (hrp *HRPOptimizer) singleLinkageDendrogram(dist [][]float64) *hrpClusterNo
 	for len(clusters) > 1 {
 		bestI := 0
 		bestJ := 1
-		bestD := hrp.clusterDistanceSingleLinkage(dist, clusters[0], clusters[1])
+		bestD := hrp.clusterDistance(dist, clusters[0], clusters[1], linkage)
 
 		for i := 0; i < len(clusters); i++ {
 			for j := i + 1; j < len(clusters); j++ {
-				d := hrp.clusterDistanceSingleLinkage(dist, clusters[i], clusters[j])
+				d := hrp.clusterDistance(dist, clusters[i], clusters[j], linkage)
 				if d < bestD || (d == bestD && hrp.clusterPairLess(clusters[i], clusters[j], clusters[bestI], clusters[bestJ])) {
 					bestD = d
 					bestI = i
@@ -169,17 +198,48 @@ func (hrp *HRPOptimizer) clusterPairLess(a1, b1, a2, b2 *hrpClusterNode) bool {
 	return y1 < y2
 }
 
-func (hrp *HRPOptimizer) clusterDistanceSingleLinkage(dist [][]float64, a, b *hrpClusterNode) float64 {
-	best := math.Inf(1)
-	for _, i := range a.leaves {
-		for _, j := range b.leaves {
-			d := dist[i][j]
-			if d < best {
-				best = d
+func (hrp *HRPOptimizer) clusterDistance(dist [][]float64, a, b *hrpClusterNode, linkage hrpLinkage) float64 {
+	switch linkage {
+	case hrpLinkageComplete:
+		best := 0.0
+		first := true
+		for _, i := range a.leaves {
+			for _, j := range b.leaves {
+				d := dist[i][j]
+				if first || d > best {
+					best = d
+					first = false
+				}
 			}
 		}
+		return best
+	case hrpLinkageAverage:
+		sum := 0.0
+		count := 0
+		for _, i := range a.leaves {
+			for _, j := range b.leaves {
+				sum += dist[i][j]
+				count++
+			}
+		}
+		if count == 0 {
+			return math.Inf(1)
+		}
+		return sum / float64(count)
+	case hrpLinkageSingle:
+		fallthrough
+	default:
+		best := math.Inf(1)
+		for _, i := range a.leaves {
+			for _, j := range b.leaves {
+				d := dist[i][j]
+				if d < best {
+					best = d
+				}
+			}
+		}
+		return best
 	}
-	return best
 }
 
 func (hrp *HRPOptimizer) quasiDiagonalOrder(node *hrpClusterNode) []int {

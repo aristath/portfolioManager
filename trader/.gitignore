@@ -48,3 +48,4 @@ tmp/
 # Allow embedded.go to be committed, but ignore the copied directories
 pkg/embedded/frontend/
 pkg/embedded/display/
+trader-*
