@@ -52,6 +52,7 @@ trader/server
 trader/trader
 trader/trader-go
 trader/trader-go-arm64
+trader/trader-arm64
 display/bridge/bridge
 display/bridge/display-bridge
 

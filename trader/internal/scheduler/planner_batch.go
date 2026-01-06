@@ -169,6 +169,11 @@ func (j *PlannerBatchJob) Run() error {
 		}
 	}
 
+	// Add virtual test cash if in research mode
+	if err := j.addVirtualTestCash(cashBalances); err != nil {
+		j.log.Warn().Err(err).Msg("Failed to add virtual test cash, continuing without it")
+	}
+
 	// Get pending orders from Tradernet if available
 	pendingOrders := j.fetchPendingOrders()
 
@@ -713,6 +718,68 @@ func parseFloat(s string) (float64, error) {
 	var result float64
 	_, err := fmt.Sscanf(s, "%f", &result)
 	return result, err
+}
+
+// addVirtualTestCash adds virtual test cash to cash balances if in research mode
+// TEST currency is added to cashBalances map, and also added to EUR for AvailableCashEUR calculation
+func (j *PlannerBatchJob) addVirtualTestCash(cashBalances map[string]float64) error {
+	if j.configDB == nil {
+		return nil // No config DB available, skip
+	}
+
+	// Check trading mode - only add test cash in research mode
+	var tradingMode string
+	err := j.configDB.QueryRow("SELECT value FROM settings WHERE key = 'trading_mode'").Scan(&tradingMode)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// Default to research mode if not set
+			tradingMode = "research"
+		} else {
+			return fmt.Errorf("failed to get trading mode: %w", err)
+		}
+	}
+
+	// Only add test cash in research mode
+	if tradingMode != "research" {
+		return nil
+	}
+
+	// Get virtual_test_cash setting
+	var virtualTestCashStr string
+	err = j.configDB.QueryRow("SELECT value FROM settings WHERE key = 'virtual_test_cash'").Scan(&virtualTestCashStr)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// No virtual test cash set, that's fine
+			return nil
+		}
+		return fmt.Errorf("failed to get virtual_test_cash: %w", err)
+	}
+
+	// Parse virtual test cash amount
+	virtualTestCash, err := parseFloat(virtualTestCashStr)
+	if err != nil {
+		return fmt.Errorf("failed to parse virtual_test_cash: %w", err)
+	}
+
+	// Only add if > 0
+	if virtualTestCash > 0 {
+		// Add TEST currency to cashBalances
+		cashBalances["TEST"] = virtualTestCash
+
+		// Also add to EUR for AvailableCashEUR calculation (TEST is treated as EUR-equivalent)
+		// Get current EUR balance (default to 0 if not present)
+		currentEUR := cashBalances["EUR"]
+		cashBalances["EUR"] = currentEUR + virtualTestCash
+
+		j.log.Info().
+			Float64("virtual_test_cash", virtualTestCash).
+			Float64("eur_before", currentEUR).
+			Float64("eur_after", cashBalances["EUR"]).
+			Str("trading_mode", tradingMode).
+			Msg("Added virtual test cash to opportunity context")
+	}
+
+	return nil
 }
 
 // fetchCurrentPrices fetches current prices for all securities from Yahoo Finance
