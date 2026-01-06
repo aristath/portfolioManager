@@ -217,3 +217,127 @@ func makeReturns(value float64, count int) []float64 {
 	}
 	return returns
 }
+
+func TestMean(t *testing.T) {
+	tests := []struct {
+		name     string
+		data     []float64
+		expected float64
+	}{
+		{"empty", []float64{}, 0.0},
+		{"single value", []float64{5.0}, 5.0},
+		{"multiple values", []float64{1.0, 2.0, 3.0, 4.0, 5.0}, 3.0},
+		{"negative values", []float64{-1.0, -2.0, -3.0}, -2.0},
+		{"mixed values", []float64{-2.0, 0.0, 2.0}, 0.0},
+		{"decimal values", []float64{1.5, 2.5, 3.5}, 2.5},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Mean(tt.data)
+			if math.Abs(result-tt.expected) > 0.0001 {
+				t.Errorf("Mean() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestStdDev(t *testing.T) {
+	tests := []struct {
+		name      string
+		data      []float64
+		expected  float64
+		tolerance float64
+	}{
+		{"empty", []float64{}, 0.0, 0.0},
+		{"single value", []float64{5.0}, 0.0, 0.0},
+		{"constant values", []float64{5.0, 5.0, 5.0}, 0.0, 0.0},
+		{"two values", []float64{1.0, 3.0}, 1.4142, 0.01},                         // Sample std dev: sqrt(((1-2)^2 + (3-2)^2) / 1) = sqrt(2) // Sample variance: ((1-2)^2 + (3-2)^2) / 1 = 2
+		{"standard set", []float64{1.0, 2.0, 3.0, 4.0, 5.0}, 1.5811, 0.01},        // Sample std dev: sqrt(sum((x-mean)^2)/(n-1))
+		{"different values", []float64{10.0, 12.0, 23.0, 23.0, 16.0}, 6.058, 0.1}, // Sample std dev for mean=16.8: sqrt(36.7) ≈ 6.058
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := StdDev(tt.data)
+			if math.Abs(result-tt.expected) > tt.tolerance {
+				t.Errorf("StdDev() = %v, want %v (±%v)", result, tt.expected, tt.tolerance)
+			}
+		})
+	}
+}
+
+func TestVariance(t *testing.T) {
+	tests := []struct {
+		name      string
+		data      []float64
+		expected  float64
+		tolerance float64
+	}{
+		{"empty", []float64{}, 0.0, 0.0},
+		{"single value", []float64{5.0}, 0.0, 0.0},
+		{"constant values", []float64{5.0, 5.0, 5.0}, 0.0, 0.0},
+		{"two values", []float64{1.0, 3.0}, 2.0, 0.01},                  // Sample variance: ((1-2)^2 + (3-2)^2) / 1 = 2
+		{"standard set", []float64{1.0, 2.0, 3.0, 4.0, 5.0}, 2.5, 0.01}, // Sample variance: sum((x-3)^2)/(n-1) = 10/4 = 2.5
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Variance(tt.data)
+			if math.Abs(result-tt.expected) > tt.tolerance {
+				t.Errorf("Variance() = %v, want %v (±%v)", result, tt.expected, tt.tolerance)
+			}
+		})
+	}
+}
+
+func TestCorrelation(t *testing.T) {
+	tests := []struct {
+		name      string
+		x         []float64
+		y         []float64
+		expected  float64
+		tolerance float64
+	}{
+		{"empty", []float64{}, []float64{}, 0.0, 0.0},
+		{"different lengths", []float64{1.0}, []float64{1.0, 2.0}, 0.0, 0.0},
+		{"perfect positive", []float64{1.0, 2.0, 3.0}, []float64{2.0, 4.0, 6.0}, 1.0, 0.01},
+		{"perfect negative", []float64{1.0, 2.0, 3.0}, []float64{6.0, 4.0, 2.0}, -1.0, 0.01},
+		{"no correlation", []float64{1.0, 2.0, 3.0, 4.0}, []float64{4.0, 1.0, 3.0, 2.0}, 0.0, 0.5},
+		{"same values", []float64{1.0, 2.0, 3.0}, []float64{1.0, 2.0, 3.0}, 1.0, 0.01},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Correlation(tt.x, tt.y)
+			if math.Abs(result-tt.expected) > tt.tolerance {
+				t.Errorf("Correlation() = %v, want %v (±%v)", result, tt.expected, tt.tolerance)
+			}
+		})
+	}
+}
+
+func TestCovariance(t *testing.T) {
+	tests := []struct {
+		name      string
+		x         []float64
+		y         []float64
+		expected  float64
+		tolerance float64
+	}{
+		{"empty", []float64{}, []float64{}, 0.0, 0.0},
+		{"different lengths", []float64{1.0}, []float64{1.0, 2.0}, 0.0, 0.0},
+		{"positive covariance", []float64{1.0, 2.0, 3.0}, []float64{2.0, 4.0, 6.0}, 2.0, 0.1},
+		{"negative covariance", []float64{1.0, 2.0, 3.0}, []float64{6.0, 4.0, 2.0}, -2.0, 0.1},
+		{"zero covariance", []float64{1.0, 2.0, 3.0}, []float64{3.0, 3.0, 3.0}, 0.0, 0.01},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Covariance(tt.x, tt.y)
+			if math.Abs(result-tt.expected) > tt.tolerance {
+				t.Errorf("Covariance() = %v, want %v (±%v)", result, tt.expected, tt.tolerance)
+			}
+		})
+	}
+}
