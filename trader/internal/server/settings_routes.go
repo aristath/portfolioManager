@@ -25,9 +25,8 @@ func (s *Server) setupSettingsRoutes(r chi.Router) {
 	// Initialize settings service
 	settingsService := settings.NewService(settingsRepo, s.log)
 
-	// Initialize Tradernet client for onboarding
-	tradernetClient := tradernet.NewClient(s.cfg.UnifiedServiceURL, s.log)
-	tradernetClient.SetCredentials(s.cfg.TradernetAPIKey, s.cfg.TradernetAPISecret)
+	// Initialize Tradernet SDK client for onboarding
+	tradernetClient := tradernet.NewClient(s.cfg.TradernetAPIKey, s.cfg.TradernetAPISecret, s.log)
 
 	// Initialize currency exchange service for multi-currency cash handling
 	currencyExchangeService := services.NewCurrencyExchangeService(tradernetClient, s.log)

@@ -304,8 +304,7 @@ func registerJobs(sched *scheduler.Scheduler, universeDB, configDB, ledgerDB, po
 	dividendRepo := dividends.NewDividendRepository(ledgerDB.Conn(), log)
 
 	// Clients
-	tradernetClient := tradernet.NewClient(cfg.UnifiedServiceURL, log)
-	tradernetClient.SetCredentials(cfg.TradernetAPIKey, cfg.TradernetAPISecret)
+	tradernetClient := tradernet.NewClient(cfg.TradernetAPIKey, cfg.TradernetAPISecret, log)
 	// Use native Go Yahoo Finance client
 	yahooClient := yahoo.NewNativeClient(log)
 	log.Info().Msg("Using native Go Yahoo Finance client")

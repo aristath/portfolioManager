@@ -1,27 +1,24 @@
 package tradernet
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 	"time"
 
 	"github.com/rs/zerolog"
+
+	"github.com/aristath/arduino-trader/internal/clients/tradernet/sdk"
 )
 
-// Client for Tradernet microservice
+// Client for Tradernet API (using SDK directly)
 type Client struct {
-	baseURL   string
-	client    *http.Client
+	sdkClient SDKClient
 	log       zerolog.Logger
 	apiKey    string
 	apiSecret string
 }
 
-// ServiceResponse is the standard response format
+// ServiceResponse is the standard response format (kept for backward compatibility)
 type ServiceResponse struct {
 	Success   bool            `json:"success"`
 	Data      json.RawMessage `json:"data"`
@@ -29,127 +26,35 @@ type ServiceResponse struct {
 	Timestamp string          `json:"timestamp"`
 }
 
-// NewClient creates a new Tradernet microservice client
-func NewClient(baseURL string, log zerolog.Logger) *Client {
+// NewClient creates a new Tradernet client using SDK
+// Always creates an SDK client, even with empty credentials (SDK will validate and return errors)
+func NewClient(apiKey, apiSecret string, log zerolog.Logger) *Client {
+	// Always create SDK client - it will validate credentials and return errors if invalid
+	sdkClient := sdk.NewClient(apiKey, apiSecret, log)
+
 	return &Client{
-		baseURL: baseURL,
-		client: &http.Client{
-			Timeout: 30 * time.Second,
-		},
-		log: log.With().Str("client", "tradernet").Logger(),
+		sdkClient: sdkClient,
+		log:       log.With().Str("client", "tradernet").Logger(),
+		apiKey:    apiKey,
+		apiSecret: apiSecret,
+	}
+}
+
+// NewClientWithSDK creates a new Tradernet client with a provided SDK client (for testing)
+func NewClientWithSDK(sdkClient SDKClient, log zerolog.Logger) *Client {
+	return &Client{
+		sdkClient: sdkClient,
+		log:       log.With().Str("client", "tradernet").Logger(),
 	}
 }
 
 // SetCredentials sets the API credentials for the client
+// This will recreate the SDK client with new credentials
 func (c *Client) SetCredentials(apiKey, apiSecret string) {
 	c.apiKey = apiKey
 	c.apiSecret = apiSecret
-}
-
-// post makes a POST request to the microservice
-func (c *Client) post(endpoint string, request interface{}) (*ServiceResponse, error) {
-	body, err := json.Marshal(request)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	url := c.baseURL + endpoint
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	// Add credentials to headers if available
-	if c.apiKey != "" {
-		req.Header.Set("X-Tradernet-API-Key", c.apiKey)
-	}
-	if c.apiSecret != "" {
-		req.Header.Set("X-Tradernet-API-Secret", c.apiSecret)
-	}
-
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to make request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	return c.parseResponse(resp)
-}
-
-// get makes a GET request to the microservice
-func (c *Client) get(endpoint string) (*ServiceResponse, error) {
-	url := c.baseURL + endpoint
-	c.log.Debug().Str("endpoint", endpoint).Str("url", url).Msg("Making GET request")
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// Add credentials to headers if available
-	hasCredentials := false
-	if c.apiKey != "" {
-		req.Header.Set("X-Tradernet-API-Key", c.apiKey)
-		hasCredentials = true
-	}
-	if c.apiSecret != "" {
-		req.Header.Set("X-Tradernet-API-Secret", c.apiSecret)
-		hasCredentials = true
-	}
-	c.log.Debug().Bool("has_credentials", hasCredentials).Msg("Request headers set")
-
-	c.log.Debug().Msg("Calling client.Do()")
-	resp, err := c.client.Do(req)
-	if err != nil {
-		c.log.Error().Err(err).Msg("client.Do() failed")
-		return nil, fmt.Errorf("failed to make request: %w", err)
-	}
-	c.log.Debug().Int("status_code", resp.StatusCode).Msg("Got response")
-	defer resp.Body.Close()
-
-	// Handle non-200 status codes before parsing
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		c.log.Error().
-			Int("status_code", resp.StatusCode).
-			Str("body", string(bodyBytes)).
-			Msg("Non-200 response from microservice")
-		return nil, fmt.Errorf("microservice returned status %d: %s", resp.StatusCode, string(bodyBytes))
-	}
-
-	return c.parseResponse(resp)
-}
-
-// parseResponse parses the service response
-func (c *Client) parseResponse(resp *http.Response) (*ServiceResponse, error) {
-	c.log.Debug().Msg("parseResponse: reading body")
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		c.log.Error().Err(err).Msg("parseResponse: ReadAll failed")
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-	c.log.Debug().Int("body_len", len(body)).Msg("parseResponse: body read, unmarshaling")
-
-	var result ServiceResponse
-	if err := json.Unmarshal(body, &result); err != nil {
-		previewLen := 100
-		if len(body) < previewLen {
-			previewLen = len(body)
-		}
-		c.log.Error().Err(err).Str("body_preview", string(body[:previewLen])).Msg("parseResponse: Unmarshal failed")
-		return nil, fmt.Errorf("failed to parse response: %w", err)
-	}
-	c.log.Debug().Bool("success", result.Success).Msg("parseResponse: unmarshaled")
-
-	if !result.Success {
-		errMsg := "unknown error"
-		if result.Error != nil {
-			errMsg = *result.Error
-		}
-		return &result, fmt.Errorf("microservice error: %s", errMsg)
-	}
-
-	return &result, nil
+	// Always recreate SDK client with new credentials (even if empty - SDK will validate)
+	c.sdkClient = sdk.NewClient(apiKey, apiSecret, c.log)
 }
 
 // PlaceOrderRequest is the request for placing an order
@@ -170,23 +75,36 @@ type OrderResult struct {
 
 // PlaceOrder executes a trade order
 func (c *Client) PlaceOrder(symbol, side string, quantity float64) (*OrderResult, error) {
-	req := PlaceOrderRequest{
-		Symbol:   symbol,
-		Side:     side,
-		Quantity: quantity,
+	if c.sdkClient == nil {
+		return nil, fmt.Errorf("SDK client not initialized")
 	}
 
-	resp, err := c.post("/api/tradernet/api/trading/place-order", req)
+	c.log.Debug().Str("symbol", symbol).Str("side", side).Float64("quantity", quantity).Msg("PlaceOrder: calling SDK")
+
+	quantityInt := int(quantity)
+	var result interface{}
+	var err error
+
+	if side == "BUY" {
+		result, err = c.sdkClient.Buy(symbol, quantityInt, 0.0, "day", false, nil)
+	} else if side == "SELL" {
+		result, err = c.sdkClient.Sell(symbol, quantityInt, 0.0, "day", false, nil)
+	} else {
+		return nil, fmt.Errorf("invalid side: %s (must be BUY or SELL)", side)
+	}
+
 	if err != nil {
-		return nil, err
+		c.log.Error().Err(err).Msg("PlaceOrder: SDK Buy/Sell failed")
+		return nil, fmt.Errorf("failed to place order: %w", err)
 	}
 
-	var result OrderResult
-	if err := json.Unmarshal(resp.Data, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse order result: %w", err)
+	orderResult, err := transformOrderResult(result, symbol, side, quantity)
+	if err != nil {
+		c.log.Error().Err(err).Msg("PlaceOrder: transformOrderResult failed")
+		return nil, fmt.Errorf("failed to transform order result: %w", err)
 	}
 
-	return &result, nil
+	return orderResult, nil
 }
 
 // Position represents a portfolio position
@@ -209,22 +127,25 @@ type PositionsResponse struct {
 
 // GetPortfolio gets current portfolio positions
 func (c *Client) GetPortfolio() ([]Position, error) {
-	c.log.Debug().Msg("GetPortfolio: calling c.get()")
-	resp, err := c.get("/api/tradernet/api/portfolio/positions")
+	if c.sdkClient == nil {
+		return nil, fmt.Errorf("SDK client not initialized")
+	}
+
+	c.log.Debug().Msg("GetPortfolio: calling SDK AccountSummary")
+	result, err := c.sdkClient.AccountSummary()
 	if err != nil {
-		c.log.Error().Err(err).Msg("GetPortfolio: c.get() failed")
-		return nil, err
+		c.log.Error().Err(err).Msg("GetPortfolio: SDK AccountSummary failed")
+		return nil, fmt.Errorf("failed to get account summary: %w", err)
 	}
-	c.log.Debug().Int("data_len", len(resp.Data)).Msg("GetPortfolio: got response, parsing")
 
-	var result PositionsResponse
-	if err := json.Unmarshal(resp.Data, &result); err != nil {
-		c.log.Error().Err(err).Msg("GetPortfolio: json.Unmarshal failed")
-		return nil, fmt.Errorf("failed to parse positions: %w", err)
+	positions, err := transformPositions(result)
+	if err != nil {
+		c.log.Error().Err(err).Msg("GetPortfolio: transformPositions failed")
+		return nil, fmt.Errorf("failed to transform positions: %w", err)
 	}
-	c.log.Debug().Int("positions_count", len(result.Positions)).Msg("GetPortfolio: successfully parsed")
 
-	return result.Positions, nil
+	c.log.Debug().Int("positions_count", len(positions)).Msg("GetPortfolio: successfully parsed")
+	return positions, nil
 }
 
 // CashBalance represents cash balance in a currency
@@ -240,17 +161,24 @@ type CashBalancesResponse struct {
 
 // GetCashBalances gets cash balances in all currencies
 func (c *Client) GetCashBalances() ([]CashBalance, error) {
-	resp, err := c.get("/api/tradernet/api/portfolio/cash-balances")
+	if c.sdkClient == nil {
+		return nil, fmt.Errorf("SDK client not initialized")
+	}
+
+	c.log.Debug().Msg("GetCashBalances: calling SDK AccountSummary")
+	result, err := c.sdkClient.AccountSummary()
 	if err != nil {
-		return nil, err
+		c.log.Error().Err(err).Msg("GetCashBalances: SDK AccountSummary failed")
+		return nil, fmt.Errorf("failed to get account summary: %w", err)
 	}
 
-	var result CashBalancesResponse
-	if err := json.Unmarshal(resp.Data, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse cash balances: %w", err)
+	balances, err := transformCashBalances(result)
+	if err != nil {
+		c.log.Error().Err(err).Msg("GetCashBalances: transformCashBalances failed")
+		return nil, fmt.Errorf("failed to transform cash balances: %w", err)
 	}
 
-	return result.Balances, nil
+	return balances, nil
 }
 
 // CashMovementsResponse is the response for GetCashMovements
@@ -262,17 +190,24 @@ type CashMovementsResponse struct {
 
 // GetCashMovements gets withdrawal history
 func (c *Client) GetCashMovements() (*CashMovementsResponse, error) {
-	resp, err := c.get("/api/tradernet/api/transactions/cash-movements")
+	if c.sdkClient == nil {
+		return nil, fmt.Errorf("SDK client not initialized")
+	}
+
+	c.log.Debug().Msg("GetCashMovements: calling SDK GetClientCpsHistory")
+	result, err := c.sdkClient.GetClientCpsHistory("", "", nil, nil, nil, nil, nil)
 	if err != nil {
-		return nil, err
+		c.log.Error().Err(err).Msg("GetCashMovements: SDK GetClientCpsHistory failed")
+		return nil, fmt.Errorf("failed to get cash movements: %w", err)
 	}
 
-	var result CashMovementsResponse
-	if err := json.Unmarshal(resp.Data, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse cash movements: %w", err)
+	response, err := transformCashMovements(result)
+	if err != nil {
+		c.log.Error().Err(err).Msg("GetCashMovements: transformCashMovements failed")
+		return nil, fmt.Errorf("failed to transform cash movements: %w", err)
 	}
 
-	return &result, nil
+	return response, nil
 }
 
 // SecurityInfo represents security lookup result
@@ -292,22 +227,25 @@ type FindSymbolResponse struct {
 
 // FindSymbol finds security by symbol or ISIN
 func (c *Client) FindSymbol(symbol string, exchange *string) ([]SecurityInfo, error) {
-	url := fmt.Sprintf("/api/tradernet/api/securities/find?symbol=%s", symbol)
-	if exchange != nil {
-		url += fmt.Sprintf("&exchange=%s", *exchange)
+	if c.sdkClient == nil {
+		return nil, fmt.Errorf("SDK client not initialized")
 	}
 
-	resp, err := c.get(url)
+	c.log.Debug().Str("symbol", symbol).Msg("FindSymbol: calling SDK FindSymbol")
+
+	result, err := c.sdkClient.FindSymbol(symbol, exchange)
 	if err != nil {
-		return nil, err
+		c.log.Error().Err(err).Msg("FindSymbol: SDK FindSymbol failed")
+		return nil, fmt.Errorf("failed to find symbol: %w", err)
 	}
 
-	var result FindSymbolResponse
-	if err := json.Unmarshal(resp.Data, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse find symbol result: %w", err)
+	securities, err := transformSecurityInfo(result)
+	if err != nil {
+		c.log.Error().Err(err).Msg("FindSymbol: transformSecurityInfo failed")
+		return nil, fmt.Errorf("failed to transform security info: %w", err)
 	}
 
-	return result.Found, nil
+	return securities, nil
 }
 
 // Trade represents an executed trade
@@ -327,18 +265,26 @@ type ExecutedTradesResponse struct {
 
 // GetExecutedTrades gets executed trade history
 func (c *Client) GetExecutedTrades(limit int) ([]Trade, error) {
-	url := fmt.Sprintf("/api/tradernet/api/transactions/executed-trades?limit=%d", limit)
-	resp, err := c.get(url)
+	if c.sdkClient == nil {
+		return nil, fmt.Errorf("SDK client not initialized")
+	}
+
+	c.log.Debug().Int("limit", limit).Msg("GetExecutedTrades: calling SDK GetTradesHistory")
+
+	limitPtr := &limit
+	result, err := c.sdkClient.GetTradesHistory("", "", nil, limitPtr, nil, nil)
 	if err != nil {
-		return nil, err
+		c.log.Error().Err(err).Msg("GetExecutedTrades: SDK GetTradesHistory failed")
+		return nil, fmt.Errorf("failed to get executed trades: %w", err)
 	}
 
-	var result ExecutedTradesResponse
-	if err := json.Unmarshal(resp.Data, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse executed trades: %w", err)
+	trades, err := transformTrades(result)
+	if err != nil {
+		c.log.Error().Err(err).Msg("GetExecutedTrades: transformTrades failed")
+		return nil, fmt.Errorf("failed to transform trades: %w", err)
 	}
 
-	return result.Trades, nil
+	return trades, nil
 }
 
 // CashFlowTransaction represents a cash flow transaction from Tradernet API
@@ -370,20 +316,27 @@ type CashFlowsResponse struct {
 // GetAllCashFlows fetches all cash flows from Tradernet API
 // Combines multiple sources: transaction history, corporate actions, fees
 func (c *Client) GetAllCashFlows(limit int) ([]CashFlowTransaction, error) {
-	url := fmt.Sprintf("/api/tradernet/api/transactions/cash-flows?limit=%d", limit)
-	resp, err := c.get(url)
+	if c.sdkClient == nil {
+		return nil, fmt.Errorf("SDK client not initialized")
+	}
+
+	c.log.Debug().Int("limit", limit).Msg("GetAllCashFlows: calling SDK GetClientCpsHistory")
+
+	limitPtr := &limit
+	result, err := c.sdkClient.GetClientCpsHistory("", "", nil, nil, limitPtr, nil, nil)
 	if err != nil {
-		c.log.Error().Err(err).Msg("Failed to fetch cash flows from Tradernet")
-		return nil, fmt.Errorf("failed to fetch cash flows: %w", err)
+		c.log.Error().Err(err).Msg("GetAllCashFlows: SDK GetClientCpsHistory failed")
+		return nil, fmt.Errorf("failed to get cash flows: %w", err)
 	}
 
-	var result CashFlowsResponse
-	if err := json.Unmarshal(resp.Data, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse cash flows: %w", err)
+	transactions, err := transformCashFlows(result)
+	if err != nil {
+		c.log.Error().Err(err).Msg("GetAllCashFlows: transformCashFlows failed")
+		return nil, fmt.Errorf("failed to transform cash flows: %w", err)
 	}
 
-	c.log.Info().Int("count", len(result.CashFlows)).Msg("Fetched cash flows from Tradernet")
-	return result.CashFlows, nil
+	c.log.Info().Int("count", len(transactions)).Msg("Fetched cash flows from Tradernet")
+	return transactions, nil
 }
 
 // HealthResponse represents the health check response from the microservice
@@ -401,114 +354,48 @@ type HealthCheckResult struct {
 	Timestamp string
 }
 
-// HealthCheck checks the health of the Tradernet microservice
-// The /health endpoint returns plain JSON, not the standard ServiceResponse format
+// HealthCheck checks the health of the Tradernet API using UserInfo()
 func (c *Client) HealthCheck() (*HealthCheckResult, error) {
-	url := c.baseURL + "/health"
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
+	if c.sdkClient == nil {
 		return &HealthCheckResult{
 			Connected: false,
 			Timestamp: time.Now().Format(time.RFC3339),
 		}, nil
 	}
 
-	// Add credentials to headers if available (for testing connection)
-	if c.apiKey != "" {
-		req.Header.Set("X-Tradernet-API-Key", c.apiKey)
-	}
-	if c.apiSecret != "" {
-		req.Header.Set("X-Tradernet-API-Secret", c.apiSecret)
-	}
+	c.log.Debug().Msg("HealthCheck: calling SDK UserInfo")
 
-	resp, err := c.client.Do(req)
+	_, err := c.sdkClient.UserInfo()
 	if err != nil {
-		c.log.Debug().Err(err).Msg("Failed to connect to Tradernet microservice health endpoint")
+		c.log.Debug().Err(err).Msg("HealthCheck: SDK UserInfo failed")
 		return &HealthCheckResult{
 			Connected: false,
 			Timestamp: time.Now().Format(time.RFC3339),
 		}, nil // Return result, not error - service unavailable means not connected
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		c.log.Debug().Int("status_code", resp.StatusCode).Msg("Tradernet microservice health check returned non-200 status")
-		return &HealthCheckResult{
-			Connected: false,
-			Timestamp: time.Now().Format(time.RFC3339),
-		}, nil
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		c.log.Debug().Err(err).Msg("Failed to read health check response")
-		return &HealthCheckResult{
-			Connected: false,
-			Timestamp: time.Now().Format(time.RFC3339),
-		}, nil
-	}
-
-	var healthResp HealthResponse
-	if err := json.Unmarshal(body, &healthResp); err != nil {
-		c.log.Debug().Err(err).Msg("Failed to parse health check response")
-		return &HealthCheckResult{
-			Connected: false,
-			Timestamp: time.Now().Format(time.RFC3339),
-		}, nil
-	}
 
 	return &HealthCheckResult{
-		Connected: healthResp.TradernetConnected,
-		Timestamp: healthResp.Timestamp,
+		Connected: true,
+		Timestamp: time.Now().Format(time.RFC3339),
 	}, nil
 }
 
-// IsConnected checks if the Tradernet microservice is reachable
+// IsConnected checks if the Tradernet API is reachable
 func (c *Client) IsConnected() bool {
-	// Try a simple health check endpoint
-	// Note: /health endpoint returns {"status": "healthy", ...} not standard ServiceResponse
-	url := c.baseURL + "/health"
-	req, err := http.NewRequest("GET", url, nil)
+	if c.sdkClient == nil {
+		c.log.Debug().Msg("IsConnected: SDK client is nil")
+		return false
+	}
+
+	c.log.Debug().Msg("IsConnected: calling SDK UserInfo")
+
+	_, err := c.sdkClient.UserInfo()
 	if err != nil {
-		c.log.Debug().Err(err).Msg("Failed to create health check request")
+		c.log.Debug().Err(err).Msg("IsConnected: SDK UserInfo failed")
 		return false
 	}
 
-	// Add credentials to headers if available
-	if c.apiKey != "" {
-		req.Header.Set("X-Tradernet-API-Key", c.apiKey)
-	}
-	if c.apiSecret != "" {
-		req.Header.Set("X-Tradernet-API-Secret", c.apiSecret)
-	}
-
-	resp, err := c.client.Do(req)
-	if err != nil {
-		c.log.Debug().Err(err).Msg("Tradernet microservice not connected")
-		return false
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		c.log.Debug().Int("status_code", resp.StatusCode).Msg("Tradernet microservice health check returned non-200 status")
-		return false
-	}
-
-	// Health endpoint returns {"status": "healthy", ...} format
-	// Use the same HealthResponse struct as HealthCheck() for consistency
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		c.log.Debug().Err(err).Msg("Failed to read health check response")
-		return false
-	}
-
-	var healthResp HealthResponse
-	if err := json.Unmarshal(body, &healthResp); err != nil {
-		c.log.Debug().Err(err).Msg("Failed to parse health check response")
-		return false
-	}
-
-	return healthResp.Status == "healthy"
+	return true
 }
 
 // Quote represents a security quote
@@ -528,20 +415,25 @@ type QuoteResponse struct {
 
 // GetQuote gets current quote for a symbol
 func (c *Client) GetQuote(symbol string) (*Quote, error) {
-	// URL-encode the symbol to handle special characters like slashes (e.g., "HKD/EUR")
-	encodedSymbol := url.PathEscape(symbol)
-	url := fmt.Sprintf("/api/tradernet/api/market-data/quote/%s", encodedSymbol)
-	resp, err := c.get(url)
+	if c.sdkClient == nil {
+		return nil, fmt.Errorf("SDK client not initialized")
+	}
+
+	c.log.Debug().Str("symbol", symbol).Msg("GetQuote: calling SDK GetQuotes")
+
+	result, err := c.sdkClient.GetQuotes([]string{symbol})
 	if err != nil {
-		return nil, err
+		c.log.Error().Err(err).Msg("GetQuote: SDK GetQuotes failed")
+		return nil, fmt.Errorf("failed to get quote: %w", err)
 	}
 
-	var result QuoteResponse
-	if err := json.Unmarshal(resp.Data, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse quote: %w", err)
+	quote, err := transformQuote(result, symbol)
+	if err != nil {
+		c.log.Error().Err(err).Msg("GetQuote: transformQuote failed")
+		return nil, fmt.Errorf("failed to transform quote: %w", err)
 	}
 
-	return &result.Quote, nil
+	return quote, nil
 }
 
 // PendingOrder represents a pending order in the broker
@@ -561,15 +453,22 @@ type PendingOrdersResponse struct {
 
 // GetPendingOrders retrieves all pending orders from the broker
 func (c *Client) GetPendingOrders() ([]PendingOrder, error) {
-	resp, err := c.get("/api/tradernet/api/trading/pending-orders")
+	if c.sdkClient == nil {
+		return nil, fmt.Errorf("SDK client not initialized")
+	}
+
+	c.log.Debug().Msg("GetPendingOrders: calling SDK GetPlaced")
+	result, err := c.sdkClient.GetPlaced(true)
 	if err != nil {
-		return nil, err
+		c.log.Error().Err(err).Msg("GetPendingOrders: SDK GetPlaced failed")
+		return nil, fmt.Errorf("failed to get pending orders: %w", err)
 	}
 
-	var result PendingOrdersResponse
-	if err := json.Unmarshal(resp.Data, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse pending orders: %w", err)
+	orders, err := transformPendingOrders(result)
+	if err != nil {
+		c.log.Error().Err(err).Msg("GetPendingOrders: transformPendingOrders failed")
+		return nil, fmt.Errorf("failed to transform pending orders: %w", err)
 	}
 
-	return result.Orders, nil
+	return orders, nil
 }

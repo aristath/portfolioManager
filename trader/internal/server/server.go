@@ -91,9 +91,8 @@ func New(cfg Config) *Server {
 	// Initialize system handlers early
 	dataDir := cfg.Config.DataDir
 
-	// Create Tradernet client for system handlers
-	tradernetClient := tradernet.NewClient(cfg.Config.UnifiedServiceURL, cfg.Log)
-	tradernetClient.SetCredentials(cfg.Config.TradernetAPIKey, cfg.Config.TradernetAPISecret)
+	// Create Tradernet SDK client for system handlers
+	tradernetClient := tradernet.NewClient(cfg.Config.TradernetAPIKey, cfg.Config.TradernetAPISecret, cfg.Log)
 
 	// Create currency exchange service for cash balance calculations
 	currencyExchangeService := services.NewCurrencyExchangeService(tradernetClient, cfg.Log)
@@ -296,8 +295,7 @@ func (s *Server) setupSystemRoutes(r chi.Router) {
 	historyDB := universe.NewHistoryDB(s.historyDB.Conn(), s.log)
 
 	// Tradernet client for symbol resolution and data fetching
-	tradernetClient := tradernet.NewClient(s.cfg.UnifiedServiceURL, s.log)
-	tradernetClient.SetCredentials(s.cfg.TradernetAPIKey, s.cfg.TradernetAPISecret)
+	tradernetClient := tradernet.NewClient(s.cfg.TradernetAPIKey, s.cfg.TradernetAPISecret, s.log)
 
 	// Create SecuritySetupService for adding securities (system routes)
 	symbolResolver1 := universe.NewSymbolResolver(tradernetClient, securityRepo, s.log)
@@ -396,8 +394,7 @@ func (s *Server) setupAllocationRoutes(r chi.Router) {
 
 	// Portfolio service (needed for allocation calculations)
 	positionRepo := portfolio.NewPositionRepository(s.portfolioDB.Conn(), s.universeDB.Conn(), s.log)
-	tradernetClient := tradernet.NewClient(s.cfg.UnifiedServiceURL, s.log)
-	tradernetClient.SetCredentials(s.cfg.TradernetAPIKey, s.cfg.TradernetAPISecret)
+	tradernetClient := tradernet.NewClient(s.cfg.TradernetAPIKey, s.cfg.TradernetAPISecret, s.log)
 
 	// Initialize currency exchange service for multi-currency cash handling
 	currencyExchangeService := services.NewCurrencyExchangeService(tradernetClient, s.log)
@@ -453,8 +450,7 @@ func (s *Server) setupPortfolioRoutes(r chi.Router) {
 	allocRepo := allocation.NewRepository(s.configDB.Conn(), s.log)
 
 	// Tradernet microservice client
-	tradernetClient := tradernet.NewClient(s.cfg.UnifiedServiceURL, s.log)
-	tradernetClient.SetCredentials(s.cfg.TradernetAPIKey, s.cfg.TradernetAPISecret)
+	tradernetClient := tradernet.NewClient(s.cfg.TradernetAPIKey, s.cfg.TradernetAPISecret, s.log)
 
 	// Initialize currency exchange service for multi-currency cash handling
 	currencyExchangeService := services.NewCurrencyExchangeService(tradernetClient, s.log)
@@ -510,8 +506,7 @@ func (s *Server) setupUniverseRoutes(r chi.Router) {
 	historyDB := universe.NewHistoryDB(s.historyDB.Conn(), s.log)
 
 	// Tradernet client for symbol resolution and data fetching
-	tradernetClient := tradernet.NewClient(s.cfg.UnifiedServiceURL, s.log)
-	tradernetClient.SetCredentials(s.cfg.TradernetAPIKey, s.cfg.TradernetAPISecret)
+	tradernetClient := tradernet.NewClient(s.cfg.TradernetAPIKey, s.cfg.TradernetAPISecret, s.log)
 
 	// Create SecuritySetupService for adding securities
 	symbolResolver := universe.NewSymbolResolver(tradernetClient, securityRepo, s.log)
@@ -617,8 +612,7 @@ func (s *Server) setupTradingRoutes(r chi.Router) {
 	positionRepo := portfolio.NewPositionRepository(s.portfolioDB.Conn(), s.universeDB.Conn(), s.log)
 
 	// Tradernet microservice client
-	tradernetClient := tradernet.NewClient(s.cfg.UnifiedServiceURL, s.log)
-	tradernetClient.SetCredentials(s.cfg.TradernetAPIKey, s.cfg.TradernetAPISecret)
+	tradernetClient := tradernet.NewClient(s.cfg.TradernetAPIKey, s.cfg.TradernetAPISecret, s.log)
 
 	// Initialize currency exchange service for multi-currency cash handling
 	currencyExchangeService := services.NewCurrencyExchangeService(tradernetClient, s.log)
@@ -737,8 +731,7 @@ func (s *Server) setupScoringRoutes(r chi.Router) {
 func (s *Server) setupOptimizationRoutes(r chi.Router) {
 	// Initialize shared clients
 	yahooClient := yahoo.NewNativeClient(s.log)
-	tradernetClient := tradernet.NewClient(s.cfg.UnifiedServiceURL, s.log)
-	tradernetClient.SetCredentials(s.cfg.TradernetAPIKey, s.cfg.TradernetAPISecret)
+	tradernetClient := tradernet.NewClient(s.cfg.TradernetAPIKey, s.cfg.TradernetAPISecret, s.log)
 	dividendRepo := dividends.NewDividendRepository(s.ledgerDB.Conn(), s.log)
 
 	// Initialize currency exchange service for multi-currency cash handling
@@ -796,8 +789,7 @@ func (s *Server) setupCashFlowsRoutes(r chi.Router) {
 	}
 
 	// Initialize Tradernet client and adapter
-	tradernetClient := tradernet.NewClient(s.cfg.UnifiedServiceURL, s.log)
-	tradernetClient.SetCredentials(s.cfg.TradernetAPIKey, s.cfg.TradernetAPISecret)
+	tradernetClient := tradernet.NewClient(s.cfg.TradernetAPIKey, s.cfg.TradernetAPISecret, s.log)
 	tradernetAdapter := cash_flows.NewTradernetAdapter(tradernetClient)
 
 	// Initialize deposit processor (uses CashManager)
@@ -852,8 +844,7 @@ func (s *Server) setupEvaluationRoutes(r chi.Router) {
 // setupRebalancingRoutes configures rebalancing module routes
 func (s *Server) setupRebalancingRoutes(r chi.Router) {
 	// Initialize clients
-	tradernetClient := tradernet.NewClient(s.cfg.UnifiedServiceURL, s.log)
-	tradernetClient.SetCredentials(s.cfg.TradernetAPIKey, s.cfg.TradernetAPISecret)
+	tradernetClient := tradernet.NewClient(s.cfg.TradernetAPIKey, s.cfg.TradernetAPISecret, s.log)
 	yahooClient := yahoo.NewNativeClient(s.log)
 
 	// Initialize portfolio service (needed for rebalancing)

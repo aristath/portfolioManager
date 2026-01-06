@@ -12,7 +12,7 @@ func TestCashConversion_AllEUR(t *testing.T) {
 	// Setup - create real CurrencyExchangeService with mock client
 	// Note: These tests may fail at runtime if the service requires connection
 	// but they will compile. Consider updating to use NewHandlers with proper mocks.
-	mockClient := tradernet.NewClient("", zerolog.Nop())
+	mockClient := tradernet.NewClient("", "", zerolog.Nop())
 	exchangeService := services.NewCurrencyExchangeService(mockClient, zerolog.Nop())
 
 	handler := &Handlers{
@@ -66,7 +66,7 @@ func TestCashConversion_MixedCurrencies(t *testing.T) {
 	// Setup - create real CurrencyExchangeService with mock client
 	// Note: These tests may fail at runtime if the service requires connection
 	// but they will compile. Consider updating to use NewHandlers with proper mocks.
-	mockClient := tradernet.NewClient("", zerolog.Nop())
+	mockClient := tradernet.NewClient("", "", zerolog.Nop())
 	exchangeService := services.NewCurrencyExchangeService(mockClient, zerolog.Nop())
 
 	handler := &Handlers{
@@ -121,7 +121,7 @@ func TestCashConversion_MixedCurrencies(t *testing.T) {
 
 func TestShortfallConversion_Mixed(t *testing.T) {
 	// Setup - create real CurrencyExchangeService with mock client
-	mockClient := tradernet.NewClient("", zerolog.Nop())
+	mockClient := tradernet.NewClient("", "", zerolog.Nop())
 	exchangeService := services.NewCurrencyExchangeService(mockClient, zerolog.Nop())
 
 	handler := &Handlers{
@@ -171,7 +171,7 @@ func TestShortfallConversion_Mixed(t *testing.T) {
 
 func TestShortfallConversion_FallbackRates(t *testing.T) {
 	// Setup - create real CurrencyExchangeService with mock client
-	mockClient := tradernet.NewClient("", zerolog.Nop())
+	mockClient := tradernet.NewClient("", "", zerolog.Nop())
 	exchangeService := services.NewCurrencyExchangeService(mockClient, zerolog.Nop())
 
 	handler := &Handlers{
@@ -221,7 +221,7 @@ func TestShortfallConversion_FallbackRates(t *testing.T) {
 
 func TestCashConversion_FallbackRates(t *testing.T) {
 	// Setup - create real CurrencyExchangeService with mock client
-	mockClient := tradernet.NewClient("", zerolog.Nop())
+	mockClient := tradernet.NewClient("", "", zerolog.Nop())
 	exchangeService := services.NewCurrencyExchangeService(mockClient, zerolog.Nop())
 
 	handler := &Handlers{

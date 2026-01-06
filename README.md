@@ -55,13 +55,13 @@ Arduino Trader is a production-ready autonomous trading system that manages a re
        │                              │
        │  • Portfolio Optimization    │
        │    (PyPFOpt)                 │
-       │  • Broker API Gateway        │
-       │    (Tradernet)               │
        │  • Market Data               │
        │    (Yahoo Finance)           │
        │                              │
        │  Port: 9000                  │
        └──────────────────────────────┘
+
+Note: Tradernet API is now integrated directly via Go SDK (no microservice)
 ```
 
 ### Design Principles
@@ -109,20 +109,20 @@ Arduino Trader is a production-ready autonomous trading system that manages a re
 
 ### Microservices
 
-1. **unified** (Python/FastAPI) - Unified microservice combining all Python services
+1. **unified** (Python/FastAPI) - Unified microservice combining Python services
    - Port: 9000
-   - Purpose: Portfolio optimization, broker API gateway, and market data
+   - Purpose: Portfolio optimization and market data
    - Libraries:
      - PyPortfolioOpt (portfolio optimization)
-     - Tradernet SDK v2.0.0 (trading execution)
      - yfinance (market data)
    - Routes:
      - `/api/pypfopt/*` - Portfolio optimization endpoints
-     - `/api/tradernet/api/*` - Broker API endpoints
      - `/api/yfinance/api/*` - Market data endpoints
      - `/health` - Unified health check
 
-**Note:** Planning evaluation is built into the main trader application using an in-process worker pool (no separate microservice).
+**Note:**
+- Planning evaluation is built into the main trader application using an in-process worker pool (no separate microservice).
+- Tradernet API is now integrated directly via Go SDK embedded in the main application (no microservice needed).
 
 ### Hardware
 
