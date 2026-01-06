@@ -16,7 +16,7 @@ from app.models.tradernet_models import (
     SecurityInfo,
     Trade,
 )
-from tradernet import TraderNetAPI
+from tradernet import Tradernet
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ class TradernetService:
 
     def __init__(self):
         """Initialize the Tradernet service."""
-        self._client: Optional[TraderNetAPI] = None
+        self._client: Optional[Tradernet] = None
         self._connected = False
 
     def connect(self) -> bool:
@@ -40,7 +40,7 @@ class TradernetService:
             return False
 
         try:
-            client = TraderNetAPI(
+            client = Tradernet(
                 settings.tradernet_api_key, settings.tradernet_api_secret
             )
             # Test connection
@@ -61,15 +61,15 @@ class TradernetService:
 
     def _get_client(
         self, api_key: Optional[str] = None, api_secret: Optional[str] = None
-    ) -> TraderNetAPI:
-        """Get a TraderNetAPI client with credentials.
+    ) -> Tradernet:
+        """Get a Tradernet client with credentials.
 
         Args:
             api_key: Optional API key (if not provided, uses settings)
             api_secret: Optional API secret (if not provided, uses settings)
 
         Returns:
-            TraderNetAPI client instance
+            Tradernet client instance
 
         Raises:
             ValueError: If credentials are not available
@@ -82,7 +82,7 @@ class TradernetService:
             raise ValueError("Tradernet API credentials not provided")
 
         # Create new client instance with credentials
-        return TraderNetAPI(key, secret)
+        return Tradernet(key, secret)
 
     # Trading operations
     def place_order(
