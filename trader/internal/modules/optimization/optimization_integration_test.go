@@ -75,7 +75,8 @@ func TestOptimizationPipeline(t *testing.T) {
 	for _, w := range mvWeights {
 		mvSum += w
 		assert.GreaterOrEqual(t, w, 0.0)
-		assert.LessOrEqual(t, w, 0.25)
+		// Use tolerance for upper bound due to numerical precision (especially with race detector)
+		assert.LessOrEqual(t, w, 0.25+1e-6, "weight should be within bounds (allowing for numerical precision)")
 	}
 	assert.InDelta(t, 1.0, mvSum, 1e-3, "MV weights should sum to 1")
 
