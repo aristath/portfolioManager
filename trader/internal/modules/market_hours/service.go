@@ -137,6 +137,7 @@ func (s *MarketHoursService) getHolidaysForYear(config *ExchangeConfig, year int
 }
 
 // isEarlyClose checks if a date/time is an early close day
+// Reserved for future use
 //
 //nolint:unused // Reserved for future use
 func (s *MarketHoursService) isEarlyClose(config *ExchangeConfig, t time.Time) bool {

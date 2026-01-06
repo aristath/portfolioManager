@@ -385,7 +385,7 @@ func (ss *SecurityScorer) GetScoreWeightsWithRegime(productType string, regimeSc
 	// Apply adaptive weights if service is available
 	if ss.adaptiveService != nil {
 		adaptiveWeights := ss.adaptiveService.CalculateAdaptiveWeights(regimeScore)
-		if adaptiveWeights != nil && len(adaptiveWeights) > 0 {
+		if len(adaptiveWeights) > 0 {
 			// Merge: use adaptive weights for common keys, keep base weights for others
 			result := make(map[string]float64)
 			for key, baseWeight := range baseWeights {
