@@ -37,6 +37,18 @@ jobs:
           # This allows embed directive to access all files without using .. paths
           # Must be done BEFORE go mod tidy so the embed directive can find the files
           mkdir -p pkg/embedded/frontend pkg/embedded/display
+          if [ ! -d "frontend/dist" ]; then
+            echo "ERROR: frontend/dist not found - frontend must be built and committed"
+            exit 1
+          fi
+          if [ ! -d "../display/app" ]; then
+            echo "ERROR: display/app not found"
+            exit 1
+          fi
+          if [ ! -d "../display/sketch" ]; then
+            echo "ERROR: display/sketch not found"
+            exit 1
+          fi
           cp -r frontend/dist pkg/embedded/frontend/
           cp -r ../display/app pkg/embedded/display/
           cp -r ../display/sketch pkg/embedded/display/
