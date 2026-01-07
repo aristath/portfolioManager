@@ -34,6 +34,14 @@ type OpportunityContext struct {
 	TargetReturn             float64            `json:"target_return,omitempty"`               // Target annual return (default: 0.11 = 11%)
 	TargetReturnThresholdPct float64            `json:"target_return_threshold_pct,omitempty"` // Threshold percentage (default: 0.80 = 80%)
 
+	// Value trap detection data (for quality checks when tags disabled)
+	OpportunityScores map[string]float64 `json:"opportunity_scores,omitempty"` // Group score for opportunity (0-1) by ISIN
+	PERatios          map[string]float64 `json:"pe_ratios,omitempty"`          // P/E ratios by ISIN (optional)
+	MarketAvgPE       float64            `json:"market_avg_pe,omitempty"`      // Market average P/E (single value)
+	MomentumScores    map[string]float64 `json:"momentum_scores,omitempty"`    // Momentum scores by ISIN (optional, derived from short-term)
+	Volatility        map[string]float64 `json:"volatility,omitempty"`         // Volatility by ISIN (optional)
+	RegimeScore       float64            `json:"regime_score,omitempty"`       // Current market regime score (single value, -1 to +1)
+
 	// Constraints
 	IneligibleSymbols map[string]bool `json:"ineligible_symbols"` // Can't sell these
 	RecentlySold      map[string]bool `json:"recently_sold"`      // Recently sold (cooldown)

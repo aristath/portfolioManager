@@ -21,6 +21,7 @@ import (
 	"github.com/aristath/portfolioManager/internal/modules/planning/planner"
 	"github.com/aristath/portfolioManager/internal/modules/planning/repository"
 	"github.com/aristath/portfolioManager/internal/modules/portfolio"
+	"github.com/aristath/portfolioManager/internal/modules/scoring"
 	scoringdomain "github.com/aristath/portfolioManager/internal/modules/scoring/domain"
 	"github.com/aristath/portfolioManager/internal/modules/sequences"
 	"github.com/aristath/portfolioManager/internal/modules/settings"
@@ -488,6 +489,9 @@ func (j *PlannerBatchJob) buildOpportunityContext(
 	longTermScores, fundamentalsScores := j.populateQualityScores(securities)
 	targetReturn, targetReturnThresholdPct := j.getTargetReturnSettings()
 
+	// Populate value trap detection data
+	valueTrapData := j.populateValueTrapData(securities)
+
 	return &planningdomain.OpportunityContext{
 		PortfolioContext:         portfolioCtx,
 		Positions:                domainPositions,
@@ -505,6 +509,12 @@ func (j *PlannerBatchJob) buildOpportunityContext(
 		FundamentalsScores:       fundamentalsScores,
 		TargetReturn:             targetReturn,
 		TargetReturnThresholdPct: targetReturnThresholdPct,
+		OpportunityScores:        valueTrapData.OpportunityScores,
+		PERatios:                 valueTrapData.PERatios,
+		MarketAvgPE:              valueTrapData.MarketAvgPE,
+		MomentumScores:           valueTrapData.MomentumScores,
+		Volatility:               valueTrapData.Volatility,
+		RegimeScore:              valueTrapData.RegimeScore,
 	}
 }
 
@@ -750,6 +760,147 @@ func (j *PlannerBatchJob) getTargetReturnSettings() (float64, float64) {
 		Float64("threshold_pct", thresholdPct).
 		Msg("Retrieved target return settings")
 	return targetReturn, thresholdPct
+}
+
+// valueTrapData holds all data needed for value trap detection
+type valueTrapData struct {
+	OpportunityScores map[string]float64
+	PERatios          map[string]float64
+	MarketAvgPE       float64
+	MomentumScores    map[string]float64
+	Volatility        map[string]float64
+	RegimeScore       float64
+}
+
+// populateValueTrapData populates all data needed for classical and quantum value trap detection
+// This includes opportunity scores, P/E ratios, momentum, volatility, and regime score
+func (j *PlannerBatchJob) populateValueTrapData(securities []universe.Security) valueTrapData {
+	data := valueTrapData{
+		OpportunityScores: make(map[string]float64),
+		PERatios:          make(map[string]float64),   // P/E ratios not stored in DB, leave empty for now
+		MarketAvgPE:       scoring.DefaultMarketAvgPE, // Use constant default
+		MomentumScores:    make(map[string]float64),
+		Volatility:        make(map[string]float64),
+		RegimeScore:       0.0, // Default to neutral
+	}
+
+	if j.portfolioDB == nil {
+		j.log.Debug().Msg("PortfolioDB not available, skipping value trap data population")
+		return data
+	}
+
+	// Build ISIN -> symbol map for securities
+	isinToSymbol := make(map[string]string)
+	isinList := make([]string, 0)
+	for _, sec := range securities {
+		if sec.ISIN != "" && sec.Symbol != "" {
+			isinToSymbol[sec.ISIN] = sec.Symbol
+			isinList = append(isinList, sec.ISIN)
+		}
+	}
+
+	if len(isinList) == 0 {
+		j.log.Debug().Msg("No ISINs available, skipping value trap data population")
+		return data
+	}
+
+	// Query scores table for opportunity scores, volatility, and drawdown (for momentum)
+	// Filter by ISIN list for efficiency
+	placeholders := strings.Repeat("?,", len(isinList))
+	placeholders = placeholders[:len(placeholders)-1] // Remove trailing comma
+
+	query := fmt.Sprintf(`
+		SELECT isin, opportunity_score, volatility, drawdown_score
+		FROM scores
+		WHERE isin IN (%s)
+	`, placeholders)
+
+	// Build args slice
+	args := make([]interface{}, len(isinList))
+	for i, isin := range isinList {
+		args[i] = isin
+	}
+
+	rows, err := j.portfolioDB.Query(query, args...)
+	if err != nil {
+		j.log.Warn().Err(err).Msg("Failed to query value trap data from scores table")
+		return data
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var isin string
+		var opportunityScore, volatility, drawdownScore sql.NullFloat64
+
+		if err := rows.Scan(&isin, &opportunityScore, &volatility, &drawdownScore); err != nil {
+			j.log.Warn().Err(err).Str("isin", isin).Msg("Failed to scan value trap data")
+			continue
+		}
+
+		symbol := isinToSymbol[isin]
+
+		// Store opportunity score (normalize to 0-1 range)
+		if opportunityScore.Valid {
+			normalized := math.Max(0.0, math.Min(1.0, opportunityScore.Float64))
+			data.OpportunityScores[isin] = normalized
+			data.OpportunityScores[symbol] = normalized // Also store by symbol for backward compatibility
+		}
+
+		// Store volatility
+		if volatility.Valid && volatility.Float64 > 0 {
+			data.Volatility[isin] = volatility.Float64
+			data.Volatility[symbol] = volatility.Float64
+		}
+
+		// Derive momentum from drawdown score
+		// drawdown_score stores raw max drawdown percentage (negative, e.g., -0.15 for 15% drawdown)
+		// Convert to momentum: small drawdown (close to 0) = positive momentum, large drawdown (very negative) = negative momentum
+		if drawdownScore.Valid {
+			// drawdown_score is negative (e.g., -0.15 for 15% drawdown)
+			// Normalize to [-1, 1] range: drawdown 0% → momentum +1, drawdown -50% → momentum -1
+			// Clamp drawdown to reasonable range [-1.0, 0.0] (0% to 100% drawdown)
+			rawDrawdown := math.Max(-1.0, math.Min(0.0, drawdownScore.Float64))
+			// Convert: momentum = 1 + drawdown (since drawdown is negative, this gives positive momentum for small drawdowns)
+			// Example: drawdown = -0.05 → momentum = 0.95 (good)
+			//          drawdown = -0.50 → momentum = 0.50 (neutral)
+			//          drawdown = -1.0 → momentum = 0.0 (bad, but we'll map to -1)
+			momentum := 1.0 + rawDrawdown // Maps [-1, 0] to [0, 1]
+			// Scale to [-1, 1] range: map [0, 1] to [-1, 1]
+			momentum = (momentum * 2.0) - 1.0                  // Maps [0, 1] to [-1, 1]
+			momentum = math.Max(-1.0, math.Min(1.0, momentum)) // Clamp to [-1, 1]
+			data.MomentumScores[isin] = momentum
+			data.MomentumScores[symbol] = momentum
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		j.log.Warn().Err(err).Msg("Error iterating value trap data")
+	}
+
+	// Get regime score from configDB
+	if j.configDB != nil {
+		var regimeScore sql.NullFloat64
+		err := j.configDB.QueryRow(`
+			SELECT smoothed_score FROM market_regime_history
+			ORDER BY id DESC LIMIT 1
+		`).Scan(&regimeScore)
+		if err == nil && regimeScore.Valid {
+			data.RegimeScore = regimeScore.Float64
+		} else if err != nil && err != sql.ErrNoRows {
+			j.log.Warn().Err(err).Msg("Failed to query regime score, using default 0.0")
+		}
+		// If ErrNoRows, keep default 0.0 (neutral)
+	}
+
+	j.log.Debug().
+		Int("opportunity_scores", len(data.OpportunityScores)).
+		Int("momentum_scores", len(data.MomentumScores)).
+		Int("volatility", len(data.Volatility)).
+		Float64("market_avg_pe", data.MarketAvgPE).
+		Float64("regime_score", data.RegimeScore).
+		Msg("Populated value trap detection data")
+
+	return data
 }
 
 // parseFloat parses a string to float64, returns error if invalid

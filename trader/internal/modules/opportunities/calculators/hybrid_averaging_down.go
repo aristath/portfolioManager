@@ -147,37 +147,67 @@ func (c *HybridAveragingDownCalculator) Calculate(
 
 		// Get tags for this security
 		securityTags, err := c.securityRepo.GetTagsForSecurity(position.Symbol)
-		if err != nil {
-			// Log but continue - tags are optional
-			c.log.Debug().
-				Str("symbol", position.Symbol).
-				Err(err).
-				Msg("Failed to get tags for security")
-			securityTags = []string{}
-		}
+		useTagChecks := err == nil && config != nil && config.EnableTagFiltering && len(securityTags) > 0
 
-		// CRITICAL: Exclude value traps (classical or ensemble)
-		if contains(securityTags, "value-trap") || contains(securityTags, "ensemble-value-trap") {
-			c.log.Debug().
-				Str("symbol", position.Symbol).
-				Msg("Skipping value trap (ensemble detection)")
-			continue
-		}
+		if useTagChecks {
+			// Use tag-based checks (when tags are enabled)
+			// CRITICAL: Exclude value traps (classical or ensemble)
+			if contains(securityTags, "value-trap") || contains(securityTags, "ensemble-value-trap") {
+				c.log.Debug().
+					Str("symbol", position.Symbol).
+					Msg("Skipping value trap (ensemble detection)")
+				continue
+			}
 
-		// CRITICAL: Skip securities below absolute minimum return (hard filter from tags)
-		if contains(securityTags, "below-minimum-return") {
-			c.log.Debug().
-				Str("symbol", position.Symbol).
-				Msg("Skipping - below absolute minimum return (tag-based filter)")
-			continue
-		}
+			// CRITICAL: Skip securities below absolute minimum return (hard filter from tags)
+			if contains(securityTags, "below-minimum-return") {
+				c.log.Debug().
+					Str("symbol", position.Symbol).
+					Msg("Skipping - below absolute minimum return (tag-based filter)")
+				continue
+			}
 
-		// CRITICAL: Require quality gate pass
-		if !contains(securityTags, "quality-gate-pass") {
-			c.log.Debug().
-				Str("symbol", position.Symbol).
-				Msg("Skipping - quality gate failed")
-			continue
+			// CRITICAL: Require quality gate pass
+			if !contains(securityTags, "quality-gate-pass") {
+				c.log.Debug().
+					Str("symbol", position.Symbol).
+					Msg("Skipping - quality gate failed")
+				continue
+			}
+		} else {
+			// Use score-based checks (when tags are disabled or unavailable)
+			// For averaging down, we're already in a position, so isNewPosition = false
+			qualityCheck := CheckQualityGates(ctx, position.Symbol, false, config)
+
+			if qualityCheck.IsEnsembleValueTrap {
+				c.log.Debug().
+					Str("symbol", position.Symbol).
+					Bool("classical", qualityCheck.IsValueTrap).
+					Bool("quantum", qualityCheck.IsQuantumValueTrap).
+					Float64("quantum_prob", qualityCheck.QuantumValueTrapProb).
+					Msg("Skipping value trap (ensemble detection)")
+				continue
+			}
+
+			if qualityCheck.BelowMinimumReturn {
+				c.log.Debug().
+					Str("symbol", position.Symbol).
+					Msg("Skipping - below absolute minimum return (score-based filter)")
+				continue
+			}
+
+			// For averaging down, we still want quality but it's less strict (we're already in the position)
+			// Only skip if quality is very poor
+			if qualityCheck.QualityGateReason == "quality_gate_fail" {
+				// Check if fundamentals are extremely poor
+				fundamentalsScore := GetScoreFromContext(ctx, position.Symbol, ctx.FundamentalsScores)
+				if fundamentalsScore > 0 && fundamentalsScore < 0.4 {
+					c.log.Debug().
+						Str("symbol", position.Symbol).
+						Msg("Skipping - extremely poor quality (score-based check)")
+					continue
+				}
+			}
 		}
 
 		// Calculate quantity based on max value

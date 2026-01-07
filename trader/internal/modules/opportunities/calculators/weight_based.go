@@ -168,9 +168,18 @@ func (c *WeightBasedCalculator) Calculate(
 			}
 
 			// CRITICAL: Quality gate filtering (if securityRepo is available)
+			// Get config from params
+			var config *planningdomain.PlannerConfiguration
+			if cfg, ok := params["config"].(*planningdomain.PlannerConfiguration); ok && cfg != nil {
+				config = cfg
+			}
+
 			if c.securityRepo != nil {
 				securityTags, err := c.securityRepo.GetTagsForSecurity(symbol)
-				if err == nil {
+				useTagChecks := err == nil && config != nil && config.EnableTagFiltering && len(securityTags) > 0
+
+				if useTagChecks {
+					// Use tag-based checks (when tags are enabled)
 					// Skip value traps (classical or ensemble)
 					if contains(securityTags, "value-trap") || contains(securityTags, "ensemble-value-trap") {
 						c.log.Debug().
@@ -210,6 +219,50 @@ func (c *WeightBasedCalculator) Calculate(
 						c.log.Debug().
 							Str("symbol", symbol).
 							Msg("Skipping - quality gate failed (new position)")
+						continue
+					}
+				} else {
+					// Use score-based checks (when tags are disabled or unavailable)
+					// Check if this is a new position
+					isNewPosition := true
+					for _, pos := range ctx.Positions {
+						if pos.Symbol == symbol {
+							isNewPosition = false
+							break
+						}
+					}
+
+					qualityCheck := CheckQualityGates(ctx, symbol, isNewPosition, config)
+
+					if qualityCheck.IsEnsembleValueTrap {
+						c.log.Debug().
+							Str("symbol", symbol).
+							Bool("classical", qualityCheck.IsValueTrap).
+							Bool("quantum", qualityCheck.IsQuantumValueTrap).
+							Float64("quantum_prob", qualityCheck.QuantumValueTrapProb).
+							Msg("Skipping value trap (ensemble detection)")
+						continue
+					}
+
+					if qualityCheck.IsBubbleRisk {
+						c.log.Debug().
+							Str("symbol", symbol).
+							Msg("Skipping bubble risk (score-based detection)")
+						continue
+					}
+
+					if qualityCheck.BelowMinimumReturn {
+						c.log.Debug().
+							Str("symbol", symbol).
+							Msg("Skipping - below absolute minimum return (score-based filter)")
+						continue
+					}
+
+					if !qualityCheck.PassesQualityGate {
+						c.log.Debug().
+							Str("symbol", symbol).
+							Str("reason", qualityCheck.QualityGateReason).
+							Msg("Skipping - quality gate failed (score-based check)")
 						continue
 					}
 				}

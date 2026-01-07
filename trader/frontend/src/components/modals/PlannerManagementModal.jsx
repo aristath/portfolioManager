@@ -53,6 +53,8 @@ const DEFAULT_CONFIG = {
   enable_diversity_filter: true,
   enable_eligibility_filter: true,
   enable_recently_traded_filter: true,
+  // Tag filtering
+  enable_tag_filtering: true,
 };
 
 export function PlannerManagementModal() {
@@ -612,6 +614,13 @@ export function PlannerManagementModal() {
                       label="Recently Traded Filter"
                       checked={getConfigValue('enable_recently_traded_filter', true)}
                       onChange={(e) => updateConfig('enable_recently_traded_filter', e.currentTarget.checked)}
+                    />
+                    <Divider my="sm" />
+                    <Switch
+                      label="Tag-Based Filtering"
+                      checked={getConfigValue('enable_tag_filtering', true)}
+                      onChange={(e) => updateConfig('enable_tag_filtering', e.currentTarget.checked)}
+                      description="Enable tag-based pre-filtering for opportunity identification. When disabled, all active securities are considered (uses score-based quality checks instead)."
                     />
                   </Stack>
                 </Paper>

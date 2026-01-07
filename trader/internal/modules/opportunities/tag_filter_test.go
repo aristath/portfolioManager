@@ -367,7 +367,8 @@ func TestTagBasedFilter_isMarketVolatile(t *testing.T) {
 	)
 
 	// Execute
-	isVolatile := filter.isMarketVolatile(ctx)
+	config := planningdomain.NewDefaultConfiguration()
+	isVolatile := filter.isMarketVolatile(ctx, config)
 
 	// Assert
 	assert.True(t, isVolatile, "Market should be volatile with 6 securities having volatility-spike tag")
@@ -420,7 +421,8 @@ func TestTagBasedFilter_isMarketVolatile_NotVolatile(t *testing.T) {
 	)
 
 	// Execute
-	isVolatile := filter.isMarketVolatile(ctx)
+	config := planningdomain.NewDefaultConfiguration()
+	isVolatile := filter.isMarketVolatile(ctx, config)
 
 	// Assert
 	assert.False(t, isVolatile, "Market should not be volatile with only 2 securities having volatility-spike tag")

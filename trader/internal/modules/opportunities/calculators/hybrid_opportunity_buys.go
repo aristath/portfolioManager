@@ -151,8 +151,12 @@ func (c *HybridOpportunityBuysCalculator) Calculate(
 		}
 
 		// Quality gate: Exclude value traps, bubble risks, and low-return securities
+		// Check tags first if available, then fall back to score-based checks if tags disabled
 		securityTags, err := c.securityRepo.GetTagsForSecurity(symbol)
-		if err == nil {
+		useTagChecks := err == nil && config != nil && config.EnableTagFiltering && len(securityTags) > 0
+
+		if useTagChecks {
+			// Use tag-based checks (when tags are enabled)
 			// Skip value traps (classical or ensemble)
 			if contains(securityTags, "value-trap") || contains(securityTags, "ensemble-value-trap") {
 				c.log.Debug().
@@ -183,6 +187,41 @@ func (c *HybridOpportunityBuysCalculator) Calculate(
 				c.log.Debug().
 					Str("symbol", symbol).
 					Msg("Skipping - quality gate failed")
+				continue
+			}
+		} else {
+			// Use score-based checks (when tags are disabled or unavailable)
+			qualityCheck := CheckQualityGates(ctx, symbol, !existingPositions[symbol], config)
+
+			if qualityCheck.IsEnsembleValueTrap {
+				c.log.Debug().
+					Str("symbol", symbol).
+					Bool("classical", qualityCheck.IsValueTrap).
+					Bool("quantum", qualityCheck.IsQuantumValueTrap).
+					Float64("quantum_prob", qualityCheck.QuantumValueTrapProb).
+					Msg("Skipping value trap (ensemble detection)")
+				continue
+			}
+
+			if qualityCheck.IsBubbleRisk {
+				c.log.Debug().
+					Str("symbol", symbol).
+					Msg("Skipping bubble risk (score-based detection)")
+				continue
+			}
+
+			if qualityCheck.BelowMinimumReturn {
+				c.log.Debug().
+					Str("symbol", symbol).
+					Msg("Skipping - below absolute minimum return (score-based filter)")
+				continue
+			}
+
+			if !qualityCheck.PassesQualityGate {
+				c.log.Debug().
+					Str("symbol", symbol).
+					Str("reason", qualityCheck.QualityGateReason).
+					Msg("Skipping - quality gate failed (score-based check)")
 				continue
 			}
 		}

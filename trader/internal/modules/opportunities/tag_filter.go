@@ -52,7 +52,7 @@ func (f *TagBasedFilter) GetOpportunityCandidates(ctx *domain.OpportunityContext
 		return symbols, nil
 	}
 
-	tags := f.selectOpportunityTags(ctx)
+	tags := f.selectOpportunityTags(ctx, config)
 	if len(tags) == 0 {
 		f.log.Debug().Msg("No opportunity tags selected")
 		return []string{}, nil
@@ -141,7 +141,7 @@ func (f *TagBasedFilter) GetSellCandidates(ctx *domain.OpportunityContext, confi
 
 // selectOpportunityTags intelligently selects tags based on opportunity context.
 // Adapts tag selection based on available cash, market conditions, and strategy.
-func (f *TagBasedFilter) selectOpportunityTags(ctx *domain.OpportunityContext) []string {
+func (f *TagBasedFilter) selectOpportunityTags(ctx *domain.OpportunityContext, config *domain.PlannerConfiguration) []string {
 	tags := []string{}
 
 	// Always include quality gates (enhanced tags)
@@ -153,7 +153,8 @@ func (f *TagBasedFilter) selectOpportunityTags(ctx *domain.OpportunityContext) [
 	}
 
 	// Add technical opportunities if market is volatile
-	if f.isMarketVolatile(ctx) {
+	// Note: If tags are disabled, this function won't be called, so config should be non-nil
+	if f.isMarketVolatile(ctx, config) {
 		tags = append(tags, "oversold", "below-ema", "recovery-candidate")
 	}
 
@@ -190,7 +191,15 @@ func (f *TagBasedFilter) selectSellTags(ctx *domain.OpportunityContext) []string
 
 // isMarketVolatile determines if market conditions are volatile.
 // Checks if many securities have volatility-spike tag as a proxy for market volatility.
-func (f *TagBasedFilter) isMarketVolatile(ctx *domain.OpportunityContext) bool {
+// Falls back to checking all securities if tags are disabled.
+func (f *TagBasedFilter) isMarketVolatile(ctx *domain.OpportunityContext, config *domain.PlannerConfiguration) bool {
+	// If tag filtering is disabled, we can't use tags to check volatility
+	// Return false (conservative: assume market is not volatile)
+	if config != nil && !config.EnableTagFiltering {
+		f.log.Debug().Msg("Tag filtering disabled, cannot check market volatility via tags")
+		return false
+	}
+
 	// Check if many securities have volatility-spike tag
 	volatileSecurities, err := f.securityRepo.GetByTags([]string{"volatility-spike"})
 	if err != nil {
