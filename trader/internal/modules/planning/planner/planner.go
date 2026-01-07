@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/aristath/portfolioManager/internal/modules/opportunities"
+	planningconstraints "github.com/aristath/portfolioManager/internal/modules/planning/constraints"
 	"github.com/aristath/portfolioManager/internal/modules/planning/domain"
 	"github.com/aristath/portfolioManager/internal/modules/planning/evaluation"
 	"github.com/aristath/portfolioManager/internal/modules/planning/hash"
@@ -17,14 +18,37 @@ type Planner struct {
 	opportunitiesService *opportunities.Service
 	sequencesService     *sequences.Service
 	evaluationService    *evaluation.Service
+	constraintEnforcer   *planningconstraints.Enforcer
 	log                  zerolog.Logger
 }
 
-func NewPlanner(opportunitiesService *opportunities.Service, sequencesService *sequences.Service, evaluationService *evaluation.Service, log zerolog.Logger) *Planner {
+func NewPlanner(opportunitiesService *opportunities.Service, sequencesService *sequences.Service, evaluationService *evaluation.Service, securityRepo *universe.SecurityRepository, log zerolog.Logger) *Planner {
+	// Create security lookup function for constraint enforcer
+	securityLookup := func(symbol, isin string) (*universe.Security, bool) {
+		// Try ISIN first
+		if isin != "" {
+			sec, err := securityRepo.GetByISIN(isin)
+			if err == nil && sec != nil {
+				return sec, true
+			}
+		}
+		// Fallback to symbol
+		if symbol != "" {
+			sec, err := securityRepo.GetBySymbol(symbol)
+			if err == nil && sec != nil {
+				return sec, true
+			}
+		}
+		return nil, false
+	}
+
+	constraintEnforcer := planningconstraints.NewEnforcer(log, securityLookup)
+
 	return &Planner{
 		opportunitiesService: opportunitiesService,
 		sequencesService:     sequencesService,
 		evaluationService:    evaluationService,
+		constraintEnforcer:   constraintEnforcer,
 		log:                  log.With().Str("component", "planner").Logger(),
 	}
 }
@@ -70,7 +94,7 @@ func (p *Planner) CreatePlan(ctx *domain.OpportunityContext, config *domain.Plan
 		p.log.Error().Err(err).Msg("Evaluation failed, falling back to priority-based selection")
 		// Fallback: use priority-based selection if evaluation fails
 		bestSequence := p.selectByPriority(sequences)
-		plan := p.convertToPlan(bestSequence, 0.0, 0.0)
+		plan := p.convertToPlan(bestSequence, ctx, 0.0, 0.0)
 		return plan, nil
 	}
 
@@ -80,8 +104,8 @@ func (p *Planner) CreatePlan(ctx *domain.OpportunityContext, config *domain.Plan
 		return nil, fmt.Errorf("no valid sequence found")
 	}
 
-	// Step 5: Convert to HolisticPlan
-	plan := p.convertToPlan(*bestSequence, 0.0, bestResult.EndScore)
+	// Step 5: Convert to HolisticPlan (with constraint enforcement)
+	plan := p.convertToPlan(*bestSequence, ctx, 0.0, bestResult.EndScore)
 
 	p.log.Info().
 		Int("steps", len(plan.Steps)).
@@ -91,12 +115,30 @@ func (p *Planner) CreatePlan(ctx *domain.OpportunityContext, config *domain.Plan
 	return plan, nil
 }
 
-func (p *Planner) convertToPlan(sequence domain.ActionSequence, currentScore float64, endScore float64) *domain.HolisticPlan {
+func (p *Planner) convertToPlan(sequence domain.ActionSequence, ctx *domain.OpportunityContext, currentScore float64, endScore float64) *domain.HolisticPlan {
+	// Enforce constraints on actions before creating steps
+	validatedActions, filteredActions := p.constraintEnforcer.EnforceConstraints(sequence.Actions, ctx)
+
+	// Log filtered actions for debugging
+	if len(filteredActions) > 0 {
+		p.log.Info().
+			Int("filtered_count", len(filteredActions)).
+			Int("validated_count", len(validatedActions)).
+			Msg("Applied constraint enforcement")
+		for _, filtered := range filteredActions {
+			p.log.Debug().
+				Str("symbol", filtered.Action.Symbol).
+				Str("side", filtered.Action.Side).
+				Str("reason", filtered.Reason).
+				Msg("Action filtered by constraints")
+		}
+	}
 	var steps []domain.HolisticStep
 	cashRequired := 0.0
 	cashGenerated := 0.0
 
-	for i, action := range sequence.Actions {
+	// Use validated actions (after constraint enforcement)
+	for i, action := range validatedActions {
 		step := domain.HolisticStep{
 			StepNumber:     i + 1,
 			Side:           action.Side,

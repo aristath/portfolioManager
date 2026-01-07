@@ -6,6 +6,7 @@ import (
 	"github.com/aristath/portfolioManager/internal/modules/planning/evaluation"
 	"github.com/aristath/portfolioManager/internal/modules/planning/planner"
 	"github.com/aristath/portfolioManager/internal/modules/sequences"
+	"github.com/aristath/portfolioManager/internal/modules/universe"
 	"github.com/rs/zerolog"
 )
 
@@ -14,9 +15,9 @@ type Service struct {
 	log     zerolog.Logger
 }
 
-func NewService(opportunitiesService *opportunities.Service, sequencesService *sequences.Service, evaluationService *evaluation.Service, log zerolog.Logger) *Service {
+func NewService(opportunitiesService *opportunities.Service, sequencesService *sequences.Service, evaluationService *evaluation.Service, securityRepo *universe.SecurityRepository, log zerolog.Logger) *Service {
 	return &Service{
-		planner: planner.NewPlanner(opportunitiesService, sequencesService, evaluationService, log),
+		planner: planner.NewPlanner(opportunitiesService, sequencesService, evaluationService, securityRepo, log),
 		log:     log.With().Str("module", "planning").Logger(),
 	}
 }

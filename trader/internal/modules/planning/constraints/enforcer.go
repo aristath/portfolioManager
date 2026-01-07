@@ -1,0 +1,160 @@
+package constraints
+
+import (
+	"fmt"
+
+	planningdomain "github.com/aristath/portfolioManager/internal/modules/planning/domain"
+	"github.com/aristath/portfolioManager/internal/modules/universe"
+	"github.com/rs/zerolog"
+)
+
+// SecurityLookupFunc is a function that looks up full security information by symbol or ISIN
+type SecurityLookupFunc func(symbol, isin string) (*universe.Security, bool)
+
+// Enforcer validates and adjusts actions based on security constraints
+type Enforcer struct {
+	log            zerolog.Logger
+	securityLookup SecurityLookupFunc
+}
+
+// FilteredAction represents an action that was filtered out with a reason
+type FilteredAction struct {
+	Action planningdomain.ActionCandidate
+	Reason string
+}
+
+// NewEnforcer creates a new constraint enforcer
+func NewEnforcer(log zerolog.Logger, securityLookup SecurityLookupFunc) *Enforcer {
+	return &Enforcer{
+		log:            log.With().Str("component", "constraint_enforcer").Logger(),
+		securityLookup: securityLookup,
+	}
+}
+
+// EnforceConstraints validates and adjusts actions based on security constraints
+// Returns validated/adjusted actions and list of filtered actions with reasons
+func (e *Enforcer) EnforceConstraints(
+	actions []planningdomain.ActionCandidate,
+	ctx *planningdomain.OpportunityContext,
+) ([]planningdomain.ActionCandidate, []FilteredAction) {
+	var validated []planningdomain.ActionCandidate
+	var filtered []FilteredAction
+
+	for _, action := range actions {
+		valid, adjusted, reason := e.validateAndAdjustAction(action, ctx)
+		if valid {
+			validated = append(validated, adjusted)
+		} else {
+			filtered = append(filtered, FilteredAction{
+				Action: action,
+				Reason: reason,
+			})
+			e.log.Debug().
+				Str("symbol", action.Symbol).
+				Str("side", action.Side).
+				Str("reason", reason).
+				Msg("Action filtered by constraints")
+		}
+	}
+
+	return validated, filtered
+}
+
+// validateAndAdjustAction checks constraints and adjusts quantity
+// Returns: (valid, adjustedAction, reason)
+func (e *Enforcer) validateAndAdjustAction(
+	action planningdomain.ActionCandidate,
+	ctx *planningdomain.OpportunityContext,
+) (bool, planningdomain.ActionCandidate, string) {
+	// Get ISIN from context if available
+	var isin string
+	if domainSec, ok := ctx.StocksBySymbol[action.Symbol]; ok {
+		isin = domainSec.ISIN
+	}
+
+	// Look up security using ISIN (preferred) or symbol (fallback)
+	security, found := e.securityLookup(action.Symbol, isin)
+
+	if !found {
+		return false, action, fmt.Sprintf("security not found: %s", action.Symbol)
+	}
+
+	// Check allow_sell/allow_buy constraints
+	if action.Side == "SELL" {
+		if !security.AllowSell {
+			return false, action, "allow_sell=false"
+		}
+	} else if action.Side == "BUY" {
+		if !security.AllowBuy {
+			return false, action, "allow_buy=false"
+		}
+	} else {
+		// Invalid side value - reject the action
+		return false, action, fmt.Sprintf("invalid side: %s (must be BUY or SELL)", action.Side)
+	}
+
+	// Round quantity to lot size
+	adjustedQuantity := e.roundToLotSize(action.Quantity, security.MinLot)
+
+	// If quantity becomes 0 or invalid after rounding, filter out
+	if adjustedQuantity <= 0 {
+		return false, action, fmt.Sprintf("quantity below minimum lot size (min_lot=%d, requested=%d)", security.MinLot, action.Quantity)
+	}
+
+	// If quantity changed, update the action
+	if adjustedQuantity != action.Quantity {
+		// Validate price before recalculating
+		if action.Price <= 0 {
+			return false, action, fmt.Sprintf("invalid price: %.2f (must be positive)", action.Price)
+		}
+
+		// Recalculate value based on adjusted quantity
+		adjustedValue := float64(adjustedQuantity) * action.Price
+
+		adjustedAction := action
+		adjustedAction.Quantity = adjustedQuantity
+		adjustedAction.ValueEUR = adjustedValue
+
+		e.log.Debug().
+			Str("symbol", action.Symbol).
+			Int("original_quantity", action.Quantity).
+			Int("adjusted_quantity", adjustedQuantity).
+			Int("min_lot", security.MinLot).
+			Msg("Adjusted quantity to lot size")
+
+		return true, adjustedAction, ""
+	}
+
+	// No adjustment needed
+	return true, action, ""
+}
+
+// roundToLotSize intelligently rounds quantity to lot size
+// Strategy:
+//  1. Try rounding down: floor(quantity/lotSize) * lotSize
+//  2. If result is 0 or invalid, try rounding up: ceil(quantity/lotSize) * lotSize
+//  3. Return the valid rounded quantity, or 0 if both fail
+func (e *Enforcer) roundToLotSize(quantity int, lotSize int) int {
+	if lotSize <= 0 {
+		return quantity // No rounding needed
+	}
+
+	// Strategy 1: Round down
+	roundedDown := (quantity / lotSize) * lotSize
+
+	// If rounding down gives valid result (>= lotSize), use it
+	if roundedDown >= lotSize {
+		return roundedDown
+	}
+
+	// Strategy 2: Round up (only if rounding down failed)
+	// Using ceiling: (quantity + lotSize - 1) / lotSize * lotSize
+	roundedUp := ((quantity + lotSize - 1) / lotSize) * lotSize
+
+	// Use rounded up if it's valid, otherwise return 0
+	if roundedUp >= lotSize {
+		return roundedUp
+	}
+
+	return 0 // Cannot make valid
+}
