@@ -26,6 +26,8 @@ import (
 	"github.com/aristath/sentinel/internal/modules/charts"
 	chartshandlers "github.com/aristath/sentinel/internal/modules/charts/handlers"
 	"github.com/aristath/sentinel/internal/modules/display"
+	"github.com/aristath/sentinel/internal/modules/settings"
+	settingshandlers "github.com/aristath/sentinel/internal/modules/settings/handlers"
 	displayhandlers "github.com/aristath/sentinel/internal/modules/display/handlers"
 	dividendhandlers "github.com/aristath/sentinel/internal/modules/dividends/handlers"
 	"github.com/aristath/sentinel/internal/modules/evaluation"
@@ -420,7 +422,9 @@ func (s *Server) setupRoutes() {
 		s.setupDeploymentRoutes(r)
 
 		// Settings module (MIGRATED TO GO!)
-		s.setupSettingsRoutes(r)
+		settingsService := s.container.SettingsService
+		settingsHandler := settingshandlers.NewHandler(settingsService, s.log)
+		settingsHandler.RegisterRoutes(r)
 
 		// Symbolic Regression module (MIGRATED TO GO!)
 		s.setupSymbolicRegressionRoutes(r)
