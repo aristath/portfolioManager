@@ -53,6 +53,12 @@ jobs:
         cp -r ../display/sketch pkg/embedded/display/
         echo "✓ Copied files for embedding"
 
+    - name: Install Go tools for pre-commit hooks
+      run: |
+        go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+        export PATH="$(go env GOPATH)/bin:$PATH"
+        echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
     - name: Run pre-commit
       uses: pre-commit/action@v3.0.1
       with:
