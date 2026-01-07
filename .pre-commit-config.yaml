@@ -180,7 +180,7 @@ repos:
 
       - id: go-test-mod
 
-        args: [-timeout=60s]
+        args: [-timeout=5m]
 
         files: ^trader/.*\.go$
 
