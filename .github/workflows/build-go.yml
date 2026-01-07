@@ -84,7 +84,16 @@ jobs:
 
       - name: Run tests
         working-directory: trader
-        run: go test ./... -v -tags=!integration
+        run: |
+          # Skip full test suite in build workflow - tests run in dedicated Go Tests workflow
+          # Only run a quick compile check to ensure code builds
+          echo "Skipping full test suite - tests run in dedicated Go Tests workflow"
+          echo "Running quick build verification instead..."
+          go test -c ./cmd/server -o /dev/null 2>&1 || {
+            echo "ERROR: Code does not compile"
+            exit 1
+          }
+          echo "✓ Build verification passed"
 
       - name: Build ARM64 binary for Arduino Uno Q
         working-directory: trader
