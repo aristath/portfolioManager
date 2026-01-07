@@ -6,6 +6,7 @@ import (
 )
 
 // setupSymbolicRegressionRoutes configures symbolic regression module routes
+// nolint:unused // kept for documentation/reference; not used by runtime
 func (s *Server) setupSymbolicRegressionRoutes(r chi.Router) {
 	// Initialize formula storage
 	formulaStorage := symbolic_regression.NewFormulaStorage(s.configDB.Conn(), s.log)

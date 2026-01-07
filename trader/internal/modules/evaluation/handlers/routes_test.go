@@ -80,4 +80,3 @@ func TestRegisterRoutes_RoutePrefix(t *testing.T) {
 	router.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusNotFound, rec.Code, "Route without /api/v1 prefix should return 404")
 }
-

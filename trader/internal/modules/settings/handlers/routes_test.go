@@ -89,4 +89,3 @@ func TestRegisterRoutes_RoutePrefix(t *testing.T) {
 	router.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusNotFound, rec.Code, "Route without /settings prefix should return 404")
 }
-

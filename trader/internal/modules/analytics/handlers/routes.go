@@ -14,4 +14,3 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		})
 	})
 }
-

@@ -291,4 +291,3 @@ func (h *Handler) getSecurityMetricsForFactorExposure(positions []positionForFac
 
 	return metrics, nil
 }
-

@@ -78,4 +78,3 @@ func TestRegisterRoutes_RoutePrefix(t *testing.T) {
 	router.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusNotFound, rec.Code, "Route without /analytics prefix should return 404")
 }
-

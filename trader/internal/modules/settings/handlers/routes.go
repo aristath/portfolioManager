@@ -35,4 +35,3 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		r.Post("/trading-mode", h.HandleToggleTradingMode)
 	})
 }
-

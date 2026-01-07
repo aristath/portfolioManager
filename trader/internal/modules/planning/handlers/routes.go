@@ -72,4 +72,3 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		r.Get("/stream", h.streamHandler.ServeHTTP)
 	})
 }
-

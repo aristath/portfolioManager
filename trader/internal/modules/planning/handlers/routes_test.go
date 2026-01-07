@@ -135,4 +135,3 @@ func TestRegisterRoutes_RoutePrefix(t *testing.T) {
 	router.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusNotFound, rec.Code, "Route without /planning prefix should return 404")
 }
-

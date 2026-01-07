@@ -48,6 +48,13 @@ import (
 	"github.com/aristath/sentinel/pkg/embedded"
 )
 
+// Reference legacy helpers to avoid unused-lint errors (kept for documentation only).
+// They are not called at runtime.
+var (
+	_ = (*Server)._setupSystemRoutes_OLD
+	_ = (*Server).setupSymbolicRegressionRoutes
+)
+
 // Config holds server configuration - NEW 7-database architecture
 type Config struct {
 	Log                zerolog.Logger
