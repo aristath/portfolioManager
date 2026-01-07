@@ -552,7 +552,7 @@ func (s *PortfolioService) SyncFromTradernet() error {
 			Quantity:     tradernetPos.Quantity,     // From Tradernet
 			AvgPrice:     tradernetPos.AvgPrice,     // From Tradernet (historical)
 			Currency:     tradernetPos.Currency,     // From Tradernet
-			CurrencyRate: tradernetPos.CurrencyRate, // From Tradernet (usually 1.0, will be updated if needed)
+			CurrencyRate: tradernetPos.CurrencyRate, // From Tradernet
 			LastUpdated:  &now,
 		}
 
@@ -562,74 +562,12 @@ func (s *PortfolioService) SyncFromTradernet() error {
 			dbPos.MarketValueEUR = existingPos.MarketValueEUR // Keep Yahoo-calculated value
 		}
 
-		// Fetch currency rate if CurrencyRate is missing or default (1.0)
-		// CurrencyRate format: 1 EUR = CurrencyRate units of foreign currency
-		// GetRate returns: how many EUR per 1 unit of foreign currency
-		// So: CurrencyRate = 1.0 / GetRate(currency, "EUR")
-		if (dbPos.CurrencyRate == 0 || dbPos.CurrencyRate == 1.0) && dbPos.Currency != "EUR" && dbPos.Currency != "" {
-			if s.currencyExchangeService != nil {
-				rate, err := s.currencyExchangeService.GetRate(dbPos.Currency, "EUR")
-				if err == nil && rate > 0 {
-					// Convert GetRate format to CurrencyRate format
-					// GetRate("HKD", "EUR") returns 0.11 (1 HKD = 0.11 EUR)
-					// CurrencyRate should be 9.09 (1 EUR = 9.09 HKD)
-					dbPos.CurrencyRate = 1.0 / rate
-					s.log.Debug().
-						Str("symbol", dbPos.Symbol).
-						Str("currency", dbPos.Currency).
-						Float64("rate_from_service", rate).
-						Float64("currency_rate", dbPos.CurrencyRate).
-						Msg("Fetched and converted currency rate from exchange service")
-				} else {
-					// Use fallback rates (same as calculatePositionValue)
-					s.log.Warn().
-						Err(err).
-						Str("symbol", dbPos.Symbol).
-						Str("currency", dbPos.Currency).
-						Msg("Failed to get exchange rate, using fallback")
-					switch dbPos.Currency {
-					case "USD":
-						dbPos.CurrencyRate = 1.0 / 0.9 // 1 EUR = 1.11 USD
-					case "GBP":
-						dbPos.CurrencyRate = 1.0 / 1.2 // 1 EUR = 0.83 GBP
-					case "HKD":
-						dbPos.CurrencyRate = 1.0 / 0.11 // 1 EUR = 9.09 HKD
-					default:
-						// Keep 1.0 as fallback, will log warning during calculation
-						dbPos.CurrencyRate = 1.0
-					}
-				}
-			} else {
-				// No exchange service, use fallback rates
-				switch dbPos.Currency {
-				case "USD":
-					dbPos.CurrencyRate = 1.0 / 0.9
-				case "GBP":
-					dbPos.CurrencyRate = 1.0 / 1.2
-				case "HKD":
-					dbPos.CurrencyRate = 1.0 / 0.11
-				default:
-					dbPos.CurrencyRate = 1.0
-				}
-			}
-		}
-
 		// If we have a current price, recalculate market value
 		if dbPos.CurrentPrice > 0 && dbPos.Quantity > 0 {
 			valueInCurrency := dbPos.Quantity * dbPos.CurrentPrice
-			if dbPos.Currency == "EUR" || dbPos.Currency == "" {
-				dbPos.MarketValueEUR = valueInCurrency
-			} else if dbPos.CurrencyRate > 0 && dbPos.CurrencyRate != 1.0 {
-				// CurrencyRate format: 1 EUR = CurrencyRate units of foreign currency
-				// So to convert FROM foreign currency TO EUR: valueEUR = valueInCurrency / CurrencyRate
+			if dbPos.CurrencyRate > 0 {
 				dbPos.MarketValueEUR = valueInCurrency / dbPos.CurrencyRate
-			} else {
-				// CurrencyRate is still 1.0 (fallback), log warning
-				s.log.Warn().
-					Str("symbol", dbPos.Symbol).
-					Str("currency", dbPos.Currency).
-					Float64("value_in_currency", valueInCurrency).
-					Msg("CurrencyRate is 1.0, market value may be incorrect")
+			} else if dbPos.Currency == "EUR" || dbPos.Currency == "" {
 				dbPos.MarketValueEUR = valueInCurrency
 			}
 		}
