@@ -650,33 +650,6 @@ func (a *securityFetcherAdapter) GetSecurityName(symbol string) (string, error) 
 	return security.Name, nil
 }
 
-// setupEvaluationRoutes configures evaluation module routes
-func (s *Server) setupEvaluationRoutes(r chi.Router) {
-	// Initialize evaluation service
-	numWorkers := runtime.NumCPU()
-	if numWorkers < 2 {
-		numWorkers = 2
-	}
-
-	evalService := evaluation.NewService(numWorkers, s.log)
-	handler := evaluation.NewHandler(evalService, s.log)
-
-	// Mount routes under /api/v1 for Python client compatibility
-	r.Route("/api/v1", func(r chi.Router) {
-		// Increase timeout for heavy evaluation operations
-		r.Use(middleware.Timeout(120 * time.Second))
-
-		r.Route("/evaluate", func(r chi.Router) {
-			r.Post("/batch", handler.HandleEvaluateBatch)
-			r.Post("/monte-carlo", handler.HandleMonteCarlo)
-			r.Post("/stochastic", handler.HandleStochastic)
-		})
-
-		r.Route("/simulate", func(r chi.Router) {
-			r.Post("/batch", handler.HandleSimulateBatch)
-		})
-	})
-}
 
 // setupRebalancingRoutes configures rebalancing module routes
 func (s *Server) setupRebalancingRoutes(r chi.Router) {

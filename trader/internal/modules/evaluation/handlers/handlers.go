@@ -1,7 +1,12 @@
 package handlers
 
 import (
+	"encoding/json"
+	"net/http"
+	"time"
+
 	"github.com/aristath/sentinel/internal/modules/evaluation"
+	"github.com/rs/zerolog"
 )
 
 import (
@@ -14,12 +19,12 @@ import (
 
 // Handler handles evaluation HTTP requests
 type Handler struct {
-	service *Service
+	service *evaluation.Service
 	log     zerolog.Logger
 }
 
 // NewHandler creates a new evaluation handler
-func NewHandler(service *Service, log zerolog.Logger) *Handler {
+func NewHandler(service *evaluation.Service, log zerolog.Logger) *Handler {
 	return &Handler{
 		service: service,
 		log:     log.With().Str("handler", "evaluation").Logger(),
@@ -28,7 +33,7 @@ func NewHandler(service *Service, log zerolog.Logger) *Handler {
 
 // HandleEvaluateBatch handles POST /api/v1/evaluate/batch
 func (h *Handler) HandleEvaluateBatch(w http.ResponseWriter, r *http.Request) {
-	var request BatchEvaluationRequest
+	var request evaluation.BatchEvaluationRequest
 
 	// Parse request body
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
@@ -80,7 +85,7 @@ func (h *Handler) HandleEvaluateBatch(w http.ResponseWriter, r *http.Request) {
 		Msg("Batch evaluation completed")
 
 	// Build response
-	response := BatchEvaluationResponse{
+	response := evaluation.BatchEvaluationResponse{
 		Results: results,
 		Errors:  []string{}, // Errors per sequence (if any)
 	}
@@ -90,7 +95,7 @@ func (h *Handler) HandleEvaluateBatch(w http.ResponseWriter, r *http.Request) {
 
 // HandleSimulateBatch handles POST /api/v1/simulate/batch
 func (h *Handler) HandleSimulateBatch(w http.ResponseWriter, r *http.Request) {
-	var request BatchSimulationRequest
+	var request evaluation.BatchSimulationRequest
 
 	// Parse request body
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
@@ -131,7 +136,7 @@ func (h *Handler) HandleSimulateBatch(w http.ResponseWriter, r *http.Request) {
 		Msg("Batch simulation completed")
 
 	// Build response
-	response := BatchSimulationResponse{
+	response := evaluation.BatchSimulationResponse{
 		Results: results,
 	}
 
@@ -140,7 +145,7 @@ func (h *Handler) HandleSimulateBatch(w http.ResponseWriter, r *http.Request) {
 
 // HandleMonteCarlo handles POST /api/v1/evaluate/monte-carlo
 func (h *Handler) HandleMonteCarlo(w http.ResponseWriter, r *http.Request) {
-	var request MonteCarloRequest
+	var request evaluation.MonteCarloRequest
 
 	// Parse request body
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
@@ -181,7 +186,7 @@ func (h *Handler) HandleMonteCarlo(w http.ResponseWriter, r *http.Request) {
 
 // HandleStochastic handles POST /api/v1/evaluate/stochastic
 func (h *Handler) HandleStochastic(w http.ResponseWriter, r *http.Request) {
-	var request StochasticRequest
+	var request evaluation.StochasticRequest
 
 	// Parse request body
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
