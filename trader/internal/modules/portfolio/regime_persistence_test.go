@@ -121,7 +121,7 @@ func TestRecordRegimeScore(t *testing.T) {
 		err = db.QueryRow(`
 			SELECT smoothed_score
 			FROM market_regime_history
-			ORDER BY recorded_at DESC LIMIT 1
+			ORDER BY id DESC LIMIT 1
 		`).Scan(&smoothed)
 		require.NoError(t, err)
 

@@ -34,8 +34,10 @@ func NewRegimePersistence(db *sql.DB, log zerolog.Logger) *RegimePersistence {
 
 // GetCurrentRegimeScore returns the current smoothed regime score
 func (rp *RegimePersistence) GetCurrentRegimeScore() (MarketRegimeScore, error) {
+	// Order by id DESC to ensure we get the most recent record
+	// This is more reliable than ordering by recorded_at when stored as TEXT
 	query := `SELECT smoothed_score FROM market_regime_history
-	          ORDER BY recorded_at DESC LIMIT 1`
+	          ORDER BY id DESC LIMIT 1`
 
 	var score float64
 	err := rp.db.QueryRow(query).Scan(&score)
@@ -75,7 +77,18 @@ func (rp *RegimePersistence) RecordRegimeScore(rawScore MarketRegimeScore) error
 		}
 	} else {
 		// We have a previous smoothed score - apply EMA
-		smoothed = rp.ApplySmoothing(float64(rawScore), float64(lastSmoothed), rp.smoothingAlpha)
+		// Formula: smoothed = alpha * current + (1 - alpha) * lastSmoothed
+		smoothed = rp.smoothingAlpha*float64(rawScore) + (1.0-rp.smoothingAlpha)*float64(lastSmoothed)
+		// Ensure we're actually applying smoothing (debug check)
+		if smoothed == float64(lastSmoothed) && float64(rawScore) != float64(lastSmoothed) {
+			// This should never happen if smoothing is working correctly
+			rp.log.Warn().
+				Float64("rawScore", float64(rawScore)).
+				Float64("lastSmoothed", float64(lastSmoothed)).
+				Float64("alpha", rp.smoothingAlpha).
+				Float64("calculated", smoothed).
+				Msg("Smoothing calculation resulted in same value as lastSmoothed")
+		}
 	}
 
 	// Discrete regime support is intentionally removed. Keep column populated for schema compatibility.
