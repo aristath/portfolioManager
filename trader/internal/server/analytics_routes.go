@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/aristath/portfolioManager/internal/modules/analytics"
+	"github.com/aristath/sentinel/internal/modules/analytics"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 )

@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"testing"
 
-	"github.com/aristath/portfolioManager/pkg/logger"
+	"github.com/aristath/sentinel/pkg/logger"
 )
 
 func TestCalculateMinTradeAmount(t *testing.T) {

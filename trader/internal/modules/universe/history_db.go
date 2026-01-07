@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aristath/portfolioManager/internal/utils"
+	"github.com/aristath/sentinel/internal/utils"
 	_ "github.com/mattn/go-sqlite3" // SQLite driver
 	"github.com/rs/zerolog"
 )

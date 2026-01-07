@@ -7,7 +7,7 @@ import (
 	"math/rand"
 	"sort"
 
-	"github.com/aristath/portfolioManager/internal/evaluation/models"
+	"github.com/aristath/sentinel/internal/evaluation/models"
 	"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/stat"
 )

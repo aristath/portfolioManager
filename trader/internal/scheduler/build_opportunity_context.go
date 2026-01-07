@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/aristath/portfolioManager/internal/domain"
-	planningdomain "github.com/aristath/portfolioManager/internal/modules/planning/domain"
-	"github.com/aristath/portfolioManager/internal/modules/portfolio"
-	"github.com/aristath/portfolioManager/internal/modules/scoring"
-	scoringdomain "github.com/aristath/portfolioManager/internal/modules/scoring/domain"
-	"github.com/aristath/portfolioManager/internal/modules/settings"
-	"github.com/aristath/portfolioManager/internal/modules/universe"
+	"github.com/aristath/sentinel/internal/domain"
+	planningdomain "github.com/aristath/sentinel/internal/modules/planning/domain"
+	"github.com/aristath/sentinel/internal/modules/portfolio"
+	"github.com/aristath/sentinel/internal/modules/scoring"
+	scoringdomain "github.com/aristath/sentinel/internal/modules/scoring/domain"
+	"github.com/aristath/sentinel/internal/modules/settings"
+	"github.com/aristath/sentinel/internal/modules/universe"
 	"github.com/rs/zerolog"
 )
 

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/aristath/portfolioManager/internal/modules/portfolio"
-	"github.com/aristath/portfolioManager/pkg/formulas"
+	"github.com/aristath/sentinel/internal/modules/portfolio"
+	"github.com/aristath/sentinel/pkg/formulas"
 	"github.com/rs/zerolog"
 )
 

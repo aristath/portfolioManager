@@ -9,11 +9,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aristath/portfolioManager/internal/evaluation"
-	"github.com/aristath/portfolioManager/internal/evaluation/models"
-	"github.com/aristath/portfolioManager/internal/evaluation/workers"
-	"github.com/aristath/portfolioManager/internal/modules/planning/domain"
-	scoringdomain "github.com/aristath/portfolioManager/internal/modules/scoring/domain"
+	"github.com/aristath/sentinel/internal/evaluation"
+	"github.com/aristath/sentinel/internal/evaluation/models"
+	"github.com/aristath/sentinel/internal/evaluation/workers"
+	"github.com/aristath/sentinel/internal/modules/planning/domain"
+	scoringdomain "github.com/aristath/sentinel/internal/modules/scoring/domain"
 	"github.com/rs/zerolog"
 )
 

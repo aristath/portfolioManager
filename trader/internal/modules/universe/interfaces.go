@@ -3,7 +3,7 @@ package universe
 import (
 	"database/sql"
 
-	"github.com/aristath/portfolioManager/internal/clients/yahoo"
+	"github.com/aristath/sentinel/internal/clients/yahoo"
 )
 
 // SyncServiceInterface defines the contract for sync service operations

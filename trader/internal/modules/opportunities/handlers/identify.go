@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/aristath/portfolioManager/internal/modules/opportunities"
-	"github.com/aristath/portfolioManager/internal/modules/planning/domain"
+	"github.com/aristath/sentinel/internal/modules/opportunities"
+	"github.com/aristath/sentinel/internal/modules/planning/domain"
 	"github.com/rs/zerolog"
 )
 

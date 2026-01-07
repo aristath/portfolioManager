@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/aristath/portfolioManager/internal/clients/tradernet"
-	"github.com/aristath/portfolioManager/internal/domain"
-	"github.com/aristath/portfolioManager/internal/modules/planning"
-	"github.com/aristath/portfolioManager/internal/modules/portfolio"
-	"github.com/aristath/portfolioManager/internal/modules/settings"
-	"github.com/aristath/portfolioManager/internal/modules/universe"
-	"github.com/aristath/portfolioManager/internal/services"
+	"github.com/aristath/sentinel/internal/clients/tradernet"
+	"github.com/aristath/sentinel/internal/domain"
+	"github.com/aristath/sentinel/internal/modules/planning"
+	"github.com/aristath/sentinel/internal/modules/portfolio"
+	"github.com/aristath/sentinel/internal/modules/settings"
+	"github.com/aristath/sentinel/internal/modules/universe"
+	"github.com/aristath/sentinel/internal/services"
 	"github.com/rs/zerolog"
 )
 

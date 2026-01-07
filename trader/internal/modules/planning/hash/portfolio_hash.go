@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/aristath/portfolioManager/internal/modules/universe"
+	"github.com/aristath/sentinel/internal/modules/universe"
 	"github.com/rs/zerolog/log"
 )
 

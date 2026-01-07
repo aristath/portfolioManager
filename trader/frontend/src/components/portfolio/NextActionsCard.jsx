@@ -32,7 +32,7 @@ export function NextActionsCard() {
       p="lg"
       style={{
         border: '1px solid var(--mantine-color-dark-6)',
-        backgroundColor: 'var(--mantine-color-dark-8)',
+        backgroundColor: 'var(--mantine-color-dark-7)',
       }}
     >
       <Group justify="space-between" mb="md">
@@ -174,7 +174,7 @@ export function NextActionsCard() {
                     : step.side === 'SELL'
                     ? 'var(--mantine-color-red-0)'
                     : 'var(--mantine-color-green-0)',
-                  backgroundColor: 'var(--mantine-color-dark-7)',
+                  backgroundColor: 'var(--mantine-color-dark-8)',
                 }}
               >
                 <Group justify="space-between" align="flex-start">

@@ -1,8 +1,8 @@
 package domain
 
 import (
-	"github.com/aristath/portfolioManager/internal/domain"
-	scoringdomain "github.com/aristath/portfolioManager/internal/modules/scoring/domain"
+	"github.com/aristath/sentinel/internal/domain"
+	scoringdomain "github.com/aristath/sentinel/internal/modules/scoring/domain"
 )
 
 // OpportunityContext contains all data needed by opportunity calculators

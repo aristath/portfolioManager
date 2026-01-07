@@ -1,4 +1,4 @@
-# Arduino Trader
+# Sentinel
 
 ## What This Is
 

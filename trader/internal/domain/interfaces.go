@@ -1,7 +1,7 @@
 package domain
 
 import (
-	"github.com/aristath/portfolioManager/internal/clients/tradernet"
+	"github.com/aristath/sentinel/internal/clients/tradernet"
 )
 
 // CashManager defines operations for managing cash balances

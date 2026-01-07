@@ -7,8 +7,8 @@ import (
 	"math"
 	"time"
 
-	"github.com/aristath/portfolioManager/internal/modules/settings"
-	"github.com/aristath/portfolioManager/internal/utils"
+	"github.com/aristath/sentinel/internal/modules/settings"
+	"github.com/aristath/sentinel/internal/utils"
 	"github.com/rs/zerolog"
 )
 

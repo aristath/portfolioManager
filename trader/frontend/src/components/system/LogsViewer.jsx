@@ -76,10 +76,10 @@ export function LogsViewer() {
   };
 
   return (
-    <Card p="md" style={{ backgroundColor: 'var(--mantine-color-dark-8)', border: '1px solid var(--mantine-color-dark-6)' }}>
+    <Card p="md" style={{ backgroundColor: 'var(--mantine-color-dark-7)', border: '1px solid var(--mantine-color-dark-6)' }}>
       <Stack gap="md">
         {/* Controls */}
-        <Card p="md" style={{ backgroundColor: 'var(--mantine-color-dark-7)', border: '1px solid var(--mantine-color-dark-6)' }}>
+        <Card p="md" style={{ backgroundColor: 'var(--mantine-color-dark-8)', border: '1px solid var(--mantine-color-dark-6)' }}>
           <Group gap="md" wrap="wrap">
             <Select
               label="Log File"

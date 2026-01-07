@@ -44,7 +44,7 @@ export class ErrorBoundary extends Component {
                     Error Details
                   </summary>
                   <pre style={{
-                    backgroundColor: 'var(--mantine-color-dark-8)',
+                    backgroundColor: 'var(--mantine-color-dark-7)',
                     border: '1px solid var(--mantine-color-dark-6)',
                     padding: '1rem',
                     borderRadius: '2px',

@@ -3,9 +3,9 @@ package scheduler
 import (
 	"testing"
 
-	"github.com/aristath/portfolioManager/internal/modules/optimization"
-	"github.com/aristath/portfolioManager/internal/modules/portfolio"
-	"github.com/aristath/portfolioManager/internal/modules/universe"
+	"github.com/aristath/sentinel/internal/modules/optimization"
+	"github.com/aristath/sentinel/internal/modules/portfolio"
+	"github.com/aristath/sentinel/internal/modules/universe"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

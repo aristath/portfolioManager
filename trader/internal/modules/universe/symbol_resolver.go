@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/aristath/portfolioManager/internal/clients/tradernet"
+	"github.com/aristath/sentinel/internal/clients/tradernet"
 	"github.com/rs/zerolog"
 )
 

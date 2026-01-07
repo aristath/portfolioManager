@@ -3,8 +3,8 @@ package scorers
 import (
 	"math"
 
-	"github.com/aristath/portfolioManager/internal/modules/scoring"
-	"github.com/aristath/portfolioManager/pkg/formulas"
+	"github.com/aristath/sentinel/internal/modules/scoring"
+	"github.com/aristath/sentinel/pkg/formulas"
 )
 
 // TechnicalsScorer calculates technical indicators score

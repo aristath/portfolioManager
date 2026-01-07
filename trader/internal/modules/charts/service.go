@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aristath/portfolioManager/internal/modules/universe"
-	"github.com/aristath/portfolioManager/internal/utils"
+	"github.com/aristath/sentinel/internal/modules/universe"
+	"github.com/aristath/sentinel/internal/utils"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
 )

@@ -3,7 +3,7 @@ package evaluation
 import (
 	"math"
 
-	"github.com/aristath/portfolioManager/internal/evaluation/models"
+	"github.com/aristath/sentinel/internal/evaluation/models"
 )
 
 // Scoring weight constants

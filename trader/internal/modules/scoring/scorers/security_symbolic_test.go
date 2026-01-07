@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"testing"
 
-	"github.com/aristath/portfolioManager/internal/modules/symbolic_regression"
-	"github.com/aristath/portfolioManager/pkg/formulas"
+	"github.com/aristath/sentinel/internal/modules/symbolic_regression"
+	"github.com/aristath/sentinel/pkg/formulas"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

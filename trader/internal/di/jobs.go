@@ -4,14 +4,14 @@ package di
 import (
 	"fmt"
 
-	"github.com/aristath/portfolioManager/internal/config"
-	"github.com/aristath/portfolioManager/internal/database"
-	"github.com/aristath/portfolioManager/internal/modules/cleanup"
-	"github.com/aristath/portfolioManager/internal/modules/display"
-	"github.com/aristath/portfolioManager/internal/modules/symbolic_regression"
-	"github.com/aristath/portfolioManager/internal/queue"
-	"github.com/aristath/portfolioManager/internal/reliability"
-	"github.com/aristath/portfolioManager/internal/scheduler"
+	"github.com/aristath/sentinel/internal/config"
+	"github.com/aristath/sentinel/internal/database"
+	"github.com/aristath/sentinel/internal/modules/cleanup"
+	"github.com/aristath/sentinel/internal/modules/display"
+	"github.com/aristath/sentinel/internal/modules/symbolic_regression"
+	"github.com/aristath/sentinel/internal/queue"
+	"github.com/aristath/sentinel/internal/reliability"
+	"github.com/aristath/sentinel/internal/scheduler"
 	"github.com/rs/zerolog"
 )
 

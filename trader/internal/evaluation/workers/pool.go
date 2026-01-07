@@ -4,8 +4,8 @@ package workers
 import (
 	"sync"
 
-	"github.com/aristath/portfolioManager/internal/evaluation"
-	"github.com/aristath/portfolioManager/internal/evaluation/models"
+	"github.com/aristath/sentinel/internal/evaluation"
+	"github.com/aristath/sentinel/internal/evaluation/models"
 )
 
 // WorkerPool manages a pool of worker goroutines for parallel sequence evaluation

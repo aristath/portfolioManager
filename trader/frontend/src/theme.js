@@ -60,7 +60,7 @@ export const theme = createTheme({
     deg: 45,
   },
   colors: {
-    // Dark theme colors mapped from Catppuccin Mocha
+    // Dark theme colors mapped from Catppuccin Mocha (darker variant)
     dark: [
       catppuccinMocha.text,        // 0 - lightest text
       catppuccinMocha.subtext1,    // 1
@@ -68,10 +68,10 @@ export const theme = createTheme({
       catppuccinMocha.overlay2,    // 3
       catppuccinMocha.overlay1,    // 4
       catppuccinMocha.overlay0,    // 5
-      catppuccinMocha.surface2,    // 6
-      catppuccinMocha.surface1,    // 7
-      catppuccinMocha.surface0,    // 8
-      catppuccinMocha.base,         // 9 - darkest background
+      catppuccinMocha.surface0,    // 6 - borders
+      catppuccinMocha.base,        // 7 - panels/cards
+      catppuccinMocha.mantle,      // 8 - secondary background
+      catppuccinMocha.crust,       // 9 - darkest background (main)
     ],
     // Blue (primary)
     blue: [

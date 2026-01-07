@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aristath/portfolioManager/internal/utils"
+	"github.com/aristath/sentinel/internal/utils"
 	"github.com/rs/zerolog"
 )
 

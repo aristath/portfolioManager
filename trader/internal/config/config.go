@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/aristath/portfolioManager/internal/deployment"
-	"github.com/aristath/portfolioManager/internal/modules/settings"
+	"github.com/aristath/sentinel/internal/deployment"
+	"github.com/aristath/sentinel/internal/modules/settings"
 	"github.com/joho/godotenv"
 )
 
@@ -41,9 +41,9 @@ type DeploymentConfig struct {
 	// GitHub artifact deployment settings
 	UseGitHubArtifacts bool   // Use GitHub Actions artifacts instead of building on-device
 	GitHubWorkflowName string // e.g., "build-go.yml"
-	GitHubArtifactName string // e.g., "trader-arm64"
+	GitHubArtifactName string // e.g., "sentinel-arm64"
 	GitHubBranch       string // Branch to check for builds (defaults to GitBranch if empty)
-	GitHubRepo         string // GitHub repository in format "owner/repo" (e.g., "aristath/portfolioManager")
+	GitHubRepo         string // GitHub repository in format "owner/repo" (e.g., "aristath/sentinel")
 }
 
 // ToDeploymentConfig converts config.DeploymentConfig to deployment.DeploymentConfig
@@ -200,15 +200,15 @@ func loadDeploymentConfig() *DeploymentConfig {
 		HealthCheckTimeout:     10,
 		HealthCheckMaxAttempts: 3,
 		GitBranch:              "", // Empty = auto-detect at runtime (deployment manager has fallback logic)
-		TraderBinaryName:       "trader",
-		TraderServiceName:      "trader",
+		TraderBinaryName:       "sentinel",
+		TraderServiceName:      "sentinel",
 		DockerComposePath:      "",
 		// GitHub artifact deployment (REQUIRED - no on-device building)
 		// This saves 1GB+ disk space by not requiring Go toolchain on device
 		UseGitHubArtifacts: true, // Always true - artifact deployment is required
 		GitHubWorkflowName: getEnv("GITHUB_WORKFLOW_NAME", "build-go.yml"),
-		GitHubArtifactName: getEnv("GITHUB_ARTIFACT_NAME", "trader-arm64"),
-		GitHubBranch:       getEnv("GITHUB_BRANCH", ""),                        // Defaults to GitBranch if empty
-		GitHubRepo:         getEnv("GITHUB_REPO", "aristath/portfolioManager"), // GitHub repository
+		GitHubArtifactName: getEnv("GITHUB_ARTIFACT_NAME", "sentinel-arm64"),
+		GitHubBranch:       getEnv("GITHUB_BRANCH", ""),                // Defaults to GitBranch if empty
+		GitHubRepo:         getEnv("GITHUB_REPO", "aristath/sentinel"), // GitHub repository
 	}
 }

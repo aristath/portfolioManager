@@ -7,7 +7,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/aristath/portfolioManager/internal/modules/settings"
+	"github.com/aristath/sentinel/internal/modules/settings"
 	"github.com/rs/zerolog"
 )
 

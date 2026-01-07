@@ -124,7 +124,7 @@ export function JobFooter() {
       mt="xl"
       style={{
         borderTop: '1px solid var(--mantine-color-dark-6)',
-        backgroundColor: 'var(--mantine-color-dark-8)',
+        backgroundColor: 'var(--mantine-color-dark-7)',
         border: '1px solid var(--mantine-color-dark-6)',
       }}
     >

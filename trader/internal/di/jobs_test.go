@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aristath/portfolioManager/internal/config"
-	"github.com/aristath/portfolioManager/internal/modules/display"
+	"github.com/aristath/sentinel/internal/config"
+	"github.com/aristath/sentinel/internal/modules/display"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

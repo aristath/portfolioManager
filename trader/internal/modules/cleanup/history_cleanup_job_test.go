@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aristath/portfolioManager/internal/database"
-	"github.com/aristath/portfolioManager/pkg/logger"
+	"github.com/aristath/sentinel/internal/database"
+	"github.com/aristath/sentinel/pkg/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

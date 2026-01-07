@@ -1,5 +1,5 @@
 /**
- * Centralized API client for Arduino Trader
+ * Centralized API client for Sentinel
  */
 
 async function fetchJSON(url, options = {}) {

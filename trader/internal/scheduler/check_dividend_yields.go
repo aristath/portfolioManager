@@ -1,7 +1,7 @@
 package scheduler
 
 import (
-	"github.com/aristath/portfolioManager/internal/modules/scoring"
+	"github.com/aristath/sentinel/internal/modules/scoring"
 	"github.com/rs/zerolog"
 )
 

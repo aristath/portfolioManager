@@ -11,7 +11,7 @@ Create a Python microservice (similar to `tradernet`) that wraps `yfinance` and 
 ## Architecture
 
 ```
-Go Application (trader)
+Go Application (Sentinel)
     ↓ HTTP calls
 Yahoo Finance Microservice (port 9003)
     ↓ Python calls
@@ -384,10 +384,10 @@ Wants=network.target
 Type=simple
 User=arduino
 Group=arduino
-WorkingDirectory=/opt/arduino-trader/microservices/yfinance
+WorkingDirectory=/opt/sentinel/microservices/yfinance
 Environment="PATH=/usr/local/bin:/usr/bin:/bin"
 Environment="PORT=9003"
-ExecStart=/opt/arduino-trader/microservices/yfinance/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 9003
+ExecStart=/opt/sentinel/microservices/yfinance/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 9003
 Restart=always
 RestartSec=10
 

@@ -5,8 +5,8 @@ import (
 	"math"
 	"sort"
 
-	"github.com/aristath/portfolioManager/internal/modules/planning/domain"
-	"github.com/aristath/portfolioManager/internal/modules/universe"
+	"github.com/aristath/sentinel/internal/modules/planning/domain"
+	"github.com/aristath/sentinel/internal/modules/universe"
 	"github.com/rs/zerolog"
 )
 

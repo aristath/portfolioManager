@@ -6,7 +6,7 @@ export function TradesTable() {
   const { trades } = useTradesStore();
 
   return (
-    <Card p="md" style={{ backgroundColor: 'var(--mantine-color-dark-8)', border: '1px solid var(--mantine-color-dark-6)' }}>
+    <Card p="md" style={{ backgroundColor: 'var(--mantine-color-dark-7)', border: '1px solid var(--mantine-color-dark-6)' }}>
       <Text size="xs" tt="uppercase" c="dimmed" fw={600} mb="md" style={{ fontFamily: 'var(--mantine-font-family)' }}>
         Recent Trades
       </Text>
@@ -36,7 +36,7 @@ export function TradesTable() {
                   <Table.Tr
                     key={trade.id}
                     style={{
-                      backgroundColor: isCash ? 'var(--mantine-color-dark-7)' : undefined,
+                      backgroundColor: isCash ? 'var(--mantine-color-dark-8)' : undefined,
                     }}
                   >
                     <Table.Td>

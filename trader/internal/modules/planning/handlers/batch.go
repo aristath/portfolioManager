@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/aristath/portfolioManager/internal/modules/planning/domain"
-	"github.com/aristath/portfolioManager/internal/modules/planning/planner"
-	"github.com/aristath/portfolioManager/internal/modules/planning/repository"
+	"github.com/aristath/sentinel/internal/modules/planning/domain"
+	"github.com/aristath/sentinel/internal/modules/planning/planner"
+	"github.com/aristath/sentinel/internal/modules/planning/repository"
 	"github.com/rs/zerolog"
 )
 

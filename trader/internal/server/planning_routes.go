@@ -1,10 +1,10 @@
 package server
 
 import (
-	"github.com/aristath/portfolioManager/internal/modules/planning/config"
-	"github.com/aristath/portfolioManager/internal/modules/planning/handlers"
-	"github.com/aristath/portfolioManager/internal/modules/planning/planner"
-	"github.com/aristath/portfolioManager/internal/modules/planning/repository"
+	"github.com/aristath/sentinel/internal/modules/planning/config"
+	"github.com/aristath/sentinel/internal/modules/planning/handlers"
+	"github.com/aristath/sentinel/internal/modules/planning/planner"
+	"github.com/aristath/sentinel/internal/modules/planning/repository"
 	"github.com/go-chi/chi/v5"
 )
 

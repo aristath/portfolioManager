@@ -259,7 +259,7 @@ pip install hypercorn
 pip uninstall uvicorn
 # 3. Update systemd service file:
 # Change: uvicorn → hypercorn
-# ExecStart=/opt/arduino-trader/microservices/yfinance/venv/bin/hypercorn app.main:app --bind 0.0.0.0:9003
+# ExecStart=/opt/sentinel/microservices/yfinance/venv/bin/hypercorn app.main:app --bind 0.0.0.0:9003
 # 4. Restart service:
 sudo systemctl restart yfinance
 ```
@@ -379,12 +379,12 @@ After migration, verify:
 
 **Example systemd update for Starlette+Hypercorn:**
 ```ini
-ExecStart=/opt/arduino-trader/microservices/yfinance/venv/bin/hypercorn app.main:app --bind 0.0.0.0:9003
+ExecStart=/opt/sentinel/microservices/yfinance/venv/bin/hypercorn app.main:app --bind 0.0.0.0:9003
 ```
 
 **Example systemd update for Flask+Gunicorn:**
 ```ini
-ExecStart=/opt/arduino-trader/microservices/yfinance/venv/bin/gunicorn -w 2 -b 0.0.0.0:9003 app.main:app
+ExecStart=/opt/sentinel/microservices/yfinance/venv/bin/gunicorn -w 2 -b 0.0.0.0:9003 app.main:app
 ```
 
 ### Docker Service (pypfopt)

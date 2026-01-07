@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/aristath/portfolioManager/internal/modules/planning/domain"
+	"github.com/aristath/sentinel/internal/modules/planning/domain"
 )
 
 // ValidationError represents a configuration validation error.

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/aristath/portfolioManager/internal/domain"
+	"github.com/aristath/sentinel/internal/domain"
 	"github.com/rs/zerolog"
 )
 

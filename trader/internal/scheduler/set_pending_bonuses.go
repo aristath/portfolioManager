@@ -3,7 +3,7 @@ package scheduler
 import (
 	"fmt"
 
-	"github.com/aristath/portfolioManager/internal/modules/dividends"
+	"github.com/aristath/sentinel/internal/modules/dividends"
 	"github.com/rs/zerolog"
 )
 

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/aristath/portfolioManager/pkg/formulas"
+	"github.com/aristath/sentinel/pkg/formulas"
 )
 
 type hrpLinkage string

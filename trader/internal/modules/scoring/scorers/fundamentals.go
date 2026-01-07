@@ -3,7 +3,7 @@ package scorers
 import (
 	"math"
 
-	"github.com/aristath/portfolioManager/pkg/formulas"
+	"github.com/aristath/sentinel/pkg/formulas"
 )
 
 // FundamentalsScorer calculates company health and stability score

@@ -1,7 +1,7 @@
 package queue
 
 import (
-	"github.com/aristath/portfolioManager/internal/scheduler"
+	"github.com/aristath/sentinel/internal/scheduler"
 )
 
 // JobToHandler converts a scheduler.Job to a queue.Handler

@@ -11,7 +11,7 @@
 
 /* Terminal-style borders for panels */
 [data-mantine-color-scheme="dark"] .mantine-Paper-root {
-  background-color: var(--mantine-color-dark-8) !important;
+  background-color: var(--mantine-color-dark-7) !important;
   border: 1px solid var(--mantine-color-dark-6) !important;
 }
 
@@ -29,7 +29,7 @@
 [data-mantine-color-scheme="dark"] .mantine-Input-input,
 [data-mantine-color-scheme="dark"] .mantine-TextInput-input,
 [data-mantine-color-scheme="dark"] .mantine-Select-input {
-  background-color: var(--mantine-color-dark-8) !important;
+  background-color: var(--mantine-color-dark-7) !important;
   border: 1px solid var(--mantine-color-dark-6) !important;
   font-family: var(--mantine-font-family) !important;
 }
@@ -46,17 +46,17 @@
 }
 
 [data-mantine-color-scheme="dark"] .mantine-Table-th {
-  background-color: var(--mantine-color-dark-8) !important;
+  background-color: var(--mantine-color-dark-7) !important;
   border-bottom: 1px solid var(--mantine-color-dark-6) !important;
   color: var(--mantine-color-dark-1) !important;
 }
 
 [data-mantine-color-scheme="dark"] .mantine-Table-td {
-  border-bottom: 1px solid var(--mantine-color-dark-7) !important;
+  border-bottom: 1px solid var(--mantine-color-dark-6) !important;
 }
 
 [data-mantine-color-scheme="dark"] .mantine-Table-tr:hover {
-  background-color: var(--mantine-color-dark-7) !important;
+  background-color: var(--mantine-color-dark-8) !important;
 }
 
 /* Terminal-style tabs */
@@ -68,7 +68,7 @@
 [data-mantine-color-scheme="dark"] .mantine-Tabs-tab[data-active] {
   border-color: var(--mantine-color-dark-6);
   border-bottom-color: transparent;
-  background-color: var(--mantine-color-dark-8);
+  background-color: var(--mantine-color-dark-7);
 }
 
 /* Terminal-style badges */
@@ -79,14 +79,14 @@
 
 /* Terminal-style modals */
 [data-mantine-color-scheme="dark"] .mantine-Modal-content {
-  background-color: var(--mantine-color-dark-8) !important;
+  background-color: var(--mantine-color-dark-7) !important;
   border: 1px solid var(--mantine-color-dark-6) !important;
   font-family: var(--mantine-font-family) !important;
 }
 
 [data-mantine-color-scheme="dark"] .mantine-Modal-header {
   border-bottom: 1px solid var(--mantine-color-dark-6) !important;
-  background-color: var(--mantine-color-dark-8) !important;
+  background-color: var(--mantine-color-dark-7) !important;
   font-family: var(--mantine-font-family) !important;
 }
 
@@ -100,7 +100,7 @@
 
 /* Terminal-style notifications */
 [data-mantine-color-scheme="dark"] .mantine-Notification-root {
-  background-color: var(--mantine-color-dark-8) !important;
+  background-color: var(--mantine-color-dark-7) !important;
   border: 1px solid var(--mantine-color-dark-6) !important;
   box-shadow: none !important;
 }
@@ -114,7 +114,7 @@
 [data-mantine-color-scheme="dark"] pre,
 [data-mantine-color-scheme="dark"] code {
   font-family: var(--mantine-font-family) !important;
-  background-color: var(--mantine-color-dark-8) !important;
+  background-color: var(--mantine-color-dark-7) !important;
   border: 1px solid var(--mantine-color-dark-6) !important;
   padding: 4px 8px;
   border-radius: 2px;
@@ -140,14 +140,14 @@
 
 /* Terminal-style Select dropdowns */
 [data-mantine-color-scheme="dark"] .mantine-Select-dropdown {
-  background-color: var(--mantine-color-dark-8) !important;
+  background-color: var(--mantine-color-dark-7) !important;
   border: 1px solid var(--mantine-color-dark-6) !important;
   font-family: var(--mantine-font-family) !important;
 }
 
 /* Terminal-style Menu dropdowns */
 [data-mantine-color-scheme="dark"] .mantine-Menu-dropdown {
-  background-color: var(--mantine-color-dark-8) !important;
+  background-color: var(--mantine-color-dark-7) !important;
   border: 1px solid var(--mantine-color-dark-6) !important;
   font-family: var(--mantine-font-family) !important;
 }

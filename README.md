@@ -1,14 +1,14 @@
-# Portfolio Manager
+# Sentinel
 
 **Autonomous portfolio management system for retirement fund management**
 
-Portfolio Manager is a production-ready autonomous trading system that manages a real retirement fund. It runs on an Arduino Uno Q, handling monthly deposits, automatic trading, dividend reinvestment, and portfolio management with zero human intervention.
+Sentinel is a production-ready autonomous trading system that manages a real retirement fund. It runs on an Arduino Uno Q, handling monthly deposits, automatic trading, dividend reinvestment, and portfolio management with zero human intervention.
 
 **This manages real money. Every line of code matters. Every decision has consequences.**
 
 ## Overview
 
-Portfolio Manager is an autonomous retirement fund management system that combines modern portfolio theory with adaptive market strategies. The system operates on a **slow-growth, long-term philosophy** (2-3 trades per week), prioritizing quality, diversification, and risk-adjusted returns over speculative gains.
+Sentinel is an autonomous retirement fund management system that combines modern portfolio theory with adaptive market strategies. The system operates on a **slow-growth, long-term philosophy** (2-3 trades per week), prioritizing quality, diversification, and risk-adjusted returns over speculative gains.
 
 ### Economic Theories & Models
 
@@ -91,7 +91,7 @@ The optimizer integrates advanced position sizing and risk management:
 │                    Arduino Uno Q (ARM64)                      │
 │                                                                │
 │  ┌───────────────────────────────────────────────────────┐   │
-│  │           trader (Main Application)                 │   │
+│  │           Sentinel (Main Application)                 │   │
 │  │                                                         │   │
 │  │  • Portfolio Management                                 │   │
 │  │  • Autonomous Trading                                   │   │
@@ -134,7 +134,7 @@ Note: All functionality has been migrated to Go - Tradernet API is integrated di
 
 ## Technology Stack
 
-### Main Application (trader)
+### Main Application
 
 **Language:** Go 1.22+
 - **HTTP Router:** Chi (stdlib-based, lightweight)
@@ -156,7 +156,7 @@ Note: All functionality has been migrated to Go - Tradernet API is integrated di
 - Startup: 2-3s (vs 10s Python)
 
 **Note:**
-- Planning evaluation is built into the main trader application using an in-process worker pool (no separate microservice).
+- Planning evaluation is built into the main Sentinel application using an in-process worker pool (no separate microservice).
 - Tradernet API is now integrated directly via Go SDK embedded in the main application (no microservice needed).
 - All functionality has been migrated to Go - no Python microservices are used.
 
@@ -174,7 +174,7 @@ Note: All functionality has been migrated to Go - Tradernet API is integrated di
 
 ### Prerequisites
 
-- Go 1.22+ (for building trader)
+- Go 1.22+ (for building Sentinel)
 - Existing SQLite databases (7-database architecture)
 - Tradernet API credentials
 
@@ -183,7 +183,8 @@ Note: All functionality has been migrated to Go - Tradernet API is integrated di
 #### 1. Clone Repository
 
 ```bash
-cd /path/to/arduino-trader
+git clone https://github.com/aristath/sentinel.git
+cd sentinel
 ```
 
 #### 2. Build Main Application
@@ -629,7 +630,7 @@ Composite jobs (`sync_cycle`, `planner_batch`, `dividend_reinvestment`, `health_
 ### Project Structure
 
 ```
-arduino-trader/
+sentinel/
 ├── trader/                      # Main Go application
 │   ├── cmd/server/             # Application entry point
 │   ├── internal/               # Private application code
@@ -677,7 +678,7 @@ arduino-trader/
 
 ### Development Workflow
 
-#### Main Application (trader)
+#### Main Application
 
 ```bash
 cd trader
@@ -786,7 +787,7 @@ go test -cover ./...
 
 ## Deployment
 
-**Deployment is fully automated** by the Go trader service. The system automatically:
+**Deployment is fully automated** by the Sentinel service. The system automatically:
 - Checks for code changes every 5 minutes
 - Downloads pre-built binaries from GitHub Actions
 - Deploys Go services, frontend, display app, and sketch
@@ -795,10 +796,10 @@ go test -cover ./...
 
 ### Automated Deployment
 
-The trader service includes a built-in deployment manager that:
+The Sentinel service includes a built-in deployment manager that:
 - Monitors the git repository for changes
 - Downloads ARM64 binaries from GitHub Actions artifacts
-- Deploys all components (trader service, frontend, display app, sketch)
+- Deploys all components (Sentinel service, frontend, display app, sketch)
 - Handles service restarts gracefully
 - Provides API endpoints for manual triggers
 
@@ -835,15 +836,15 @@ Create `/etc/systemd/system/trader.service`:
 
 ```ini
 [Unit]
-Description=Arduino Trader Go Service
+Description=Sentinel Go Service
 After=network.target
 
 [Service]
 Type=simple
 User=aristath
-WorkingDirectory=/home/aristath/arduino-trader/trader
+WorkingDirectory=/home/aristath/sentinel/trader
 Environment="PATH=/usr/local/bin:/usr/bin:/bin"
-ExecStart=/home/aristath/arduino-trader/trader/trader
+ExecStart=/home/aristath/sentinel/trader/trader
 Restart=always
 RestartSec=10
 
@@ -860,7 +861,7 @@ The system is self-contained and runs as a single Go application. No additional 
 For the first-time setup on a new device:
 
 1. **Install systemd service** (see Systemd Services section below)
-2. **Start the trader service**: `sudo systemctl start trader`
+2. **Start the Sentinel service**: `sudo systemctl start trader`
 3. **Configure credentials** via Settings UI or API
 
 After initial setup, deployment is fully automated. The service will:
@@ -879,7 +880,7 @@ After initial setup, deployment is fully automated. The service will:
 
 **Deployment:**
 1. Install systemd service (first time only)
-2. Start the trader service: `sudo systemctl start trader`
+2. Start the Sentinel service: `sudo systemctl start trader`
 3. Verify health endpoints
 4. Monitor logs for 24 hours
 
@@ -932,7 +933,7 @@ curl -X POST http://localhost:8001/api/settings/trading-mode \
 ```
 
 **Full Rollback:**
-1. Stop Go service: `sudo systemctl stop trader`
+1. Stop Sentinel service: `sudo systemctl stop trader`
 2. Restore previous binary
 3. Restart: `sudo systemctl start trader`
 4. Verify: `curl http://localhost:8001/health`

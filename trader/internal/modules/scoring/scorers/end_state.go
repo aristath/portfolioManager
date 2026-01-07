@@ -3,7 +3,7 @@ package scorers
 import (
 	"math"
 
-	"github.com/aristath/portfolioManager/internal/modules/scoring"
+	"github.com/aristath/sentinel/internal/modules/scoring"
 )
 
 // EndStateScorer provides scoring functions for holistic planning

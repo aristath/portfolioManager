@@ -3,7 +3,7 @@ package universe
 import (
 	"testing"
 
-	"github.com/aristath/portfolioManager/internal/modules/scoring/domain"
+	"github.com/aristath/sentinel/internal/modules/scoring/domain"
 	"github.com/stretchr/testify/assert"
 )
 

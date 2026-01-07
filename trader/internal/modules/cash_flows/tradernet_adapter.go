@@ -1,7 +1,7 @@
 package cash_flows
 
 import (
-	"github.com/aristath/portfolioManager/internal/clients/tradernet"
+	"github.com/aristath/sentinel/internal/clients/tradernet"
 )
 
 // TradernetAdapter adapts the Tradernet client to the TradernetClient interface

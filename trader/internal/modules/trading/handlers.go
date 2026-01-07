@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aristath/portfolioManager/internal/clients/tradernet"
-	"github.com/aristath/portfolioManager/internal/events"
-	"github.com/aristath/portfolioManager/internal/modules/allocation"
-	"github.com/aristath/portfolioManager/internal/modules/portfolio"
-	"github.com/aristath/portfolioManager/internal/modules/settings"
+	"github.com/aristath/sentinel/internal/clients/tradernet"
+	"github.com/aristath/sentinel/internal/events"
+	"github.com/aristath/sentinel/internal/modules/allocation"
+	"github.com/aristath/sentinel/internal/modules/portfolio"
+	"github.com/aristath/sentinel/internal/modules/settings"
 	"github.com/rs/zerolog"
 )
 

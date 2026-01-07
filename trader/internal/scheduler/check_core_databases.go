@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/aristath/portfolioManager/internal/database"
+	"github.com/aristath/sentinel/internal/database"
 	"github.com/rs/zerolog"
 )
 

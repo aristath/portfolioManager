@@ -3,7 +3,7 @@ package scheduler
 import (
 	"time"
 
-	"github.com/aristath/portfolioManager/internal/modules/symbolic_regression"
+	"github.com/aristath/sentinel/internal/modules/symbolic_regression"
 	"github.com/rs/zerolog"
 )
 

@@ -3,7 +3,7 @@ package universe
 import (
 	"math"
 
-	"github.com/aristath/portfolioManager/internal/modules/quantum"
+	"github.com/aristath/sentinel/internal/modules/quantum"
 	"github.com/rs/zerolog"
 )
 

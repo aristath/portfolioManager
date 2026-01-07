@@ -1,6 +1,6 @@
 package scheduler
 
-import "github.com/aristath/portfolioManager/internal/events"
+import "github.com/aristath/sentinel/internal/events"
 
 // UniverseServiceInterface defines the contract for universe service operations
 // Used by scheduler to enable testing with mocks

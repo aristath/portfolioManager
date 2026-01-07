@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aristath/portfolioManager/internal/database"
-	"github.com/aristath/portfolioManager/internal/modules/planning/domain"
+	"github.com/aristath/sentinel/internal/database"
+	"github.com/aristath/sentinel/internal/modules/planning/domain"
 	"github.com/rs/zerolog"
 )
 

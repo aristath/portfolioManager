@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/aristath/portfolioManager/internal/clients/tradernet"
-	"github.com/aristath/portfolioManager/internal/clients/yahoo"
-	"github.com/aristath/portfolioManager/internal/events"
+	"github.com/aristath/sentinel/internal/clients/tradernet"
+	"github.com/aristath/sentinel/internal/clients/yahoo"
+	"github.com/aristath/sentinel/internal/events"
 	"github.com/rs/zerolog"
 )
 

@@ -4,7 +4,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/aristath/portfolioManager/internal/modules/scoring"
+	"github.com/aristath/sentinel/internal/modules/scoring"
 )
 
 // WindfallScorer identifies excess gains vs expected growth

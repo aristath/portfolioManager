@@ -1,4 +1,4 @@
-# Arduino Trader LED Display
+# Sentinel LED Display
 # Simple scrolling text display for 8x13 LED matrix and RGB LEDs 3 & 4
 
 from arduino.app_utils import App, Bridge, Logger

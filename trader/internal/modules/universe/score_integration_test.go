@@ -3,9 +3,9 @@ package universe
 import (
 	"testing"
 
-	"github.com/aristath/portfolioManager/internal/database"
-	"github.com/aristath/portfolioManager/internal/modules/scoring/scorers"
-	"github.com/aristath/portfolioManager/pkg/formulas"
+	"github.com/aristath/sentinel/internal/database"
+	"github.com/aristath/sentinel/internal/modules/scoring/scorers"
+	"github.com/aristath/sentinel/pkg/formulas"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

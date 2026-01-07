@@ -3,10 +3,10 @@ package planner
 import (
 	"testing"
 
-	"github.com/aristath/portfolioManager/internal/domain"
-	planningconstraints "github.com/aristath/portfolioManager/internal/modules/planning/constraints"
-	planningdomain "github.com/aristath/portfolioManager/internal/modules/planning/domain"
-	"github.com/aristath/portfolioManager/internal/modules/universe"
+	"github.com/aristath/sentinel/internal/domain"
+	planningconstraints "github.com/aristath/sentinel/internal/modules/planning/constraints"
+	planningdomain "github.com/aristath/sentinel/internal/modules/planning/domain"
+	"github.com/aristath/sentinel/internal/modules/universe"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"

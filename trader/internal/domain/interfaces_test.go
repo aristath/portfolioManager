@@ -3,7 +3,7 @@ package domain
 import (
 	"testing"
 
-	"github.com/aristath/portfolioManager/internal/clients/tradernet"
+	"github.com/aristath/sentinel/internal/clients/tradernet"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -1,6 +1,6 @@
 package allocation
 
-import "github.com/aristath/portfolioManager/internal/domain"
+import "github.com/aristath/sentinel/internal/domain"
 
 // Note: PortfolioSummaryProvider and ConcentrationAlertProvider have been moved to domain/interfaces.go
 // They are now available as domain.PortfolioSummaryProvider and domain.ConcentrationAlertProvider

@@ -5,7 +5,7 @@
 # Arduino device connection
 export ARDUINO_HOST="${ARDUINO_HOST:-192.168.1.11}"
 export ARDUINO_USER="${ARDUINO_USER:-arduino}"
-export ARDUINO_DEPLOY_PATH="${ARDUINO_DEPLOY_PATH:-/opt/arduino-trader}"
+export ARDUINO_DEPLOY_PATH="${ARDUINO_DEPLOY_PATH:-/opt/sentinel}"
 
 # SSH connection string
 export ARDUINO_SSH="${ARDUINO_USER}@${ARDUINO_HOST}"

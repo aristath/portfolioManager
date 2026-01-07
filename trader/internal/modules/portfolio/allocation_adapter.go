@@ -2,7 +2,7 @@
 package portfolio
 
 import (
-	"github.com/aristath/portfolioManager/internal/domain"
+	"github.com/aristath/sentinel/internal/domain"
 )
 
 // PortfolioSummaryAdapter adapts PortfolioService to domain.PortfolioSummaryProvider

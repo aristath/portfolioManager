@@ -2,11 +2,11 @@
 package sequences
 
 import (
-	"github.com/aristath/portfolioManager/internal/modules/optimization"
-	"github.com/aristath/portfolioManager/internal/modules/planning/domain"
-	"github.com/aristath/portfolioManager/internal/modules/sequences/filters"
-	"github.com/aristath/portfolioManager/internal/modules/sequences/generators"
-	"github.com/aristath/portfolioManager/internal/modules/sequences/patterns"
+	"github.com/aristath/sentinel/internal/modules/optimization"
+	"github.com/aristath/sentinel/internal/modules/planning/domain"
+	"github.com/aristath/sentinel/internal/modules/sequences/filters"
+	"github.com/aristath/sentinel/internal/modules/sequences/generators"
+	"github.com/aristath/sentinel/internal/modules/sequences/patterns"
 	"github.com/rs/zerolog"
 )
 

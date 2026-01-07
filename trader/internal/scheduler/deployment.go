@@ -3,7 +3,7 @@ package scheduler
 import (
 	"time"
 
-	"github.com/aristath/portfolioManager/internal/deployment"
+	"github.com/aristath/sentinel/internal/deployment"
 	"github.com/rs/zerolog"
 )
 

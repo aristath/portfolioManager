@@ -2,7 +2,7 @@
 package server
 
 import (
-	"github.com/aristath/portfolioManager/internal/modules/charts"
+	"github.com/aristath/sentinel/internal/modules/charts"
 	"github.com/go-chi/chi/v5"
 )
 

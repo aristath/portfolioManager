@@ -1,4 +1,4 @@
-module github.com/aristath/portfolioManager
+module github.com/aristath/sentinel
 
 go 1.23.2
 

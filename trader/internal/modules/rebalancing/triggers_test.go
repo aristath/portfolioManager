@@ -3,8 +3,8 @@ package rebalancing
 import (
 	"testing"
 
-	"github.com/aristath/portfolioManager/internal/modules/portfolio"
-	"github.com/aristath/portfolioManager/pkg/logger"
+	"github.com/aristath/sentinel/internal/modules/portfolio"
+	"github.com/aristath/sentinel/pkg/logger"
 )
 
 func TestTriggerChecker_Disabled(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aristath/portfolioManager/internal/database"
+	"github.com/aristath/sentinel/internal/database"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

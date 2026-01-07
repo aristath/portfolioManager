@@ -1,4 +1,4 @@
-// Arduino Trader LED Display
+// Sentinel LED Display
 // Controls 8x13 LED matrix and RGB LEDs 3 & 4 on Arduino UNO Q
 // Uses Router Bridge for communication with Linux MPU
 

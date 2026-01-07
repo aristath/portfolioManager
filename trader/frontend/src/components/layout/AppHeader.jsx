@@ -23,7 +23,7 @@ export function AppHeader() {
             fontFamily: 'var(--mantine-font-family)',
             letterSpacing: '0.5px',
           }}>
-            Arduino Trader
+            Sentinel
           </h1>
           <p style={{
             margin: 0,

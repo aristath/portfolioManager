@@ -3,7 +3,7 @@ package scorers
 import (
 	"testing"
 
-	"github.com/aristath/portfolioManager/pkg/formulas"
+	"github.com/aristath/sentinel/pkg/formulas"
 	"github.com/stretchr/testify/assert"
 )
 

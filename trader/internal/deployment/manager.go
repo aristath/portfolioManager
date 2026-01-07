@@ -30,7 +30,7 @@ type DeploymentConfig struct {
 	GitHubWorkflowName string
 	GitHubArtifactName string
 	GitHubBranch       string
-	GitHubRepo         string // GitHub repository in format "owner/repo" (e.g., "aristath/portfolioManager")
+	GitHubRepo         string // GitHub repository in format "owner/repo" (e.g., "aristath/sentinel")
 }
 
 // Manager handles deployment orchestration
@@ -102,7 +102,7 @@ func NewManager(config *DeploymentConfig, version string, log zerolog.Logger) *M
 
 	if config.GitHubRepo == "" {
 		log.Fatal().
-			Msg("GitHub repository is REQUIRED but configuration is missing. Set GITHUB_REPO (e.g., 'aristath/portfolioManager')")
+			Msg("GitHub repository is REQUIRED but configuration is missing. Set GITHUB_REPO (e.g., 'aristath/sentinel')")
 	}
 
 	trackerFile := filepath.Join(config.DeployDir, "github-artifact-id.txt")
@@ -304,7 +304,7 @@ func (m *Manager) HardUpdate() (*DeploymentResult, error) {
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
-	// Deploy trader service (always - force download latest)
+	// Deploy Sentinel service (always - force download latest)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -346,7 +346,7 @@ func (m *Manager) HardUpdate() (*DeploymentResult, error) {
 		}
 	}
 
-	// Note: Go services (trader) are already restarted by deployGoService above
+	// Note: Go services (Sentinel) are already restarted by deployGoService above
 	// No additional restart needed here
 
 	// Mark as deployed
@@ -392,7 +392,7 @@ func (m *Manager) deployServices(result *DeploymentResult, runID string) map[str
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
-	// Deploy trader service (always deploy if artifact is available)
+	// Deploy Sentinel service (always deploy if artifact is available)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -482,7 +482,7 @@ func (m *Manager) deployGoService(config GoServiceConfig, serviceName string, ru
 		return deployment
 	}
 
-	// Health check (only for trader, bridge may not have health endpoint)
+	// Health check (only for Sentinel, bridge may not have health endpoint)
 	if serviceName == "trader" {
 		healthURL := fmt.Sprintf("http://%s:%d/health", m.config.APIHost, m.config.APIPort)
 		if err := m.serviceManager.CheckHealth(healthURL, m.config.HealthCheckMaxAttempts, m.config.HealthCheckTimeout); err != nil {

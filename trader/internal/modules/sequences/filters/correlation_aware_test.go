@@ -3,8 +3,8 @@ package filters
 import (
 	"testing"
 
-	"github.com/aristath/portfolioManager/internal/modules/optimization"
-	"github.com/aristath/portfolioManager/internal/modules/planning/domain"
+	"github.com/aristath/sentinel/internal/modules/optimization"
+	"github.com/aristath/sentinel/internal/modules/planning/domain"
 	"github.com/rs/zerolog"
 )
 

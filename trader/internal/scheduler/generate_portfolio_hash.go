@@ -3,10 +3,10 @@ package scheduler
 import (
 	"fmt"
 
-	"github.com/aristath/portfolioManager/internal/domain"
-	"github.com/aristath/portfolioManager/internal/modules/planning/hash"
-	"github.com/aristath/portfolioManager/internal/modules/portfolio"
-	"github.com/aristath/portfolioManager/internal/modules/universe"
+	"github.com/aristath/sentinel/internal/domain"
+	"github.com/aristath/sentinel/internal/modules/planning/hash"
+	"github.com/aristath/sentinel/internal/modules/portfolio"
+	"github.com/aristath/sentinel/internal/modules/universe"
 	"github.com/rs/zerolog"
 )
 

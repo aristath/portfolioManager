@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"os/exec"
 
-	"github.com/aristath/portfolioManager/internal/events"
+	"github.com/aristath/sentinel/internal/events"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 )
@@ -131,7 +131,7 @@ func (h *Handler) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 // HandleRestartService handles POST /api/settings/restart-service
 // Faithful translation from Python: app/api/settings.py -> restart_service()
 func (h *Handler) HandleRestartService(w http.ResponseWriter, r *http.Request) {
-	cmd := exec.Command("sudo", "systemctl", "restart", "arduino-trader")
+	cmd := exec.Command("sudo", "systemctl", "restart", "trader")
 	output, err := cmd.CombinedOutput()
 
 	response := map[string]string{}

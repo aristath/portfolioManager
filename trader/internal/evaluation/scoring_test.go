@@ -3,7 +3,7 @@ package evaluation
 import (
 	"testing"
 
-	"github.com/aristath/portfolioManager/internal/evaluation/models"
+	"github.com/aristath/sentinel/internal/evaluation/models"
 	"github.com/stretchr/testify/assert"
 )
 

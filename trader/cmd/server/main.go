@@ -7,12 +7,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/aristath/portfolioManager/internal/config"
-	"github.com/aristath/portfolioManager/internal/deployment"
-	"github.com/aristath/portfolioManager/internal/di"
-	"github.com/aristath/portfolioManager/internal/modules/display"
-	"github.com/aristath/portfolioManager/internal/server"
-	"github.com/aristath/portfolioManager/pkg/logger"
+	"github.com/aristath/sentinel/internal/config"
+	"github.com/aristath/sentinel/internal/deployment"
+	"github.com/aristath/sentinel/internal/di"
+	"github.com/aristath/sentinel/internal/modules/display"
+	"github.com/aristath/sentinel/internal/server"
+	"github.com/aristath/sentinel/pkg/logger"
 )
 
 // getEnv gets environment variable with fallback
@@ -30,7 +30,7 @@ func main() {
 		Pretty: true,
 	})
 
-	log.Info().Msg("Starting Portfolio Manager")
+	log.Info().Msg("Starting Sentinel")
 
 	// Load configuration
 	cfg, err := config.Load()

@@ -1,8 +1,8 @@
 package server
 
 import (
-	"github.com/aristath/portfolioManager/internal/modules/settings"
-	"github.com/aristath/portfolioManager/internal/modules/universe"
+	"github.com/aristath/sentinel/internal/modules/settings"
+	"github.com/aristath/sentinel/internal/modules/universe"
 	"github.com/go-chi/chi/v5"
 )
 

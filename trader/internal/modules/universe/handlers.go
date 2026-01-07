@@ -11,12 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aristath/portfolioManager/internal/clients/yahoo"
-	"github.com/aristath/portfolioManager/internal/domain"
-	"github.com/aristath/portfolioManager/internal/events"
-	scoringdomain "github.com/aristath/portfolioManager/internal/modules/scoring/domain"
-	"github.com/aristath/portfolioManager/internal/modules/scoring/scorers"
-	"github.com/aristath/portfolioManager/pkg/formulas"
+	"github.com/aristath/sentinel/internal/clients/yahoo"
+	"github.com/aristath/sentinel/internal/domain"
+	"github.com/aristath/sentinel/internal/events"
+	scoringdomain "github.com/aristath/sentinel/internal/modules/scoring/domain"
+	"github.com/aristath/sentinel/internal/modules/scoring/scorers"
+	"github.com/aristath/sentinel/pkg/formulas"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 )

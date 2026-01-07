@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aristath/portfolioManager/internal/events"
+	"github.com/aristath/sentinel/internal/events"
 	"github.com/rs/zerolog"
 )
 

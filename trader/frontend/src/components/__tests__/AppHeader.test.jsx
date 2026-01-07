@@ -31,6 +31,6 @@ describe('AppHeader', () => {
       </MantineProvider>
     );
 
-    expect(screen.getByText('Arduino Trader')).toBeInTheDocument();
+    expect(screen.getByText('Sentinel')).toBeInTheDocument();
   });
 });

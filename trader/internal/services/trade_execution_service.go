@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aristath/portfolioManager/internal/clients/tradernet"
-	"github.com/aristath/portfolioManager/internal/domain"
-	"github.com/aristath/portfolioManager/internal/events"
-	"github.com/aristath/portfolioManager/internal/modules/portfolio"
-	"github.com/aristath/portfolioManager/internal/modules/trading"
+	"github.com/aristath/sentinel/internal/clients/tradernet"
+	"github.com/aristath/sentinel/internal/domain"
+	"github.com/aristath/sentinel/internal/events"
+	"github.com/aristath/sentinel/internal/modules/portfolio"
+	"github.com/aristath/sentinel/internal/modules/trading"
 	"github.com/rs/zerolog"
 )
 

@@ -4,8 +4,8 @@ package di
 import (
 	"fmt"
 
-	"github.com/aristath/portfolioManager/internal/config"
-	"github.com/aristath/portfolioManager/internal/database"
+	"github.com/aristath/sentinel/internal/config"
+	"github.com/aristath/sentinel/internal/database"
 	"github.com/rs/zerolog"
 )
 

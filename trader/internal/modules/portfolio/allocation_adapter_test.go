@@ -3,7 +3,7 @@ package portfolio
 import (
 	"testing"
 
-	"github.com/aristath/portfolioManager/internal/domain"
+	"github.com/aristath/sentinel/internal/domain"
 	"github.com/stretchr/testify/assert"
 )
 

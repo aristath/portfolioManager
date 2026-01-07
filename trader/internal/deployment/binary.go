@@ -1,4 +1,4 @@
-// Package deployment provides deployment functionality for building and deploying the trader application.
+// Package deployment provides deployment functionality for building and deploying the Sentinel application.
 package deployment
 
 import (

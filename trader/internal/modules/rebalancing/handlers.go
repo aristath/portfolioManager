@@ -6,11 +6,11 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/aristath/portfolioManager/internal/clients/tradernet"
-	"github.com/aristath/portfolioManager/internal/domain"
-	"github.com/aristath/portfolioManager/internal/modules/allocation"
-	"github.com/aristath/portfolioManager/internal/modules/portfolio"
-	"github.com/aristath/portfolioManager/internal/services"
+	"github.com/aristath/sentinel/internal/clients/tradernet"
+	"github.com/aristath/sentinel/internal/domain"
+	"github.com/aristath/sentinel/internal/modules/allocation"
+	"github.com/aristath/sentinel/internal/modules/portfolio"
+	"github.com/aristath/sentinel/internal/services"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 )

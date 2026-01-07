@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aristath/portfolioManager/internal/clients/yahoo"
+	"github.com/aristath/sentinel/internal/clients/yahoo"
 	"github.com/rs/zerolog"
 )
 

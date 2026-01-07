@@ -4,15 +4,15 @@ package di
 import (
 	"fmt"
 
-	"github.com/aristath/portfolioManager/internal/modules/allocation"
-	"github.com/aristath/portfolioManager/internal/modules/cash_flows"
-	"github.com/aristath/portfolioManager/internal/modules/dividends"
-	"github.com/aristath/portfolioManager/internal/modules/planning"
-	planningrepo "github.com/aristath/portfolioManager/internal/modules/planning/repository"
-	"github.com/aristath/portfolioManager/internal/modules/portfolio"
-	"github.com/aristath/portfolioManager/internal/modules/settings"
-	"github.com/aristath/portfolioManager/internal/modules/trading"
-	"github.com/aristath/portfolioManager/internal/modules/universe"
+	"github.com/aristath/sentinel/internal/modules/allocation"
+	"github.com/aristath/sentinel/internal/modules/cash_flows"
+	"github.com/aristath/sentinel/internal/modules/dividends"
+	"github.com/aristath/sentinel/internal/modules/planning"
+	planningrepo "github.com/aristath/sentinel/internal/modules/planning/repository"
+	"github.com/aristath/sentinel/internal/modules/portfolio"
+	"github.com/aristath/sentinel/internal/modules/settings"
+	"github.com/aristath/sentinel/internal/modules/trading"
+	"github.com/aristath/sentinel/internal/modules/universe"
 	"github.com/rs/zerolog"
 )
 

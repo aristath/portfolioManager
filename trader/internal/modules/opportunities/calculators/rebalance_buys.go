@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/aristath/portfolioManager/internal/modules/planning/domain"
+	"github.com/aristath/sentinel/internal/modules/planning/domain"
 	"github.com/rs/zerolog"
 )
 

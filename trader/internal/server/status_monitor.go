@@ -3,8 +3,8 @@ package server
 import (
 	"time"
 
-	"github.com/aristath/portfolioManager/internal/events"
-	"github.com/aristath/portfolioManager/internal/modules/market_hours"
+	"github.com/aristath/sentinel/internal/events"
+	"github.com/aristath/sentinel/internal/modules/market_hours"
 	"github.com/rs/zerolog"
 )
 

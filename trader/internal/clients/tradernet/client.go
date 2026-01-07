@@ -8,7 +8,7 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/aristath/portfolioManager/internal/clients/tradernet/sdk"
+	"github.com/aristath/sentinel/internal/clients/tradernet/sdk"
 )
 
 // Client for Tradernet API (using SDK directly)

@@ -3,7 +3,7 @@ package di
 import (
 	"testing"
 
-	"github.com/aristath/portfolioManager/internal/config"
+	"github.com/aristath/sentinel/internal/config"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

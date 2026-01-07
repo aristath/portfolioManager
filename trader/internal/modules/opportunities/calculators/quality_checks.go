@@ -3,8 +3,8 @@ package calculators
 import (
 	"math"
 
-	"github.com/aristath/portfolioManager/internal/modules/planning/domain"
-	"github.com/aristath/portfolioManager/internal/modules/quantum"
+	"github.com/aristath/sentinel/internal/modules/planning/domain"
+	"github.com/aristath/sentinel/internal/modules/quantum"
 )
 
 // QualityCheckResult contains the result of quality checks

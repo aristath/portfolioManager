@@ -1,12 +1,12 @@
 package planning
 
 import (
-	"github.com/aristath/portfolioManager/internal/modules/opportunities"
-	"github.com/aristath/portfolioManager/internal/modules/planning/domain"
-	"github.com/aristath/portfolioManager/internal/modules/planning/evaluation"
-	"github.com/aristath/portfolioManager/internal/modules/planning/planner"
-	"github.com/aristath/portfolioManager/internal/modules/sequences"
-	"github.com/aristath/portfolioManager/internal/modules/universe"
+	"github.com/aristath/sentinel/internal/modules/opportunities"
+	"github.com/aristath/sentinel/internal/modules/planning/domain"
+	"github.com/aristath/sentinel/internal/modules/planning/evaluation"
+	"github.com/aristath/sentinel/internal/modules/planning/planner"
+	"github.com/aristath/sentinel/internal/modules/sequences"
+	"github.com/aristath/sentinel/internal/modules/universe"
 	"github.com/rs/zerolog"
 )
 

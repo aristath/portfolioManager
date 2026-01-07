@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/aristath/portfolioManager/pkg/embedded"
+	"github.com/aristath/sentinel/pkg/embedded"
 )
 
 // SketchDeployer handles Arduino sketch compilation and upload

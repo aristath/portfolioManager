@@ -3,7 +3,7 @@ package scheduler
 import (
 	"testing"
 
-	"github.com/aristath/portfolioManager/internal/modules/dividends"
+	"github.com/aristath/sentinel/internal/modules/dividends"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 )

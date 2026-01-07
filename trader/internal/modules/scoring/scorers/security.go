@@ -4,11 +4,11 @@ import (
 	"math"
 	"time"
 
-	"github.com/aristath/portfolioManager/internal/modules/quantum"
-	"github.com/aristath/portfolioManager/internal/modules/scoring"
-	"github.com/aristath/portfolioManager/internal/modules/scoring/domain"
-	"github.com/aristath/portfolioManager/internal/modules/symbolic_regression"
-	"github.com/aristath/portfolioManager/pkg/formulas"
+	"github.com/aristath/sentinel/internal/modules/quantum"
+	"github.com/aristath/sentinel/internal/modules/scoring"
+	"github.com/aristath/sentinel/internal/modules/scoring/domain"
+	"github.com/aristath/sentinel/internal/modules/symbolic_regression"
+	"github.com/aristath/sentinel/pkg/formulas"
 )
 
 // AdaptiveWeightsProvider interface for getting adaptive weights

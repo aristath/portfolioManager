@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/aristath/portfolioManager/internal/clients/tradernet"
-	"github.com/aristath/portfolioManager/internal/modules/trading"
-	"github.com/aristath/portfolioManager/pkg/logger"
+	"github.com/aristath/sentinel/internal/clients/tradernet"
+	"github.com/aristath/sentinel/internal/modules/trading"
+	"github.com/aristath/sentinel/pkg/logger"
 )
 
 // Mock implementations for testing

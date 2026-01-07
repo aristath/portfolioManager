@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/aristath/portfolioManager/internal/clients/yahoo"
-	"github.com/aristath/portfolioManager/internal/modules/symbolic_regression"
+	"github.com/aristath/sentinel/internal/clients/yahoo"
+	"github.com/aristath/sentinel/internal/modules/symbolic_regression"
 	"github.com/rs/zerolog"
 )
 

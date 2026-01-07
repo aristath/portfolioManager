@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aristath/portfolioManager/internal/events"
-	"github.com/aristath/portfolioManager/internal/modules/planning/config"
-	"github.com/aristath/portfolioManager/internal/modules/planning/domain"
-	"github.com/aristath/portfolioManager/internal/modules/planning/repository"
+	"github.com/aristath/sentinel/internal/events"
+	"github.com/aristath/sentinel/internal/modules/planning/config"
+	"github.com/aristath/sentinel/internal/modules/planning/domain"
+	"github.com/aristath/sentinel/internal/modules/planning/repository"
 	"github.com/rs/zerolog"
 )
 

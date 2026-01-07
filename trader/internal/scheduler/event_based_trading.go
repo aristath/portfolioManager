@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aristath/portfolioManager/internal/modules/planning"
-	"github.com/aristath/portfolioManager/internal/modules/trading"
+	"github.com/aristath/sentinel/internal/modules/planning"
+	"github.com/aristath/sentinel/internal/modules/trading"
 	"github.com/rs/zerolog"
 )
 

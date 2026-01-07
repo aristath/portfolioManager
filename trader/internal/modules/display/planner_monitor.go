@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/aristath/portfolioManager/internal/modules/planning"
+	"github.com/aristath/sentinel/internal/modules/planning"
 	"github.com/rs/zerolog"
 )
 

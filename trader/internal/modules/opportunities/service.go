@@ -4,9 +4,9 @@ package opportunities
 import (
 	"fmt"
 
-	"github.com/aristath/portfolioManager/internal/modules/opportunities/calculators"
-	"github.com/aristath/portfolioManager/internal/modules/planning/domain"
-	"github.com/aristath/portfolioManager/internal/modules/universe"
+	"github.com/aristath/sentinel/internal/modules/opportunities/calculators"
+	"github.com/aristath/sentinel/internal/modules/planning/domain"
+	"github.com/aristath/sentinel/internal/modules/universe"
 	"github.com/rs/zerolog"
 )
 

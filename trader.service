@@ -1,6 +1,6 @@
 [Unit]
-Description=Portfolio Manager Go Service
-Documentation=https://github.com/aristath/portfolioManager
+Description=Sentinel Go Service
+Documentation=https://github.com/aristath/sentinel
 After=network.target docker.service
 Wants=docker.service
 
@@ -8,10 +8,10 @@ Wants=docker.service
 Type=simple
 User=arduino
 Group=arduino
-WorkingDirectory=/opt/arduino-trader
+WorkingDirectory=/opt/sentinel
 Environment="PATH=/usr/local/bin:/usr/bin:/bin"
-EnvironmentFile=-/opt/arduino-trader/.env
-ExecStart=/opt/arduino-trader/trader
+EnvironmentFile=-/opt/sentinel/.env
+ExecStart=/opt/sentinel/trader
 Restart=always
 RestartSec=10
 

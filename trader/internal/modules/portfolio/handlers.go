@@ -8,8 +8,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/aristath/portfolioManager/internal/clients/tradernet"
-	"github.com/aristath/portfolioManager/internal/domain"
+	"github.com/aristath/sentinel/internal/clients/tradernet"
+	"github.com/aristath/sentinel/internal/domain"
 	"github.com/rs/zerolog"
 )
 
