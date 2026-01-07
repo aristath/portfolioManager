@@ -457,8 +457,10 @@ func (a *RecommendationRepositoryAdapter) StorePlan(plan interface{}, portfolioH
 
 	if holisticPlan == nil || len(holisticPlan.Steps) == 0 {
 		// If plan has no steps, dismiss all old pending recommendations
-		// This ensures old invalid recommendations are cleared when no new plan is generated
-		_, _ = a.repo.DismissAllByPortfolioHash(portfolioHash)
+		// This ensures old invalid recommendations are cleared when no new plan is generated.
+		// We use DismissAllPending() instead of DismissAllByPortfolioHash() because old
+		// recommendations may have different portfolio hashes from before portfolio changes.
+		_, _ = a.repo.DismissAllPending()
 		return nil
 	}
 
