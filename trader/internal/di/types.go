@@ -7,6 +7,7 @@ import (
 	"github.com/aristath/sentinel/internal/database"
 	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/events"
+	"github.com/aristath/sentinel/internal/market_regime"
 	"github.com/aristath/sentinel/internal/modules/adaptation"
 	"github.com/aristath/sentinel/internal/modules/allocation"
 	"github.com/aristath/sentinel/internal/modules/analytics"
@@ -100,9 +101,9 @@ type Container struct {
 	PlanningService           *planning.Service
 	RebalancingService        *rebalancing.Service
 	SecurityScorer            *scorers.SecurityScorer
-	MarketIndexService        *portfolio.MarketIndexService
-	RegimePersistence         *portfolio.RegimePersistence
-	RegimeDetector            *portfolio.MarketRegimeDetector
+	MarketIndexService        *market_regime.MarketIndexService
+	RegimePersistence         *market_regime.RegimePersistence
+	RegimeDetector            *market_regime.MarketRegimeDetector
 	AdaptiveMarketService     *adaptation.AdaptiveMarketService
 	RegimeScoreProvider       *portfolio.RegimeScoreProviderAdapter
 	DividendService           *cash_flows.DividendServiceImpl

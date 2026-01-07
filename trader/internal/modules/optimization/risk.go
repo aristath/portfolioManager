@@ -9,7 +9,7 @@ import (
 	"gonum.org/v1/gonum/mat"
 	"gonum.org/v1/gonum/stat"
 
-	"github.com/aristath/sentinel/internal/modules/portfolio"
+	"github.com/aristath/sentinel/internal/market_regime"
 	"github.com/rs/zerolog"
 )
 
@@ -202,7 +202,7 @@ func (rb *RiskModelBuilder) BuildRegimeAwareCovarianceMatrix(
 
 	// Regime score series per observation: use rolling window of market returns.
 	regimeScores := make([]float64, numObs)
-	detector := portfolio.NewMarketRegimeDetector(rb.log)
+	detector := market_regime.NewMarketRegimeDetector(rb.log)
 	for t := 0; t < numObs; t++ {
 		start := t - (regimeWindowDays - 1)
 		if start < 0 {

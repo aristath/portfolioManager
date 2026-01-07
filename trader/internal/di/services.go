@@ -10,6 +10,7 @@ import (
 	"github.com/aristath/sentinel/internal/config"
 	"github.com/aristath/sentinel/internal/database"
 	"github.com/aristath/sentinel/internal/events"
+	"github.com/aristath/sentinel/internal/market_regime"
 	"github.com/aristath/sentinel/internal/modules/adaptation"
 	"github.com/aristath/sentinel/internal/modules/allocation"
 	"github.com/aristath/sentinel/internal/modules/analytics"
@@ -381,7 +382,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	// ==========================================
 
 	// Market index service for market-wide regime detection
-	container.MarketIndexService = portfolio.NewMarketIndexService(
+	container.MarketIndexService = market_regime.NewMarketIndexService(
 		container.UniverseDB.Conn(),
 		container.HistoryDB.Conn(),
 		container.TradernetClient,
@@ -389,10 +390,10 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	)
 
 	// Regime persistence for smoothing and history
-	container.RegimePersistence = portfolio.NewRegimePersistence(container.ConfigDB.Conn(), log)
+	container.RegimePersistence = market_regime.NewRegimePersistence(container.ConfigDB.Conn(), log)
 
 	// Market regime detector
-	container.RegimeDetector = portfolio.NewMarketRegimeDetector(log)
+	container.RegimeDetector = market_regime.NewMarketRegimeDetector(log)
 	container.RegimeDetector.SetMarketIndexService(container.MarketIndexService)
 	container.RegimeDetector.SetRegimePersistence(container.RegimePersistence)
 

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aristath/sentinel/internal/market_regime"
 	"github.com/aristath/sentinel/internal/modules/portfolio"
 	"github.com/aristath/sentinel/internal/modules/scoring/scorers"
 	"github.com/aristath/sentinel/internal/modules/universe"
@@ -117,8 +118,8 @@ func TestFullAdaptationFlow(t *testing.T) {
 	log := zerolog.Nop()
 
 	// Step 1: Initialize components
-	regimePersistence := portfolio.NewRegimePersistence(configDB, log)
-	regimeDetector := portfolio.NewMarketRegimeDetector(log)
+	regimePersistence := market_regime.NewRegimePersistence(configDB, log)
+	regimeDetector := market_regime.NewMarketRegimeDetector(log)
 	regimeDetector.SetRegimePersistence(regimePersistence)
 	// Note: MarketIndexService not needed for this test - we're testing adaptation logic, not market data fetching
 
@@ -131,12 +132,12 @@ func TestFullAdaptationFlow(t *testing.T) {
 	)
 
 	// Step 2: Record initial regime score (neutral)
-	initialScore := portfolio.MarketRegimeScore(0.0)
+	initialScore := market_regime.MarketRegimeScore(0.0)
 	err := regimePersistence.RecordRegimeScore(initialScore)
 	require.NoError(t, err)
 
 	// Step 3: Simulate regime change (bull market)
-	bullScore := portfolio.MarketRegimeScore(0.6)
+	bullScore := market_regime.MarketRegimeScore(0.6)
 	err = regimePersistence.RecordRegimeScore(bullScore)
 	require.NoError(t, err)
 
@@ -144,7 +145,7 @@ func TestFullAdaptationFlow(t *testing.T) {
 	currentScore, err := regimePersistence.GetCurrentRegimeScore()
 	require.NoError(t, err)
 
-	lastScore := portfolio.MarketRegimeScore(0.0) // Initial neutral score
+	lastScore := market_regime.MarketRegimeScore(0.0) // Initial neutral score
 	shouldAdapt := adaptiveService.ShouldAdapt(
 		float64(currentScore),
 		float64(lastScore),
@@ -230,15 +231,15 @@ func TestAdaptationWithScoringIntegration(t *testing.T) {
 	log := zerolog.Nop()
 
 	// Setup regime persistence
-	regimePersistence := portfolio.NewRegimePersistence(configDB, log)
+	regimePersistence := market_regime.NewRegimePersistence(configDB, log)
 
 	// Record bull market regime
-	bullScore := portfolio.MarketRegimeScore(0.5)
+	bullScore := market_regime.MarketRegimeScore(0.5)
 	err := regimePersistence.RecordRegimeScore(bullScore)
 	require.NoError(t, err)
 
 	// Create adaptive service
-	regimeDetector := portfolio.NewMarketRegimeDetector(log)
+	regimeDetector := market_regime.NewMarketRegimeDetector(log)
 	regimeDetector.SetRegimePersistence(regimePersistence)
 	adaptiveService := NewAdaptiveMarketService(regimeDetector, nil, nil, nil, log)
 
@@ -282,15 +283,15 @@ func TestAdaptationWithTagAssignerIntegration(t *testing.T) {
 	log := zerolog.Nop()
 
 	// Setup regime persistence
-	regimePersistence := portfolio.NewRegimePersistence(configDB, log)
+	regimePersistence := market_regime.NewRegimePersistence(configDB, log)
 
 	// Record bear market regime
-	bearScore := portfolio.MarketRegimeScore(-0.5)
+	bearScore := market_regime.MarketRegimeScore(-0.5)
 	err := regimePersistence.RecordRegimeScore(bearScore)
 	require.NoError(t, err)
 
 	// Create adaptive service
-	regimeDetector := portfolio.NewMarketRegimeDetector(log)
+	regimeDetector := market_regime.NewMarketRegimeDetector(log)
 	regimeDetector.SetRegimePersistence(regimePersistence)
 	adaptiveService := NewAdaptiveMarketService(regimeDetector, nil, nil, nil, log)
 
@@ -322,8 +323,8 @@ func TestRegimeTransitionSmoothness(t *testing.T) {
 	configDB, _, _ := setupIntegrationTestDB(t)
 	log := zerolog.Nop()
 
-	regimePersistence := portfolio.NewRegimePersistence(configDB, log)
-	regimeDetector := portfolio.NewMarketRegimeDetector(log)
+	regimePersistence := market_regime.NewRegimePersistence(configDB, log)
+	regimeDetector := market_regime.NewMarketRegimeDetector(log)
 	regimeDetector.SetRegimePersistence(regimePersistence)
 	adaptiveService := NewAdaptiveMarketService(regimeDetector, nil, nil, nil, log)
 
@@ -333,7 +334,7 @@ func TestRegimeTransitionSmoothness(t *testing.T) {
 	blendsHistory := make([]float64, len(scores))
 
 	for i, score := range scores {
-		err := regimePersistence.RecordRegimeScore(portfolio.MarketRegimeScore(score))
+		err := regimePersistence.RecordRegimeScore(market_regime.MarketRegimeScore(score))
 		require.NoError(t, err)
 
 		currentScore, err := regimePersistence.GetCurrentRegimeScore()
@@ -365,8 +366,8 @@ func TestAdaptationThresholdCrossing(t *testing.T) {
 	configDB, _, _ := setupIntegrationTestDB(t)
 	log := zerolog.Nop()
 
-	regimePersistence := portfolio.NewRegimePersistence(configDB, log)
-	regimeDetector := portfolio.NewMarketRegimeDetector(log)
+	regimePersistence := market_regime.NewRegimePersistence(configDB, log)
+	regimeDetector := market_regime.NewMarketRegimeDetector(log)
 	regimeDetector.SetRegimePersistence(regimePersistence)
 	adaptiveService := NewAdaptiveMarketService(regimeDetector, nil, nil, nil, log)
 
@@ -429,13 +430,13 @@ func TestAdaptiveParametersPersistence(t *testing.T) {
 	configDB, _, _ := setupIntegrationTestDB(t)
 	log := zerolog.Nop()
 
-	regimePersistence := portfolio.NewRegimePersistence(configDB, log)
-	regimeDetector := portfolio.NewMarketRegimeDetector(log)
+	regimePersistence := market_regime.NewRegimePersistence(configDB, log)
+	regimeDetector := market_regime.NewMarketRegimeDetector(log)
 	regimeDetector.SetRegimePersistence(regimePersistence)
 	adaptiveService := NewAdaptiveMarketService(regimeDetector, nil, nil, nil, log)
 
 	// Record regime score
-	regimeScore := portfolio.MarketRegimeScore(0.4)
+	regimeScore := market_regime.MarketRegimeScore(0.4)
 	err := regimePersistence.RecordRegimeScore(regimeScore)
 	require.NoError(t, err)
 

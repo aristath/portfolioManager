@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/aristath/sentinel/internal/modules/portfolio"
+	"github.com/aristath/sentinel/internal/market_regime"
 	"github.com/aristath/sentinel/pkg/formulas"
 	"github.com/rs/zerolog"
 )
@@ -12,14 +12,14 @@ import (
 // CVaRCalculator calculates Conditional Value at Risk for portfolios and securities.
 type CVaRCalculator struct {
 	riskBuilder    *RiskModelBuilder
-	regimeDetector *portfolio.MarketRegimeDetector
+	regimeDetector *market_regime.MarketRegimeDetector
 	log            zerolog.Logger
 }
 
 // NewCVaRCalculator creates a new CVaR calculator.
 func NewCVaRCalculator(
 	riskBuilder *RiskModelBuilder,
-	regimeDetector *portfolio.MarketRegimeDetector,
+	regimeDetector *market_regime.MarketRegimeDetector,
 	log zerolog.Logger,
 ) *CVaRCalculator {
 	if log.GetLevel() == zerolog.Disabled {

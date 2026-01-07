@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/aristath/sentinel/internal/modules/portfolio"
+	"github.com/aristath/sentinel/internal/market_regime"
 	"github.com/rs/zerolog"
 )
 
@@ -18,7 +18,7 @@ type KellyPositionSizer struct {
 	fractionalMode  string // "fixed" or "adaptive"
 	returnsCalc     *ReturnsCalculator
 	riskBuilder     *RiskModelBuilder
-	regimeDetector  *portfolio.MarketRegimeDetector
+	regimeDetector  *market_regime.MarketRegimeDetector
 	log             zerolog.Logger
 }
 
@@ -39,7 +39,7 @@ func NewKellyPositionSizer(
 	maxPositionSize float64,
 	returnsCalc *ReturnsCalculator,
 	riskBuilder *RiskModelBuilder,
-	regimeDetector *portfolio.MarketRegimeDetector,
+	regimeDetector *market_regime.MarketRegimeDetector,
 ) *KellyPositionSizer {
 	log := zerolog.Nop()
 	if returnsCalc != nil {

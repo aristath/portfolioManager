@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/aristath/sentinel/internal/market_regime"
 	"github.com/aristath/sentinel/internal/modules/adaptation"
-	"github.com/aristath/sentinel/internal/modules/portfolio"
 	"github.com/rs/zerolog"
 )
 
@@ -15,8 +15,8 @@ import (
 // Runs daily to monitor market conditions and adapt portfolio strategy
 type AdaptiveMarketJob struct {
 	log                 zerolog.Logger
-	regimeDetector      *portfolio.MarketRegimeDetector
-	regimePersistence   *portfolio.RegimePersistence
+	regimeDetector      *market_regime.MarketRegimeDetector
+	regimePersistence   *market_regime.RegimePersistence
 	adaptiveService     *adaptation.AdaptiveMarketService
 	adaptationThreshold float64 // Threshold for triggering adaptation (default: 0.1)
 	configDB            *sql.DB // Database connection for storing adaptive parameters
@@ -25,8 +25,8 @@ type AdaptiveMarketJob struct {
 // AdaptiveMarketJobConfig holds configuration for adaptive market job
 type AdaptiveMarketJobConfig struct {
 	Log                 zerolog.Logger
-	RegimeDetector      *portfolio.MarketRegimeDetector
-	RegimePersistence   *portfolio.RegimePersistence
+	RegimeDetector      *market_regime.MarketRegimeDetector
+	RegimePersistence   *market_regime.RegimePersistence
 	AdaptiveService     *adaptation.AdaptiveMarketService
 	AdaptationThreshold float64 // Default: 0.1
 	ConfigDB            *sql.DB // Database connection for storing adaptive parameters
