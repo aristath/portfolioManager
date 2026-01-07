@@ -1,3 +1,4 @@
+// Package di provides dependency injection type definitions.
 package di
 
 import (

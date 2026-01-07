@@ -1,3 +1,4 @@
+// Package di provides dependency injection for scheduler jobs.
 package di
 
 import (

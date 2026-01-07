@@ -1,3 +1,4 @@
+// Package di provides dependency injection wiring and initialization.
 package di
 
 import (

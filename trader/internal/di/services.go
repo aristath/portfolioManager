@@ -1,3 +1,4 @@
+// Package di provides dependency injection for service implementations.
 package di
 
 import (

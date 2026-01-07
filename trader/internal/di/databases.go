@@ -1,3 +1,4 @@
+// Package di provides dependency injection for database connections.
 package di
 
 import (

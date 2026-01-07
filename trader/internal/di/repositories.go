@@ -1,3 +1,4 @@
+// Package di provides dependency injection for repository implementations.
 package di
 
 import (
