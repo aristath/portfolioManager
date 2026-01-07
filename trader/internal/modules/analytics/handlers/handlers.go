@@ -7,25 +7,23 @@ import (
 	"strings"
 
 	"github.com/aristath/sentinel/internal/modules/analytics"
-	"github.com/aristath/sentinel/internal/modules/portfolio"
-	"github.com/aristath/sentinel/internal/modules/universe"
 	"github.com/rs/zerolog"
 )
 
 // Handler provides HTTP handlers for analytics endpoints
 type Handler struct {
-	factorTracker   *analytics.FactorExposureTracker
-	portfolioService *portfolio.Service
-	positionRepo    interface{} // TODO: Replace with actual position repository type
-	scoreRepo       interface{} // TODO: Replace with actual score repository type
-	portfolioDB     *sql.DB
-	log             zerolog.Logger
+	factorTracker    *analytics.FactorExposureTracker
+	portfolioService interface{} // TODO: Replace with actual portfolio service type
+	positionRepo     interface{} // TODO: Replace with actual position repository type
+	scoreRepo        interface{} // TODO: Replace with actual score repository type
+	portfolioDB      *sql.DB
+	log              zerolog.Logger
 }
 
 // NewHandler creates a new analytics handler
 func NewHandler(
 	factorTracker *analytics.FactorExposureTracker,
-	portfolioService *portfolio.Service,
+	portfolioService interface{},
 	positionRepo interface{},
 	scoreRepo interface{},
 	portfolioDB *sql.DB,
