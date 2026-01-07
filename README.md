@@ -17,20 +17,20 @@ The system implements a comprehensive suite of financial theories:
 - **Modern Portfolio Theory (Markowitz)**: Mean-variance optimization for efficient frontier construction
 - **Hierarchical Risk Parity (HRP)**: Risk-based portfolio construction using correlation clustering
 - **Adaptive Market Hypothesis (AMH)**: Dynamic adaptation of scoring weights and optimization strategies as markets evolve
-- **Quantum Probability Models**: Advanced bubble detection and value trap identification using quantum-inspired probability distributions
+- **Quantum-Inspired Probability Models**: Advanced bubble detection and value trap identification using quantum-inspired probability distributions (see `docs/QUANTUM_PROBABILITY_IMPLEMENTATION.md`)
 - **Regime-Aware Risk Management**: Market regime detection (bull/bear/sideways) with adaptive correlation matrices and multi-scale optimization
-- **Symbolic Regression**: Formula discovery for optimal scoring combinations across different market conditions
+- **Symbolic Regression**: Formula discovery for optimal scoring combinations across different market conditions (with walk-forward validation and complexity limits to prevent overfitting)
 - **Risk-Adjusted Metrics**: Sharpe ratio, Sortino ratio, and volatility-adjusted returns
 - **Total Return Focus**: Combined growth (CAGR) and dividend yield for comprehensive return measurement
 
 ### Investment Philosophy
 
 **What the System Favors:**
-- **Quality over quantity**: 45% of security scoring emphasizes long-term fundamentals and financial strength
+- **Quality over quantity**: ~45% of security scoring emphasizes long-term fundamentals and financial strength (adapts with market regime: 45% neutral, 45% bull, 50% bear)
 - **Dividend income**: 18% weight on dividend yield, consistency, and growth (total return = growth + dividends)
 - **Diversification**: Geographic, sector, and position-level diversification with optimizer alignment
 - **Risk-adjusted performance**: Sharpe and Sortino ratios prioritized over raw returns
-- **Gradual rebalancing**: Avoids large portfolio shifts, preferring incremental adjustments
+- **Gradual rebalancing**: Avoids large portfolio shifts, preferring incremental adjustments (even during regime changes - uses monthly deposits and selective buying rather than selling to rebalance)
 - **Dynamic adaptation**: Scoring weights and optimization strategies evolve with market conditions over months/years
 - **Regime awareness**: Different strategies for bull, bear, and sideways markets
 
@@ -43,7 +43,12 @@ The system implements a comprehensive suite of financial theories:
 - **Static strategies**: Continuously adapts to changing market conditions rather than fixed allocations
 - **Speculative trading**: Focuses on 2-3 trades per week, not high-frequency strategies
 
-The optimizer blends Mean-Variance (return-focused) and HRP (risk-focused) strategies, while the planner identifies opportunities through value, quality, dividend, and technical analysis. All decisions are evaluated through a multi-factor scoring system that balances expected returns, risk, quality, and transaction costs.
+The optimizer blends Mean-Variance (return-focused) and HRP (risk-focused) strategies using an adaptive blend that responds to market regime:
+- **Bull markets**: 70% MV / 30% HRP (return-focused)
+- **Neutral markets**: 50% MV / 50% HRP (balanced)
+- **Bear markets**: 30% MV / 70% HRP (risk-focused)
+
+The blend adapts smoothly via linear interpolation based on the continuous regime score (-1.0 to +1.0). The planner identifies opportunities through value, quality, dividend, and technical analysis. All decisions are evaluated through a multi-factor scoring system that balances expected returns, risk, quality, and transaction costs.
 
 ## Table of Contents
 
