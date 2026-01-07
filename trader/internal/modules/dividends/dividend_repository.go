@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aristath/portfolioManager/internal/utils"
 	"github.com/rs/zerolog"
 )
 
@@ -49,11 +48,11 @@ func (r *DividendRepository) Create(dividend *DividendRecord) error {
 		}
 	}
 
-	// Convert YYYY-MM-DD payment_date to Unix timestamp at midnight UTC
-	paymentDateUnix, err := utils.DateToUnix(dividend.PaymentDate)
-	if err != nil {
-		return fmt.Errorf("invalid payment_date format (expected YYYY-MM-DD): %w", err)
+	// Use Unix timestamp directly - no string parsing needed
+	if dividend.PaymentDate == nil {
+		return fmt.Errorf("payment_date is required")
 	}
+	paymentDateUnix := *dividend.PaymentDate
 
 	query := `
 		INSERT INTO dividend_history
@@ -532,7 +531,7 @@ func (r *DividendRepository) scanDividend(row *sql.Row) (DividendRecord, error) 
 		dividend.CashFlowID = &id
 	}
 	if paymentDateUnix.Valid {
-		dividend.PaymentDate = utils.UnixToDate(paymentDateUnix.Int64)
+		dividend.PaymentDate = &paymentDateUnix.Int64
 	}
 	dividend.Reinvested = reinvested == 1
 	if reinvestedAtUnix.Valid {
@@ -594,7 +593,7 @@ func (r *DividendRepository) scanDividendFromRows(rows *sql.Rows) (DividendRecor
 		dividend.CashFlowID = &id
 	}
 	if paymentDateUnix.Valid {
-		dividend.PaymentDate = utils.UnixToDate(paymentDateUnix.Int64)
+		dividend.PaymentDate = &paymentDateUnix.Int64
 	}
 	dividend.Reinvested = reinvested == 1
 	if reinvestedAtUnix.Valid {

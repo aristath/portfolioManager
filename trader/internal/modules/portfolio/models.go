@@ -1,13 +1,19 @@
 package portfolio
 
+import (
+	"encoding/json"
+	"time"
+)
+
 // Position represents current position in a security
-// Faithful translation from Python: app/modules/portfolio/domain/models.py
+// After Unix timestamp migration: date/timestamp fields use Unix timestamps (int64)
+// Converted to strings only at JSON boundary for API compatibility
 type Position struct {
-	LastUpdated      string  `json:"last_updated,omitempty"`
-	LastSoldAt       string  `json:"last_sold_at,omitempty"`
+	LastUpdated      *int64  `json:"-"` // Unix timestamp (seconds since epoch), converted to string in MarshalJSON
+	LastSoldAt       *int64  `json:"-"` // Unix timestamp at midnight UTC (date only), converted to string in MarshalJSON
 	ISIN             string  `json:"isin,omitempty"`
 	Currency         string  `json:"currency"`
-	FirstBoughtAt    string  `json:"first_bought_at,omitempty"`
+	FirstBoughtAt    *int64  `json:"-"` // Unix timestamp at midnight UTC (date only), converted to string in MarshalJSON
 	Symbol           string  `json:"symbol"`
 	CurrentPrice     float64 `json:"current_price,omitempty"`
 	CostBasisEUR     float64 `json:"cost_basis_eur,omitempty"`
@@ -17,6 +23,35 @@ type Position struct {
 	CurrencyRate     float64 `json:"currency_rate"`
 	AvgPrice         float64 `json:"avg_price"`
 	Quantity         float64 `json:"quantity"`
+}
+
+// MarshalJSON customizes JSON serialization to convert Unix timestamps to strings
+func (p Position) MarshalJSON() ([]byte, error) {
+	type Alias Position
+	aux := &struct {
+		LastUpdated   string `json:"last_updated,omitempty"`
+		FirstBoughtAt string `json:"first_bought_at,omitempty"`
+		LastSoldAt    string `json:"last_sold_at,omitempty"`
+		*Alias
+	}{
+		Alias: (*Alias)(&p),
+	}
+
+	// Convert Unix timestamps to strings for API
+	if p.LastUpdated != nil {
+		t := time.Unix(*p.LastUpdated, 0).UTC()
+		aux.LastUpdated = t.Format(time.RFC3339)
+	}
+	if p.FirstBoughtAt != nil {
+		t := time.Unix(*p.FirstBoughtAt, 0).UTC()
+		aux.FirstBoughtAt = t.Format("2006-01-02")
+	}
+	if p.LastSoldAt != nil {
+		t := time.Unix(*p.LastSoldAt, 0).UTC()
+		aux.LastSoldAt = t.Format("2006-01-02")
+	}
+
+	return json.Marshal(aux)
 }
 
 // AllocationStatus represents current allocation vs target
@@ -48,7 +83,7 @@ type PositionWithSecurity struct {
 	Currency         string  `db:"currency"`
 	FullExchangeName string  `db:"fullExchangeName"`
 	Industry         string  `db:"industry"`
-	LastUpdated      string  `db:"last_updated"`
+	LastUpdated      *int64  `db:"last_updated"` // Unix timestamp, converted to string in handler
 	CurrentPrice     float64 `db:"current_price"`
 	MarketValueEUR   float64 `db:"market_value_eur"`
 	CurrencyRate     float64 `db:"currency_rate"`

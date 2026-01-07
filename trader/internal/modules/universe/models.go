@@ -1,6 +1,9 @@
 package universe
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // Tag represents a tag definition with ID and human-readable name
 type Tag struct {
@@ -9,8 +12,8 @@ type Tag struct {
 }
 
 // Security represents a security in the investment universe
-// Faithful translation from Python: app/domain/models.py -> class Security
-// After migration 030: ISIN is PRIMARY KEY and is required for all database operations
+// After Unix timestamp migration: LastSynced uses Unix timestamp (int64)
+// Converted to string only at JSON boundary for API compatibility
 type Security struct {
 	Currency           string   `json:"currency,omitempty"`
 	Name               string   `json:"name"`
@@ -21,7 +24,7 @@ type Security struct {
 	ISIN               string   `json:"isin,omitempty"` // Required: PRIMARY KEY after migration 030
 	Industry           string   `json:"industry,omitempty"`
 	Symbol             string   `json:"symbol"`
-	LastSynced         string   `json:"last_synced,omitempty"`
+	LastSynced         *int64   `json:"-"` // Unix timestamp (seconds since epoch), converted to string in MarshalJSON
 	PriorityMultiplier float64  `json:"priority_multiplier"`
 	MinPortfolioTarget float64  `json:"min_portfolio_target,omitempty"`
 	MaxPortfolioTarget float64  `json:"max_portfolio_target,omitempty"`
@@ -30,6 +33,25 @@ type Security struct {
 	AllowBuy           bool     `json:"allow_buy"`
 	Active             bool     `json:"active"`
 	Tags               []string `json:"tags,omitempty"`
+}
+
+// MarshalJSON customizes JSON serialization to convert Unix timestamp to string
+func (s Security) MarshalJSON() ([]byte, error) {
+	type Alias Security
+	aux := &struct {
+		LastSynced string `json:"last_synced,omitempty"`
+		*Alias
+	}{
+		Alias: (*Alias)(&s),
+	}
+
+	// Convert Unix timestamp to RFC3339 string for API
+	if s.LastSynced != nil {
+		t := time.Unix(*s.LastSynced, 0).UTC()
+		aux.LastSynced = t.Format(time.RFC3339)
+	}
+
+	return json.Marshal(aux)
 }
 
 // SecurityScore represents calculated scores for a security
@@ -82,7 +104,7 @@ type SecurityWithScore struct {
 	Symbol             string   `json:"symbol"`
 	Industry           string   `json:"industry,omitempty"`
 	FullExchangeName   string   `json:"fullExchangeName,omitempty"`
-	LastSynced         string   `json:"last_synced,omitempty"`
+	LastSynced         *int64   `json:"last_synced,omitempty"` // Unix timestamp, converted to string in handler
 	Country            string   `json:"country,omitempty"`
 	Currency           string   `json:"currency,omitempty"`
 	ProductType        string   `json:"product_type,omitempty"`

@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/aristath/portfolioManager/internal/clients/yahoo"
 	"github.com/aristath/portfolioManager/internal/domain"
@@ -320,7 +321,7 @@ func (h *UniverseHandlers) HandleGetStocks(w http.ResponseWriter, r *http.Reques
 			"allow_buy":            sec.AllowBuy,
 			"allow_sell":           sec.AllowSell,
 			"currency":             sec.Currency,
-			"last_synced":          sec.LastSynced,
+			"last_synced":          convertUnixToString(sec.LastSynced),
 			"min_portfolio_target": sec.MinPortfolioTarget,
 			"max_portfolio_target": sec.MaxPortfolioTarget,
 		}
@@ -1292,4 +1293,13 @@ func (h *UniverseHandlers) HandleSyncSecuritiesData(w http.ResponseWriter, r *ht
 		"errors":    errors,
 	}
 	_ = json.NewEncoder(w).Encode(response)
+}
+
+// convertUnixToString converts Unix timestamp to RFC3339 string for API
+func convertUnixToString(ts *int64) string {
+	if ts == nil {
+		return ""
+	}
+	t := time.Unix(*ts, 0).UTC()
+	return t.Format(time.RFC3339)
 }

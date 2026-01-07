@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"time"
 
 	"github.com/aristath/portfolioManager/internal/clients/tradernet"
 	"github.com/aristath/portfolioManager/internal/domain"
@@ -57,6 +58,13 @@ func (h *Handler) HandleGetPortfolio(w http.ResponseWriter, r *http.Request) {
 	// Convert to response format
 	result := make([]map[string]interface{}, 0, len(positions))
 	for _, pos := range positions {
+		// Convert Unix timestamp to RFC3339 string for API
+		var lastUpdatedStr string
+		if pos.LastUpdated != nil {
+			t := time.Unix(*pos.LastUpdated, 0).UTC()
+			lastUpdatedStr = t.Format(time.RFC3339)
+		}
+
 		result = append(result, map[string]interface{}{
 			"symbol":           pos.Symbol,
 			"quantity":         pos.Quantity,
@@ -65,7 +73,7 @@ func (h *Handler) HandleGetPortfolio(w http.ResponseWriter, r *http.Request) {
 			"currency":         pos.Currency,
 			"currency_rate":    pos.CurrencyRate,
 			"market_value_eur": pos.MarketValueEUR,
-			"last_updated":     pos.LastUpdated,
+			"last_updated":     lastUpdatedStr,
 			"stock_name":       pos.StockName,
 			"industry":         pos.Industry,
 			"country":          pos.Country,

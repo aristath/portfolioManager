@@ -339,16 +339,13 @@ func (r *PositionRepository) scanPosition(rows *sql.Rows) (Position, error) {
 		pos.UnrealizedPnLPct = unrealizedPnLPct.Float64
 	}
 	if lastUpdatedUnix.Valid {
-		t := time.Unix(lastUpdatedUnix.Int64, 0).UTC()
-		pos.LastUpdated = t.Format(time.RFC3339)
+		pos.LastUpdated = &lastUpdatedUnix.Int64
 	}
 	if firstBoughtAtUnix.Valid {
-		t := time.Unix(firstBoughtAtUnix.Int64, 0).UTC()
-		pos.FirstBoughtAt = t.Format("2006-01-02")
+		pos.FirstBoughtAt = &firstBoughtAtUnix.Int64
 	}
 	if lastSoldAtUnix.Valid {
-		t := time.Unix(lastSoldAtUnix.Int64, 0).UTC()
-		pos.LastSoldAt = t.Format("2006-01-02")
+		pos.LastSoldAt = &lastSoldAtUnix.Int64
 	}
 	if isin.Valid {
 		pos.ISIN = isin.String
@@ -384,36 +381,22 @@ func (r *PositionRepository) Upsert(position Position) error {
 	}
 	position.ISIN = strings.ToUpper(strings.TrimSpace(position.ISIN))
 
-	// Set last_updated if not provided
+	// Use Unix timestamps directly - no string parsing needed
 	var lastUpdatedUnix int64
-	if position.LastUpdated != "" {
-		// Parse RFC3339 timestamp to Unix
-		t, err := time.Parse(time.RFC3339, position.LastUpdated)
-		if err != nil {
-			return fmt.Errorf("invalid last_updated format: %w", err)
-		}
-		lastUpdatedUnix = t.Unix()
+	if position.LastUpdated != nil {
+		lastUpdatedUnix = *position.LastUpdated
 	} else {
 		lastUpdatedUnix = now
 	}
 
-	// Convert date strings to Unix timestamps
 	var firstBoughtUnix sql.NullInt64
-	if position.FirstBoughtAt != "" {
-		t, err := time.Parse("2006-01-02", position.FirstBoughtAt)
-		if err != nil {
-			return fmt.Errorf("invalid first_bought_at format (expected YYYY-MM-DD): %w", err)
-		}
-		firstBoughtUnix = sql.NullInt64{Int64: time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC).Unix(), Valid: true}
+	if position.FirstBoughtAt != nil {
+		firstBoughtUnix = sql.NullInt64{Int64: *position.FirstBoughtAt, Valid: true}
 	}
 
 	var lastSoldUnix sql.NullInt64
-	if position.LastSoldAt != "" {
-		t, err := time.Parse("2006-01-02", position.LastSoldAt)
-		if err != nil {
-			return fmt.Errorf("invalid last_sold_at format (expected YYYY-MM-DD): %w", err)
-		}
-		lastSoldUnix = sql.NullInt64{Int64: time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC).Unix(), Valid: true}
+	if position.LastSoldAt != nil {
+		lastSoldUnix = sql.NullInt64{Int64: *position.LastSoldAt, Valid: true}
 	}
 
 	// Begin transaction

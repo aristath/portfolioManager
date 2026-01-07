@@ -104,7 +104,8 @@ func (m *CashManager) updateCashPositionLegacy(currency string, balance float64)
 
 	// Create legacy position for backward compatibility
 	// CASH positions use symbol as ISIN
-	now := time.Now().Format(time.RFC3339)
+	now := time.Now().Unix()
+	nowDate := time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day(), 0, 0, 0, 0, time.UTC).Unix()
 	position := portfolio.Position{
 		ISIN:           symbol, // CASH positions use symbol as ISIN
 		Symbol:         symbol,
@@ -114,7 +115,7 @@ func (m *CashManager) updateCashPositionLegacy(currency string, balance float64)
 		Currency:       currency,
 		CurrencyRate:   1.0,
 		MarketValueEUR: balance,
-		LastUpdated:    now,
+		LastUpdated:    &now,
 	}
 
 	// Check if position exists to preserve FirstBoughtAt
@@ -123,10 +124,10 @@ func (m *CashManager) updateCashPositionLegacy(currency string, balance float64)
 		return fmt.Errorf("failed to check existing legacy position: %w", err)
 	}
 
-	if existing != nil && existing.FirstBoughtAt != "" {
+	if existing != nil && existing.FirstBoughtAt != nil {
 		position.FirstBoughtAt = existing.FirstBoughtAt
 	} else {
-		position.FirstBoughtAt = now
+		position.FirstBoughtAt = &nowDate
 	}
 
 	err = m.positionRepo.Upsert(position)

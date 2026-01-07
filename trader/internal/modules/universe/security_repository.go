@@ -292,6 +292,7 @@ func (r *SecurityRepository) Update(isin string, updates map[string]interface{})
 		"min_portfolio_target": true, "max_portfolio_target": true,
 		"isin": true, "min_lot": true, "priority_multiplier": true,
 		"yahoo_symbol": true, "symbol": true,
+		"last_synced": true, // Unix timestamp
 	}
 
 	// Validate all keys are in whitelist
@@ -642,8 +643,7 @@ func (r *SecurityRepository) scanSecurity(rows *sql.Rows) (Security, error) {
 		security.Currency = currency.String
 	}
 	if lastSynced.Valid {
-		t := time.Unix(lastSynced.Int64, 0).UTC()
-		security.LastSynced = t.Format(time.RFC3339)
+		security.LastSynced = &lastSynced.Int64
 	}
 	if minPortfolioTarget.Valid {
 		security.MinPortfolioTarget = minPortfolioTarget.Float64

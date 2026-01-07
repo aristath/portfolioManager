@@ -192,28 +192,16 @@ func (s *SyncService) getSecuritiesNeedingSync() ([]Security, error) {
 		return nil, fmt.Errorf("failed to get active securities: %w", err)
 	}
 
-	threshold := time.Now().Add(-SyncThresholdHours * time.Hour)
+	thresholdUnix := time.Now().Add(-SyncThresholdHours * time.Hour).Unix()
 
 	var securitiesNeedingSync []Security
 	for _, security := range allSecurities {
-		if security.LastSynced == "" {
+		if security.LastSynced == nil {
 			// Never synced
 			securitiesNeedingSync = append(securitiesNeedingSync, security)
-		} else {
-			// Try to parse last_synced
-			lastSynced, err := time.Parse(time.RFC3339, security.LastSynced)
-			if err != nil {
-				// Invalid date format, treat as needing sync
-				s.log.Warn().
-					Err(err).
-					Str("symbol", security.Symbol).
-					Str("last_synced", security.LastSynced).
-					Msg("Invalid last_synced format, treating as needing sync")
-				securitiesNeedingSync = append(securitiesNeedingSync, security)
-			} else if lastSynced.Before(threshold) {
-				// Synced more than 24 hours ago
-				securitiesNeedingSync = append(securitiesNeedingSync, security)
-			}
+		} else if *security.LastSynced < thresholdUnix {
+			// Synced more than threshold hours ago - compare Unix timestamps directly
+			securitiesNeedingSync = append(securitiesNeedingSync, security)
 		}
 	}
 

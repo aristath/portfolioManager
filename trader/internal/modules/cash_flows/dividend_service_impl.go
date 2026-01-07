@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/aristath/portfolioManager/internal/modules/dividends"
+	"github.com/aristath/portfolioManager/internal/utils"
 	"github.com/rs/zerolog"
 )
 
@@ -44,13 +45,18 @@ func (s *DividendServiceImpl) CreateFromCashFlow(cashFlow *CashFlow) error {
 
 	// 3. Create dividend record
 	cashFlowID := cashFlow.ID
+	// Convert YYYY-MM-DD string to Unix timestamp at midnight UTC
+	paymentDateUnix, err := utils.DateToUnix(cashFlow.Date)
+	if err != nil {
+		return fmt.Errorf("invalid payment_date format (expected YYYY-MM-DD): %w", err)
+	}
 	dividend := &dividends.DividendRecord{
 		Symbol:      symbol,
 		CashFlowID:  &cashFlowID,
 		Amount:      cashFlow.Amount,
 		Currency:    cashFlow.Currency,
 		AmountEUR:   cashFlow.AmountEUR,
-		PaymentDate: cashFlow.Date,
+		PaymentDate: &paymentDateUnix,
 		Reinvested:  false,
 	}
 

@@ -329,12 +329,12 @@ func (j *TagUpdateJob) updateTagsForSecurity(security universe.Security) error {
 	if j.positionRepo != nil {
 		// Query position data
 		var quantity, avgPrice, currentPriceDB, marketValueEUR, costBasisEUR sql.NullFloat64
-		var firstBought sql.NullString
+		var firstBoughtUnix sql.NullInt64
 		err := j.portfolioDB.QueryRow(`
 			SELECT quantity, avg_price, current_price, market_value_eur, cost_basis_eur, first_bought
 			FROM positions
 			WHERE symbol = ?
-		`, security.Symbol).Scan(&quantity, &avgPrice, &currentPriceDB, &marketValueEUR, &costBasisEUR, &firstBought)
+		`, security.Symbol).Scan(&quantity, &avgPrice, &currentPriceDB, &marketValueEUR, &costBasisEUR, &firstBoughtUnix)
 
 		if err == nil && quantity.Valid && marketValueEUR.Valid {
 			// Calculate position weight
@@ -360,39 +360,20 @@ func (j *TagUpdateJob) updateTagsForSecurity(security universe.Security) error {
 				}
 			}
 
-			// Calculate days held from first_bought date
-			if firstBought.Valid && firstBought.String != "" {
-				// Try parsing as RFC3339 (ISO 8601)
-				firstBoughtTime, err := time.Parse(time.RFC3339, firstBought.String)
-				if err != nil {
-					// Try alternative formats
-					formats := []string{
-						"2006-01-02 15:04:05",
-						"2006-01-02T15:04:05Z",
-						"2006-01-02",
-					}
-					for _, format := range formats {
-						if t, parseErr := time.Parse(format, firstBought.String); parseErr == nil {
-							firstBoughtTime = t
-							err = nil
-							break
-						}
-					}
-				}
+			// Calculate days held from first_bought Unix timestamp
+			if firstBoughtUnix.Valid {
+				firstBoughtTime := time.Unix(firstBoughtUnix.Int64, 0).UTC()
+				days := int(time.Since(firstBoughtTime).Hours() / 24)
+				daysHeld = &days
 
-				if err == nil {
-					days := int(time.Since(firstBoughtTime).Hours() / 24)
-					daysHeld = &days
-
-					// Calculate annualized return if we have cost basis and market value
-					if costBasisEUR.Valid && costBasisEUR.Float64 > 0 && days > 0 {
-						years := float64(days) / 365.0
-						if years > 0 {
-							returnPct := (marketValueEUR.Float64 - costBasisEUR.Float64) / costBasisEUR.Float64
-							if returnPct > -1.0 { // Avoid negative base for power calculation
-								annualized := math.Pow(1.0+returnPct, 1.0/years) - 1.0
-								annualizedReturn = &annualized
-							}
+				// Calculate annualized return if we have cost basis and market value
+				if costBasisEUR.Valid && costBasisEUR.Float64 > 0 && days > 0 {
+					years := float64(days) / 365.0
+					if years > 0 {
+						returnPct := (marketValueEUR.Float64 - costBasisEUR.Float64) / costBasisEUR.Float64
+						if returnPct > -1.0 { // Avoid negative base for power calculation
+							annualized := math.Pow(1.0+returnPct, 1.0/years) - 1.0
+							annualizedReturn = &annualized
 						}
 					}
 				}
