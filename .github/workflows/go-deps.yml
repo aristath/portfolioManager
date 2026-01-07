@@ -1,22 +1,25 @@
-name: Pre-commit Checks
+name: Go Dependencies
 
 on:
   push:
     branches: [ main ]
+    paths:
+      - 'trader/go.mod'
+      - 'trader/go.sum'
+      - '.github/workflows/go-deps.yml'
   pull_request:
     branches: [ main ]
+    paths:
+      - 'trader/go.mod'
+      - 'trader/go.sum'
+      - '.github/workflows/go-deps.yml'
 
 jobs:
-  pre-commit:
+  deps:
     runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.13'
 
     - name: Set up Go
       uses: actions/setup-go@v5
@@ -53,7 +56,12 @@ jobs:
         cp -r ../display/sketch pkg/embedded/display/
         echo "✓ Copied files for embedding"
 
-    - name: Run pre-commit
-      uses: pre-commit/action@v3.0.1
-      with:
-        extra_args: --all-files --hook-stage commit
+    - name: Verify dependencies
+      working-directory: trader
+      run: go mod verify
+
+    - name: Check go.mod is tidy
+      working-directory: trader
+      run: |
+        go mod tidy
+        git diff --exit-code go.mod go.sum

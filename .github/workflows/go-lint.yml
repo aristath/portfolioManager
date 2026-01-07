@@ -1,22 +1,29 @@
-name: Pre-commit Checks
+name: Go Lint
 
 on:
   push:
     branches: [ main ]
+    paths:
+      - 'trader/**.go'
+      - 'trader/go.mod'
+      - 'trader/go.sum'
+      - '.github/workflows/go-lint.yml'
+      - 'trader/.golangci.yml'
   pull_request:
     branches: [ main ]
+    paths:
+      - 'trader/**.go'
+      - 'trader/go.mod'
+      - 'trader/go.sum'
+      - '.github/workflows/go-lint.yml'
+      - 'trader/.golangci.yml'
 
 jobs:
-  pre-commit:
+  lint:
     runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.13'
 
     - name: Set up Go
       uses: actions/setup-go@v5
@@ -53,7 +60,13 @@ jobs:
         cp -r ../display/sketch pkg/embedded/display/
         echo "✓ Copied files for embedding"
 
-    - name: Run pre-commit
-      uses: pre-commit/action@v3.0.1
+    - name: Download dependencies
+      working-directory: trader
+      run: go mod download
+
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@v6
       with:
-        extra_args: --all-files --hook-stage commit
+        version: latest
+        working-directory: trader
+        args: --timeout=5m --config .golangci.yml
