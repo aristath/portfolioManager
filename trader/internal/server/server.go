@@ -480,7 +480,7 @@ func (s *Server) setupRoutes() {
 		}
 		evalService := evaluation.NewService(numWorkers, s.log)
 		evalHandler := evaluationhandlers.NewHandler(evalService, s.log)
-		evalHandler.RegisterRoutes(r)
+		evalHandler.RegisterRoutes(s.router)
 
 	// Serve built frontend files from embedded filesystem
 	// Frontend files are embedded in the binary at frontend/dist
