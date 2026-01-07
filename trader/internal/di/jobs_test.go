@@ -5,7 +5,6 @@ import (
 
 	"github.com/aristath/portfolioManager/internal/config"
 	"github.com/aristath/portfolioManager/internal/modules/display"
-	"github.com/aristath/portfolioManager/internal/scheduler"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -32,13 +31,8 @@ func TestRegisterJobs(t *testing.T) {
 	err = InitializeServices(container, cfg, displayManager, log)
 	require.NoError(t, err)
 
-	// Create scheduler
-	sched := scheduler.New(log)
-	sched.Start()
-	defer sched.Stop()
-
 	// Register jobs
-	jobInstances, err := RegisterJobs(container, cfg, sched, displayManager, log)
+	jobInstances, err := RegisterJobs(container, cfg, displayManager, log)
 	require.NoError(t, err)
 	require.NotNil(t, jobInstances)
 

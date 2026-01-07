@@ -13,33 +13,27 @@ import (
 // This is the main autonomous trading loop that waits for the planner batch job
 // to complete, then executes the recommended trades
 type EventBasedTradingJob struct {
-	log                  zerolog.Logger
-	recommendationRepo   *planning.RecommendationRepository
-	tradingService       *trading.TradingService
-	lastExecutionTime    time.Time
-	minExecutionInterval int // Minimum minutes between trade executions
+	log                zerolog.Logger
+	recommendationRepo *planning.RecommendationRepository
+	tradingService     *trading.TradingService
+	eventManager       EventManagerInterface
 }
 
 // EventBasedTradingConfig holds configuration for event-based trading job
 type EventBasedTradingConfig struct {
-	Log                     zerolog.Logger
-	RecommendationRepo      *planning.RecommendationRepository
-	TradingService          *trading.TradingService
-	MinExecutionIntervalMin int // Default: 30 minutes
+	Log                zerolog.Logger
+	RecommendationRepo *planning.RecommendationRepository
+	TradingService     *trading.TradingService
+	EventManager       EventManagerInterface
 }
 
 // NewEventBasedTradingJob creates a new event-based trading job
 func NewEventBasedTradingJob(cfg EventBasedTradingConfig) *EventBasedTradingJob {
-	minInterval := cfg.MinExecutionIntervalMin
-	if minInterval == 0 {
-		minInterval = 30 // Default: 30 minutes between trade executions
-	}
-
 	return &EventBasedTradingJob{
-		log:                  cfg.Log.With().Str("job", "event_based_trading").Logger(),
-		recommendationRepo:   cfg.RecommendationRepo,
-		tradingService:       cfg.TradingService,
-		minExecutionInterval: minInterval,
+		log:                cfg.Log.With().Str("job", "event_based_trading").Logger(),
+		recommendationRepo: cfg.RecommendationRepo,
+		tradingService:     cfg.TradingService,
+		eventManager:       cfg.EventManager,
 	}
 }
 
@@ -52,18 +46,6 @@ func (j *EventBasedTradingJob) Name() string {
 func (j *EventBasedTradingJob) Run() error {
 	j.log.Info().Msg("Starting event-based trading cycle")
 	startTime := time.Now()
-
-	// Check if enough time has passed since last execution
-	timeSinceLastExec := time.Since(j.lastExecutionTime)
-	minInterval := time.Duration(j.minExecutionInterval) * time.Minute
-
-	if timeSinceLastExec < minInterval && j.lastExecutionTime.Unix() > 0 {
-		j.log.Info().
-			Dur("time_since_last", timeSinceLastExec).
-			Dur("min_interval", minInterval).
-			Msg("Skipping execution - too soon since last trade execution")
-		return nil
-	}
 
 	// Step 1: Get pending recommendations (limit to top 10 by priority)
 	recommendations, err := j.recommendationRepo.GetPendingRecommendations(10)
@@ -140,9 +122,6 @@ func (j *EventBasedTradingJob) Run() error {
 			Msg("Trade executed successfully")
 		executedCount++
 	}
-
-	// Update last execution time
-	j.lastExecutionTime = time.Now()
 
 	duration := time.Since(startTime)
 	j.log.Info().

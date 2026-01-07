@@ -11,7 +11,6 @@ import (
 	"github.com/aristath/portfolioManager/internal/deployment"
 	"github.com/aristath/portfolioManager/internal/di"
 	"github.com/aristath/portfolioManager/internal/modules/display"
-	"github.com/aristath/portfolioManager/internal/scheduler"
 	"github.com/aristath/portfolioManager/internal/server"
 	"github.com/aristath/portfolioManager/pkg/logger"
 )
@@ -39,18 +38,13 @@ func main() {
 		log.Fatal().Err(err).Msg("Failed to load configuration")
 	}
 
-	// Initialize scheduler
-	sched := scheduler.New(log)
-	sched.Start()
-	defer sched.Stop()
-
 	// Display manager (state holder for LED display) - must be initialized before server.New()
 	displayManager := display.NewStateManager(log)
 	log.Info().Msg("Display manager initialized")
 
 	// Wire all dependencies using DI container
 	// This replaces the massive registerJobs function and all manual wiring
-	container, jobs, err := di.Wire(cfg, log, sched, displayManager)
+	container, jobs, err := di.Wire(cfg, log, displayManager)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to wire dependencies")
 	}
@@ -91,13 +85,9 @@ func main() {
 		deploymentManager := deployment.NewManager(deployConfig, version, log)
 		deploymentHandlers = server.NewDeploymentHandlers(deploymentManager, log)
 
-		// Register deployment job (runs every 5 minutes)
-		deploymentJob := scheduler.NewDeploymentJob(deploymentManager, 5*time.Minute, true, log)
-		if err := sched.AddJob("0 */5 * * * *", deploymentJob); err != nil {
-			log.Warn().Err(err).Msg("Failed to register deployment job")
-		} else {
-			log.Info().Msg("Deployment job registered (every 5 minutes)")
-		}
+		// Deployment job is now handled by the queue system
+		// It can be enqueued manually or via time-based scheduler if needed
+		log.Info().Msg("Deployment manager initialized (use queue system for scheduling)")
 	}
 
 	// Initialize HTTP server
@@ -114,7 +104,6 @@ func main() {
 		CacheDB:            container.CacheDB,
 		Config:             cfg,
 		DevMode:            cfg.DevMode,
-		Scheduler:          sched,
 		DisplayManager:     displayManager,
 		DeploymentHandlers: deploymentHandlers,
 		Container:          container, // Pass container for handlers to use
@@ -164,6 +153,16 @@ func main() {
 	log.Info().Msg("Stopping LED monitors...")
 
 	log.Info().Msg("Shutting down server...")
+
+	// Stop queue system components
+	if container.TimeScheduler != nil {
+		container.TimeScheduler.Stop()
+		log.Info().Msg("Time scheduler stopped")
+	}
+	if container.WorkerPool != nil {
+		container.WorkerPool.Stop()
+		log.Info().Msg("Worker pool stopped")
+	}
 
 	// Graceful shutdown
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)

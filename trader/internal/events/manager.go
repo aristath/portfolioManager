@@ -8,18 +8,6 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// EventType represents different event types
-type EventType string
-
-const (
-	CashFlowSyncStart    EventType = "CASH_FLOW_SYNC_START"
-	CashFlowSyncComplete EventType = "CASH_FLOW_SYNC_COMPLETE"
-	ErrorOccurred        EventType = "ERROR_OCCURRED"
-	DepositProcessed     EventType = "DEPOSIT_PROCESSED"
-	DividendCreated      EventType = "DIVIDEND_CREATED"
-	SecurityAdded        EventType = "SECURITY_ADDED"
-)
-
 // Event represents a system event
 type Event struct {
 	Type      EventType              `json:"type"`
@@ -30,17 +18,19 @@ type Event struct {
 
 // Manager handles event emission and logging
 type Manager struct {
+	bus *Bus
 	log zerolog.Logger
 }
 
 // NewManager creates a new event manager
-func NewManager(log zerolog.Logger) *Manager {
+func NewManager(bus *Bus, log zerolog.Logger) *Manager {
 	return &Manager{
+		bus: bus,
 		log: log.With().Str("service", "events").Logger(),
 	}
 }
 
-// Emit emits an event
+// Emit emits an event to the bus and logs it
 func (m *Manager) Emit(eventType EventType, module string, data map[string]interface{}) {
 	event := Event{
 		Type:      eventType,
@@ -48,6 +38,9 @@ func (m *Manager) Emit(eventType EventType, module string, data map[string]inter
 		Data:      data,
 		Module:    module,
 	}
+
+	// Publish to bus
+	m.bus.Emit(eventType, module, data)
 
 	// Log event
 	eventJSON, _ := json.Marshal(event)

@@ -10,6 +10,7 @@ import (
 	"github.com/aristath/portfolioManager/internal/clients/tradernet"
 	"github.com/aristath/portfolioManager/internal/clients/yahoo"
 	"github.com/aristath/portfolioManager/internal/domain"
+	"github.com/aristath/portfolioManager/internal/events"
 	"github.com/aristath/portfolioManager/internal/modules/allocation"
 	"github.com/aristath/portfolioManager/internal/modules/opportunities"
 	"github.com/aristath/portfolioManager/internal/modules/optimization"
@@ -30,76 +31,70 @@ import (
 // PlannerBatchJob processes planning in batches to generate trading recommendations
 // Simplified version: Creates plan on-demand rather than batch processing sequences
 type PlannerBatchJob struct {
-	log                    zerolog.Logger
-	positionRepo           *portfolio.PositionRepository
-	securityRepo           *universe.SecurityRepository
-	allocRepo              *allocation.Repository
-	cashManager            domain.CashManager
-	tradernetClient        *tradernet.Client
-	yahooClient            yahoo.FullClientInterface
-	optimizerService       *optimization.OptimizerService // Added for optimizer target weights
-	opportunitiesService   *opportunities.Service
-	sequencesService       *sequences.Service
-	evaluationService      *evaluation.Service
-	plannerService         *planner.Planner
-	configRepo             *repository.ConfigRepository
-	recommendationRepo     *planning.RecommendationRepository
-	portfolioDB            *sql.DB                   // For querying scores and calculations
-	configDB               *sql.DB                   // For querying settings
-	scoreRepo              *universe.ScoreRepository // For querying quality scores
-	lastPortfolioHash      string
-	lastPlanTime           time.Time
-	minPlanningIntervalMin int // Minimum minutes between planning cycles
+	log                  zerolog.Logger
+	positionRepo         *portfolio.PositionRepository
+	securityRepo         *universe.SecurityRepository
+	allocRepo            *allocation.Repository
+	cashManager          domain.CashManager
+	tradernetClient      *tradernet.Client
+	yahooClient          yahoo.FullClientInterface
+	optimizerService     *optimization.OptimizerService
+	opportunitiesService *opportunities.Service
+	sequencesService     *sequences.Service
+	evaluationService    *evaluation.Service
+	plannerService       *planner.Planner
+	configRepo           *repository.ConfigRepository
+	recommendationRepo   *planning.RecommendationRepository
+	portfolioDB          *sql.DB
+	configDB             *sql.DB
+	scoreRepo            *universe.ScoreRepository
+	eventManager         EventManagerInterface
+	lastPortfolioHash    string
 }
 
 // PlannerBatchConfig holds configuration for planner batch job
 type PlannerBatchConfig struct {
-	Log                    zerolog.Logger
-	PositionRepo           *portfolio.PositionRepository
-	SecurityRepo           *universe.SecurityRepository
-	AllocRepo              *allocation.Repository
-	CashManager            domain.CashManager
-	TradernetClient        *tradernet.Client
-	YahooClient            yahoo.FullClientInterface
-	OptimizerService       *optimization.OptimizerService // Added for optimizer target weights
-	OpportunitiesService   *opportunities.Service
-	SequencesService       *sequences.Service
-	EvaluationService      *evaluation.Service
-	PlannerService         *planner.Planner
-	ConfigRepo             *repository.ConfigRepository
-	RecommendationRepo     *planning.RecommendationRepository
-	PortfolioDB            *sql.DB                   // For querying scores and calculations
-	ConfigDB               *sql.DB                   // For querying settings
-	ScoreRepo              *universe.ScoreRepository // For querying quality scores
-	MinPlanningIntervalMin int                       // Default: 15 minutes
+	Log                  zerolog.Logger
+	PositionRepo         *portfolio.PositionRepository
+	SecurityRepo         *universe.SecurityRepository
+	AllocRepo            *allocation.Repository
+	CashManager          domain.CashManager
+	TradernetClient      *tradernet.Client
+	YahooClient          yahoo.FullClientInterface
+	OptimizerService     *optimization.OptimizerService
+	OpportunitiesService *opportunities.Service
+	SequencesService     *sequences.Service
+	EvaluationService    *evaluation.Service
+	PlannerService       *planner.Planner
+	ConfigRepo           *repository.ConfigRepository
+	RecommendationRepo   *planning.RecommendationRepository
+	PortfolioDB          *sql.DB
+	ConfigDB             *sql.DB
+	ScoreRepo            *universe.ScoreRepository
+	EventManager         EventManagerInterface
 }
 
 // NewPlannerBatchJob creates a new planner batch job
 func NewPlannerBatchJob(cfg PlannerBatchConfig) *PlannerBatchJob {
-	minInterval := cfg.MinPlanningIntervalMin
-	if minInterval == 0 {
-		minInterval = 15 // Default: 15 minutes between planning cycles
-	}
-
 	return &PlannerBatchJob{
-		log:                    cfg.Log.With().Str("job", "planner_batch").Logger(),
-		positionRepo:           cfg.PositionRepo,
-		securityRepo:           cfg.SecurityRepo,
-		allocRepo:              cfg.AllocRepo,
-		cashManager:            cfg.CashManager,
-		tradernetClient:        cfg.TradernetClient,
-		yahooClient:            cfg.YahooClient,
-		optimizerService:       cfg.OptimizerService,
-		opportunitiesService:   cfg.OpportunitiesService,
-		sequencesService:       cfg.SequencesService,
-		evaluationService:      cfg.EvaluationService,
-		plannerService:         cfg.PlannerService,
-		configRepo:             cfg.ConfigRepo,
-		recommendationRepo:     cfg.RecommendationRepo,
-		portfolioDB:            cfg.PortfolioDB,
-		configDB:               cfg.ConfigDB,
-		scoreRepo:              cfg.ScoreRepo,
-		minPlanningIntervalMin: minInterval,
+		log:                  cfg.Log.With().Str("job", "planner_batch").Logger(),
+		positionRepo:         cfg.PositionRepo,
+		securityRepo:         cfg.SecurityRepo,
+		allocRepo:            cfg.AllocRepo,
+		cashManager:          cfg.CashManager,
+		tradernetClient:      cfg.TradernetClient,
+		yahooClient:          cfg.YahooClient,
+		optimizerService:     cfg.OptimizerService,
+		opportunitiesService: cfg.OpportunitiesService,
+		sequencesService:     cfg.SequencesService,
+		evaluationService:    cfg.EvaluationService,
+		plannerService:       cfg.PlannerService,
+		configRepo:           cfg.ConfigRepo,
+		recommendationRepo:   cfg.RecommendationRepo,
+		portfolioDB:          cfg.PortfolioDB,
+		configDB:             cfg.ConfigDB,
+		scoreRepo:            cfg.ScoreRepo,
+		eventManager:         cfg.EventManager,
 	}
 }
 
@@ -112,18 +107,6 @@ func (j *PlannerBatchJob) Name() string {
 func (j *PlannerBatchJob) Run() error {
 	j.log.Info().Msg("Starting planner batch generation")
 	startTime := time.Now()
-
-	// Check if enough time has passed since last planning
-	timeSinceLastPlan := time.Since(j.lastPlanTime)
-	minInterval := time.Duration(j.minPlanningIntervalMin) * time.Minute
-
-	if timeSinceLastPlan < minInterval && j.lastPlanTime.Unix() > 0 {
-		j.log.Info().
-			Dur("time_since_last", timeSinceLastPlan).
-			Dur("min_interval", minInterval).
-			Msg("Skipping planning - too soon since last plan")
-		return nil
-	}
 
 	// Step 1: Get current portfolio state
 	positions, err := j.positionRepo.GetAll()
@@ -242,7 +225,25 @@ func (j *PlannerBatchJob) Run() error {
 
 	// Update state
 	j.lastPortfolioHash = portfolioHash
-	j.lastPlanTime = time.Now()
+
+	// Emit PlanGenerated event
+	if j.eventManager != nil {
+		j.eventManager.Emit(events.PlanGenerated, "planner", map[string]interface{}{
+			"portfolio_hash": portfolioHash,
+			"steps":          len(plan.Steps),
+			"end_score":      plan.EndStateScore,
+			"improvement":    plan.Improvement,
+			"feasible":       plan.Feasible,
+		})
+
+		// Emit RecommendationsReady if plan has steps
+		if len(plan.Steps) > 0 {
+			j.eventManager.Emit(events.RecommendationsReady, "planner", map[string]interface{}{
+				"portfolio_hash": portfolioHash,
+				"count":          len(plan.Steps),
+			})
+		}
+	}
 
 	duration := time.Since(startTime)
 	j.log.Info().

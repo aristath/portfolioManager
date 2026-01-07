@@ -25,6 +25,7 @@ import (
 	"github.com/aristath/portfolioManager/internal/modules/settings"
 	"github.com/aristath/portfolioManager/internal/modules/trading"
 	"github.com/aristath/portfolioManager/internal/modules/universe"
+	"github.com/aristath/portfolioManager/internal/queue"
 	"github.com/aristath/portfolioManager/internal/reliability"
 	"github.com/aristath/portfolioManager/internal/scheduler"
 	"github.com/aristath/portfolioManager/internal/services"
@@ -74,8 +75,14 @@ type Container struct {
 	TradeExecutionService     *services.TradeExecutionService
 	SettingsService           *settings.Service
 	MarketHoursService        *market_hours.MarketHoursService
+	EventBus                  *events.Bus
 	EventManager              *events.Manager
 	TickerContentService      *ticker.TickerContentService
+	QueueManager              *queue.Manager
+	WorkerPool                *queue.WorkerPool
+	TimeScheduler             *queue.Scheduler
+	JobHistory                *queue.History
+	JobRegistry               *queue.Registry
 	NegativeBalanceRebalancer *rebalancing.NegativeBalanceRebalancer
 	OpportunitiesService      *opportunities.Service
 	RiskBuilder               *optimization.RiskModelBuilder

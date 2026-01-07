@@ -45,3 +45,13 @@ CREATE TABLE IF NOT EXISTS cache_data (
 ) STRICT;
 
 CREATE INDEX IF NOT EXISTS idx_cache_expires ON cache_data(expires_at);
+
+-- Job execution history (tracks last run time per job type)
+-- Used by time-based scheduler to determine if jobs should run
+CREATE TABLE IF NOT EXISTS job_history (
+    job_type TEXT PRIMARY KEY,
+    last_run_at TEXT NOT NULL,
+    last_status TEXT NOT NULL DEFAULT 'success'
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS idx_job_history_last_run ON job_history(last_run_at);

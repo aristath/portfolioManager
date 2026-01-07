@@ -6,7 +6,6 @@ import (
 
 	"github.com/aristath/portfolioManager/internal/config"
 	"github.com/aristath/portfolioManager/internal/modules/display"
-	"github.com/aristath/portfolioManager/internal/scheduler"
 	"github.com/rs/zerolog"
 )
 
@@ -17,7 +16,7 @@ import (
 // 2. Initialize repositories
 // 3. Initialize services
 // 4. Register jobs
-func Wire(cfg *config.Config, log zerolog.Logger, sched *scheduler.Scheduler, displayManager *display.StateManager) (*Container, *JobInstances, error) {
+func Wire(cfg *config.Config, log zerolog.Logger, displayManager *display.StateManager) (*Container, *JobInstances, error) {
 	// Step 1: Initialize databases
 	container, err := InitializeDatabases(cfg, log)
 	if err != nil {
@@ -51,7 +50,7 @@ func Wire(cfg *config.Config, log zerolog.Logger, sched *scheduler.Scheduler, di
 	}
 
 	// Step 4: Register jobs
-	jobs, err := RegisterJobs(container, cfg, sched, displayManager, log)
+	jobs, err := RegisterJobs(container, cfg, displayManager, log)
 	if err != nil {
 		// Cleanup on error
 		container.UniverseDB.Close()

@@ -5,7 +5,6 @@ import (
 
 	"github.com/aristath/portfolioManager/internal/config"
 	"github.com/aristath/portfolioManager/internal/modules/display"
-	"github.com/aristath/portfolioManager/internal/scheduler"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,16 +19,11 @@ func TestWire(t *testing.T) {
 	}
 	log := zerolog.Nop()
 
-	// Create scheduler
-	sched := scheduler.New(log)
-	sched.Start()
-	defer sched.Stop()
-
 	// Create display manager
 	displayManager := display.NewStateManager(log)
 
 	// Wire everything
-	container, jobs, err := Wire(cfg, log, sched, displayManager)
+	container, jobs, err := Wire(cfg, log, displayManager)
 	require.NoError(t, err)
 	require.NotNil(t, container)
 	require.NotNil(t, jobs)

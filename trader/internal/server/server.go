@@ -48,7 +48,6 @@ type Config struct {
 	Config             *config.Config
 	Port               int
 	DevMode            bool
-	Scheduler          *scheduler.Scheduler
 	DisplayManager     *display.StateManager
 	DeploymentHandlers *DeploymentHandlers
 	Container          *di.Container // DI container with all services
@@ -70,7 +69,6 @@ type Server struct {
 	container          *di.Container // DI container with all services
 	displayManager     *display.StateManager
 	systemHandlers     *SystemHandlers
-	scheduler          *scheduler.Scheduler
 	deploymentHandlers *DeploymentHandlers
 }
 
@@ -100,7 +98,7 @@ func New(cfg Config) *Server {
 		cfg.ConfigDB,
 		cfg.UniverseDB,
 		cfg.HistoryDB,
-		cfg.Scheduler,
+		cfg.Container.QueueManager,
 		cfg.DisplayManager,
 		tradernetClient,
 		currencyExchangeService,
@@ -122,7 +120,6 @@ func New(cfg Config) *Server {
 		container:          cfg.Container,
 		displayManager:     cfg.DisplayManager,
 		systemHandlers:     systemHandlers,
-		scheduler:          cfg.Scheduler,
 		deploymentHandlers: cfg.DeploymentHandlers,
 	}
 

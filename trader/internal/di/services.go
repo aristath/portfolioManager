@@ -27,6 +27,7 @@ import (
 	"github.com/aristath/portfolioManager/internal/modules/settings"
 	"github.com/aristath/portfolioManager/internal/modules/trading"
 	"github.com/aristath/portfolioManager/internal/modules/universe"
+	"github.com/aristath/portfolioManager/internal/queue"
 	"github.com/aristath/portfolioManager/internal/reliability"
 	"github.com/aristath/portfolioManager/internal/services"
 	"github.com/aristath/portfolioManager/internal/ticker"
@@ -62,8 +63,20 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	// Market hours service
 	container.MarketHoursService = market_hours.NewMarketHoursService()
 
-	// Event manager (for system events)
-	container.EventManager = events.NewManager(log)
+	// Event system (new bus-based architecture)
+	container.EventBus = events.NewBus(log)
+	container.EventManager = events.NewManager(container.EventBus, log)
+
+	// Queue system
+	memoryQueue := queue.NewMemoryQueue()
+	jobHistory := queue.NewHistory(container.CacheDB.Conn())
+	container.QueueManager = queue.NewManager(memoryQueue, jobHistory)
+	container.JobHistory = jobHistory
+	container.JobRegistry = queue.NewRegistry()
+	container.WorkerPool = queue.NewWorkerPool(container.QueueManager, container.JobRegistry, 2)
+	container.WorkerPool.SetLogger(log)
+	container.TimeScheduler = queue.NewScheduler(container.QueueManager)
+	container.TimeScheduler.SetLogger(log)
 
 	// Settings service (needed for trade safety and other services)
 	container.SettingsService = settings.NewService(container.SettingsRepo, log)

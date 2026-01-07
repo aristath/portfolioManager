@@ -16,6 +16,7 @@ import (
 	"github.com/aristath/portfolioManager/internal/modules/market_hours"
 	"github.com/aristath/portfolioManager/internal/modules/settings"
 	"github.com/aristath/portfolioManager/internal/modules/universe"
+	"github.com/aristath/portfolioManager/internal/queue"
 	"github.com/aristath/portfolioManager/internal/scheduler"
 	"github.com/aristath/portfolioManager/internal/services"
 	"github.com/rs/zerolog"
@@ -31,7 +32,7 @@ type SystemHandlers struct {
 	configDB                *database.DB
 	universeDB              *database.DB
 	historyDB               *database.DB
-	scheduler               *scheduler.Scheduler
+	queueManager            *queue.Manager
 	portfolioDisplayCalc    *display.PortfolioDisplayCalculator
 	displayManager          *display.StateManager
 	tradernetClient         *tradernet.Client
@@ -52,7 +53,7 @@ func NewSystemHandlers(
 	log zerolog.Logger,
 	dataDir string,
 	portfolioDB, configDB, universeDB, historyDB *database.DB,
-	sched *scheduler.Scheduler,
+	queueManager *queue.Manager,
 	displayManager *display.StateManager,
 	tradernetClient *tradernet.Client,
 	currencyExchangeService *services.CurrencyExchangeService,
@@ -82,7 +83,7 @@ func NewSystemHandlers(
 		configDB:                configDB,
 		universeDB:              universeDB,
 		historyDB:               historyDB,
-		scheduler:               sched,
+		queueManager:            queueManager,
 		portfolioDisplayCalc:    portfolioDisplayCalc,
 		displayManager:          displayManager,
 		marketHoursService:      marketHoursService,
@@ -113,6 +114,21 @@ func (h *SystemHandlers) SetJobs(
 // SetTagUpdateJob sets the tag update job (called after job registration)
 func (h *SystemHandlers) SetTagUpdateJob(tagUpdate scheduler.Job) {
 	h.tagUpdateJob = tagUpdate
+}
+
+// enqueueJob is a helper to enqueue a job for manual execution
+func (h *SystemHandlers) enqueueJob(jobType queue.JobType, priority queue.Priority) error {
+	job := &queue.Job{
+		ID:          fmt.Sprintf("manual-%s-%d", jobType, time.Now().UnixNano()),
+		Type:        jobType,
+		Priority:    priority,
+		Payload:     map[string]interface{}{"manual": true},
+		CreatedAt:   time.Now(),
+		AvailableAt: time.Now(),
+		Retries:     0,
+		MaxRetries:  3,
+	}
+	return h.queueManager.Enqueue(job)
 }
 
 // SystemStatusResponse represents the system status response
@@ -868,7 +884,18 @@ func (h *SystemHandlers) HandleTriggerSyncCycle(w http.ResponseWriter, r *http.R
 
 	h.log.Info().Msg("Manual sync cycle triggered")
 
-	if err := h.scheduler.RunNow(h.syncCycleJob); err != nil {
+	// Enqueue sync cycle job
+	job := &queue.Job{
+		ID:          fmt.Sprintf("manual-sync-cycle-%d", time.Now().UnixNano()),
+		Type:        queue.JobTypeSyncCycle,
+		Priority:    queue.PriorityHigh,
+		Payload:     map[string]interface{}{"manual": true},
+		CreatedAt:   time.Now(),
+		AvailableAt: time.Now(),
+		Retries:     0,
+		MaxRetries:  3,
+	}
+	if err := h.queueManager.Enqueue(job); err != nil {
 		h.log.Error().Err(err).Msg("Failed to trigger sync cycle")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -899,7 +926,7 @@ func (h *SystemHandlers) HandleTriggerHealthCheck(w http.ResponseWriter, r *http
 
 	h.log.Info().Msg("Manual health check triggered")
 
-	if err := h.scheduler.RunNow(h.healthCheckJob); err != nil {
+	if err := h.enqueueJob(queue.JobTypeHealthCheck, queue.PriorityMedium); err != nil {
 		h.log.Error().Err(err).Msg("Failed to trigger health check")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -930,7 +957,7 @@ func (h *SystemHandlers) HandleTriggerDividendReinvestment(w http.ResponseWriter
 
 	h.log.Info().Msg("Manual dividend reinvestment triggered")
 
-	if err := h.scheduler.RunNow(h.dividendReinvestJob); err != nil {
+	if err := h.enqueueJob(queue.JobTypeDividendReinvest, queue.PriorityHigh); err != nil {
 		h.log.Error().Err(err).Msg("Failed to trigger dividend reinvestment")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -961,7 +988,7 @@ func (h *SystemHandlers) HandleTriggerPlannerBatch(w http.ResponseWriter, r *htt
 
 	h.log.Info().Msg("Manual planner batch triggered")
 
-	if err := h.scheduler.RunNow(h.plannerBatchJob); err != nil {
+	if err := h.enqueueJob(queue.JobTypePlannerBatch, queue.PriorityHigh); err != nil {
 		h.log.Error().Err(err).Msg("Failed to trigger planner batch")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -992,7 +1019,7 @@ func (h *SystemHandlers) HandleTriggerEventBasedTrading(w http.ResponseWriter, r
 
 	h.log.Info().Msg("Manual event-based trading triggered")
 
-	if err := h.scheduler.RunNow(h.eventBasedTradingJob); err != nil {
+	if err := h.enqueueJob(queue.JobTypeEventBasedTrading, queue.PriorityCritical); err != nil {
 		h.log.Error().Err(err).Msg("Failed to trigger event-based trading")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1091,7 +1118,7 @@ func (h *SystemHandlers) HandleTriggerTagUpdate(w http.ResponseWriter, r *http.R
 
 	h.log.Info().Msg("Manual tag update triggered")
 
-	if err := h.scheduler.RunNow(h.tagUpdateJob); err != nil {
+	if err := h.enqueueJob(queue.JobTypeTagUpdate, queue.PriorityMedium); err != nil {
 		h.log.Error().Err(err).Msg("Failed to trigger tag update")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

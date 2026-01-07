@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/aristath/portfolioManager/internal/events"
 	"github.com/aristath/portfolioManager/internal/modules/cash_flows"
 	"github.com/aristath/portfolioManager/internal/modules/display"
 	"github.com/aristath/portfolioManager/internal/modules/portfolio"
@@ -21,8 +22,9 @@ type SyncCycleJob struct {
 	universeService     UniverseServiceInterface
 	balanceService      BalanceServiceInterface
 	displayManager      *display.StateManager
-	emergencyRebalance  func() error // Callback for emergency rebalance
-	updateDisplayTicker func() error // Callback for display ticker update
+	emergencyRebalance  func() error
+	updateDisplayTicker func() error
+	eventManager        EventManagerInterface
 }
 
 // SyncCycleConfig holds configuration for sync cycle job
@@ -36,6 +38,7 @@ type SyncCycleConfig struct {
 	DisplayManager      *display.StateManager
 	EmergencyRebalance  func() error
 	UpdateDisplayTicker func() error
+	EventManager        EventManagerInterface
 }
 
 // NewSyncCycleJob creates a new sync cycle job
@@ -50,6 +53,7 @@ func NewSyncCycleJob(cfg SyncCycleConfig) *SyncCycleJob {
 		displayManager:      cfg.DisplayManager,
 		emergencyRebalance:  cfg.EmergencyRebalance,
 		updateDisplayTicker: cfg.UpdateDisplayTicker,
+		eventManager:        cfg.EventManager,
 	}
 }
 
@@ -91,6 +95,20 @@ func (j *SyncCycleJob) Run() error {
 
 	// Clear LED syncing indicator
 	j.setDisplayIdle()
+
+	// Emit PortfolioChanged event after successful sync
+	if j.eventManager != nil {
+		j.eventManager.Emit(events.PortfolioChanged, "sync_cycle", map[string]interface{}{
+			"sync_completed": true,
+		})
+	}
+
+	// Emit PriceUpdated event after price sync
+	if j.eventManager != nil {
+		j.eventManager.Emit(events.PriceUpdated, "sync_cycle", map[string]interface{}{
+			"prices_synced": true,
+		})
+	}
 
 	duration := time.Since(startTime)
 	j.log.Info().

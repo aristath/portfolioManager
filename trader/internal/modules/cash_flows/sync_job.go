@@ -167,6 +167,12 @@ func (j *SyncJob) SyncCashFlows() error {
 					"amount_eur":     created.AmountEUR,
 					"date":           created.Date,
 				})
+				// Also emit DividendDetected for queue system
+				j.eventManager.Emit(events.DividendDetected, "cash_flows", map[string]interface{}{
+					"transaction_id": created.TransactionID,
+					"amount_eur":     created.AmountEUR,
+					"date":           created.Date,
+				})
 			}
 		}
 	}
