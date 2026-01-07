@@ -22,6 +22,9 @@ import (
 	"github.com/aristath/sentinel/internal/di"
 	allocationhandlers "github.com/aristath/sentinel/internal/modules/allocation/handlers"
 	"github.com/aristath/sentinel/internal/modules/cash_flows"
+	cashflowshandlers "github.com/aristath/sentinel/internal/modules/cash_flows/handlers"
+	"github.com/aristath/sentinel/internal/modules/charts"
+	chartshandlers "github.com/aristath/sentinel/internal/modules/charts/handlers"
 	"github.com/aristath/sentinel/internal/modules/display"
 	displayhandlers "github.com/aristath/sentinel/internal/modules/display/handlers"
 	dividendhandlers "github.com/aristath/sentinel/internal/modules/dividends/handlers"
@@ -378,7 +381,23 @@ func (s *Server) setupRoutes() {
 		optimizationHandler.RegisterRoutes(r)
 
 		// Cash-flows module (MIGRATED TO GO!)
-		s.setupCashFlowsRoutes(r)
+		cashFlowsRepo := s.container.CashFlowsRepo
+		cashFlowsDepositProcessor := s.container.DepositProcessor
+		cashFlowsTradernetClient := s.container.TradernetClient
+		// Initialize schema
+		if err := cash_flows.InitSchema(s.ledgerDB.Conn()); err != nil {
+			s.log.Error().Err(err).Msg("Failed to initialize cash_flows schema")
+		}
+		// Initialize Tradernet adapter
+		cashFlowsTradernetAdapter := cash_flows.NewTradernetAdapter(cashFlowsTradernetClient)
+		// Initialize handler
+		cashFlowsHandler := cashflowshandlers.NewHandler(
+			cashFlowsRepo,
+			cashFlowsDepositProcessor,
+			cashFlowsTradernetAdapter,
+			s.log,
+		)
+		cashFlowsHandler.RegisterRoutes(r)
 
 		// Rebalancing module (MIGRATED TO GO!)
 		s.setupRebalancingRoutes(r)
@@ -387,7 +406,15 @@ func (s *Server) setupRoutes() {
 		s.setupPlanningRoutes(r)
 
 		// Charts module (MIGRATED TO GO!)
-		s.setupChartsRoutes(r)
+		chartsSecurityRepo := s.container.SecurityRepo
+		chartsService := charts.NewService(
+			s.historyDB.Conn(),
+			chartsSecurityRepo,
+			s.universeDB.Conn(),
+			s.log,
+		)
+		chartsHandler := chartshandlers.NewHandler(chartsService, s.log)
+		chartsHandler.RegisterRoutes(r)
 
 		// Deployment module (MIGRATED TO GO!)
 		s.setupDeploymentRoutes(r)
@@ -576,34 +603,6 @@ func (a *securityFetcherAdapter) GetSecurityName(symbol string) (string, error) 
 		return symbol, nil // Return symbol if not found
 	}
 	return security.Name, nil
-}
-
-// setupCashFlowsRoutes configures cash-flows module routes
-func (s *Server) setupCashFlowsRoutes(r chi.Router) {
-	// Use services from container (single source of truth)
-	repo := s.container.CashFlowsRepo
-
-	// Initialize schema
-	if err := cash_flows.InitSchema(s.ledgerDB.Conn()); err != nil {
-		s.log.Error().Err(err).Msg("Failed to initialize cash_flows schema")
-	}
-
-	// Initialize Tradernet adapter
-	tradernetClient := s.container.TradernetClient
-	tradernetAdapter := cash_flows.NewTradernetAdapter(tradernetClient)
-
-	// Use deposit processor from container
-	depositProcessor := s.container.DepositProcessor
-
-	// Initialize handler
-	handler := cash_flows.NewHandler(repo, depositProcessor, tradernetAdapter, s.log)
-
-	// Cash-flows routes (faithful translation of Python routes)
-	r.Route("/cash-flows", func(r chi.Router) {
-		r.Get("/", handler.HandleGetCashFlows)      // GET / - list cash flows with filters
-		r.Get("/sync", handler.HandleSyncCashFlows) // GET /sync - sync from Tradernet
-		r.Get("/summary", handler.HandleGetSummary) // GET /summary - aggregate statistics
-	})
 }
 
 // setupEvaluationRoutes configures evaluation module routes

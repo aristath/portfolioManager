@@ -1,6 +1,10 @@
 package optimization
 
 import (
+	optimizationhandlers "github.com/aristath/sentinel/internal/modules/optimization/handlers"
+)
+
+import (
 	"errors"
 	"testing"
 

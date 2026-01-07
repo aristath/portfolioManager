@@ -1,6 +1,10 @@
 package charts
 
 import (
+	chartshandlers "github.com/aristath/sentinel/internal/modules/charts/handlers"
+)
+
+import (
 	"testing"
 	"time"
 )

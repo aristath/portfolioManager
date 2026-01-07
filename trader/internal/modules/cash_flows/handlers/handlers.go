@@ -1,4 +1,8 @@
-package cash_flows
+package handlers
+
+import (
+	"github.com/aristath/sentinel/internal/modules/cash_flows"
+)
 
 import (
 	"encoding/json"
@@ -13,17 +17,17 @@ import (
 
 // Handler handles cash flow HTTP requests
 type Handler struct {
-	repo             *Repository
-	depositProcessor *DepositProcessor
-	tradernetClient  TradernetClient
+	repo             *cash_flows.Repository
+	depositProcessor *cash_flows.DepositProcessor
+	tradernetClient  cash_flows.TradernetClient
 	log              zerolog.Logger
 }
 
 // NewHandler creates a new cash flows handler
 func NewHandler(
-	repo *Repository,
-	depositProcessor *DepositProcessor,
-	tradernetClient TradernetClient,
+	repo *cash_flows.Repository,
+	depositProcessor *cash_flows.DepositProcessor,
+	tradernetClient cash_flows.TradernetClient,
 	log zerolog.Logger,
 ) *Handler {
 	return &Handler{
@@ -42,7 +46,7 @@ func (h *Handler) HandleGetCashFlows(w http.ResponseWriter, r *http.Request) {
 	startDate := r.URL.Query().Get("start_date")
 	endDate := r.URL.Query().Get("end_date")
 
-	var cashFlows []CashFlow
+	var cashFlows []cash_flows.CashFlow
 	var err error
 
 	// Apply filters

@@ -1,5 +1,9 @@
 // Package charts provides charting and visualization functionality.
-package charts
+package handlers
+
+import (
+	"github.com/aristath/sentinel/internal/modules/charts"
+)
 
 import (
 	"encoding/json"
@@ -12,12 +16,12 @@ import (
 
 // Handler provides HTTP handlers for chart endpoints
 type Handler struct {
-	service *Service
+	service *charts.Service
 	log     zerolog.Logger
 }
 
 // NewHandler creates a new charts handler
-func NewHandler(service *Service, log zerolog.Logger) *Handler {
+func NewHandler(service *charts.Service, log zerolog.Logger) *Handler {
 	return &Handler{
 		service: service,
 		log:     log.With().Str("handler", "charts").Logger(),
@@ -54,7 +58,7 @@ func (h *Handler) HandleGetSecurityChart(w http.ResponseWriter, r *http.Request)
 
 	// Validate and normalize ISIN
 	isin = strings.ToUpper(strings.TrimSpace(isin))
-	if !isValidISIN(isin) {
+	if !IsValidISIN(isin) {
 		http.Error(w, "Invalid ISIN format", http.StatusBadRequest)
 		return
 	}
@@ -85,42 +89,42 @@ func (h *Handler) HandleGetSecurityChart(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-// isValidISIN performs basic ISIN validation
+// IsValidISIN performs basic ISIN validation
 // Faithful translation from Python: app/modules/universe/domain/symbol_resolver.py -> is_isin()
-func isValidISIN(isin string) bool {
+func IsValidISIN(isin string) bool {
 	// ISIN must be exactly 12 characters
 	if len(isin) != 12 {
 		return false
 	}
 
 	// First two characters must be country code (letters)
-	if !isLetter(isin[0]) || !isLetter(isin[1]) {
+	if !IsLetter(isin[0]) || !IsLetter(isin[1]) {
 		return false
 	}
 
 	// Next 9 characters can be alphanumeric
 	for i := 2; i < 11; i++ {
-		if !isAlphanumeric(isin[i]) {
+		if !IsAlphanumeric(isin[i]) {
 			return false
 		}
 	}
 
 	// Last character must be a digit (check digit)
-	if !isDigit(isin[11]) {
+	if !IsDigit(isin[11]) {
 		return false
 	}
 
 	return true
 }
 
-func isLetter(c byte) bool {
+func IsLetter(c byte) bool {
 	return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')
 }
 
-func isDigit(c byte) bool {
+func IsDigit(c byte) bool {
 	return c >= '0' && c <= '9'
 }
 
-func isAlphanumeric(c byte) bool {
-	return isLetter(c) || isDigit(c)
+func IsAlphanumeric(c byte) bool {
+	return IsLetter(c) || IsDigit(c)
 }

@@ -1,8 +1,4 @@
-package cash_flows
-
-import (
-	"github.com/aristath/sentinel/internal/modules/cash_flows/handlers"
-)
+package handlers
 
 import (
 	"encoding/json"
@@ -11,6 +7,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"database/sql"
+
+	"github.com/aristath/sentinel/internal/modules/cash_flows"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,11 +19,11 @@ import (
 // MockTradernetClient for testing
 type MockTradernetClient struct {
 	connected       bool
-	cashFlows       []APITransaction
+	cashFlows       []cash_flows.APITransaction
 	shouldFailFetch bool
 }
 
-func (m *MockTradernetClient) GetAllCashFlows(limit int) ([]APITransaction, error) {
+func (m *MockTradernetClient) GetAllCashFlows(limit int) ([]cash_flows.APITransaction, error) {
 	if m.shouldFailFetch {
 		return nil, fmt.Errorf("mock fetch error")
 	}
@@ -34,16 +34,26 @@ func (m *MockTradernetClient) IsConnected() bool {
 	return m.connected
 }
 
+func setupTestDB(t *testing.T) *sql.DB {
+	db, err := sql.Open("sqlite3", ":memory:")
+	require.NoError(t, err)
+
+	err = cash_flows.InitSchema(db)
+	require.NoError(t, err)
+
+	return db
+}
+
 func TestHandleGetCashFlows_All(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	repo := NewRepository(db, zerolog.Nop())
-	handler := handlers.NewHandler(repo, nil, nil, zerolog.Nop())
+	repo := cash_flows.NewRepository(db, zerolog.Nop())
+	handler := NewHandler(repo, nil, nil, zerolog.Nop())
 
 	// Create test data
 	txType := "DEPOSIT"
-	cashFlow := &CashFlow{
+	cashFlow := &cash_flows.CashFlow{
 		TransactionID:   "TEST_TX",
 		TypeDocID:       100,
 		TransactionType: &txType,
@@ -62,7 +72,7 @@ func TestHandleGetCashFlows_All(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 
-	var cashFlows []CashFlow
+	var cashFlows []cash_flows.CashFlow
 	err := json.NewDecoder(w.Body).Decode(&cashFlows)
 	require.NoError(t, err)
 	assert.Len(t, cashFlows, 1)
@@ -73,13 +83,13 @@ func TestHandleGetCashFlows_WithLimit(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	repo := NewRepository(db, zerolog.Nop())
-	handler := handlers.NewHandler(repo, nil, nil, zerolog.Nop())
+	repo := cash_flows.NewRepository(db, zerolog.Nop())
+	handler := NewHandler(repo, nil, nil, zerolog.Nop())
 
 	// Create 5 cash flows
 	for i := 1; i <= 5; i++ {
 		txType := "DEPOSIT"
-		cashFlow := &CashFlow{
+		cashFlow := &cash_flows.CashFlow{
 			TransactionID:   fmt.Sprintf("TX%d", i),
 			TypeDocID:       100,
 			TransactionType: &txType,
@@ -98,7 +108,7 @@ func TestHandleGetCashFlows_WithLimit(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var cashFlows []CashFlow
+	var cashFlows []cash_flows.CashFlow
 	err := json.NewDecoder(w.Body).Decode(&cashFlows)
 	require.NoError(t, err)
 	assert.Len(t, cashFlows, 3)
@@ -108,8 +118,8 @@ func TestHandleGetCashFlows_InvalidLimit(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	repo := NewRepository(db, zerolog.Nop())
-	handler := handlers.NewHandler(repo, nil, nil, zerolog.Nop())
+	repo := cash_flows.NewRepository(db, zerolog.Nop())
+	handler := NewHandler(repo, nil, nil, zerolog.Nop())
 
 	tests := []struct {
 		name       string
@@ -137,16 +147,16 @@ func TestHandleGetCashFlows_ByTransactionType(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	repo := NewRepository(db, zerolog.Nop())
-	handler := handlers.NewHandler(repo, nil, nil, zerolog.Nop())
+	repo := cash_flows.NewRepository(db, zerolog.Nop())
+	handler := NewHandler(repo, nil, nil, zerolog.Nop())
 
 	// Create cash flows of different types
 	deposit := "DEPOSIT"
 	withdrawal := "WITHDRAWAL"
 
-	repo.Create(&CashFlow{TransactionID: "TX1", TypeDocID: 100, TransactionType: &deposit, Date: "2024-01-10", Amount: 1000, Currency: "EUR", AmountEUR: 1000})
-	repo.Create(&CashFlow{TransactionID: "TX2", TypeDocID: 101, TransactionType: &withdrawal, Date: "2024-01-15", Amount: 200, Currency: "EUR", AmountEUR: 200})
-	repo.Create(&CashFlow{TransactionID: "TX3", TypeDocID: 100, TransactionType: &deposit, Date: "2024-01-20", Amount: 500, Currency: "EUR", AmountEUR: 500})
+	repo.Create(&cash_flows.CashFlow{TransactionID: "TX1", TypeDocID: 100, TransactionType: &deposit, Date: "2024-01-10", Amount: 1000, Currency: "EUR", AmountEUR: 1000})
+	repo.Create(&cash_flows.CashFlow{TransactionID: "TX2", TypeDocID: 101, TransactionType: &withdrawal, Date: "2024-01-15", Amount: 200, Currency: "EUR", AmountEUR: 200})
+	repo.Create(&cash_flows.CashFlow{TransactionID: "TX3", TypeDocID: 100, TransactionType: &deposit, Date: "2024-01-20", Amount: 500, Currency: "EUR", AmountEUR: 500})
 
 	// Test filter by DEPOSIT
 	req := httptest.NewRequest("GET", "/cash-flows?transaction_type=DEPOSIT", nil)
@@ -155,7 +165,7 @@ func TestHandleGetCashFlows_ByTransactionType(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var cashFlows []CashFlow
+	var cashFlows []cash_flows.CashFlow
 	err := json.NewDecoder(w.Body).Decode(&cashFlows)
 	require.NoError(t, err)
 	assert.Len(t, cashFlows, 2)
@@ -165,14 +175,14 @@ func TestHandleGetCashFlows_ByDateRange(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	repo := NewRepository(db, zerolog.Nop())
-	handler := handlers.NewHandler(repo, nil, nil, zerolog.Nop())
+	repo := cash_flows.NewRepository(db, zerolog.Nop())
+	handler := NewHandler(repo, nil, nil, zerolog.Nop())
 
 	// Create cash flows on different dates
 	deposit := "DEPOSIT"
-	repo.Create(&CashFlow{TransactionID: "TX1", TypeDocID: 100, TransactionType: &deposit, Date: "2024-01-10", Amount: 1000, Currency: "EUR", AmountEUR: 1000})
-	repo.Create(&CashFlow{TransactionID: "TX2", TypeDocID: 100, TransactionType: &deposit, Date: "2024-01-15", Amount: 500, Currency: "EUR", AmountEUR: 500})
-	repo.Create(&CashFlow{TransactionID: "TX3", TypeDocID: 100, TransactionType: &deposit, Date: "2024-01-20", Amount: 300, Currency: "EUR", AmountEUR: 300})
+	repo.Create(&cash_flows.CashFlow{TransactionID: "TX1", TypeDocID: 100, TransactionType: &deposit, Date: "2024-01-10", Amount: 1000, Currency: "EUR", AmountEUR: 1000})
+	repo.Create(&cash_flows.CashFlow{TransactionID: "TX2", TypeDocID: 100, TransactionType: &deposit, Date: "2024-01-15", Amount: 500, Currency: "EUR", AmountEUR: 500})
+	repo.Create(&cash_flows.CashFlow{TransactionID: "TX3", TypeDocID: 100, TransactionType: &deposit, Date: "2024-01-20", Amount: 300, Currency: "EUR", AmountEUR: 300})
 
 	// Test date range that includes only middle transaction
 	req := httptest.NewRequest("GET", "/cash-flows?start_date=2024-01-12&end_date=2024-01-18", nil)
@@ -181,7 +191,7 @@ func TestHandleGetCashFlows_ByDateRange(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var cashFlows []CashFlow
+	var cashFlows []cash_flows.CashFlow
 	err := json.NewDecoder(w.Body).Decode(&cashFlows)
 	require.NoError(t, err)
 	assert.Len(t, cashFlows, 1)
@@ -192,8 +202,8 @@ func TestHandleGetCashFlows_InvalidDateFormat(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	repo := NewRepository(db, zerolog.Nop())
-	handler := handlers.NewHandler(repo, nil, nil, zerolog.Nop())
+	repo := cash_flows.NewRepository(db, zerolog.Nop())
+	handler := NewHandler(repo, nil, nil, zerolog.Nop())
 
 	tests := []struct {
 		name      string
@@ -222,8 +232,8 @@ func TestHandleGetCashFlows_InvalidDateRange(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	repo := NewRepository(db, zerolog.Nop())
-	handler := handlers.NewHandler(repo, nil, nil, zerolog.Nop())
+	repo := cash_flows.NewRepository(db, zerolog.Nop())
+	handler := NewHandler(repo, nil, nil, zerolog.Nop())
 
 	// start_date > end_date
 	req := httptest.NewRequest("GET", "/cash-flows?start_date=2024-01-31&end_date=2024-01-01", nil)
@@ -238,12 +248,12 @@ func TestHandleSyncCashFlows_Success(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	repo := NewRepository(db, zerolog.Nop())
+	repo := cash_flows.NewRepository(db, zerolog.Nop())
 
 	// Mock Tradernet client with test data
 	mockClient := &MockTradernetClient{
 		connected: true,
-		cashFlows: []APITransaction{
+		cashFlows: []cash_flows.APITransaction{
 			{
 				TransactionID:   "SYNC_TX_1",
 				TypeDocID:       100,
@@ -273,7 +283,7 @@ func TestHandleSyncCashFlows_Success(t *testing.T) {
 		},
 	}
 
-	handler := handlers.NewHandler(repo, nil, mockClient, zerolog.Nop())
+	handler := NewHandler(repo, nil, mockClient, zerolog.Nop())
 
 	req := httptest.NewRequest("GET", "/cash-flows/sync", nil)
 	w := httptest.NewRecorder()
@@ -299,11 +309,11 @@ func TestHandleSyncCashFlows_DuplicatePrevention(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	repo := NewRepository(db, zerolog.Nop())
+	repo := cash_flows.NewRepository(db, zerolog.Nop())
 
 	mockClient := &MockTradernetClient{
 		connected: true,
-		cashFlows: []APITransaction{
+		cashFlows: []cash_flows.APITransaction{
 			{
 				TransactionID:   "DUP_TX",
 				TypeDocID:       100,
@@ -319,7 +329,7 @@ func TestHandleSyncCashFlows_DuplicatePrevention(t *testing.T) {
 		},
 	}
 
-	handler := handlers.NewHandler(repo, nil, mockClient, zerolog.Nop())
+	handler := NewHandler(repo, nil, mockClient, zerolog.Nop())
 
 	// First sync
 	req := httptest.NewRequest("GET", "/cash-flows/sync", nil)
@@ -353,13 +363,13 @@ func TestHandleSyncCashFlows_TradernetNotConnected(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	repo := NewRepository(db, zerolog.Nop())
+	repo := cash_flows.NewRepository(db, zerolog.Nop())
 
 	mockClient := &MockTradernetClient{
 		connected: false,
 	}
 
-	handler := handlers.NewHandler(repo, nil, mockClient, zerolog.Nop())
+	handler := NewHandler(repo, nil, mockClient, zerolog.Nop())
 
 	req := httptest.NewRequest("GET", "/cash-flows/sync", nil)
 	w := httptest.NewRecorder()
@@ -373,14 +383,14 @@ func TestHandleSyncCashFlows_FetchError(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	repo := NewRepository(db, zerolog.Nop())
+	repo := cash_flows.NewRepository(db, zerolog.Nop())
 
 	mockClient := &MockTradernetClient{
 		connected:       true,
 		shouldFailFetch: true,
 	}
 
-	handler := handlers.NewHandler(repo, nil, mockClient, zerolog.Nop())
+	handler := NewHandler(repo, nil, mockClient, zerolog.Nop())
 
 	req := httptest.NewRequest("GET", "/cash-flows/sync", nil)
 	w := httptest.NewRecorder()
@@ -394,8 +404,8 @@ func TestHandleGetSummary_WithMultipleTypes(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	repo := NewRepository(db, zerolog.Nop())
-	handler := handlers.NewHandler(repo, nil, nil, zerolog.Nop())
+	repo := cash_flows.NewRepository(db, zerolog.Nop())
+	handler := NewHandler(repo, nil, nil, zerolog.Nop())
 
 	// Create cash flows of different types
 	deposit := "DEPOSIT"
@@ -403,11 +413,11 @@ func TestHandleGetSummary_WithMultipleTypes(t *testing.T) {
 	withdrawal := "WITHDRAWAL"
 	dividend := "DIVIDEND"
 
-	repo.Create(&CashFlow{TransactionID: "TX1", TypeDocID: 100, TransactionType: &deposit, Date: "2024-01-10", Amount: 1000, Currency: "EUR", AmountEUR: 1000})
-	repo.Create(&CashFlow{TransactionID: "TX2", TypeDocID: 100, TransactionType: &deposit, Date: "2024-01-15", Amount: 500, Currency: "EUR", AmountEUR: 500})
-	repo.Create(&CashFlow{TransactionID: "TX3", TypeDocID: 100, TransactionType: &refill, Date: "2024-01-16", Amount: 300, Currency: "EUR", AmountEUR: 300})
-	repo.Create(&CashFlow{TransactionID: "TX4", TypeDocID: 101, TransactionType: &withdrawal, Date: "2024-01-20", Amount: 200, Currency: "EUR", AmountEUR: 200})
-	repo.Create(&CashFlow{TransactionID: "TX5", TypeDocID: 102, TransactionType: &dividend, Date: "2024-01-25", Amount: 50, Currency: "EUR", AmountEUR: 50})
+	repo.Create(&cash_flows.CashFlow{TransactionID: "TX1", TypeDocID: 100, TransactionType: &deposit, Date: "2024-01-10", Amount: 1000, Currency: "EUR", AmountEUR: 1000})
+	repo.Create(&cash_flows.CashFlow{TransactionID: "TX2", TypeDocID: 100, TransactionType: &deposit, Date: "2024-01-15", Amount: 500, Currency: "EUR", AmountEUR: 500})
+	repo.Create(&cash_flows.CashFlow{TransactionID: "TX3", TypeDocID: 100, TransactionType: &refill, Date: "2024-01-16", Amount: 300, Currency: "EUR", AmountEUR: 300})
+	repo.Create(&cash_flows.CashFlow{TransactionID: "TX4", TypeDocID: 101, TransactionType: &withdrawal, Date: "2024-01-20", Amount: 200, Currency: "EUR", AmountEUR: 200})
+	repo.Create(&cash_flows.CashFlow{TransactionID: "TX5", TypeDocID: 102, TransactionType: &dividend, Date: "2024-01-25", Amount: 50, Currency: "EUR", AmountEUR: 50})
 
 	req := httptest.NewRequest("GET", "/cash-flows/summary", nil)
 	w := httptest.NewRecorder()
@@ -449,8 +459,8 @@ func TestHandleGetSummary_EmptyRepository(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	repo := NewRepository(db, zerolog.Nop())
-	handler := handlers.NewHandler(repo, nil, nil, zerolog.Nop())
+	repo := cash_flows.NewRepository(db, zerolog.Nop())
+	handler := NewHandler(repo, nil, nil, zerolog.Nop())
 
 	req := httptest.NewRequest("GET", "/cash-flows/summary", nil)
 	w := httptest.NewRecorder()
@@ -475,11 +485,11 @@ func TestHandleGetSummary_NullTransactionTypes(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	repo := NewRepository(db, zerolog.Nop())
-	handler := handlers.NewHandler(repo, nil, nil, zerolog.Nop())
+	repo := cash_flows.NewRepository(db, zerolog.Nop())
+	handler := NewHandler(repo, nil, nil, zerolog.Nop())
 
 	// Create cash flow with null transaction type
-	repo.Create(&CashFlow{TransactionID: "TX_NULL", TypeDocID: 100, TransactionType: nil, Date: "2024-01-10", Amount: 1000, Currency: "EUR", AmountEUR: 1000})
+	repo.Create(&cash_flows.CashFlow{TransactionID: "TX_NULL", TypeDocID: 100, TransactionType: nil, Date: "2024-01-10", Amount: 1000, Currency: "EUR", AmountEUR: 1000})
 
 	req := httptest.NewRequest("GET", "/cash-flows/summary", nil)
 	w := httptest.NewRecorder()
