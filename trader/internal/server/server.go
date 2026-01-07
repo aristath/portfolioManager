@@ -21,13 +21,12 @@ import (
 	"github.com/aristath/sentinel/internal/database"
 	"github.com/aristath/sentinel/internal/di"
 	allocationhandlers "github.com/aristath/sentinel/internal/modules/allocation/handlers"
+	analyticshandlers "github.com/aristath/sentinel/internal/modules/analytics/handlers"
 	"github.com/aristath/sentinel/internal/modules/cash_flows"
 	cashflowshandlers "github.com/aristath/sentinel/internal/modules/cash_flows/handlers"
 	"github.com/aristath/sentinel/internal/modules/charts"
 	chartshandlers "github.com/aristath/sentinel/internal/modules/charts/handlers"
 	"github.com/aristath/sentinel/internal/modules/display"
-	settingshandlers "github.com/aristath/sentinel/internal/modules/settings/handlers"
-	analyticshandlers "github.com/aristath/sentinel/internal/modules/analytics/handlers"
 	displayhandlers "github.com/aristath/sentinel/internal/modules/display/handlers"
 	dividendhandlers "github.com/aristath/sentinel/internal/modules/dividends/handlers"
 	evaluation "github.com/aristath/sentinel/internal/modules/evaluation"
@@ -41,6 +40,7 @@ import (
 	portfoliohandlers "github.com/aristath/sentinel/internal/modules/portfolio/handlers"
 	"github.com/aristath/sentinel/internal/modules/rebalancing"
 	scoringhandlers "github.com/aristath/sentinel/internal/modules/scoring/api/handlers"
+	settingshandlers "github.com/aristath/sentinel/internal/modules/settings/handlers"
 	tradinghandlers "github.com/aristath/sentinel/internal/modules/trading/handlers"
 	"github.com/aristath/sentinel/internal/modules/universe"
 	universehandlers "github.com/aristath/sentinel/internal/modules/universe/handlers"
@@ -274,7 +274,69 @@ func (s *Server) setupRoutes() {
 		r.Get("/events/stream", eventsStreamHandler.ServeHTTP)
 
 		// System monitoring and operations (MIGRATED TO GO!)
-		s.setupSystemRoutes(r)
+		// Use server's system handlers instance
+		systemHandlers := s.systemHandlers
+
+		// Initialize log handlers
+		dataDir := s.cfg.DataDir
+		logHandlers := NewLogHandlers(s.log, dataDir)
+
+		// Use services from container (single source of truth)
+		securityRepo := s.container.SecurityRepo
+		scoreRepo := s.container.ScoreRepo
+		positionRepo := s.container.PositionRepo
+		yahooClient := s.container.YahooClient
+		securityScorer := s.container.SecurityScorer
+		historyDB := s.container.HistoryDBClient
+		setupService1 := s.container.SetupService
+		syncService1 := s.container.SyncService
+		currencyExchangeService1 := s.container.CurrencyExchangeService
+
+		universeHandlers := universehandlers.NewUniverseHandlers(
+			securityRepo,
+			scoreRepo,
+			s.portfolioDB.Conn(),
+			positionRepo,
+			securityScorer,
+			yahooClient,
+			historyDB,
+			setupService1,
+			syncService1,
+			currencyExchangeService1,
+			s.container.EventManager,
+			s.log,
+		)
+
+		r.Route("/system", func(r chi.Router) {
+			r.Get("/status", systemHandlers.HandleSystemStatus)
+			r.Get("/led/display", systemHandlers.HandleLEDDisplay)
+			r.Get("/logs", logHandlers.HandleGetLogs)
+			r.Get("/logs/{filename}", logHandlers.HandleGetLogFile)
+			r.Post("/logs/{filename}/clear", logHandlers.HandleClearLogFile)
+			r.Post("/sync-prices", systemHandlers.HandleTriggerSyncPrices)
+			r.Post("/check-negative-balances", systemHandlers.HandleTriggerCheckNegativeBalances)
+			r.Post("/update-display-ticker", systemHandlers.HandleTriggerUpdateDisplayTicker)
+
+			// Individual planning jobs
+			r.Post("/generate-portfolio-hash", systemHandlers.HandleTriggerGeneratePortfolioHash)
+			r.Post("/get-optimizer-weights", systemHandlers.HandleTriggerGetOptimizerWeights)
+			r.Post("/build-opportunity-context", systemHandlers.HandleTriggerBuildOpportunityContext)
+			r.Post("/create-trade-plan", systemHandlers.HandleTriggerCreateTradePlan)
+			r.Post("/store-recommendations", systemHandlers.HandleTriggerStoreRecommendations)
+
+			// Individual dividend jobs
+			r.Post("/get-unreinvested-dividends", systemHandlers.HandleTriggerGetUnreinvestedDividends)
+			r.Post("/group-dividends-by-symbol", systemHandlers.HandleTriggerGroupDividendsBySymbol)
+			r.Post("/check-dividend-yields", systemHandlers.HandleTriggerCheckDividendYields)
+			r.Post("/create-dividend-recommendations", systemHandlers.HandleTriggerCreateDividendRecommendations)
+			r.Post("/set-pending-bonuses", systemHandlers.HandleTriggerSetPendingBonuses)
+			r.Post("/execute-dividend-trades", systemHandlers.HandleTriggerExecuteDividendTrades)
+
+			// Individual health check jobs
+			r.Post("/check-core-databases", systemHandlers.HandleTriggerCheckCoreDatabases)
+			r.Post("/check-history-databases", systemHandlers.HandleTriggerCheckHistoryDatabases)
+			r.Post("/check-wal-checkpoints", systemHandlers.HandleTriggerCheckWALCheckpoints)
+		})
 
 		// Allocation module (MIGRATED TO GO!)
 		allocRepo := s.container.AllocRepo
@@ -406,7 +468,22 @@ func (s *Server) setupRoutes() {
 		cashFlowsHandler.RegisterRoutes(r)
 
 		// Rebalancing module (MIGRATED TO GO!)
-		s.setupRebalancingRoutes(r)
+		rebalancingTradernetClient := s.container.TradernetClient
+		rebalancingCurrencyExchangeService := s.container.CurrencyExchangeService
+		rebalancingAllocRepo := s.container.AllocRepo
+		rebalancingCashManager := s.container.CashManager
+		rebalancingPortfolioService := s.container.PortfolioService
+		rebalancingService := s.container.RebalancingService
+		rebalancingHandlers := rebalancing.NewHandlers(
+			rebalancingService,
+			rebalancingPortfolioService,
+			rebalancingTradernetClient,
+			rebalancingCurrencyExchangeService,
+			rebalancingAllocRepo,
+			rebalancingCashManager,
+			s.log,
+		)
+		rebalancingHandlers.RegisterRoutes(r)
 
 		// Planning module (MIGRATED TO GO!)
 		planningService := s.container.PlanningService
@@ -446,7 +523,9 @@ func (s *Server) setupRoutes() {
 		chartsHandler.RegisterRoutes(r)
 
 		// Deployment module (MIGRATED TO GO!)
-		s.setupDeploymentRoutes(r)
+		if s.deploymentHandlers != nil {
+			s.deploymentHandlers.RegisterRoutes(r)
+		}
 
 		// Settings module (MIGRATED TO GO!)
 		settingsService := s.container.SettingsService
@@ -454,7 +533,7 @@ func (s *Server) setupRoutes() {
 		settingsHandler.RegisterRoutes(r)
 
 		// Symbolic Regression module (MIGRATED TO GO!)
-		s.setupSymbolicRegressionRoutes(r)
+		// TODO: Extract to handlers package when module is migrated
 
 		// Analytics module (Factor Exposure, etc.)
 		analyticsFactorTracker := s.container.FactorExposureTracker
@@ -472,15 +551,15 @@ func (s *Server) setupRoutes() {
 		analyticsHandler.RegisterRoutes(r)
 	})
 
-		// Evaluation module routes (MIGRATED TO GO!)
-		// Mounted directly under /api/v1 for Python client compatibility
-		numWorkers := runtime.NumCPU()
-		if numWorkers < 2 {
-			numWorkers = 2
-		}
-		evalService := evaluation.NewService(numWorkers, s.log)
-		evalHandler := evaluationhandlers.NewHandler(evalService, s.log)
-		evalHandler.RegisterRoutes(s.router)
+	// Evaluation module routes (MIGRATED TO GO!)
+	// Mounted directly under /api/v1 for Python client compatibility
+	numWorkers := runtime.NumCPU()
+	if numWorkers < 2 {
+		numWorkers = 2
+	}
+	evalService := evaluation.NewService(numWorkers, s.log)
+	evalHandler := evaluationhandlers.NewHandler(evalService, s.log)
+	evalHandler.RegisterRoutes(s.router)
 
 	// Serve built frontend files from embedded filesystem
 	// Frontend files are embedded in the binary at frontend/dist
@@ -652,39 +731,6 @@ func (a *securityFetcherAdapter) GetSecurityName(symbol string) (string, error) 
 		return symbol, nil // Return symbol if not found
 	}
 	return security.Name, nil
-}
-
-
-// setupRebalancingRoutes configures rebalancing module routes
-func (s *Server) setupRebalancingRoutes(r chi.Router) {
-	// Use services from container (single source of truth)
-	tradernetClient := s.container.TradernetClient
-	currencyExchangeService := s.container.CurrencyExchangeService
-	allocRepo := s.container.AllocRepo
-	cashManager := s.container.CashManager
-	portfolioService := s.container.PortfolioService
-	rebalancingService := s.container.RebalancingService
-
-	// Initialize handlers with currency exchange service and allocation repository
-	handlers := rebalancing.NewHandlers(
-		rebalancingService,
-		portfolioService,
-		tradernetClient,
-		currencyExchangeService,
-		allocRepo,
-		cashManager,
-		s.log,
-	)
-
-	// Register routes
-	handlers.RegisterRoutes(r)
-}
-
-// setupDeploymentRoutes configures deployment module routes
-func (s *Server) setupDeploymentRoutes(r chi.Router) {
-	if s.deploymentHandlers != nil {
-		s.deploymentHandlers.RegisterRoutes(r)
-	}
 }
 
 // Start starts the HTTP server and background monitors
