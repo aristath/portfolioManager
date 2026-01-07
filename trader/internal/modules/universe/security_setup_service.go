@@ -255,9 +255,15 @@ func (s *SecuritySetupService) AddSecurityByIdentifier(
 	if idType == IdentifierTypeTradernet {
 		// Already have Tradernet symbol
 		tradernetSymbol = identifier
+
+		// Check if Tradernet is connected before trying to fetch data
+		if s.tradernetClient == nil || !s.tradernetClient.IsConnected() {
+			return nil, fmt.Errorf("Tradernet client is not connected. Cannot fetch ISIN for symbol: %s. Please connect to Tradernet first", tradernetSymbol)
+		}
+
 		tradernetData, err := s.getTradernetData(tradernetSymbol)
 		if err != nil {
-			s.log.Warn().Err(err).Str("symbol", tradernetSymbol).Msg("Failed to get Tradernet data")
+			return nil, fmt.Errorf("failed to fetch data from Tradernet API for symbol: %s: %w", tradernetSymbol, err)
 		} else if tradernetData != nil {
 			// Prefer ISIN from resolver, fallback to API data
 			if isin == nil || *isin == "" {
@@ -269,6 +275,12 @@ func (s *SecuritySetupService) AddSecurityByIdentifier(
 		// Need to look up Tradernet symbol from ISIN
 		isinVal := identifier // Use the provided ISIN
 		isin = &isinVal
+
+		// Check if Tradernet is connected before trying to lookup
+		if s.tradernetClient == nil || !s.tradernetClient.IsConnected() {
+			return nil, fmt.Errorf("Tradernet client is not connected. Cannot lookup Tradernet symbol for ISIN: %s. Please connect to Tradernet first", isinVal)
+		}
+
 		lookupResult, err := s.getTradernetSymbolFromISIN(isinVal)
 		if err != nil {
 			return nil, fmt.Errorf("failed to lookup Tradernet symbol for ISIN: %w", err)
@@ -302,8 +314,16 @@ func (s *SecuritySetupService) AddSecurityByIdentifier(
 
 	// Ensure we have ISIN - try to get it if we don't have it yet
 	if isin == nil || *isin == "" {
+		// Check if Tradernet is connected before trying to fetch ISIN
+		if s.tradernetClient == nil || !s.tradernetClient.IsConnected() {
+			return nil, fmt.Errorf("Tradernet client is not connected. Cannot fetch ISIN for symbol: %s. Please connect to Tradernet first", tradernetSymbol)
+		}
+
 		tradernetData, err := s.getTradernetData(tradernetSymbol)
-		if err == nil && tradernetData != nil {
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch ISIN from Tradernet API for symbol: %s: %w", tradernetSymbol, err)
+		}
+		if tradernetData != nil && tradernetData.ISIN != nil && *tradernetData.ISIN != "" {
 			isin = tradernetData.ISIN
 		}
 	}
