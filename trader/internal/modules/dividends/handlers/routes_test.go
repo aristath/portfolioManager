@@ -1,0 +1,93 @@
+package handlers
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/aristath/sentinel/internal/modules/dividends"
+	"github.com/go-chi/chi/v5"
+	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestRegisterRoutes(t *testing.T) {
+	// Create mock dependencies
+	dividendRepo := &dividends.DividendRepository{}
+
+	// Create handler - we're only testing that RegisterRoutes works, not handler execution
+	handler := NewDividendHandlers(dividendRepo, zerolog.Nop())
+
+	// Create router and register routes - this should not panic
+	router := chi.NewRouter()
+	require.NotPanics(t, func() {
+		handler.RegisterRoutes(router)
+	}, "RegisterRoutes should not panic")
+
+	// Test that routes are registered by checking they don't return 404
+	// Note: They may return 500 due to nil dependencies, but 404 means route not found
+	testCases := []struct {
+		method string
+		path   string
+		name   string
+	}{
+		{"GET", "/dividends/", "GetDividends"},
+		{"GET", "/dividends/1", "GetDividendByID"},
+		{"GET", "/dividends/symbol/AAPL", "GetDividendsBySymbol"},
+		{"GET", "/dividends/unreinvested", "GetUnreinvestedDividends"},
+		{"POST", "/dividends/1/pending-bonus", "SetPendingBonus"},
+		{"POST", "/dividends/1/mark-reinvested", "MarkReinvested"},
+		{"POST", "/dividends/", "CreateDividend"},
+		{"POST", "/dividends/clear-bonus/AAPL", "ClearBonus"},
+		{"GET", "/dividends/pending-bonuses", "GetPendingBonuses"},
+		{"GET", "/dividends/analytics/total", "GetTotalDividendsBySymbol"},
+		{"GET", "/dividends/analytics/reinvestment-rate", "GetReinvestmentRate"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, nil)
+			rec := httptest.NewRecorder()
+
+			// Catch panics from nil pointer dereferences
+			var panicked bool
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						panicked = true
+						// Panic is OK - it means route was found and handler was called
+						// We just need to verify it's not a 404
+					}
+				}()
+				router.ServeHTTP(rec, req)
+			}()
+
+			// Route should be registered (not 404)
+			// 404 means route not found
+			// Panic or 500 means route exists but handler failed (expected with nil deps)
+			if !panicked {
+				assert.NotEqual(t, http.StatusNotFound, rec.Code, "Route %s %s should be registered (got %d)", tc.method, tc.path, rec.Code)
+			} else {
+				// Panic means route was found and handler executed (which is what we want to verify)
+				assert.True(t, true, "Route %s %s was found (handler executed, panic expected with nil deps)", tc.method, tc.path)
+			}
+		})
+	}
+}
+
+func TestRegisterRoutes_RoutePrefix(t *testing.T) {
+	// Verify that routes are registered under /dividends prefix
+	dividendRepo := &dividends.DividendRepository{}
+
+	handler := NewDividendHandlers(dividendRepo, zerolog.Nop())
+
+	router := chi.NewRouter()
+	handler.RegisterRoutes(router)
+
+	// Test that routes outside /dividends prefix return 404
+	req := httptest.NewRequest("GET", "/unreinvested", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusNotFound, rec.Code, "Route without /dividends prefix should return 404")
+}

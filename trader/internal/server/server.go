@@ -23,7 +23,7 @@ import (
 	allocationhandlers "github.com/aristath/sentinel/internal/modules/allocation/handlers"
 	"github.com/aristath/sentinel/internal/modules/cash_flows"
 	"github.com/aristath/sentinel/internal/modules/display"
-	"github.com/aristath/sentinel/internal/modules/dividends"
+	dividendhandlers "github.com/aristath/sentinel/internal/modules/dividends/handlers"
 	"github.com/aristath/sentinel/internal/modules/evaluation"
 	"github.com/aristath/sentinel/internal/modules/optimization"
 	"github.com/aristath/sentinel/internal/modules/planning/repository"
@@ -343,7 +343,9 @@ func (s *Server) setupRoutes() {
 		tradingHandler.RegisterRoutes(r)
 
 		// Dividends module (MIGRATED TO GO!)
-		s.setupDividendRoutes(r)
+		dividendRepo := s.container.DividendRepo
+		dividendHandler := dividendhandlers.NewDividendHandlers(dividendRepo, s.log)
+		dividendHandler.RegisterRoutes(r)
 
 		// Display module (MIGRATED TO GO!)
 		s.setupDisplayRoutes(r)
@@ -553,35 +555,6 @@ func (a *securityFetcherAdapter) GetSecurityName(symbol string) (string, error) 
 		return symbol, nil // Return symbol if not found
 	}
 	return security.Name, nil
-}
-
-// setupDividendRoutes configures dividend module routes
-func (s *Server) setupDividendRoutes(r chi.Router) {
-	// Use services from container (single source of truth)
-	dividendRepo := s.container.DividendRepo
-	handler := dividends.NewDividendHandlers(dividendRepo, s.log)
-
-	// Dividend routes (faithful translation of Python repository to HTTP API)
-	r.Route("/dividends", func(r chi.Router) {
-		// List endpoints
-		r.Get("/", handler.HandleGetDividends)                        // List all dividends
-		r.Get("/{id}", handler.HandleGetDividendByID)                 // Get dividend by ID
-		r.Get("/symbol/{symbol}", handler.HandleGetDividendsBySymbol) // Get dividends by symbol
-
-		// CRITICAL: Endpoints used by dividend_reinvestment.py job
-		r.Get("/unreinvested", handler.HandleGetUnreinvestedDividends) // Get unreinvested dividends
-		r.Post("/{id}/pending-bonus", handler.HandleSetPendingBonus)   // Set pending bonus
-		r.Post("/{id}/mark-reinvested", handler.HandleMarkReinvested)  // Mark as reinvested
-
-		// Management endpoints
-		r.Post("/", handler.HandleCreateDividend)                  // Create dividend
-		r.Post("/clear-bonus/{symbol}", handler.HandleClearBonus)  // Clear bonus by symbol
-		r.Get("/pending-bonuses", handler.HandleGetPendingBonuses) // Get all pending bonuses
-
-		// Analytics endpoints
-		r.Get("/analytics/total", handler.HandleGetTotalDividendsBySymbol)       // Total dividends by symbol
-		r.Get("/analytics/reinvestment-rate", handler.HandleGetReinvestmentRate) // Overall reinvestment rate
-	})
 }
 
 // setupDisplayRoutes configures display module routes
