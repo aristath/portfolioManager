@@ -7,7 +7,7 @@ import (
 	"math/rand"
 	"sort"
 
-	"github.com/aristath/arduino-trader/internal/evaluation/models"
+	"github.com/aristath/portfolioManager/internal/evaluation/models"
 	"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/stat"
 )

@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/aristath/arduino-trader/internal/database"
-	"github.com/aristath/arduino-trader/pkg/logger"
+	"github.com/aristath/portfolioManager/internal/database"
+	"github.com/aristath/portfolioManager/pkg/logger"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/aristath/arduino-trader/internal/clients/yahoo"
-	"github.com/aristath/arduino-trader/internal/modules/symbolic_regression"
+	"github.com/aristath/portfolioManager/internal/clients/yahoo"
+	"github.com/aristath/portfolioManager/internal/modules/symbolic_regression"
 	"github.com/rs/zerolog"
 )
 

@@ -3,7 +3,7 @@ package scorers
 import (
 	"math"
 
-	"github.com/aristath/arduino-trader/internal/modules/scoring"
+	"github.com/aristath/portfolioManager/internal/modules/scoring"
 )
 
 // ShortTermScorer calculates short-term performance score

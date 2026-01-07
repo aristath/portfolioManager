@@ -9,7 +9,7 @@ import (
 	"gonum.org/v1/gonum/mat"
 	"gonum.org/v1/gonum/stat"
 
-	"github.com/aristath/arduino-trader/internal/modules/portfolio"
+	"github.com/aristath/portfolioManager/internal/modules/portfolio"
 	"github.com/rs/zerolog"
 )
 

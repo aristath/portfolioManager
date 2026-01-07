@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aristath/arduino-trader/internal/modules/cash_flows"
-	"github.com/aristath/arduino-trader/internal/modules/display"
-	"github.com/aristath/arduino-trader/internal/modules/portfolio"
-	"github.com/aristath/arduino-trader/internal/modules/trading"
+	"github.com/aristath/portfolioManager/internal/modules/cash_flows"
+	"github.com/aristath/portfolioManager/internal/modules/display"
+	"github.com/aristath/portfolioManager/internal/modules/portfolio"
+	"github.com/aristath/portfolioManager/internal/modules/trading"
 	"github.com/rs/zerolog"
 )
 

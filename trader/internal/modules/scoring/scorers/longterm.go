@@ -3,8 +3,8 @@ package scorers
 import (
 	"math"
 
-	"github.com/aristath/arduino-trader/internal/modules/scoring"
-	"github.com/aristath/arduino-trader/pkg/formulas"
+	"github.com/aristath/portfolioManager/internal/modules/scoring"
+	"github.com/aristath/portfolioManager/pkg/formulas"
 )
 
 // LongTermScorer calculates long-term performance score

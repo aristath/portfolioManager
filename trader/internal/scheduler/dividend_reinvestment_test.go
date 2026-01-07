@@ -3,12 +3,12 @@ package scheduler
 import (
 	"testing"
 
-	"github.com/aristath/arduino-trader/internal/clients/tradernet"
-	"github.com/aristath/arduino-trader/internal/clients/yahoo"
-	"github.com/aristath/arduino-trader/internal/modules/dividends"
-	"github.com/aristath/arduino-trader/internal/modules/portfolio"
-	"github.com/aristath/arduino-trader/internal/modules/trading"
-	"github.com/aristath/arduino-trader/internal/modules/universe"
+	"github.com/aristath/portfolioManager/internal/clients/tradernet"
+	"github.com/aristath/portfolioManager/internal/clients/yahoo"
+	"github.com/aristath/portfolioManager/internal/modules/dividends"
+	"github.com/aristath/portfolioManager/internal/modules/portfolio"
+	"github.com/aristath/portfolioManager/internal/modules/trading"
+	"github.com/aristath/portfolioManager/internal/modules/universe"
 	"github.com/rs/zerolog"
 )
 

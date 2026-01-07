@@ -3,22 +3,22 @@ package opportunities
 import (
 	"testing"
 
-	"github.com/aristath/arduino-trader/internal/modules/planning/domain"
+	"github.com/aristath/portfolioManager/internal/modules/planning/domain"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestSortByPriority(t *testing.T) {
 	tests := []struct {
-		name      string
+		name       string
 		candidates []domain.ActionCandidate
-		expected  []domain.ActionCandidate
-		desc      string
+		expected   []domain.ActionCandidate
+		desc       string
 	}{
 		{
-			name:      "empty slice",
+			name:       "empty slice",
 			candidates: []domain.ActionCandidate{},
-			expected:  []domain.ActionCandidate{},
-			desc:      "Empty slice should remain empty",
+			expected:   []domain.ActionCandidate{},
+			desc:       "Empty slice should remain empty",
 		},
 		{
 			name: "single candidate",
@@ -109,4 +109,3 @@ func TestSortByPriority(t *testing.T) {
 		})
 	}
 }
-

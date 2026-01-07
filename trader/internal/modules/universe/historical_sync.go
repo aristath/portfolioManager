@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aristath/arduino-trader/internal/clients/yahoo"
+	"github.com/aristath/portfolioManager/internal/clients/yahoo"
 	"github.com/rs/zerolog"
 )
 

@@ -1,11 +1,11 @@
 package planning
 
 import (
-	"github.com/aristath/arduino-trader/internal/modules/opportunities"
-	"github.com/aristath/arduino-trader/internal/modules/planning/domain"
-	"github.com/aristath/arduino-trader/internal/modules/planning/evaluation"
-	"github.com/aristath/arduino-trader/internal/modules/planning/planner"
-	"github.com/aristath/arduino-trader/internal/modules/sequences"
+	"github.com/aristath/portfolioManager/internal/modules/opportunities"
+	"github.com/aristath/portfolioManager/internal/modules/planning/domain"
+	"github.com/aristath/portfolioManager/internal/modules/planning/evaluation"
+	"github.com/aristath/portfolioManager/internal/modules/planning/planner"
+	"github.com/aristath/portfolioManager/internal/modules/sequences"
 	"github.com/rs/zerolog"
 )
 

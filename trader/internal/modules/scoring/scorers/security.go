@@ -4,11 +4,11 @@ import (
 	"math"
 	"time"
 
-	"github.com/aristath/arduino-trader/internal/modules/quantum"
-	"github.com/aristath/arduino-trader/internal/modules/scoring"
-	"github.com/aristath/arduino-trader/internal/modules/scoring/domain"
-	"github.com/aristath/arduino-trader/internal/modules/symbolic_regression"
-	"github.com/aristath/arduino-trader/pkg/formulas"
+	"github.com/aristath/portfolioManager/internal/modules/quantum"
+	"github.com/aristath/portfolioManager/internal/modules/scoring"
+	"github.com/aristath/portfolioManager/internal/modules/scoring/domain"
+	"github.com/aristath/portfolioManager/internal/modules/symbolic_regression"
+	"github.com/aristath/portfolioManager/pkg/formulas"
 )
 
 // AdaptiveWeightsProvider interface for getting adaptive weights

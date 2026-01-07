@@ -3,9 +3,9 @@ package universe
 import (
 	"testing"
 
-	"github.com/aristath/arduino-trader/internal/database"
-	"github.com/aristath/arduino-trader/internal/modules/scoring/scorers"
-	"github.com/aristath/arduino-trader/pkg/formulas"
+	"github.com/aristath/portfolioManager/internal/database"
+	"github.com/aristath/portfolioManager/internal/modules/scoring/scorers"
+	"github.com/aristath/portfolioManager/pkg/formulas"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

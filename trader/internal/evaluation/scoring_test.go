@@ -3,7 +3,7 @@ package evaluation
 import (
 	"testing"
 
-	"github.com/aristath/arduino-trader/internal/evaluation/models"
+	"github.com/aristath/portfolioManager/internal/evaluation/models"
 	"github.com/stretchr/testify/assert"
 )
 

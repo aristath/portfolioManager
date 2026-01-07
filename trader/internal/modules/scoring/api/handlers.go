@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/aristath/arduino-trader/internal/modules/scoring/domain"
-	"github.com/aristath/arduino-trader/internal/modules/scoring/scorers"
-	"github.com/aristath/arduino-trader/pkg/formulas"
+	"github.com/aristath/portfolioManager/internal/modules/scoring/domain"
+	"github.com/aristath/portfolioManager/internal/modules/scoring/scorers"
+	"github.com/aristath/portfolioManager/pkg/formulas"
 	"github.com/rs/zerolog"
 )
 

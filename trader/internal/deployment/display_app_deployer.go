@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/aristath/arduino-trader/pkg/embedded"
+	"github.com/aristath/portfolioManager/pkg/embedded"
 )
 
 // DisplayAppDeployer handles Python display app deployment (extracts from embedded files)

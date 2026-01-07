@@ -10,7 +10,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	response := map[string]interface{}{
 		"status":  "healthy",
 		"version": "1.0.0",
-		"service": "arduino-trader",
+		"service": "portfolio-manager",
 	}
 
 	s.writeJSON(w, http.StatusOK, response)

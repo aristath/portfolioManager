@@ -1,8 +1,8 @@
 package opportunities
 
 import (
-	"github.com/aristath/arduino-trader/internal/modules/planning/domain"
-	"github.com/aristath/arduino-trader/internal/modules/universe"
+	"github.com/aristath/portfolioManager/internal/modules/planning/domain"
+	"github.com/aristath/portfolioManager/internal/modules/universe"
 	"github.com/rs/zerolog"
 )
 

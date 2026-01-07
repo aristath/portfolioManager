@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/aristath/arduino-trader/pkg/formulas"
+	"github.com/aristath/portfolioManager/pkg/formulas"
 )
 
 type hrpLinkage string

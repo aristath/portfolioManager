@@ -40,6 +40,6 @@ clean: ## Clean build artifacts
 	go clean
 
 docker-build: ## Build Docker image
-	docker build -t arduino-trader:latest .
+	docker build -t portfolio-manager:latest .
 
 .DEFAULT_GOAL := help

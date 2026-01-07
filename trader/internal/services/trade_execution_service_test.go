@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/aristath/arduino-trader/internal/clients/tradernet"
-	"github.com/aristath/arduino-trader/internal/modules/trading"
-	"github.com/aristath/arduino-trader/pkg/logger"
+	"github.com/aristath/portfolioManager/internal/clients/tradernet"
+	"github.com/aristath/portfolioManager/internal/modules/trading"
+	"github.com/aristath/portfolioManager/pkg/logger"
 )
 
 // Mock implementations for testing

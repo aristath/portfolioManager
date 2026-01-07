@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aristath/arduino-trader/internal/database"
+	"github.com/aristath/portfolioManager/internal/database"
 	"github.com/rs/zerolog"
 )
 

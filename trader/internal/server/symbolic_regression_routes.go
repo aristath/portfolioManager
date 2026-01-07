@@ -1,7 +1,7 @@
 package server
 
 import (
-	"github.com/aristath/arduino-trader/internal/modules/symbolic_regression"
+	"github.com/aristath/portfolioManager/internal/modules/symbolic_regression"
 	"github.com/go-chi/chi/v5"
 )
 

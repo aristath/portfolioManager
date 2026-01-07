@@ -7,7 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 
-	"github.com/aristath/arduino-trader/internal/deployment"
+	"github.com/aristath/portfolioManager/internal/deployment"
 )
 
 // DeploymentHandlers handles deployment-related HTTP endpoints

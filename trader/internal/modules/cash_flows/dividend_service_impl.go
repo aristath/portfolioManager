@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/aristath/arduino-trader/internal/modules/dividends"
+	"github.com/aristath/portfolioManager/internal/modules/dividends"
 	"github.com/rs/zerolog"
 )
 

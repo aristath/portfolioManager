@@ -3,7 +3,7 @@ package portfolio
 import (
 	"testing"
 
-	"github.com/aristath/arduino-trader/internal/modules/allocation"
+	"github.com/aristath/portfolioManager/internal/modules/allocation"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -97,4 +97,3 @@ func TestConvertAllocationsToAllocation(t *testing.T) {
 		})
 	}
 }
-

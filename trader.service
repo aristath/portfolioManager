@@ -1,6 +1,6 @@
 [Unit]
-Description=Arduino Trader Go Service
-Documentation=https://github.com/aristath/arduino-trader
+Description=Portfolio Manager Go Service
+Documentation=https://github.com/aristath/portfolioManager
 After=network.target docker.service
 Wants=docker.service
 

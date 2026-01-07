@@ -30,7 +30,7 @@ type DeploymentConfig struct {
 	GitHubWorkflowName string
 	GitHubArtifactName string
 	GitHubBranch       string
-	GitHubRepo         string // GitHub repository in format "owner/repo" (e.g., "aristath/arduino-trader")
+	GitHubRepo         string // GitHub repository in format "owner/repo" (e.g., "aristath/portfolioManager")
 }
 
 // Manager handles deployment orchestration
@@ -102,7 +102,7 @@ func NewManager(config *DeploymentConfig, version string, log zerolog.Logger) *M
 
 	if config.GitHubRepo == "" {
 		log.Fatal().
-			Msg("GitHub repository is REQUIRED but configuration is missing. Set GITHUB_REPO (e.g., 'aristath/arduino-trader')")
+			Msg("GitHub repository is REQUIRED but configuration is missing. Set GITHUB_REPO (e.g., 'aristath/portfolioManager')")
 	}
 
 	trackerFile := filepath.Join(config.DeployDir, "github-artifact-id.txt")

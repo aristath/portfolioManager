@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"testing"
 
-	"github.com/aristath/arduino-trader/internal/modules/symbolic_regression"
+	"github.com/aristath/portfolioManager/internal/modules/symbolic_regression"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

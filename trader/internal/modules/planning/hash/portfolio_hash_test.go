@@ -3,7 +3,7 @@ package hash
 import (
 	"testing"
 
-	"github.com/aristath/arduino-trader/internal/modules/universe"
+	"github.com/aristath/portfolioManager/internal/modules/universe"
 )
 
 func TestGeneratePortfolioHash(t *testing.T) {

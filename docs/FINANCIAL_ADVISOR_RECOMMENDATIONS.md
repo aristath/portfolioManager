@@ -1,13 +1,13 @@
 # Financial Advisor Recommendations: Recent Scientific Theories for Portfolio Management
 
 **Date**: 2025-01-27
-**Purpose**: Reference document for applying recent mathematical, statistical, and physics theories to the arduino-trader retirement fund management system.
+**Purpose**: Reference document for applying recent mathematical, statistical, and physics theories to the portfolioManager retirement fund management system.
 
 ---
 
 ## Executive Summary
 
-This document outlines recent scientific theories (2023-2024) that could enhance the arduino-trader autonomous portfolio management system. **This system manages a retirement fund with a slow-growth, long-term strategy (couple trades per week, not high-frequency trading).**
+This document outlines recent scientific theories (2023-2024) that could enhance the portfolioManager autonomous portfolio management system. **This system manages a retirement fund with a slow-growth, long-term strategy (couple trades per week, not high-frequency trading).**
 
 Each theory is evaluated for:
 - **Practical applicability** to long-term portfolio management
@@ -57,7 +57,7 @@ Quantum probability extends classical probability into the complex domain, model
 - Quantum probability in asset return modeling (arXiv:2401.05823)
 - Schrödinger-like trading equations for multimodal return distributions
 
-### Application to Arduino-Trader
+### Application to Portfolio Manager
 
 **Current System Context**:
 - Security scoring uses traditional metrics (CAGR, Sharpe, Sortino) in `tag_assigner.go`
@@ -113,7 +113,7 @@ Focuses on significant price movements rather than fixed time intervals. Filters
 - Focus on meaningful price movements
 - Reduces noise in volatile periods
 
-### Application to Arduino-Trader
+### Application to Portfolio Manager
 
 **Current System Context**:
 - Regime detector uses fixed windows (daily returns) in `market_regime.go`
@@ -152,7 +152,7 @@ Markets evolve as participants adapt; efficiency is dynamic, not static. Market 
 - Efficiency is dynamic, not static
 - Strategies must evolve with the market
 
-### Application to Arduino-Trader
+### Application to Portfolio Manager
 
 **Current System Context**:
 - Scoring weights are static (defined in `scoring/constants.go`)
@@ -211,7 +211,7 @@ Discovers mathematical expressions that best fit data, finding underlying equati
 - Find optimal formulas, not just parameters
 - Discover hidden relationships in data
 
-### Application to Arduino-Trader
+### Application to Portfolio Manager
 
 **Current System Context**:
 - Scoring combines many factors with static weights
@@ -260,7 +260,7 @@ Recent HRP improvements include:
 - Dynamic clustering adapts to market structure
 - Multi-scale optimization for different horizons
 
-### Application to Arduino-Trader
+### Application to Portfolio Manager
 
 **Current System Context**:
 - HRP implementation uses static correlation matrix
@@ -306,7 +306,7 @@ Solomonoff's theory assigns probabilities based on algorithmic complexity (Occam
 - Occam's razor formalized
 - Model selection based on simplicity
 
-### Application to Arduino-Trader
+### Application to Portfolio Manager
 
 **Current System Context**:
 - Multiple scoring models and configurations

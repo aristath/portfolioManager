@@ -4,7 +4,7 @@ package services
 import (
 	"fmt"
 
-	"github.com/aristath/arduino-trader/internal/clients/tradernet"
+	"github.com/aristath/portfolioManager/internal/clients/tradernet"
 	"github.com/rs/zerolog"
 )
 

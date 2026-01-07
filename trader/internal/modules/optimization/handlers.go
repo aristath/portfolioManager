@@ -9,11 +9,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aristath/arduino-trader/internal/clients/tradernet"
-	"github.com/aristath/arduino-trader/internal/clients/yahoo"
-	"github.com/aristath/arduino-trader/internal/modules/dividends"
-	"github.com/aristath/arduino-trader/internal/modules/portfolio"
-	"github.com/aristath/arduino-trader/internal/services"
+	"github.com/aristath/portfolioManager/internal/clients/tradernet"
+	"github.com/aristath/portfolioManager/internal/clients/yahoo"
+	"github.com/aristath/portfolioManager/internal/modules/dividends"
+	"github.com/aristath/portfolioManager/internal/modules/portfolio"
+	"github.com/aristath/portfolioManager/internal/services"
 	"github.com/rs/zerolog"
 )
 

@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/aristath/arduino-trader/internal/modules/opportunities"
-	"github.com/aristath/arduino-trader/internal/modules/planning/domain"
-	"github.com/aristath/arduino-trader/internal/modules/planning/evaluation"
-	"github.com/aristath/arduino-trader/internal/modules/planning/hash"
-	"github.com/aristath/arduino-trader/internal/modules/sequences"
-	"github.com/aristath/arduino-trader/internal/modules/universe"
+	"github.com/aristath/portfolioManager/internal/modules/opportunities"
+	"github.com/aristath/portfolioManager/internal/modules/planning/domain"
+	"github.com/aristath/portfolioManager/internal/modules/planning/evaluation"
+	"github.com/aristath/portfolioManager/internal/modules/planning/hash"
+	"github.com/aristath/portfolioManager/internal/modules/sequences"
+	"github.com/aristath/portfolioManager/internal/modules/universe"
 	"github.com/rs/zerolog"
 )
 

@@ -17,33 +17,33 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/rs/zerolog"
 
-	"github.com/aristath/arduino-trader/internal/clients/tradernet"
-	"github.com/aristath/arduino-trader/internal/clients/yahoo"
-	"github.com/aristath/arduino-trader/internal/config"
-	"github.com/aristath/arduino-trader/internal/database"
-	"github.com/aristath/arduino-trader/internal/events"
-	"github.com/aristath/arduino-trader/internal/modules/allocation"
-	"github.com/aristath/arduino-trader/internal/modules/cash_flows"
-	"github.com/aristath/arduino-trader/internal/modules/display"
-	"github.com/aristath/arduino-trader/internal/modules/dividends"
-	"github.com/aristath/arduino-trader/internal/modules/evaluation"
-	"github.com/aristath/arduino-trader/internal/modules/market_hours"
-	"github.com/aristath/arduino-trader/internal/modules/opportunities"
-	"github.com/aristath/arduino-trader/internal/modules/optimization"
-	"github.com/aristath/arduino-trader/internal/modules/planning"
-	planningevaluation "github.com/aristath/arduino-trader/internal/modules/planning/evaluation"
-	planningrepo "github.com/aristath/arduino-trader/internal/modules/planning/repository"
-	"github.com/aristath/arduino-trader/internal/modules/portfolio"
-	"github.com/aristath/arduino-trader/internal/modules/rebalancing"
-	"github.com/aristath/arduino-trader/internal/modules/scoring/api"
-	"github.com/aristath/arduino-trader/internal/modules/scoring/scorers"
-	"github.com/aristath/arduino-trader/internal/modules/sequences"
-	"github.com/aristath/arduino-trader/internal/modules/settings"
-	"github.com/aristath/arduino-trader/internal/modules/trading"
-	"github.com/aristath/arduino-trader/internal/modules/universe"
-	"github.com/aristath/arduino-trader/internal/scheduler"
-	"github.com/aristath/arduino-trader/internal/services"
-	"github.com/aristath/arduino-trader/pkg/embedded"
+	"github.com/aristath/portfolioManager/internal/clients/tradernet"
+	"github.com/aristath/portfolioManager/internal/clients/yahoo"
+	"github.com/aristath/portfolioManager/internal/config"
+	"github.com/aristath/portfolioManager/internal/database"
+	"github.com/aristath/portfolioManager/internal/events"
+	"github.com/aristath/portfolioManager/internal/modules/allocation"
+	"github.com/aristath/portfolioManager/internal/modules/cash_flows"
+	"github.com/aristath/portfolioManager/internal/modules/display"
+	"github.com/aristath/portfolioManager/internal/modules/dividends"
+	"github.com/aristath/portfolioManager/internal/modules/evaluation"
+	"github.com/aristath/portfolioManager/internal/modules/market_hours"
+	"github.com/aristath/portfolioManager/internal/modules/opportunities"
+	"github.com/aristath/portfolioManager/internal/modules/optimization"
+	"github.com/aristath/portfolioManager/internal/modules/planning"
+	planningevaluation "github.com/aristath/portfolioManager/internal/modules/planning/evaluation"
+	planningrepo "github.com/aristath/portfolioManager/internal/modules/planning/repository"
+	"github.com/aristath/portfolioManager/internal/modules/portfolio"
+	"github.com/aristath/portfolioManager/internal/modules/rebalancing"
+	"github.com/aristath/portfolioManager/internal/modules/scoring/api"
+	"github.com/aristath/portfolioManager/internal/modules/scoring/scorers"
+	"github.com/aristath/portfolioManager/internal/modules/sequences"
+	"github.com/aristath/portfolioManager/internal/modules/settings"
+	"github.com/aristath/portfolioManager/internal/modules/trading"
+	"github.com/aristath/portfolioManager/internal/modules/universe"
+	"github.com/aristath/portfolioManager/internal/scheduler"
+	"github.com/aristath/portfolioManager/internal/services"
+	"github.com/aristath/portfolioManager/pkg/embedded"
 )
 
 // Config holds server configuration - NEW 7-database architecture
@@ -791,7 +791,7 @@ func (s *Server) setupOptimizationRoutes(r chi.Router) {
 	constraintsMgr := optimization.NewConstraintsManager(s.log)
 
 	// Initialize returns calculator with Yahoo client for market indicators
-	returnsCalc := optimization.NewReturnsCalculator(s.configDB.Conn(), yahooClient, s.log)
+	returnsCalc := optimization.NewReturnsCalculator(s.portfolioDB.Conn(), yahooClient, s.log)
 
 	// Initialize risk model builder
 	riskBuilder := optimization.NewRiskModelBuilder(s.historyDB.Conn(), s.log)

@@ -4,8 +4,8 @@ import (
 	"math"
 	"time"
 
-	"github.com/aristath/arduino-trader/internal/modules/scoring"
-	"github.com/aristath/arduino-trader/internal/modules/scoring/domain"
+	"github.com/aristath/portfolioManager/internal/modules/scoring"
+	"github.com/aristath/portfolioManager/internal/modules/scoring/domain"
 )
 
 // SellScorer calculates sell priority scores for positions

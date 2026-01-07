@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/aristath/arduino-trader/internal/modules/planning/domain"
-	"github.com/aristath/arduino-trader/internal/modules/planning/repository"
+	"github.com/aristath/portfolioManager/internal/modules/planning/domain"
+	"github.com/aristath/portfolioManager/internal/modules/planning/repository"
 	"github.com/rs/zerolog"
 )
 

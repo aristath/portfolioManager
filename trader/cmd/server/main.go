@@ -8,38 +8,38 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/aristath/arduino-trader/internal/clients/tradernet"
-	"github.com/aristath/arduino-trader/internal/clients/yahoo"
-	"github.com/aristath/arduino-trader/internal/config"
-	"github.com/aristath/arduino-trader/internal/database"
-	"github.com/aristath/arduino-trader/internal/deployment"
-	"github.com/aristath/arduino-trader/internal/events"
-	"github.com/aristath/arduino-trader/internal/modules/adaptation"
-	"github.com/aristath/arduino-trader/internal/modules/allocation"
-	"github.com/aristath/arduino-trader/internal/modules/cash_flows"
-	"github.com/aristath/arduino-trader/internal/modules/cleanup"
-	"github.com/aristath/arduino-trader/internal/modules/display"
-	"github.com/aristath/arduino-trader/internal/modules/dividends"
-	"github.com/aristath/arduino-trader/internal/modules/market_hours"
-	"github.com/aristath/arduino-trader/internal/modules/opportunities"
-	"github.com/aristath/arduino-trader/internal/modules/optimization"
-	"github.com/aristath/arduino-trader/internal/modules/planning"
-	planningevaluation "github.com/aristath/arduino-trader/internal/modules/planning/evaluation"
-	planningplanner "github.com/aristath/arduino-trader/internal/modules/planning/planner"
-	planningrepo "github.com/aristath/arduino-trader/internal/modules/planning/repository"
-	"github.com/aristath/arduino-trader/internal/modules/portfolio"
-	"github.com/aristath/arduino-trader/internal/modules/rebalancing"
-	"github.com/aristath/arduino-trader/internal/modules/sequences"
-	"github.com/aristath/arduino-trader/internal/modules/settings"
-	"github.com/aristath/arduino-trader/internal/modules/symbolic_regression"
-	"github.com/aristath/arduino-trader/internal/modules/trading"
-	"github.com/aristath/arduino-trader/internal/modules/universe"
-	"github.com/aristath/arduino-trader/internal/reliability"
-	"github.com/aristath/arduino-trader/internal/scheduler"
-	"github.com/aristath/arduino-trader/internal/server"
-	"github.com/aristath/arduino-trader/internal/services"
-	"github.com/aristath/arduino-trader/internal/ticker"
-	"github.com/aristath/arduino-trader/pkg/logger"
+	"github.com/aristath/portfolioManager/internal/clients/tradernet"
+	"github.com/aristath/portfolioManager/internal/clients/yahoo"
+	"github.com/aristath/portfolioManager/internal/config"
+	"github.com/aristath/portfolioManager/internal/database"
+	"github.com/aristath/portfolioManager/internal/deployment"
+	"github.com/aristath/portfolioManager/internal/events"
+	"github.com/aristath/portfolioManager/internal/modules/adaptation"
+	"github.com/aristath/portfolioManager/internal/modules/allocation"
+	"github.com/aristath/portfolioManager/internal/modules/cash_flows"
+	"github.com/aristath/portfolioManager/internal/modules/cleanup"
+	"github.com/aristath/portfolioManager/internal/modules/display"
+	"github.com/aristath/portfolioManager/internal/modules/dividends"
+	"github.com/aristath/portfolioManager/internal/modules/market_hours"
+	"github.com/aristath/portfolioManager/internal/modules/opportunities"
+	"github.com/aristath/portfolioManager/internal/modules/optimization"
+	"github.com/aristath/portfolioManager/internal/modules/planning"
+	planningevaluation "github.com/aristath/portfolioManager/internal/modules/planning/evaluation"
+	planningplanner "github.com/aristath/portfolioManager/internal/modules/planning/planner"
+	planningrepo "github.com/aristath/portfolioManager/internal/modules/planning/repository"
+	"github.com/aristath/portfolioManager/internal/modules/portfolio"
+	"github.com/aristath/portfolioManager/internal/modules/rebalancing"
+	"github.com/aristath/portfolioManager/internal/modules/sequences"
+	"github.com/aristath/portfolioManager/internal/modules/settings"
+	"github.com/aristath/portfolioManager/internal/modules/symbolic_regression"
+	"github.com/aristath/portfolioManager/internal/modules/trading"
+	"github.com/aristath/portfolioManager/internal/modules/universe"
+	"github.com/aristath/portfolioManager/internal/reliability"
+	"github.com/aristath/portfolioManager/internal/scheduler"
+	"github.com/aristath/portfolioManager/internal/server"
+	"github.com/aristath/portfolioManager/internal/services"
+	"github.com/aristath/portfolioManager/internal/ticker"
+	"github.com/aristath/portfolioManager/pkg/logger"
 	"github.com/rs/zerolog"
 )
 
@@ -58,7 +58,7 @@ func main() {
 		Pretty: true,
 	})
 
-	log.Info().Msg("Starting Arduino Trader")
+	log.Info().Msg("Starting Portfolio Manager")
 
 	// Load configuration
 	cfg, err := config.Load()
@@ -561,7 +561,7 @@ func registerJobs(sched *scheduler.Scheduler, universeDB, configDB, ledgerDB, po
 
 	// Initialize optimizer service for target weights
 	constraintsMgr := optimization.NewConstraintsManager(log)
-	returnsCalc := optimization.NewReturnsCalculator(configDB.Conn(), yahooClient, log)
+	returnsCalc := optimization.NewReturnsCalculator(portfolioDB.Conn(), yahooClient, log)
 	optimizerService := optimization.NewOptimizerService(
 		constraintsMgr,
 		returnsCalc,

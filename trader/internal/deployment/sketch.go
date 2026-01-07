@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/aristath/arduino-trader/pkg/embedded"
+	"github.com/aristath/portfolioManager/pkg/embedded"
 )
 
 // SketchDeployer handles Arduino sketch compilation and upload

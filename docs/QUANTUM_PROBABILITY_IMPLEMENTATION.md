@@ -6,7 +6,7 @@
 
 ## Overview
 
-This document describes the implementation of quantum probability models for asset returns in the arduino-trader system. The implementation uses a **quantum-inspired approach** (not full quantum mechanics) integrated with existing classical methods in an **ensemble approach** for autonomous operation.
+This document describes the implementation of quantum probability models for asset returns in the portfolioManager system. The implementation uses a **quantum-inspired approach** (not full quantum mechanics) integrated with existing classical methods in an **ensemble approach** for autonomous operation.
 
 ## Architecture
 

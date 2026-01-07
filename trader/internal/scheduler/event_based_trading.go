@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aristath/arduino-trader/internal/modules/planning"
-	"github.com/aristath/arduino-trader/internal/modules/trading"
+	"github.com/aristath/portfolioManager/internal/modules/planning"
+	"github.com/aristath/portfolioManager/internal/modules/trading"
 	"github.com/rs/zerolog"
 )
 

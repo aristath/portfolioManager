@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"testing"
 
-	"github.com/aristath/arduino-trader/pkg/logger"
+	"github.com/aristath/portfolioManager/pkg/logger"
 )
 
 func TestCalculateMinTradeAmount(t *testing.T) {

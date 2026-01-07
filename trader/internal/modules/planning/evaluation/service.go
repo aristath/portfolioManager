@@ -9,11 +9,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aristath/arduino-trader/internal/evaluation"
-	"github.com/aristath/arduino-trader/internal/evaluation/models"
-	"github.com/aristath/arduino-trader/internal/evaluation/workers"
-	"github.com/aristath/arduino-trader/internal/modules/planning/domain"
-	scoringdomain "github.com/aristath/arduino-trader/internal/modules/scoring/domain"
+	"github.com/aristath/portfolioManager/internal/evaluation"
+	"github.com/aristath/portfolioManager/internal/evaluation/models"
+	"github.com/aristath/portfolioManager/internal/evaluation/workers"
+	"github.com/aristath/portfolioManager/internal/modules/planning/domain"
+	scoringdomain "github.com/aristath/portfolioManager/internal/modules/scoring/domain"
 	"github.com/rs/zerolog"
 )
 

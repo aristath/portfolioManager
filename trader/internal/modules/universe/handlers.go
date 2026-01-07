@@ -10,10 +10,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/aristath/arduino-trader/internal/clients/yahoo"
-	"github.com/aristath/arduino-trader/internal/modules/scoring/domain"
-	"github.com/aristath/arduino-trader/internal/modules/scoring/scorers"
-	"github.com/aristath/arduino-trader/pkg/formulas"
+	"github.com/aristath/portfolioManager/internal/clients/yahoo"
+	"github.com/aristath/portfolioManager/internal/modules/scoring/domain"
+	"github.com/aristath/portfolioManager/internal/modules/scoring/scorers"
+	"github.com/aristath/portfolioManager/pkg/formulas"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 )

@@ -376,7 +376,7 @@ func (c *Client) GetBatchQuotes(
 ```ini
 [Unit]
 Description=Yahoo Finance Python Microservice
-Documentation=https://github.com/aristath/arduino-trader
+Documentation=https://github.com/aristath/portfolioManager
 After=network.target
 Wants=network.target
 

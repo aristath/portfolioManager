@@ -2,7 +2,7 @@
 package portfolio
 
 import (
-	"github.com/aristath/arduino-trader/internal/modules/allocation"
+	"github.com/aristath/portfolioManager/internal/modules/allocation"
 )
 
 // PortfolioSummaryAdapter adapts PortfolioService to allocation.PortfolioSummaryProvider

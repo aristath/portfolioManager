@@ -1,4 +1,4 @@
-module github.com/aristath/arduino-trader
+module github.com/aristath/portfolioManager
 
 go 1.23.2
 

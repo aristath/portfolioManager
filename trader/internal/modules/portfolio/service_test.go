@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/aristath/arduino-trader/internal/clients/tradernet"
+	"github.com/aristath/portfolioManager/internal/clients/tradernet"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"

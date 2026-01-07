@@ -3,8 +3,8 @@ package rebalancing
 import (
 	"testing"
 
-	"github.com/aristath/arduino-trader/internal/modules/portfolio"
-	"github.com/aristath/arduino-trader/pkg/logger"
+	"github.com/aristath/portfolioManager/internal/modules/portfolio"
+	"github.com/aristath/portfolioManager/pkg/logger"
 )
 
 func TestTriggerChecker_Disabled(t *testing.T) {

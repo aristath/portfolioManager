@@ -3,8 +3,8 @@ package rebalancing
 import (
 	"testing"
 
-	"github.com/aristath/arduino-trader/internal/clients/tradernet"
-	"github.com/aristath/arduino-trader/internal/services"
+	"github.com/aristath/portfolioManager/internal/clients/tradernet"
+	"github.com/aristath/portfolioManager/internal/services"
 	"github.com/rs/zerolog"
 )
 

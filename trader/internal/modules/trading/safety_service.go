@@ -5,10 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aristath/arduino-trader/internal/modules/market_hours"
-	"github.com/aristath/arduino-trader/internal/modules/portfolio"
-	"github.com/aristath/arduino-trader/internal/modules/settings"
-	"github.com/aristath/arduino-trader/internal/modules/universe"
+	"github.com/aristath/portfolioManager/internal/modules/market_hours"
+	"github.com/aristath/portfolioManager/internal/modules/portfolio"
+	"github.com/aristath/portfolioManager/internal/modules/settings"
+	"github.com/aristath/portfolioManager/internal/modules/universe"
 	"github.com/rs/zerolog"
 )
 

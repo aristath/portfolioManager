@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/aristath/arduino-trader/internal/modules/universe"
+	"github.com/aristath/portfolioManager/internal/modules/universe"
 	"github.com/rs/zerolog/log"
 )
 

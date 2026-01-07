@@ -1,6 +1,6 @@
 package portfolio
 
-import "github.com/aristath/arduino-trader/internal/clients/tradernet"
+import "github.com/aristath/portfolioManager/internal/clients/tradernet"
 
 // TradernetClientInterface defines the contract for Tradernet client operations
 // Used by PortfolioService to enable testing with mocks

@@ -3,7 +3,7 @@ import { api } from '../api/client';
 
 export const useLogsStore = create((set, get) => ({
   entries: [],
-  selectedLogFile: 'arduino-trader.log',
+  selectedLogFile: 'portfolio-manager.log',
   availableLogFiles: [],
   filterLevel: null,
   searchQuery: '',

@@ -1,8 +1,8 @@
 package generators
 
 import (
-	"github.com/aristath/arduino-trader/internal/modules/planning/domain"
-	"github.com/aristath/arduino-trader/internal/modules/sequences/patterns"
+	"github.com/aristath/portfolioManager/internal/modules/planning/domain"
+	"github.com/aristath/portfolioManager/internal/modules/sequences/patterns"
 	"github.com/rs/zerolog"
 )
 

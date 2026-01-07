@@ -1,15 +1,15 @@
 package server
 
 import (
-	"github.com/aristath/arduino-trader/internal/modules/opportunities"
-	"github.com/aristath/arduino-trader/internal/modules/optimization"
-	"github.com/aristath/arduino-trader/internal/modules/planning"
-	"github.com/aristath/arduino-trader/internal/modules/planning/config"
-	"github.com/aristath/arduino-trader/internal/modules/planning/evaluation"
-	"github.com/aristath/arduino-trader/internal/modules/planning/handlers"
-	"github.com/aristath/arduino-trader/internal/modules/planning/planner"
-	"github.com/aristath/arduino-trader/internal/modules/planning/repository"
-	"github.com/aristath/arduino-trader/internal/modules/sequences"
+	"github.com/aristath/portfolioManager/internal/modules/opportunities"
+	"github.com/aristath/portfolioManager/internal/modules/optimization"
+	"github.com/aristath/portfolioManager/internal/modules/planning"
+	"github.com/aristath/portfolioManager/internal/modules/planning/config"
+	"github.com/aristath/portfolioManager/internal/modules/planning/evaluation"
+	"github.com/aristath/portfolioManager/internal/modules/planning/handlers"
+	"github.com/aristath/portfolioManager/internal/modules/planning/planner"
+	"github.com/aristath/portfolioManager/internal/modules/planning/repository"
+	"github.com/aristath/portfolioManager/internal/modules/sequences"
 	"github.com/go-chi/chi/v5"
 )
 

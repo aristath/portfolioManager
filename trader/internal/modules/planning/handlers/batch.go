@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/aristath/arduino-trader/internal/modules/planning/domain"
-	"github.com/aristath/arduino-trader/internal/modules/planning/planner"
-	"github.com/aristath/arduino-trader/internal/modules/planning/repository"
+	"github.com/aristath/portfolioManager/internal/modules/planning/domain"
+	"github.com/aristath/portfolioManager/internal/modules/planning/planner"
+	"github.com/aristath/portfolioManager/internal/modules/planning/repository"
 	"github.com/rs/zerolog"
 )
 

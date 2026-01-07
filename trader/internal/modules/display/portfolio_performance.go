@@ -7,7 +7,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/aristath/arduino-trader/internal/modules/settings"
+	"github.com/aristath/portfolioManager/internal/modules/settings"
 	"github.com/rs/zerolog"
 )
 

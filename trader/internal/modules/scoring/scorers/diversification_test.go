@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/aristath/arduino-trader/internal/modules/scoring/domain"
+	"github.com/aristath/portfolioManager/internal/modules/scoring/domain"
 )
 
 func TestCalculatePortfolioScore(t *testing.T) {

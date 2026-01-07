@@ -5,8 +5,8 @@ import (
 	"math"
 	"strings"
 
-	"github.com/aristath/arduino-trader/internal/modules/scoring"
-	"github.com/aristath/arduino-trader/internal/modules/scoring/domain"
+	"github.com/aristath/portfolioManager/internal/modules/scoring"
+	"github.com/aristath/portfolioManager/internal/modules/scoring/domain"
 )
 
 // DiversificationScorer calculates portfolio fit and balance score

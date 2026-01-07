@@ -3,7 +3,7 @@ package patterns
 import (
 	"math"
 
-	"github.com/aristath/arduino-trader/internal/modules/planning/domain"
+	"github.com/aristath/portfolioManager/internal/modules/planning/domain"
 	"github.com/rs/zerolog"
 )
 

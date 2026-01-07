@@ -1,6 +1,6 @@
 # Microservice Framework Alternatives
 
-This document compares lightweight alternatives to FastAPI/uvicorn for Python microservices in the arduino-trader project.
+This document compares lightweight alternatives to FastAPI/uvicorn for Python microservices in the portfolioManager project.
 
 ## Current Setup
 

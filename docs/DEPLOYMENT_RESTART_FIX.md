@@ -35,7 +35,7 @@ sudo systemctl restart trader
 
 ### Option 2: Configure Polkit Permissions
 
-Create `/etc/polkit-1/rules.d/50-arduino-trader.rules`:
+Create `/etc/polkit-1/rules.d/50-portfolio-manager.rules`:
 ```javascript
 polkit.addRule(function(action, subject) {
     if (action.id == "org.freedesktop.systemd1.manage-units" &&

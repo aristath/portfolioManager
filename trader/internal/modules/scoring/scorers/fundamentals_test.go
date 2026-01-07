@@ -3,7 +3,7 @@ package scorers
 import (
 	"testing"
 
-	"github.com/aristath/arduino-trader/pkg/formulas"
+	"github.com/aristath/portfolioManager/pkg/formulas"
 	"github.com/stretchr/testify/assert"
 )
 

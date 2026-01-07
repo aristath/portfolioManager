@@ -1,7 +1,7 @@
 package scheduler
 
 import (
-	"github.com/aristath/arduino-trader/internal/modules/portfolio"
+	"github.com/aristath/portfolioManager/internal/modules/portfolio"
 	"github.com/rs/zerolog"
 )
 

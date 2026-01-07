@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/aristath/arduino-trader/internal/deployment"
-	"github.com/aristath/arduino-trader/internal/modules/settings"
+	"github.com/aristath/portfolioManager/internal/deployment"
+	"github.com/aristath/portfolioManager/internal/modules/settings"
 	"github.com/joho/godotenv"
 )
 
@@ -43,7 +43,7 @@ type DeploymentConfig struct {
 	GitHubWorkflowName string // e.g., "build-go.yml"
 	GitHubArtifactName string // e.g., "trader-arm64"
 	GitHubBranch       string // Branch to check for builds (defaults to GitBranch if empty)
-	GitHubRepo         string // GitHub repository in format "owner/repo" (e.g., "aristath/arduino-trader")
+	GitHubRepo         string // GitHub repository in format "owner/repo" (e.g., "aristath/portfolioManager")
 }
 
 // ToDeploymentConfig converts config.DeploymentConfig to deployment.DeploymentConfig
@@ -208,7 +208,7 @@ func loadDeploymentConfig() *DeploymentConfig {
 		UseGitHubArtifacts: true, // Always true - artifact deployment is required
 		GitHubWorkflowName: getEnv("GITHUB_WORKFLOW_NAME", "build-go.yml"),
 		GitHubArtifactName: getEnv("GITHUB_ARTIFACT_NAME", "trader-arm64"),
-		GitHubBranch:       getEnv("GITHUB_BRANCH", ""),                      // Defaults to GitBranch if empty
-		GitHubRepo:         getEnv("GITHUB_REPO", "aristath/arduino-trader"), // GitHub repository
+		GitHubBranch:       getEnv("GITHUB_BRANCH", ""),                        // Defaults to GitBranch if empty
+		GitHubRepo:         getEnv("GITHUB_REPO", "aristath/portfolioManager"), // GitHub repository
 	}
 }

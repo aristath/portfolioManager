@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/aristath/arduino-trader/internal/modules/adaptation"
-	"github.com/aristath/arduino-trader/internal/modules/portfolio"
+	"github.com/aristath/portfolioManager/internal/modules/adaptation"
+	"github.com/aristath/portfolioManager/internal/modules/portfolio"
 	"github.com/rs/zerolog"
 )
 

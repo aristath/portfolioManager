@@ -1,8 +1,8 @@
-# Arduino Trader
+# Portfolio Manager
 
 **Autonomous portfolio management system for retirement fund management**
 
-Arduino Trader is a production-ready autonomous trading system that manages a real retirement fund. It runs on an Arduino Uno Q, handling monthly deposits, automatic trading, dividend reinvestment, and portfolio management with zero human intervention.
+Portfolio Manager is a production-ready autonomous trading system that manages a real retirement fund. It runs on an Arduino Uno Q, handling monthly deposits, automatic trading, dividend reinvestment, and portfolio management with zero human intervention.
 
 **This manages real money. Every line of code matters. Every decision has consequences.**
 

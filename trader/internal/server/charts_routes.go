@@ -2,8 +2,8 @@
 package server
 
 import (
-	"github.com/aristath/arduino-trader/internal/modules/charts"
-	"github.com/aristath/arduino-trader/internal/modules/universe"
+	"github.com/aristath/portfolioManager/internal/modules/charts"
+	"github.com/aristath/portfolioManager/internal/modules/universe"
 	"github.com/go-chi/chi/v5"
 )
 

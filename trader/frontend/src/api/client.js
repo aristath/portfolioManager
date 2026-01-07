@@ -45,13 +45,13 @@ export const api = {
   syncHistorical: () => fetchJSON('/api/system/sync/historical', { method: 'POST' }),
 
   // Logs
-  fetchLogs: (logFile = 'arduino-trader.log', lines = 100, level = null, search = null) => {
+  fetchLogs: (logFile = 'portfolio-manager.log', lines = 100, level = null, search = null) => {
     const params = new URLSearchParams({ log_file: logFile, lines: lines.toString() });
     if (level) params.append('level', level);
     if (search) params.append('search', search);
     return fetchJSON(`/api/system/logs?${params}`);
   },
-  fetchErrorLogs: (logFile = 'arduino-trader.log', lines = 50) => {
+  fetchErrorLogs: (logFile = 'portfolio-manager.log', lines = 50) => {
     const params = new URLSearchParams({ log_file: logFile, lines: lines.toString() });
     return fetchJSON(`/api/system/logs/errors?${params}`);
   },

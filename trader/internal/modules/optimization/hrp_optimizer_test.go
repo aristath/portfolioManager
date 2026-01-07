@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/aristath/arduino-trader/pkg/formulas"
+	"github.com/aristath/portfolioManager/pkg/formulas"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

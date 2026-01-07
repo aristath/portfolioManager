@@ -3,7 +3,7 @@ package universe
 import (
 	"database/sql"
 
-	"github.com/aristath/arduino-trader/internal/clients/yahoo"
+	"github.com/aristath/portfolioManager/internal/clients/yahoo"
 )
 
 // SyncServiceInterface defines the contract for sync service operations

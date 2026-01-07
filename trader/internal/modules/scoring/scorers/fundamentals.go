@@ -3,7 +3,7 @@ package scorers
 import (
 	"math"
 
-	"github.com/aristath/arduino-trader/pkg/formulas"
+	"github.com/aristath/portfolioManager/pkg/formulas"
 )
 
 // FundamentalsScorer calculates company health and stability score

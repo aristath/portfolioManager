@@ -428,7 +428,7 @@ Modify `tag_assigner.go`:
 
 ```go
 import (
-    "github.com/aristath/arduino-trader/trader/internal/modules/quantum"
+    "github.com/aristath/portfolioManager/trader/internal/modules/quantum"
 )
 
 // In AssignTagsForSecurity function, add:

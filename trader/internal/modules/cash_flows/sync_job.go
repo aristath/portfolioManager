@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aristath/arduino-trader/internal/events"
-	"github.com/aristath/arduino-trader/internal/modules/display"
+	"github.com/aristath/portfolioManager/internal/events"
+	"github.com/aristath/portfolioManager/internal/modules/display"
 	"github.com/rs/zerolog"
 )
 
