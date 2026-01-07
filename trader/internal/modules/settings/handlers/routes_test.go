@@ -32,10 +32,15 @@ func TestRegisterRoutes(t *testing.T) {
 		path   string
 		name   string
 	}{
-		{"GET", "/settings", "GetSettings"},
-		{"PUT", "/settings", "UpdateSettings"},
-		{"GET", "/settings/onboarding", "GetOnboardingStatus"},
-		{"POST", "/settings/onboarding/complete", "CompleteOnboarding"},
+		{"GET", "/settings", "GetAll"},
+		{"PUT", "/settings/test-key", "Update"},
+		{"POST", "/settings/restart-service", "RestartService"},
+		{"POST", "/settings/restart", "Restart"},
+		{"POST", "/settings/reset-cache", "ResetCache"},
+		{"GET", "/settings/cache-stats", "GetCacheStats"},
+		{"POST", "/settings/reschedule-jobs", "RescheduleJobs"},
+		{"GET", "/settings/trading-mode", "GetTradingMode"},
+		{"POST", "/settings/trading-mode", "ToggleTradingMode"},
 	}
 
 	for _, tc := range testCases {
@@ -79,7 +84,7 @@ func TestRegisterRoutes_RoutePrefix(t *testing.T) {
 	handler.RegisterRoutes(router)
 
 	// Test that routes outside /settings prefix return 404
-	req := httptest.NewRequest("GET", "/onboarding", nil)
+	req := httptest.NewRequest("GET", "/trading-mode", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusNotFound, rec.Code, "Route without /settings prefix should return 404")

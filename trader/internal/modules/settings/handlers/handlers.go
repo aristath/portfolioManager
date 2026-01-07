@@ -27,7 +27,7 @@ type CredentialRefresher interface {
 
 // Handler provides HTTP handlers for settings endpoints
 type Handler struct {
-	service             *Service
+	service             *settings.Service
 	onboardingService   OnboardingServiceInterface
 	credentialRefresher CredentialRefresher
 	eventManager        *events.Manager
@@ -35,7 +35,7 @@ type Handler struct {
 }
 
 // NewHandler creates a new settings handler
-func NewHandler(service *Service, eventManager *events.Manager, log zerolog.Logger) *Handler {
+func NewHandler(service *settings.Service, eventManager *events.Manager, log zerolog.Logger) *Handler {
 	return &Handler{
 		service:      service,
 		eventManager: eventManager,
@@ -80,7 +80,7 @@ func (h *Handler) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var update SettingUpdate
+	var update settings.SettingUpdate
 	if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
@@ -195,11 +195,11 @@ func (h *Handler) HandleResetCache(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) HandleGetCacheStats(w http.ResponseWriter, r *http.Request) {
 	// Note: Full implementation would require calculations DB integration
 	// This is a simplified version returning stub data
-	stats := CacheStats{
-		SimpleCache: SimpleCacheStats{
+	stats := settings.CacheStats{
+		SimpleCache: settings.SimpleCacheStats{
 			Entries: 0,
 		},
-		CalculationsDB: CalculationsDBStats{
+		CalculationsDB: settings.CalculationsDBStats{
 			Entries:        0,
 			ExpiredCleaned: 0,
 		},
@@ -235,7 +235,7 @@ func (h *Handler) HandleGetTradingMode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := TradingModeResponse{TradingMode: mode}
+	response := settings.TradingModeResponse{TradingMode: mode}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
@@ -255,7 +255,7 @@ func (h *Handler) HandleToggleTradingMode(w http.ResponseWriter, r *http.Request
 		Str("new_mode", newMode).
 		Msg("Trading mode toggled")
 
-	response := TradingModeToggleResponse{
+	response := settings.TradingModeToggleResponse{
 		TradingMode:  newMode,
 		PreviousMode: previousMode,
 	}
