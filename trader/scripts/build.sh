@@ -18,12 +18,12 @@ echo
 
 if [ "$ARCH" = "arm64" ]; then
     echo "Cross-compiling for ARM64 (Arduino Uno Q)..."
-    GOOS=linux GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o trader-go-arm64 ./cmd/server
-    echo "✓ Built: trader-go-arm64"
+    GOOS=linux GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o sentinel-arm64 ./cmd/server
+    echo "✓ Built: sentinel-arm64"
 else
     echo "Building for local architecture..."
-    go build -ldflags "${LDFLAGS}" -o trader-go ./cmd/server
-    echo "✓ Built: trader-go"
+    go build -ldflags "${LDFLAGS}" -o sentinel ./cmd/server
+    echo "✓ Built: sentinel"
 fi
 
 echo

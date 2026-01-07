@@ -131,7 +131,7 @@ func (h *Handler) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 // HandleRestartService handles POST /api/settings/restart-service
 // Faithful translation from Python: app/api/settings.py -> restart_service()
 func (h *Handler) HandleRestartService(w http.ResponseWriter, r *http.Request) {
-	cmd := exec.Command("sudo", "systemctl", "restart", "trader")
+	cmd := exec.Command("sudo", "systemctl", "restart", "sentinel")
 	output, err := cmd.CombinedOutput()
 
 	response := map[string]string{}

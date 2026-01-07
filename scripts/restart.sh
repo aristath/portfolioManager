@@ -42,7 +42,7 @@ case "$SERVICE" in
         restart_service "$SERVICE_BRIDGE_GO"
         log_success "All services restarted!"
         ;;
-    trader)
+    sentinel|trader)
         restart_service "$SERVICE_TRADER_GO"
         ;;
     display-bridge|bridge)
@@ -58,7 +58,7 @@ case "$SERVICE" in
         echo ""
         echo "Services:"
         echo "  all            - Restart all services (default)"
-        echo "  trader         - Restart trader service"
+        echo "  sentinel       - Restart Sentinel service"
         echo "  display-bridge - Restart display bridge service"
         echo "  arduino-router - Restart arduino-router service"
         exit 1

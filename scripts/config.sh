@@ -15,7 +15,7 @@ export BUILD_TRADER_GO="${BUILD_TRADER_GO:-yes}"
 export BUILD_BRIDGE_GO="${BUILD_BRIDGE_GO:-yes}"
 
 # Service names
-export SERVICE_TRADER_GO="trader"
+export SERVICE_TRADER_GO="sentinel"
 export SERVICE_BRIDGE_GO="display-bridge"
 export SERVICE_ARDUINO_ROUTER="arduino-router"
 

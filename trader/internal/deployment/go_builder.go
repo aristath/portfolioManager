@@ -107,7 +107,7 @@ func (b *GoServiceBuilder) GetServiceBuildPath(serviceName string, repoDir strin
 	var buildPath string
 
 	switch serviceName {
-	case "trader":
+	case "sentinel":
 		buildPath = filepath.Join(repoDir, "trader/cmd/server")
 	default:
 		return "", fmt.Errorf("unknown service: %s", serviceName)

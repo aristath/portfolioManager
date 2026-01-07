@@ -308,7 +308,7 @@ func (m *Manager) HardUpdate() (*DeploymentResult, error) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		deployment := m.deployGoService(m.config.TraderConfig, "trader", "")
+		deployment := m.deployGoService(m.config.TraderConfig, "sentinel", "")
 		mu.Lock()
 		result.ServicesDeployed = append(result.ServicesDeployed, deployment)
 		if !deployment.Success {
@@ -396,7 +396,7 @@ func (m *Manager) deployServices(result *DeploymentResult, runID string) map[str
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		deployment := m.deployGoService(m.config.TraderConfig, "trader", runID)
+		deployment := m.deployGoService(m.config.TraderConfig, "sentinel", runID)
 		mu.Lock()
 		result.ServicesDeployed = append(result.ServicesDeployed, deployment)
 		if !deployment.Success {
@@ -483,7 +483,7 @@ func (m *Manager) deployGoService(config GoServiceConfig, serviceName string, ru
 	}
 
 	// Health check (only for Sentinel, bridge may not have health endpoint)
-	if serviceName == "trader" {
+	if serviceName == "sentinel" {
 		healthURL := fmt.Sprintf("http://%s:%d/health", m.config.APIHost, m.config.APIPort)
 		if err := m.serviceManager.CheckHealth(healthURL, m.config.HealthCheckMaxAttempts, m.config.HealthCheckTimeout); err != nil {
 			deployment.Error = fmt.Sprintf("health check failed: %v", err)

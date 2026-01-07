@@ -64,7 +64,7 @@ func (c *DeploymentConfig) ToDeploymentConfig() *deployment.DeploymentConfig {
 		HealthCheckMaxAttempts: c.HealthCheckMaxAttempts,
 		GitBranch:              c.GitBranch,
 		TraderConfig: deployment.GoServiceConfig{
-			Name:        "trader",
+			Name:        "sentinel",
 			BuildPath:   "trader/cmd/server",
 			BinaryName:  c.TraderBinaryName,
 			ServiceName: c.TraderServiceName,

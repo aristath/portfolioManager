@@ -49,7 +49,7 @@ func (s *ServiceManager) StopService(serviceName string) error {
 	}
 
 	// Method 3: Try using dbus-send (works without sudo if user has polkit permissions)
-	// Convert service name to D-Bus object path format (e.g., "trader.service" -> "trader_2eservice")
+	// Convert service name to D-Bus object path format (e.g., "sentinel.service" -> "sentinel_2eservice")
 	dbusPath := strings.ReplaceAll(serviceName, "-", "_2d")
 	if !strings.HasSuffix(dbusPath, "_2eservice") {
 		dbusPath = dbusPath + "_2eservice"
@@ -104,7 +104,7 @@ func (s *ServiceManager) StartService(serviceName string) error {
 	}
 
 	// Method 3: Try using dbus-send (works without sudo if user has polkit permissions)
-	// Convert service name to D-Bus object path format (e.g., "trader.service" -> "trader_2eservice")
+	// Convert service name to D-Bus object path format (e.g., "sentinel.service" -> "sentinel_2eservice")
 	dbusPath := strings.ReplaceAll(serviceName, "-", "_2d")
 	if !strings.HasSuffix(dbusPath, "_2eservice") {
 		dbusPath = dbusPath + "_2eservice"
@@ -159,7 +159,7 @@ func (s *ServiceManager) RestartService(serviceName string) error {
 	}
 
 	// Method 3: Try using dbus-send (works without sudo if user has polkit permissions)
-	// Convert service name to D-Bus object path format (e.g., "trader.service" -> "trader_2eservice")
+	// Convert service name to D-Bus object path format (e.g., "sentinel.service" -> "sentinel_2eservice")
 	dbusPath := strings.ReplaceAll(serviceName, "-", "_2d")
 	if !strings.HasSuffix(dbusPath, "_2eservice") {
 		dbusPath = dbusPath + "_2eservice"

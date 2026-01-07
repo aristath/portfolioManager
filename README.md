@@ -196,17 +196,17 @@ cd trader
 go mod download
 
 # Build
-go build -o trader ./cmd/server
+go build -o sentinel ./cmd/server
 
 # Or build for Arduino Uno Q (ARM64)
-GOOS=linux GOARCH=arm64 go build -o trader-arm64 ./cmd/server
+GOOS=linux GOARCH=arm64 go build -o sentinel-arm64 ./cmd/server
 ```
 
 #### 3. Configure Credentials
 
 **Recommended: Use Settings UI**
 
-1. Start the application: `./trader`
+1. Start the application: `./sentinel`
 2. Open the web UI (default: http://localhost:8001)
 3. Click the Settings icon (gear) in the header
 4. Navigate to the **Credentials** tab
@@ -233,7 +233,7 @@ The `.env` file is no longer required. If you need to set infrastructure setting
 
 ```bash
 cd trader
-./trader
+./sentinel
 ```
 
 ### Verify Installation
@@ -709,7 +709,7 @@ go fmt ./...
 golangci-lint run
 
 # Build
-go build -o trader ./cmd/server
+go build -o sentinel ./cmd/server
 ```
 
 ### Code Guidelines
@@ -822,7 +822,7 @@ Builds are handled automatically by GitHub Actions. For local builds:
 cd trader
 
 # Cross-compile for ARM64
-GOOS=linux GOARCH=arm64 go build -o trader-arm64 ./cmd/server
+GOOS=linux GOARCH=arm64 go build -o sentinel-arm64 ./cmd/server
 
 # Or use build script
 ./scripts/build.sh arm64
@@ -832,7 +832,7 @@ GOOS=linux GOARCH=arm64 go build -o trader-arm64 ./cmd/server
 
 #### Main Application
 
-Create `/etc/systemd/system/trader.service`:
+Create `/etc/systemd/system/sentinel.service` (or copy from `sentinel.service` in the repo):
 
 ```ini
 [Unit]
@@ -844,7 +844,7 @@ Type=simple
 User=aristath
 WorkingDirectory=/home/aristath/sentinel/trader
 Environment="PATH=/usr/local/bin:/usr/bin:/bin"
-ExecStart=/home/aristath/sentinel/trader/trader
+ExecStart=/home/aristath/sentinel/trader/sentinel
 Restart=always
 RestartSec=10
 
@@ -861,7 +861,7 @@ The system is self-contained and runs as a single Go application. No additional 
 For the first-time setup on a new device:
 
 1. **Install systemd service** (see Systemd Services section below)
-2. **Start the Sentinel service**: `sudo systemctl start trader`
+2. **Start the Sentinel service**: `sudo systemctl start sentinel`
 3. **Configure credentials** via Settings UI or API
 
 After initial setup, deployment is fully automated. The service will:
@@ -880,7 +880,7 @@ After initial setup, deployment is fully automated. The service will:
 
 **Deployment:**
 1. Install systemd service (first time only)
-2. Start the Sentinel service: `sudo systemctl start trader`
+2. Start the Sentinel service: `sudo systemctl start sentinel`
 3. Verify health endpoints
 4. Monitor logs for 24 hours
 
@@ -915,14 +915,14 @@ curl http://localhost:8001/api/system/jobs
 **Logs:**
 ```bash
 # Systemd logs
-journalctl -u trader -f
+journalctl -u sentinel -f
 ```
 
 ### Rollback Plan
 
 **Emergency Stop:**
 ```bash
-sudo systemctl stop trader
+sudo systemctl stop sentinel
 ```
 
 **Switch to Research Mode:**
@@ -933,9 +933,9 @@ curl -X POST http://localhost:8001/api/settings/trading-mode \
 ```
 
 **Full Rollback:**
-1. Stop Sentinel service: `sudo systemctl stop trader`
+1. Stop Sentinel service: `sudo systemctl stop sentinel`
 2. Restore previous binary
-3. Restart: `sudo systemctl start trader`
+3. Restart: `sudo systemctl start sentinel`
 4. Verify: `curl http://localhost:8001/health`
 
 ---
@@ -1067,23 +1067,23 @@ go fmt ./...
 golangci-lint run
 
 # Build
-go build -o trader ./cmd/server
+go build -o sentinel ./cmd/server
 ```
 
 ### Production
 
 ```bash
 # Build for Arduino Uno Q
-GOOS=linux GOARCH=arm64 go build -o trader-arm64 ./cmd/server
+GOOS=linux GOARCH=arm64 go build -o sentinel-arm64 ./cmd/server
 
 # Start service
 sudo systemctl start trader
 
 # Stop service
-sudo systemctl stop trader
+sudo systemctl stop sentinel
 
 # View logs
-journalctl -u trader -f
+journalctl -u sentinel -f
 
 # Health checks
 curl http://localhost:8001/health

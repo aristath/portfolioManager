@@ -40,7 +40,7 @@ check_service() {
 }
 
 # Check all services
-check_service "$SERVICE_TRADER_GO" "trader"
+check_service "$SERVICE_TRADER_GO" "sentinel"
 check_service "$SERVICE_BRIDGE_GO" "display-bridge"
 check_service "$SERVICE_ARDUINO_ROUTER" "arduino-router"
 

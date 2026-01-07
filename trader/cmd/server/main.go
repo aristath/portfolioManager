@@ -157,7 +157,7 @@ func main() {
 	defer cancel()
 
 	// Start service heartbeat monitor (LED3)
-	serviceMonitor := display.NewServiceMonitor("trader", displayManager, log)
+	serviceMonitor := display.NewServiceMonitor("sentinel", displayManager, log)
 	go serviceMonitor.MonitorService(ctx)
 	log.Info().Msg("Service heartbeat monitor started (LED3)")
 

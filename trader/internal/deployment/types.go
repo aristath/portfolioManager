@@ -18,7 +18,7 @@ type DeploymentResult struct {
 
 // ServiceDeployment represents the deployment status of a single service
 type ServiceDeployment struct {
-	ServiceName string // "trader"
+	ServiceName string // "sentinel"
 	ServiceType string // "go"
 	Success     bool
 	Error       string
@@ -40,18 +40,18 @@ func (c *ChangeCategories) HasAnyChanges() bool {
 
 // GoServiceConfig holds configuration for a Go service
 type GoServiceConfig struct {
-	Name        string // Service identifier: "trader"
+	Name        string // Service identifier: "sentinel"
 	BuildPath   string // Relative path from repo root (e.g., "trader/cmd/server")
-	BinaryName  string // Output binary name (e.g., "trader")
-	ServiceName string // Systemd service name (e.g., "trader")
+	BinaryName  string // Output binary name (e.g., "sentinel")
+	ServiceName string // Systemd service name (e.g., "sentinel")
 }
 
-// DefaultTraderConfig returns default configuration for trader service
+// DefaultTraderConfig returns default configuration for Sentinel service
 func DefaultTraderConfig() GoServiceConfig {
 	return GoServiceConfig{
-		Name:        "trader",
+		Name:        "sentinel",
 		BuildPath:   "trader/cmd/server",
-		BinaryName:  "trader",
-		ServiceName: "trader",
+		BinaryName:  "sentinel",
+		ServiceName: "sentinel",
 	}
 }

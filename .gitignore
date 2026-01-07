@@ -49,6 +49,11 @@ package-lock.json
 microservices/evaluator-go/evaluator-go
 microservices/evaluator-go/evaluator-go.exe
 trader/server
+trader/sentinel
+trader/sentinel-go
+trader/sentinel-go-arm64
+trader/sentinel-arm64
+# Legacy names (keep for backward compatibility)
 trader/trader
 trader/trader-go
 trader/trader-go-arm64
@@ -64,8 +69,10 @@ trader/app/bin/.deploy.lock
 
 trader/tradernet-sdk
 
+sentinel-arm64
+sentinel-artifact.zip
+# Legacy names (keep for backward compatibility)
 trader-arm64
-
 trader-artifact.zip
 
 artifact.zip

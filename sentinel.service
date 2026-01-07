@@ -1,0 +1,32 @@
+[Unit]
+Description=Sentinel Go Service
+Documentation=https://github.com/aristath/sentinel
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+User=arduino
+Group=arduino
+WorkingDirectory=/opt/sentinel
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+EnvironmentFile=-/opt/sentinel/.env
+ExecStart=/opt/sentinel/sentinel
+Restart=always
+RestartSec=10
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sentinel
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Resource limits (adjust as needed for your hardware)
+MemoryMax=2G
+CPUQuota=50%
+
+[Install]
+WantedBy=multi-user.target

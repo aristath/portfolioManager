@@ -20,7 +20,7 @@ If the automatic restart continues to fail, you have these options:
 
 ### Option 1: Remove NoNewPrivileges (Simplest)
 
-Edit `/etc/systemd/system/trader.service` and remove or comment out:
+Edit `/etc/systemd/system/sentinel.service` and remove or comment out:
 ```ini
 # NoNewPrivileges=true
 ```
@@ -28,7 +28,7 @@ Edit `/etc/systemd/system/trader.service` and remove or comment out:
 Then reload systemd:
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl restart trader
+sudo systemctl restart sentinel
 ```
 
 **Security Note:** This reduces security isolation but allows automatic restarts.
@@ -40,21 +40,21 @@ Create `/etc/polkit-1/rules.d/50-portfolio-manager.rules`:
 polkit.addRule(function(action, subject) {
     if (action.id == "org.freedesktop.systemd1.manage-units" &&
         subject.user == "arduino" &&
-        action.lookup("unit") == "trader.service") {
+        action.lookup("unit") == "sentinel.service") {
         return polkit.Result.YES;
     }
 });
 ```
 
-This allows the `arduino` user to restart the `trader` service via D-Bus without sudo.
+This allows the `arduino` user to restart the `sentinel` service via D-Bus without sudo.
 
 ### Option 3: Create Helper Script
 
 Create a helper script with proper permissions:
 ```bash
 #!/bin/bash
-# /usr/local/bin/restart-trader.sh
-systemctl restart trader
+# /usr/local/bin/restart-sentinel.sh
+systemctl restart sentinel
 ```
 
 Make it executable and ensure it's in the PATH. The deployment system can then call this script instead of systemctl directly.
@@ -63,7 +63,7 @@ Make it executable and ensure it's in the PATH. The deployment system can then c
 
 If automatic restart fails, manually restart after deployment:
 ```bash
-sudo systemctl restart trader
+sudo systemctl restart sentinel
 ```
 
 The deployment system will log a warning but continue successfully.
