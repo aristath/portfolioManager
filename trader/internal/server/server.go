@@ -26,7 +26,7 @@ import (
 	displayhandlers "github.com/aristath/sentinel/internal/modules/display/handlers"
 	dividendhandlers "github.com/aristath/sentinel/internal/modules/dividends/handlers"
 	"github.com/aristath/sentinel/internal/modules/evaluation"
-	"github.com/aristath/sentinel/internal/modules/optimization"
+	optimizationhandlers "github.com/aristath/sentinel/internal/modules/optimization/handlers"
 	"github.com/aristath/sentinel/internal/modules/planning/repository"
 	"github.com/aristath/sentinel/internal/modules/portfolio"
 	portfoliohandlers "github.com/aristath/sentinel/internal/modules/portfolio/handlers"
@@ -359,7 +359,23 @@ func (s *Server) setupRoutes() {
 		scoringHandler.RegisterRoutes(r)
 
 		// Optimization module (MIGRATED TO GO!)
-		s.setupOptimizationRoutes(r)
+		optimizationYahooClient := s.container.YahooClient
+		optimizationTradernetClient := s.container.TradernetClient
+		optimizationDividendRepo := s.container.DividendRepo
+		optimizationCurrencyExchangeService := s.container.CurrencyExchangeService
+		optimizationCashManager := s.container.CashManager
+		optimizationService := s.container.OptimizerService
+		optimizationHandler := optimizationhandlers.NewHandler(
+			optimizationService,
+			s.configDB.Conn(),
+			optimizationYahooClient,
+			optimizationTradernetClient,
+			optimizationCurrencyExchangeService,
+			optimizationDividendRepo,
+			optimizationCashManager,
+			s.log,
+		)
+		optimizationHandler.RegisterRoutes(r)
 
 		// Cash-flows module (MIGRATED TO GO!)
 		s.setupCashFlowsRoutes(r)
@@ -560,35 +576,6 @@ func (a *securityFetcherAdapter) GetSecurityName(symbol string) (string, error) 
 		return symbol, nil // Return symbol if not found
 	}
 	return security.Name, nil
-}
-
-// setupOptimizationRoutes configures optimization module routes
-func (s *Server) setupOptimizationRoutes(r chi.Router) {
-	// Use services from container (single source of truth)
-	yahooClient := s.container.YahooClient
-	tradernetClient := s.container.TradernetClient
-	dividendRepo := s.container.DividendRepo
-	currencyExchangeService := s.container.CurrencyExchangeService
-	cashManager := s.container.CashManager
-	optimizerService := s.container.OptimizerService
-
-	// Initialize handler with currency exchange service
-	handler := optimization.NewHandler(
-		optimizerService,
-		s.configDB.Conn(),
-		yahooClient,
-		tradernetClient,
-		currencyExchangeService,
-		dividendRepo,
-		cashManager,
-		s.log,
-	)
-
-	// Optimization routes (faithful translation of Python routes)
-	r.Route("/optimizer", func(r chi.Router) {
-		r.Get("/", handler.HandleGetStatus) // Get optimizer status and last run
-		r.Post("/run", handler.HandleRun)   // Run optimization
-	})
 }
 
 // setupCashFlowsRoutes configures cash-flows module routes
