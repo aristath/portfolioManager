@@ -17,7 +17,7 @@ func TestRegisterRoutes(t *testing.T) {
 	service := &settings.Service{}
 
 	// Create handler - we're only testing that RegisterRoutes works, not handler execution
-	handler := NewHandler(service, zerolog.Nop())
+	handler := NewHandler(service, nil, zerolog.Nop())
 
 	// Create router and register routes - this should not panic
 	router := chi.NewRouter()
@@ -78,7 +78,7 @@ func TestRegisterRoutes_RoutePrefix(t *testing.T) {
 	// Verify that routes are registered under /settings prefix
 	service := &settings.Service{}
 
-	handler := NewHandler(service, zerolog.Nop())
+	handler := NewHandler(service, nil, zerolog.Nop())
 
 	router := chi.NewRouter()
 	handler.RegisterRoutes(router)

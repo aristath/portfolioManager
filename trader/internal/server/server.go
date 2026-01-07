@@ -423,7 +423,7 @@ func (s *Server) setupRoutes() {
 
 		// Settings module (MIGRATED TO GO!)
 		settingsService := s.container.SettingsService
-		settingsHandler := settingshandlers.NewHandler(settingsService, s.log)
+		settingsHandler := settingshandlers.NewHandler(settingsService, s.container.EventManager, s.log)
 		settingsHandler.RegisterRoutes(r)
 
 		// Symbolic Regression module (MIGRATED TO GO!)
