@@ -1,4 +1,4 @@
-// Package charts provides charting and visualization functionality.
+// Package handlers provides HTTP handlers for chart data.
 package handlers
 
 import (

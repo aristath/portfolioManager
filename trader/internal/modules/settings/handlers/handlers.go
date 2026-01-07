@@ -1,4 +1,4 @@
-// Package settings provides application settings management functionality.
+// Package handlers provides HTTP handlers for system settings management.
 package handlers
 
 import (
