@@ -13,6 +13,7 @@ import (
 
 	"github.com/aristath/portfolioManager/internal/clients/yahoo"
 	"github.com/aristath/portfolioManager/internal/domain"
+	"github.com/aristath/portfolioManager/internal/events"
 	scoringdomain "github.com/aristath/portfolioManager/internal/modules/scoring/domain"
 	"github.com/aristath/portfolioManager/internal/modules/scoring/scorers"
 	"github.com/aristath/portfolioManager/pkg/formulas"
@@ -124,6 +125,7 @@ type UniverseHandlers struct {
 	setupService            *SecuritySetupService
 	syncService             *SyncService
 	currencyExchangeService domain.CurrencyExchangeServiceInterface
+	eventManager            *events.Manager
 }
 
 // NewUniverseHandlers creates a new universe handlers instance
@@ -138,6 +140,7 @@ func NewUniverseHandlers(
 	setupService *SecuritySetupService,
 	syncService *SyncService,
 	currencyExchangeService domain.CurrencyExchangeServiceInterface,
+	eventManager *events.Manager,
 	log zerolog.Logger,
 ) *UniverseHandlers {
 	return &UniverseHandlers{
@@ -151,6 +154,7 @@ func NewUniverseHandlers(
 		setupService:            setupService,
 		syncService:             syncService,
 		currencyExchangeService: currencyExchangeService,
+		eventManager:            eventManager,
 		log:                     log.With().Str("module", "universe_handlers").Logger(),
 	}
 }
@@ -727,6 +731,15 @@ func (h *UniverseHandlers) HandleRefreshSecurityData(w http.ResponseWriter, r *h
 		return
 	}
 
+	// Emit SECURITY_SYNCED event
+	if h.eventManager != nil {
+		h.eventManager.Emit(events.SecuritySynced, "universe", map[string]interface{}{
+			"isin":   isin,
+			"symbol": symbol,
+			"reason": "refresh_data",
+		})
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	response := map[string]interface{}{
 		"status":  "success",
@@ -931,10 +944,10 @@ func (h *UniverseHandlers) HandleDeleteStock(w http.ResponseWriter, r *http.Requ
 	symbol := security.Symbol
 	h.log.Info().Str("isin", isin).Str("symbol", symbol).Msg("Soft deleting security (setting active=0)")
 
-	// Soft delete (set active=0)
-	err = h.securityRepo.Delete(symbol)
+	// Soft delete (set active=0) - use ISIN, not symbol
+	err = h.securityRepo.Delete(isin)
 	if err != nil {
-		h.log.Error().Err(err).Str("symbol", symbol).Msg("Failed to delete security")
+		h.log.Error().Err(err).Str("isin", isin).Str("symbol", symbol).Msg("Failed to delete security")
 		http.Error(w, "Failed to delete security", http.StatusInternalServerError)
 		return
 	}
@@ -1067,6 +1080,15 @@ func (h *UniverseHandlers) calculateAndSaveScore(isin string, yahooSymbol string
 	// Save score to database
 	if err := h.scoreRepo.Upsert(score); err != nil {
 		return nil, fmt.Errorf("failed to save score: %w", err)
+	}
+
+	// Emit SCORE_UPDATED event
+	if h.eventManager != nil {
+		h.eventManager.Emit(events.ScoreUpdated, "universe", map[string]interface{}{
+			"isin":        isin,
+			"symbol":      symbol,
+			"total_score": score.TotalScore,
+		})
 	}
 
 	h.log.Info().Str("isin", isin).Str("symbol", symbol).Float64("score", score.TotalScore).Msg("Score calculated and saved")
@@ -1283,6 +1305,15 @@ func (h *UniverseHandlers) HandleSyncSecuritiesData(w http.ResponseWriter, r *ht
 		h.log.Error().Err(err).Msg("Securities data sync failed")
 		http.Error(w, fmt.Sprintf("Securities data sync failed: %v", err), http.StatusInternalServerError)
 		return
+	}
+
+	// Emit SECURITY_SYNCED event after successful sync
+	if h.eventManager != nil {
+		h.eventManager.Emit(events.SecuritySynced, "universe", map[string]interface{}{
+			"processed": processed,
+			"errors":    errors,
+			"reason":    "sync_securities_data",
+		})
 	}
 
 	w.Header().Set("Content-Type", "application/json")
