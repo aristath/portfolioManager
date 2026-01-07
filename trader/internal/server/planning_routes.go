@@ -1,56 +1,25 @@
 package server
 
 import (
-	"github.com/aristath/portfolioManager/internal/modules/opportunities"
-	"github.com/aristath/portfolioManager/internal/modules/optimization"
-	"github.com/aristath/portfolioManager/internal/modules/planning"
 	"github.com/aristath/portfolioManager/internal/modules/planning/config"
-	"github.com/aristath/portfolioManager/internal/modules/planning/evaluation"
 	"github.com/aristath/portfolioManager/internal/modules/planning/handlers"
 	"github.com/aristath/portfolioManager/internal/modules/planning/planner"
 	"github.com/aristath/portfolioManager/internal/modules/planning/repository"
-	"github.com/aristath/portfolioManager/internal/modules/sequences"
 	"github.com/go-chi/chi/v5"
 )
 
 // setupPlanningRoutes configures planning module routes.
 func (s *Server) setupPlanningRoutes(r chi.Router) {
-	// Initialize opportunities service
-	opportunitiesService := opportunities.NewService(s.log)
-
-	// Initialize optimization services for correlation filtering
-	riskBuilder := optimization.NewRiskModelBuilder(s.historyDB.Conn(), s.log)
-
-	// Initialize sequences service
-	sequencesService := sequences.NewService(s.log, riskBuilder)
-
-	// Initialize evaluation service (in-process, no HTTP overhead)
-	evaluationClient := evaluation.NewService(4, s.log) // 4 workers for parallel evaluation
-
-	// Initialize planning service
-	planningService := planning.NewService(
-		opportunitiesService,
-		sequencesService,
-		evaluationClient,
-		s.log,
-	)
+	// Use services from container (single source of truth)
+	planningService := s.container.PlanningService
+	configRepo := s.container.PlannerConfigRepo
+	corePlanner := s.container.PlannerService
 
 	// Initialize planner repository (uses agentsDB for sequences/evaluations)
 	plannerRepo := repository.NewPlannerRepository(s.agentsDB, s.log)
 
-	// Initialize config repository (uses config.db)
-	configRepo := repository.NewConfigRepository(s.configDB, s.log)
-
 	// Initialize config validator
 	validator := config.NewValidator()
-
-	// Initialize core planner (planning engine)
-	corePlanner := planner.NewPlanner(
-		opportunitiesService,
-		sequencesService,
-		evaluationClient,
-		s.log,
-	)
 
 	// Initialize incremental planner (batch generation)
 	incrementalPlanner := planner.NewIncrementalPlanner(

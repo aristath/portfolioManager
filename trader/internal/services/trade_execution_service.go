@@ -5,27 +5,15 @@ import (
 	"time"
 
 	"github.com/aristath/portfolioManager/internal/clients/tradernet"
+	"github.com/aristath/portfolioManager/internal/domain"
 	"github.com/aristath/portfolioManager/internal/modules/portfolio"
 	"github.com/aristath/portfolioManager/internal/modules/trading"
 	"github.com/rs/zerolog"
 )
 
-// CashManagerInterface defines the minimal interface for cash operations
-// This avoids import cycles with the cash_flows package
-type CashManagerInterface interface {
-	GetCashBalance(currency string) (float64, error)
-}
-
-// CurrencyExchangeServiceInterface defines the minimal interface for currency exchange
-type CurrencyExchangeServiceInterface interface {
-	GetRate(fromCurrency, toCurrency string) (float64, error)
-}
-
-// TradernetClientInterface defines the interface for Tradernet operations
-type TradernetClientInterface interface {
-	IsConnected() bool
-	PlaceOrder(symbol, side string, quantity float64) (*tradernet.OrderResult, error)
-}
+// Note: CashManagerInterface, CurrencyExchangeServiceInterface, and TradernetClientInterface
+// have been moved to domain/interfaces.go. Use domain.CashManager, domain.CurrencyExchangeServiceInterface,
+// and domain.TradernetClientInterface instead.
 
 // TradeRepositoryInterface defines the interface for trade persistence
 type TradeRepositoryInterface interface {
@@ -58,11 +46,11 @@ type TradeRecommendation struct {
 //
 // Faithful translation from Python: app/modules/trading/services/trade_execution_service.py
 type TradeExecutionService struct {
-	tradernetClient TradernetClientInterface
+	tradernetClient domain.TradernetClientInterface
 	tradeRepo       TradeRepositoryInterface
 	positionRepo    *portfolio.PositionRepository
-	cashManager     CashManagerInterface
-	exchangeService CurrencyExchangeServiceInterface
+	cashManager     domain.CashManager
+	exchangeService domain.CurrencyExchangeServiceInterface
 	log             zerolog.Logger
 }
 
@@ -75,11 +63,11 @@ type ExecuteResult struct {
 
 // NewTradeExecutionService creates a new trade execution service
 func NewTradeExecutionService(
-	tradernetClient TradernetClientInterface,
+	tradernetClient domain.TradernetClientInterface,
 	tradeRepo TradeRepositoryInterface,
 	positionRepo *portfolio.PositionRepository,
-	cashManager CashManagerInterface,
-	exchangeService CurrencyExchangeServiceInterface,
+	cashManager domain.CashManager,
+	exchangeService domain.CurrencyExchangeServiceInterface,
 	log zerolog.Logger,
 ) *TradeExecutionService {
 	return &TradeExecutionService{

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/aristath/portfolioManager/internal/modules/portfolio"
+	"github.com/aristath/portfolioManager/internal/domain"
 	"github.com/rs/zerolog"
 )
 
@@ -15,14 +15,14 @@ type TickerContentService struct {
 	portfolioDB *sql.DB
 	configDB    *sql.DB
 	cacheDB     *sql.DB
-	cashManager portfolio.CashManager
+	cashManager domain.CashManager
 	log         zerolog.Logger
 }
 
 // NewTickerContentService creates a new ticker content service
 func NewTickerContentService(
 	portfolioDB, configDB, cacheDB *sql.DB,
-	cashManager portfolio.CashManager,
+	cashManager domain.CashManager,
 	log zerolog.Logger,
 ) *TickerContentService {
 	return &TickerContentService{

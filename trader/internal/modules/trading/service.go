@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aristath/portfolioManager/internal/clients/tradernet"
+	"github.com/aristath/portfolioManager/internal/domain"
 	"github.com/rs/zerolog"
 )
 
@@ -13,24 +13,21 @@ type TradeRepositoryInterface interface {
 	Create(trade Trade) error
 }
 
-// TradernetClientInterface defines the interface for Tradernet operations
-type TradernetClientInterface interface {
-	GetExecutedTrades(limit int) ([]tradernet.Trade, error)
-	PlaceOrder(symbol, side string, quantity float64) (*tradernet.OrderResult, error)
-}
+// Note: TradernetClientInterface has been moved to domain/interfaces.go
+// Use domain.TradernetClientInterface instead
 
 // TradingService handles trade-related business logic
 type TradingService struct {
 	log             zerolog.Logger
 	tradeRepo       TradeRepositoryInterface
-	tradernetClient TradernetClientInterface
+	tradernetClient domain.TradernetClientInterface
 	safetyService   *TradeSafetyService
 }
 
 // NewTradingService creates a new trading service
 func NewTradingService(
 	tradeRepo TradeRepositoryInterface,
-	tradernetClient TradernetClientInterface,
+	tradernetClient domain.TradernetClientInterface,
 	safetyService *TradeSafetyService,
 	log zerolog.Logger,
 ) *TradingService {

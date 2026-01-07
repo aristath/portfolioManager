@@ -31,6 +31,11 @@ func (m *MockCashManager) GetAllCashBalances() (map[string]float64, error) {
 	return args.Get(0).(map[string]float64), args.Error(1)
 }
 
+func (m *MockCashManager) GetCashBalance(currency string) (float64, error) {
+	args := m.Called(currency)
+	return args.Get(0).(float64), args.Error(1)
+}
+
 // MockTradernetClient is a mock Tradernet client for testing
 type MockTradernetClient struct {
 	mock.Mock
@@ -50,6 +55,27 @@ func (m *MockTradernetClient) GetCashBalances() ([]tradernet.CashBalance, error)
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]tradernet.CashBalance), args.Error(1)
+}
+
+func (m *MockTradernetClient) GetExecutedTrades(limit int) ([]tradernet.Trade, error) {
+	args := m.Called(limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]tradernet.Trade), args.Error(1)
+}
+
+func (m *MockTradernetClient) PlaceOrder(symbol, side string, quantity float64) (*tradernet.OrderResult, error) {
+	args := m.Called(symbol, side, quantity)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*tradernet.OrderResult), args.Error(1)
+}
+
+func (m *MockTradernetClient) IsConnected() bool {
+	args := m.Called()
+	return args.Bool(0)
 }
 
 // MockPositionRepository is a mock position repository for testing

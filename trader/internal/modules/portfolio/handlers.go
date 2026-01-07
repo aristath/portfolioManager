@@ -8,6 +8,7 @@ import (
 	"sort"
 
 	"github.com/aristath/portfolioManager/internal/clients/tradernet"
+	"github.com/aristath/portfolioManager/internal/domain"
 	"github.com/rs/zerolog"
 )
 
@@ -17,8 +18,8 @@ type Handler struct {
 	positionRepo            *PositionRepository
 	service                 *PortfolioService
 	tradernetClient         *tradernet.Client
-	currencyExchangeService CurrencyExchangeServiceInterface
-	cashManager             CashManager
+	currencyExchangeService domain.CurrencyExchangeServiceInterface
+	cashManager             domain.CashManager
 	configDB                *sql.DB
 	log                     zerolog.Logger
 }
@@ -28,8 +29,8 @@ func NewHandler(
 	positionRepo *PositionRepository,
 	service *PortfolioService,
 	tradernetClient *tradernet.Client,
-	currencyExchangeService CurrencyExchangeServiceInterface,
-	cashManager CashManager,
+	currencyExchangeService domain.CurrencyExchangeServiceInterface,
+	cashManager domain.CashManager,
 	configDB *sql.DB,
 	log zerolog.Logger,
 ) *Handler {

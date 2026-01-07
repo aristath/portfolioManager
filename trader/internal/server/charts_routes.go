@@ -3,14 +3,13 @@ package server
 
 import (
 	"github.com/aristath/portfolioManager/internal/modules/charts"
-	"github.com/aristath/portfolioManager/internal/modules/universe"
 	"github.com/go-chi/chi/v5"
 )
 
 // setupChartsRoutes configures charts module routes
 func (s *Server) setupChartsRoutes(r chi.Router) {
-	// Initialize security repository
-	securityRepo := universe.NewSecurityRepository(s.universeDB.Conn(), s.log)
+	// Use services from container (single source of truth)
+	securityRepo := s.container.SecurityRepo
 
 	// Initialize charts service
 	chartsService := charts.NewService(

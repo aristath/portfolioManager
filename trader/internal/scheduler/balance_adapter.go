@@ -1,19 +1,19 @@
 package scheduler
 
 import (
-	"github.com/aristath/portfolioManager/internal/modules/portfolio"
+	"github.com/aristath/portfolioManager/internal/domain"
 	"github.com/rs/zerolog"
 )
 
-// BalanceAdapter adapts portfolio.CashManager to implement BalanceServiceInterface
+// BalanceAdapter adapts domain.CashManager to implement BalanceServiceInterface
 // This allows the sync cycle to check for negative balances using the cash manager
 type BalanceAdapter struct {
-	cashManager portfolio.CashManager
+	cashManager domain.CashManager
 	log         zerolog.Logger
 }
 
 // NewBalanceAdapter creates a new balance adapter
-func NewBalanceAdapter(cashManager portfolio.CashManager, log zerolog.Logger) *BalanceAdapter {
+func NewBalanceAdapter(cashManager domain.CashManager, log zerolog.Logger) *BalanceAdapter {
 	return &BalanceAdapter{
 		cashManager: cashManager,
 		log:         log.With().Str("component", "balance_adapter").Logger(),

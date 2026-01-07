@@ -1,15 +1,22 @@
 package allocation
 
-// PortfolioSummaryProvider provides portfolio summary data without creating
-// a dependency on the portfolio package. This interface breaks the circular
-// dependency: allocation → portfolio → cash_flows → trading → allocation
-type PortfolioSummaryProvider interface {
-	GetPortfolioSummary() (PortfolioSummary, error)
-}
+import "github.com/aristath/portfolioManager/internal/domain"
 
-// ConcentrationAlertProvider provides concentration alert detection without
-// requiring direct dependency on ConcentrationAlertService. This interface
-// breaks the circular dependency: trading → allocation
-type ConcentrationAlertProvider interface {
-	DetectAlerts(summary PortfolioSummary) ([]ConcentrationAlert, error)
-}
+// Note: PortfolioSummaryProvider and ConcentrationAlertProvider have been moved to domain/interfaces.go
+// They are now available as domain.PortfolioSummaryProvider and domain.ConcentrationAlertProvider
+// The PortfolioSummary and ConcentrationAlert types are also in domain/interfaces.go
+
+// PortfolioSummaryProvider is an alias for domain.PortfolioSummaryProvider for backward compatibility
+type PortfolioSummaryProvider = domain.PortfolioSummaryProvider
+
+// ConcentrationAlertProvider is an alias for domain.ConcentrationAlertProvider for backward compatibility
+type ConcentrationAlertProvider = domain.ConcentrationAlertProvider
+
+// PortfolioSummary is an alias for domain.PortfolioSummary for backward compatibility
+type PortfolioSummary = domain.PortfolioSummary
+
+// PortfolioAllocation is an alias for domain.PortfolioAllocation for backward compatibility
+type PortfolioAllocation = domain.PortfolioAllocation
+
+// ConcentrationAlert is an alias for domain.ConcentrationAlert for backward compatibility
+type ConcentrationAlert = domain.ConcentrationAlert

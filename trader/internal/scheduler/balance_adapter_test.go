@@ -29,6 +29,13 @@ func (m *mockCashManager) UpdateCashPosition(currency string, balance float64) e
 	return nil
 }
 
+func (m *mockCashManager) GetCashBalance(currency string) (float64, error) {
+	if balance, ok := m.balances[currency]; ok {
+		return balance, nil
+	}
+	return 0.0, nil
+}
+
 func TestBalanceAdapter_GetAllCurrencies(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 

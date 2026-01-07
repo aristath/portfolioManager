@@ -2,41 +2,41 @@
 package portfolio
 
 import (
-	"github.com/aristath/portfolioManager/internal/modules/allocation"
+	"github.com/aristath/portfolioManager/internal/domain"
 )
 
-// PortfolioSummaryAdapter adapts PortfolioService to allocation.PortfolioSummaryProvider
+// PortfolioSummaryAdapter adapts PortfolioService to domain.PortfolioSummaryProvider
 // This adapter breaks the circular dependency: allocation → portfolio
 type PortfolioSummaryAdapter struct {
 	service *PortfolioService
 }
 
 // NewPortfolioSummaryAdapter creates a new adapter
-func NewPortfolioSummaryAdapter(service *PortfolioService) allocation.PortfolioSummaryProvider {
+func NewPortfolioSummaryAdapter(service *PortfolioService) domain.PortfolioSummaryProvider {
 	return &PortfolioSummaryAdapter{service: service}
 }
 
-// GetPortfolioSummary implements allocation.PortfolioSummaryProvider
-func (a *PortfolioSummaryAdapter) GetPortfolioSummary() (allocation.PortfolioSummary, error) {
+// GetPortfolioSummary implements domain.PortfolioSummaryProvider
+func (a *PortfolioSummaryAdapter) GetPortfolioSummary() (domain.PortfolioSummary, error) {
 	portfolioSummary, err := a.service.GetPortfolioSummary()
 	if err != nil {
-		return allocation.PortfolioSummary{}, err
+		return domain.PortfolioSummary{}, err
 	}
 
-	// Convert portfolio.PortfolioSummary to allocation.PortfolioSummary
-	return allocation.PortfolioSummary{
-		CountryAllocations:  convertAllocationsToAllocation(portfolioSummary.CountryAllocations),
-		IndustryAllocations: convertAllocationsToAllocation(portfolioSummary.IndustryAllocations),
+	// Convert portfolio.PortfolioSummary to domain.PortfolioSummary
+	return domain.PortfolioSummary{
+		CountryAllocations:  convertAllocationsToDomain(portfolioSummary.CountryAllocations),
+		IndustryAllocations: convertAllocationsToDomain(portfolioSummary.IndustryAllocations),
 		TotalValue:          portfolioSummary.TotalValue,
 		CashBalance:         portfolioSummary.CashBalance,
 	}, nil
 }
 
-// convertAllocationsToAllocation converts []AllocationStatus to []allocation.PortfolioAllocation
-func convertAllocationsToAllocation(src []AllocationStatus) []allocation.PortfolioAllocation {
-	result := make([]allocation.PortfolioAllocation, len(src))
+// convertAllocationsToDomain converts []AllocationStatus to []domain.PortfolioAllocation
+func convertAllocationsToDomain(src []AllocationStatus) []domain.PortfolioAllocation {
+	result := make([]domain.PortfolioAllocation, len(src))
 	for i, a := range src {
-		result[i] = allocation.PortfolioAllocation{
+		result[i] = domain.PortfolioAllocation{
 			Name:         a.Name,
 			TargetPct:    a.TargetPct,
 			CurrentPct:   a.CurrentPct,

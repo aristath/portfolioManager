@@ -11,8 +11,8 @@ import (
 
 	"github.com/aristath/portfolioManager/internal/clients/tradernet"
 	"github.com/aristath/portfolioManager/internal/clients/yahoo"
+	"github.com/aristath/portfolioManager/internal/domain"
 	"github.com/aristath/portfolioManager/internal/modules/dividends"
-	"github.com/aristath/portfolioManager/internal/modules/portfolio"
 	"github.com/aristath/portfolioManager/internal/services"
 	"github.com/rs/zerolog"
 )
@@ -29,10 +29,10 @@ type Handler struct {
 	service                 *OptimizerService
 	db                      *sql.DB
 	yahooClient             yahoo.FullClientInterface
-	tradernetClient         TradernetClientInterface
-	currencyExchangeService CurrencyExchangeServiceInterface
+	tradernetClient         domain.TradernetClientInterface
+	currencyExchangeService domain.CurrencyExchangeServiceInterface
 	dividendRepo            *dividends.DividendRepository
-	cashManager             portfolio.CashManager
+	cashManager             domain.CashManager
 	cache                   *OptimizationCache
 	log                     zerolog.Logger
 }
@@ -48,7 +48,7 @@ func NewHandler(
 	tradernetClient *tradernet.Client,
 	currencyExchangeService *services.CurrencyExchangeService,
 	dividendRepo *dividends.DividendRepository,
-	cashManager portfolio.CashManager,
+	cashManager domain.CashManager,
 	log zerolog.Logger,
 ) *Handler {
 	return &Handler{

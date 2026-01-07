@@ -13,16 +13,9 @@ type AllocationTarget struct {
 	TargetPct float64   `json:"target_pct"`
 }
 
-// ConcentrationAlert represents alert for approaching concentration limit
-// Faithful translation from Python: app/modules/allocation/services/concentration_alerts.py
-type ConcentrationAlert struct {
-	Type              string  `json:"type"`
-	Name              string  `json:"name"`
-	Severity          string  `json:"severity"`
-	CurrentPct        float64 `json:"current_pct"`
-	LimitPct          float64 `json:"limit_pct"`
-	AlertThresholdPct float64 `json:"alert_threshold_pct"`
-}
+// Note: ConcentrationAlert has been moved to domain/interfaces.go
+// It is now available as domain.ConcentrationAlert
+// Type alias is in interfaces.go for backward compatibility
 
 // AllocationInfo represents allocation status for display
 type AllocationInfo struct {

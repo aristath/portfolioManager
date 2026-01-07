@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/aristath/portfolioManager/internal/domain"
 	"github.com/rs/zerolog"
 )
 
@@ -15,22 +16,9 @@ type Position struct {
 	MarketValueEUR float64
 }
 
-// PortfolioAllocation represents allocation info (from Python: app/domain/models.py)
-type PortfolioAllocation struct {
-	Name         string
-	TargetPct    float64
-	CurrentPct   float64
-	CurrentValue float64
-	Deviation    float64
-}
-
-// PortfolioSummary represents complete portfolio summary (from Python: app/domain/models.py)
-type PortfolioSummary struct {
-	CountryAllocations  []PortfolioAllocation
-	IndustryAllocations []PortfolioAllocation
-	TotalValue          float64
-	CashBalance         float64
-}
+// Note: PortfolioAllocation and PortfolioSummary have been moved to domain/interfaces.go
+// They are now available as domain.PortfolioAllocation and domain.PortfolioSummary
+// Using type aliases in interfaces.go for backward compatibility
 
 // ConcentrationAlertService detects concentration limit alerts
 // Faithful translation from Python: app/modules/allocation/services/concentration_alerts.py
@@ -49,8 +37,8 @@ func NewConcentrationAlertService(db *sql.DB, log zerolog.Logger) *Concentration
 
 // DetectAlerts detects all concentration alerts from portfolio summary
 // Faithful translation of Python: async def detect_alerts(self, portfolio_summary: PortfolioSummary) -> List[ConcentrationAlert]
-func (s *ConcentrationAlertService) DetectAlerts(summary PortfolioSummary) ([]ConcentrationAlert, error) {
-	var alerts []ConcentrationAlert
+func (s *ConcentrationAlertService) DetectAlerts(summary domain.PortfolioSummary) ([]domain.ConcentrationAlert, error) {
+	var alerts []domain.ConcentrationAlert
 
 	if summary.TotalValue <= 0 {
 		return alerts, nil
@@ -61,7 +49,7 @@ func (s *ConcentrationAlertService) DetectAlerts(summary PortfolioSummary) ([]Co
 		currentPct := countryAlloc.CurrentPct
 		if currentPct >= CountryAlertThreshold {
 			severity := s.calculateSeverity(currentPct, MaxCountryConcentration)
-			alerts = append(alerts, ConcentrationAlert{
+			alerts = append(alerts, domain.ConcentrationAlert{
 				Type:              "country",
 				Name:              countryAlloc.Name,
 				CurrentPct:        currentPct,
@@ -77,7 +65,7 @@ func (s *ConcentrationAlertService) DetectAlerts(summary PortfolioSummary) ([]Co
 		currentPct := industryAlloc.CurrentPct
 		if currentPct >= SectorAlertThreshold {
 			severity := s.calculateSeverity(currentPct, MaxSectorConcentration)
-			alerts = append(alerts, ConcentrationAlert{
+			alerts = append(alerts, domain.ConcentrationAlert{
 				Type:              "sector",
 				Name:              industryAlloc.Name,
 				CurrentPct:        currentPct,
@@ -99,7 +87,7 @@ func (s *ConcentrationAlertService) DetectAlerts(summary PortfolioSummary) ([]Co
 			positionPct := position.MarketValueEUR / summary.TotalValue
 			if positionPct >= PositionAlertThreshold {
 				severity := s.calculateSeverity(positionPct, MaxPositionConcentration)
-				alerts = append(alerts, ConcentrationAlert{
+				alerts = append(alerts, domain.ConcentrationAlert{
 					Type:              "position",
 					Name:              position.Symbol,
 					CurrentPct:        positionPct,

@@ -34,7 +34,7 @@ type PlannerBatchJob struct {
 	positionRepo           *portfolio.PositionRepository
 	securityRepo           *universe.SecurityRepository
 	allocRepo              *allocation.Repository
-	cashManager            portfolio.CashManager
+	cashManager            domain.CashManager
 	tradernetClient        *tradernet.Client
 	yahooClient            yahoo.FullClientInterface
 	optimizerService       *optimization.OptimizerService // Added for optimizer target weights
@@ -58,7 +58,7 @@ type PlannerBatchConfig struct {
 	PositionRepo           *portfolio.PositionRepository
 	SecurityRepo           *universe.SecurityRepository
 	AllocRepo              *allocation.Repository
-	CashManager            portfolio.CashManager
+	CashManager            domain.CashManager
 	TradernetClient        *tradernet.Client
 	YahooClient            yahoo.FullClientInterface
 	OptimizerService       *optimization.OptimizerService // Added for optimizer target weights

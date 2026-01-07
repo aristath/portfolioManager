@@ -26,6 +26,11 @@ func (m *MockCashManager) GetAllCashBalances() (map[string]float64, error) {
 	return args.Get(0).(map[string]float64), args.Error(1)
 }
 
+func (m *MockCashManager) GetCashBalance(currency string) (float64, error) {
+	args := m.Called(currency)
+	return args.Get(0).(float64), args.Error(1)
+}
+
 // MockCurrencyExchangeService is a mock currency exchange service for testing
 type MockCurrencyExchangeService struct {
 	mock.Mock

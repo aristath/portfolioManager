@@ -21,11 +21,23 @@ func newMockCashManager(balances map[string]float64) *mockCashManager {
 	}
 }
 
+func (m *mockCashManager) UpdateCashPosition(currency string, balance float64) error {
+	if m.balances == nil {
+		m.balances = make(map[string]float64)
+	}
+	m.balances[currency] = balance
+	return nil
+}
+
 func (m *mockCashManager) GetCashBalance(currency string) (float64, error) {
 	if balance, ok := m.balances[currency]; ok {
 		return balance, nil
 	}
 	return 0.0, nil
+}
+
+func (m *mockCashManager) GetAllCashBalances() (map[string]float64, error) {
+	return m.balances, nil
 }
 
 type mockCurrencyExchangeService struct {
@@ -319,6 +331,18 @@ func newMockTradernetClient(connected bool) *mockTradernetClient {
 
 func (m *mockTradernetClient) IsConnected() bool {
 	return m.connected
+}
+
+func (m *mockTradernetClient) GetPortfolio() ([]tradernet.Position, error) {
+	return nil, nil
+}
+
+func (m *mockTradernetClient) GetCashBalances() ([]tradernet.CashBalance, error) {
+	return nil, nil
+}
+
+func (m *mockTradernetClient) GetExecutedTrades(limit int) ([]tradernet.Trade, error) {
+	return nil, nil
 }
 
 func (m *mockTradernetClient) PlaceOrder(symbol, side string, quantity float64) (*tradernet.OrderResult, error) {

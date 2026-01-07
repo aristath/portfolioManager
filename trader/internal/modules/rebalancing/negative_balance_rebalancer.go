@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	"github.com/aristath/portfolioManager/internal/clients/tradernet"
+	"github.com/aristath/portfolioManager/internal/domain"
 	"github.com/aristath/portfolioManager/internal/modules/planning"
 	"github.com/aristath/portfolioManager/internal/modules/portfolio"
 	"github.com/aristath/portfolioManager/internal/modules/settings"
@@ -25,7 +26,7 @@ const MinCurrencyReserve = 5.0
 // 3. Final currency exchange to ensure all currencies have minimum
 type NegativeBalanceRebalancer struct {
 	log                     zerolog.Logger
-	cashManager             portfolio.CashManager
+	cashManager             domain.CashManager
 	tradernetClient         *tradernet.Client
 	securityRepo            *universe.SecurityRepository
 	positionRepo            *portfolio.PositionRepository
@@ -38,7 +39,7 @@ type NegativeBalanceRebalancer struct {
 // NewNegativeBalanceRebalancer creates a new negative balance rebalancer
 func NewNegativeBalanceRebalancer(
 	log zerolog.Logger,
-	cashManager portfolio.CashManager,
+	cashManager domain.CashManager,
 	tradernetClient *tradernet.Client,
 	securityRepo *universe.SecurityRepository,
 	positionRepo *portfolio.PositionRepository,

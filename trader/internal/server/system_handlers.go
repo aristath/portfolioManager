@@ -11,9 +11,9 @@ import (
 
 	"github.com/aristath/portfolioManager/internal/clients/tradernet"
 	"github.com/aristath/portfolioManager/internal/database"
+	"github.com/aristath/portfolioManager/internal/domain"
 	"github.com/aristath/portfolioManager/internal/modules/display"
 	"github.com/aristath/portfolioManager/internal/modules/market_hours"
-	"github.com/aristath/portfolioManager/internal/modules/portfolio"
 	"github.com/aristath/portfolioManager/internal/modules/settings"
 	"github.com/aristath/portfolioManager/internal/modules/universe"
 	"github.com/aristath/portfolioManager/internal/scheduler"
@@ -36,7 +36,7 @@ type SystemHandlers struct {
 	displayManager          *display.StateManager
 	tradernetClient         *tradernet.Client
 	currencyExchangeService *services.CurrencyExchangeService
-	cashManager             portfolio.CashManager
+	cashManager             domain.CashManager
 	marketHoursService      *market_hours.MarketHoursService
 	// Jobs (will be set after job registration in main.go)
 	healthCheckJob       scheduler.Job
@@ -56,7 +56,7 @@ func NewSystemHandlers(
 	displayManager *display.StateManager,
 	tradernetClient *tradernet.Client,
 	currencyExchangeService *services.CurrencyExchangeService,
-	cashManager portfolio.CashManager,
+	cashManager domain.CashManager,
 	marketHoursService *market_hours.MarketHoursService,
 ) *SystemHandlers {
 	// Create portfolio performance service

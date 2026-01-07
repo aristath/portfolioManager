@@ -1,91 +1,27 @@
 package server
 
 import (
-	"time"
-
-	"github.com/aristath/portfolioManager/internal/clients/tradernet"
-	"github.com/aristath/portfolioManager/internal/clients/yahoo"
-	"github.com/aristath/portfolioManager/internal/events"
-	"github.com/aristath/portfolioManager/internal/modules/allocation"
-	"github.com/aristath/portfolioManager/internal/modules/cash_flows"
-	"github.com/aristath/portfolioManager/internal/modules/market_hours"
-	"github.com/aristath/portfolioManager/internal/modules/portfolio"
-	"github.com/aristath/portfolioManager/internal/modules/scoring/scorers"
 	"github.com/aristath/portfolioManager/internal/modules/settings"
-	"github.com/aristath/portfolioManager/internal/modules/trading"
 	"github.com/aristath/portfolioManager/internal/modules/universe"
-	"github.com/aristath/portfolioManager/internal/services"
 	"github.com/go-chi/chi/v5"
 )
 
 // setupSettingsRoutes configures settings module routes
 func (s *Server) setupSettingsRoutes(r chi.Router) {
-	// Initialize settings repository
-	settingsRepo := settings.NewRepository(s.configDB.Conn(), s.log)
-
-	// Initialize settings service
-	settingsService := settings.NewService(settingsRepo, s.log)
-
-	// Initialize Tradernet SDK client for onboarding
-	tradernetClient := tradernet.NewClient(s.cfg.TradernetAPIKey, s.cfg.TradernetAPISecret, s.log)
-
-	// Initialize currency exchange service for multi-currency cash handling
-	currencyExchangeService := services.NewCurrencyExchangeService(tradernetClient, s.log)
-
-	// Initialize portfolio service for onboarding
-	positionRepo := portfolio.NewPositionRepository(s.portfolioDB.Conn(), s.universeDB.Conn(), s.log)
-	allocRepo := allocation.NewRepository(s.configDB.Conn(), s.log)
-
-	// Security repository (needed for universe services)
-	securityRepo := universe.NewSecurityRepository(s.universeDB.Conn(), s.log)
-
-	// Cash manager (needed for portfolio service)
-	cashRepo := cash_flows.NewCashRepository(s.portfolioDB.Conn(), s.log)
-	cashManager := cash_flows.NewCashManagerWithDualWrite(cashRepo, positionRepo, s.log)
-
-	portfolioService := portfolio.NewPortfolioService(
-		positionRepo,
-		allocRepo,
-		cashManager,
-		s.universeDB.Conn(),
-		tradernetClient,
-		currencyExchangeService,
-		s.log,
-	)
-
-	// Initialize universe sync service for onboarding
-	scoreRepo := universe.NewScoreRepository(s.portfolioDB.Conn(), s.log)
-	yahooClient := yahoo.NewNativeClient(s.log)
-	historyDB := universe.NewHistoryDB(s.historyDB.Conn(), s.log)
-	symbolResolver := universe.NewSymbolResolver(tradernetClient, securityRepo, s.log)
-	historicalSync := universe.NewHistoricalSyncService(yahooClient, securityRepo, historyDB, 2*time.Second, s.log)
-	eventManager := events.NewManager(s.log)
-	securityScorer := scorers.NewSecurityScorer()
-
-	// Create score calculator adapter (we'll use a simple adapter)
-	var scoreCalculator universe.ScoreCalculator
-
-	setupService := universe.NewSecuritySetupService(
-		symbolResolver,
-		securityRepo,
-		tradernetClient,
-		yahooClient,
-		historicalSync,
-		eventManager,
-		scoreCalculator, // Will be set after sync service is created
-		s.log,
-	)
-
-	syncService := universe.NewSyncService(
-		securityRepo,
-		historicalSync,
-		yahooClient,
-		scoreCalculator,      // Will be set after handler is created
-		tradernetClient,      // For RebuildUniverseFromPortfolio
-		setupService,         // For adding missing securities
-		s.portfolioDB.Conn(), // For SyncAllPrices position updates
-		s.log,
-	)
+	// Use services from container (single source of truth)
+	settingsService := s.container.SettingsService
+	tradernetClient := s.container.TradernetClient
+	currencyExchangeService := s.container.CurrencyExchangeService
+	positionRepo := s.container.PositionRepo
+	securityRepo := s.container.SecurityRepo
+	portfolioService := s.container.PortfolioService
+	scoreRepo := s.container.ScoreRepo
+	yahooClient := s.container.YahooClient
+	historyDB := s.container.HistoryDBClient
+	setupService := s.container.SetupService
+	syncService := s.container.SyncService
+	securityScorer := s.container.SecurityScorer
+	tradingService := s.container.TradingService
 
 	// Create a simple score calculator that uses UniverseHandlers pattern
 	// For onboarding, we'll create a minimal handler just for score calculation
@@ -103,32 +39,9 @@ func (s *Server) setupSettingsRoutes(r chi.Router) {
 		s.log,
 	)
 
-	// Wire score calculator
+	// Wire score calculator (already done in services.go, but ensure it's set here too)
 	setupService.SetScoreCalculator(universeHandler)
 	syncService.SetScoreCalculator(universeHandler)
-
-	// Initialize trading service for onboarding
-	tradingRepo := trading.NewTradeRepository(s.ledgerDB.Conn(), s.log)
-	settingsServiceForTrading := settings.NewService(settingsRepo, s.log)
-
-	// Create market hours service for trade safety
-	marketHoursService := market_hours.NewMarketHoursService()
-
-	tradeSafetyService := trading.NewTradeSafetyService(
-		tradingRepo,
-		positionRepo,
-		securityRepo,
-		settingsServiceForTrading,
-		marketHoursService,
-		s.log,
-	)
-
-	tradingService := trading.NewTradingService(
-		tradingRepo,
-		tradernetClient,
-		tradeSafetyService,
-		s.log,
-	)
 
 	// Create onboarding service
 	onboardingService := settings.NewOnboardingService(

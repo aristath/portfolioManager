@@ -3,20 +3,20 @@ package portfolio
 import (
 	"testing"
 
-	"github.com/aristath/portfolioManager/internal/modules/allocation"
+	"github.com/aristath/portfolioManager/internal/domain"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestConvertAllocationsToAllocation(t *testing.T) {
+func TestConvertAllocationsToDomain(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    []AllocationStatus
-		expected []allocation.PortfolioAllocation
+		expected []domain.PortfolioAllocation
 	}{
 		{
 			name:     "empty slice",
 			input:    []AllocationStatus{},
-			expected: []allocation.PortfolioAllocation{},
+			expected: []domain.PortfolioAllocation{},
 		},
 		{
 			name: "single allocation",
@@ -29,7 +29,7 @@ func TestConvertAllocationsToAllocation(t *testing.T) {
 					Deviation:    -0.05,
 				},
 			},
-			expected: []allocation.PortfolioAllocation{
+			expected: []domain.PortfolioAllocation{
 				{
 					Name:         "US",
 					TargetPct:    0.5,
@@ -64,7 +64,7 @@ func TestConvertAllocationsToAllocation(t *testing.T) {
 					Deviation:    0.0,
 				},
 			},
-			expected: []allocation.PortfolioAllocation{
+			expected: []domain.PortfolioAllocation{
 				{
 					Name:         "US",
 					TargetPct:    0.5,
@@ -92,7 +92,7 @@ func TestConvertAllocationsToAllocation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := convertAllocationsToAllocation(tt.input)
+			result := convertAllocationsToDomain(tt.input)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

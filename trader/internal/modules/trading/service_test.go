@@ -34,6 +34,18 @@ func (m *mockTradernetClient) PlaceOrder(symbol, side string, quantity float64) 
 	}, nil
 }
 
+func (m *mockTradernetClient) GetPortfolio() ([]tradernet.Position, error) {
+	return nil, nil
+}
+
+func (m *mockTradernetClient) GetCashBalances() ([]tradernet.CashBalance, error) {
+	return nil, nil
+}
+
+func (m *mockTradernetClient) IsConnected() bool {
+	return true
+}
+
 // Mock Trade Repository for testing
 
 type mockTradeRepository struct {

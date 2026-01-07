@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/aristath/portfolioManager/internal/clients/tradernet"
+	"github.com/aristath/portfolioManager/internal/domain"
 	"github.com/aristath/portfolioManager/internal/modules/allocation"
 	"github.com/aristath/portfolioManager/internal/modules/portfolio"
 	"github.com/aristath/portfolioManager/internal/services"
@@ -21,7 +22,7 @@ type Handlers struct {
 	tradernetClient         *tradernet.Client
 	currencyExchangeService *services.CurrencyExchangeService
 	allocRepo               *allocation.Repository
-	cashManager             portfolio.CashManager
+	cashManager             domain.CashManager
 	log                     zerolog.Logger
 }
 
@@ -36,7 +37,7 @@ func NewHandlers(
 	tradernetClient *tradernet.Client,
 	currencyExchangeService *services.CurrencyExchangeService,
 	allocRepo *allocation.Repository,
-	cashManager portfolio.CashManager,
+	cashManager domain.CashManager,
 	log zerolog.Logger,
 ) *Handlers {
 	return &Handlers{

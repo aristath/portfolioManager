@@ -63,7 +63,7 @@ type Service struct {
 	positionRepo       *portfolio.PositionRepository
 	securityRepo       *universe.SecurityRepository
 	allocRepo          *allocation.Repository
-	cashManager        portfolio.CashManager
+	cashManager        domain.CashManager
 	tradernetClient    *tradernet.Client
 	yahooClient        yahoo.FullClientInterface
 	configRepo         *planningrepo.ConfigRepository
@@ -82,7 +82,7 @@ func NewService(
 	positionRepo *portfolio.PositionRepository,
 	securityRepo *universe.SecurityRepository,
 	allocRepo *allocation.Repository,
-	cashManager portfolio.CashManager,
+	cashManager domain.CashManager,
 	tradernetClient *tradernet.Client,
 	yahooClient yahoo.FullClientInterface,
 	configRepo *planningrepo.ConfigRepository,

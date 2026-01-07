@@ -11,7 +11,8 @@ import (
 	"strings"
 
 	"github.com/aristath/portfolioManager/internal/clients/yahoo"
-	"github.com/aristath/portfolioManager/internal/modules/scoring/domain"
+	"github.com/aristath/portfolioManager/internal/domain"
+	scoringdomain "github.com/aristath/portfolioManager/internal/modules/scoring/domain"
 	"github.com/aristath/portfolioManager/internal/modules/scoring/scorers"
 	"github.com/aristath/portfolioManager/pkg/formulas"
 	"github.com/go-chi/chi/v5"
@@ -121,7 +122,7 @@ type UniverseHandlers struct {
 	historyDB               *HistoryDB
 	setupService            *SecuritySetupService
 	syncService             *SyncService
-	currencyExchangeService CurrencyExchangeServiceInterface
+	currencyExchangeService domain.CurrencyExchangeServiceInterface
 }
 
 // NewUniverseHandlers creates a new universe handlers instance
@@ -135,7 +136,7 @@ func NewUniverseHandlers(
 	historyDB *HistoryDB,
 	setupService *SecuritySetupService,
 	syncService *SyncService,
-	currencyExchangeService CurrencyExchangeServiceInterface,
+	currencyExchangeService domain.CurrencyExchangeServiceInterface,
 	log zerolog.Logger,
 ) *UniverseHandlers {
 	return &UniverseHandlers{
@@ -1071,9 +1072,9 @@ func (h *UniverseHandlers) calculateAndSaveScore(isin string, yahooSymbol string
 	return &score, nil
 }
 
-// convertToSecurityScore converts domain.CalculatedSecurityScore to SecurityScore
+// convertToSecurityScore converts scoringdomain.CalculatedSecurityScore to SecurityScore
 // After migration: accepts ISIN as primary identifier
-func convertToSecurityScore(isin string, symbol string, calculated *domain.CalculatedSecurityScore) SecurityScore {
+func convertToSecurityScore(isin string, symbol string, calculated *scoringdomain.CalculatedSecurityScore) SecurityScore {
 	// Extract group scores
 	groupScores := calculated.GroupScores
 	if groupScores == nil {

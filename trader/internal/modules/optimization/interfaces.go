@@ -1,15 +1,4 @@
 package optimization
 
-import "github.com/aristath/portfolioManager/internal/clients/tradernet"
-
-// TradernetClientInterface defines the contract for Tradernet client operations
-// Used by Handler to enable testing with mocks
-type TradernetClientInterface interface {
-	GetCashBalances() ([]tradernet.CashBalance, error)
-}
-
-// CurrencyExchangeServiceInterface defines the contract for currency exchange operations
-// Used by Handler to enable testing with mocks
-type CurrencyExchangeServiceInterface interface {
-	GetRate(fromCurrency, toCurrency string) (float64, error)
-}
+// Note: TradernetClientInterface and CurrencyExchangeServiceInterface have been moved to domain/interfaces.go
+// They are now available as domain.TradernetClientInterface and domain.CurrencyExchangeServiceInterface

@@ -49,9 +49,5 @@ type DBExecutor interface {
 	Exec(query string, args ...interface{}) (sql.Result, error)
 }
 
-// CurrencyExchangeServiceInterface defines the contract for currency exchange operations
-// Used by UniverseHandlers to enable testing with mocks
-// This interface avoids import cycles with the services package
-type CurrencyExchangeServiceInterface interface {
-	GetRate(fromCurrency, toCurrency string) (float64, error)
-}
+// Note: CurrencyExchangeServiceInterface has been moved to domain/interfaces.go
+// It is now available as domain.CurrencyExchangeServiceInterface

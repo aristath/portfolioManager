@@ -8,42 +8,30 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aristath/portfolioManager/internal/domain"
 	"github.com/rs/zerolog"
 )
-
-// AllocationTargetProvider provides access to allocation targets
-// This interface breaks the circular dependency between portfolio and allocation packages
-type AllocationTargetProvider interface {
-	GetAll() (map[string]float64, error)
-}
-
-// CashManager interface defines operations for managing cash balances
-// This interface breaks the circular dependency between portfolio and cash_flows packages
-type CashManager interface {
-	UpdateCashPosition(currency string, balance float64) error
-	GetAllCashBalances() (map[string]float64, error)
-}
 
 // PortfolioService orchestrates portfolio operations
 // Faithful translation from Python: app/modules/portfolio/services/portfolio_service.py
 type PortfolioService struct {
 	positionRepo            PositionRepositoryInterface
-	allocRepo               AllocationTargetProvider
-	cashManager             CashManager // Interface to break circular dependency
-	universeDB              *sql.DB     // For querying securities (universe.db)
-	tradernetClient         TradernetClientInterface
-	currencyExchangeService CurrencyExchangeServiceInterface
+	allocRepo               domain.AllocationTargetProvider
+	cashManager             domain.CashManager // Interface to break circular dependency
+	universeDB              *sql.DB            // For querying securities (universe.db)
+	tradernetClient         domain.TradernetClientInterface
+	currencyExchangeService domain.CurrencyExchangeServiceInterface
 	log                     zerolog.Logger
 }
 
 // NewPortfolioService creates a new portfolio service
 func NewPortfolioService(
 	positionRepo PositionRepositoryInterface,
-	allocRepo AllocationTargetProvider,
-	cashManager CashManager,
+	allocRepo domain.AllocationTargetProvider,
+	cashManager domain.CashManager,
 	universeDB *sql.DB,
-	tradernetClient TradernetClientInterface,
-	currencyExchangeService CurrencyExchangeServiceInterface,
+	tradernetClient domain.TradernetClientInterface,
+	currencyExchangeService domain.CurrencyExchangeServiceInterface,
 	log zerolog.Logger,
 ) *PortfolioService {
 	return &PortfolioService{
