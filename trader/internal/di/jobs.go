@@ -287,10 +287,12 @@ func RegisterJobs(container *Container, cfg *config.Config, displayManager *disp
 	scoresRepoAdapter := scheduler.NewScoresRepositoryAdapter(container.PortfolioDB.Conn(), log)
 	settingsRepoAdapter := scheduler.NewSettingsRepositoryAdapter(container.ConfigDB.Conn(), log)
 	regimeRepoAdapter := scheduler.NewRegimeRepositoryAdapter(container.ConfigDB.Conn())
+	groupingRepoAdapter := scheduler.NewGroupingRepositoryAdapter(container.GroupingRepo)
 	buildOpportunityContext := scheduler.NewBuildOpportunityContextJob(
 		positionRepoAdapter,
 		securityRepoAdapter,
 		allocRepoAdapter,
+		groupingRepoAdapter,
 		container.CashManager,
 		priceClientAdapter,
 		scoresRepoAdapter,

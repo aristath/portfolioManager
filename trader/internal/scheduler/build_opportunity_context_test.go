@@ -77,8 +77,28 @@ func (m *MockRegimeRepoForContext) GetCurrentRegimeScore() (float64, error) {
 	return 0.0, nil
 }
 
+// MockGroupingRepoForContext is a mock implementation of GroupingRepositoryInterface
+type MockGroupingRepoForContext struct {
+	GetCountryGroupsFunc  func() (map[string][]string, error)
+	GetIndustryGroupsFunc func() (map[string][]string, error)
+}
+
+func (m *MockGroupingRepoForContext) GetCountryGroups() (map[string][]string, error) {
+	if m.GetCountryGroupsFunc != nil {
+		return m.GetCountryGroupsFunc()
+	}
+	return map[string][]string{}, nil
+}
+
+func (m *MockGroupingRepoForContext) GetIndustryGroups() (map[string][]string, error) {
+	if m.GetIndustryGroupsFunc != nil {
+		return m.GetIndustryGroupsFunc()
+	}
+	return map[string][]string{}, nil
+}
+
 func TestBuildOpportunityContextJob_Name(t *testing.T) {
-	job := NewBuildOpportunityContextJob(nil, nil, nil, nil, nil, nil, nil, nil)
+	job := NewBuildOpportunityContextJob(nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	assert.Equal(t, "build_opportunity_context", job.Name())
 }
 
@@ -187,10 +207,12 @@ func TestBuildOpportunityContextJob_Run_Success(t *testing.T) {
 		},
 	}
 
+	mockGroupingRepo := &MockGroupingRepoForContext{}
 	job := NewBuildOpportunityContextJob(
 		mockPositionRepo,
 		mockSecurityRepo,
 		mockAllocRepo,
+		mockGroupingRepo,
 		mockCashManager,
 		mockPriceClient,
 		mockScoresRepo,
@@ -216,10 +238,12 @@ func TestBuildOpportunityContextJob_Run_PositionRepoError(t *testing.T) {
 		},
 	}
 
+	mockGroupingRepo := &MockGroupingRepoForContext{}
 	job := NewBuildOpportunityContextJob(
 		mockPositionRepo,
 		nil,
 		nil,
+		mockGroupingRepo,
 		nil,
 		nil,
 		nil,
@@ -245,10 +269,12 @@ func TestBuildOpportunityContextJob_Run_SecurityRepoError(t *testing.T) {
 		},
 	}
 
+	mockGroupingRepo := &MockGroupingRepoForContext{}
 	job := NewBuildOpportunityContextJob(
 		mockPositionRepo,
 		mockSecurityRepo,
 		nil,
+		mockGroupingRepo,
 		nil,
 		nil,
 		nil,
@@ -280,10 +306,12 @@ func TestBuildOpportunityContextJob_Run_AllocationRepoError(t *testing.T) {
 		},
 	}
 
+	mockGroupingRepo := &MockGroupingRepoForContext{}
 	job := NewBuildOpportunityContextJob(
 		mockPositionRepo,
 		mockSecurityRepo,
 		mockAllocRepo,
+		mockGroupingRepo,
 		nil,
 		nil,
 		nil,

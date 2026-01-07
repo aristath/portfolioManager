@@ -20,6 +20,7 @@ type BuildOpportunityContextJob struct {
 	positionRepo           PositionRepositoryInterface
 	securityRepo           SecurityRepositoryInterface
 	allocRepo              AllocationRepositoryInterface
+	groupingRepo           GroupingRepositoryInterface
 	cashManager            CashManagerInterface
 	priceClient            PriceClientInterface
 	scoresRepo             ScoresRepositoryInterface
@@ -34,6 +35,7 @@ func NewBuildOpportunityContextJob(
 	positionRepo PositionRepositoryInterface,
 	securityRepo SecurityRepositoryInterface,
 	allocRepo AllocationRepositoryInterface,
+	groupingRepo GroupingRepositoryInterface,
 	cashManager CashManagerInterface,
 	priceClient PriceClientInterface,
 	scoresRepo ScoresRepositoryInterface,
@@ -45,6 +47,7 @@ func NewBuildOpportunityContextJob(
 		positionRepo: positionRepo,
 		securityRepo: securityRepo,
 		allocRepo:    allocRepo,
+		groupingRepo: groupingRepo,
 		cashManager:  cashManager,
 		priceClient:  priceClient,
 		scoresRepo:   scoresRepo,
@@ -199,14 +202,39 @@ func (j *BuildOpportunityContextJob) buildOpportunityContext(
 	// Fetch current prices for all securities
 	currentPrices := j.fetchCurrentPrices(securities)
 
-	// Calculate position values and total portfolio value
+	// Calculate position values and total portfolio value with currency conversion
 	totalValue := availableCashEUR
 	positionAvgPrices := make(map[string]float64)
 	for _, pos := range positions {
 		if price, ok := currentPrices[pos.Symbol]; ok {
-			valueEUR := price * float64(pos.Quantity)
+			// Calculate value in position's currency
+			valueInCurrency := price * float64(pos.Quantity)
+
+			// Convert to EUR using CurrencyRate from position
+			var valueEUR float64
+			if pos.Currency == "EUR" || pos.Currency == "" {
+				valueEUR = valueInCurrency
+			} else if pos.CurrencyRate > 0 && pos.CurrencyRate != 1.0 {
+				// CurrencyRate is stored as: 1 EUR = CurrencyRate units of foreign currency
+				// So to convert FROM foreign currency TO EUR: valueEUR = valueInCurrency / CurrencyRate
+				// Example: If CurrencyRate is 9.09 for HKD, then 1 EUR = 9.09 HKD, so 100 HKD = 100/9.09 = 11 EUR
+				valueEUR = valueInCurrency / pos.CurrencyRate
+			} else {
+				// Fallback: use stored MarketValueEUR if available, otherwise assume same currency
+				if pos.MarketValueEUR > 0 {
+					valueEUR = pos.MarketValueEUR
+				} else {
+					valueEUR = valueInCurrency
+					j.log.Warn().
+						Str("symbol", pos.Symbol).
+						Str("currency", pos.Currency).
+						Msg("No currency rate available, using price as-is (may be incorrect)")
+				}
+			}
+
 			positionValues[pos.Symbol] = valueEUR
 			totalValue += valueEUR
+
 			// Use avg price from position if available, otherwise current price
 			if pos.AvgPrice > 0 {
 				positionAvgPrices[pos.Symbol] = pos.AvgPrice
@@ -216,32 +244,125 @@ func (j *BuildOpportunityContextJob) buildOpportunityContext(
 		}
 	}
 
-	// Build country and industry weights from allocations
-	countryWeights := make(map[string]float64)
-	industryWeights := make(map[string]float64)
-	countryToGroup := make(map[string]string)
-	industryToGroup := make(map[string]string)
+	// Get country and industry groups from GroupingRepository
+	var countryGroups map[string][]string
+	var industryGroups map[string][]string
+	var countryToGroup map[string]string
+	var industryToGroup map[string]string
+
+	if j.groupingRepo != nil {
+		var err error
+		countryGroups, err = j.groupingRepo.GetCountryGroups()
+		if err != nil {
+			j.log.Warn().Err(err).Msg("Failed to get country groups, continuing without group mappings")
+			countryGroups = make(map[string][]string)
+		}
+
+		industryGroups, err = j.groupingRepo.GetIndustryGroups()
+		if err != nil {
+			j.log.Warn().Err(err).Msg("Failed to get industry groups, continuing without group mappings")
+			industryGroups = make(map[string][]string)
+		}
+
+		// Build reverse mappings: country -> group, industry -> group
+		countryToGroup = make(map[string]string)
+		for groupName, countries := range countryGroups {
+			for _, country := range countries {
+				countryToGroup[country] = groupName
+			}
+		}
+
+		industryToGroup = make(map[string]string)
+		for groupName, industries := range industryGroups {
+			for _, industry := range industries {
+				industryToGroup[industry] = groupName
+			}
+		}
+	} else {
+		countryToGroup = make(map[string]string)
+		industryToGroup = make(map[string]string)
+	}
+
+	// Extract raw weights from allocations (country_group and industry_group)
+	rawCountryWeights := make(map[string]float64)
+	rawIndustryWeights := make(map[string]float64)
 
 	for key, value := range allocations {
 		if strings.HasPrefix(key, "country_group:") {
-			country := strings.TrimPrefix(key, "country_group:")
-			countryWeights[country] = value
-			// Map individual countries to groups (simplified - would need actual mapping)
-			for _, sec := range securities {
-				if sec.Country != "" {
-					// Simple mapping: could be enhanced with actual country-to-group mapping
-					countryToGroup[sec.Country] = country
-				}
-			}
+			groupName := strings.TrimPrefix(key, "country_group:")
+			rawCountryWeights[groupName] = value
 		} else if strings.HasPrefix(key, "industry_group:") {
-			industry := strings.TrimPrefix(key, "industry_group:")
-			industryWeights[industry] = value
-			// Map individual industries to groups (simplified)
-			for _, sec := range securities {
-				if sec.Industry != "" {
-					industryToGroup[sec.Industry] = industry
+			groupName := strings.TrimPrefix(key, "industry_group:")
+			rawIndustryWeights[groupName] = value
+		}
+	}
+
+	// Normalize country group weights to percentages (sum to 1.0)
+	countryWeights := normalizeWeights(rawCountryWeights)
+	industryWeights := normalizeWeights(rawIndustryWeights)
+
+	// Calculate current allocations by GROUP
+	// Step 1: Aggregate positions by country (with currency conversion already applied)
+	countryValues := make(map[string]float64)
+	industryValues := make(map[string]float64)
+
+	for _, pos := range positions {
+		valueEUR := positionValues[pos.Symbol]
+		if valueEUR <= 0 {
+			continue
+		}
+
+		// Get security to find country/industry
+		if sec, ok := stocksBySymbol[pos.Symbol]; ok {
+			// Aggregate by country
+			if sec.Country != "" {
+				countryValues[sec.Country] += valueEUR
+			}
+		}
+
+		// Aggregate by industry (use securityIndustries map built earlier)
+		if industry, ok := securityIndustries[pos.Symbol]; ok && industry != "" {
+			// Parse industries if comma-separated
+			industries := parseIndustries(industry)
+			if len(industries) > 0 {
+				splitValue := valueEUR / float64(len(industries))
+				for _, ind := range industries {
+					industryValues[ind] += splitValue
 				}
 			}
+		}
+	}
+
+	// Step 2: Map countries to groups and aggregate by group
+	countryGroupValues := make(map[string]float64)
+	for country, value := range countryValues {
+		group := countryToGroup[country]
+		if group == "" {
+			group = "OTHER" // Countries not in any group go to OTHER
+		}
+		countryGroupValues[group] += value
+	}
+
+	// Step 3: Map industries to groups and aggregate by group
+	industryGroupValues := make(map[string]float64)
+	for industry, value := range industryValues {
+		group := industryToGroup[industry]
+		if group == "" {
+			group = "OTHER" // Industries not in any group go to OTHER
+		}
+		industryGroupValues[group] += value
+	}
+
+	// Step 4: Convert group values to percentages
+	countryAllocations := make(map[string]float64)
+	industryAllocations := make(map[string]float64)
+
+	if totalValue > 0 {
+		for group, value := range countryGroupValues {
+			countryAllocations[group] = value / totalValue
+		}
+		for group, value := range industryGroupValues {
+			industryAllocations[group] = value / totalValue
 		}
 	}
 
@@ -289,9 +410,10 @@ func (j *BuildOpportunityContextJob) buildOpportunityContext(
 		AvailableCashEUR:         availableCashEUR,
 		TotalPortfolioValueEUR:   totalValue,
 		CurrentPrices:            currentPrices,
-		SecurityScores:           securityScores, // Total scores keyed by symbol (for calculators)
-		TargetWeights:            targetWeights,  // Optimizer target weights (security-level)
-		CountryWeights:           countryWeights,
+		SecurityScores:           securityScores,     // Total scores keyed by symbol (for calculators)
+		TargetWeights:            targetWeights,      // Optimizer target weights (security-level)
+		CountryAllocations:       countryAllocations, // Current group-level allocations (percentages)
+		CountryWeights:           countryWeights,     // Target group-level weights (normalized percentages)
 		CountryToGroup:           countryToGroup,
 		CAGRs:                    cagrs,
 		LongTermScores:           longTermScores,
@@ -678,4 +800,46 @@ func (j *BuildOpportunityContextJob) addVirtualTestCash(cashBalances map[string]
 	}
 
 	return nil
+}
+
+// normalizeWeights normalizes raw weights to percentages (sums to 1.0)
+func normalizeWeights(rawWeights map[string]float64) map[string]float64 {
+	if len(rawWeights) == 0 {
+		return make(map[string]float64)
+	}
+
+	// Calculate total weight
+	totalWeight := 0.0
+	for _, weight := range rawWeights {
+		totalWeight += weight
+	}
+
+	// Normalize if total > 0
+	if totalWeight > 0 {
+		normalized := make(map[string]float64)
+		for name, weight := range rawWeights {
+			normalized[name] = weight / totalWeight
+		}
+		return normalized
+	}
+
+	return rawWeights
+}
+
+// parseIndustries parses comma-separated industry string into list
+func parseIndustries(industryStr string) []string {
+	if industryStr == "" {
+		return []string{}
+	}
+
+	parts := strings.Split(industryStr, ",")
+	industries := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			industries = append(industries, trimmed)
+		}
+	}
+
+	return industries
 }

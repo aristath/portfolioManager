@@ -62,6 +62,13 @@ type AllocationRepositoryInterface interface {
 	GetAll() (map[string]float64, error)
 }
 
+// GroupingRepositoryInterface defines the contract for country/industry grouping operations
+// Used by scheduler to enable testing with mocks
+type GroupingRepositoryInterface interface {
+	GetCountryGroups() (map[string][]string, error)  // Returns map: group_name -> [country_names]
+	GetIndustryGroups() (map[string][]string, error) // Returns map: group_name -> [industry_names]
+}
+
 // CashManagerInterface defines the contract for cash manager operations
 // Used by scheduler to enable testing with mocks
 type CashManagerInterface interface {
