@@ -411,7 +411,7 @@ func (s *Server) setupRoutes() {
 		planningConfigRepo := s.container.PlannerConfigRepo
 		planningCorePlanner := s.container.PlannerService
 		planningPlannerRepo := repository.NewPlannerRepository(s.agentsDB, s.log)
-		planningValidator := config.NewValidator()
+		planningValidator := planningconfig.NewValidator()
 		planningIncrementalPlanner := planner.NewIncrementalPlanner(
 			planningCorePlanner,
 			planningPlannerRepo,
