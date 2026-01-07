@@ -176,13 +176,17 @@ repos:
 
         files: ^trader/.*\.go$
 
-      # Run tests
-
+      # Run tests (skip in CI - use dedicated test workflows instead)
+      # Tests are slow with race detection, so we skip them in pre-commit
+      # and rely on dedicated Go Tests workflow for CI
       - id: go-test-mod
 
-        args: [-timeout=5m]
+        args: [-timeout=10m, -short]
 
         files: ^trader/.*\.go$
+
+        # Skip if running in CI - we have dedicated test workflows
+        stages: [commit]
 
       # Check go.mod is tidy
 
