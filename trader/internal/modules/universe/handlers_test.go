@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/aristath/sentinel/internal/modules/scoring/domain"
+	"github.com/aristath/sentinel/internal/modules/universe/handlers"
 	"github.com/stretchr/testify/assert"
 )
 

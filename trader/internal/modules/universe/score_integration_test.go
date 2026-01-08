@@ -5,6 +5,7 @@ import (
 
 	"github.com/aristath/sentinel/internal/database"
 	"github.com/aristath/sentinel/internal/modules/scoring/scorers"
+	"github.com/aristath/sentinel/internal/modules/universe/handlers"
 	"github.com/aristath/sentinel/pkg/formulas"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
