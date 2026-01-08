@@ -5,7 +5,6 @@ import (
 
 	"github.com/aristath/sentinel/internal/database"
 	"github.com/aristath/sentinel/internal/modules/scoring/scorers"
-	"github.com/aristath/sentinel/internal/modules/universe/handlers"
 	"github.com/aristath/sentinel/pkg/formulas"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -90,7 +89,7 @@ func TestScoreCalculation_SavesAllRawValues(t *testing.T) {
 	calculatedScore := scorer.ScoreSecurityWithDefaults(scoringInput)
 
 	// Convert to SecurityScore
-	score := handlers.ConvertToSecurityScore("TEST12345678", "TEST", calculatedScore)
+	score := ConvertToSecurityScore("TEST12345678", "TEST", calculatedScore)
 
 	// Verify raw values are extracted (some may be 0.0 if calculation fails or data is insufficient)
 	assert.GreaterOrEqual(t, score.SharpeScore, 0.0, "SharpeScore should be >= 0")

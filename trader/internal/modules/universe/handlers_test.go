@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/aristath/sentinel/internal/modules/scoring/domain"
-	"github.com/aristath/sentinel/internal/modules/universe/handlers"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -55,7 +54,7 @@ func TestConvertToSecurityScore_ExtractsRawValues(t *testing.T) {
 		},
 	}
 
-	score := handlers.ConvertToSecurityScore("TEST12345678", "TEST", calculated)
+	score := ConvertToSecurityScore("TEST12345678", "TEST", calculated)
 
 	// Verify all raw values are extracted
 	assert.Equal(t, 1.5, score.SharpeScore, "SharpeScore should be extracted from sharpe_raw")
@@ -88,7 +87,7 @@ func TestConvertToSecurityScore_HandlesMissingRawValues(t *testing.T) {
 		},
 	}
 
-	score := handlers.ConvertToSecurityScore("TEST12345678", "TEST", calculated)
+	score := ConvertToSecurityScore("TEST12345678", "TEST", calculated)
 
 	// Missing raw values should default to 0.0
 	assert.Equal(t, 0.0, score.SharpeScore, "Missing sharpe_raw should default to 0.0")
@@ -110,7 +109,7 @@ func TestConvertToSecurityScore_HandlesNilSubScores(t *testing.T) {
 		SubScores: nil,
 	}
 
-	score := handlers.ConvertToSecurityScore("TEST12345678", "TEST", calculated)
+	score := ConvertToSecurityScore("TEST12345678", "TEST", calculated)
 
 	// All raw values should default to 0.0 when SubScores is nil
 	assert.Equal(t, 0.0, score.SharpeScore)
