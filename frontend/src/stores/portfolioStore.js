@@ -102,7 +102,12 @@ export const usePortfolioStore = create((set, get) => ({
       console.error('Failed to save country targets:', e);
       throw e; // Re-throw so components can handle it
     } finally {
-      set({ loading: { ...get().loading, countrySave: false } });
+      // Ensure loading flag is ALWAYS reset, even if state update fails
+      try {
+        set({ loading: { ...get().loading, countrySave: false } });
+      } catch (finallyError) {
+        console.error('Failed to reset loading state:', finallyError);
+      }
     }
   },
 
@@ -124,7 +129,12 @@ export const usePortfolioStore = create((set, get) => ({
       console.error('Failed to save industry targets:', e);
       throw e; // Re-throw so components can handle it
     } finally {
-      set({ loading: { ...get().loading, industrySave: false } });
+      // Ensure loading flag is ALWAYS reset, even if state update fails
+      try {
+        set({ loading: { ...get().loading, industrySave: false } });
+      } catch (finallyError) {
+        console.error('Failed to reset loading state:', finallyError);
+      }
     }
   },
 

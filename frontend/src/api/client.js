@@ -2,14 +2,36 @@
  * Centralized API client for Sentinel
  */
 
+// Default timeout for API requests (30 seconds)
+const DEFAULT_TIMEOUT_MS = 30000;
+
 async function fetchJSON(url, options = {}) {
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
+  // Create abort controller for timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), options.timeout || DEFAULT_TIMEOUT_MS);
+
+  try {
+    const res = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+    return await handleResponse(res, url);
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error(`Request timeout after ${options.timeout || DEFAULT_TIMEOUT_MS}ms: ${url}`);
+    }
+    throw error;
+  }
+}
+
+async function handleResponse(res, url) {
 
   if (!res.ok) {
     let errorMessage = `Request failed with status ${res.status}`;
@@ -22,7 +44,18 @@ async function fetchJSON(url, options = {}) {
     throw new Error(errorMessage);
   }
 
-  return res.json();
+  try {
+    const data = await res.json();
+    // Basic validation - ensure we got valid JSON
+    if (data === null || data === undefined) {
+      console.warn(`API returned null/undefined for ${url}`);
+      return null;
+    }
+    return data;
+  } catch (e) {
+    console.error(`Failed to parse JSON response from ${url}:`, e);
+    throw new Error(`Invalid JSON response from ${url}`);
+  }
 }
 
 export const api = {

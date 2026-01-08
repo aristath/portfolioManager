@@ -112,8 +112,18 @@ export const useSecuritiesStore = create((set, get) => ({
     try {
       await api.refreshScore(isin);
       await get().fetchSecurities();
+      notifications.show({
+        title: 'Score refreshed',
+        message: 'Security score updated successfully',
+        color: 'green',
+      });
     } catch (e) {
       console.error('Failed to refresh score:', e);
+      notifications.show({
+        title: 'Score refresh failed',
+        message: e.message || 'Failed to refresh security score',
+        color: 'red',
+      });
     } finally {
       set({ loading: { ...get().loading, scores: false } });
     }
@@ -124,8 +134,18 @@ export const useSecuritiesStore = create((set, get) => ({
     try {
       await api.refreshAllScores();
       await get().fetchSecurities();
+      notifications.show({
+        title: 'All scores refreshed',
+        message: 'All security scores updated successfully',
+        color: 'green',
+      });
     } catch (e) {
       console.error('Failed to refresh all scores:', e);
+      notifications.show({
+        title: 'Score refresh failed',
+        message: e.message || 'Failed to refresh all scores',
+        color: 'red',
+      });
     } finally {
       set({ loading: { ...get().loading, scores: false } });
     }
