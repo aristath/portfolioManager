@@ -258,7 +258,7 @@ func (s *SecuritySetupService) AddSecurityByIdentifier(
 
 		// Check if Tradernet is connected before trying to fetch data
 		if s.tradernetClient == nil || !s.tradernetClient.IsConnected() {
-			return nil, fmt.Errorf("Tradernet client is not connected. Cannot fetch ISIN for symbol: %s. Please connect to Tradernet first", tradernetSymbol)
+			return nil, fmt.Errorf("tradernet client is not connected. Cannot fetch ISIN for symbol: %s. Please connect to Tradernet first", tradernetSymbol)
 		}
 
 		tradernetData, err := s.getTradernetData(tradernetSymbol)
@@ -280,7 +280,7 @@ func (s *SecuritySetupService) AddSecurityByIdentifier(
 		// Note: We check here instead of inside getTradernetSymbolFromISIN to avoid
 		// redundant checks and ensure consistent error messages
 		if s.tradernetClient == nil || !s.tradernetClient.IsConnected() {
-			return nil, fmt.Errorf("Tradernet client is not connected. Cannot lookup Tradernet symbol for ISIN: %s. Please connect to Tradernet first", isinVal)
+			return nil, fmt.Errorf("tradernet client is not connected. Cannot lookup Tradernet symbol for ISIN: %s. Please connect to Tradernet first", isinVal)
 		}
 
 		lookupResult, err := s.getTradernetSymbolFromISIN(isinVal)
@@ -289,7 +289,7 @@ func (s *SecuritySetupService) AddSecurityByIdentifier(
 			// This can happen if FindSymbol fails for reasons other than connection
 			if strings.Contains(err.Error(), "SDK client not initialized") ||
 				strings.Contains(err.Error(), "client not available") {
-				return nil, fmt.Errorf("Tradernet client is not available. Cannot lookup Tradernet symbol for ISIN: %s", isinVal)
+				return nil, fmt.Errorf("tradernet client is not available. Cannot lookup Tradernet symbol for ISIN: %s", isinVal)
 			}
 			return nil, fmt.Errorf("failed to lookup Tradernet symbol for ISIN: %w", err)
 		}
@@ -324,7 +324,7 @@ func (s *SecuritySetupService) AddSecurityByIdentifier(
 	if isin == nil || *isin == "" {
 		// Check if Tradernet is connected before trying to fetch ISIN
 		if s.tradernetClient == nil || !s.tradernetClient.IsConnected() {
-			return nil, fmt.Errorf("Tradernet client is not connected. Cannot fetch ISIN for symbol: %s. Please connect to Tradernet first", tradernetSymbol)
+			return nil, fmt.Errorf("tradernet client is not connected. Cannot fetch ISIN for symbol: %s. Please connect to Tradernet first", tradernetSymbol)
 		}
 
 		tradernetData, err := s.getTradernetData(tradernetSymbol)

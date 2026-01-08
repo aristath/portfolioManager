@@ -3,7 +3,6 @@ package scheduler
 import (
 	"fmt"
 
-	"github.com/aristath/sentinel/internal/modules/planning/domain"
 	planningdomain "github.com/aristath/sentinel/internal/modules/planning/domain"
 	"github.com/rs/zerolog"
 )
@@ -63,7 +62,7 @@ func (j *CreateTradePlanJob) Run() error {
 	config, err := j.loadPlannerConfig()
 	if err != nil {
 		j.log.Warn().Err(err).Msg("Failed to load planner config, using defaults")
-		config = domain.NewDefaultConfiguration()
+		config = planningdomain.NewDefaultConfiguration()
 	}
 
 	// Create plan (planner service returns interface{}, we type assert to HolisticPlan)
@@ -88,14 +87,14 @@ func (j *CreateTradePlanJob) Run() error {
 }
 
 // loadPlannerConfig loads the planner configuration from the repository or uses defaults
-func (j *CreateTradePlanJob) loadPlannerConfig() (*domain.PlannerConfiguration, error) {
+func (j *CreateTradePlanJob) loadPlannerConfig() (*planningdomain.PlannerConfiguration, error) {
 	// Try to load default config from repository
 	if j.configRepo != nil {
 		configInterface, err := j.configRepo.GetDefaultConfig()
 		if err != nil {
 			j.log.Warn().Err(err).Msg("Failed to load default config from repository, using defaults")
 		} else if configInterface != nil {
-			if config, ok := configInterface.(*domain.PlannerConfiguration); ok {
+			if config, ok := configInterface.(*planningdomain.PlannerConfiguration); ok {
 				j.log.Debug().Str("config_name", config.Name).Msg("Loaded planner config from repository")
 				return config, nil
 			}
@@ -104,5 +103,5 @@ func (j *CreateTradePlanJob) loadPlannerConfig() (*domain.PlannerConfiguration, 
 
 	// Use default config
 	j.log.Debug().Msg("Using default planner configuration")
-	return domain.NewDefaultConfiguration(), nil
+	return planningdomain.NewDefaultConfiguration(), nil
 }
