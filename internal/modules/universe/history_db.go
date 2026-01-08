@@ -218,3 +218,89 @@ func (h *HistoryDB) SyncHistoricalPrices(isin string, prices []DailyPrice) error
 
 	return nil
 }
+
+// ExchangeRate represents a cached exchange rate
+type ExchangeRate struct {
+	FromCurrency string
+	ToCurrency   string
+	Date         time.Time
+	Rate         float64
+}
+
+// UpsertExchangeRate inserts or replaces an exchange rate
+// Uses current date at midnight UTC for the date field
+func (h *HistoryDB) UpsertExchangeRate(fromCurrency, toCurrency string, rate float64) error {
+	now := time.Now()
+	dateUnix := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).Unix()
+
+	query := `
+		INSERT OR REPLACE INTO exchange_rates (from_currency, to_currency, date, rate)
+		VALUES (?, ?, ?, ?)
+	`
+
+	_, err := h.db.Exec(query, fromCurrency, toCurrency, dateUnix, rate)
+	if err != nil {
+		return fmt.Errorf("failed to upsert exchange rate: %w", err)
+	}
+
+	h.log.Debug().
+		Str("from", fromCurrency).
+		Str("to", toCurrency).
+		Float64("rate", rate).
+		Msg("Upserted exchange rate")
+
+	return nil
+}
+
+// GetLatestExchangeRate fetches most recent rate for a currency pair
+// Returns nil if no rate found (not an error)
+func (h *HistoryDB) GetLatestExchangeRate(fromCurrency, toCurrency string) (*ExchangeRate, error) {
+	query := `
+		SELECT from_currency, to_currency, date, rate
+		FROM exchange_rates
+		WHERE from_currency = ? AND to_currency = ?
+		ORDER BY date DESC
+		LIMIT 1
+	`
+
+	var er ExchangeRate
+	var dateUnix int64
+
+	err := h.db.QueryRow(query, fromCurrency, toCurrency).Scan(
+		&er.FromCurrency,
+		&er.ToCurrency,
+		&dateUnix,
+		&er.Rate,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, nil // Not found (not an error)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get exchange rate: %w", err)
+	}
+
+	er.Date = time.Unix(dateUnix, 0).UTC()
+	return &er, nil
+}
+
+// DeleteStaleRates removes exchange rates older than threshold
+// Used by cleanup jobs to prevent unbounded table growth
+func (h *HistoryDB) DeleteStaleRates(olderThan time.Time) error {
+	dateUnix := olderThan.Unix()
+
+	result, err := h.db.Exec("DELETE FROM exchange_rates WHERE date < ?", dateUnix)
+	if err != nil {
+		return fmt.Errorf("failed to delete stale rates: %w", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected > 0 {
+		h.log.Info().
+			Int64("rows_deleted", rowsAffected).
+			Time("older_than", olderThan).
+			Msg("Deleted stale exchange rates")
+	}
+
+	return nil
+}
