@@ -19,11 +19,23 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        group:
+          - name: "core"
+            packages: "./internal/clients/... ./internal/config ./internal/database/... ./internal/deployment ./internal/di ./internal/domain ./internal/events ./internal/evaluation/... ./internal/market_regime"
+          - name: "modules-1"
+            packages: "./internal/modules/adaptation ./internal/modules/allocation/... ./internal/modules/analytics/... ./internal/modules/cash_flows/... ./internal/modules/charts/... ./internal/modules/cleanup"
+          - name: "modules-2"
+            packages: "./internal/modules/display/... ./internal/modules/dividends/... ./internal/modules/evaluation/... ./internal/modules/market_hours ./internal/modules/opportunities/... ./internal/modules/optimization/..."
+          - name: "modules-3"
+            packages: "./internal/modules/planning/... ./internal/modules/portfolio/... ./internal/modules/quantum ./internal/modules/rebalancing/... ./internal/modules/scoring/..."
+          - name: "modules-4"
+            packages: "./internal/modules/sequences/... ./internal/modules/settings/... ./internal/modules/symbolic_regression/... ./internal/modules/trading/... ./internal/modules/universe/..."
+          - name: "infrastructure"
+            packages: "./internal/queue ./internal/reliability ./internal/scheduler ./internal/services ./internal/ticker ./internal/utils ./pkg/..."
 
     steps:
     - uses: actions/checkout@v4
@@ -76,22 +88,10 @@ jobs:
 
         echo "✓ Files prepared for embedding"
 
-    - name: Run tests (shard ${{ matrix.shard }}/4)
+    - name: Run tests (${{ matrix.group.name }})
       run: |
-        # Get all packages and split into 4 shards
-        SHARD=${{ matrix.shard }}
-        PACKAGES=$(go list ./... | grep -v "/cmd/" | sort)
-        TOTAL=$(echo "$PACKAGES" | wc -l)
-        PER_SHARD=$(( (TOTAL + 3) / 4 ))  # Round up
-        START=$(( (SHARD - 1) * PER_SHARD + 1 ))
-
-        # Get packages for this shard
-        SHARD_PACKAGES=$(echo "$PACKAGES" | sed -n "${START},$((START + PER_SHARD - 1))p")
-
-        if [ -n "$SHARD_PACKAGES" ]; then
-          echo "Testing shard ${SHARD}/4 (packages $START to $((START + PER_SHARD - 1)))"
-          echo "$SHARD_PACKAGES" | xargs go test -tags=!integration
-        fi
+        echo "Testing group: ${{ matrix.group.name }}"
+        go test -tags=!integration ${{ matrix.group.packages }}
       continue-on-error: false
 
     - name: Upload coverage to Codecov
