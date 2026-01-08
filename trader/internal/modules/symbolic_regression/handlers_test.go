@@ -42,7 +42,7 @@ func setupTestHandlers(t *testing.T) (*Handlers, *sql.DB, func()) {
 	log := zerolog.Nop()
 	storage := NewFormulaStorage(db, log)
 
-	handlers := NewHandlers(storage, nil, nil, log)
+	handlers := symbolicregressionhandlers.NewHandlers(storage, nil, nil, log)
 
 	cleanup := func() {
 		db.Close()
