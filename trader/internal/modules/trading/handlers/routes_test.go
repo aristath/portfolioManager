@@ -34,7 +34,7 @@ func (m *mockPlannerRepo) CountEvaluations(portfolioHash string) (int, error) {
 // mockRecommendationRepo implements RecommendationRepositoryInterface
 type mockRecommendationRepo struct{}
 
-func (m *mockRecommendationRepo) GetRecommendationsAsPlan(getEvaluatedCount func(portfolioHash string) (int, error)) (map[string]interface{}, error) {
+func (m *mockRecommendationRepo) GetRecommendationsAsPlan(getEvaluatedCount func(portfolioHash string) (int, error), startingCashEUR float64) (map[string]interface{}, error) {
 	return make(map[string]interface{}), nil
 }
 

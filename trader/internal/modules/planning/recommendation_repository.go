@@ -439,7 +439,8 @@ func (r *RecommendationRepository) GetPendingRecommendations(limit int) ([]Recom
 // GetRecommendationsAsPlan retrieves pending recommendations and formats them as a plan structure
 // Returns a plan-like structure with steps array for frontend consumption
 // getEvaluatedCount is an optional function to retrieve the evaluated count for a portfolio hash
-func (r *RecommendationRepository) GetRecommendationsAsPlan(getEvaluatedCount func(portfolioHash string) (int, error)) (map[string]interface{}, error) {
+// startingCashEUR is the starting cash balance in EUR (optional, defaults to 0 if not provided)
+func (r *RecommendationRepository) GetRecommendationsAsPlan(getEvaluatedCount func(portfolioHash string) (int, error), startingCashEUR float64) (map[string]interface{}, error) {
 	recs, err := r.GetPendingRecommendations(0) // Get all pending
 	if err != nil {
 		return nil, fmt.Errorf("failed to get pending recommendations: %w", err)
@@ -456,8 +457,10 @@ func (r *RecommendationRepository) GetRecommendationsAsPlan(getEvaluatedCount fu
 	var totalScoreImprovement float64
 	var currentScore float64
 	var endScore float64
-	var finalCash float64
 	var portfolioHash string
+
+	// Calculate per-step cash by iterating through steps in order and tracking running cash balance
+	currentCash := startingCashEUR
 
 	for i, rec := range recs {
 		// Use priority as step number (1-based)
@@ -474,6 +477,19 @@ func (r *RecommendationRepository) GetRecommendationsAsPlan(getEvaluatedCount fu
 			portfolioHash = rec.PortfolioHash
 		}
 
+		// Calculate available cash before this step
+		availableCashBefore := currentCash
+
+		// Calculate available cash after this step
+		availableCashAfter := currentCash
+		if rec.Side == "BUY" {
+			availableCashAfter -= rec.EstimatedValue
+			currentCash = availableCashAfter
+		} else if rec.Side == "SELL" {
+			availableCashAfter += rec.EstimatedValue
+			currentCash = availableCashAfter
+		}
+
 		step := map[string]interface{}{
 			"step":                   stepNum,
 			"symbol":                 rec.Symbol,
@@ -487,13 +503,15 @@ func (r *RecommendationRepository) GetRecommendationsAsPlan(getEvaluatedCount fu
 			"portfolio_score_before": rec.CurrentPortfolioScore,
 			"portfolio_score_after":  rec.NewPortfolioScore,
 			"score_change":           rec.ScoreChange,
-			"available_cash_before":  0.0,   // TODO: Calculate from portfolio state
-			"available_cash_after":   0.0,   // TODO: Calculate from portfolio state
+			"available_cash_before":  availableCashBefore,
+			"available_cash_after":   availableCashAfter,
 			"is_emergency":           false, // TODO: Determine from reason or other criteria
 		}
 
 		steps = append(steps, step)
 	}
+
+	finalCash := currentCash
 
 	// Get evaluated count if function is provided
 	var evaluatedCount interface{} = nil

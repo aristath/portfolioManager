@@ -24,7 +24,8 @@ type RecommendationRepositoryInterface interface {
 	GetPendingRecommendations(limit int) ([]Recommendation, error)
 
 	// GetRecommendationsAsPlan returns recommendations formatted as a plan
-	GetRecommendationsAsPlan(getEvaluatedCount func(portfolioHash string) (int, error)) (map[string]interface{}, error)
+	// startingCashEUR is the starting cash balance in EUR (optional, defaults to 0 if not provided)
+	GetRecommendationsAsPlan(getEvaluatedCount func(portfolioHash string) (int, error), startingCashEUR float64) (map[string]interface{}, error)
 }
 
 // Compile-time check that RecommendationRepository implements RecommendationRepositoryInterface

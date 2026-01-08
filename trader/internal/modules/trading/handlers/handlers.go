@@ -48,7 +48,7 @@ type TradingHandlers struct {
 
 // RecommendationRepositoryInterface defines the interface for recommendation repository
 type RecommendationRepositoryInterface interface {
-	GetRecommendationsAsPlan(getEvaluatedCount func(portfolioHash string) (int, error)) (map[string]interface{}, error)
+	GetRecommendationsAsPlan(getEvaluatedCount func(portfolioHash string) (int, error), startingCashEUR float64) (map[string]interface{}, error)
 }
 
 // NewTradingHandlers creates a new trading handlers instance
@@ -319,7 +319,34 @@ func (h *TradingHandlers) HandleGetRecommendations(w http.ResponseWriter, r *htt
 		}
 	}
 
-	plan, err := h.recommendationRepo.GetRecommendationsAsPlan(getEvaluatedCount)
+	// Get current cash balance (EUR) to calculate per-step cash values
+	// Includes virtual test cash if in research mode
+	startingCashEUR := 0.0
+	if h.portfolioService != nil {
+		summary, err := h.portfolioService.GetPortfolioSummary()
+		if err == nil {
+			startingCashEUR = summary.CashBalance
+		}
+	}
+
+	// Add virtual test cash if in research mode (matches how BuildOpportunityContext handles it)
+	if h.settingsService != nil {
+		tradingMode, err := h.settingsService.GetTradingMode()
+		if err == nil && tradingMode == "research" {
+			virtualTestCashVal, err := h.settingsService.Get("virtual_test_cash")
+			if err == nil {
+				if virtualTestCash, ok := virtualTestCashVal.(float64); ok && virtualTestCash > 0 {
+					startingCashEUR += virtualTestCash
+					h.log.Debug().
+						Float64("virtual_test_cash", virtualTestCash).
+						Float64("total_starting_cash", startingCashEUR).
+						Msg("Added virtual test cash to starting cash balance")
+				}
+			}
+		}
+	}
+
+	plan, err := h.recommendationRepo.GetRecommendationsAsPlan(getEvaluatedCount, startingCashEUR)
 	if err != nil {
 		h.log.Error().Err(err).Msg("Failed to get recommendations")
 		h.writeError(w, http.StatusInternalServerError, "Failed to get recommendations")

@@ -157,21 +157,20 @@ func (j *PlannerBatchJob) Run() error {
 
 	// Emit events
 	if j.eventManager != nil {
-		if plan != nil {
-			j.eventManager.EmitTyped(events.PlanGenerated, "planner", &events.PlanGeneratedData{
-				PortfolioHash: portfolioHash,
-				Steps:         len(plan.Steps),
-				EndScore:      plan.EndStateScore,
-				Improvement:   plan.Improvement,
-				Feasible:      plan.Feasible,
-			})
+		// plan is guaranteed to be non-nil here (checked above)
+		j.eventManager.EmitTyped(events.PlanGenerated, "planner", &events.PlanGeneratedData{
+			PortfolioHash: portfolioHash,
+			Steps:         len(plan.Steps),
+			EndScore:      plan.EndStateScore,
+			Improvement:   plan.Improvement,
+			Feasible:      plan.Feasible,
+		})
 
-			if len(plan.Steps) > 0 {
-				j.eventManager.EmitTyped(events.RecommendationsReady, "planner", &events.RecommendationsReadyData{
-					PortfolioHash: portfolioHash,
-					Count:         len(plan.Steps),
-				})
-			}
+		if len(plan.Steps) > 0 {
+			j.eventManager.EmitTyped(events.RecommendationsReady, "planner", &events.RecommendationsReadyData{
+				PortfolioHash: portfolioHash,
+				Count:         len(plan.Steps),
+			})
 		}
 	}
 
