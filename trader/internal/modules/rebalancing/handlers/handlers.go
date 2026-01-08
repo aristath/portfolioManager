@@ -33,7 +33,7 @@ type Handlers struct {
 // allocRepo is used to load target allocations for trigger checking.
 // cashManager is used to get cash balances.
 func NewHandlers(
-	service *Service,
+	service *rebalancing.Service,
 	portfolioService *portfolio.PortfolioService,
 	tradernetClient *tradernet.Client,
 	currencyExchangeService *services.CurrencyExchangeService,
