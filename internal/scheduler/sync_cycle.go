@@ -20,6 +20,7 @@ type SyncCycleJob struct {
 	syncCashFlowsJob         Job
 	syncPortfolioJob         Job
 	syncPricesJob            Job
+	syncExchangeRatesJob     Job
 	checkNegativeBalancesJob Job
 	updateDisplayTickerJob   Job
 }
@@ -34,6 +35,7 @@ type SyncCycleConfig struct {
 	SyncCashFlowsJob         Job
 	SyncPortfolioJob         Job
 	SyncPricesJob            Job
+	SyncExchangeRatesJob     Job
 	CheckNegativeBalancesJob Job
 	UpdateDisplayTickerJob   Job
 }
@@ -48,6 +50,7 @@ func NewSyncCycleJob(cfg SyncCycleConfig) *SyncCycleJob {
 		syncCashFlowsJob:         cfg.SyncCashFlowsJob,
 		syncPortfolioJob:         cfg.SyncPortfolioJob,
 		syncPricesJob:            cfg.SyncPricesJob,
+		syncExchangeRatesJob:     cfg.SyncExchangeRatesJob,
 		checkNegativeBalancesJob: cfg.CheckNegativeBalancesJob,
 		updateDisplayTickerJob:   cfg.UpdateDisplayTickerJob,
 	}
@@ -94,6 +97,14 @@ func (j *SyncCycleJob) Run() error {
 		j.log.Error().Msg("CRITICAL: Portfolio sync job not available")
 		j.setDisplayError()
 		return fmt.Errorf("portfolio sync job not available")
+	}
+
+	// Step 3.5: Sync exchange rates (non-critical)
+	if j.syncExchangeRatesJob != nil {
+		if err := j.syncExchangeRatesJob.Run(); err != nil {
+			j.log.Error().Err(err).Msg("Exchange rate sync failed (non-critical)")
+			// Continue - non-critical
+		}
 	}
 
 	// Step 4: Check for negative balances and trigger emergency rebalance
