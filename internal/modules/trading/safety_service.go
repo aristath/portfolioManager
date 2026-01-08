@@ -106,27 +106,33 @@ func (s *TradeSafetyService) validateSecurity(symbol string) error {
 
 // checkMarketHours validates that the stock's market is currently open (if required for this trade)
 // Layer 1: Market Hours Check
+// SOFT FAIL-SAFE: Market hours is advisory (broker allows off-hours trading except Asian markets)
+// If validation unavailable, log warning and allow trade attempt. Broker will reject if truly closed.
 func (s *TradeSafetyService) checkMarketHours(symbol string, side string) error {
 	if s.marketHoursService == nil {
-		// Market hours service not available, allow trade (fail open)
+		// Market hours service not available - SOFT fail-safe (warn + allow)
+		s.log.Warn().Msg("Market hours service unavailable - allowing trade attempt (broker will reject if market closed)")
 		return nil
 	}
 
 	security, err := s.securityRepo.GetBySymbol(symbol)
 	if err != nil {
-		s.log.Warn().Err(err).Str("symbol", symbol).Msg("Failed to lookup security for market hours check, allowing trade")
-		return nil // Fail open
+		// SOFT fail-safe for market hours check
+		s.log.Warn().Err(err).Str("symbol", symbol).Msg("Failed to lookup security for market hours check - allowing trade attempt")
+		return nil
 	}
 
 	if security == nil {
-		s.log.Warn().Str("symbol", symbol).Msg("Security not found for market hours check, allowing trade")
-		return nil // Fail open
+		// SOFT fail-safe for market hours check
+		s.log.Warn().Str("symbol", symbol).Msg("Security not found for market hours check - allowing trade attempt")
+		return nil
 	}
 
 	exchange := security.FullExchangeName
 	if exchange == "" {
-		s.log.Warn().Str("symbol", symbol).Msg("Security has no exchange set, allowing trade")
-		return nil // Fail open
+		// SOFT fail-safe for market hours check
+		s.log.Warn().Str("symbol", symbol).Msg("Security has no exchange set - allowing trade attempt")
+		return nil
 	}
 
 	// Check if market hours validation is required for this trade
@@ -182,14 +188,16 @@ func (s *TradeSafetyService) checkBuyCooldown(symbol string, side string) error 
 
 // checkPendingOrders validates no pending orders exist
 // Layer 3: Pending Orders Check
+// HARD FAIL-SAFE: Block trades if validation fails (prevents duplicate orders)
 // Faithful translation from Python: async def check_pending_orders()
 func (s *TradeSafetyService) checkPendingOrders(symbol string, side string) error {
 	// For SELL orders: Check database for recent orders (last 2 hours)
 	if side == "SELL" {
 		hasRecent, err := s.tradeRepo.HasRecentSellOrder(symbol, 2.0)
 		if err != nil {
-			s.log.Warn().Err(err).Msg("Failed to check recent sell orders - allowing trade")
-			return nil // Fail open
+			// HARD fail-safe - block trade if validation unavailable
+			s.log.Error().Err(err).Msg("Failed to check recent sell orders - blocking trade for safety")
+			return fmt.Errorf("pending orders validation failed - blocking trade for safety: %w", err)
 		}
 
 		if hasRecent {
@@ -206,6 +214,7 @@ func (s *TradeSafetyService) checkPendingOrders(symbol string, side string) erro
 
 // checkMinimumHoldTime validates minimum hold period before selling
 // Layer 4: Minimum Hold Time Check
+// HARD FAIL-SAFE: Block trades if validation fails (prevents premature selling)
 // Faithful translation from Python: async def check_minimum_hold_time()
 func (s *TradeSafetyService) checkMinimumHoldTime(symbol string, side string) error {
 	// Only applies to SELL orders
@@ -226,8 +235,9 @@ func (s *TradeSafetyService) checkMinimumHoldTime(symbol string, side string) er
 	// Get last transaction date
 	lastTransactionDateStr, err := s.tradeRepo.GetLastTransactionDate(symbol)
 	if err != nil {
-		s.log.Warn().Err(err).Msg("Failed to get last transaction date - allowing sell")
-		return nil // Fail open
+		// HARD fail-safe - block sell if validation unavailable
+		s.log.Error().Err(err).Msg("Failed to get last transaction date - blocking sell for safety")
+		return fmt.Errorf("last transaction date lookup failed - blocking sell for safety: %w", err)
 	}
 
 	if lastTransactionDateStr == nil {
@@ -240,8 +250,9 @@ func (s *TradeSafetyService) checkMinimumHoldTime(symbol string, side string) er
 		// Try alternative format
 		lastTransactionDate, err = time.Parse("2006-01-02 15:04:05", *lastTransactionDateStr)
 		if err != nil {
-			s.log.Warn().Err(err).Msg("Failed to parse last transaction date - allowing sell")
-			return nil // Fail open
+			// HARD fail-safe - block sell if date parsing fails
+			s.log.Error().Err(err).Msg("Failed to parse last transaction date - blocking sell for safety")
+			return fmt.Errorf("last transaction date parsing failed - blocking sell for safety: %w", err)
 		}
 	}
 

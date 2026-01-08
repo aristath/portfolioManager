@@ -11,6 +11,8 @@ import (
 	"github.com/aristath/sentinel/internal/deployment"
 	"github.com/aristath/sentinel/internal/di"
 	"github.com/aristath/sentinel/internal/modules/display"
+	"github.com/aristath/sentinel/internal/queue"
+	"github.com/aristath/sentinel/internal/scheduler"
 	"github.com/aristath/sentinel/internal/server"
 	"github.com/aristath/sentinel/pkg/logger"
 )
@@ -47,19 +49,10 @@ func main() {
 	displayManager := display.NewStateManager(log)
 	log.Info().Msg("Display manager initialized")
 
-	// Initialize deployment manager BEFORE DI wiring so it can be passed to job registration
-	var deploymentManager *deployment.Manager
-	if cfg.Deployment != nil && cfg.Deployment.Enabled {
-		deployConfig := cfg.Deployment.ToDeploymentConfig(cfg.GitHubToken)
-		version := getEnv("VERSION", "dev")
-		deploymentManager = deployment.NewManager(deployConfig, version, log)
-		log.Info().Msg("Deployment manager initialized")
-	}
-
-	// Wire all dependencies using DI container
-	// This replaces the massive registerJobs function and all manual wiring
-	// Pass deployment manager so it can be registered as a job
-	container, jobs, err := di.Wire(cfg, log, displayManager, deploymentManager)
+	// Wire all dependencies using DI container (WITHOUT deployment manager first)
+	// This initializes databases and settings repository
+	// Pass nil for deployment manager - we'll create it after loading settings
+	container, jobs, err := di.Wire(cfg, log, displayManager, nil)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to wire dependencies")
 	}
@@ -73,11 +66,33 @@ func main() {
 	defer container.HistoryDB.Close()
 	defer container.CacheDB.Close()
 
-	// Update config from settings DB (credentials, etc.)
-	// Note: SettingsRepo is now in container, but we need to update config before server creation
-	// So we access it directly from container
+	// Update config from settings DB (credentials, etc.) - BEFORE creating deployment manager
+	// This ensures GitHub token and other credentials are loaded from settings
 	if err := cfg.UpdateFromSettings(container.SettingsRepo); err != nil {
 		log.Warn().Err(err).Msg("Failed to update config from settings DB, using environment variables")
+	}
+
+	// NOW create deployment manager with settings-loaded config
+	var deploymentManager *deployment.Manager
+	if cfg.Deployment != nil && cfg.Deployment.Enabled {
+		deployConfig := cfg.Deployment.ToDeploymentConfig(cfg.GitHubToken)
+		version := getEnv("VERSION", "dev")
+		deploymentManager = deployment.NewManager(deployConfig, version, log)
+
+		// Register deployment job now that we have the manager
+		deploymentIntervalMinutes, err := container.SettingsRepo.GetFloat("job_auto_deploy_minutes", 5.0)
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to get deployment interval from settings, using default 5 minutes")
+			deploymentIntervalMinutes = 5.0
+		}
+		deploymentInterval := time.Duration(deploymentIntervalMinutes) * time.Minute
+		deploymentJob := scheduler.NewDeploymentJob(deploymentManager, deploymentInterval, true, log)
+		container.JobRegistry.Register(queue.JobTypeDeployment, queue.JobToHandler(deploymentJob))
+		jobs.Deployment = deploymentJob
+
+		log.Info().
+			Float64("interval_minutes", deploymentIntervalMinutes).
+			Msg("Deployment manager initialized and job registered")
 	}
 
 	// Warn if credentials are loaded from .env (deprecated)

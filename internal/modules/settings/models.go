@@ -17,9 +17,10 @@ var SettingDefaults = map[string]interface{}{
 	"github_token":         "", // GitHub personal access token for deployment artifact downloads
 
 	// Portfolio Optimizer settings
-	"optimizer_blend":             0.5,  // 0.0 = pure Mean-Variance, 1.0 = pure HRP
-	"optimizer_target_return":     0.11, // Target annual return for MV component
-	"target_return_threshold_pct": 0.80, // Threshold percentage for target return filtering (0.80 = 80% of target, default for retirement funds)
+	"optimizer_blend":             0.5,   // 0.0 = pure Mean-Variance, 1.0 = pure HRP
+	"optimizer_target_return":     0.11,  // Target annual return for MV component
+	"target_return_threshold_pct": 0.80,  // Threshold percentage for target return filtering (0.80 = 80% of target, default for retirement funds)
+	"optimizer_max_cvar_95":       -0.15, // Maximum CVaR at 95% confidence (max -15% loss in tail risk)
 
 	// Cash management
 	"min_cash_reserve": 500.0, // Minimum cash to keep (never fully deploy)
@@ -57,8 +58,9 @@ var SettingDefaults = map[string]interface{}{
 	"max_trades_per_week":             10.0, // Maximum trades per rolling 7-day window
 
 	// Trade Safety settings
-	"buy_cooldown_days": 30.0, // Prevent buying same security within 30 days
-	"min_hold_days":     90.0, // Minimum hold time before selling (days)
+	"buy_cooldown_days":  30.0, // Prevent buying same security within 30 days
+	"min_hold_days":      90.0, // Minimum hold time before selling (days)
+	"max_price_age_hours": 48.0, // Maximum age of price data before considered stale (hours)
 
 	// Security Discovery settings
 	"security_discovery_enabled":               1.0,          // 1.0 = enabled, 0.0 = disabled

@@ -288,14 +288,22 @@ func (s *TradeExecutionService) calculateCommission(
 // 1. Block if balance is already negative (status: "blocked")
 // 2. Block if balance < (trade_value + commission) (status: "blocked")
 //
+// HARD FAIL-SAFE: Block trades if cash validation unavailable (prevents overdraft)
+//
 // Faithful translation from Python:
 // app/modules/trading/services/trade_execution_service.py:152-217
 func (s *TradeExecutionService) validateBuyCashBalance(rec TradeRecommendation) *ExecuteResult {
 	// Get current balance for the trade currency
 	// Use CashSecurityManager directly
 	if s.cashManager == nil {
-		s.log.Warn().Msg("CashSecurityManager not available, skipping cash validation")
-		return nil // Allow trade to proceed if cash manager unavailable
+		// HARD fail-safe - block BUY if cash validation unavailable
+		s.log.Error().Msg("CashSecurityManager not available - blocking BUY for safety (prevents overdraft)")
+		errMsg := "Cash balance validation unavailable - blocking BUY for safety"
+		return &ExecuteResult{
+			Symbol: rec.Symbol,
+			Status: "blocked",
+			Error:  &errMsg,
+		}
 	}
 
 	balance, err := s.cashManager.GetCashBalance(rec.Currency)
