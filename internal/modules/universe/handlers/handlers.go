@@ -1004,8 +1004,8 @@ func (h *UniverseHandlers) calculateAndSaveScore(isin string, yahooSymbol string
 		return nil, fmt.Errorf("failed to get daily prices: %w", err)
 	}
 
-	if len(dailyPrices) < 50 {
-		return nil, fmt.Errorf("insufficient daily data: %d days (need at least 50)", len(dailyPrices))
+	if len(dailyPrices) < 30 {
+		return nil, fmt.Errorf("insufficient daily data: %d days (need at least 30)", len(dailyPrices))
 	}
 
 	monthlyPrices, err := h.historyDB.GetMonthlyPrices(isin, 150)
@@ -1013,8 +1013,8 @@ func (h *UniverseHandlers) calculateAndSaveScore(isin string, yahooSymbol string
 		return nil, fmt.Errorf("failed to get monthly prices: %w", err)
 	}
 
-	if len(monthlyPrices) < 12 {
-		return nil, fmt.Errorf("insufficient monthly data: %d months (need at least 12)", len(monthlyPrices))
+	if len(monthlyPrices) < 6 {
+		return nil, fmt.Errorf("insufficient monthly data: %d months (need at least 6)", len(monthlyPrices))
 	}
 
 	// Fetch fundamentals from Yahoo Finance

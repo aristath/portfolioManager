@@ -23,7 +23,7 @@ type MonthlyPrice struct {
 //
 //	CAGR as decimal (e.g., 0.11 = 11%) or nil if insufficient data
 func CalculateCAGR(prices []MonthlyPrice, months int) *float64 {
-	const minMonthsForCAGR = 12
+	const minMonthsForCAGR = 6
 
 	if len(prices) < minMonthsForCAGR {
 		return nil
