@@ -3,6 +3,7 @@ package scheduler
 import (
 	"fmt"
 
+	planningdomain "github.com/aristath/sentinel/internal/modules/planning/domain"
 	"github.com/rs/zerolog"
 )
 
@@ -11,7 +12,7 @@ type StoreRecommendationsJob struct {
 	log                zerolog.Logger
 	recommendationRepo RecommendationRepositoryInterface
 	portfolioHash      string
-	plan               interface{}
+	plan               *planningdomain.HolisticPlan
 }
 
 // NewStoreRecommendationsJob creates a new StoreRecommendationsJob
@@ -32,8 +33,13 @@ func (j *StoreRecommendationsJob) SetLogger(log zerolog.Logger) {
 }
 
 // SetPlan sets the plan to store
-func (j *StoreRecommendationsJob) SetPlan(plan interface{}) {
+func (j *StoreRecommendationsJob) SetPlan(plan *planningdomain.HolisticPlan) {
 	j.plan = plan
+}
+
+// GetPlan returns the plan to store
+func (j *StoreRecommendationsJob) GetPlan() *planningdomain.HolisticPlan {
+	return j.plan
 }
 
 // SetPortfolioHash sets the portfolio hash

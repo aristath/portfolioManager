@@ -3,16 +3,17 @@ package scheduler
 import (
 	"testing"
 
+	planningdomain "github.com/aristath/sentinel/internal/modules/planning/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // MockRecommendationRepoForStore is a mock implementation of RecommendationRepositoryInterface
 type MockRecommendationRepoForStore struct {
-	StorePlanFunc func(plan interface{}, portfolioHash string) error
+	StorePlanFunc func(plan *planningdomain.HolisticPlan, portfolioHash string) error
 }
 
-func (m *MockRecommendationRepoForStore) StorePlan(plan interface{}, portfolioHash string) error {
+func (m *MockRecommendationRepoForStore) StorePlan(plan *planningdomain.HolisticPlan, portfolioHash string) error {
 	if m.StorePlanFunc != nil {
 		return m.StorePlanFunc(plan, portfolioHash)
 	}
@@ -26,11 +27,11 @@ func TestStoreRecommendationsJob_Name(t *testing.T) {
 
 func TestStoreRecommendationsJob_Run_Success(t *testing.T) {
 	storeCalled := false
-	var storedPlan interface{}
+	var storedPlan *planningdomain.HolisticPlan
 	var storedHash string
 
 	mockRepo := &MockRecommendationRepoForStore{
-		StorePlanFunc: func(plan interface{}, portfolioHash string) error {
+		StorePlanFunc: func(plan *planningdomain.HolisticPlan, portfolioHash string) error {
 			storeCalled = true
 			storedPlan = plan
 			storedHash = portfolioHash
@@ -38,8 +39,9 @@ func TestStoreRecommendationsJob_Run_Success(t *testing.T) {
 		},
 	}
 
-	plan := map[string]interface{}{
-		"Steps": []interface{}{},
+	plan := &planningdomain.HolisticPlan{
+		Steps: []planningdomain.HolisticStep{},
+		Feasible: true,
 	}
 	portfolioHash := "test-hash-123"
 
@@ -55,7 +57,10 @@ func TestStoreRecommendationsJob_Run_Success(t *testing.T) {
 
 func TestStoreRecommendationsJob_Run_NoRepository(t *testing.T) {
 	job := NewStoreRecommendationsJob(nil, "test-hash")
-	job.SetPlan(map[string]interface{}{})
+	job.SetPlan(&planningdomain.HolisticPlan{
+		Steps: []planningdomain.HolisticStep{},
+		Feasible: true,
+	})
 
 	err := job.Run()
 	require.Error(t, err)
@@ -75,13 +80,16 @@ func TestStoreRecommendationsJob_Run_NoPlan(t *testing.T) {
 
 func TestStoreRecommendationsJob_Run_RepositoryError(t *testing.T) {
 	mockRepo := &MockRecommendationRepoForStore{
-		StorePlanFunc: func(plan interface{}, portfolioHash string) error {
+		StorePlanFunc: func(plan *planningdomain.HolisticPlan, portfolioHash string) error {
 			return assert.AnError
 		},
 	}
 
 	job := NewStoreRecommendationsJob(mockRepo, "test-hash")
-	job.SetPlan(map[string]interface{}{})
+	job.SetPlan(&planningdomain.HolisticPlan{
+		Steps: []planningdomain.HolisticStep{},
+		Feasible: true,
+	})
 
 	err := job.Run()
 	require.Error(t, err)

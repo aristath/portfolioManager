@@ -1,6 +1,9 @@
 package scheduler
 
-import "github.com/aristath/sentinel/internal/events"
+import (
+	"github.com/aristath/sentinel/internal/events"
+	planningdomain "github.com/aristath/sentinel/internal/modules/planning/domain"
+)
 
 // UniverseServiceInterface defines the contract for universe service operations
 // Used by scheduler to enable testing with mocks
@@ -115,7 +118,7 @@ type PlannerServiceInterface interface {
 // RecommendationRepositoryInterface defines the contract for recommendation repository operations
 // Used by scheduler to enable testing with mocks
 type RecommendationRepositoryInterface interface {
-	StorePlan(plan interface{}, portfolioHash string) error
+	StorePlan(plan *planningdomain.HolisticPlan, portfolioHash string) error
 }
 
 // PriceClientInterface defines the contract for price fetching operations

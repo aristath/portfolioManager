@@ -1,7 +1,6 @@
 // Package events provides event management functionality.
 package events
 
-
 // EventType represents different event types
 type EventType string
 

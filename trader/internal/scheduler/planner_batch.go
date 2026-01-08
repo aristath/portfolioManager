@@ -139,6 +139,12 @@ func (j *PlannerBatchJob) Run() error {
 		return fmt.Errorf("plan is nil")
 	}
 
+	// Type assert plan to HolisticPlan
+	holisticPlan, ok := plan.(*planningdomain.HolisticPlan)
+	if !ok {
+		return fmt.Errorf("plan has invalid type: expected *planningdomain.HolisticPlan")
+	}
+
 	// Step 5: Store recommendations
 	if j.storeRecommendationsJob == nil {
 		return fmt.Errorf("store recommendations job not available")
@@ -147,7 +153,7 @@ func (j *PlannerBatchJob) Run() error {
 	if !ok {
 		return fmt.Errorf("store recommendations job has wrong type")
 	}
-	storeJob.SetPlan(plan)
+	storeJob.SetPlan(holisticPlan)
 	storeJob.SetPortfolioHash(portfolioHash)
 	if err := j.storeRecommendationsJob.Run(); err != nil {
 		return fmt.Errorf("failed to store recommendations: %w", err)

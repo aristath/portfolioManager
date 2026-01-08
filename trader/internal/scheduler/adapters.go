@@ -466,13 +466,12 @@ func NewRecommendationRepositoryAdapter(repo *planning.RecommendationRepository)
 	return &RecommendationRepositoryAdapter{repo: repo}
 }
 
-func (a *RecommendationRepositoryAdapter) StorePlan(plan interface{}, portfolioHash string) error {
-	holisticPlan, ok := plan.(*planningdomain.HolisticPlan)
-	if !ok {
-		return fmt.Errorf("invalid plan type")
+func (a *RecommendationRepositoryAdapter) StorePlan(plan *planningdomain.HolisticPlan, portfolioHash string) error {
+	if plan == nil {
+		return fmt.Errorf("plan cannot be nil")
 	}
 
-	if holisticPlan == nil || len(holisticPlan.Steps) == 0 {
+	if len(plan.Steps) == 0 {
 		// If plan has no steps, dismiss all old pending recommendations
 		// This ensures old invalid recommendations are cleared when no new plan is generated.
 		// We use DismissAllPending() instead of DismissAllByPortfolioHash() because old
@@ -488,7 +487,7 @@ func (a *RecommendationRepositoryAdapter) StorePlan(plan interface{}, portfolioH
 	// from before portfolio changes, and we want a clean slate for the new plan.
 	_, _ = a.repo.DismissAllPending()
 
-	for stepIdx, step := range holisticPlan.Steps {
+	for stepIdx, step := range plan.Steps {
 		rec := planning.Recommendation{
 			Symbol:                step.Symbol,
 			Name:                  step.Name,
@@ -499,9 +498,9 @@ func (a *RecommendationRepositoryAdapter) StorePlan(plan interface{}, portfolioH
 			Reason:                step.Reason,
 			Currency:              step.Currency,
 			Priority:              float64(stepIdx),
-			CurrentPortfolioScore: holisticPlan.CurrentScore,
-			NewPortfolioScore:     holisticPlan.EndStateScore,
-			ScoreChange:           holisticPlan.Improvement,
+			CurrentPortfolioScore: plan.CurrentScore,
+			NewPortfolioScore:     plan.EndStateScore,
+			ScoreChange:           plan.Improvement,
 			Status:                "pending",
 			PortfolioHash:         portfolioHash,
 		}
