@@ -40,7 +40,7 @@ func transformPositions(sdkResult interface{}) ([]Position, error) {
 			CurrentPrice:  getFloat64(posMap, "mkt_price"),
 			UnrealizedPnL: getFloat64(posMap, "profit_close"),
 			Currency:      getString(posMap, "curr"),
-			CurrencyRate:  1.0, // Default, will be calculated if needed
+			CurrencyRate:  0.0, // Will be set during portfolio sync from cache
 		}
 
 		// Calculate MarketValue = Quantity * CurrentPrice
