@@ -157,54 +157,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	)
 
 	// ==========================================
-	// STEP 5: Initialize Portfolio Service
-	// ==========================================
-
-	// Portfolio service
-	container.PortfolioService = portfolio.NewPortfolioService(
-		container.PositionRepo,
-		container.AllocRepo,
-		cashManager, // Use concrete type
-		container.UniverseDB.Conn(),
-		container.BrokerClient,
-		container.CurrencyExchangeService,
-		container.ExchangeRateCacheService,
-		container.SettingsService,
-		log,
-	)
-
-	// ==========================================
-	// STEP 6: Initialize Cash Flows Services
-	// ==========================================
-
-	// Dividend service implementation (adapter - uses existing dividendRepo)
-	container.DividendService = cash_flows.NewDividendServiceImpl(container.DividendRepo, log)
-
-	// Dividend creator
-	container.DividendCreator = cash_flows.NewDividendCreator(container.DividendService, log)
-
-	// Deposit processor (uses CashManager)
-	container.DepositProcessor = cash_flows.NewDepositProcessor(cashManager, log)
-
-	// Tradernet adapter (adapts tradernet.Client to cash_flows.TradernetClient)
-	tradernetAdapter := cash_flows.NewTradernetAdapter(container.BrokerClient)
-
-	// Cash flows sync job (created but not stored - used by service)
-	syncJob := cash_flows.NewSyncJob(
-		container.CashFlowsRepo,
-		container.DepositProcessor,
-		container.DividendCreator,
-		tradernetAdapter,
-		displayManager,
-		container.EventManager,
-		log,
-	)
-
-	// Cash flows service
-	container.CashFlowsService = cash_flows.NewCashFlowsService(syncJob, log)
-
-	// ==========================================
-	// STEP 7: Initialize Universe Services
+	// STEP 5: Initialize Universe Services
 	// ==========================================
 
 	// Historical sync service
@@ -234,6 +187,58 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		nil, // scoreCalculator - will be set later
 		log,
 	)
+
+	// ==========================================
+	// STEP 6: Initialize Portfolio Service
+	// ==========================================
+
+	// Portfolio service (with SecuritySetupService for auto-adding missing securities)
+	container.PortfolioService = portfolio.NewPortfolioService(
+		container.PositionRepo,
+		container.AllocRepo,
+		cashManager, // Use concrete type
+		container.UniverseDB.Conn(),
+		container.BrokerClient,
+		container.CurrencyExchangeService,
+		container.ExchangeRateCacheService,
+		container.SettingsService,
+		container.SetupService, // Now available
+		log,
+	)
+
+	// ==========================================
+	// STEP 7: Initialize Cash Flows Services
+	// ==========================================
+
+	// Dividend service implementation (adapter - uses existing dividendRepo)
+	container.DividendService = cash_flows.NewDividendServiceImpl(container.DividendRepo, log)
+
+	// Dividend creator
+	container.DividendCreator = cash_flows.NewDividendCreator(container.DividendService, log)
+
+	// Deposit processor (uses CashManager)
+	container.DepositProcessor = cash_flows.NewDepositProcessor(cashManager, log)
+
+	// Tradernet adapter (adapts tradernet.Client to cash_flows.TradernetClient)
+	tradernetAdapter := cash_flows.NewTradernetAdapter(container.BrokerClient)
+
+	// Cash flows sync job (created but not stored - used by service)
+	syncJob := cash_flows.NewSyncJob(
+		container.CashFlowsRepo,
+		container.DepositProcessor,
+		container.DividendCreator,
+		tradernetAdapter,
+		displayManager,
+		container.EventManager,
+		log,
+	)
+
+	// Cash flows service
+	container.CashFlowsService = cash_flows.NewCashFlowsService(syncJob, log)
+
+	// ==========================================
+	// STEP 8: Initialize Remaining Universe Services
+	// ==========================================
 
 	// Sync service (scoreCalculator will be set later)
 	container.SyncService = universe.NewSyncService(
@@ -503,6 +508,32 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	// Initialize backup service
 	backupDir := dataDir + "/backups"
 	container.BackupService = reliability.NewBackupService(databases, dataDir, backupDir, log)
+
+	// Initialize R2 backup service (optional - only if R2 configured)
+	r2AccountID, _ := container.SettingsRepo.Get("r2_account_id")
+	r2AccessKeyID, _ := container.SettingsRepo.Get("r2_access_key_id")
+	r2SecretAccessKey, _ := container.SettingsRepo.Get("r2_secret_access_key")
+	r2BucketName, _ := container.SettingsRepo.Get("r2_bucket_name")
+
+	if r2AccountID != nil && *r2AccountID != "" &&
+		r2AccessKeyID != nil && *r2AccessKeyID != "" &&
+		r2SecretAccessKey != nil && *r2SecretAccessKey != "" &&
+		r2BucketName != nil && *r2BucketName != "" {
+		r2Client, err := reliability.NewR2Client(*r2AccountID, *r2AccessKeyID,
+			*r2SecretAccessKey, *r2BucketName, log)
+		if err == nil {
+			container.R2Client = r2Client
+			container.R2BackupService = reliability.NewR2BackupService(
+				r2Client, container.BackupService, dataDir, log)
+			container.RestoreService = reliability.NewRestoreService(
+				r2Client, dataDir, log)
+			log.Info().Msg("R2 backup service initialized")
+		} else {
+			log.Warn().Err(err).Msg("Failed to initialize R2 client - R2 backups disabled")
+		}
+	} else {
+		log.Debug().Msg("R2 credentials not configured - R2 backups disabled")
+	}
 
 	// ==========================================
 	// STEP 14: Initialize Concentration Alert Service

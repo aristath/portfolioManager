@@ -17,6 +17,11 @@ type SettingsServiceInterface interface {
 	Get(key string) (interface{}, error)
 }
 
+// SecuritySetupServiceInterface defines the contract for adding securities to the universe
+type SecuritySetupServiceInterface interface {
+	AddSecurityByIdentifier(identifier string, minLot int, allowBuy bool, allowSell bool) (interface{}, error)
+}
+
 // PortfolioService orchestrates portfolio operations and calculations.
 //
 // This is a module-specific service that encapsulates portfolio domain logic.
@@ -53,6 +58,7 @@ type PortfolioService struct {
 	currencyExchangeService  domain.CurrencyExchangeServiceInterface
 	exchangeRateCacheService ExchangeRateCacheServiceInterface // For cached exchange rates
 	settingsService          SettingsServiceInterface          // For staleness threshold configuration
+	securitySetupService     SecuritySetupServiceInterface     // For auto-adding missing securities
 	log                      zerolog.Logger
 }
 
@@ -66,6 +72,7 @@ func NewPortfolioService(
 	currencyExchangeService domain.CurrencyExchangeServiceInterface,
 	exchangeRateCacheService ExchangeRateCacheServiceInterface,
 	settingsService SettingsServiceInterface,
+	securitySetupService SecuritySetupServiceInterface,
 	log zerolog.Logger,
 ) *PortfolioService {
 	return &PortfolioService{
@@ -77,6 +84,7 @@ func NewPortfolioService(
 		currencyExchangeService:  currencyExchangeService,
 		exchangeRateCacheService: exchangeRateCacheService,
 		settingsService:          settingsService,
+		securitySetupService:     securitySetupService,
 		log:                      log.With().Str("service", "portfolio").Logger(),
 	}
 }
@@ -571,11 +579,51 @@ func (s *PortfolioService) SyncFromTradernet() error {
 		row := s.universeDB.QueryRow(query, strings.ToUpper(strings.TrimSpace(tradernetPos.Symbol)))
 		if err := row.Scan(&isin); err != nil {
 			if err == sql.ErrNoRows {
-				s.log.Warn().Str("symbol", tradernetPos.Symbol).Msg("Security not found in universe, skipping position")
-				continue // Skip positions without ISIN
+				// Security not in universe - auto-add it
+				s.log.Info().
+					Str("symbol", tradernetPos.Symbol).
+					Msg("Security not found in universe, automatically adding it")
+
+				// Use SecuritySetupService to add the security with full data pipeline
+				if s.securitySetupService != nil {
+					_, addErr := s.securitySetupService.AddSecurityByIdentifier(
+						tradernetPos.Symbol,
+						1,    // minLot
+						true, // allowBuy
+						true, // allowSell
+					)
+					if addErr != nil {
+						s.log.Error().
+							Err(addErr).
+							Str("symbol", tradernetPos.Symbol).
+							Msg("Failed to auto-add security to universe, skipping position")
+						continue
+					}
+
+					// Retry ISIN lookup after adding security
+					row = s.universeDB.QueryRow(query, strings.ToUpper(strings.TrimSpace(tradernetPos.Symbol)))
+					if err := row.Scan(&isin); err != nil {
+						s.log.Error().
+							Err(err).
+							Str("symbol", tradernetPos.Symbol).
+							Msg("Failed to lookup ISIN after auto-add, skipping position")
+						continue
+					}
+
+					s.log.Info().
+						Str("symbol", tradernetPos.Symbol).
+						Str("isin", isin).
+						Msg("Successfully auto-added security to universe")
+				} else {
+					s.log.Warn().
+						Str("symbol", tradernetPos.Symbol).
+						Msg("Security not found in universe and setup service not available, skipping position")
+					continue
+				}
+			} else {
+				s.log.Warn().Err(err).Str("symbol", tradernetPos.Symbol).Msg("Failed to lookup ISIN, skipping position")
+				continue // Skip on lookup errors
 			}
-			s.log.Warn().Err(err).Str("symbol", tradernetPos.Symbol).Msg("Failed to lookup ISIN, skipping position")
-			continue // Skip on lookup errors
 		}
 		if isin == "" {
 			s.log.Warn().Str("symbol", tradernetPos.Symbol).Msg("Security has no ISIN, skipping position")
