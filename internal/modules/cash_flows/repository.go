@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/aristath/sentinel/internal/utils"
@@ -33,6 +34,11 @@ type BalancePoint struct {
 
 // Create inserts a new cash flow
 func (r *Repository) Create(cashFlow *CashFlow) (*CashFlow, error) {
+	// Validate currency conversion accuracy
+	if err := r.validateCurrencyConversion(cashFlow); err != nil {
+		return nil, err
+	}
+
 	query := `
 		INSERT INTO cash_flows (
 			transaction_id, type_doc_id, transaction_type, date, amount, currency,
@@ -76,6 +82,32 @@ func (r *Repository) Create(cashFlow *CashFlow) (*CashFlow, error) {
 	cashFlow.CreatedAt = time.Unix(createdAt, 0).UTC()
 
 	return cashFlow, nil
+}
+
+// validateCurrencyConversion ensures currency conversion accuracy in cash flows
+func (r *Repository) validateCurrencyConversion(cf *CashFlow) error {
+	// For EUR currency, amounts should match exactly
+	if cf.Currency == "EUR" {
+		if math.Abs(cf.Amount-cf.AmountEUR) > 0.01 {
+			return fmt.Errorf("currency conversion mismatch for EUR: amount=%f but amount_eur=%f",
+				cf.Amount, cf.AmountEUR)
+		}
+	} else if cf.Currency != "" && cf.Amount != 0 {
+		// For non-EUR currencies, calculate expected rate and warn if suspicious
+		impliedRate := cf.AmountEUR / cf.Amount
+
+		// Sanity check: rate should be positive and within reasonable bounds
+		// Typical EUR exchange rates range from ~0.01 to ~100
+		if impliedRate <= 0 || impliedRate > 200 || impliedRate < 0.001 {
+			r.log.Warn().
+				Str("currency", cf.Currency).
+				Float64("amount", cf.Amount).
+				Float64("amount_eur", cf.AmountEUR).
+				Float64("implied_rate", impliedRate).
+				Msg("Suspicious currency conversion rate")
+		}
+	}
+	return nil
 }
 
 // GetByTransactionID retrieves a cash flow by transaction ID

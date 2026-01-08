@@ -129,6 +129,24 @@ func (s *TradeExecutionService) executeSingleTrade(rec TradeRecommendation) Exec
 		Str("reason", rec.Reason).
 		Msg("Executing trade")
 
+	// Basic input validation - prevent catastrophic errors
+	if rec.Symbol == "" {
+		errMsg := "Symbol cannot be empty"
+		return ExecuteResult{Symbol: rec.Symbol, Status: "error", Error: &errMsg}
+	}
+	if rec.Quantity <= 0 {
+		errMsg := fmt.Sprintf("Invalid quantity: %.4f (must be positive)", rec.Quantity)
+		return ExecuteResult{Symbol: rec.Symbol, Status: "error", Error: &errMsg}
+	}
+	if rec.EstimatedPrice <= 0 {
+		errMsg := fmt.Sprintf("Invalid price: %.2f (must be positive)", rec.EstimatedPrice)
+		return ExecuteResult{Symbol: rec.Symbol, Status: "error", Error: &errMsg}
+	}
+	if rec.Side != "BUY" && rec.Side != "SELL" {
+		errMsg := fmt.Sprintf("Invalid side: %s (must be BUY or SELL)", rec.Side)
+		return ExecuteResult{Symbol: rec.Symbol, Status: "error", Error: &errMsg}
+	}
+
 	// Pre-trade validation for BUY orders
 	if rec.Side == "BUY" {
 		if validationErr := s.validateBuyCashBalance(rec); validationErr != nil {

@@ -502,7 +502,7 @@ func (s *Server) setupRoutes() {
 		cashFlowsTradernetClient := s.container.TradernetClient
 		// Initialize schema
 		if err := cash_flows.InitSchema(s.ledgerDB.Conn()); err != nil {
-			s.log.Error().Err(err).Msg("Failed to initialize cash_flows schema")
+			s.log.Fatal().Err(err).Msg("Failed to initialize cash_flows schema")
 		}
 		// Initialize Tradernet adapter
 		cashFlowsTradernetAdapter := cash_flows.NewTradernetAdapter(cashFlowsTradernetClient)

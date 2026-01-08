@@ -70,10 +70,12 @@ func (h *DeploymentHandlers) HandleTriggerDeployment(w http.ResponseWriter, r *h
 		h.log.Error().Err(err).Msg("Deployment failed")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		if encErr := json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
 			"error":   err.Error(),
-		})
+		}); encErr != nil {
+			h.log.Error().Err(encErr).Msg("Failed to encode error response")
+		}
 		return
 	}
 
@@ -111,12 +113,14 @@ func (h *DeploymentHandlers) HandleHardUpdate(w http.ResponseWriter, r *http.Req
 		h.log.Error().Err(err).Msg("Hard update failed")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		if encErr := json.NewEncoder(w).Encode(map[string]interface{}{
 			"status":  "error",
 			"success": false,
 			"error":   err.Error(),
 			"message": err.Error(),
-		})
+		}); encErr != nil {
+			h.log.Error().Err(encErr).Msg("Failed to encode error response")
+		}
 		return
 	}
 
