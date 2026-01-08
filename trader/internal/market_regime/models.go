@@ -14,5 +14,3 @@ const (
 	BullScore        MarketRegimeScore = 0.5
 	ExtremeBullScore MarketRegimeScore = 1.0
 )
-
-

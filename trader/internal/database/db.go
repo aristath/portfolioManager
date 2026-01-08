@@ -42,17 +42,23 @@ type Config struct {
 
 // New creates a new database connection with production-grade configuration
 func New(cfg Config) (*DB, error) {
-	// Ensure directory exists - resolve to absolute path to avoid relative path issues
-	absPath, err := filepath.Abs(cfg.Path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve database path to absolute: %w", err)
+	// Handle file: URIs (used for in-memory databases) - skip filepath operations
+	if strings.HasPrefix(cfg.Path, "file:") {
+		// For file: URIs, use as-is without filepath operations
+		// This is used for in-memory databases in tests
+	} else {
+		// Ensure directory exists - resolve to absolute path to avoid relative path issues
+		absPath, err := filepath.Abs(cfg.Path)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve database path to absolute: %w", err)
+		}
+		dir := filepath.Dir(absPath)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return nil, fmt.Errorf("failed to create database directory: %w", err)
+		}
+		// Use absolute path for database operations
+		cfg.Path = absPath
 	}
-	dir := filepath.Dir(absPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create database directory: %w", err)
-	}
-	// Use absolute path for database operations
-	cfg.Path = absPath
 
 	// Default to standard profile if not specified
 	if cfg.Profile == "" {
@@ -200,16 +206,32 @@ func (db *DB) Migrate() error {
 	// Try multiple paths to find schemas directory
 	var schemasDir string
 
-	// 1. Try relative to database path (for absolute paths)
-	dbDir := filepath.Dir(db.path)
+	// Prioritize paths relative to CWD and source location over database file location
+	// (database file might be in /tmp for tests)
 	candidates := []string{
+		"internal/database/schemas",          // Relative to CWD (most common case)
+		"./internal/database/schemas",        // Explicit relative
+		"trader/internal/database/schemas",   // From repo root
+		"./trader/internal/database/schemas", // From repo root (explicit)
+	}
+
+	// Try from current working directory
+	if cwd, err := os.Getwd(); err == nil {
+		candidates = append(candidates,
+			filepath.Join(cwd, "internal/database/schemas"),                      // From trader/ directory
+			filepath.Join(cwd, "trader/internal/database/schemas"),               // From repo root
+			filepath.Join(filepath.Dir(cwd), "trader/internal/database/schemas"), // From parent of trader/
+		)
+	}
+
+	// Try relative to database path (for production databases)
+	dbDir := filepath.Dir(db.path)
+	candidates = append(candidates,
 		filepath.Join(dbDir, "../trader/internal/database/schemas"),      // From ../data to trader/internal/...
 		filepath.Join(dbDir, "../repo/trader/internal/database/schemas"), // From ../data to repo/trader/internal/...
 		filepath.Join(dbDir, "../internal/database/schemas"),             // From ../data to internal/...
 		filepath.Join(dbDir, "internal/database/schemas"),                // Same directory
-		"internal/database/schemas",                                      // Relative to CWD
-		"./internal/database/schemas",                                    // Explicit relative
-	}
+	)
 
 	// Also try from executable directory if available
 	if execPath, err := os.Executable(); err == nil {

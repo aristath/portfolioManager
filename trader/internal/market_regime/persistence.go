@@ -192,5 +192,3 @@ func (rp *RegimePersistence) ApplySmoothing(currentScore, lastSmoothed, alpha fl
 	detector := NewMarketRegimeDetector(rp.log)
 	return detector.ApplySmoothing(currentScore, lastSmoothed, alpha)
 }
-
-

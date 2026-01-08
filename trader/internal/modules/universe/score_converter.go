@@ -116,4 +116,3 @@ func ConvertToSecurityScore(isin string, symbol string, calculated *scoringdomai
 		SellScore:              0, // Position-specific, not stored in scores table
 	}
 }
-

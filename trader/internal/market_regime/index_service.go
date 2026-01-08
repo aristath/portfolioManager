@@ -251,5 +251,3 @@ func (s *MarketIndexService) getIndexReturns(symbol string, days int) ([]float64
 
 	return returns, nil
 }
-
-

@@ -375,5 +375,3 @@ func TestCalculateRegimeScoreFromReturns(t *testing.T) {
 		})
 	}
 }
-
-

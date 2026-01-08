@@ -27,13 +27,23 @@ import (
 func NewTestDB(t *testing.T, name string) (*database.DB, func()) {
 	t.Helper()
 
-	// Create in-memory database
+	// Create temporary file for test database to ensure test isolation
+	// Using temporary files ensures each test gets its own isolated database
+	tmpFile, err := os.CreateTemp("", fmt.Sprintf("test_%s_*.db", name))
+	if err != nil {
+		t.Fatalf("Failed to create temporary database file: %v", err)
+	}
+	tmpPath := tmpFile.Name()
+	_ = tmpFile.Close()
+
+	// Create database from temporary file
 	db, err := database.New(database.Config{
-		Path:    ":memory:",
+		Path:    tmpPath,
 		Profile: database.ProfileStandard,
 		Name:    name,
 	})
 	if err != nil {
+		_ = os.Remove(tmpPath)
 		t.Fatalf("Failed to create test database %s: %v", name, err)
 	}
 
@@ -41,6 +51,7 @@ func NewTestDB(t *testing.T, name string) (*database.DB, func()) {
 	err = db.Migrate()
 	if err != nil {
 		_ = db.Close()
+		_ = os.Remove(tmpPath)
 		t.Fatalf("Failed to migrate test database %s: %v", name, err)
 	}
 
@@ -49,6 +60,9 @@ func NewTestDB(t *testing.T, name string) (*database.DB, func()) {
 		if err := db.Close(); err != nil {
 			// Log error but don't fail test - cleanup should be idempotent
 			t.Logf("Warning: Failed to close test database %s: %v", name, err)
+		}
+		if err := os.Remove(tmpPath); err != nil {
+			t.Logf("Warning: Failed to remove temporary database file %s: %v", tmpPath, err)
 		}
 	}
 }
@@ -59,13 +73,22 @@ func NewTestDB(t *testing.T, name string) (*database.DB, func()) {
 func NewTestDBWithSchema(t *testing.T, name string, schema string) (*database.DB, func()) {
 	t.Helper()
 
-	// Create in-memory database
+	// Create temporary file for test database to ensure test isolation
+	tmpFile, err := os.CreateTemp("", fmt.Sprintf("test_%s_*.db", name))
+	if err != nil {
+		t.Fatalf("Failed to create temporary database file: %v", err)
+	}
+	tmpPath := tmpFile.Name()
+	_ = tmpFile.Close()
+
+	// Create database from temporary file
 	db, err := database.New(database.Config{
-		Path:    ":memory:",
+		Path:    tmpPath,
 		Profile: database.ProfileStandard,
 		Name:    name,
 	})
 	if err != nil {
+		_ = os.Remove(tmpPath)
 		t.Fatalf("Failed to create test database %s: %v", name, err)
 	}
 
@@ -74,6 +97,7 @@ func NewTestDBWithSchema(t *testing.T, name string, schema string) (*database.DB
 		_, err = db.Conn().Exec(schema)
 		if err != nil {
 			_ = db.Close()
+			_ = os.Remove(tmpPath)
 			t.Fatalf("Failed to execute custom schema for test database %s: %v", name, err)
 		}
 	}
@@ -83,6 +107,9 @@ func NewTestDBWithSchema(t *testing.T, name string, schema string) (*database.DB
 		if err := db.Close(); err != nil {
 			// Log error but don't fail test - cleanup should be idempotent
 			t.Logf("Warning: Failed to close test database %s: %v", name, err)
+		}
+		if err := os.Remove(tmpPath); err != nil {
+			t.Logf("Warning: Failed to remove temporary database file %s: %v", tmpPath, err)
 		}
 	}
 }

@@ -355,5 +355,3 @@ func (d *MarketRegimeDetector) GetRegimeScore() (MarketRegimeScore, error) {
 
 	return NeutralScore, fmt.Errorf("no data source available")
 }
-
-

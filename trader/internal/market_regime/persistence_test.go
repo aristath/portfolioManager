@@ -205,5 +205,3 @@ func TestGetRegimeHistory(t *testing.T) {
 		assert.Greater(t, history[1].SmoothedScore, history[2].SmoothedScore)
 	})
 }
-
-

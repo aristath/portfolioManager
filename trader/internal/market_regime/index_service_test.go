@@ -276,5 +276,3 @@ func TestMarketIndexWeights(t *testing.T) {
 		assert.InDelta(t, 0.30, asiaWeight, 0.01, "Asia should be 30%")
 	})
 }
-
-

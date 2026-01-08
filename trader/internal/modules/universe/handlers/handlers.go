@@ -1107,7 +1107,6 @@ func (h *UniverseHandlers) calculateAndSaveScore(isin string, yahooSymbol string
 	return &score, nil
 }
 
-
 // HandleSyncPrices triggers manual price sync for all active securities
 // Endpoint: POST /api/universe/sync/prices
 func (h *UniverseHandlers) HandleSyncPrices(w http.ResponseWriter, r *http.Request) {
