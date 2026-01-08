@@ -19,6 +19,7 @@ type Config struct {
 	EvaluatorServiceURL string
 	TradernetAPIKey     string
 	TradernetAPISecret  string
+	GitHubToken         string // GitHub personal access token for artifact downloads
 	LogLevel            string
 	Port                int
 	DevMode             bool
@@ -47,7 +48,8 @@ type DeploymentConfig struct {
 }
 
 // ToDeploymentConfig converts config.DeploymentConfig to deployment.DeploymentConfig
-func (c *DeploymentConfig) ToDeploymentConfig() *deployment.DeploymentConfig {
+// githubToken is passed separately since it comes from Config.GitHubToken (not DeploymentConfig)
+func (c *DeploymentConfig) ToDeploymentConfig(githubToken string) *deployment.DeploymentConfig {
 	// Determine GitHub branch (use GitHubBranch if set, otherwise GitBranch)
 	githubBranch := c.GitHubBranch
 	if githubBranch == "" {
@@ -75,6 +77,7 @@ func (c *DeploymentConfig) ToDeploymentConfig() *deployment.DeploymentConfig {
 		GitHubArtifactName: c.GitHubArtifactName,
 		GitHubBranch:       githubBranch,
 		GitHubRepo:         c.GitHubRepo,
+		GitHubToken:        githubToken,
 	}
 }
 
@@ -112,6 +115,7 @@ func Load() (*Config, error) {
 		EvaluatorServiceURL: getEnv("EVALUATOR_SERVICE_URL", "http://localhost:9000"), // Evaluator-go microservice on 9000
 		TradernetAPIKey:     getEnv("TRADERNET_API_KEY", ""),
 		TradernetAPISecret:  getEnv("TRADERNET_API_SECRET", ""),
+		GitHubToken:         getEnv("GITHUB_TOKEN", ""), // GitHub token for deployment
 		LogLevel:            getEnv("LOG_LEVEL", "info"),
 		Deployment:          loadDeploymentConfig(),
 	}
@@ -146,6 +150,17 @@ func (c *Config) UpdateFromSettings(settingsRepo *settings.Repository) error {
 	// Only use settings DB value if it's not empty (settings DB takes precedence)
 	if apiSecret != nil && *apiSecret != "" {
 		c.TradernetAPISecret = *apiSecret
+	}
+	// If settings DB value is empty, keep the env var value (if any) as fallback
+
+	// Get GitHub token from settings DB
+	githubToken, err := settingsRepo.Get("github_token")
+	if err != nil {
+		return fmt.Errorf("failed to get github_token from settings: %w", err)
+	}
+	// Only use settings DB value if it's not empty (settings DB takes precedence)
+	if githubToken != nil && *githubToken != "" {
+		c.GitHubToken = *githubToken
 	}
 	// If settings DB value is empty, keep the env var value (if any) as fallback
 

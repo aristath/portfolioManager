@@ -11,9 +11,10 @@ var SettingDefaults = map[string]interface{}{
 	// Trading mode
 	"trading_mode": "research", // "live" or "research" - blocks trades in research mode
 
-	// Tradernet API credentials
+	// API credentials
 	"tradernet_api_key":    "", // Tradernet API key
 	"tradernet_api_secret": "", // Tradernet API secret
+	"github_token":         "", // GitHub personal access token for deployment artifact downloads
 
 	// Portfolio Optimizer settings
 	"optimizer_blend":             0.5,  // 0.0 = pure Mean-Variance, 1.0 = pure HRP
@@ -153,6 +154,7 @@ var StringSettings = map[string]bool{
 	"display_mode":                   true,
 	"tradernet_api_key":              true,
 	"tradernet_api_secret":           true,
+	"github_token":                   true,
 	"security_table_visible_columns": true,
 }
 

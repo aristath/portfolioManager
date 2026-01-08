@@ -3,9 +3,11 @@ package di
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/aristath/sentinel/internal/config"
 	"github.com/aristath/sentinel/internal/database"
+	"github.com/aristath/sentinel/internal/deployment"
 	"github.com/aristath/sentinel/internal/modules/cleanup"
 	"github.com/aristath/sentinel/internal/modules/display"
 	"github.com/aristath/sentinel/internal/modules/symbolic_regression"
@@ -17,7 +19,8 @@ import (
 
 // RegisterJobs registers all jobs with the queue system
 // Returns JobInstances for manual triggering via API
-func RegisterJobs(container *Container, cfg *config.Config, displayManager *display.StateManager, log zerolog.Logger) (*JobInstances, error) {
+// deploymentManager is optional (can be nil if deployment is disabled)
+func RegisterJobs(container *Container, cfg *config.Config, displayManager *display.StateManager, deploymentManager interface{}, log zerolog.Logger) (*JobInstances, error) {
 	if container == nil {
 		return nil, fmt.Errorf("container cannot be nil")
 	}
@@ -446,12 +449,44 @@ func RegisterJobs(container *Container, cfg *config.Config, displayManager *disp
 	instances.HealthCheck = healthCheck
 
 	// ==========================================
+	// DEPLOYMENT JOB (optional - only if deployment manager is provided)
+	// ==========================================
+	if deploymentManager != nil {
+		// Type assert to deployment.Manager
+		if mgr, ok := deploymentManager.(*deployment.Manager); ok {
+			// Get deployment interval from settings (default: 5 minutes)
+			deploymentIntervalMinutes, err := container.SettingsRepo.GetFloat("job_auto_deploy_minutes", 5.0)
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to get deployment interval from settings, using default 5 minutes")
+				deploymentIntervalMinutes = 5.0
+			}
+
+			deploymentInterval := time.Duration(deploymentIntervalMinutes) * time.Minute
+			deploymentJob := scheduler.NewDeploymentJob(mgr, deploymentInterval, true, log)
+			container.JobRegistry.Register(queue.JobTypeDeployment, queue.JobToHandler(deploymentJob))
+			instances.Deployment = deploymentJob
+
+			log.Info().
+				Float64("interval_minutes", deploymentIntervalMinutes).
+				Msg("Deployment job registered (auto-deploy enabled)")
+		} else {
+			log.Warn().Msg("Deployment manager provided but type assertion failed, skipping deployment job registration")
+		}
+	} else {
+		log.Info().Msg("Deployment manager not provided, skipping deployment job registration")
+	}
+
+	// ==========================================
 	// Start Queue System
 	// ==========================================
 	container.WorkerPool.Start()
 	container.TimeScheduler.Start()
 
-	log.Info().Int("jobs", 36).Msg("Jobs registered with queue system")
+	jobCount := 36
+	if deploymentManager != nil {
+		jobCount = 37 // Include deployment job
+	}
+	log.Info().Int("jobs", jobCount).Msg("Jobs registered with queue system")
 
 	return instances, nil
 }

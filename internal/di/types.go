@@ -183,4 +183,7 @@ type JobInstances struct {
 
 	// Adaptive Market job
 	AdaptiveMarketJob scheduler.Job
+
+	// Deployment job
+	Deployment scheduler.Job
 }

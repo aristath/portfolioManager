@@ -51,6 +51,22 @@ func (s *Scheduler) Start() {
 	s.started = true
 	s.log.Info().Msg("Time scheduler started")
 
+	// Deployment check (configurable interval via settings - default: 5 minutes)
+	// This runs at whatever interval is configured in job_auto_deploy_minutes setting
+	deploymentTicker := time.NewTicker(1 * time.Minute) // Check every minute to respect setting changes
+	go func() {
+		for {
+			select {
+			case <-s.stop:
+				deploymentTicker.Stop()
+				return
+			case <-deploymentTicker.C:
+				// Enqueue deployment check (interval is checked by queue manager)
+				s.enqueueTimeBasedJob(JobTypeDeployment, PriorityMedium, 5*time.Minute)
+			}
+		}
+	}()
+
 	// Hourly jobs (every hour at :00)
 	hourlyTicker := time.NewTicker(1 * time.Hour)
 	go func() {

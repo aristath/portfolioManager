@@ -47,9 +47,19 @@ func main() {
 	displayManager := display.NewStateManager(log)
 	log.Info().Msg("Display manager initialized")
 
+	// Initialize deployment manager BEFORE DI wiring so it can be passed to job registration
+	var deploymentManager *deployment.Manager
+	if cfg.Deployment != nil && cfg.Deployment.Enabled {
+		deployConfig := cfg.Deployment.ToDeploymentConfig(cfg.GitHubToken)
+		version := getEnv("VERSION", "dev")
+		deploymentManager = deployment.NewManager(deployConfig, version, log)
+		log.Info().Msg("Deployment manager initialized")
+	}
+
 	// Wire all dependencies using DI container
 	// This replaces the massive registerJobs function and all manual wiring
-	container, jobs, err := di.Wire(cfg, log, displayManager)
+	// Pass deployment manager so it can be registered as a job
+	container, jobs, err := di.Wire(cfg, log, displayManager, deploymentManager)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to wire dependencies")
 	}
@@ -82,17 +92,10 @@ func main() {
 		}
 	}
 
-	// Initialize deployment manager and handlers if enabled
+	// Create deployment handlers if deployment is enabled
 	var deploymentHandlers *server.DeploymentHandlers
-	if cfg.Deployment != nil && cfg.Deployment.Enabled {
-		deployConfig := cfg.Deployment.ToDeploymentConfig()
-		version := getEnv("VERSION", "dev")
-		deploymentManager := deployment.NewManager(deployConfig, version, log)
+	if deploymentManager != nil {
 		deploymentHandlers = server.NewDeploymentHandlers(deploymentManager, log)
-
-		// Deployment job is now handled by the queue system
-		// It can be enqueued manually or via time-based scheduler if needed
-		log.Info().Msg("Deployment manager initialized (use queue system for scheduling)")
 	}
 
 	// Initialize HTTP server

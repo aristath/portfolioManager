@@ -361,7 +361,8 @@ func TestToDeploymentConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := tt.config.ToDeploymentConfig()
+			// Pass test GitHub token
+			result := tt.config.ToDeploymentConfig("test_github_token")
 
 			assert.NotNil(t, result)
 			assert.Equal(t, tt.config.Enabled, result.Enabled)

@@ -31,6 +31,7 @@ type DeploymentConfig struct {
 	GitHubArtifactName string
 	GitHubBranch       string
 	GitHubRepo         string // GitHub repository in format "owner/repo" (e.g., "aristath/sentinel")
+	GitHubToken        string // GitHub personal access token for artifact downloads
 }
 
 // Manager handles deployment orchestration
@@ -124,6 +125,7 @@ func NewManager(config *DeploymentConfig, version string, log zerolog.Logger) *M
 		config.GitHubArtifactName,
 		githubBranch,
 		config.GitHubRepo,
+		config.GitHubToken,
 		artifactTracker,
 		&logAdapter{log: log.With().Str("component", "github-artifact").Logger()},
 	)

@@ -57,8 +57,8 @@ func TestRegisterJobs(t *testing.T) {
 	err = InitializeServices(container, cfg, displayManager, log)
 	require.NoError(t, err)
 
-	// Register jobs
-	jobInstances, err := RegisterJobs(container, cfg, displayManager, log)
+	// Register jobs (pass nil for deployment manager in tests)
+	jobInstances, err := RegisterJobs(container, cfg, displayManager, nil, log)
 	require.NoError(t, err)
 	require.NotNil(t, jobInstances)
 

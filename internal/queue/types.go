@@ -23,6 +23,7 @@ const (
 	JobTypeFormulaDiscovery   JobType = "formula_discovery"
 	JobTypeAdaptiveMarket     JobType = "adaptive_market_check"
 	JobTypeHistoryCleanup     JobType = "history_cleanup"
+	JobTypeDeployment         JobType = "deployment"
 
 	// Sync jobs - individual responsibilities split from sync_cycle
 	JobTypeSyncTrades            JobType = "sync_trades"

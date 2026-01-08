@@ -103,18 +103,20 @@ type GitHubArtifactDeployer struct {
 	artifactName string
 	branch       string
 	githubRepo   string // GitHub repository in format "owner/repo"
+	githubToken  string // GitHub personal access token (injected from config/settings)
 	tracker      *ArtifactTracker
 	httpClient   *http.Client
 }
 
 // NewGitHubArtifactDeployer creates a new GitHub artifact deployer
-func NewGitHubArtifactDeployer(workflowName, artifactName, branch, githubRepo string, tracker *ArtifactTracker, log Logger) *GitHubArtifactDeployer {
+func NewGitHubArtifactDeployer(workflowName, artifactName, branch, githubRepo, githubToken string, tracker *ArtifactTracker, log Logger) *GitHubArtifactDeployer {
 	return &GitHubArtifactDeployer{
 		log:          log,
 		workflowName: workflowName,
 		artifactName: artifactName,
 		branch:       branch,
 		githubRepo:   githubRepo,
+		githubToken:  githubToken,
 		tracker:      tracker,
 		httpClient:   &http.Client{Timeout: 60 * time.Second},
 	}
@@ -129,10 +131,10 @@ func (g *GitHubArtifactDeployer) CheckForNewBuild() (string, error) {
 		return "", fmt.Errorf("failed to get last deployed run ID: %w", err)
 	}
 
-	// Get GitHub token from environment
-	githubToken := os.Getenv("GITHUB_TOKEN")
+	// Use injected GitHub token (from config/settings, not environment)
+	githubToken := g.githubToken
 	if githubToken == "" {
-		return "", fmt.Errorf("GITHUB_TOKEN environment variable is required")
+		return "", fmt.Errorf("GitHub token is required (configure via Settings UI or GITHUB_TOKEN environment variable)")
 	}
 
 	// Get workflow ID first
@@ -308,10 +310,10 @@ func (g *GitHubArtifactDeployer) DownloadArtifact(runID string, outputDir string
 		Str("output_dir", outputDir).
 		Msg("Downloading artifact from GitHub Actions")
 
-	// Get GitHub token from environment
-	githubToken := os.Getenv("GITHUB_TOKEN")
+	// Use injected GitHub token (from config/settings, not environment)
+	githubToken := g.githubToken
 	if githubToken == "" {
-		return "", fmt.Errorf("GITHUB_TOKEN environment variable is required")
+		return "", fmt.Errorf("GitHub token is required (configure via Settings UI or GITHUB_TOKEN environment variable)")
 	}
 
 	// Get artifacts for the run
