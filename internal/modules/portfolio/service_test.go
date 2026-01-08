@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/aristath/sentinel/internal/clients/tradernet"
+	"github.com/aristath/sentinel/internal/domain"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -36,46 +36,98 @@ func (m *MockCashManager) GetCashBalance(currency string) (float64, error) {
 	return args.Get(0).(float64), args.Error(1)
 }
 
-// MockTradernetClient is a mock Tradernet client for testing
+// MockTradernetClient is a mock broker client for testing
 type MockTradernetClient struct {
 	mock.Mock
 }
 
-func (m *MockTradernetClient) GetPortfolio() ([]tradernet.Position, error) {
+func (m *MockTradernetClient) GetPortfolio() ([]domain.BrokerPosition, error) {
 	args := m.Called()
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]tradernet.Position), args.Error(1)
+	return args.Get(0).([]domain.BrokerPosition), args.Error(1)
 }
 
-func (m *MockTradernetClient) GetCashBalances() ([]tradernet.CashBalance, error) {
+func (m *MockTradernetClient) GetCashBalances() ([]domain.BrokerCashBalance, error) {
 	args := m.Called()
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]tradernet.CashBalance), args.Error(1)
+	return args.Get(0).([]domain.BrokerCashBalance), args.Error(1)
 }
 
-func (m *MockTradernetClient) GetExecutedTrades(limit int) ([]tradernet.Trade, error) {
+func (m *MockTradernetClient) GetExecutedTrades(limit int) ([]domain.BrokerTrade, error) {
 	args := m.Called(limit)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]tradernet.Trade), args.Error(1)
+	return args.Get(0).([]domain.BrokerTrade), args.Error(1)
 }
 
-func (m *MockTradernetClient) PlaceOrder(symbol, side string, quantity float64) (*tradernet.OrderResult, error) {
+func (m *MockTradernetClient) PlaceOrder(symbol, side string, quantity float64) (*domain.BrokerOrderResult, error) {
 	args := m.Called(symbol, side, quantity)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*tradernet.OrderResult), args.Error(1)
+	return args.Get(0).(*domain.BrokerOrderResult), args.Error(1)
+}
+
+func (m *MockTradernetClient) GetPendingOrders() ([]domain.BrokerPendingOrder, error) {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]domain.BrokerPendingOrder), args.Error(1)
+}
+
+func (m *MockTradernetClient) GetQuote(symbol string) (*domain.BrokerQuote, error) {
+	args := m.Called(symbol)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.BrokerQuote), args.Error(1)
+}
+
+func (m *MockTradernetClient) FindSymbol(symbol string, exchange *string) ([]domain.BrokerSecurityInfo, error) {
+	args := m.Called(symbol, exchange)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]domain.BrokerSecurityInfo), args.Error(1)
+}
+
+func (m *MockTradernetClient) GetAllCashFlows(limit int) ([]domain.BrokerCashFlow, error) {
+	args := m.Called(limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]domain.BrokerCashFlow), args.Error(1)
+}
+
+func (m *MockTradernetClient) GetCashMovements() (*domain.BrokerCashMovement, error) {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.BrokerCashMovement), args.Error(1)
 }
 
 func (m *MockTradernetClient) IsConnected() bool {
 	args := m.Called()
 	return args.Bool(0)
+}
+
+func (m *MockTradernetClient) HealthCheck() (*domain.BrokerHealthResult, error) {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.BrokerHealthResult), args.Error(1)
+}
+
+func (m *MockTradernetClient) SetCredentials(apiKey, apiSecret string) {
+	m.Called(apiKey, apiSecret)
 }
 
 // MockPositionRepository is a mock position repository for testing
@@ -203,15 +255,15 @@ func TestSyncFromTradernet_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	service := &PortfolioService{
-		tradernetClient: mockTradernetClient,
-		positionRepo:    mockPositionRepo,
-		cashManager:     mockCashManager,
-		universeDB:      universeDB,
-		log:             log,
+		brokerClient: mockTradernetClient,
+		positionRepo: mockPositionRepo,
+		cashManager:  mockCashManager,
+		universeDB:   universeDB,
+		log:          log,
 	}
 
 	// Mock data
-	tradernetPositions := []tradernet.Position{
+	tradernetPositions := []domain.BrokerPosition{
 		{
 			Symbol:         "AAPL",
 			Quantity:       10,
@@ -234,7 +286,7 @@ func TestSyncFromTradernet_Success(t *testing.T) {
 
 	currentPositions := []Position{}
 
-	cashBalances := []tradernet.CashBalance{
+	cashBalances := []domain.BrokerCashBalance{
 		{Currency: "EUR", Amount: 1000.0},
 		{Currency: "USD", Amount: 500.0},
 	}
@@ -291,15 +343,15 @@ func TestSyncFromTradernet_DeleteStale(t *testing.T) {
 	require.NoError(t, err)
 
 	service := &PortfolioService{
-		tradernetClient: mockTradernetClient,
-		positionRepo:    mockPositionRepo,
-		cashManager:     mockCashManager,
-		universeDB:      universeDB,
-		log:             log,
+		brokerClient: mockTradernetClient,
+		positionRepo: mockPositionRepo,
+		cashManager:  mockCashManager,
+		universeDB:   universeDB,
+		log:          log,
 	}
 
 	// Mock data - Tradernet has AAPL, DB has AAPL and MSFT (MSFT is stale)
-	tradernetPositions := []tradernet.Position{
+	tradernetPositions := []domain.BrokerPosition{
 		{
 			Symbol:         "AAPL",
 			Quantity:       10,
@@ -316,7 +368,7 @@ func TestSyncFromTradernet_DeleteStale(t *testing.T) {
 		{Symbol: "MSFT", ISIN: "US5949181045", Quantity: 5}, // Stale - not in Tradernet
 	}
 
-	cashBalances := []tradernet.CashBalance{}
+	cashBalances := []domain.BrokerCashBalance{}
 
 	// Mock expectations
 	mockTradernetClient.On("GetPortfolio").Return(tradernetPositions, nil)
@@ -370,15 +422,15 @@ func TestSyncFromTradernet_SkipZeroQuantity(t *testing.T) {
 	require.NoError(t, err)
 
 	service := &PortfolioService{
-		tradernetClient: mockTradernetClient,
-		positionRepo:    mockPositionRepo,
-		cashManager:     mockCashManager,
-		universeDB:      universeDB,
-		log:             log,
+		brokerClient: mockTradernetClient,
+		positionRepo: mockPositionRepo,
+		cashManager:  mockCashManager,
+		universeDB:   universeDB,
+		log:          log,
 	}
 
 	// Mock data - one position with zero quantity
-	tradernetPositions := []tradernet.Position{
+	tradernetPositions := []domain.BrokerPosition{
 		{
 			Symbol:   "AAPL",
 			Quantity: 10,
@@ -392,7 +444,7 @@ func TestSyncFromTradernet_SkipZeroQuantity(t *testing.T) {
 	}
 
 	currentPositions := []Position{}
-	cashBalances := []tradernet.CashBalance{}
+	cashBalances := []domain.BrokerCashBalance{}
 
 	// Mock expectations - Upsert should only be called once (for AAPL)
 	mockTradernetClient.On("GetPortfolio").Return(tradernetPositions, nil)
@@ -417,8 +469,8 @@ func TestSyncFromTradernet_TradernetError(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 
 	service := &PortfolioService{
-		tradernetClient: mockTradernetClient,
-		log:             log,
+		brokerClient: mockTradernetClient,
+		log:          log,
 	}
 
 	// Mock expectations - Tradernet API error
@@ -438,8 +490,8 @@ func TestSyncFromTradernet_NilClient(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 
 	service := &PortfolioService{
-		tradernetClient: nil,
-		log:             log,
+		brokerClient: nil,
+		log:          log,
 	}
 
 	// Execute
@@ -458,13 +510,13 @@ func TestSyncFromTradernet_RepositoryError(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 
 	service := &PortfolioService{
-		tradernetClient: mockTradernetClient,
-		positionRepo:    mockPositionRepo,
-		cashManager:     mockCashManager,
-		log:             log,
+		brokerClient: mockTradernetClient,
+		positionRepo: mockPositionRepo,
+		cashManager:  mockCashManager,
+		log:          log,
 	}
 
-	tradernetPositions := []tradernet.Position{
+	tradernetPositions := []domain.BrokerPosition{
 		{Symbol: "AAPL", Quantity: 10},
 	}
 
@@ -516,20 +568,20 @@ func TestSyncFromTradernet_UpsertError(t *testing.T) {
 	require.NoError(t, err)
 
 	service := &PortfolioService{
-		tradernetClient: mockTradernetClient,
-		positionRepo:    mockPositionRepo,
-		cashManager:     mockCashManager,
-		universeDB:      universeDB,
-		log:             log,
+		brokerClient: mockTradernetClient,
+		positionRepo: mockPositionRepo,
+		cashManager:  mockCashManager,
+		universeDB:   universeDB,
+		log:          log,
 	}
 
-	tradernetPositions := []tradernet.Position{
+	tradernetPositions := []domain.BrokerPosition{
 		{Symbol: "AAPL", Quantity: 10},
 		{Symbol: "MSFT", Quantity: 5},
 	}
 
 	currentPositions := []Position{}
-	cashBalances := []tradernet.CashBalance{}
+	cashBalances := []domain.BrokerCashBalance{}
 
 	// Mock expectations - Upsert fails for first position but succeeds for second
 	mockTradernetClient.On("GetPortfolio").Return(tradernetPositions, nil)
@@ -587,14 +639,14 @@ func TestSyncFromTradernet_CashBalancesError(t *testing.T) {
 	require.NoError(t, err)
 
 	service := &PortfolioService{
-		tradernetClient: mockTradernetClient,
-		positionRepo:    mockPositionRepo,
-		cashManager:     mockCashManager,
-		universeDB:      universeDB,
-		log:             log,
+		brokerClient: mockTradernetClient,
+		positionRepo: mockPositionRepo,
+		cashManager:  mockCashManager,
+		universeDB:   universeDB,
+		log:          log,
 	}
 
-	tradernetPositions := []tradernet.Position{
+	tradernetPositions := []domain.BrokerPosition{
 		{Symbol: "AAPL", Quantity: 10},
 	}
 
@@ -1107,15 +1159,15 @@ func TestSyncFromTradernet_SkipPositionWithoutISIN(t *testing.T) {
 	// Note: No securities inserted - symbol won't be found
 
 	service := &PortfolioService{
-		tradernetClient: mockTradernetClient,
-		positionRepo:    mockPositionRepo,
-		cashManager:     mockCashManager,
-		universeDB:      universeDB,
-		log:             log,
+		brokerClient: mockTradernetClient,
+		positionRepo: mockPositionRepo,
+		cashManager:  mockCashManager,
+		universeDB:   universeDB,
+		log:          log,
 	}
 
 	// Mock Tradernet returns position for symbol not in universe
-	tradernetPositions := []tradernet.Position{
+	tradernetPositions := []domain.BrokerPosition{
 		{
 			Symbol:   "UNKNOWN.STOCK",
 			Quantity: 10.0,
@@ -1124,7 +1176,7 @@ func TestSyncFromTradernet_SkipPositionWithoutISIN(t *testing.T) {
 		},
 	}
 	mockTradernetClient.On("GetPortfolio").Return(tradernetPositions, nil)
-	mockTradernetClient.On("GetCashBalances").Return([]tradernet.CashBalance{}, nil)
+	mockTradernetClient.On("GetCashBalances").Return([]domain.BrokerCashBalance{}, nil)
 	mockPositionRepo.On("GetAll").Return([]Position{}, nil)
 	mockPositionRepo.On("GetBySymbol", "UNKNOWN.STOCK").Return(nil, nil).Once()
 

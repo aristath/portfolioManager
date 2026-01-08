@@ -3,10 +3,10 @@ package testing
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
-	"github.com/aristath/sentinel/internal/clients/tradernet"
 	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/modules/allocation"
 	"github.com/aristath/sentinel/internal/modules/portfolio"
@@ -1019,9 +1019,9 @@ var _ domain.CashManager = (*MockCashManager)(nil)
 type MockTradernetClient struct {
 	mu           sync.RWMutex
 	connected    bool
-	portfolio    []tradernet.Position
-	cashBalances []tradernet.CashBalance
-	trades       []tradernet.Trade
+	portfolio    []domain.BrokerPosition
+	cashBalances []domain.BrokerCashBalance
+	trades       []domain.BrokerTrade
 	err          error
 }
 
@@ -1029,9 +1029,9 @@ type MockTradernetClient struct {
 func NewMockTradernetClient() *MockTradernetClient {
 	return &MockTradernetClient{
 		connected:    false,
-		portfolio:    make([]tradernet.Position, 0),
-		cashBalances: make([]tradernet.CashBalance, 0),
-		trades:       make([]tradernet.Trade, 0),
+		portfolio:    make([]domain.BrokerPosition, 0),
+		cashBalances: make([]domain.BrokerCashBalance, 0),
+		trades:       make([]domain.BrokerTrade, 0),
 	}
 }
 
@@ -1043,21 +1043,21 @@ func (m *MockTradernetClient) SetConnected(connected bool) {
 }
 
 // SetPortfolio sets the portfolio to return
-func (m *MockTradernetClient) SetPortfolio(portfolio []tradernet.Position) {
+func (m *MockTradernetClient) SetPortfolio(portfolio []domain.BrokerPosition) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.portfolio = portfolio
 }
 
 // SetCashBalances sets the cash balances to return
-func (m *MockTradernetClient) SetCashBalances(cashBalances []tradernet.CashBalance) {
+func (m *MockTradernetClient) SetCashBalances(cashBalances []domain.BrokerCashBalance) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.cashBalances = cashBalances
 }
 
 // SetTrades sets the trades to return
-func (m *MockTradernetClient) SetTrades(trades []tradernet.Trade) {
+func (m *MockTradernetClient) SetTrades(trades []domain.BrokerTrade) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.trades = trades
@@ -1071,7 +1071,7 @@ func (m *MockTradernetClient) SetError(err error) {
 }
 
 // GetPortfolio retrieves all positions from Tradernet
-func (m *MockTradernetClient) GetPortfolio() ([]tradernet.Position, error) {
+func (m *MockTradernetClient) GetPortfolio() ([]domain.BrokerPosition, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if m.err != nil {
@@ -1081,7 +1081,7 @@ func (m *MockTradernetClient) GetPortfolio() ([]tradernet.Position, error) {
 }
 
 // GetCashBalances retrieves all cash balances from Tradernet
-func (m *MockTradernetClient) GetCashBalances() ([]tradernet.CashBalance, error) {
+func (m *MockTradernetClient) GetCashBalances() ([]domain.BrokerCashBalance, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if m.err != nil {
@@ -1091,7 +1091,7 @@ func (m *MockTradernetClient) GetCashBalances() ([]tradernet.CashBalance, error)
 }
 
 // GetExecutedTrades retrieves executed trades from Tradernet
-func (m *MockTradernetClient) GetExecutedTrades(limit int) ([]tradernet.Trade, error) {
+func (m *MockTradernetClient) GetExecutedTrades(limit int) ([]domain.BrokerTrade, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if m.err != nil {
@@ -1105,14 +1105,14 @@ func (m *MockTradernetClient) GetExecutedTrades(limit int) ([]tradernet.Trade, e
 }
 
 // PlaceOrder places an order via Tradernet
-func (m *MockTradernetClient) PlaceOrder(symbol, side string, quantity float64) (*tradernet.OrderResult, error) {
+func (m *MockTradernetClient) PlaceOrder(symbol, side string, quantity float64) (*domain.BrokerOrderResult, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if m.err != nil {
 		return nil, m.err
 	}
 	// Return a mock order result
-	return &tradernet.OrderResult{
+	return &domain.BrokerOrderResult{
 		OrderID:  "mock_order_" + symbol,
 		Symbol:   symbol,
 		Side:     side,
@@ -1128,8 +1128,336 @@ func (m *MockTradernetClient) IsConnected() bool {
 	return m.connected
 }
 
+// GetPendingOrders retrieves pending orders (mock implementation)
+func (m *MockTradernetClient) GetPendingOrders() ([]domain.BrokerPendingOrder, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.err != nil {
+		return nil, m.err
+	}
+	return []domain.BrokerPendingOrder{}, nil
+}
+
+// GetQuote retrieves quote for a symbol (mock implementation)
+func (m *MockTradernetClient) GetQuote(symbol string) (*domain.BrokerQuote, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.err != nil {
+		return nil, m.err
+	}
+	return &domain.BrokerQuote{Symbol: symbol, Price: 100.0}, nil
+}
+
+// FindSymbol searches for securities (mock implementation)
+func (m *MockTradernetClient) FindSymbol(symbol string, exchange *string) ([]domain.BrokerSecurityInfo, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.err != nil {
+		return nil, m.err
+	}
+	return []domain.BrokerSecurityInfo{}, nil
+}
+
+// GetAllCashFlows retrieves cash flows (mock implementation)
+func (m *MockTradernetClient) GetAllCashFlows(limit int) ([]domain.BrokerCashFlow, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.err != nil {
+		return nil, m.err
+	}
+	return []domain.BrokerCashFlow{}, nil
+}
+
+// GetCashMovements retrieves cash movements (mock implementation)
+func (m *MockTradernetClient) GetCashMovements() (*domain.BrokerCashMovement, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.err != nil {
+		return nil, m.err
+	}
+	return &domain.BrokerCashMovement{}, nil
+}
+
+// HealthCheck performs health check (mock implementation)
+func (m *MockTradernetClient) HealthCheck() (*domain.BrokerHealthResult, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.err != nil {
+		return nil, m.err
+	}
+	return &domain.BrokerHealthResult{Connected: m.connected}, nil
+}
+
+// SetCredentials sets API credentials (mock implementation)
+func (m *MockTradernetClient) SetCredentials(apiKey, apiSecret string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	// Mock implementation - does nothing
+}
+
 // Verify interface implementation
-var _ domain.TradernetClientInterface = (*MockTradernetClient)(nil)
+
+// MockBrokerClient is a thread-safe mock implementation of domain.BrokerClient for testing
+type MockBrokerClient struct {
+	mu             sync.RWMutex
+	connected      bool
+	portfolio      []domain.BrokerPosition
+	cashBalances   []domain.BrokerCashBalance
+	trades         []domain.BrokerTrade
+	pendingOrders  []domain.BrokerPendingOrder
+	cashFlows      []domain.BrokerCashFlow
+	quotes         map[string]*domain.BrokerQuote
+	securities     []domain.BrokerSecurityInfo
+	cashMovements  *domain.BrokerCashMovement
+	healthResult   *domain.BrokerHealthResult
+	orderResult    *domain.BrokerOrderResult
+	credentialsSet bool
+	err            error
+}
+
+// NewMockBrokerClient creates a new mock broker client
+func NewMockBrokerClient() *MockBrokerClient {
+	return &MockBrokerClient{
+		connected:     true,
+		portfolio:     make([]domain.BrokerPosition, 0),
+		cashBalances:  make([]domain.BrokerCashBalance, 0),
+		trades:        make([]domain.BrokerTrade, 0),
+		pendingOrders: make([]domain.BrokerPendingOrder, 0),
+		cashFlows:     make([]domain.BrokerCashFlow, 0),
+		quotes:        make(map[string]*domain.BrokerQuote),
+		securities:    make([]domain.BrokerSecurityInfo, 0),
+	}
+}
+
+// SetConnected sets the connection status
+func (m *MockBrokerClient) SetConnected(connected bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.connected = connected
+}
+
+// SetPortfolio sets the portfolio to return
+func (m *MockBrokerClient) SetPortfolio(portfolio []domain.BrokerPosition) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.portfolio = portfolio
+}
+
+// SetCashBalances sets the cash balances to return
+func (m *MockBrokerClient) SetCashBalances(balances []domain.BrokerCashBalance) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.cashBalances = balances
+}
+
+// SetTrades sets the trades to return
+func (m *MockBrokerClient) SetTrades(trades []domain.BrokerTrade) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.trades = trades
+}
+
+// SetPendingOrders sets the pending orders to return
+func (m *MockBrokerClient) SetPendingOrders(orders []domain.BrokerPendingOrder) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.pendingOrders = orders
+}
+
+// SetCashFlows sets the cash flows to return
+func (m *MockBrokerClient) SetCashFlows(flows []domain.BrokerCashFlow) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.cashFlows = flows
+}
+
+// SetQuote sets the quote to return for a specific symbol
+func (m *MockBrokerClient) SetQuote(symbol string, quote *domain.BrokerQuote) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.quotes[symbol] = quote
+}
+
+// SetSecurities sets the securities to return
+func (m *MockBrokerClient) SetSecurities(securities []domain.BrokerSecurityInfo) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.securities = securities
+}
+
+// SetCashMovements sets the cash movements to return
+func (m *MockBrokerClient) SetCashMovements(movements *domain.BrokerCashMovement) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.cashMovements = movements
+}
+
+// SetHealthResult sets the health result to return
+func (m *MockBrokerClient) SetHealthResult(result *domain.BrokerHealthResult) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.healthResult = result
+}
+
+// SetOrderResult sets the order result to return
+func (m *MockBrokerClient) SetOrderResult(result *domain.BrokerOrderResult) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.orderResult = result
+}
+
+// SetError sets the error to return
+func (m *MockBrokerClient) SetError(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.err = err
+}
+
+// GetPortfolio implements domain.BrokerClient
+func (m *MockBrokerClient) GetPortfolio() ([]domain.BrokerPosition, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.portfolio, nil
+}
+
+// GetCashBalances implements domain.BrokerClient
+func (m *MockBrokerClient) GetCashBalances() ([]domain.BrokerCashBalance, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.cashBalances, nil
+}
+
+// PlaceOrder implements domain.BrokerClient
+func (m *MockBrokerClient) PlaceOrder(symbol, side string, quantity float64) (*domain.BrokerOrderResult, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.err != nil {
+		return nil, m.err
+	}
+	if m.orderResult != nil {
+		return m.orderResult, nil
+	}
+	// Return default mock result
+	return &domain.BrokerOrderResult{
+		OrderID:  "mock_order_" + symbol,
+		Symbol:   symbol,
+		Side:     side,
+		Quantity: quantity,
+		Price:    100.0,
+	}, nil
+}
+
+// GetExecutedTrades implements domain.BrokerClient
+func (m *MockBrokerClient) GetExecutedTrades(limit int) ([]domain.BrokerTrade, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.err != nil {
+		return nil, m.err
+	}
+	result := m.trades
+	if limit > 0 && limit < len(result) {
+		result = result[:limit]
+	}
+	return result, nil
+}
+
+// GetPendingOrders implements domain.BrokerClient
+func (m *MockBrokerClient) GetPendingOrders() ([]domain.BrokerPendingOrder, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.pendingOrders, nil
+}
+
+// GetQuote implements domain.BrokerClient
+func (m *MockBrokerClient) GetQuote(symbol string) (*domain.BrokerQuote, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.err != nil {
+		return nil, m.err
+	}
+	quote, exists := m.quotes[symbol]
+	if !exists {
+		return nil, fmt.Errorf("no quote configured for symbol: %s", symbol)
+	}
+	return quote, nil
+}
+
+// FindSymbol implements domain.BrokerClient
+func (m *MockBrokerClient) FindSymbol(symbol string, exchange *string) ([]domain.BrokerSecurityInfo, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.securities, nil
+}
+
+// GetAllCashFlows implements domain.BrokerClient
+func (m *MockBrokerClient) GetAllCashFlows(limit int) ([]domain.BrokerCashFlow, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.err != nil {
+		return nil, m.err
+	}
+	result := m.cashFlows
+	if limit > 0 && limit < len(result) {
+		result = result[:limit]
+	}
+	return result, nil
+}
+
+// GetCashMovements implements domain.BrokerClient
+func (m *MockBrokerClient) GetCashMovements() (*domain.BrokerCashMovement, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.cashMovements, nil
+}
+
+// IsConnected implements domain.BrokerClient
+func (m *MockBrokerClient) IsConnected() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.connected
+}
+
+// HealthCheck implements domain.BrokerClient
+func (m *MockBrokerClient) HealthCheck() (*domain.BrokerHealthResult, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.err != nil {
+		return nil, m.err
+	}
+	if m.healthResult != nil {
+		return m.healthResult, nil
+	}
+	// Return default result based on connection status
+	return &domain.BrokerHealthResult{
+		Connected: m.connected,
+		Timestamp: time.Now().Format(time.RFC3339),
+	}, nil
+}
+
+// SetCredentials implements domain.BrokerClient
+func (m *MockBrokerClient) SetCredentials(apiKey, apiSecret string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.credentialsSet = true
+}
+
+// Verify interface implementation
+var _ domain.BrokerClient = (*MockBrokerClient)(nil)
 
 // MockCurrencyExchangeService is a mock implementation of CurrencyExchangeServiceInterface for testing
 type MockCurrencyExchangeService struct {

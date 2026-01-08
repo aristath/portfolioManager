@@ -6,9 +6,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/aristath/sentinel/internal/clients/tradernet"
 	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/modules/portfolio"
+	testingpkg "github.com/aristath/sentinel/internal/testing"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -19,7 +19,7 @@ func TestRegisterRoutes(t *testing.T) {
 	// Create mock dependencies
 	positionRepo := &portfolio.PositionRepository{}
 	service := &portfolio.PortfolioService{}
-	tradernetClient := &tradernet.Client{}
+	tradernetClient := testingpkg.NewMockBrokerClient()
 	var currencyExchangeService domain.CurrencyExchangeServiceInterface = nil
 	var cashManager domain.CashManager = nil
 	var configDB *sql.DB = nil
@@ -89,7 +89,7 @@ func TestRegisterRoutes_RoutePrefix(t *testing.T) {
 	// Verify that routes are registered under /portfolio prefix
 	positionRepo := &portfolio.PositionRepository{}
 	service := &portfolio.PortfolioService{}
-	tradernetClient := &tradernet.Client{}
+	tradernetClient := testingpkg.NewMockBrokerClient()
 	var currencyExchangeService domain.CurrencyExchangeServiceInterface = nil
 	var cashManager domain.CashManager = nil
 	var configDB *sql.DB = nil

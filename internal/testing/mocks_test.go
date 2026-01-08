@@ -164,8 +164,8 @@ func TestNewMockTradernetClient(t *testing.T) {
 	mock := NewMockTradernetClient()
 	require.NotNil(t, mock)
 
-	// Verify it implements the interface
-	var _ domain.TradernetClientInterface = mock
+	// Verify it implements the BrokerClient interface
+	var _ domain.BrokerClient = mock
 
 	// Test IsConnected returns false by default
 	assert.False(t, mock.IsConnected())

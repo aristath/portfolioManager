@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/aristath/sentinel/internal/clients/tradernet"
+	"github.com/aristath/sentinel/internal/domain"
 	"github.com/rs/zerolog"
 )
 
@@ -120,21 +120,21 @@ func TradernetToYahoo(tradernetSymbol string) string {
 // SymbolResolver service for resolving security identifiers to usable formats
 // Faithful translation from Python: app/modules/universe/domain/symbol_resolver.py -> SymbolResolver
 type SymbolResolver struct {
-	tradernetClient *tradernet.Client
-	securityRepo    *SecurityRepository
-	log             zerolog.Logger
+	brokerClient domain.BrokerClient
+	securityRepo *SecurityRepository
+	log          zerolog.Logger
 }
 
 // NewSymbolResolver creates a new symbol resolver
 func NewSymbolResolver(
-	tradernetClient *tradernet.Client,
+	brokerClient domain.BrokerClient,
 	securityRepo *SecurityRepository,
 	log zerolog.Logger,
 ) *SymbolResolver {
 	return &SymbolResolver{
-		tradernetClient: tradernetClient,
-		securityRepo:    securityRepo,
-		log:             log.With().Str("component", "symbol_resolver").Logger(),
+		brokerClient: brokerClient,
+		securityRepo: securityRepo,
+		log:          log.With().Str("component", "symbol_resolver").Logger(),
 	}
 }
 
@@ -246,12 +246,12 @@ func (r *SymbolResolver) getISINForTradernet(tradernetSymbol string) (*string, e
 //
 // Uses the Tradernet microservice FindSymbol endpoint which returns security info including ISIN.
 func (r *SymbolResolver) fetchISINFromTradernet(tradernetSymbol string) (*string, error) {
-	if r.tradernetClient == nil {
+	if r.brokerClient == nil {
 		r.log.Warn().Msg("Tradernet client not available, cannot fetch ISIN")
 		return nil, nil
 	}
 
-	if !r.tradernetClient.IsConnected() {
+	if !r.brokerClient.IsConnected() {
 		r.log.Warn().Msg("Tradernet client not connected, cannot fetch ISIN")
 		return nil, nil
 	}
@@ -259,7 +259,7 @@ func (r *SymbolResolver) fetchISINFromTradernet(tradernetSymbol string) (*string
 	r.log.Debug().Str("symbol", tradernetSymbol).Msg("Fetching ISIN from Tradernet API")
 
 	// Call Tradernet FindSymbol
-	securities, err := r.tradernetClient.FindSymbol(tradernetSymbol, nil)
+	securities, err := r.brokerClient.FindSymbol(tradernetSymbol, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find symbol in Tradernet: %w", err)
 	}

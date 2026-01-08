@@ -49,8 +49,9 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	// STEP 1: Initialize Clients
 	// ==========================================
 
-	// Tradernet client
-	container.TradernetClient = tradernet.NewClient(cfg.TradernetAPIKey, cfg.TradernetAPISecret, log)
+	// Broker client (Tradernet adapter)
+	container.BrokerClient = tradernet.NewTradernetBrokerAdapter(cfg.TradernetAPIKey, cfg.TradernetAPISecret, log)
+	log.Info().Msg("Broker client initialized (Tradernet adapter)")
 
 	// Yahoo Finance client (native Go implementation)
 	container.YahooClient = yahoo.NewNativeClient(log)
@@ -61,7 +62,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	// ==========================================
 
 	// Currency exchange service
-	container.CurrencyExchangeService = services.NewCurrencyExchangeService(container.TradernetClient, log)
+	container.CurrencyExchangeService = services.NewCurrencyExchangeService(container.BrokerClient, log)
 
 	// Market hours service
 	container.MarketHoursService = market_hours.NewMarketHoursService()
@@ -128,7 +129,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	// Trading service
 	container.TradingService = trading.NewTradingService(
 		container.TradeRepo,
-		container.TradernetClient,
+		container.BrokerClient,
 		container.TradeSafetyService,
 		container.EventManager,
 		log,
@@ -136,7 +137,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 
 	// Trade execution service for emergency rebalancing
 	container.TradeExecutionService = services.NewTradeExecutionService(
-		container.TradernetClient,
+		container.BrokerClient,
 		container.TradeRepo,
 		container.PositionRepo,
 		cashManager, // Use concrete type for now, will be interface later
@@ -159,7 +160,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		container.AllocRepo,
 		cashManager, // Use concrete type
 		container.UniverseDB.Conn(),
-		container.TradernetClient,
+		container.BrokerClient,
 		container.CurrencyExchangeService,
 		container.ExchangeRateCacheService,
 		container.SettingsService,
@@ -180,7 +181,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	container.DepositProcessor = cash_flows.NewDepositProcessor(cashManager, log)
 
 	// Tradernet adapter (adapts tradernet.Client to cash_flows.TradernetClient)
-	tradernetAdapter := cash_flows.NewTradernetAdapter(container.TradernetClient)
+	tradernetAdapter := cash_flows.NewTradernetAdapter(container.BrokerClient)
 
 	// Cash flows sync job (created but not stored - used by service)
 	syncJob := cash_flows.NewSyncJob(
@@ -211,7 +212,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 
 	// Symbol resolver
 	container.SymbolResolver = universe.NewSymbolResolver(
-		container.TradernetClient,
+		container.BrokerClient,
 		container.SecurityRepo,
 		log,
 	)
@@ -220,7 +221,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	container.SetupService = universe.NewSecuritySetupService(
 		container.SymbolResolver,
 		container.SecurityRepo,
-		container.TradernetClient,
+		container.BrokerClient,
 		container.YahooClient,
 		container.HistoricalSyncService,
 		container.EventManager,
@@ -234,7 +235,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		container.HistoricalSyncService,
 		container.YahooClient,
 		nil, // scoreCalculator - will be set later
-		container.TradernetClient,
+		container.BrokerClient,
 		container.SetupService,
 		container.PortfolioDB.Conn(),
 		log,
@@ -381,7 +382,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	container.NegativeBalanceRebalancer = rebalancing.NewNegativeBalanceRebalancer(
 		log,
 		cashManager,
-		container.TradernetClient,
+		container.BrokerClient,
 		container.SecurityRepo,
 		container.PositionRepo,
 		container.SettingsRepo,
@@ -400,7 +401,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		container.SecurityRepo,
 		container.AllocRepo,
 		cashManager,
-		container.TradernetClient,
+		container.BrokerClient,
 		container.YahooClient,
 		container.PlannerConfigRepo,
 		container.RecommendationRepo,
@@ -431,7 +432,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	container.MarketIndexService = market_regime.NewMarketIndexService(
 		container.UniverseDB.Conn(),
 		container.HistoryDB.Conn(),
-		container.TradernetClient,
+		container.BrokerClient,
 		log,
 	)
 

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/aristath/sentinel/internal/clients/tradernet"
 	"github.com/aristath/sentinel/internal/clients/yahoo"
 	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/modules/allocation"
@@ -65,7 +64,7 @@ type Service struct {
 	securityRepo       *universe.SecurityRepository
 	allocRepo          *allocation.Repository
 	cashManager        domain.CashManager
-	tradernetClient    *tradernet.Client
+	brokerClient       domain.BrokerClient
 	yahooClient        yahoo.FullClientInterface
 	configRepo         *planningrepo.ConfigRepository
 	recommendationRepo *planning.RecommendationRepository
@@ -84,7 +83,7 @@ func NewService(
 	securityRepo *universe.SecurityRepository,
 	allocRepo *allocation.Repository,
 	cashManager domain.CashManager,
-	tradernetClient *tradernet.Client,
+	brokerClient domain.BrokerClient,
 	yahooClient yahoo.FullClientInterface,
 	configRepo *planningrepo.ConfigRepository,
 	recommendationRepo *planning.RecommendationRepository,
@@ -100,7 +99,7 @@ func NewService(
 		securityRepo:       securityRepo,
 		allocRepo:          allocRepo,
 		cashManager:        cashManager,
-		tradernetClient:    tradernetClient,
+		brokerClient:       brokerClient,
 		yahooClient:        yahooClient,
 		configRepo:         configRepo,
 		recommendationRepo: recommendationRepo,

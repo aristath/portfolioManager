@@ -14,7 +14,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aristath/sentinel/internal/clients/tradernet"
 	"github.com/aristath/sentinel/internal/clients/yahoo"
 	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/modules/dividends"
@@ -34,7 +33,7 @@ type Handler struct {
 	service                 *optimization.OptimizerService
 	db                      *sql.DB
 	yahooClient             yahoo.FullClientInterface
-	tradernetClient         domain.TradernetClientInterface
+	brokerClient            domain.BrokerClient
 	currencyExchangeService domain.CurrencyExchangeServiceInterface
 	dividendRepo            *dividends.DividendRepository
 	cashManager             domain.CashManager
@@ -50,7 +49,7 @@ func NewHandler(
 	service *optimization.OptimizerService,
 	db *sql.DB,
 	yahooClient yahoo.FullClientInterface,
-	tradernetClient *tradernet.Client,
+	brokerClient domain.BrokerClient,
 	currencyExchangeService *services.CurrencyExchangeService,
 	dividendRepo *dividends.DividendRepository,
 	cashManager domain.CashManager,
@@ -60,7 +59,7 @@ func NewHandler(
 		service:                 service,
 		db:                      db,
 		yahooClient:             yahooClient,
-		tradernetClient:         tradernetClient,
+		brokerClient:            brokerClient,
 		currencyExchangeService: currencyExchangeService,
 		dividendRepo:            dividendRepo,
 		cashManager:             cashManager,

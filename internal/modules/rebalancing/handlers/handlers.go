@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/aristath/sentinel/internal/clients/tradernet"
 	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/modules/allocation"
 	"github.com/aristath/sentinel/internal/modules/portfolio"
@@ -20,7 +19,7 @@ import (
 type Handlers struct {
 	service                 *rebalancing.Service
 	portfolioService        *portfolio.PortfolioService
-	tradernetClient         *tradernet.Client
+	brokerClient            domain.BrokerClient
 	currencyExchangeService *services.CurrencyExchangeService
 	allocRepo               *allocation.Repository
 	cashManager             domain.CashManager
@@ -35,7 +34,7 @@ type Handlers struct {
 func NewHandlers(
 	service *rebalancing.Service,
 	portfolioService *portfolio.PortfolioService,
-	tradernetClient *tradernet.Client,
+	brokerClient domain.BrokerClient,
 	currencyExchangeService *services.CurrencyExchangeService,
 	allocRepo *allocation.Repository,
 	cashManager domain.CashManager,
@@ -44,7 +43,7 @@ func NewHandlers(
 	return &Handlers{
 		service:                 service,
 		portfolioService:        portfolioService,
-		tradernetClient:         tradernetClient,
+		brokerClient:            brokerClient,
 		currencyExchangeService: currencyExchangeService,
 		allocRepo:               allocRepo,
 		cashManager:             cashManager,
@@ -88,7 +87,7 @@ func (h *Handlers) CheckTriggers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get current positions
-	positions, err := h.tradernetClient.GetPortfolio()
+	positions, err := h.brokerClient.GetPortfolio()
 	if err != nil {
 		h.log.Error().Err(err).Msg("Failed to get portfolio")
 		http.Error(w, "Failed to get portfolio", http.StatusInternalServerError)
@@ -327,7 +326,7 @@ func (h *Handlers) ExecuteRebalance(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get positions and cash if not provided
-	positions, err := h.tradernetClient.GetPortfolio()
+	positions, err := h.brokerClient.GetPortfolio()
 	if err != nil {
 		h.log.Error().Err(err).Msg("Failed to get portfolio")
 		http.Error(w, "Failed to get portfolio", http.StatusInternalServerError)

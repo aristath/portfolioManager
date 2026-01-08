@@ -3,7 +3,6 @@ package domain
 import (
 	"testing"
 
-	"github.com/aristath/sentinel/internal/clients/tradernet"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -14,9 +13,9 @@ func TestCashManagerInterface(t *testing.T) {
 	var _ CashManager = (*mockCashManager)(nil)
 }
 
-// TestTradernetClientInterface tests that TradernetClientInterface has all required methods
-func TestTradernetClientInterface(t *testing.T) {
-	var _ TradernetClientInterface = (*mockTradernetClient)(nil)
+// TestBrokerClientInterface tests that BrokerClient interface has all required methods
+func TestBrokerClientInterface(t *testing.T) {
+	var _ BrokerClient = (*mockBrokerClient)(nil)
 }
 
 // TestCurrencyExchangeServiceInterface tests that CurrencyExchangeServiceInterface has all required methods
@@ -55,26 +54,53 @@ func (m *mockCashManager) GetCashBalance(currency string) (float64, error) {
 	return 1000.0, nil
 }
 
-type mockTradernetClient struct{}
+type mockBrokerClient struct{}
 
-func (m *mockTradernetClient) GetPortfolio() ([]tradernet.Position, error) {
+func (m *mockBrokerClient) GetPortfolio() ([]BrokerPosition, error) {
 	return nil, nil
 }
 
-func (m *mockTradernetClient) GetCashBalances() ([]tradernet.CashBalance, error) {
+func (m *mockBrokerClient) GetCashBalances() ([]BrokerCashBalance, error) {
 	return nil, nil
 }
 
-func (m *mockTradernetClient) GetExecutedTrades(limit int) ([]tradernet.Trade, error) {
+func (m *mockBrokerClient) GetExecutedTrades(limit int) ([]BrokerTrade, error) {
 	return nil, nil
 }
 
-func (m *mockTradernetClient) PlaceOrder(symbol, side string, quantity float64) (*tradernet.OrderResult, error) {
+func (m *mockBrokerClient) PlaceOrder(symbol, side string, quantity float64) (*BrokerOrderResult, error) {
 	return nil, nil
 }
 
-func (m *mockTradernetClient) IsConnected() bool {
+func (m *mockBrokerClient) GetPendingOrders() ([]BrokerPendingOrder, error) {
+	return nil, nil
+}
+
+func (m *mockBrokerClient) GetQuote(symbol string) (*BrokerQuote, error) {
+	return nil, nil
+}
+
+func (m *mockBrokerClient) FindSymbol(symbol string, exchange *string) ([]BrokerSecurityInfo, error) {
+	return nil, nil
+}
+
+func (m *mockBrokerClient) GetAllCashFlows(limit int) ([]BrokerCashFlow, error) {
+	return nil, nil
+}
+
+func (m *mockBrokerClient) GetCashMovements() (*BrokerCashMovement, error) {
+	return nil, nil
+}
+
+func (m *mockBrokerClient) IsConnected() bool {
 	return true
+}
+
+func (m *mockBrokerClient) HealthCheck() (*BrokerHealthResult, error) {
+	return nil, nil
+}
+
+func (m *mockBrokerClient) SetCredentials(apiKey, apiSecret string) {
 }
 
 type mockCurrencyExchangeService struct{}

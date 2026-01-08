@@ -5,27 +5,27 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aristath/sentinel/internal/clients/tradernet"
+	"github.com/aristath/sentinel/internal/domain"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 )
 
-// Mock Tradernet Client for testing
+// Mock Broker Client for testing
 
 type mockTradernetClient struct {
-	trades []tradernet.Trade
+	trades []domain.BrokerTrade
 	err    error
 }
 
-func (m *mockTradernetClient) GetExecutedTrades(limit int) ([]tradernet.Trade, error) {
+func (m *mockTradernetClient) GetExecutedTrades(limit int) ([]domain.BrokerTrade, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
 	return m.trades, nil
 }
 
-func (m *mockTradernetClient) PlaceOrder(symbol, side string, quantity float64) (*tradernet.OrderResult, error) {
-	return &tradernet.OrderResult{
+func (m *mockTradernetClient) PlaceOrder(symbol, side string, quantity float64) (*domain.BrokerOrderResult, error) {
+	return &domain.BrokerOrderResult{
 		OrderID:  "ORDER-" + symbol,
 		Symbol:   symbol,
 		Side:     side,
@@ -34,16 +34,43 @@ func (m *mockTradernetClient) PlaceOrder(symbol, side string, quantity float64) 
 	}, nil
 }
 
-func (m *mockTradernetClient) GetPortfolio() ([]tradernet.Position, error) {
+func (m *mockTradernetClient) GetPortfolio() ([]domain.BrokerPosition, error) {
 	return nil, nil
 }
 
-func (m *mockTradernetClient) GetCashBalances() ([]tradernet.CashBalance, error) {
+func (m *mockTradernetClient) GetCashBalances() ([]domain.BrokerCashBalance, error) {
+	return nil, nil
+}
+
+func (m *mockTradernetClient) GetPendingOrders() ([]domain.BrokerPendingOrder, error) {
+	return nil, nil
+}
+
+func (m *mockTradernetClient) GetQuote(symbol string) (*domain.BrokerQuote, error) {
+	return nil, nil
+}
+
+func (m *mockTradernetClient) FindSymbol(symbol string, exchange *string) ([]domain.BrokerSecurityInfo, error) {
+	return nil, nil
+}
+
+func (m *mockTradernetClient) GetAllCashFlows(limit int) ([]domain.BrokerCashFlow, error) {
+	return nil, nil
+}
+
+func (m *mockTradernetClient) GetCashMovements() (*domain.BrokerCashMovement, error) {
 	return nil, nil
 }
 
 func (m *mockTradernetClient) IsConnected() bool {
 	return true
+}
+
+func (m *mockTradernetClient) HealthCheck() (*domain.BrokerHealthResult, error) {
+	return &domain.BrokerHealthResult{Connected: true}, nil
+}
+
+func (m *mockTradernetClient) SetCredentials(apiKey, apiSecret string) {
 }
 
 // Mock Trade Repository for testing
@@ -284,7 +311,7 @@ func TestSyncFromTradernet_Success(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 
 	mockClient := &mockTradernetClient{
-		trades: []tradernet.Trade{
+		trades: []domain.BrokerTrade{
 			{
 				OrderID:    "ORDER-1",
 				Symbol:     "AAPL",
@@ -325,7 +352,7 @@ func TestSyncFromTradernet_DuplicateOrderID(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 
 	mockClient := &mockTradernetClient{
-		trades: []tradernet.Trade{
+		trades: []domain.BrokerTrade{
 			{
 				OrderID:    "ORDER-1",
 				Symbol:     "AAPL",
@@ -372,7 +399,7 @@ func TestSyncFromTradernet_InvalidSide(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 
 	mockClient := &mockTradernetClient{
-		trades: []tradernet.Trade{
+		trades: []domain.BrokerTrade{
 			{
 				OrderID:    "ORDER-1",
 				Symbol:     "AAPL",
@@ -408,7 +435,7 @@ func TestSyncFromTradernet_InvalidTimestamp(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 
 	mockClient := &mockTradernetClient{
-		trades: []tradernet.Trade{
+		trades: []domain.BrokerTrade{
 			{
 				OrderID:    "ORDER-1",
 				Symbol:     "AAPL",
@@ -463,7 +490,7 @@ func TestSyncFromTradernet_RepositoryError(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 
 	mockClient := &mockTradernetClient{
-		trades: []tradernet.Trade{
+		trades: []domain.BrokerTrade{
 			{
 				OrderID:    "ORDER-1",
 				Symbol:     "AAPL",
@@ -501,7 +528,7 @@ func TestSyncFromTradernet_EmptyResponse(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 
 	mockClient := &mockTradernetClient{
-		trades: []tradernet.Trade{},
+		trades: []domain.BrokerTrade{},
 	}
 
 	mockRepo := newMockTradeRepository()
@@ -548,7 +575,7 @@ func TestSyncFromTradernet_TimestampParsing(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			mockClient := &mockTradernetClient{
-				trades: []tradernet.Trade{
+				trades: []domain.BrokerTrade{
 					{
 						OrderID:    "ORDER-1",
 						Symbol:     "AAPL",
@@ -623,7 +650,7 @@ func TestSyncFromTradernet_TradeSideParsing(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			mockClient := &mockTradernetClient{
-				trades: []tradernet.Trade{
+				trades: []domain.BrokerTrade{
 					{
 						OrderID:    "ORDER-1",
 						Symbol:     "AAPL",
@@ -656,7 +683,7 @@ func TestSyncFromTradernet_PartialSuccess(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 
 	mockClient := &mockTradernetClient{
-		trades: []tradernet.Trade{
+		trades: []domain.BrokerTrade{
 			{
 				OrderID:    "ORDER-1",
 				Symbol:     "AAPL",
@@ -709,7 +736,7 @@ func TestSyncFromTradernet_CurrencyDefault(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 
 	mockClient := &mockTradernetClient{
-		trades: []tradernet.Trade{
+		trades: []domain.BrokerTrade{
 			{
 				OrderID:    "ORDER-1",
 				Symbol:     "AAPL",
@@ -736,7 +763,7 @@ func TestSyncFromTradernet_SourceTracking(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 
 	mockClient := &mockTradernetClient{
-		trades: []tradernet.Trade{
+		trades: []domain.BrokerTrade{
 			{
 				OrderID:    "ORDER-1",
 				Symbol:     "AAPL",
@@ -763,7 +790,7 @@ func TestSyncFromTradernet_LargeQuantity(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 
 	mockClient := &mockTradernetClient{
-		trades: []tradernet.Trade{
+		trades: []domain.BrokerTrade{
 			{
 				OrderID:    "ORDER-1",
 				Symbol:     "AAPL",
@@ -790,7 +817,7 @@ func TestSyncFromTradernet_ZeroQuantity(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 
 	mockClient := &mockTradernetClient{
-		trades: []tradernet.Trade{
+		trades: []domain.BrokerTrade{
 			{
 				OrderID:    "ORDER-1",
 				Symbol:     "AAPL",
@@ -818,7 +845,7 @@ func TestSyncFromTradernet_SkipsInvalidPrice(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 
 	mockClient := &mockTradernetClient{
-		trades: []tradernet.Trade{
+		trades: []domain.BrokerTrade{
 			{
 				OrderID:    "ORDER-1",
 				Symbol:     "AAPL",

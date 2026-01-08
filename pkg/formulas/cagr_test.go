@@ -15,17 +15,17 @@ func TestCalculateCAGR(t *testing.T) {
 	}{
 		{
 			name:        "insufficient data",
-			prices:      makeMonthlyPrices(100.0, 10),
+			prices:      makeMonthlyPrices(100.0, 4),
 			months:      60,
 			expectedNil: true,
-			description: "Need at least 12 months",
+			description: "Need at least 6 months",
 		},
 		{
 			name:        "exact minimum",
-			prices:      makeMonthlyPrices(100.0, 12),
-			months:      12,
+			prices:      makeMonthlyPrices(100.0, 6),
+			months:      6,
 			expectedNil: false,
-			description: "Exactly 12 months should work",
+			description: "Exactly 6 months should work",
 		},
 		{
 			name:        "valid data",
@@ -98,10 +98,10 @@ func TestCalculateCAGRFromPrices(t *testing.T) {
 		},
 		{
 			name:        "insufficient data",
-			prices:      makePriceSlice(100.0, 10),
+			prices:      makePriceSlice(100.0, 4),
 			months:      60,
 			expectedNil: true,
-			description: "Need at least 12 prices",
+			description: "Need at least 6 prices",
 		},
 		{
 			name:        "valid data",

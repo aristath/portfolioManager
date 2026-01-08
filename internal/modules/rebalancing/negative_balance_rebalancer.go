@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/aristath/sentinel/internal/clients/tradernet"
 	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/modules/planning"
 	"github.com/aristath/sentinel/internal/modules/portfolio"
@@ -27,7 +26,7 @@ const MinCurrencyReserve = 5.0
 type NegativeBalanceRebalancer struct {
 	log                     zerolog.Logger
 	cashManager             domain.CashManager
-	tradernetClient         *tradernet.Client
+	brokerClient            domain.BrokerClient
 	securityRepo            *universe.SecurityRepository
 	positionRepo            *portfolio.PositionRepository
 	settingsRepo            *settings.Repository
@@ -40,7 +39,7 @@ type NegativeBalanceRebalancer struct {
 func NewNegativeBalanceRebalancer(
 	log zerolog.Logger,
 	cashManager domain.CashManager,
-	tradernetClient *tradernet.Client,
+	brokerClient domain.BrokerClient,
 	securityRepo *universe.SecurityRepository,
 	positionRepo *portfolio.PositionRepository,
 	settingsRepo *settings.Repository,
@@ -51,7 +50,7 @@ func NewNegativeBalanceRebalancer(
 	return &NegativeBalanceRebalancer{
 		log:                     log.With().Str("service", "negative_balance_rebalancer").Logger(),
 		cashManager:             cashManager,
-		tradernetClient:         tradernetClient,
+		brokerClient:            brokerClient,
 		securityRepo:            securityRepo,
 		positionRepo:            positionRepo,
 		settingsRepo:            settingsRepo,
@@ -181,7 +180,7 @@ func (r *NegativeBalanceRebalancer) RebalanceNegativeBalances() (bool, error) {
 		return false, fmt.Errorf("cash manager not available")
 	}
 
-	if !r.tradernetClient.IsConnected() {
+	if !r.brokerClient.IsConnected() {
 		r.log.Error().Msg("Cannot connect to Tradernet for rebalancing")
 		return false, fmt.Errorf("tradernet not connected")
 	}

@@ -6,12 +6,12 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/aristath/sentinel/internal/clients/tradernet"
 	"github.com/aristath/sentinel/internal/clients/yahoo"
 	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/modules/dividends"
 	"github.com/aristath/sentinel/internal/modules/optimization"
 	"github.com/aristath/sentinel/internal/services"
+	testingpkg "github.com/aristath/sentinel/internal/testing"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -23,7 +23,7 @@ func TestRegisterRoutes(t *testing.T) {
 	service := &optimization.OptimizerService{}
 	var db *sql.DB = nil
 	var yahooClient yahoo.FullClientInterface = nil
-	tradernetClient := &tradernet.Client{}
+	tradernetClient := testingpkg.NewMockBrokerClient()
 	currencyExchangeService := &services.CurrencyExchangeService{}
 	dividendRepo := &dividends.DividendRepository{}
 	var cashManager domain.CashManager = nil
@@ -93,7 +93,7 @@ func TestRegisterRoutes_RoutePrefix(t *testing.T) {
 	service := &optimization.OptimizerService{}
 	var db *sql.DB = nil
 	var yahooClient yahoo.FullClientInterface = nil
-	tradernetClient := &tradernet.Client{}
+	tradernetClient := testingpkg.NewMockBrokerClient()
 	currencyExchangeService := &services.CurrencyExchangeService{}
 	dividendRepo := &dividends.DividendRepository{}
 	var cashManager domain.CashManager = nil

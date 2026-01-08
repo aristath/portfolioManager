@@ -9,7 +9,6 @@ import (
 	"sort"
 	"time"
 
-	"github.com/aristath/sentinel/internal/clients/tradernet"
 	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/modules/portfolio"
 	"github.com/rs/zerolog"
@@ -20,7 +19,7 @@ import (
 type Handler struct {
 	positionRepo            *portfolio.PositionRepository
 	service                 *portfolio.PortfolioService
-	tradernetClient         *tradernet.Client
+	brokerClient            domain.BrokerClient
 	currencyExchangeService domain.CurrencyExchangeServiceInterface
 	cashManager             domain.CashManager
 	configDB                *sql.DB
@@ -31,7 +30,7 @@ type Handler struct {
 func NewHandler(
 	positionRepo *portfolio.PositionRepository,
 	service *portfolio.PortfolioService,
-	tradernetClient *tradernet.Client,
+	brokerClient domain.BrokerClient,
 	currencyExchangeService domain.CurrencyExchangeServiceInterface,
 	cashManager domain.CashManager,
 	configDB *sql.DB,
@@ -40,7 +39,7 @@ func NewHandler(
 	return &Handler{
 		positionRepo:            positionRepo,
 		service:                 service,
-		tradernetClient:         tradernetClient,
+		brokerClient:            brokerClient,
 		currencyExchangeService: currencyExchangeService,
 		cashManager:             cashManager,
 		configDB:                configDB,
@@ -126,7 +125,7 @@ func (h *Handler) HandleGetSummary(w http.ResponseWriter, r *http.Request) {
 // HandleGetTransactions gets withdrawal transaction history from Tradernet microservice
 // Faithful translation of Python: @router.get("/transactions")
 func (h *Handler) HandleGetTransactions(w http.ResponseWriter, r *http.Request) {
-	movements, err := h.tradernetClient.GetCashMovements()
+	movements, err := h.brokerClient.GetCashMovements()
 	if err != nil {
 		h.writeError(w, http.StatusInternalServerError, "Failed to get transaction history")
 		return

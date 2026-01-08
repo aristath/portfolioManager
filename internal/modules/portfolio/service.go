@@ -49,7 +49,7 @@ type PortfolioService struct {
 	allocRepo                domain.AllocationTargetProvider
 	cashManager              domain.CashManager // Interface to break circular dependency
 	universeDB               *sql.DB            // For querying securities (universe.db)
-	tradernetClient          domain.TradernetClientInterface
+	brokerClient             domain.BrokerClient
 	currencyExchangeService  domain.CurrencyExchangeServiceInterface
 	exchangeRateCacheService ExchangeRateCacheServiceInterface // For cached exchange rates
 	settingsService          SettingsServiceInterface          // For staleness threshold configuration
@@ -62,7 +62,7 @@ func NewPortfolioService(
 	allocRepo domain.AllocationTargetProvider,
 	cashManager domain.CashManager,
 	universeDB *sql.DB,
-	tradernetClient domain.TradernetClientInterface,
+	brokerClient domain.BrokerClient,
 	currencyExchangeService domain.CurrencyExchangeServiceInterface,
 	exchangeRateCacheService ExchangeRateCacheServiceInterface,
 	settingsService SettingsServiceInterface,
@@ -73,7 +73,7 @@ func NewPortfolioService(
 		allocRepo:                allocRepo,
 		cashManager:              cashManager,
 		universeDB:               universeDB,
-		tradernetClient:          tradernetClient,
+		brokerClient:             brokerClient,
 		currencyExchangeService:  currencyExchangeService,
 		exchangeRateCacheService: exchangeRateCacheService,
 		settingsService:          settingsService,
@@ -528,12 +528,12 @@ func round(val float64, decimals int) float64 {
 func (s *PortfolioService) SyncFromTradernet() error {
 	s.log.Info().Msg("Starting portfolio sync from Tradernet")
 
-	if s.tradernetClient == nil {
+	if s.brokerClient == nil {
 		return fmt.Errorf("tradernet client not available")
 	}
 
 	// Step 1: Fetch current positions from Tradernet
-	positions, err := s.tradernetClient.GetPortfolio()
+	positions, err := s.brokerClient.GetPortfolio()
 	if err != nil {
 		return fmt.Errorf("failed to fetch portfolio from Tradernet: %w", err)
 	}
@@ -685,7 +685,7 @@ func (s *PortfolioService) SyncFromTradernet() error {
 	}
 
 	// Step 6: Sync cash balances to cash_balances table
-	balances, err := s.tradernetClient.GetCashBalances()
+	balances, err := s.brokerClient.GetCashBalances()
 	if err != nil {
 		s.log.Warn().Err(err).Msg("Failed to fetch cash balances from Tradernet")
 	} else {

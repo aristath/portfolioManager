@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/aristath/sentinel/internal/clients/tradernet"
+	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/modules/trading"
 	"github.com/aristath/sentinel/pkg/logger"
 )
@@ -320,7 +320,7 @@ func TestValidateBuyCashBalance_SmallTrade(t *testing.T) {
 type mockTradernetClient struct {
 	connected      bool
 	placeOrderErr  error
-	placeOrderResp *tradernet.OrderResult
+	placeOrderResp *domain.BrokerOrderResult
 }
 
 func newMockTradernetClient(connected bool) *mockTradernetClient {
@@ -333,19 +333,46 @@ func (m *mockTradernetClient) IsConnected() bool {
 	return m.connected
 }
 
-func (m *mockTradernetClient) GetPortfolio() ([]tradernet.Position, error) {
+func (m *mockTradernetClient) GetPortfolio() ([]domain.BrokerPosition, error) {
 	return nil, nil
 }
 
-func (m *mockTradernetClient) GetCashBalances() ([]tradernet.CashBalance, error) {
+func (m *mockTradernetClient) GetCashBalances() ([]domain.BrokerCashBalance, error) {
 	return nil, nil
 }
 
-func (m *mockTradernetClient) GetExecutedTrades(limit int) ([]tradernet.Trade, error) {
+func (m *mockTradernetClient) GetExecutedTrades(limit int) ([]domain.BrokerTrade, error) {
 	return nil, nil
 }
 
-func (m *mockTradernetClient) PlaceOrder(symbol, side string, quantity float64) (*tradernet.OrderResult, error) {
+func (m *mockTradernetClient) GetPendingOrders() ([]domain.BrokerPendingOrder, error) {
+	return nil, nil
+}
+
+func (m *mockTradernetClient) GetQuote(symbol string) (*domain.BrokerQuote, error) {
+	return nil, nil
+}
+
+func (m *mockTradernetClient) FindSymbol(symbol string, exchange *string) ([]domain.BrokerSecurityInfo, error) {
+	return nil, nil
+}
+
+func (m *mockTradernetClient) GetAllCashFlows(limit int) ([]domain.BrokerCashFlow, error) {
+	return nil, nil
+}
+
+func (m *mockTradernetClient) GetCashMovements() (*domain.BrokerCashMovement, error) {
+	return nil, nil
+}
+
+func (m *mockTradernetClient) HealthCheck() (*domain.BrokerHealthResult, error) {
+	return &domain.BrokerHealthResult{Connected: m.connected}, nil
+}
+
+func (m *mockTradernetClient) SetCredentials(apiKey, apiSecret string) {
+}
+
+func (m *mockTradernetClient) PlaceOrder(symbol, side string, quantity float64) (*domain.BrokerOrderResult, error) {
 	if m.placeOrderErr != nil {
 		return nil, m.placeOrderErr
 	}
@@ -353,7 +380,7 @@ func (m *mockTradernetClient) PlaceOrder(symbol, side string, quantity float64) 
 		return m.placeOrderResp, nil
 	}
 	// Default successful response
-	return &tradernet.OrderResult{
+	return &domain.BrokerOrderResult{
 		OrderID:  "ORDER-" + symbol,
 		Symbol:   symbol,
 		Side:     side,
@@ -407,8 +434,8 @@ func TestExecuteTrades_TradernetNotConnected(t *testing.T) {
 	mockClient := newMockTradernetClient(false) // Not connected
 
 	service := &TradeExecutionService{
-		tradernetClient: mockClient,
-		log:             log,
+		brokerClient: mockClient,
+		log:          log,
 	}
 
 	recommendations := []TradeRecommendation{
@@ -456,7 +483,7 @@ func TestExecuteTrades_SingleBuySuccess(t *testing.T) {
 	exchangeService := newMockCurrencyExchangeService(map[string]float64{})
 
 	service := &TradeExecutionService{
-		tradernetClient: mockClient,
+		brokerClient:    mockClient,
 		tradeRepo:       mockTradeRepo,
 		cashManager:     cashManager,
 		exchangeService: exchangeService,
@@ -504,9 +531,9 @@ func TestExecuteTrades_SingleSellSuccess(t *testing.T) {
 	mockTradeRepo := newMockTradeRepository()
 
 	service := &TradeExecutionService{
-		tradernetClient: mockClient,
-		tradeRepo:       mockTradeRepo,
-		log:             log,
+		brokerClient: mockClient,
+		tradeRepo:    mockTradeRepo,
+		log:          log,
 	}
 
 	recommendations := []TradeRecommendation{
@@ -548,7 +575,7 @@ func TestExecuteTrades_BuyBlockedByNegativeBalance(t *testing.T) {
 	exchangeService := newMockCurrencyExchangeService(map[string]float64{})
 
 	service := &TradeExecutionService{
-		tradernetClient: mockClient,
+		brokerClient:    mockClient,
 		cashManager:     cashManager,
 		exchangeService: exchangeService,
 		log:             log,
@@ -587,7 +614,7 @@ func TestExecuteTrades_BuyBlockedByInsufficientFunds(t *testing.T) {
 	exchangeService := newMockCurrencyExchangeService(map[string]float64{})
 
 	service := &TradeExecutionService{
-		tradernetClient: mockClient,
+		brokerClient:    mockClient,
 		cashManager:     cashManager,
 		exchangeService: exchangeService,
 		log:             log,
@@ -625,7 +652,7 @@ func TestExecuteTrades_PlaceOrderFailure(t *testing.T) {
 	exchangeService := newMockCurrencyExchangeService(map[string]float64{})
 
 	service := &TradeExecutionService{
-		tradernetClient: mockClient,
+		brokerClient:    mockClient,
 		cashManager:     cashManager,
 		exchangeService: exchangeService,
 		log:             log,
@@ -670,7 +697,7 @@ func TestExecuteTrades_MultipleTrades_MixedResults(t *testing.T) {
 	exchangeService := newMockCurrencyExchangeService(map[string]float64{})
 
 	service := &TradeExecutionService{
-		tradernetClient: mockClient,
+		brokerClient:    mockClient,
 		tradeRepo:       mockTradeRepo,
 		cashManager:     cashManager,
 		exchangeService: exchangeService,
@@ -751,7 +778,7 @@ func TestExecuteTrades_TradeRecordingFailure(t *testing.T) {
 	exchangeService := newMockCurrencyExchangeService(map[string]float64{})
 
 	service := &TradeExecutionService{
-		tradernetClient: mockClient,
+		brokerClient:    mockClient,
 		tradeRepo:       mockTradeRepo,
 		cashManager:     cashManager,
 		exchangeService: exchangeService,
@@ -787,8 +814,8 @@ func TestExecuteTrades_EmptyRecommendations(t *testing.T) {
 	mockClient := newMockTradernetClient(true)
 
 	service := &TradeExecutionService{
-		tradernetClient: mockClient,
-		log:             log,
+		brokerClient: mockClient,
+		log:          log,
 	}
 
 	recommendations := []TradeRecommendation{}

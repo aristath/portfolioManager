@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aristath/sentinel/internal/clients/tradernet"
+	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/events"
 	"github.com/aristath/sentinel/internal/modules/allocation"
 	"github.com/aristath/sentinel/internal/modules/portfolio"
@@ -38,7 +38,7 @@ type TradingHandlers struct {
 	tradeRepo                  *trading.TradeRepository
 	portfolioService           *portfolio.PortfolioService
 	concentrationAlertProvider allocation.ConcentrationAlertProvider
-	tradernetClient            *tradernet.Client
+	brokerClient               domain.BrokerClient
 	safetyService              *trading.TradeSafetyService
 	settingsService            *settings.Service
 	recommendationRepo         RecommendationRepositoryInterface
@@ -57,7 +57,7 @@ func NewTradingHandlers(
 	securityFetcher SecurityFetcher,
 	portfolioService *portfolio.PortfolioService,
 	concentrationAlertProvider allocation.ConcentrationAlertProvider,
-	tradernetClient *tradernet.Client,
+	brokerClient domain.BrokerClient,
 	safetyService *trading.TradeSafetyService,
 	settingsService *settings.Service,
 	recommendationRepo RecommendationRepositoryInterface,
@@ -70,7 +70,7 @@ func NewTradingHandlers(
 		securityFetcher:            securityFetcher,
 		portfolioService:           portfolioService,
 		concentrationAlertProvider: concentrationAlertProvider,
-		tradernetClient:            tradernetClient,
+		brokerClient:               brokerClient,
 		safetyService:              safetyService,
 		settingsService:            settingsService,
 		recommendationRepo:         recommendationRepo,
@@ -194,7 +194,7 @@ func (h *TradingHandlers) HandleExecuteTrade(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Execute trade via Tradernet microservice
-	result, err := h.tradernetClient.PlaceOrder(req.Symbol, req.Side, req.Quantity)
+	result, err := h.brokerClient.PlaceOrder(req.Symbol, req.Side, req.Quantity)
 	if err != nil {
 		h.log.Error().Err(err).Msg("Failed to place order")
 		h.writeError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to place order: %v", err))
@@ -237,7 +237,7 @@ func (h *TradingHandlers) recordTrade(
 	symbol string,
 	side string,
 	quantity float64,
-	result *tradernet.OrderResult,
+	result *domain.BrokerOrderResult,
 	tradingMode string,
 ) error {
 	now := time.Now()

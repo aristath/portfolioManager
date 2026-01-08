@@ -35,7 +35,7 @@ func TestInitializeServices(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify core services are created
-	assert.NotNil(t, container.TradernetClient)
+	assert.NotNil(t, container.BrokerClient)
 	assert.NotNil(t, container.YahooClient)
 	assert.NotNil(t, container.CurrencyExchangeService)
 	assert.NotNil(t, container.CashManager)

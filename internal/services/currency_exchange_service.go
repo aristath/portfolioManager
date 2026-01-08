@@ -9,7 +9,7 @@ package services
 import (
 	"fmt"
 
-	"github.com/aristath/sentinel/internal/clients/tradernet"
+	"github.com/aristath/sentinel/internal/domain"
 	"github.com/rs/zerolog"
 )
 
@@ -31,18 +31,18 @@ type ExchangeRate struct {
 	Symbol       string
 }
 
-// CurrencyExchangeService handles currency conversions via Tradernet FX pairs
+// CurrencyExchangeService handles currency conversions via broker FX pairs
 //
 // Supports direct conversions between EUR, USD, HKD, and GBP.
 // For pairs without direct instruments (GBP<->HKD), routes via EUR.
 //
 // Faithful translation from Python: app/shared/services/currency_exchange_service.py
 type CurrencyExchangeService struct {
-	client *tradernet.Client
-	log    zerolog.Logger
+	brokerClient domain.BrokerClient
+	log          zerolog.Logger
 }
 
-// DirectPairs contains direct currency pairs available on Tradernet
+// DirectPairs contains direct currency pairs available on broker
 // Format: (from_currency, to_currency) -> (symbol, action)
 var DirectPairs = map[string]struct {
 	Symbol string
@@ -75,10 +75,10 @@ var RateSymbols = map[string]string{
 }
 
 // NewCurrencyExchangeService creates a new currency exchange service
-func NewCurrencyExchangeService(client *tradernet.Client, log zerolog.Logger) *CurrencyExchangeService {
+func NewCurrencyExchangeService(brokerClient domain.BrokerClient, log zerolog.Logger) *CurrencyExchangeService {
 	return &CurrencyExchangeService{
-		client: client,
-		log:    log.With().Str("service", "currency_exchange").Logger(),
+		brokerClient: brokerClient,
+		log:          log.With().Str("service", "currency_exchange").Logger(),
 	}
 }
 
@@ -143,7 +143,7 @@ func (s *CurrencyExchangeService) GetRate(fromCurrency, toCurrency string) (floa
 		return 1.0, nil
 	}
 
-	if !s.client.IsConnected() {
+	if !s.brokerClient.IsConnected() {
 		return 0, fmt.Errorf("tradernet not connected")
 	}
 
@@ -155,7 +155,7 @@ func (s *CurrencyExchangeService) GetRate(fromCurrency, toCurrency string) (floa
 	}
 
 	// Get quote
-	quote, err := s.client.GetQuote(symbol)
+	quote, err := s.brokerClient.GetQuote(symbol)
 	if err != nil {
 		s.log.Warn().Err(err).Str("symbol", symbol).Msg("Failed to get quote")
 		return 0, err
@@ -195,7 +195,7 @@ func (s *CurrencyExchangeService) getRateViaPath(fromCurrency, toCurrency string
 	}
 
 	if len(path) == 1 {
-		quote, err := s.client.GetQuote(path[0].Symbol)
+		quote, err := s.brokerClient.GetQuote(path[0].Symbol)
 		if err != nil || quote.Price <= 0 {
 			return 0, fmt.Errorf("failed to get quote for %s", path[0].Symbol)
 		}
@@ -247,7 +247,7 @@ func (s *CurrencyExchangeService) validateExchangeRequest(fromCurrency, toCurren
 		return false
 	}
 
-	if !s.client.IsConnected() {
+	if !s.brokerClient.IsConnected() {
 		s.log.Error().Msg("Tradernet not connected for exchange")
 		return false
 	}
@@ -289,7 +289,7 @@ func (s *CurrencyExchangeService) executeStep(step ConversionStep, amount float6
 		Str("to", step.ToCurrency).
 		Msg("Executing FX conversion")
 
-	_, err := s.client.PlaceOrder(step.Symbol, step.Action, amount)
+	_, err := s.brokerClient.PlaceOrder(step.Symbol, step.Action, amount)
 	return err
 }
 
@@ -301,7 +301,7 @@ func (s *CurrencyExchangeService) EnsureBalance(currency string, minAmount float
 		return true, nil
 	}
 
-	if !s.client.IsConnected() {
+	if !s.brokerClient.IsConnected() {
 		return false, fmt.Errorf("tradernet not connected")
 	}
 
@@ -335,7 +335,7 @@ func (s *CurrencyExchangeService) EnsureBalance(currency string, minAmount float
 
 // getBalances returns current and source currency balances
 func (s *CurrencyExchangeService) getBalances(currency, sourceCurrency string) (float64, float64, error) {
-	balances, err := s.client.GetCashBalances()
+	balances, err := s.brokerClient.GetCashBalances()
 	if err != nil {
 		return 0, 0, err
 	}

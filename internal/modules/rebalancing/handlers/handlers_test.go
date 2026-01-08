@@ -3,8 +3,9 @@ package handlers
 import (
 	"testing"
 
-	"github.com/aristath/sentinel/internal/clients/tradernet"
+	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/services"
+	testingpkg "github.com/aristath/sentinel/internal/testing"
 	"github.com/rs/zerolog"
 )
 
@@ -12,7 +13,7 @@ func TestCashConversion_AllEUR(t *testing.T) {
 	// Setup - create real CurrencyExchangeService with mock client
 	// Note: These tests may fail at runtime if the service requires connection
 	// but they will compile. Consider updating to use NewHandlers with proper mocks.
-	mockClient := tradernet.NewClient("", "", zerolog.Nop())
+	mockClient := testingpkg.NewMockBrokerClient()
 	exchangeService := services.NewCurrencyExchangeService(mockClient, zerolog.Nop())
 
 	handler := &Handlers{
@@ -64,9 +65,18 @@ func TestCashConversion_AllEUR(t *testing.T) {
 
 func TestCashConversion_MixedCurrencies(t *testing.T) {
 	// Setup - create real CurrencyExchangeService with mock client
-	// Note: These tests may fail at runtime if the service requires connection
-	// but they will compile. Consider updating to use NewHandlers with proper mocks.
-	mockClient := tradernet.NewClient("", "", zerolog.Nop())
+	mockClient := testingpkg.NewMockBrokerClient()
+
+	// Configure exchange rate quotes
+	mockClient.SetQuote("USDEUR=X", &domain.BrokerQuote{
+		Symbol: "USDEUR=X",
+		Price:  0.92, // 1 USD = 0.92 EUR
+	})
+	mockClient.SetQuote("GBPEUR=X", &domain.BrokerQuote{
+		Symbol: "GBPEUR=X",
+		Price:  1.17, // 1 GBP = 1.17 EUR
+	})
+
 	exchangeService := services.NewCurrencyExchangeService(mockClient, zerolog.Nop())
 
 	handler := &Handlers{
@@ -121,7 +131,7 @@ func TestCashConversion_MixedCurrencies(t *testing.T) {
 
 func TestShortfallConversion_Mixed(t *testing.T) {
 	// Setup - create real CurrencyExchangeService with mock client
-	mockClient := tradernet.NewClient("", "", zerolog.Nop())
+	mockClient := testingpkg.NewMockBrokerClient()
 	exchangeService := services.NewCurrencyExchangeService(mockClient, zerolog.Nop())
 
 	handler := &Handlers{
@@ -171,7 +181,7 @@ func TestShortfallConversion_Mixed(t *testing.T) {
 
 func TestShortfallConversion_FallbackRates(t *testing.T) {
 	// Setup - create real CurrencyExchangeService with mock client
-	mockClient := tradernet.NewClient("", "", zerolog.Nop())
+	mockClient := testingpkg.NewMockBrokerClient()
 	exchangeService := services.NewCurrencyExchangeService(mockClient, zerolog.Nop())
 
 	handler := &Handlers{
@@ -221,7 +231,7 @@ func TestShortfallConversion_FallbackRates(t *testing.T) {
 
 func TestCashConversion_FallbackRates(t *testing.T) {
 	// Setup - create real CurrencyExchangeService with mock client
-	mockClient := tradernet.NewClient("", "", zerolog.Nop())
+	mockClient := testingpkg.NewMockBrokerClient()
 	exchangeService := services.NewCurrencyExchangeService(mockClient, zerolog.Nop())
 
 	handler := &Handlers{

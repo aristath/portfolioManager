@@ -2,7 +2,6 @@
 package di
 
 import (
-	"github.com/aristath/sentinel/internal/clients/tradernet"
 	"github.com/aristath/sentinel/internal/clients/yahoo"
 	"github.com/aristath/sentinel/internal/database"
 	"github.com/aristath/sentinel/internal/domain"
@@ -48,8 +47,8 @@ type Container struct {
 	CacheDB     *database.DB
 
 	// Clients
-	TradernetClient *tradernet.Client
-	YahooClient     *yahoo.NativeClient
+	BrokerClient domain.BrokerClient
+	YahooClient  *yahoo.NativeClient
 
 	// Repositories
 	PositionRepo       *portfolio.PositionRepository

@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/aristath/sentinel/internal/clients/tradernet"
 	"github.com/aristath/sentinel/internal/database"
 	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/modules/display"
@@ -36,7 +35,7 @@ type SystemHandlers struct {
 	queueManager            *queue.Manager
 	portfolioDisplayCalc    *display.PortfolioDisplayCalculator
 	displayManager          *display.StateManager
-	tradernetClient         *tradernet.Client
+	brokerClient            domain.BrokerClient
 	currencyExchangeService *services.CurrencyExchangeService
 	cashManager             domain.CashManager
 	marketHoursService      *market_hours.MarketHoursService
@@ -85,7 +84,7 @@ func NewSystemHandlers(
 	portfolioDB, configDB, universeDB, historyDB *database.DB,
 	queueManager *queue.Manager,
 	displayManager *display.StateManager,
-	tradernetClient *tradernet.Client,
+	brokerClient domain.BrokerClient,
 	currencyExchangeService *services.CurrencyExchangeService,
 	cashManager domain.CashManager,
 	marketHoursService *market_hours.MarketHoursService,
@@ -117,7 +116,7 @@ func NewSystemHandlers(
 		portfolioDisplayCalc:    portfolioDisplayCalc,
 		displayManager:          displayManager,
 		marketHoursService:      marketHoursService,
-		tradernetClient:         tradernetClient,
+		brokerClient:            brokerClient,
 		currencyExchangeService: currencyExchangeService,
 		cashManager:             cashManager,
 	}
@@ -601,7 +600,7 @@ func (h *SystemHandlers) HandleTradernetStatus(w http.ResponseWriter, r *http.Re
 		Message:   "",
 	}
 
-	if h.tradernetClient == nil {
+	if h.brokerClient == nil {
 		response.Message = "Tradernet client not configured"
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(response)
@@ -621,11 +620,11 @@ func (h *SystemHandlers) HandleTradernetStatus(w http.ResponseWriter, r *http.Re
 
 	// Update client credentials if available
 	if apiKey != nil && apiSecret != nil && *apiKey != "" && *apiSecret != "" {
-		h.tradernetClient.SetCredentials(*apiKey, *apiSecret)
+		h.brokerClient.SetCredentials(*apiKey, *apiSecret)
 		h.log.Debug().Msg("Updated Tradernet client credentials from settings")
 	}
 
-	healthResult, err := h.tradernetClient.HealthCheck()
+	healthResult, err := h.brokerClient.HealthCheck()
 	if err != nil {
 		h.log.Error().Err(err).Msg("Failed to check Tradernet health")
 		response.Message = "Failed to check Tradernet service: " + err.Error()
@@ -652,7 +651,7 @@ func (h *SystemHandlers) HandleTradernetStatus(w http.ResponseWriter, r *http.Re
 
 // RefreshCredentials refreshes tradernet client credentials from settings database
 func (h *SystemHandlers) RefreshCredentials() error {
-	if h.tradernetClient == nil {
+	if h.brokerClient == nil {
 		return fmt.Errorf("tradernet client not configured")
 	}
 
@@ -667,7 +666,7 @@ func (h *SystemHandlers) RefreshCredentials() error {
 	}
 
 	if apiKey != nil && apiSecret != nil && *apiKey != "" && *apiSecret != "" {
-		h.tradernetClient.SetCredentials(*apiKey, *apiSecret)
+		h.brokerClient.SetCredentials(*apiKey, *apiSecret)
 		h.log.Info().Msg("Tradernet client credentials refreshed from settings database")
 		return nil
 	}

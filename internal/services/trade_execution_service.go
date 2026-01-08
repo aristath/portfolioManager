@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aristath/sentinel/internal/clients/tradernet"
 	"github.com/aristath/sentinel/internal/clients/yahoo"
 	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/events"
@@ -25,7 +24,7 @@ import (
 
 // Note: CashManagerInterface, CurrencyExchangeServiceInterface, and TradernetClientInterface
 // have been moved to domain/interfaces.go. Use domain.CashManager, domain.CurrencyExchangeServiceInterface,
-// and domain.TradernetClientInterface instead.
+// and domain.BrokerClient instead.
 
 // TradeRepositoryInterface defines the interface for trade persistence
 type TradeRepositoryInterface interface {
@@ -62,7 +61,7 @@ type TradeRecommendation struct {
 //
 // Faithful translation from Python: app/modules/trading/services/trade_execution_service.py
 type TradeExecutionService struct {
-	tradernetClient domain.TradernetClientInterface
+	brokerClient    domain.BrokerClient
 	tradeRepo       TradeRepositoryInterface
 	positionRepo    *portfolio.PositionRepository
 	cashManager     domain.CashManager
@@ -84,7 +83,7 @@ type ExecuteResult struct {
 
 // NewTradeExecutionService creates a new trade execution service
 func NewTradeExecutionService(
-	tradernetClient domain.TradernetClientInterface,
+	brokerClient domain.BrokerClient,
 	tradeRepo TradeRepositoryInterface,
 	positionRepo *portfolio.PositionRepository,
 	cashManager domain.CashManager,
@@ -97,7 +96,7 @@ func NewTradeExecutionService(
 	log zerolog.Logger,
 ) *TradeExecutionService {
 	return &TradeExecutionService{
-		tradernetClient: tradernetClient,
+		brokerClient:    brokerClient,
 		tradeRepo:       tradeRepo,
 		positionRepo:    positionRepo,
 		cashManager:     cashManager,
@@ -118,7 +117,7 @@ func NewTradeExecutionService(
 func (s *TradeExecutionService) ExecuteTrades(recommendations []TradeRecommendation) []ExecuteResult {
 	results := make([]ExecuteResult, 0, len(recommendations))
 
-	if !s.tradernetClient.IsConnected() {
+	if !s.brokerClient.IsConnected() {
 		s.log.Error().Msg("Tradernet not connected")
 		// Return error for all trades
 		for _, rec := range recommendations {
@@ -189,7 +188,7 @@ func (s *TradeExecutionService) executeSingleTrade(rec TradeRecommendation) Exec
 	}
 
 	// Place order via Tradernet
-	orderResult, err := s.tradernetClient.PlaceOrder(
+	orderResult, err := s.brokerClient.PlaceOrder(
 		rec.Symbol,
 		rec.Side, // "BUY" or "SELL"
 		rec.Quantity,
@@ -260,7 +259,7 @@ func (s *TradeExecutionService) executeSingleTrade(rec TradeRecommendation) Exec
 }
 
 // recordTrade records a trade in the database
-func (s *TradeExecutionService) recordTrade(orderResult *tradernet.OrderResult, rec TradeRecommendation) error {
+func (s *TradeExecutionService) recordTrade(orderResult *domain.BrokerOrderResult, rec TradeRecommendation) error {
 	// Convert side string to TradeSide
 	side, err := trading.TradeSideFromString(orderResult.Side)
 	if err != nil {

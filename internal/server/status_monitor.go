@@ -10,9 +10,9 @@ import (
 
 // StatusMonitor periodically checks system statuses and emits events on changes
 type StatusMonitor struct {
-	eventManager    *events.Manager
-	systemHandlers  *SystemHandlers
-	log             zerolog.Logger
+	eventManager   *events.Manager
+	systemHandlers *SystemHandlers
+	log            zerolog.Logger
 
 	// Track previous states
 	lastSystemStatus    map[string]interface{}
@@ -26,9 +26,9 @@ func NewStatusMonitor(
 	log zerolog.Logger,
 ) *StatusMonitor {
 	return &StatusMonitor{
-		eventManager:    eventManager,
-		systemHandlers:  systemHandlers,
-		log:             log.With().Str("component", "status_monitor").Logger(),
+		eventManager:     eventManager,
+		systemHandlers:   systemHandlers,
+		log:              log.With().Str("component", "status_monitor").Logger(),
 		lastSystemStatus: make(map[string]interface{}),
 	}
 }
@@ -74,12 +74,12 @@ func (m *StatusMonitor) checkSystemStatus() {
 
 // checkTradernetStatus checks if tradernet connection status has changed
 func (m *StatusMonitor) checkTradernetStatus() {
-	if m.systemHandlers == nil || m.systemHandlers.tradernetClient == nil {
+	if m.systemHandlers == nil || m.systemHandlers.brokerClient == nil {
 		return
 	}
 
 	// Check connection status
-	connected := m.systemHandlers.tradernetClient.IsConnected()
+	connected := m.systemHandlers.brokerClient.IsConnected()
 
 	// Emit event if status changed
 	if connected != m.lastTradernetStatus {

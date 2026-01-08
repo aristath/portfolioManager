@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/aristath/sentinel/internal/clients/tradernet"
 	"github.com/aristath/sentinel/internal/clients/yahoo"
+	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/events"
 	"github.com/rs/zerolog"
 )
@@ -15,7 +15,7 @@ import (
 type SecuritySetupService struct {
 	symbolResolver  *SymbolResolver
 	securityRepo    *SecurityRepository
-	tradernetClient *tradernet.Client
+	brokerClient    domain.BrokerClient
 	yahooClient     yahoo.FullClientInterface
 	historicalSync  *HistoricalSyncService
 	eventManager    *events.Manager
@@ -33,7 +33,7 @@ type ScoreCalculator interface {
 func NewSecuritySetupService(
 	symbolResolver *SymbolResolver,
 	securityRepo *SecurityRepository,
-	tradernetClient *tradernet.Client,
+	brokerClient domain.BrokerClient,
 	yahooClient yahoo.FullClientInterface,
 	historicalSync *HistoricalSyncService,
 	eventManager *events.Manager,
@@ -43,7 +43,7 @@ func NewSecuritySetupService(
 	return &SecuritySetupService{
 		symbolResolver:  symbolResolver,
 		securityRepo:    securityRepo,
-		tradernetClient: tradernetClient,
+		brokerClient:    brokerClient,
 		yahooClient:     yahooClient,
 		historicalSync:  historicalSync,
 		eventManager:    eventManager,
@@ -257,7 +257,7 @@ func (s *SecuritySetupService) AddSecurityByIdentifier(
 		tradernetSymbol = identifier
 
 		// Check if Tradernet is connected before trying to fetch data
-		if s.tradernetClient == nil || !s.tradernetClient.IsConnected() {
+		if s.brokerClient == nil || !s.brokerClient.IsConnected() {
 			return nil, fmt.Errorf("tradernet client is not connected. Cannot fetch ISIN for symbol: %s. Please connect to Tradernet first", tradernetSymbol)
 		}
 
@@ -279,7 +279,7 @@ func (s *SecuritySetupService) AddSecurityByIdentifier(
 		// Check if Tradernet is connected before trying to lookup
 		// Note: We check here instead of inside getTradernetSymbolFromISIN to avoid
 		// redundant checks and ensure consistent error messages
-		if s.tradernetClient == nil || !s.tradernetClient.IsConnected() {
+		if s.brokerClient == nil || !s.brokerClient.IsConnected() {
 			return nil, fmt.Errorf("tradernet client is not connected. Cannot lookup Tradernet symbol for ISIN: %s. Please connect to Tradernet first", isinVal)
 		}
 
@@ -323,7 +323,7 @@ func (s *SecuritySetupService) AddSecurityByIdentifier(
 	// Ensure we have ISIN - try to get it if we don't have it yet
 	if isin == nil || *isin == "" {
 		// Check if Tradernet is connected before trying to fetch ISIN
-		if s.tradernetClient == nil || !s.tradernetClient.IsConnected() {
+		if s.brokerClient == nil || !s.brokerClient.IsConnected() {
 			return nil, fmt.Errorf("tradernet client is not connected. Cannot fetch ISIN for symbol: %s. Please connect to Tradernet first", tradernetSymbol)
 		}
 
@@ -478,18 +478,18 @@ type TradernetData struct {
 // getTradernetData gets currency and ISIN from Tradernet for a symbol
 // Faithful translation from Python: SecuritySetupService._get_tradernet_data()
 func (s *SecuritySetupService) getTradernetData(symbol string) (*TradernetData, error) {
-	if s.tradernetClient == nil {
+	if s.brokerClient == nil {
 		s.log.Warn().Msg("Tradernet client not available, skipping data fetch")
 		return nil, nil
 	}
 
-	if !s.tradernetClient.IsConnected() {
+	if !s.brokerClient.IsConnected() {
 		s.log.Warn().Msg("Tradernet not connected, skipping data fetch")
 		return nil, nil
 	}
 
 	// Use FindSymbol to get security info
-	securities, err := s.tradernetClient.FindSymbol(symbol, nil)
+	securities, err := s.brokerClient.FindSymbol(symbol, nil)
 	if err != nil {
 		s.log.Warn().Err(err).Str("symbol", symbol).Msg("Failed to get Tradernet data")
 		return nil, err
@@ -522,7 +522,7 @@ type TradernetLookupResult struct {
 // Note: Connection check should be done by caller to avoid redundant expensive checks.
 // IsConnected() makes a network call (UserInfo), so calling it twice can cause false negatives.
 func (s *SecuritySetupService) getTradernetSymbolFromISIN(isin string) (*TradernetLookupResult, error) {
-	if s.tradernetClient == nil {
+	if s.brokerClient == nil {
 		return nil, fmt.Errorf("tradernet client not available")
 	}
 
@@ -530,7 +530,7 @@ func (s *SecuritySetupService) getTradernetSymbolFromISIN(isin string) (*Tradern
 	// and can fail intermittently even when Tradernet is functionally connected.
 	// Instead, just try the operation and handle errors properly.
 
-	securities, err := s.tradernetClient.FindSymbol(isin, nil)
+	securities, err := s.brokerClient.FindSymbol(isin, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to lookup ISIN via FindSymbol: %w", err)
 	}

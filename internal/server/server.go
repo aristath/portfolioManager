@@ -108,7 +108,7 @@ func New(cfg Config) *Server {
 	dataDir := cfg.Config.DataDir
 
 	// Use services from container (single source of truth)
-	tradernetClient := cfg.Container.TradernetClient
+	tradernetClient := cfg.Container.BrokerClient
 	currencyExchangeService := cfg.Container.CurrencyExchangeService
 	cashManagerForSystem := cfg.Container.CashManager
 	marketHoursService := cfg.Container.MarketHoursService
@@ -395,7 +395,7 @@ func (s *Server) setupRoutes() {
 
 		// Portfolio module (MIGRATED TO GO!)
 		portfolioPositionRepo := s.container.PositionRepo
-		portfolioTradernetClient := s.container.TradernetClient
+		portfolioTradernetClient := s.container.BrokerClient
 		portfolioCurrencyExchangeService := s.container.CurrencyExchangeService
 		portfolioCashManager := s.container.CashManager
 		// portfolioService already declared above for allocation module
@@ -437,7 +437,7 @@ func (s *Server) setupRoutes() {
 		tradingTradeRepo := s.container.TradeRepo
 		tradingSecurityRepo := s.container.SecurityRepo
 		tradingSecurityFetcher := &securityFetcherAdapter{repo: tradingSecurityRepo}
-		tradingTradernetClient := s.container.TradernetClient
+		tradingTradernetClient := s.container.BrokerClient
 		tradingPortfolioService := s.container.PortfolioService
 		tradingAlertService := s.container.ConcentrationAlertService
 		tradingSettingsService := s.container.SettingsService
@@ -477,7 +477,7 @@ func (s *Server) setupRoutes() {
 
 		// Optimization module (MIGRATED TO GO!)
 		optimizationYahooClient := s.container.YahooClient
-		optimizationTradernetClient := s.container.TradernetClient
+		optimizationTradernetClient := s.container.BrokerClient
 		optimizationDividendRepo := s.container.DividendRepo
 		optimizationCurrencyExchangeService := s.container.CurrencyExchangeService
 		optimizationCashManager := s.container.CashManager
@@ -497,7 +497,7 @@ func (s *Server) setupRoutes() {
 		// Cash-flows module (MIGRATED TO GO!)
 		cashFlowsRepo := s.container.CashFlowsRepo
 		cashFlowsDepositProcessor := s.container.DepositProcessor
-		cashFlowsTradernetClient := s.container.TradernetClient
+		cashFlowsTradernetClient := s.container.BrokerClient
 		// Initialize schema
 		if err := cash_flows.InitSchema(s.ledgerDB.Conn()); err != nil {
 			s.log.Fatal().Err(err).Msg("Failed to initialize cash_flows schema")
@@ -514,7 +514,7 @@ func (s *Server) setupRoutes() {
 		cashFlowsHandler.RegisterRoutes(r)
 
 		// Rebalancing module (MIGRATED TO GO!)
-		rebalancingTradernetClient := s.container.TradernetClient
+		rebalancingTradernetClient := s.container.BrokerClient
 		rebalancingCurrencyExchangeService := s.container.CurrencyExchangeService
 		rebalancingAllocRepo := s.container.AllocRepo
 		rebalancingCashManager := s.container.CashManager

@@ -77,7 +77,7 @@ type TradeRepositoryInterface interface {
 var _ TradeRepositoryInterface = (*TradeRepository)(nil)
 
 // Note: TradernetClientInterface has been moved to domain/interfaces.go
-// Use domain.TradernetClientInterface instead
+// Use domain.BrokerClient instead
 
 // TradingService handles trade-related business logic.
 //
@@ -91,33 +91,33 @@ var _ TradeRepositoryInterface = (*TradeRepository)(nil)
 //
 // Dependencies:
 //   - TradeRepositoryInterface: Trade data access
-//   - domain.TradernetClientInterface: Order placement
+//   - domain.BrokerClient: Order placement
 //   - TradeSafetyService: Safety rule validation
 //   - events.Manager: Event emission
 //
 // See internal/services/README.md for service architecture documentation.
 type TradingService struct {
-	log             zerolog.Logger
-	tradeRepo       TradeRepositoryInterface
-	tradernetClient domain.TradernetClientInterface
-	safetyService   *TradeSafetyService
-	eventManager    *events.Manager
+	log           zerolog.Logger
+	tradeRepo     TradeRepositoryInterface
+	brokerClient  domain.BrokerClient
+	safetyService *TradeSafetyService
+	eventManager  *events.Manager
 }
 
 // NewTradingService creates a new trading service
 func NewTradingService(
 	tradeRepo TradeRepositoryInterface,
-	tradernetClient domain.TradernetClientInterface,
+	brokerClient domain.BrokerClient,
 	safetyService *TradeSafetyService,
 	eventManager *events.Manager,
 	log zerolog.Logger,
 ) *TradingService {
 	return &TradingService{
-		log:             log.With().Str("service", "trading").Logger(),
-		tradeRepo:       tradeRepo,
-		tradernetClient: tradernetClient,
-		safetyService:   safetyService,
-		eventManager:    eventManager,
+		log:           log.With().Str("service", "trading").Logger(),
+		tradeRepo:     tradeRepo,
+		brokerClient:  brokerClient,
+		safetyService: safetyService,
+		eventManager:  eventManager,
 	}
 }
 
@@ -127,7 +127,7 @@ func (s *TradingService) SyncFromTradernet() error {
 	s.log.Info().Msg("Syncing trades from Tradernet")
 
 	// Get recent trades from Tradernet (last 100 trades)
-	trades, err := s.tradernetClient.GetExecutedTrades(100)
+	trades, err := s.brokerClient.GetExecutedTrades(100)
 	if err != nil {
 		return fmt.Errorf("failed to get trades from Tradernet: %w", err)
 	}
@@ -259,7 +259,7 @@ func (s *TradingService) ExecuteTrade(req TradeRequest) (*TradeResult, error) {
 	}
 
 	// Execute trade via Tradernet microservice
-	orderResult, err := s.tradernetClient.PlaceOrder(req.Symbol, req.Side, float64(req.Quantity))
+	orderResult, err := s.brokerClient.PlaceOrder(req.Symbol, req.Side, float64(req.Quantity))
 	if err != nil {
 		return &TradeResult{
 			Success: false,

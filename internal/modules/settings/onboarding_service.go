@@ -1,7 +1,7 @@
 package settings
 
 import (
-	"github.com/aristath/sentinel/internal/clients/tradernet"
+	"github.com/aristath/sentinel/internal/domain"
 	"github.com/rs/zerolog"
 )
 
@@ -25,7 +25,7 @@ type OnboardingService struct {
 	portfolioService PortfolioServiceInterface
 	syncService      SyncServiceInterface
 	tradingService   TradingServiceInterface
-	tradernetClient  *tradernet.Client
+	brokerClient     domain.BrokerClient
 	log              zerolog.Logger
 }
 
@@ -34,14 +34,14 @@ func NewOnboardingService(
 	portfolioService PortfolioServiceInterface,
 	syncService SyncServiceInterface,
 	tradingService TradingServiceInterface,
-	tradernetClient *tradernet.Client,
+	brokerClient domain.BrokerClient,
 	log zerolog.Logger,
 ) *OnboardingService {
 	return &OnboardingService{
 		portfolioService: portfolioService,
 		syncService:      syncService,
 		tradingService:   tradingService,
-		tradernetClient:  tradernetClient,
+		brokerClient:     brokerClient,
 		log:              log.With().Str("service", "onboarding").Logger(),
 	}
 }

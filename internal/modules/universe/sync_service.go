@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aristath/sentinel/internal/clients/tradernet"
+	"github.com/aristath/sentinel/internal/domain"
 	"github.com/rs/zerolog"
 )
 
@@ -15,7 +15,7 @@ type SyncService struct {
 	historicalSync  *HistoricalSyncService
 	yahooClient     YahooClientInterface
 	scoreCalculator ScoreCalculator
-	tradernetClient *tradernet.Client
+	brokerClient    domain.BrokerClient
 	setupService    *SecuritySetupService
 	db              DBExecutor
 	log             zerolog.Logger
@@ -27,7 +27,7 @@ func NewSyncService(
 	historicalSync *HistoricalSyncService,
 	yahooClient YahooClientInterface,
 	scoreCalculator ScoreCalculator,
-	tradernetClient *tradernet.Client,
+	brokerClient domain.BrokerClient,
 	setupService *SecuritySetupService,
 	db DBExecutor,
 	log zerolog.Logger,
@@ -37,7 +37,7 @@ func NewSyncService(
 		historicalSync:  historicalSync,
 		yahooClient:     yahooClient,
 		scoreCalculator: scoreCalculator,
-		tradernetClient: tradernetClient,
+		brokerClient:    brokerClient,
 		setupService:    setupService,
 		db:              db,
 		log:             log.With().Str("service", "sync").Logger(),
@@ -469,12 +469,12 @@ func (s *SyncService) RebuildUniverseFromPortfolio() (int, error) {
 	s.log.Info().Msg("Rebuilding universe from portfolio")
 
 	// Step 1: Check tradernet client availability
-	if s.tradernetClient == nil {
+	if s.brokerClient == nil {
 		return 0, fmt.Errorf("tradernet client not available")
 	}
 
 	// Step 2: Fetch current portfolio positions
-	positions, err := s.tradernetClient.GetPortfolio()
+	positions, err := s.brokerClient.GetPortfolio()
 	if err != nil {
 		return 0, fmt.Errorf("failed to fetch portfolio: %w", err)
 	}

@@ -5,12 +5,12 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/aristath/sentinel/internal/clients/tradernet"
 	"github.com/aristath/sentinel/internal/events"
 	"github.com/aristath/sentinel/internal/modules/allocation"
 	"github.com/aristath/sentinel/internal/modules/portfolio"
 	"github.com/aristath/sentinel/internal/modules/settings"
 	"github.com/aristath/sentinel/internal/modules/trading"
+	testingpkg "github.com/aristath/sentinel/internal/testing"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -44,7 +44,7 @@ func TestRegisterRoutes(t *testing.T) {
 	securityFetcher := &mockSecurityFetcher{}
 	portfolioService := &portfolio.PortfolioService{}
 	var concentrationAlertProvider allocation.ConcentrationAlertProvider = nil
-	tradernetClient := &tradernet.Client{}
+	tradernetClient := testingpkg.NewMockBrokerClient()
 	safetyService := &trading.TradeSafetyService{}
 	settingsService := &settings.Service{}
 	recommendationRepo := &mockRecommendationRepo{}
@@ -122,7 +122,7 @@ func TestRegisterRoutes_RoutePrefix(t *testing.T) {
 	securityFetcher := &mockSecurityFetcher{}
 	portfolioService := &portfolio.PortfolioService{}
 	var concentrationAlertProvider allocation.ConcentrationAlertProvider = nil
-	tradernetClient := &tradernet.Client{}
+	tradernetClient := testingpkg.NewMockBrokerClient()
 	safetyService := &trading.TradeSafetyService{}
 	settingsService := &settings.Service{}
 	recommendationRepo := &mockRecommendationRepo{}

@@ -1,9 +1,5 @@
 package domain
 
-import (
-	"github.com/aristath/sentinel/internal/clients/tradernet"
-)
-
 // CashManager defines operations for managing cash balances
 // This interface breaks circular dependencies between portfolio, cash_flows, and services packages
 // Merged from:
@@ -21,24 +17,31 @@ type CashManager interface {
 	GetCashBalance(currency string) (float64, error)
 }
 
-// TradernetClientInterface defines the contract for Tradernet client operations
-// Merged from multiple packages to provide a unified interface
-// Used by portfolio, trading, services, and optimization packages
-type TradernetClientInterface interface {
-	// GetPortfolio retrieves all positions from Tradernet
-	GetPortfolio() ([]tradernet.Position, error)
+// BrokerClient defines broker-agnostic trading and portfolio operations
+// This interface abstracts away broker-specific implementations (Tradernet, IBKR, etc.)
+// All broker operations should go through this interface for maximum flexibility
+type BrokerClient interface {
+	// Portfolio operations
+	GetPortfolio() ([]BrokerPosition, error)
+	GetCashBalances() ([]BrokerCashBalance, error)
 
-	// GetCashBalances retrieves all cash balances from Tradernet
-	GetCashBalances() ([]tradernet.CashBalance, error)
+	// Trading operations
+	PlaceOrder(symbol, side string, quantity float64) (*BrokerOrderResult, error)
+	GetExecutedTrades(limit int) ([]BrokerTrade, error)
+	GetPendingOrders() ([]BrokerPendingOrder, error)
 
-	// GetExecutedTrades retrieves executed trades from Tradernet
-	GetExecutedTrades(limit int) ([]tradernet.Trade, error)
+	// Market data operations
+	GetQuote(symbol string) (*BrokerQuote, error)
+	FindSymbol(symbol string, exchange *string) ([]BrokerSecurityInfo, error)
 
-	// PlaceOrder places an order via Tradernet
-	PlaceOrder(symbol, side string, quantity float64) (*tradernet.OrderResult, error)
+	// Cash operations
+	GetAllCashFlows(limit int) ([]BrokerCashFlow, error)
+	GetCashMovements() (*BrokerCashMovement, error)
 
-	// IsConnected checks if the Tradernet client is connected
+	// Connection & health
 	IsConnected() bool
+	HealthCheck() (*BrokerHealthResult, error)
+	SetCredentials(apiKey, apiSecret string)
 }
 
 // CurrencyExchangeServiceInterface defines the contract for currency exchange operations
