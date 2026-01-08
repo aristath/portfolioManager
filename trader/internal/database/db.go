@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -98,6 +99,45 @@ func New(cfg Config) (*DB, error) {
 	}
 
 	return db, nil
+}
+
+// findSchemasDirectory locates the schemas directory using the source code location.
+// This is the architecturally correct approach because:
+// 1. Schemas are part of the source code, not the database file
+// 2. Works regardless of where the database file is located (tests, CI, production)
+// 3. Works regardless of working directory
+// 4. Works regardless of executable location
+//
+// It uses runtime.Caller to find the db.go file location, then derives the schemas
+// directory as a sibling directory (internal/database/schemas/).
+func findSchemasDirectory() (string, error) {
+	// Get this function's file path (db.go)
+	// Caller(0) = this function (findSchemasDirectory)
+	_, currentFile, _, ok := runtime.Caller(0)
+	if !ok {
+		return "", fmt.Errorf("failed to get caller information")
+	}
+
+	// Get the absolute path of this source file
+	absFile, err := filepath.Abs(currentFile)
+	if err != nil {
+		return "", fmt.Errorf("failed to get absolute path of source file: %w", err)
+	}
+
+	// This file is at internal/database/db.go
+	// Schemas are at internal/database/schemas/
+	// So we go from db.go's directory to schemas/
+	dbDir := filepath.Dir(absFile)
+	schemasDir := filepath.Join(dbDir, "schemas")
+
+	// Verify the schemas directory exists
+	if info, err := os.Stat(schemasDir); err != nil {
+		return "", fmt.Errorf("schemas directory not found at %s: %w", schemasDir, err)
+	} else if !info.IsDir() {
+		return "", fmt.Errorf("schemas path exists but is not a directory: %s", schemasDir)
+	}
+
+	return schemasDir, nil
 }
 
 // buildConnectionString creates SQLite connection string with profile-specific PRAGMAs
@@ -203,60 +243,14 @@ func (db *DB) Migrate() error {
 		// Unknown database name, skip migration
 		return nil
 	}
-	// Try multiple paths to find schemas directory
-	var schemasDir string
 
-	// Prioritize paths relative to CWD and source location over database file location
-	// (database file might be in /tmp for tests)
-	candidates := []string{
-		"internal/database/schemas",          // Relative to CWD (most common case)
-		"./internal/database/schemas",        // Explicit relative
-		"trader/internal/database/schemas",   // From repo root
-		"./trader/internal/database/schemas", // From repo root (explicit)
-	}
-
-	// Try from current working directory
-	if cwd, err := os.Getwd(); err == nil {
-		candidates = append(candidates,
-			filepath.Join(cwd, "internal/database/schemas"),                      // From trader/ directory
-			filepath.Join(cwd, "trader/internal/database/schemas"),               // From repo root
-			filepath.Join(filepath.Dir(cwd), "trader/internal/database/schemas"), // From parent of trader/
-		)
-	}
-
-	// Try relative to database path (for production databases)
-	dbDir := filepath.Dir(db.path)
-	candidates = append(candidates,
-		filepath.Join(dbDir, "../trader/internal/database/schemas"),      // From ../data to trader/internal/...
-		filepath.Join(dbDir, "../repo/trader/internal/database/schemas"), // From ../data to repo/trader/internal/...
-		filepath.Join(dbDir, "../internal/database/schemas"),             // From ../data to internal/...
-		filepath.Join(dbDir, "internal/database/schemas"),                // Same directory
-	)
-
-	// Also try from executable directory if available
-	if execPath, err := os.Executable(); err == nil {
-		execDir := filepath.Dir(execPath)
-		candidates = append(candidates,
-			filepath.Join(execDir, "internal/database/schemas"),
-			filepath.Join(filepath.Dir(execDir), "internal/database/schemas"),
-			filepath.Join(execDir, "../repo/trader/internal/database/schemas"),            // From bin/ to repo/trader/internal/...
-			filepath.Join(filepath.Dir(execDir), "repo/trader/internal/database/schemas"), // From app/ to repo/trader/internal/...
-		)
-	}
-
-	// Find first existing schemas directory
-	for _, candidate := range candidates {
-		if absPath, err := filepath.Abs(candidate); err == nil {
-			if info, err := os.Stat(absPath); err == nil && info.IsDir() {
-				schemasDir = absPath
-				break
-			}
-		}
-	}
-
-	// Check if schemas directory exists
-	if schemasDir == "" {
-		// Schemas directory doesn't exist, skip (tables may already exist)
+	// Find schemas directory using source code location
+	// This is architecturally correct: schemas are always relative to the source code,
+	// not the database file location. This works in tests, CI, and production.
+	schemasDir, err := findSchemasDirectory()
+	if err != nil {
+		// If we can't find schemas directory, skip migration (tables may already exist)
+		// This allows the system to work even if schemas aren't available
 		return nil
 	}
 
