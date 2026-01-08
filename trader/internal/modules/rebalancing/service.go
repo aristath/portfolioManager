@@ -1,3 +1,4 @@
+// Package rebalancing provides portfolio rebalancing functionality.
 package rebalancing
 
 import (

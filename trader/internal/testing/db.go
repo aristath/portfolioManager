@@ -1,3 +1,4 @@
+// Package testing provides testing utilities and helpers for the sentinel project.
 package testing
 
 import (

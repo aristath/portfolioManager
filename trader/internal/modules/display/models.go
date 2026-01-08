@@ -1,3 +1,4 @@
+// Package display provides display and visualization functionality for the portfolio.
 package display
 
 // ClusterData represents a single security cluster in the portfolio display

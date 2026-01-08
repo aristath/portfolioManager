@@ -1,3 +1,4 @@
+// Package market_regime provides market regime detection and analysis functionality.
 package market_regime
 
 import (
