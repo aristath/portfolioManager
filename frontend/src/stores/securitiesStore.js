@@ -21,6 +21,7 @@ export const useSecuritiesStore = create((set, get) => ({
   // Securities data
   securities: [],
   sparklines: {},
+  sparklineTimeframe: '1Y', // 1Y or 5Y
 
   // Filters and sorting
   securityFilter: 'all',
@@ -52,11 +53,17 @@ export const useSecuritiesStore = create((set, get) => ({
 
   fetchSparklines: async () => {
     try {
-      const sparklines = await api.fetchSparklines();
+      const { sparklineTimeframe } = get();
+      const sparklines = await api.fetchSparklines(sparklineTimeframe);
       set({ sparklines });
     } catch (e) {
       console.error('Failed to fetch sparklines:', e);
     }
+  },
+
+  setSparklineTimeframe: (timeframe) => {
+    set({ sparklineTimeframe: timeframe });
+    get().fetchSparklines(); // Refetch with new timeframe
   },
 
   setSecurityFilter: (filter) => set({ securityFilter: filter }),

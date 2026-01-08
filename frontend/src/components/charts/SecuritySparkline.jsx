@@ -4,8 +4,9 @@ import { useSecuritiesStore } from '../../stores/securitiesStore';
 /**
  * Security Sparkline Component
  * Custom SVG-based sparkline chart for security table
+ * Supports cost-basis-aware coloring when avgPrice is provided
  */
-export function SecuritySparkline({ symbol, hasPosition = false }) {
+export function SecuritySparkline({ symbol, hasPosition = false, avgPrice, currentPrice }) {
   const containerRef = useRef(null);
   const { sparklines } = useSecuritiesStore();
 
@@ -39,18 +40,68 @@ export function SecuritySparkline({ symbol, hasPosition = false }) {
       return `${x},${y}`;
     });
 
-    const pathData = `M ${points.join(' L ')}`;
+    // Build SVG content with cost-basis-aware coloring
+    let svgContent;
 
-    // Determine color based on trend and position (using Catppuccin Mocha colors)
-    const firstValue = values[0];
-    const lastValue = values[values.length - 1];
-    const isPositive = lastValue > firstValue;
-    const color = hasPosition
-      ? (isPositive ? '#a6e3a1' : '#f38ba8') // Catppuccin Mocha Green/Red
-      : (isPositive ? '#89b4fa' : '#6c7086'); // Catppuccin Mocha Blue/Overlay 0
+    if (hasPosition && avgPrice && avgPrice > 0) {
+      // Cost-basis-aware coloring: split into segments at average price crossings
+      const segments = [];
+      let currentSegmentPoints = [points[0]];
+      let currentColor = values[0] >= avgPrice ? '#a6e3a1' : '#f38ba8';
 
-    containerRef.current.innerHTML = `
-      <svg width="${width}" height="${height}" style="display: block;">
+      for (let i = 1; i < values.length; i++) {
+        const value = values[i];
+        const isAbove = value >= avgPrice;
+        const segmentColor = isAbove ? '#a6e3a1' : '#f38ba8'; // Green above, red below
+
+        if (segmentColor !== currentColor) {
+          // Color changed - save current segment and start new one
+          segments.push({
+            path: `M ${currentSegmentPoints.join(' L ')}`,
+            color: currentColor,
+          });
+          // Start new segment from previous point to ensure continuity
+          currentSegmentPoints = [points[i - 1], points[i]];
+          currentColor = segmentColor;
+        } else {
+          currentSegmentPoints.push(points[i]);
+        }
+      }
+
+      // Save last segment
+      if (currentSegmentPoints.length > 0) {
+        segments.push({
+          path: `M ${currentSegmentPoints.join(' L ')}`,
+          color: currentColor,
+        });
+      }
+
+      // Render multiple path segments
+      const svgPaths = segments.map(seg =>
+        `<path
+           d="${seg.path}"
+           fill="none"
+           stroke="${seg.color}"
+           stroke-width="1.5"
+           stroke-linecap="round"
+           stroke-linejoin="round"
+         />`
+      ).join('');
+
+      svgContent = `<svg width="${width}" height="${height}" style="display: block;">
+        ${svgPaths}
+      </svg>`;
+    } else {
+      // Default trend-based coloring for non-positions or missing avg_price
+      const firstValue = values[0];
+      const lastValue = values[values.length - 1];
+      const isPositive = lastValue > firstValue;
+      const color = hasPosition
+        ? (isPositive ? '#89b4fa' : '#6c7086')  // Blue/gray for positions without avg_price
+        : (isPositive ? '#89b4fa' : '#6c7086'); // Blue/gray for non-positions
+      const pathData = `M ${points.join(' L ')}`;
+
+      svgContent = `<svg width="${width}" height="${height}" style="display: block;">
         <path
           d="${pathData}"
           fill="none"
@@ -59,9 +110,11 @@ export function SecuritySparkline({ symbol, hasPosition = false }) {
           stroke-linecap="round"
           stroke-linejoin="round"
         />
-      </svg>
-    `;
-  }, [symbol, hasPosition, sparklines]);
+      </svg>`;
+    }
+
+    containerRef.current.innerHTML = svgContent;
+  }, [symbol, hasPosition, avgPrice, currentPrice, sparklines]);
 
   if (!symbol) {
     return <span style={{ color: 'var(--mantine-color-dimmed)', fontSize: '0.875rem' }}>-</span>;

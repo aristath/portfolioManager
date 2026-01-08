@@ -1,4 +1,4 @@
-import { Card, Table, TextInput, Select, Group, Button, Text, ActionIcon, Badge, NumberInput, Menu } from '@mantine/core';
+import { Card, Table, TextInput, Select, Group, Button, Text, ActionIcon, Badge, NumberInput, Menu, SegmentedControl, Skeleton } from '@mantine/core';
 import { IconEdit, IconRefresh, IconTrash, IconColumns, IconCheck } from '@tabler/icons-react';
 import { useSecuritiesStore } from '../../stores/securitiesStore';
 import { useAppStore } from '../../stores/appStore';
@@ -6,11 +6,13 @@ import { usePortfolioStore } from '../../stores/portfolioStore';
 import { SecuritySparkline } from '../charts/SecuritySparkline';
 import { formatCurrency } from '../../utils/formatters';
 import { getTagName, getTagColor } from '../../utils/tagNames';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 export function SecurityTable() {
   const {
     securities,
+    sparklines,
+    sparklineTimeframe,
     securityFilter,
     industryFilter,
     searchQuery,
@@ -29,7 +31,10 @@ export function SecurityTable() {
     updateMultiplier,
     fetchColumnVisibility,
     toggleColumnVisibility,
+    fetchSparklines,
+    setSparklineTimeframe,
   } = useSecuritiesStore();
+  const [sparklinesLoading, setSparklinesLoading] = useState(true);
   const { openEditSecurityModal, openAddSecurityModal } = useAppStore();
   const { alerts } = usePortfolioStore();
 
@@ -37,6 +42,16 @@ export function SecurityTable() {
   useEffect(() => {
     fetchColumnVisibility();
   }, [fetchColumnVisibility]);
+
+  // Load sparklines when component mounts or timeframe changes
+  useEffect(() => {
+    const loadSparklines = async () => {
+      setSparklinesLoading(true);
+      await fetchSparklines();
+      setSparklinesLoading(false);
+    };
+    loadSparklines();
+  }, [fetchSparklines, sparklineTimeframe]);
 
   const filteredSecurities = getFilteredSecurities();
   const countries = [...new Set(securities.map(s => s.country).filter(Boolean))].sort();
@@ -224,6 +239,15 @@ export function SecurityTable() {
           size="xs"
           style={{ width: '120px' }}
         />
+        <SegmentedControl
+          value={sparklineTimeframe}
+          onChange={setSparklineTimeframe}
+          data={[
+            { label: '1 Year', value: '1Y' },
+            { label: '5 Years', value: '5Y' },
+          ]}
+          size="xs"
+        />
       </Group>
 
       {/* Results count */}
@@ -371,7 +395,16 @@ export function SecurityTable() {
                   </Table.Td>
                   {visibleColumns.chart && (
                     <Table.Td>
-                      <SecuritySparkline symbol={security.symbol} hasPosition={security.position_value > 0} />
+                      {sparklinesLoading ? (
+                        <Skeleton height={32} width={80} />
+                      ) : (
+                        <SecuritySparkline
+                          symbol={security.symbol}
+                          hasPosition={security.position_value > 0}
+                          avgPrice={security.avg_price}
+                          currentPrice={security.current_price}
+                        />
+                      )}
                     </Table.Td>
                   )}
                   {visibleColumns.company && (

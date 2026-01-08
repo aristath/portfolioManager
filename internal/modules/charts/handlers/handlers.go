@@ -26,11 +26,23 @@ func NewHandler(service *charts.Service, log zerolog.Logger) *Handler {
 }
 
 // HandleGetSparklines handles GET /api/charts/sparklines
-// Faithful translation from Python: app/api/charts.py -> get_all_stock_sparklines()
+// Supports period query parameter: ?period=1Y or ?period=5Y
 func (h *Handler) HandleGetSparklines(w http.ResponseWriter, r *http.Request) {
-	sparklines, err := h.service.GetSparklines()
+	// Get period from query params (default "1Y")
+	period := r.URL.Query().Get("period")
+	if period == "" {
+		period = "1Y"
+	}
+
+	// Validate period
+	if period != "1Y" && period != "5Y" {
+		http.Error(w, "Invalid period (must be 1Y or 5Y)", http.StatusBadRequest)
+		return
+	}
+
+	sparklines, err := h.service.GetSparklinesAggregated(period)
 	if err != nil {
-		h.log.Error().Err(err).Msg("Failed to get sparklines data")
+		h.log.Error().Err(err).Str("period", period).Msg("Failed to get sparklines data")
 		http.Error(w, "Failed to get sparklines data", http.StatusInternalServerError)
 		return
 	}

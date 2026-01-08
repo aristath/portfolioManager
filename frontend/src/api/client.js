@@ -168,7 +168,7 @@ export const api = {
     const params = new URLSearchParams({ range, source });
     return fetchJSON(`/api/charts/securities/${isin}?${params}`);
   },
-  fetchSparklines: () => fetchJSON('/api/charts/sparklines'),
+  fetchSparklines: (period = '1Y') => fetchJSON(`/api/charts/sparklines?period=${period}`),
 
   // Settings
   fetchSettings: () => fetchJSON('/api/settings'),

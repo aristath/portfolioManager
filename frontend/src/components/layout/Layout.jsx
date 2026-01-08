@@ -25,7 +25,7 @@ export function Layout() {
   useNotifications();
   const { fetchAll, startEventStream, stopEventStream } = useAppStore();
   const { fetchAllocation, fetchCashBreakdown, fetchTargets } = usePortfolioStore();
-  const { fetchSecurities, fetchSparklines } = useSecuritiesStore();
+  const { fetchSecurities } = useSecuritiesStore();
   const { fetchSettings } = useSettingsStore();
   const { fetchTrades } = useTradesStore();
   const { fetchAvailableLogFiles, selectedLogFile } = useLogsStore();
@@ -40,7 +40,6 @@ export function Layout() {
           fetchCashBreakdown(),
           fetchSecurities(),
           fetchTargets(),
-          fetchSparklines(),
           fetchSettings(),
           fetchTrades(),
           fetchAvailableLogFiles(),
@@ -53,7 +52,7 @@ export function Layout() {
     };
 
     loadData();
-  }, [fetchAll, fetchAllocation, fetchCashBreakdown, fetchSecurities, fetchTargets, fetchSparklines, fetchSettings, fetchTrades, fetchAvailableLogFiles]);
+  }, [fetchAll, fetchAllocation, fetchCashBreakdown, fetchSecurities, fetchTargets, fetchSettings, fetchTrades, fetchAvailableLogFiles]);
 
   // Manage event stream lifecycle - restart when selectedLogFile changes
   useEffect(() => {

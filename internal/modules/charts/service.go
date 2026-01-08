@@ -41,10 +41,22 @@ func NewService(
 	}
 }
 
-// GetSparklines returns 1-year sparkline data for all active securities
-// Faithful translation from Python: app/api/charts.py -> get_all_stock_sparklines()
-func (s *Service) GetSparklines() (map[string][]ChartDataPoint, error) {
-	startDate := time.Now().AddDate(-1, 0, 0).Format("2006-01-02")
+// GetSparklinesAggregated returns sparkline data with specified aggregation
+// Replaces the old GetSparklines() method - supports 1Y (weekly) or 5Y (monthly) periods
+func (s *Service) GetSparklinesAggregated(period string) (map[string][]ChartDataPoint, error) {
+	var startDate string
+	var groupBy string
+
+	switch period {
+	case "1Y":
+		startDate = time.Now().AddDate(-1, 0, 0).Format("2006-01-02")
+		groupBy = "week" // Weekly aggregation
+	case "5Y":
+		startDate = time.Now().AddDate(-5, 0, 0).Format("2006-01-02")
+		groupBy = "month" // Monthly aggregation
+	default:
+		return nil, fmt.Errorf("invalid period: %s (must be 1Y or 5Y)", period)
+	}
 
 	// Get all active securities with ISINs
 	rows, err := s.universeDB.Query("SELECT symbol, isin FROM securities WHERE active = 1 AND isin != ''")
@@ -69,14 +81,14 @@ func (s *Service) GetSparklines() (map[string][]ChartDataPoint, error) {
 			continue
 		}
 
-		// Get price data using ISIN
-		prices, err := s.getPricesFromDB(isin.String, startDate, "")
+		// Get aggregated prices
+		prices, err := s.getAggregatedPrices(isin.String, startDate, groupBy)
 		if err != nil {
 			s.log.Debug().
 				Err(err).
 				Str("symbol", symbol).
 				Str("isin", isin.String).
-				Msg("Failed to get prices for symbol")
+				Msg("Failed to get aggregated prices for symbol")
 			continue
 		}
 
@@ -90,6 +102,74 @@ func (s *Service) GetSparklines() (map[string][]ChartDataPoint, error) {
 	}
 
 	return result, nil
+}
+
+// getAggregatedPrices fetches price data aggregated by week or month
+func (s *Service) getAggregatedPrices(isin string, startDate string, groupBy string) ([]ChartDataPoint, error) {
+	startUnix, err := utils.DateToUnix(startDate)
+	if err != nil {
+		return nil, fmt.Errorf("invalid start_date: %w", err)
+	}
+
+	var query string
+	var args []interface{}
+
+	if groupBy == "week" {
+		// Weekly aggregation: use strftime to group by ISO week
+		query = `
+			SELECT
+				strftime('%Y-W%W', date, 'unixepoch') as period,
+				AVG(close) as avg_close
+			FROM daily_prices
+			WHERE isin = ? AND date >= ?
+			GROUP BY period
+			ORDER BY MIN(date) ASC
+		`
+		args = []interface{}{isin, startUnix}
+	} else {
+		// Monthly aggregation: use existing monthly_prices table
+		query = `
+			SELECT
+				year_month as period,
+				avg_close
+			FROM monthly_prices
+			WHERE isin = ? AND year_month >= strftime('%Y-%m', ?, 'unixepoch')
+			ORDER BY year_month ASC
+		`
+		args = []interface{}{isin, startUnix}
+	}
+
+	rows, err := s.historyDB.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query aggregated prices: %w", err)
+	}
+	defer rows.Close()
+
+	var prices []ChartDataPoint
+	for rows.Next() {
+		var period string
+		var avgClose sql.NullFloat64
+
+		if err := rows.Scan(&period, &avgClose); err != nil {
+			s.log.Warn().Err(err).Msg("Failed to scan aggregated price row")
+			continue
+		}
+
+		if !avgClose.Valid {
+			continue
+		}
+
+		prices = append(prices, ChartDataPoint{
+			Time:  period, // Format: "2024-W01" or "2024-01"
+			Value: avgClose.Float64,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating aggregated prices: %w", err)
+	}
+
+	return prices, nil
 }
 
 // GetSecurityChart returns historical price data for a specific security
