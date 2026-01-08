@@ -332,4 +332,3 @@ Potential improvements to the service layer:
 - [Module Structure](../modules/README.md) - Module organization
 - [Testing Guide](../testing/README.md) - Testing utilities and patterns
 - [Domain Interfaces](../domain/interfaces.go) - Shared interfaces
-
