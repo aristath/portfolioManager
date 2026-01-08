@@ -155,6 +155,43 @@ Jobs are registered via `di.RegisterJobs()` and can be:
 
 Individual jobs are in `internal/scheduler/` and implement the `scheduler.Job` interface.
 
+### Broker Abstraction
+
+The system abstracts broker interactions behind the `domain.BrokerClient` interface, allowing easy switching between broker providers without changing business logic.
+
+**Architecture Layers**:
+- **Domain Layer** (`internal/domain/broker_types.go`): Clean, broker-agnostic types with self-documenting field names
+- **Adapter Layer** (`internal/clients/tradernet/adapter.go`): Broker-specific implementations
+- **Transformer Layer** (`internal/clients/tradernet/transformers_domain.go`): Maps broker API responses to domain types
+
+**Design Principles**:
+1. **Clear naming**: Domain types use full, self-documenting names (no abbreviations except universally understood ones like USD, EUR, ID)
+2. **No leakage**: All broker-specific quirks isolated in adapter/transformer layers - services never reference broker internals
+3. **Documented mappings**: All field name mappings from broker APIs to domain types are comprehensively documented
+4. **Constants over magic**: Magic numbers and codes replaced with named constants (e.g., `OrderSideBuy` instead of "1")
+5. **Fallback logic**: Transformers handle multiple field name variants from inconsistent broker APIs with priority-based fallback
+
+**Adding a New Broker**:
+1. Create `internal/clients/<broker>/adapter.go` implementing `domain.BrokerClient` interface
+2. Create transformer functions mapping broker API → domain types
+3. Document all broker-specific field name mappings in transformer file header
+4. Add broker-specific constants for any magic numbers/codes
+5. Update DI container to instantiate new adapter
+6. No changes needed in services - they only depend on `domain.BrokerClient` interface
+
+**Tradernet-Specific Implementation**:
+- Tradernet uses cryptic field names ("i" for symbol, "sm" for amount, "dt" for date)
+- Multiple endpoints use different names for same concept (e.g., symbol: "i", "instr_nm", "instr_name")
+- Transformer handles all variants with priority-based fallback (clear names preferred)
+- Order type codes are normalized: "1" → `OrderSideBuy`, "2" → `OrderSideSell`
+- See `internal/clients/tradernet/transformers_domain.go` header comment for complete mapping table
+
+**Known Limitations**:
+- `TypeDocID` (Tradernet-specific transaction type code) is preserved in the `Params` map with key `tradernet_type_doc_id`
+- This field is Tradernet internal metadata not needed for broker-agnostic operations
+- Other brokers may store their own metadata in `Params` using broker-prefixed keys (e.g., `ibkr_*`, `schwab_*`)
+- Field extraction helpers assume modern API behavior (both clear and cryptic fields populated together)
+
 ### Application Entry Point
 
 The application starts in `cmd/server/main.go`:

@@ -78,26 +78,21 @@ type BrokerCashMovement struct {
 	Note             string                   // Additional notes
 }
 
-// BrokerCashFlow represents a cash flow transaction (broker-agnostic)
-// Supports deposits, dividends, fees, and other cash operations
+// BrokerCashFlow represents a single cash flow transaction in the account.
+// Cash flows include deposits, withdrawals, dividends, interest, fees, taxes, etc.
+// This is distinct from trades, which exchange cash for securities.
 type BrokerCashFlow struct {
-	ID              string                 // Transaction ID
-	TransactionID   string                 // Alternative transaction ID field
-	TypeDocID       int                    // Document type ID
-	Type            string                 // Type field (flexible)
-	TransactionType string                 // Transaction type field (flexible)
-	DT              string                 // Alternate date field
-	Date            string                 // Transaction date
-	SM              float64                // Alternate amount field
-	Amount          float64                // Transaction amount
-	Curr            string                 // Alternate currency field
-	Currency        string                 // Currency code
-	SMEUR           float64                // Alternate EUR amount field
-	AmountEUR       float64                // Amount in EUR
-	Status          string                 // Transaction status
-	StatusC         int                    // Status code
-	Description     string                 // Transaction description
-	Params          map[string]interface{} // Flexible parameters
+	ID            string                 // Unique transaction identifier
+	TransactionID string                 // Alternative/external transaction reference ID
+	Type          string                 // Transaction type: "deposit", "withdrawal", "dividend", "interest", "fee", "tax"
+	Date          string                 // Transaction date in YYYY-MM-DD format
+	Amount        float64                // Transaction amount in the original currency (positive for inflows, negative for outflows)
+	Currency      string                 // Currency code (ISO 4217: EUR, USD, GBP, etc.)
+	AmountEUR     float64                // Transaction amount converted to EUR for reporting consistency
+	Status        string                 // Transaction status: "completed", "pending", "cancelled", etc.
+	StatusC       int                    // Numeric status code (broker-specific, for internal use)
+	Description   string                 // Human-readable transaction description
+	Params        map[string]interface{} // Additional transaction parameters (flexible schema for broker-specific data)
 }
 
 // BrokerHealthResult represents broker connection health status (broker-agnostic)

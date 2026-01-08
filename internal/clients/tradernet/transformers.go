@@ -169,8 +169,8 @@ func transformPendingOrders(sdkResult interface{}) ([]PendingOrder, error) {
 
 		order := PendingOrder{
 			OrderID:  orderID,
-			Symbol:   getSymbol(orderMap),     // Use helper with fallback
-			Side:     convertSide(orderMap),   // Extract side (was missing)
+			Symbol:   getSymbol(orderMap),   // Use helper with fallback
+			Side:     convertSide(orderMap), // Extract side (was missing)
 			Quantity: getFloat64(orderMap, "q"),
 			Price:    getFloat64(orderMap, "p"),
 			Currency: getString(orderMap, "curr"),
@@ -329,11 +329,11 @@ func transformTrades(sdkResult interface{}) ([]Trade, error) {
 
 		trade := Trade{
 			OrderID:    orderID,
-			Symbol:     getSymbol(itemMap),       // Use helper with fallback
-			Side:       convertSide(itemMap),     // Convert type field
+			Symbol:     getSymbol(itemMap),   // Use helper with fallback
+			Side:       convertSide(itemMap), // Convert type field
 			Quantity:   getFloat64(itemMap, "q"),
 			Price:      getFloat64(itemMap, "p"),
-			ExecutedAt: getExecutedAt(itemMap),   // Use helper with fallback
+			ExecutedAt: getExecutedAt(itemMap), // Use helper with fallback
 		}
 
 		trades = append(trades, trade)

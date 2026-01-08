@@ -23,18 +23,19 @@ type CashFlow struct {
 	UpdatedAt       time.Time `json:"updated_at,omitempty"` // Not used (append-only)
 }
 
-// APITransaction represents transaction from Tradernet API
-// Used during sync_from_api - handles flexible field naming
+// APITransaction represents a transaction from the broker API (broker-agnostic).
+// Used during sync_from_api to pass broker cash flows to the repository.
+// This is an internal representation with clean field names.
 type APITransaction struct {
-	TransactionID   string                 `json:"id"` // May also be "transaction_id"
-	TypeDocID       int                    `json:"type_doc_id"`
-	TransactionType string                 `json:"type"`   // May also be "transaction_type"
-	Date            string                 `json:"dt"`     // May also be "date"
-	Amount          float64                `json:"sm"`     // May also be "amount"
-	Currency        string                 `json:"curr"`   // May also be "currency"
-	AmountEUR       float64                `json:"sm_eur"` // May also be "amount_eur"
-	Status          string                 `json:"status"`
-	StatusC         int                    `json:"status_c"`
-	Description     string                 `json:"description"`
-	Params          map[string]interface{} `json:"params"` // Raw params dict
+	TransactionID   string                 `json:"transaction_id"`   // Transaction identifier
+	TypeDocID       int                    `json:"type_doc_id"`      // Type document ID (broker-specific, may be 0)
+	TransactionType string                 `json:"transaction_type"` // Transaction type (deposit, withdrawal, etc.)
+	Date            string                 `json:"date"`             // Transaction date
+	Amount          float64                `json:"amount"`           // Amount in original currency
+	Currency        string                 `json:"currency"`         // Currency code
+	AmountEUR       float64                `json:"amount_eur"`       // Amount in EUR
+	Status          string                 `json:"status"`           // Status string
+	StatusC         int                    `json:"status_c"`         // Status code
+	Description     string                 `json:"description"`      // Human-readable description
+	Params          map[string]interface{} `json:"params"`           // Additional parameters (broker-specific metadata)
 }

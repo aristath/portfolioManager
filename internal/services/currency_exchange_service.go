@@ -49,14 +49,14 @@ var DirectPairs = map[string]struct {
 	Action string
 }{
 	// EUR <-> USD (ITS_MONEY market)
-	"EUR:USD": {"EURUSD_T0.ITS", "BUY"},   // Fixed: was SELL
-	"USD:EUR": {"EURUSD_T0.ITS", "SELL"},  // Fixed: was BUY
+	"EUR:USD": {"EURUSD_T0.ITS", "BUY"},  // Fixed: was SELL
+	"USD:EUR": {"EURUSD_T0.ITS", "SELL"}, // Fixed: was BUY
 	// EUR <-> GBP (ITS_MONEY market)
-	"EUR:GBP": {"EURGBP_T0.ITS", "BUY"},   // Fixed: was SELL
-	"GBP:EUR": {"EURGBP_T0.ITS", "SELL"},  // Fixed: was BUY
+	"EUR:GBP": {"EURGBP_T0.ITS", "BUY"},  // Fixed: was SELL
+	"GBP:EUR": {"EURGBP_T0.ITS", "SELL"}, // Fixed: was BUY
 	// GBP <-> USD (ITS_MONEY market)
-	"GBP:USD": {"GBPUSD_T0.ITS", "BUY"},   // Fixed: was SELL
-	"USD:GBP": {"GBPUSD_T0.ITS", "SELL"},  // Fixed: was BUY
+	"GBP:USD": {"GBPUSD_T0.ITS", "BUY"},  // Fixed: was SELL
+	"USD:GBP": {"GBPUSD_T0.ITS", "SELL"}, // Fixed: was BUY
 	// HKD <-> EUR (MONEY market, EXANTE)
 	"EUR:HKD": {"HKD/EUR", "BUY"},
 	"HKD:EUR": {"HKD/EUR", "SELL"},

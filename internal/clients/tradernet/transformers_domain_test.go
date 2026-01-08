@@ -244,16 +244,10 @@ func TestTransformCashFlowsToDomain(t *testing.T) {
 	assert.Len(t, result, 1)
 	assert.Equal(t, "cf-123", result[0].ID)
 	assert.Equal(t, "tx-456", result[0].TransactionID)
-	assert.Equal(t, 1, result[0].TypeDocID)
-	assert.Equal(t, "deposit", result[0].Type)
-	assert.Equal(t, "wire_transfer", result[0].TransactionType)
-	assert.Equal(t, "2025-01-08", result[0].DT)
+	assert.Equal(t, "wire_transfer", result[0].Type)
 	assert.Equal(t, "2025-01-08T10:00:00Z", result[0].Date)
-	assert.Equal(t, 1000.0, result[0].SM)
 	assert.Equal(t, 1000.0, result[0].Amount)
-	assert.Equal(t, "EUR", result[0].Curr)
 	assert.Equal(t, "EUR", result[0].Currency)
-	assert.Equal(t, 1000.0, result[0].SMEUR)
 	assert.Equal(t, 1000.0, result[0].AmountEUR)
 	assert.Equal(t, "completed", result[0].Status)
 	assert.Equal(t, 1, result[0].StatusC)
@@ -319,4 +313,172 @@ func TestTransformHealthResultToDomain(t *testing.T) {
 		result := transformHealthResultToDomain(nil)
 		assert.Nil(t, result)
 	})
+}
+
+// TestGetDateField tests date field extraction with fallback
+func TestGetDateField(t *testing.T) {
+	t.Run("prefers clear field", func(t *testing.T) {
+		result := getDateField("2025-01-08T10:00:00Z", "2025-01-08")
+		assert.Equal(t, "2025-01-08T10:00:00Z", result)
+	})
+
+	t.Run("uses fallback when clear is empty", func(t *testing.T) {
+		result := getDateField("", "2025-01-08")
+		assert.Equal(t, "2025-01-08", result)
+	})
+
+	t.Run("both empty", func(t *testing.T) {
+		result := getDateField("", "")
+		assert.Equal(t, "", result)
+	})
+
+	t.Run("both populated with same value", func(t *testing.T) {
+		result := getDateField("2025-01-08", "2025-01-08")
+		assert.Equal(t, "2025-01-08", result)
+	})
+}
+
+// TestGetAmountField tests amount field extraction with fallback
+func TestGetAmountField(t *testing.T) {
+	t.Run("prefers clear field when non-zero", func(t *testing.T) {
+		result := getAmountField(100.0, 200.0)
+		assert.Equal(t, 100.0, result)
+	})
+
+	t.Run("zero is valid amount - both zero", func(t *testing.T) {
+		result := getAmountField(0, 0)
+		assert.Equal(t, 0.0, result)
+	})
+
+	t.Run("uses fallback when amount is zero but sm is non-zero", func(t *testing.T) {
+		// This handles legacy API responses where only "sm" is populated
+		// In practice, Tradernet populates both or neither
+		// If amount=0 and sm=100, it means amount wasn't populated (legacy)
+		result := getAmountField(0, 100.0)
+		assert.Equal(t, 100.0, result)
+	})
+
+	t.Run("legitimate zero transaction", func(t *testing.T) {
+		// A legitimate $0 transaction: Tradernet sends amount=0, sm=0
+		// Both fields are 0, so we return 0
+		result := getAmountField(0, 0)
+		assert.Equal(t, 0.0, result)
+	})
+
+	t.Run("negative amounts are valid", func(t *testing.T) {
+		result := getAmountField(-50.0, 100.0)
+		assert.Equal(t, -50.0, result)
+	})
+
+	t.Run("both populated with same value", func(t *testing.T) {
+		result := getAmountField(1000.0, 1000.0)
+		assert.Equal(t, 1000.0, result)
+	})
+}
+
+// TestGetCurrencyField tests currency field extraction with fallback
+func TestGetCurrencyField(t *testing.T) {
+	t.Run("prefers clear field", func(t *testing.T) {
+		result := getCurrencyField("USD", "EUR")
+		assert.Equal(t, "USD", result)
+	})
+
+	t.Run("uses fallback when clear is empty", func(t *testing.T) {
+		result := getCurrencyField("", "EUR")
+		assert.Equal(t, "EUR", result)
+	})
+
+	t.Run("both empty", func(t *testing.T) {
+		result := getCurrencyField("", "")
+		assert.Equal(t, "", result)
+	})
+
+	t.Run("both populated with same value", func(t *testing.T) {
+		result := getCurrencyField("EUR", "EUR")
+		assert.Equal(t, "EUR", result)
+	})
+}
+
+// TestGetAmountEURField tests EUR amount field extraction with fallback
+func TestGetAmountEURField(t *testing.T) {
+	t.Run("prefers clear field when non-zero", func(t *testing.T) {
+		result := getAmountEURField(950.0, 1000.0)
+		assert.Equal(t, 950.0, result)
+	})
+
+	t.Run("zero is valid EUR amount - both zero", func(t *testing.T) {
+		result := getAmountEURField(0, 0)
+		assert.Equal(t, 0.0, result)
+	})
+
+	t.Run("uses fallback when amount_eur is zero but sm_eur is non-zero", func(t *testing.T) {
+		// Legacy API: only sm_eur is populated
+		result := getAmountEURField(0, 100.0)
+		assert.Equal(t, 100.0, result)
+	})
+
+	t.Run("legitimate zero EUR amount", func(t *testing.T) {
+		// Both fields are 0 = legitimate €0 transaction
+		result := getAmountEURField(0, 0)
+		assert.Equal(t, 0.0, result)
+	})
+
+	t.Run("negative EUR amounts are valid", func(t *testing.T) {
+		result := getAmountEURField(-50.0, 100.0)
+		assert.Equal(t, -50.0, result)
+	})
+
+	t.Run("both populated with same value", func(t *testing.T) {
+		result := getAmountEURField(1000.0, 1000.0)
+		assert.Equal(t, 1000.0, result)
+	})
+}
+
+// TestGetTransactionTypeField tests transaction type field extraction with fallback
+func TestGetTransactionTypeField(t *testing.T) {
+	t.Run("prefers specific transaction_type", func(t *testing.T) {
+		result := getTransactionTypeField("wire_transfer", "deposit")
+		assert.Equal(t, "wire_transfer", result)
+	})
+
+	t.Run("uses fallback when clear is empty", func(t *testing.T) {
+		result := getTransactionTypeField("", "deposit")
+		assert.Equal(t, "deposit", result)
+	})
+
+	t.Run("both empty", func(t *testing.T) {
+		result := getTransactionTypeField("", "")
+		assert.Equal(t, "", result)
+	})
+
+	t.Run("both populated with same value", func(t *testing.T) {
+		result := getTransactionTypeField("deposit", "deposit")
+		assert.Equal(t, "deposit", result)
+	})
+}
+
+// TestTransformCashFlowsToDomain_PreservesTypeDocID tests that TypeDocID is preserved in params
+func TestTransformCashFlowsToDomain_PreservesTypeDocID(t *testing.T) {
+	tnFlows := []CashFlowTransaction{
+		{
+			ID:              "cf-123",
+			TransactionID:   "tx-456",
+			TypeDocID:       42, // Tradernet-specific ID
+			Type:            "deposit",
+			TransactionType: "wire_transfer",
+			Date:            "2025-01-08T10:00:00Z",
+			Amount:          1000.0,
+			Currency:        "EUR",
+			AmountEUR:       1000.0,
+			Status:          "completed",
+			StatusC:         1,
+			Description:     "Test transaction",
+		},
+	}
+
+	result := transformCashFlowsToDomain(tnFlows)
+
+	assert.Len(t, result, 1)
+	assert.NotNil(t, result[0].Params)
+	assert.Equal(t, 42, result[0].Params["tradernet_type_doc_id"])
 }

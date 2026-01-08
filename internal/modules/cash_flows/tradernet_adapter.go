@@ -26,11 +26,25 @@ func (a *TradernetAdapter) GetAllCashFlows(limit int) ([]APITransaction, error) 
 	// Convert broker domain format to our APITransaction format
 	apiTransactions := make([]APITransaction, len(brokerCashFlows))
 	for i, bcf := range brokerCashFlows {
+		// Extract TypeDocID from params if it was preserved by Tradernet adapter
+		typeDocID := 0
+		if bcf.Params != nil {
+			if tid, ok := bcf.Params["tradernet_type_doc_id"]; ok {
+				// Handle both int and float64 (JSON unmarshaling may produce float64)
+				switch v := tid.(type) {
+				case int:
+					typeDocID = v
+				case float64:
+					typeDocID = int(v)
+				}
+			}
+		}
+
 		apiTransactions[i] = APITransaction{
 			// Map domain.BrokerCashFlow fields to APITransaction
 			TransactionID:   bcf.TransactionID,
-			TypeDocID:       bcf.TypeDocID,
-			TransactionType: bcf.TransactionType,
+			TypeDocID:       typeDocID, // Extracted from params (Tradernet-specific metadata)
+			TransactionType: bcf.Type,  // Map Type to TransactionType
 			Date:            bcf.Date,
 			Amount:          bcf.Amount,
 			Currency:        bcf.Currency,

@@ -179,37 +179,25 @@ func TestBrokerCashMovement(t *testing.T) {
 // TestBrokerCashFlow verifies BrokerCashFlow struct
 func TestBrokerCashFlow(t *testing.T) {
 	cashFlow := BrokerCashFlow{
-		ID:              "cf-123",
-		TransactionID:   "tx-456",
-		TypeDocID:       1,
-		Type:            "deposit",
-		TransactionType: "wire_transfer",
-		DT:              "2025-01-08",
-		Date:            "2025-01-08T10:00:00Z",
-		SM:              1000.0,
-		Amount:          1000.0,
-		Curr:            "EUR",
-		Currency:        "EUR",
-		SMEUR:           1000.0,
-		AmountEUR:       1000.0,
-		Status:          "completed",
-		StatusC:         1,
-		Description:     "Monthly deposit",
-		Params:          map[string]interface{}{"source": "bank"},
+		ID:            "cf-123",
+		TransactionID: "tx-456",
+		Type:          "deposit",
+		Date:          "2025-01-08",
+		Amount:        1000.0,
+		Currency:      "EUR",
+		AmountEUR:     1000.0,
+		Status:        "completed",
+		StatusC:       1,
+		Description:   "Monthly deposit",
+		Params:        map[string]interface{}{"source": "bank"},
 	}
 
 	assert.Equal(t, "cf-123", cashFlow.ID)
 	assert.Equal(t, "tx-456", cashFlow.TransactionID)
-	assert.Equal(t, 1, cashFlow.TypeDocID)
 	assert.Equal(t, "deposit", cashFlow.Type)
-	assert.Equal(t, "wire_transfer", cashFlow.TransactionType)
-	assert.Equal(t, "2025-01-08", cashFlow.DT)
-	assert.Equal(t, "2025-01-08T10:00:00Z", cashFlow.Date)
-	assert.Equal(t, 1000.0, cashFlow.SM)
+	assert.Equal(t, "2025-01-08", cashFlow.Date)
 	assert.Equal(t, 1000.0, cashFlow.Amount)
-	assert.Equal(t, "EUR", cashFlow.Curr)
 	assert.Equal(t, "EUR", cashFlow.Currency)
-	assert.Equal(t, 1000.0, cashFlow.SMEUR)
 	assert.Equal(t, 1000.0, cashFlow.AmountEUR)
 	assert.Equal(t, "completed", cashFlow.Status)
 	assert.Equal(t, 1, cashFlow.StatusC)
