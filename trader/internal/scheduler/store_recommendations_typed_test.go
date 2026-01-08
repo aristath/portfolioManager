@@ -22,17 +22,17 @@ func (m *MockRecommendationRepoForStoreTyped) StorePlan(plan *planningdomain.Hol
 
 func TestStoreRecommendationsJob_SetPlan_Typed(t *testing.T) {
 	job := NewStoreRecommendationsJob(nil, "")
-	
+
 	plan := &planningdomain.HolisticPlan{
-		Steps:          []planningdomain.HolisticStep{},
-		CurrentScore:   75.0,
-		EndStateScore:  85.0,
-		Improvement:    10.0,
-		Feasible:       true,
+		Steps:         []planningdomain.HolisticStep{},
+		CurrentScore:  75.0,
+		EndStateScore: 85.0,
+		Improvement:   10.0,
+		Feasible:      true,
 	}
-	
+
 	job.SetPlan(plan)
-	
+
 	retrievedPlan := job.GetPlan()
 	require.NotNil(t, retrievedPlan)
 	assert.Equal(t, plan, retrievedPlan)
@@ -55,11 +55,11 @@ func TestStoreRecommendationsJob_Run_Typed_Success(t *testing.T) {
 	plan := &planningdomain.HolisticPlan{
 		Steps: []planningdomain.HolisticStep{
 			{
-				Symbol:        "AAPL",
-				Side:          "BUY",
-				Quantity:      10.0,
+				Symbol:         "AAPL",
+				Side:           "BUY",
+				Quantity:       10.0,
 				EstimatedPrice: 150.0,
-				Reason:        "Opportunity buy",
+				Reason:         "Opportunity buy",
 			},
 		},
 		CurrentScore:  75.0,
@@ -71,7 +71,7 @@ func TestStoreRecommendationsJob_Run_Typed_Success(t *testing.T) {
 
 	job := NewStoreRecommendationsJob(nil, portfolioHash)
 	job.SetPlan(plan)
-	
+
 	// Update the repository interface to use typed plan
 	// For now, we'll test with the interface conversion
 	job.recommendationRepo = mockRepo
@@ -103,7 +103,7 @@ func TestStoreRecommendationsJob_Run_Typed_RepositoryError(t *testing.T) {
 	}
 
 	plan := &planningdomain.HolisticPlan{
-		Steps: []planningdomain.HolisticStep{},
+		Steps:    []planningdomain.HolisticStep{},
 		Feasible: true,
 	}
 
@@ -118,17 +118,17 @@ func TestStoreRecommendationsJob_Run_Typed_RepositoryError(t *testing.T) {
 
 func TestStoreRecommendationsJob_GetPlan_Typed(t *testing.T) {
 	job := NewStoreRecommendationsJob(nil, "")
-	
+
 	assert.Nil(t, job.GetPlan(), "Initial plan should be nil")
-	
+
 	plan := &planningdomain.HolisticPlan{
 		Steps: []planningdomain.HolisticStep{
 			{
-				Symbol:        "MSFT",
-				Side:          "SELL",
-				Quantity:      5.0,
+				Symbol:         "MSFT",
+				Side:           "SELL",
+				Quantity:       5.0,
 				EstimatedPrice: 300.0,
-				Reason:        "Profit taking",
+				Reason:         "Profit taking",
 			},
 		},
 		CurrentScore:  80.0,
@@ -136,9 +136,9 @@ func TestStoreRecommendationsJob_GetPlan_Typed(t *testing.T) {
 		Improvement:   10.0,
 		Feasible:      true,
 	}
-	
+
 	job.SetPlan(plan)
-	
+
 	retrievedPlan := job.GetPlan()
 	require.NotNil(t, retrievedPlan)
 	assert.Equal(t, plan.Steps, retrievedPlan.Steps)
@@ -147,4 +147,3 @@ func TestStoreRecommendationsJob_GetPlan_Typed(t *testing.T) {
 	assert.Equal(t, plan.Improvement, retrievedPlan.Improvement)
 	assert.Equal(t, plan.Feasible, retrievedPlan.Feasible)
 }
-

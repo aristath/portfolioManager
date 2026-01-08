@@ -12,8 +12,8 @@ type CreateTradePlanJob struct {
 	log                zerolog.Logger
 	plannerService     PlannerServiceInterface
 	configRepo         ConfigRepositoryInterface
-	opportunityContext interface{}
-	plan               interface{}
+	opportunityContext *planningdomain.OpportunityContext
+	plan               *planningdomain.HolisticPlan
 }
 
 // NewCreateTradePlanJob creates a new CreateTradePlanJob
@@ -34,12 +34,12 @@ func (j *CreateTradePlanJob) SetLogger(log zerolog.Logger) {
 }
 
 // SetOpportunityContext sets the opportunity context for plan creation
-func (j *CreateTradePlanJob) SetOpportunityContext(ctx interface{}) {
+func (j *CreateTradePlanJob) SetOpportunityContext(ctx *planningdomain.OpportunityContext) {
 	j.opportunityContext = ctx
 }
 
 // GetPlan returns the created plan
-func (j *CreateTradePlanJob) GetPlan() interface{} {
+func (j *CreateTradePlanJob) GetPlan() *planningdomain.HolisticPlan {
 	return j.plan
 }
 
@@ -65,11 +65,17 @@ func (j *CreateTradePlanJob) Run() error {
 		config = domain.NewDefaultConfiguration()
 	}
 
-	// Create plan
-	plan, err := j.plannerService.CreatePlan(j.opportunityContext, config)
+	// Create plan (planner service returns interface{}, we type assert to HolisticPlan)
+	planInterface, err := j.plannerService.CreatePlan(j.opportunityContext, config)
 	if err != nil {
 		j.log.Error().Err(err).Msg("Failed to create plan")
 		return fmt.Errorf("failed to create plan: %w", err)
+	}
+
+	// Type assert to HolisticPlan
+	plan, ok := planInterface.(*planningdomain.HolisticPlan)
+	if !ok {
+		return fmt.Errorf("plan has invalid type: expected *planningdomain.HolisticPlan")
 	}
 
 	j.plan = plan

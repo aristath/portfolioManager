@@ -40,7 +40,7 @@ func TestStoreRecommendationsJob_Run_Success(t *testing.T) {
 	}
 
 	plan := &planningdomain.HolisticPlan{
-		Steps: []planningdomain.HolisticStep{},
+		Steps:    []planningdomain.HolisticStep{},
 		Feasible: true,
 	}
 	portfolioHash := "test-hash-123"
@@ -58,7 +58,7 @@ func TestStoreRecommendationsJob_Run_Success(t *testing.T) {
 func TestStoreRecommendationsJob_Run_NoRepository(t *testing.T) {
 	job := NewStoreRecommendationsJob(nil, "test-hash")
 	job.SetPlan(&planningdomain.HolisticPlan{
-		Steps: []planningdomain.HolisticStep{},
+		Steps:    []planningdomain.HolisticStep{},
 		Feasible: true,
 	})
 
@@ -87,7 +87,7 @@ func TestStoreRecommendationsJob_Run_RepositoryError(t *testing.T) {
 
 	job := NewStoreRecommendationsJob(mockRepo, "test-hash")
 	job.SetPlan(&planningdomain.HolisticPlan{
-		Steps: []planningdomain.HolisticStep{},
+		Steps:    []planningdomain.HolisticStep{},
 		Feasible: true,
 	})
 

@@ -3,6 +3,7 @@ package scheduler
 import (
 	"testing"
 
+	planningdomain "github.com/aristath/sentinel/internal/modules/planning/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -46,22 +47,23 @@ func TestCreateTradePlanJob_Run_Success(t *testing.T) {
 			createPlanCalled = true
 			calledContext = ctx
 			calledConfig = config
-			return map[string]interface{}{
-				"Steps": []interface{}{},
+			return &planningdomain.HolisticPlan{
+				Steps: []planningdomain.HolisticStep{},
+				Feasible: true,
 			}, nil
 		},
 	}
 
 	mockConfigRepo := &MockConfigRepoForPlan{
 		GetDefaultConfigFunc: func() (interface{}, error) {
-			return map[string]interface{}{
-				"Name": "default",
+			return &planningdomain.PlannerConfiguration{
+				Name: "default",
 			}, nil
 		},
 	}
 
-	opportunityContext := map[string]interface{}{
-		"Positions": []interface{}{},
+	opportunityContext := &planningdomain.OpportunityContext{
+		Positions: []planningdomain.Position{},
 	}
 
 	job := NewCreateTradePlanJob(mockPlannerService, mockConfigRepo)
@@ -72,11 +74,17 @@ func TestCreateTradePlanJob_Run_Success(t *testing.T) {
 	assert.True(t, createPlanCalled, "CreatePlan should have been called")
 	assert.Equal(t, opportunityContext, calledContext)
 	assert.NotNil(t, calledConfig)
+	
+	plan := job.GetPlan()
+	require.NotNil(t, plan)
+	assert.NotNil(t, plan.Steps)
 }
 
 func TestCreateTradePlanJob_Run_NoPlannerService(t *testing.T) {
 	job := NewCreateTradePlanJob(nil, nil)
-	job.SetOpportunityContext(map[string]interface{}{})
+	job.SetOpportunityContext(&planningdomain.OpportunityContext{
+		Positions: []planningdomain.Position{},
+	})
 
 	err := job.Run()
 	require.Error(t, err)
@@ -102,7 +110,9 @@ func TestCreateTradePlanJob_Run_PlannerServiceError(t *testing.T) {
 	}
 
 	job := NewCreateTradePlanJob(mockPlannerService, nil)
-	job.SetOpportunityContext(map[string]interface{}{})
+	job.SetOpportunityContext(&planningdomain.OpportunityContext{
+		Positions: []planningdomain.Position{},
+	})
 
 	err := job.Run()
 	require.Error(t, err)
@@ -112,7 +122,10 @@ func TestCreateTradePlanJob_Run_PlannerServiceError(t *testing.T) {
 func TestCreateTradePlanJob_Run_ConfigRepoError(t *testing.T) {
 	mockPlannerService := &MockPlannerService{
 		CreatePlanFunc: func(ctx interface{}, config interface{}) (interface{}, error) {
-			return map[string]interface{}{}, nil
+			return &planningdomain.HolisticPlan{
+				Steps: []planningdomain.HolisticStep{},
+				Feasible: true,
+			}, nil
 		},
 	}
 
@@ -123,9 +136,29 @@ func TestCreateTradePlanJob_Run_ConfigRepoError(t *testing.T) {
 	}
 
 	job := NewCreateTradePlanJob(mockPlannerService, mockConfigRepo)
-	job.SetOpportunityContext(map[string]interface{}{})
+	job.SetOpportunityContext(&planningdomain.OpportunityContext{
+		Positions: []planningdomain.Position{},
+	})
 
 	// Should use default config when repo fails
 	err := job.Run()
 	require.NoError(t, err)
+}
+
+func TestCreateTradePlanJob_Run_InvalidPlanType(t *testing.T) {
+	mockPlannerService := &MockPlannerService{
+		CreatePlanFunc: func(ctx interface{}, config interface{}) (interface{}, error) {
+			// Return wrong type
+			return map[string]interface{}{}, nil
+		},
+	}
+
+	job := NewCreateTradePlanJob(mockPlannerService, nil)
+	job.SetOpportunityContext(&planningdomain.OpportunityContext{
+		Positions: []planningdomain.Position{},
+	})
+
+	err := job.Run()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "plan has invalid type")
 }
