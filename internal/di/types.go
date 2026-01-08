@@ -69,6 +69,7 @@ type Container struct {
 
 	// Services
 	CurrencyExchangeService   *services.CurrencyExchangeService
+	ExchangeRateCacheService  *services.ExchangeRateCacheService
 	CashManager               domain.CashManager // Interface
 	TradeSafetyService        *trading.TradeSafetyService
 	TradingService            *trading.TradingService
@@ -146,6 +147,7 @@ type JobInstances struct {
 	SyncCashFlows         scheduler.Job
 	SyncPortfolio         scheduler.Job
 	SyncPrices            scheduler.Job
+	SyncExchangeRates     scheduler.Job
 	CheckNegativeBalances scheduler.Job
 	UpdateDisplayTicker   scheduler.Job
 	RetryTrades           scheduler.Job

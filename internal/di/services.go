@@ -93,6 +93,15 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	// Settings service (needed for trade safety and other services)
 	container.SettingsService = settings.NewService(container.SettingsRepo, log)
 
+	// Exchange rate cache service (wraps CurrencyExchangeService + Yahoo fallback)
+	container.ExchangeRateCacheService = services.NewExchangeRateCacheService(
+		container.CurrencyExchangeService,
+		container.YahooClient,
+		container.HistoryDBClient,
+		container.SettingsService,
+		log,
+	)
+
 	// ==========================================
 	// STEP 3: Initialize Cash Manager
 	// ==========================================
@@ -152,6 +161,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		container.UniverseDB.Conn(),
 		container.TradernetClient,
 		container.CurrencyExchangeService,
+		container.ExchangeRateCacheService,
 		container.SettingsService,
 		log,
 	)

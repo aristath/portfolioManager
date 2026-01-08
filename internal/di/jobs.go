@@ -218,6 +218,14 @@ func RegisterJobs(container *Container, cfg *config.Config, displayManager *disp
 	container.JobRegistry.Register(queue.JobTypeSyncPrices, queue.JobToHandler(syncPrices))
 	instances.SyncPrices = syncPrices
 
+	// Sync Exchange Rates Job
+	syncExchangeRates := scheduler.NewSyncExchangeRatesJob(scheduler.SyncExchangeRatesConfig{
+		Log:                      log,
+		ExchangeRateCacheService: container.ExchangeRateCacheService,
+	})
+	container.JobRegistry.Register(queue.JobTypeSyncExchangeRates, queue.JobToHandler(syncExchangeRates))
+	instances.SyncExchangeRates = syncExchangeRates
+
 	// Check Negative Balances Job
 	checkNegativeBalances := scheduler.NewCheckNegativeBalancesJob(scheduler.CheckNegativeBalancesConfig{
 		Log:                log,
@@ -255,6 +263,7 @@ func RegisterJobs(container *Container, cfg *config.Config, displayManager *disp
 		SyncCashFlowsJob:         syncCashFlows,
 		SyncPortfolioJob:         syncPortfolio,
 		SyncPricesJob:            syncPrices,
+		SyncExchangeRatesJob:     syncExchangeRates,
 		CheckNegativeBalancesJob: checkNegativeBalances,
 		UpdateDisplayTickerJob:   updateDisplayTicker,
 	})

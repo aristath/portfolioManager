@@ -31,6 +31,7 @@ const (
 	JobTypeSyncPortfolio         JobType = "sync_portfolio"
 	JobTypeCheckNegativeBalances JobType = "check_negative_balances"
 	JobTypeSyncPrices            JobType = "sync_prices"
+	JobTypeSyncExchangeRates     JobType = "sync_exchange_rates"
 	JobTypeUpdateDisplayTicker   JobType = "update_display_ticker"
 	JobTypeRetryTrades           JobType = "retry_trades"
 
