@@ -1791,19 +1791,670 @@ getTradesHistory(function(json){
 
 ### Get quote historical data - `getHloc`
 
-**Status:** ⏳ AWAITING DOCUMENTATION
+Get historical candlestick (OHLC) data for securities.
+
+**Description:** Method of obtaining historical information as per the listing (candlesticks).
+
+**HTTP Method:** GET or POST (for API V2)
+**Command:** `getHloc`
+
+#### Request Parameters:
+
+```json
+{
+    "cmd": "getHloc",
+    "params": {
+        "userId": null,                      // int|null - Optional
+        "id": "FB.US",                       // string - Required
+        "count": -1,                         // signed int - Required
+        "timeframe": 1440,                   // int - Required
+        "date_from": "15.08.2020 00:00",     // string|datetime - Required
+        "date_to": "16.08.2020 00:00",       // string|datetime - Required
+        "intervalMode": "ClosedRay"          // string - Required
+    }
+}
+```
+
+#### Parameter Details:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `cmd` | string | Yes | Request execution command ("getHloc") |
+| `params` | object | Yes | Request execution parameters |
+| `params.userId` | int\|null | Optional | User ID. Used to retrieve candlestick history data for a registered user. For GET request only (API v1) |
+| `params.id` | string | Yes | Ticker name. You can specify multiple tickers separated by commas (e.g., "AAPL.US,MSFT.US") |
+| `params.count` | signed int | Yes | Number of candlesticks to receive in addition to specified interval. Use `-1` if not required. For example: `-100` = get all candlesticks for the year + 100 candlesticks before the interval |
+| `params.timeframe` | int | Yes | Interval in minutes. Valid values: `1`, `5`, `15`, `60`, `1440` |
+| `params.date_from` | string\|datetime | Yes | Start date of the interval. Format: `DD.MM.YYYY hh:mm` (e.g., "15.08.2020 00:00") |
+| `params.date_to` | string\|datetime | Yes | End date of the interval. Format: `DD.MM.YYYY hh:mm` (e.g., "16.08.2020 00:00") |
+| `params.intervalMode` | string | Yes | **Required parameter, single value: "ClosedRay"** |
+
+**Date Format:** `DD.MM.YYYY hh:mm` (e.g., "15.08.2020 00:00")
+
+**Timeframe Values:**
+- `1` - 1 minute
+- `5` - 5 minutes
+- `15` - 15 minutes
+- `60` - 1 hour
+- `1440` - 1 day (24 hours)
+
+**CRITICAL:** `intervalMode` must be `"ClosedRay"` (not "OpenRay")
+
+#### Response Structure (Success):
+
+```typescript
+/**
+ * Candlestick Data Response
+ */
+type HlocDataResponse = {
+    hloc: {
+        [ticker: string]: number[][]  // [high, low, open, close] for each candlestick
+    },
+    vl: {
+        [ticker: string]: number[]    // Volume for each candlestick
+    },
+    xSeries: {
+        [ticker: string]: number[]    // Timestamps in seconds (Unix epoch)
+    },
+    maxSeries: number,                // Timestamp of the most recent candlestick
+    info: {
+        [ticker: string]: TickerInfo  // Information about the requested ticker
+    },
+    took: number                      // Request execution time in milliseconds
+}
+
+/**
+ * Ticker Information
+ */
+type TickerInfo = {
+    id: string,              // Ticker ID
+    nt_ticker: string,       // Tradernet ticker name
+    short_name: string,      // Company short name
+    default_ticker: string,  // Default ticker symbol
+    code_nm: string,         // Ticker code
+    currency: string,        // Trading currency
+    min_step: string,        // Minimum price increment
+    lot: string             // Lot size
+}
+```
+
+#### Example Response:
+
+```json
+{
+    "hloc": {
+        "FB.US": [
+            [107.25, 106.1603, 106.96, 106.26],
+            [106.45, 104.62, 106.45, 104.75],
+            [103.33, 100.25, 103.33, 102.32],
+            [103.71, 101.41, 102.33, 102.82],
+            [103.7301, 100.89, 101.05, 102.97]
+        ]
+    },
+    "vl": {
+        "FB.US": [
+            7588957,
+            8812260,
+            5941541,
+            6529607,
+            5905857
+        ]
+    },
+    "xSeries": {
+        "FB.US": [
+            1451422800,
+            1451509200,
+            1451854800,
+            1451941200,
+            1452027600
+        ]
+    },
+    "maxSeries": 1452027600,
+    "info": {
+        "FB.US": {
+            "id": "FB.US",
+            "nt_ticker": "FB.US",
+            "short_name": "Facebook, Inc.",
+            "default_ticker": "FB",
+            "code_nm": "FB",
+            "currency": "USD",
+            "min_step": "0.01000000",
+            "lot": "1.00000000"
+        }
+    },
+    "took": 26.685
+}
+```
+
+#### Response (Error):
+
+```json
+// Common error
+{
+    "errMsg": "Bad json",
+    "code": 2
+}
+
+// Method error
+{
+    "error": "User is not found",
+    "code": 7
+}
+```
+
+#### Response Fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `hloc` | Object | Candlestick OHLC data. Key: ticker name, Value: array of `[high, low, open, close]` arrays |
+| `vl` | Object | Candlestick volume data. Key: ticker name, Value: array of volume numbers |
+| `xSeries` | Object | Candlestick timestamps **in seconds** (Unix epoch). Key: ticker name, Value: array of timestamps |
+| `maxSeries` | number | Timestamp of the most recent candlestick rendering |
+| `info` | Object | Information about the requested ticker(s) |
+| `took` | float | Request execution time in milliseconds |
+
+**Important Notes:**
+- **Timestamps are in seconds** (not milliseconds)
+- HLOC format is: `[high, low, open, close]` (not OHLC)
+- Multiple tickers can be requested by separating with commas in the `id` parameter
+- Response will contain data for all requested tickers
+- The `count` parameter allows fetching additional candlesticks before the specified date range
+
+#### Example Usage (jQuery):
+
+```javascript
+/**
+ * @type {GetHlocParams}
+ */
+var exampleParams = {
+    "cmd": "getHloc",
+    "params": {
+        "id": "FB.US",
+        "count": -1,
+        "timeframe": 1440,
+        "date_from": "15.08.2020 00:00",
+        "date_to": "16.08.2020 00:00",
+        "intervalMode": "ClosedRay"
+    }
+};
+
+function getHloc(callback) {
+    $.getJSON("https://tradernet.com/api/", {q: JSON.stringify(exampleParams)}, callback);
+}
+
+/**
+ * Get the object
+ **/
+getHloc(function(json){
+    console.log(json);
+});
+```
 
 ---
 
 ### Stock ticker search - `tickerFinder`
 
-**Status:** ⏳ AWAITING DOCUMENTATION
+Search for securities by ticker symbol or company name.
+
+**Description:** Search endpoint that returns a maximum of 30 securities matching the search query.
+
+**HTTP Method:** GET
+**Command:** `tickerFinder`
+
+#### Request Parameters:
+
+```json
+{
+    "cmd": "tickerFinder",
+    "params": {
+        "text": "AAPL.US"  // string - Required
+    }
+}
+```
+
+**Search Formats:**
+
+1. **Simple search:** `"AAPL"` or `"Apple"` - searches across all markets
+2. **Exchange-specific search:** `"<ticker>@<market>"` - searches on specific exchange
+
+**Example:** `"AAPL@FIX"` - search for AAPL on NYSE/NASDAQ
+
+#### Parameter Details:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `cmd` | string | Yes | Request execution command ("tickerFinder") |
+| `params` | object | Yes | Request execution parameters |
+| `params.text` | string | Yes | Search query (ticker symbol or company name). Use lowercase for best results. |
+
+#### Market Codes (for Exchange-Specific Search):
+
+| Market Code | Exchange |
+|-------------|----------|
+| `MCX` | MICEX (Moscow Exchange) |
+| `FORTS` | MICEX Derivatives |
+| `FIX` | NYSE/NASDAQ (US markets) |
+| `UFORTS` | Ukrainian Derivatives Exchange |
+| `UFOUND` | Ukrainian Exchange |
+| `EU` | Europe |
+| `KASE` | Kazakhstan |
+
+**Format:** `"<ticker>@<market>"` (e.g., `"AAPL@FIX"`)
+
+#### Response Structure (Success):
+
+```typescript
+/**
+ * Ticker Finder Data Row
+ */
+type TickerFinderDataRow = {
+    instr_id: number,     // Unique ticker ID
+    nm: string,           // Name (too long format)
+    n: string,            // Name (short format)
+    ln: string,           // English name
+    t: string,            // Ticker in Tradernet's system
+    isin: string,         // Ticker ISIN code
+    type: number,         // Instrument type
+    kind: number,         // Instrument sub-type
+    tn: string,           // Ticker plus name
+    code_nm: string,      // Exchange ticker
+    mkt_id: number,       // Market code (numeric)
+    mkt: string          // Market name
+}
+
+/**
+ * Ticker Finder Result
+ */
+type TickerFinderResult = {
+    found: TickerFinderDataRow[]  // List of found tickers (max 30)
+}
+```
+
+#### Instrument Type and Kind Combinations:
+
+| Type | Kind | Description |
+|------|------|-------------|
+| 1 | 1 | Regular stock (common stock) |
+| 1 | 2 | Preferred stock |
+| 1 | 7 | Investment units (funds/ETFs) |
+| 2 | - | Bonds (all kinds) |
+| 3 | - | Futures (all kinds) |
+| 5 | - | Exchange index |
+| 6 | 1 | Cash (fiat currency) |
+| 6 | 8 | Crypto (cryptocurrency) |
+| 8, 9, 10 | - | Repo (repurchase agreements) |
+
+#### Example Response:
+
+```json
+{
+    "found": [
+        {
+            "instr_id": 10000007229,
+            "nm": "Apple Inc.",
+            "n": "Apple",
+            "ln": "Apple Inc.",
+            "t": "AAPL.US",
+            "isin": "US0378331005",
+            "type": 1,
+            "kind": 1,
+            "tn": "AAPL.US Apple Inc.",
+            "code_nm": "AAPL",
+            "mkt_id": 95006833,
+            "mkt": "NASDAQ"
+        }
+    ]
+}
+```
+
+#### Response Fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `found` | array | Array of matching securities (maximum 30 results) |
+| `found[].instr_id` | number | Unique instrument ID in Tradernet system |
+| `found[].nm` | string | Full company/instrument name (long format) |
+| `found[].n` | string | Short company/instrument name |
+| `found[].ln` | string | English language name |
+| `found[].t` | string | Ticker symbol in Tradernet format (e.g., "AAPL.US") |
+| `found[].isin` | string | International Securities Identification Number |
+| `found[].type` | number | Instrument type code (see type/kind combinations table) |
+| `found[].kind` | number | Instrument sub-type/kind code |
+| `found[].tn` | string | Combined ticker and name string |
+| `found[].code_nm` | string | Ticker symbol on the exchange (without suffix) |
+| `found[].mkt_id` | number | Numeric market identifier |
+| `found[].mkt` | string | Market/exchange name |
+
+**Important Notes:**
+- **Maximum 30 results** returned per search
+- Use lowercase search text for best results
+- Exchange-specific searches use `@` symbol: `"ticker@market"`
+- Response may vary based on whether field names are short or full format
+- The `type` and `kind` fields classify the instrument (see combinations table)
+
+#### Example Usage (jQuery):
+
+```javascript
+/**
+ * @typedef {{
+ *  search: string,
+ *  q: {
+ *      cmd: 'tickerFinder',
+ *      params: {
+ *          text: string
+ *      }
+ *  }
+ * }} TickerFinderQueryParams
+ */
+
+/**
+ * @param {string} phrase
+ * @param {function} callback
+ */
+function findTickers(phrase, callback) {
+    /**
+     * @type {TickerFinderQueryParams}
+     */
+    var queryParams = {
+        q: {
+            cmd: 'tickerFinder',
+            params: {
+                text: phrase.toLowerCase()
+            }
+        }
+    };
+
+    $.getJSON('https://tradernet.com/api', queryParams, callback);
+}
+
+// Simple search
+findTickers('AAPL.US',
+    /**
+     * @param {TickerFinderResults} data
+     */
+    function (data) {
+        console.info(data);
+    }
+);
+
+// Exchange-specific search
+findTickers('AAPL@FIX',
+    function (data) {
+        console.info(data);  // Search AAPL on NYSE/NASDAQ only
+    }
+);
+```
+
+#### Alternative Request Format:
+
+The endpoint also supports a simpler GET request format:
+
+```javascript
+// Using q parameter directly
+$.getJSON('https://tradernet.com/api', {
+    q: JSON.stringify({
+        cmd: 'tickerFinder',
+        params: {
+            text: 'AAPL@FIX'
+        }
+    })
+}, callback);
+```
+
+**Best Practices:**
+- Convert search text to lowercase for consistent results
+- Use exchange-specific search (`@market`) to narrow results and improve relevance
+- Check `type` and `kind` fields to filter by instrument category
+- Validate ISIN if you need globally unique identification
 
 ---
 
 ### Get updates on market status - `getMarketStatus`
 
-**Status:** ⏳ AWAITING DOCUMENTATION
+Obtain information about market statuses and operation.
+
+**Description:** Get current status (open/closed), opening times, and time zones for markets.
+
+**HTTP Method:** GET
+**Command:** `getMarketStatus`
+
+#### Request Parameters:
+
+```json
+{
+    "cmd": "getMarketStatus",
+    "params": {
+        "market": "*",       // string - Required
+        "mode": "demo"       // string|null - Optional
+    }
+}
+```
+
+#### Parameter Details:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `cmd` | string | Yes | Request execution command ("getMarketStatus") |
+| `params` | object | Yes | Request execution parameters |
+| `params.market` | string | Yes | Market identifier (briefName). Use `"*"` for all markets. See Market List table below. |
+| `params.mode` | string\|null | Optional | Request mode: `"demo"`. If not specified, displays market statuses for real users. |
+
+#### Market List (briefName Codes)
+
+Complete list of available markets:
+
+| Market Code | Full Title | Abbreviated Name |
+|-------------|-----------|------------------|
+| `*` | All markets | - |
+| `AMX` | Armenia Securities Exchange | AMX |
+| `AIX` | Astana International Exchange | AIX |
+| `ATHEX` | Athens Stock Exchange | ATHEX |
+| `BEB.RUS` | BEB. The market for the conversions calendar | BEB.RUS |
+| `BEX` | BEX Best Execution | BEX |
+| `SBQ` | Broker Quote System (BQS) | SBQ |
+| `US_OPT` | CBOE (US Options) | US_OPT |
+| `CMX` | COMEX (Commodity Exchange) | CMX |
+| `CBF` | Cboe Futures Exchange | CBF |
+| `CBT` | Chicago Board of Trade | CBT |
+| `CME` | Chicago Mercantile Exchange | CME |
+| `SecForCrypto` | Crypto | SecForCrypto |
+| `FINERY` | Crypto Finery Market | FINERY |
+| `CRPT` | Cryptocurrency market | CRPT |
+| `EU` | EU Europe | EU |
+| `EXANTE` | EXANTE | EXANTE |
+| `EASTE` | East Exchange | EASTE |
+| `EUX` | Eurex | EUX |
+| `EUROBOND` | Eurobonds | EUROBOND |
+| `FORTS` | FORTS Market FORTS | FORTS |
+| `FFSP` | Freedom Finance Structural Products | FFSP |
+| `HKG` | Hong Kong Futures Exchange | HKG |
+| `HKEX` | Hong Kong Stock Exchange | HKEX |
+| `EDX` | ICE Endex | EDX |
+| `NYB` | ICE Futures U.S. | NYB |
+| `WCE` | ICE Futures US-Canadian Grains | WCE |
+| `IMEX` | IMEX Crypto Market | IMEX |
+| `ISF` | ISF: ICE Futures Europe S2F | ISF |
+| `ITS` | ITS | ITS |
+| `ITS_MONEY` | ITS Money Market | ITS_MONEY |
+| `ICE` | Intercontinental Exchange | ICE |
+| `KASE` | Kazakhstan Stock Exchange | KASE |
+| `KASE.CUR` | Kazakhstan Stock Exchange. Currency section | KASE.CUR |
+| `Kraken` | Kraken Crypto Exchange | Kraken |
+| `LME` | LME: London Metal Exchange | LME |
+| `LMAX` | Lmax currency | LMAX |
+| `MCX.CUR` | MCX Currency. Currency exchange | MCX.CUR |
+| `MCX.OTC` | MCX Over-The-Counter Market | MCX.OTC |
+| `MCX.nottraded` | MCX.nottraded | MCX.nottraded |
+| `MOEX` / `MCX` | MICEX. Stock market | MCX |
+| `MONEY` | MONEY Foreign Exchange Market | MONEY |
+| `OTC.xxxx.RUR` | Market for settlement of forwards on foreign stocks for Russian Rubles | OTC.xxxx.RUR |
+| `MBANK_EU` | MayBank EU Instruments | MBANK_EU |
+| `MBANK` | MayBank HKE Instruments | MBANK |
+| `MBANK_US` | MayBank US Instruments | MBANK_US |
+| `MGE` | Minneapolis Grain Exchange (MGEX) | MGE |
+| `NGC` | NSE IFSC | NGC |
+| `NYF` | NYF - ICE Futures US Indices | NYF |
+| `FIX` | NYSE/NASDAQ | FIX |
+| `NSE` | Natl Stock Exchange of India | NSE |
+| `NYM` | New York Mercantile Exchange | NYM |
+| `FIX.OTC` | OTC. Foreign securities. | FIX.OTC |
+| `PFTS_OBL` | PFTS. Obligations | PFTS_OBL |
+| `PFTS_SPOT` | PFTS. Spot | PFTS_SPOT |
+| `PRSP_OBL` | Perspektiva market. Obligations | PRSP_OBL |
+| `PRSP_SPOT` | Perspektiva market. Spot | PRSP_SPOT |
+| `RTSBoard` | RTSBoard РТС board | RTSBoard |
+| `UZSE` | Republican Stock Exchange "Toshkent" (UZSE) | UZSE |
+| `SGC` / `RTS` | SGQ system of guaranteed quotes on RTS | RTS |
+| `SGX` | SGX: Singapore Exchange | SGX |
+| `SPBFOR` | SPB Foreign securities. | SPBFOR |
+| `SPBEX` | SPB. Russian securities. | SPBEX |
+| `KASE.OTC` | Store. Kazakhstan. F24 | KASE.OTC |
+| `TABADUL` | Tabadul Exchange | TABADUL |
+| `UB_OBL` | UB. Obligations | UB_OBL |
+| `UKR_FORTS` / `UFORTS` | UKR_FORTS FORTS Ukraine | UFORTS |
+| `UKR_FOUND` / `UFOUND` | UKR_FOUND Stock Ukraine | UFOUND |
+| `UX.OTC` | UX Over-The-Counter Market | UX.OTC |
+
+#### Response Structure (Success):
+
+```typescript
+/**
+ * Market Info Row
+ */
+type MarketInfoRow = {
+    n: string,   // Full market name
+    n2: string,  // Market abbreviation
+    s: string,   // Current market status (e.g., "OPEN", "CLOSE")
+    o: string,   // Market opening time (MSK timezone) - Format: "HH:MM:SS"
+    c: string,   // Market closing time (MSK timezone) - Format: "HH:MM:SS"
+    dt: string  // Time difference relative to MSK time (in minutes as string)
+}
+
+/**
+ * Market Status Response
+ */
+type MarketStatusResponse = {
+    result: {
+        markets: {
+            t: string,              // Current request time (server time)
+            m: MarketInfoRow[]     // Array of market info
+        }
+    }
+}
+```
+
+#### Example Response:
+
+```json
+{
+    "result": {
+        "markets": {
+            "t": "2020-11-18 19:29:27",
+            "m": [
+                {
+                    "n": "KASE",
+                    "n2": "KASE",
+                    "s": "CLOSE",
+                    "o": "08:20:00",
+                    "c": "14:00:00",
+                    "dt": "-180"
+                }
+            ]
+        }
+    }
+}
+```
+
+#### Response (Error):
+
+```json
+// Common error
+{
+    "errMsg": "Bad json",
+    "code": 2
+}
+
+// Method error (service unavailable)
+{
+    "error": "Something wrong, service unavailable",
+    "code": 14
+}
+```
+
+**Error Codes:**
+- **Code 2:** Common error (bad JSON)
+- **Code 14:** Service unavailable
+
+#### Response Fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `result.markets` | object | Markets container |
+| `result.markets.t` | string | Current request time (server timestamp) |
+| `result.markets.m` | array | Array of market information objects |
+| `result.markets.m[].n` | string | Full market name |
+| `result.markets.m[].n2` | string | Market abbreviation/code |
+| `result.markets.m[].s` | string | Current market status (e.g., "OPEN", "CLOSE", "PRE_OPEN", "POST_CLOSE") |
+| `result.markets.m[].o` | string | Market opening time in MSK timezone (HH:MM:SS format) |
+| `result.markets.m[].c` | string | Market closing time in MSK timezone (HH:MM:SS format) |
+| `result.markets.m[].dt` | string | Time difference relative to Moscow time in minutes (e.g., "-180" = 3 hours behind) |
+
+**Market Status Values:**
+- `"OPEN"` - Market is currently open for trading
+- `"CLOSE"` - Market is currently closed
+- `"PRE_OPEN"` - Pre-market session
+- `"POST_CLOSE"` - After-hours session
+
+**Time Zone Notes:**
+- Opening and closing times (`o`, `c`) are in **MSK (Moscow Standard Time)**
+- Use `dt` field to calculate local market time
+- Positive `dt` = ahead of MSK, Negative `dt` = behind MSK
+
+#### Example Usage (jQuery):
+
+```javascript
+/**
+ * @type {getMarketStatus}
+ */
+var paramsToGetStatus = {
+    "cmd": "getMarketStatus",
+    "params": {
+        "market": "*",    // Get all markets
+        "mode": "demo"    // Demo mode
+    }
+};
+
+/**
+ * The request allows you to get updates on the market status directly from the server
+ */
+function getMarketStatuses(callback) {
+    $.getJSON("https://tradernet.com/api/", {q: JSON.stringify(paramsToGetStatus)}, callback);
+}
+
+getMarketStatuses(function (json) {
+    console.info(json);
+});
+
+// Get specific market
+var paramsSpecific = {
+    "cmd": "getMarketStatus",
+    "params": {
+        "market": "FIX"  // Get NYSE/NASDAQ status only
+    }
+};
+```
+
+#### WebSocket Support:
+
+The market status can also be received via WebSocket for real-time updates. Subscribe to market status changes to receive push notifications when markets open/close.
+
+**Usage Notes:**
+- Use `"*"` to get all markets at once
+- Use specific market code (e.g., `"FIX"`) to get single market
+- `mode: "demo"` shows demo account market statuses
+- Omit `mode` parameter for real account market statuses
+- Times are always in MSK timezone - convert using `dt` field
+- Status updates are useful for determining if orders can be placed
 
 ---
 
@@ -2064,15 +2715,329 @@ getCrossRatesForDate(function(json){
 
 ---
 
-### Adding ticker to list
+### Adding ticker to list - `addStockListTicker`
 
-**Status:** ⏳ AWAITING DOCUMENTATION
+Add a ticker to a user's securities list (watchlist).
+
+**Description:** Add a specific ticker symbol to one of the user's custom securities lists.
+
+**HTTP Method:** POST
+**Command:** `addStockListTicker`
+
+**Authorization:** Required. The SID received during authorization must be passed.
+
+#### Request Parameters:
+
+```json
+{
+    "cmd": "addStockListTicker",
+    "SID": "<SID>",
+    "params": {
+        "id": 2,              // integer - Required
+        "ticker": "AAPL.US",  // string - Required
+        "index": 2            // integer - Required
+    }
+}
+```
+
+#### Parameter Details:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `cmd` | string | Yes | Request execution command ("addStockListTicker") |
+| `SID` | string | Yes | Session ID received during authorization |
+| `params` | object | Yes | Request execution parameters |
+| `params.id` | integer | Yes | List ID (the ID of the securities list to add the ticker to) |
+| `params.ticker` | string | Yes | Ticker symbol (e.g., "AAPL.US") |
+| `params.index` | integer | Yes | Ticker item number (position in the list) |
+
+#### Response Structure (Success):
+
+```typescript
+/**
+ * Stock List
+ */
+type StockList = {
+    id: number,           // List ID
+    userId: number,       // User ID who owns the list
+    name: string,         // List name
+    tickers: string[],    // Array of ticker symbols in the list
+    picture: string | null // Emoji or image for the list (optional)
+}
+
+/**
+ * Add Stock List Ticker Response
+ */
+type AddStockListTickerResponse = {
+    userStockLists: StockList[],  // All user's stock lists (updated)
+    selectedId: number,            // Currently selected list ID
+    defaultId: number             // Default list ID
+}
+```
+
+#### Example Response:
+
+```json
+{
+    "userStockLists": [
+        {
+            "id": 1,
+            "userId": 123456,
+            "name": "default",
+            "tickers": [],
+            "picture": null
+        },
+        {
+            "id": 2,
+            "userId": 123456,
+            "name": "etf",
+            "tickers": [
+                "AAAU.US",
+                "ACES.US",
+                "AAPL.US",
+                "ACIO.US",
+                "AFIF.US"
+            ],
+            "picture": "🙂"
+        }
+    ],
+    "selectedId": 1,
+    "defaultId": 1
+}
+```
+
+#### Response (Error):
+
+```json
+// Common error
+{
+    "errMsg": "Bad json",
+    "code": 2
+}
+```
+
+#### Response Fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `userStockLists` | array | Complete array of all user's securities lists (updated after adding ticker) |
+| `userStockLists[].id` | number | Unique list identifier |
+| `userStockLists[].userId` | number | ID of the user who owns the list |
+| `userStockLists[].name` | string | Display name of the list |
+| `userStockLists[].tickers` | array | Array of ticker symbols in this list (in order) |
+| `userStockLists[].picture` | string\|null | Emoji or image representing the list (optional) |
+| `selectedId` | number | ID of the currently selected/active list |
+| `defaultId` | number | ID of the user's default list |
+
+**Important Notes:**
+- Response returns **all** user's lists, not just the modified one
+- The `tickers` array shows the updated list including the newly added ticker
+- `index` parameter determines the position of the ticker in the list
+- If ticker already exists in the list, it may be moved to the new index
+- The list specified by `id` must exist and belong to the authenticated user
+
+#### Example Usage (jQuery):
+
+```javascript
+/**
+ * @type {addStockListTicker}
+ */
+var exampleParams = {
+    "cmd": "addStockListTicker",
+    "SID": "<SID>",
+    "params": {
+        "id": 2,              // Add to list ID 2
+        "ticker": "AAPL.US",  // Add Apple stock
+        "index": 2            // Insert at position 2
+    }
+};
+
+function addStockListTicker(callback) {
+    $.getJSON("https://tradernet.com/api/", {q: JSON.stringify(exampleParams)}, callback);
+}
+
+/**
+ * Get the object
+ **/
+addStockListTicker(function(json){
+    console.log(json);
+    console.log("Ticker added. Updated lists:", json.userStockLists);
+});
+```
+
+**Use Cases:**
+- Building custom watchlists
+- Organizing securities by strategy, sector, or theme
+- Creating favorites lists for quick access
+- Managing multiple portfolios or trading ideas
+
+**Related Endpoints:**
+- `addSecuritiesList` - Create a new securities list
+- `deleteTickerFromList` - Remove a ticker from a list
+- `getSecuritiesLists` - Get all user's securities lists
+- `updateSecuritiesList` - Modify list properties (name, picture)
+- `deleteSecuritiesList` - Delete a securities list
 
 ---
 
-### Deleting ticker from list
+### Deleting ticker from list - `deleteStockListTicker`
 
-**Status:** ⏳ AWAITING DOCUMENTATION
+Remove a ticker from a user's securities list (watchlist).
+
+**Description:** Delete a specific ticker symbol from one of the user's custom securities lists.
+
+**HTTP Method:** POST
+**Command:** `deleteStockListTicker`
+
+**Authorization:** Required. The SID received during authorization must be passed.
+
+#### Request Parameters:
+
+```json
+{
+    "cmd": "deleteStockListTicker",
+    "SID": "<SID>",
+    "params": {
+        "id": 2,              // integer - Required
+        "ticker": "AAPL.US"   // string - Required
+    }
+}
+```
+
+#### Parameter Details:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `cmd` | string | Yes | Request execution command ("deleteStockListTicker") |
+| `SID` | string | Yes | Session ID received during authorization |
+| `params` | object | Yes | Request execution parameters |
+| `params.id` | integer | Yes | List ID (the ID of the securities list to remove the ticker from) |
+| `params.ticker` | string | Yes | Ticker symbol to remove (e.g., "AAPL.US") |
+
+#### Response Structure (Success):
+
+```typescript
+/**
+ * Stock List
+ */
+type StockList = {
+    id: number,           // List ID
+    userId: number,       // User ID who owns the list
+    name: string,         // List name
+    tickers: string[],    // Array of ticker symbols in the list
+    picture: string | null // Emoji or image for the list (optional)
+}
+
+/**
+ * Delete Stock List Ticker Response
+ */
+type DeleteStockListTickerResponse = {
+    userStockLists: StockList[],  // All user's stock lists (updated)
+    selectedId: number,            // Currently selected list ID
+    defaultId: number             // Default list ID
+}
+```
+
+#### Example Response:
+
+```json
+{
+    "userStockLists": [
+        {
+            "id": 1,
+            "userId": 123456,
+            "name": "default",
+            "tickers": [],
+            "picture": null
+        },
+        {
+            "id": 2,
+            "userId": 123456,
+            "name": "etf",
+            "tickers": [
+                "AAAU.US",
+                "ACES.US",
+                "ACIO.US",
+                "AFIF.US"
+            ],
+            "picture": "🙂"
+        }
+    ],
+    "selectedId": 1,
+    "defaultId": 1
+}
+```
+
+#### Response (Error):
+
+```json
+// Common error
+{
+    "errMsg": "Bad json",
+    "code": 2
+}
+```
+
+#### Response Fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `userStockLists` | array | Complete array of all user's securities lists (updated after removing ticker) |
+| `userStockLists[].id` | number | Unique list identifier |
+| `userStockLists[].userId` | number | ID of the user who owns the list |
+| `userStockLists[].name` | string | Display name of the list |
+| `userStockLists[].tickers` | array | Array of ticker symbols in this list (ticker removed) |
+| `userStockLists[].picture` | string\|null | Emoji or image representing the list (optional) |
+| `selectedId` | number | ID of the currently selected/active list |
+| `defaultId` | number | ID of the user's default list |
+
+**Important Notes:**
+- Response returns **all** user's lists, not just the modified one
+- The `tickers` array shows the updated list with the ticker removed
+- If the ticker doesn't exist in the list, the operation succeeds silently (no error)
+- The list specified by `id` must exist and belong to the authenticated user
+- The ticker is removed from the specified list only, not from other lists
+
+#### Example Usage (jQuery):
+
+```javascript
+/**
+ * @type {deleteStockListTicker}
+ */
+var exampleParams = {
+    "cmd": "deleteStockListTicker",
+    "SID": "<SID>",
+    "params": {
+        "id": 2,              // Remove from list ID 2
+        "ticker": "AAPL.US"   // Remove Apple stock
+    }
+};
+
+function deleteStockListTicker(callback) {
+    $.getJSON("https://tradernet.com/api/", {q: JSON.stringify(exampleParams)}, callback);
+}
+
+/**
+ * Get the object
+ **/
+deleteStockListTicker(function(json){
+    console.log(json);
+    console.log("Ticker removed. Updated lists:", json.userStockLists);
+});
+```
+
+**Use Cases:**
+- Cleaning up watchlists
+- Removing securities that no longer match list criteria
+- Managing list organization
+- Removing duplicates across multiple lists
+
+**Related Endpoints:**
+- `addStockListTicker` - Add a ticker to a list
+- `addSecuritiesList` - Create a new securities list
+- `getSecuritiesLists` - Get all user's securities lists
+- `updateSecuritiesList` - Modify list properties (name, picture)
+- `deleteSecuritiesList` - Delete an entire securities list
 
 ---
 
@@ -2118,19 +3083,581 @@ getCrossRatesForDate(function(json){
 
 ### Connecting to websocket server
 
-**Status:** ⏳ AWAITING DOCUMENTATION
+Connect to Tradernet's WebSocket server for real-time data streaming.
+
+**Description:** WebSocket connection provides real-time updates for quotes, portfolio, orders, and market data.
+
+**Server Address:** `wss://wss.tradernet.com/`
+
+**Authorization:** Optional (SID parameter)
+- **With SID:** Access to live account data (portfolio, orders, quotes)
+- **Without SID:** Demo data only (quotes and market depth)
+
+#### Connection Format
+
+All WebSocket requests and responses use the format:
+
+```javascript
+[event, data]  // event: string, data: optional JSON object
+```
+
+- `event` - Event name (string)
+- `data` - Request/response data in JSON format (optional)
+
+#### Connection Methods
+
+**1. Connect without SID (Demo Mode):**
+```javascript
+const ws = new WebSocket('wss://wss.tradernet.com/');
+```
+
+**2. Connect with SID (Live Account):**
+```javascript
+const ws = new WebSocket('wss://wss.tradernet.com/?SID=<your-sid>');
+```
+
+**Note:** To obtain a SID, see the 'Authorization' section.
+
+#### Basic Connection Example
+
+```javascript
+const WebSocketsURL = "wss://wss.tradernet.com/";
+
+const ws = new WebSocket(WebSocketsURL);
+
+// Connection event
+ws.onopen = function () {
+    console.log('Connected to WS');
+};
+
+// Incoming message processing
+ws.onmessage = function (m) {
+    const [event, data] = JSON.parse(m.data);
+    console.log(event, data);
+};
+
+// Connection closure processing
+ws.onclose = function (e) {
+    console.log('sockets closed', e);
+};
+
+// Error processing
+ws.onerror = function (error) {
+    console.log("Sockets.error: ", error);
+    ws.close();
+};
+```
+
+**Learn more:** [WebSocket object's methods and events](https://developer.mozilla.org/en-US/docs/Web/API/WebSocket)
+
+#### Reconnection Logic
+
+**Important:** Out-of-the-box WebSocket doesn't support automatic reconnection. Implement reconnection logic for production use:
+
+```javascript
+(function websocketStart() {
+    const ws = new WebSocket(WebSocketsURL);
+
+    ws.onopen = function () {
+        console.log('Connected to WS');
+    };
+
+    ws.onmessage = function (m) {
+        const [event, data] = JSON.parse(m.data);
+        console.log(event, data);
+    };
+
+    ws.onclose = function (e) {
+        console.log('sockets closed', e);
+        setTimeout(function () {
+            websocketStart();  // Reconnect after 5 seconds
+        }, 5000);
+    };
+
+    ws.onerror = function (error) {
+        console.log("Sockets.error: ", error);
+        ws.close();
+    };
+})();
+```
+
+#### Initial Response: `userData` Event
+
+When connecting, the server sends a `userData` event with user information:
+
+```javascript
+[
+    "userData",
+    {
+        "isDemo": false,
+        "mode": "prod",
+        "authLogin": "user@example.com",
+        "login": "user1",
+        "clientLogin": "user@example.com"
+    }
+]
+```
+
+#### `userData` Event Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `isDemo` | bool | Demo mode indicator. `true` if: (1) No SID provided, (2) SID authorization failed, or (3) User has no live account |
+| `mode` | string | Mode string representation: `"prod"` or `"demo"` |
+| `authLogin` | string | Authentication login (email used for login) |
+| `login` | string | User login (username) |
+| `clientLogin` | string | Username under which the user logged in |
+
+#### Subscribing to Events
+
+To subscribe to an event, send the event name and parameters (if required):
+
+```javascript
+// Subscribing to quotes
+ws.onopen = function() {
+    // Wait for connection to open
+    ws.send(JSON.stringify(['quotes', ['AAPL.SPB']]));
+};
+
+// Incoming data processing with event handlers
+function quotesHandler(data) {
+    console.log(data);
+}
+
+const handlers = {
+    q: quotesHandler  // 'q' event for quotes
+};
+
+ws.onmessage = function (m) {
+    const [event, data] = JSON.parse(m.data);
+    if (handlers[event]) {
+        handlers[event](data);
+    }
+};
+```
+
+#### Connection States
+
+WebSocket connection states:
+- `CONNECTING (0)` - Connection is being established
+- `OPEN (1)` - Connection is open and ready to communicate
+- `CLOSING (2)` - Connection is being closed
+- `CLOSED (3)` - Connection is closed
+
+Check connection state:
+```javascript
+console.log(ws.readyState);  // 0, 1, 2, or 3
+```
+
+#### Available Event Subscriptions
+
+Once connected, you can subscribe to various events:
+- **quotes** - Real-time stock quotes
+- **portfolio** - Portfolio updates
+- **orders** - Order status updates
+- **orderbook** - Market depth data
+- **markets** - Market status changes
+- **sessions** - Security session changes
+
+See individual event documentation for subscription formats and data structures.
+
+#### Error Handling Best Practices
+
+1. **Implement reconnection logic** - Network interruptions are common
+2. **Handle authentication failures** - Check `isDemo` flag in `userData`
+3. **Validate event data** - Check for required fields before processing
+4. **Rate limit subscriptions** - Don't subscribe to too many symbols at once
+5. **Clean up on disconnect** - Clear timers and event handlers
+
+#### Connection with SID Example
+
+```javascript
+// Get SID from authentication
+const sid = '<your-sid-from-auth>';
+
+// Connect with live account access
+const ws = new WebSocket(`wss://wss.tradernet.com/?SID=${sid}`);
+
+ws.onopen = function() {
+    console.log('Connected with live account');
+};
+
+ws.onmessage = function(m) {
+    const [event, data] = JSON.parse(m.data);
+
+    if (event === 'userData') {
+        console.log('User data:', data);
+        if (!data.isDemo) {
+            // Live account connected - can subscribe to portfolio/orders
+            ws.send(JSON.stringify(['portfolio']));
+            ws.send(JSON.stringify(['orders']));
+        }
+    }
+};
+```
+
+#### Demo Mode Limitations
+
+When connected **without SID** or with **demo account**:
+- ✅ Real-time quotes available
+- ✅ Market depth data available
+- ❌ Portfolio subscription unavailable
+- ❌ Order subscription unavailable
+- ❌ Account-specific data unavailable
+
+**Usage Notes:**
+- WebSocket provides **push updates** (more efficient than polling)
+- Use for **real-time features** (live quotes, order status)
+- Complement REST API (use REST for initial data, WebSocket for updates)
+- **Reconnection is critical** for production reliability
+- Monitor `userData.isDemo` to ensure live account access
 
 ---
 
 ### Subscribe to quotes (WebSocket)
 
-**Status:** ⏳ AWAITING DOCUMENTATION
+Subscribe to real-time quote updates via WebSocket.
+
+**Description:** Receive live price updates, bid/ask spreads, volume, and other market data for specified securities.
+
+**Availability:** WebSocket only (not available via REST API)
+
+**Event Name:** `q` (quotes)
+
+**Authorization:** Optional (works in both demo and live modes)
+
+#### Subscription Format
+
+```javascript
+// Subscribe to one or more tickers
+ws.send(JSON.stringify(['quotes', ['AAPL.US', 'MSFT.US', 'TSLA.US']]));
+```
+
+#### Server Response Event
+
+The server sends `q` events with quote updates:
+
+```javascript
+["q", [
+    {
+        "c": "AAPL.US",
+        "ltp": 150.25,
+        "chg": 2.50,
+        // ... other fields
+    }
+]]
+```
+
+#### Quote Data Fields
+
+Complete list of fields in quote updates:
+
+| Field | Name | Type | Description |
+|-------|------|------|-------------|
+| `c` | Ticker | string | Ticker symbol |
+| `ltr` | Exchange | string | Exchange of the latest trade |
+| `name` | Name | string | Name of security |
+| `name2` | Name Latin | string | Security name in Latin characters |
+| `bbp` | Best Bid Price | float | Best bid price |
+| `bbc` | Best Bid Change | string | Bid change indicator: `''` (no change), `'D'` (down), `'U'` (up) |
+| `bbs` | Best Bid Size | int | Best bid size (quantity) |
+| `bbf` | Best Bid Volume | float | Best bid volume (value) |
+| `bap` | Best Ask Price | float | Best offer/ask price |
+| `bac` | Best Ask Change | string | Ask change indicator: `''` (no change), `'D'` (down), `'U'` (up) |
+| `bas` | Best Ask Size | int | Size of the best offer |
+| `baf` | Best Ask Volume | float | Volume of the best offer |
+| `pp` | Previous Close | float | Previous closing price |
+| `op` | Open | float | Opening price of current trading session |
+| `ltp` | Last Trade Price | float | Last trade price |
+| `lts` | Last Trade Size | int | Last trade size (quantity) |
+| `ltt` | Last Trade Time | string | Time of last trade |
+| `chg` | Change | float | Price change in points relative to previous close |
+| `pcp` | Change Percent | float | Percentage change relative to previous close |
+| `ltc` | Last Trade Change | string | Price change indicator: `''` (no change), `'D'` (down), `'U'` (up) |
+| `mintp` | Day Low | float | Minimum trade price for the day |
+| `maxtp` | Day High | float | Maximum trade price for the day |
+| `vol` | Volume | int | Trade volume for the day (in shares/units) |
+| `vlt` | Volume Currency | float | Trading volume for the day in currency |
+| `yld` | Yield | float | Yield to maturity (for bonds) |
+| `acd` | Accrued Interest | float | Accumulated coupon interest (ACI) |
+| `fv` | Face Value | float | Face value (for bonds) |
+| `mtd` | Maturity Date | string | Maturity date (for bonds) |
+| `cpn` | Coupon | float | Coupon in currency (for bonds) |
+| `cpp` | Coupon Period | int | Coupon period in days (for bonds) |
+| `ncd` | Next Coupon Date | string | Next coupon date (for bonds) |
+| `ncp` | Latest Coupon Date | string | Latest coupon date (for bonds) |
+| `dpd` | Margin Long | float | Purchase margin (long position) |
+| `dps` | Margin Short | float | Short sale margin |
+| `trades` | Trades Count | int | Number of trades for the day |
+| `min_step` | Min Step | float | Minimum price increment |
+| `step_price` | Step Price | float | Price increment value |
+
+#### Example Implementation
+
+```javascript
+var WebSocketsURL = "wss://wss.tradernet.com/";
+var ws = new WebSocket(WebSocketsURL);
+
+var tickersToWatchChanges = ["AAPL.US", "MSFT.US", "TSLA.US"];
+
+/**
+ * Process quote updates
+ * @param {QuoteUpdate[]} data
+ */
+function updateWatcher(data) {
+    data.forEach(function(quote) {
+        console.log(`${quote.c}: ${quote.ltp} (${quote.chg >= 0 ? '+' : ''}${quote.chg})`);
+    });
+}
+
+ws.onmessage = function (m) {
+    const [event, data] = JSON.parse(m.data);
+
+    if (event === 'q') {
+        updateWatcher(data);
+    }
+};
+
+ws.onopen = function() {
+    console.log('Connected, subscribing to quotes...');
+    ws.send(JSON.stringify(['quotes', tickersToWatchChanges]));
+};
+```
+
+#### Change Indicators
+
+The `bbc`, `bac`, and `ltc` fields indicate price movement:
+- `''` (empty string) - No change
+- `'D'` - Down (price decreased)
+- `'U'` - Up (price increased)
+
+**Important Notes:**
+- Quotes are available in both **demo** and **live** modes
+- **No SID required** for basic quote data
+- Updates are **push-based** (no polling needed)
 
 ---
 
 ### Subscribe to market depth (WebSocket)
 
-**Status:** ⏳ AWAITING DOCUMENTATION
+Subscribe to real-time market depth (order book) updates via WebSocket.
+
+**Description:** Receive Level 2 market data showing bid/ask depth with prices and quantities at multiple levels.
+
+**Availability:** WebSocket only (not available via REST API)
+
+**Event Name:** `b` (book/depth)
+
+**Authorization:** Optional (works in both demo and live modes)
+
+#### Subscription Format
+
+```javascript
+// Subscribe to order book for one or more tickers
+ws.send(JSON.stringify(["orderBook", ["AAPL.US"]]));
+```
+
+#### Server Response Event
+
+The server sends `b` events with market depth updates:
+
+```javascript
+["b", {
+    "n": 102,
+    "i": "AAPL.US",
+    "del": [],
+    "ins": [],
+    "upd": [
+        {"p": 33.925, "s": "S", "q": 196100, "k": 3},
+        {"p": 33.89, "s": "S", "q": 373700, "k": 6}
+    ],
+    "cnt": 21,
+    "x": 11
+}]
+```
+
+#### Market Depth Data Structure
+
+```typescript
+/**
+ * Market Depth Row
+ */
+type DomInfoRow = {
+    k: number,      // Position number in the market depth (level)
+    p: number,      // Price at this level
+    q: number,      // Quantity at this level
+    s: 'S' | 'B'   // Side: 'S' = Sell (ask), 'B' = Buy (bid)
+}
+
+/**
+ * Market Depth Update Block
+ */
+type DomInfoBlock = {
+    i: string,           // Ticker symbol
+    n: number,           // Update sequence number
+    cnt: number,         // Depth of market data (number of levels)
+    x: number,           // Additional metadata
+    ins: DomInfoRow[],   // New rows to insert in market depth
+    del: DomInfoRow[],   // Market depth rows to delete
+    upd: DomInfoRow[]    // Market depth rows to update
+}
+```
+
+#### Response Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `i` | string | Ticker symbol for which market depth information was received |
+| `n` | number | Update sequence number |
+| `cnt` | number | Total depth of market data (number of price levels) |
+| `x` | number | Additional metadata field |
+| `ins` | array | New price levels to insert into the order book |
+| `del` | array | Price levels to remove from the order book |
+| `upd` | array | Price levels to update in the order book |
+
+#### Row Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `k` | number | Position/level number in the market depth (1 = closest to spread) |
+| `p` | number | Price at this level |
+| `q` | number | Total quantity available at this price level |
+| `s` | string | Side indicator: `'S'` = Sell/Ask side, `'B'` = Buy/Bid side |
+
+#### Example Implementation
+
+```javascript
+const ticker = 'AAPL.US';
+const WebSocketsURL = "wss://wss.tradernet.com/";
+const ws = new WebSocket(WebSocketsURL);
+
+// Store order book state
+const orderBook = {
+    bids: {},  // { level: { price, quantity } }
+    asks: {}   // { level: { price, quantity } }
+};
+
+function processDepthUpdate(data) {
+    console.log(`Market Depth Update for ${data.i}`);
+
+    // Process deletions
+    data.del.forEach(row => {
+        const side = row.s === 'B' ? 'bids' : 'asks';
+        delete orderBook[side][row.k];
+    });
+
+    // Process insertions
+    data.ins.forEach(row => {
+        const side = row.s === 'B' ? 'bids' : 'asks';
+        orderBook[side][row.k] = { price: row.p, quantity: row.q };
+    });
+
+    // Process updates
+    data.upd.forEach(row => {
+        const side = row.s === 'B' ? 'bids' : 'asks';
+        orderBook[side][row.k] = { price: row.p, quantity: row.q };
+    });
+
+    // Display top 5 levels
+    console.log('Top 5 Asks:');
+    Object.keys(orderBook.asks).slice(0, 5).forEach(k => {
+        const level = orderBook.asks[k];
+        console.log(`  ${level.price} x ${level.quantity}`);
+    });
+
+    console.log('Top 5 Bids:');
+    Object.keys(orderBook.bids).slice(0, 5).forEach(k => {
+        const level = orderBook.bids[k];
+        console.log(`  ${level.price} x ${level.quantity}`);
+    });
+}
+
+ws.onmessage = function (m) {
+    const [event, data] = JSON.parse(m.data);
+
+    if (event === 'b') {
+        processDepthUpdate(data);
+    }
+};
+
+ws.onopen = function() {
+    console.log('Connected, subscribing to order book...');
+    ws.send(JSON.stringify(["orderBook", [ticker]]));
+};
+```
+
+#### Update Types
+
+Market depth updates come in three categories:
+
+1. **Insertions (`ins`)** - New price levels added to the order book
+2. **Deletions (`del`)** - Price levels removed from the order book
+3. **Updates (`upd`)** - Existing price levels with quantity changes
+
+#### Maintaining Order Book State
+
+To maintain accurate order book state:
+
+1. **Initialize** - Start with empty order book
+2. **Apply deletions** - Remove specified levels
+3. **Apply insertions** - Add new levels
+4. **Apply updates** - Modify existing levels
+5. **Sort** - Keep bids descending, asks ascending by price
+
+#### Side Indicators
+
+- `'B'` = **Bid** side (buy orders) - highest bid price closest to spread
+- `'S'` = **Ask** side (sell/offer orders) - lowest ask price closest to spread
+
+#### Level Numbers (`k`)
+
+- Level 1 (`k=1`) is closest to the spread (best bid/ask)
+- Higher levels are further from the spread
+- Level numbers indicate depth position
+
+#### Example Response
+
+```json
+{
+    "n": 102,
+    "i": "AAPL.US",
+    "del": [],
+    "ins": [],
+    "upd": [
+        {"p": 33.925, "s": "S", "q": 196100, "k": 3},
+        {"p": 33.89, "s": "S", "q": 373700, "k": 6},
+        {"p": 33.885, "s": "S", "q": 1198800, "k": 7},
+        {"p": 33.88, "s": "S", "q": 251600, "k": 8}
+    ],
+    "cnt": 21,
+    "x": 11
+}
+```
+
+This update shows 4 ask levels being updated with new quantities.
+
+#### Use Cases
+
+- **Order placement** - See available liquidity at different price levels
+- **Slippage estimation** - Calculate market impact of large orders
+- **Market microstructure** - Analyze order book dynamics
+- **Limit order positioning** - Place orders based on depth
+- **Spread analysis** - Monitor bid-ask spread changes
+
+#### Best Practices
+
+1. **Maintain full state** - Apply all updates (ins/del/upd) sequentially
+2. **Handle missing data** - Some updates may skip levels
+3. **Validate sequence** - Use `n` field to detect missed updates
+4. **Aggregate levels** - Sum quantities at same price if needed
+5. **Display top levels** - Show most relevant depth (typically 5-10 levels)
+
+**Important Notes:**
+- Market depth available in both **demo** and **live** modes
+- **No SID required** for depth data
+- Updates are **incremental** - must maintain state
+- High-frequency updates for liquid securities
+- Useful for **advanced trading** strategies
 
 ---
 
@@ -2142,19 +3669,810 @@ getCrossRatesForDate(function(json){
 
 ### Subscribe to portfolio (WebSocket)
 
-**Status:** ⏳ AWAITING DOCUMENTATION
+Subscribe to real-time portfolio updates via WebSocket.
+
+**Description:** Receive live updates about your portfolio positions, account balances, and P&L changes.
+
+**Availability:** WebSocket only (not available via REST API)
+
+**Event Name:** `portfolio`
+
+**Authorization:** **Required** (SID must be provided) - Does not work in demo mode
+
+#### Subscription Format
+
+```javascript
+// Subscribe to portfolio updates (no parameters needed)
+ws.send(JSON.stringify(["portfolio"]));
+```
+
+#### Server Response Event
+
+The server sends `portfolio` events with portfolio updates:
+
+```javascript
+["portfolio", {
+    "key": "%test@test.com",
+    "acc": [
+        {
+            "s": ".00000000",
+            "forecast_in": ".00000000",
+            "forecast_out": ".00000000",
+            "curr": "USD",
+            "currval": 78.95,
+            "t2_in": ".00000000",
+            "t2_out": ".00000000"
+        }
+    ],
+    "pos": [
+        {
+            "i": "AAPL.US",
+            "q": 100,
+            "mkt_price": 23.81,
+            "profit_price": 2.83,
+            // ... other fields
+        }
+    ]
+}]
+```
+
+#### Portfolio Data Structure
+
+```typescript
+/**
+ * Account Balance Information
+ */
+type AccountInfoRow = {
+    curr: string,        // Account currency
+    currval: number,     // Account currency exchange rate
+    forecast_in: number, // Forecasted incoming funds
+    forecast_out: number, // Forecasted outgoing funds
+    s: number,           // Available funds
+    t2_in: string,       // T+2 incoming
+    t2_out: string       // T+2 outgoing
+}
+
+/**
+ * Position Information
+ */
+type PositionInfoRow = {
+    acc_pos_id: number,      // Unique position ID in Tradernet system
+    accruedint_a: number,    // Accumulated coupon income (ACI)
+    curr: string,            // Position currency
+    currval: number,         // Currency exchange rate
+    fv: number,              // Coefficient to calculate initial margin
+    go: number,              // Initial margin per position
+    i: string,               // Position ticker symbol
+    k: number,               // Kind/type
+    q: number,               // Quantity of securities in position
+    s: number,               // Size/value
+    t: number,               // Type
+    t2_in: string,           // T+2 settlement incoming
+    t2_out: string,          // T+2 settlement outgoing
+    vm: number,              // Variable margin of position
+    name: string,            // Issuer name
+    name2: string,           // Issuer alternative name
+    mkt_price: number,       // Current market price
+    market_value: number,    // Total market value of position
+    bal_price_a: number,     // Book value (average price)
+    open_bal: number,        // Position book value at open
+    price_a: number,         // Book value when position opened
+    profit_close: number,    // Previous day profit/loss
+    profit_price: number,    // Current position profit/loss
+    close_price: number,     // Position closing price
+    trade: Array<{trade_count: number}>, // Trade information
+    base_currency: string,   // Base currency
+    face_val_a: number,      // Face value (for bonds)
+    scheme_calc: string,     // Calculation scheme (e.g., "T2")
+    instr_id: number,        // Instrument ID
+    Yield: number,           // Yield (for bonds)
+    issue_nb: string,        // ISIN code
+    acd: number              // Accumulated coupon date
+}
+
+/**
+ * Portfolio Response
+ */
+type SocketPortfolioResponse = {
+    key: string,                  // User identifier
+    acc: AccountInfoRow[],        // Account balances (by currency)
+    pos: PositionInfoRow[]        // Open positions
+}
+```
+
+#### Account Balance Fields (`acc`)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `curr` | string | Account currency code (USD, EUR, etc.) |
+| `currval` | number | Currency exchange rate to base currency |
+| `s` | number | Available funds in this currency |
+| `forecast_in` | number | Forecasted incoming funds |
+| `forecast_out` | number | Forecasted outgoing funds |
+| `t2_in` | string | T+2 settlement incoming |
+| `t2_out` | string | T+2 settlement outgoing |
+
+#### Position Fields (`pos`)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `i` | string | Ticker symbol |
+| `q` | number | Quantity of shares/units held |
+| `curr` | string | Position currency |
+| `currval` | number | Currency exchange rate |
+| `name` | string | Security name |
+| `name2` | string | Alternative security name |
+| `mkt_price` | number | Current market price per unit |
+| `market_value` | number | Total market value (qty × price) |
+| `bal_price_a` | number | Average purchase price (book value) |
+| `price_a` | number | Book value when opened |
+| `open_bal` | number | Opening book value |
+| `profit_close` | number | Previous day P&L |
+| `profit_price` | number | Current unrealized P&L |
+| `close_price` | number | Closing price |
+| `go` | number | Initial margin requirement |
+| `vm` | number | Variable margin |
+| `acc_pos_id` | number | Unique position identifier |
+| `accruedint_a` | number | Accumulated coupon income (bonds) |
+| `acd` | number | Accrued coupon date |
+| `fv` | number | Face value coefficient |
+| `base_currency` | string | Base currency |
+| `scheme_calc` | string | Settlement calculation scheme |
+| `instr_id` | number | Instrument ID |
+| `Yield` | number | Yield (for bonds) |
+| `issue_nb` | string | ISIN code |
+| `t` | number | Type code |
+| `k` | number | Kind code |
+| `s` | number | Size/value |
+| `trade` | array | Trade count information |
+
+#### Example Implementation
+
+```javascript
+const WS_SOCKETURL = 'wss://wss.tradernet.com/?SID=<your-sid>';
+const ws = new WebSocket(WS_SOCKETURL);
+
+ws.onopen = function() {
+    console.log('Connected, subscribing to portfolio...');
+    // Subscribe to portfolio updates
+    ws.send(JSON.stringify(["portfolio"]));
+};
+
+ws.onmessage = function (m) {
+    const [event, data] = JSON.parse(m.data);
+
+    if (event === 'portfolio') {
+        console.log('Portfolio Update:');
+
+        // Process account balances
+        data.acc.forEach(account => {
+            console.log(`${account.curr}: ${account.s} available`);
+        });
+
+        // Process positions
+        data.pos.forEach(position => {
+            const totalValue = position.market_value;
+            const pnl = position.profit_price;
+            const pnlPercent = ((position.mkt_price - position.bal_price_a) / position.bal_price_a * 100).toFixed(2);
+
+            console.log(`${position.i}: ${position.q} shares`);
+            console.log(`  Current: ${position.mkt_price} | Avg Cost: ${position.bal_price_a}`);
+            console.log(`  Value: ${totalValue} | P&L: ${pnl} (${pnlPercent}%)`);
+        });
+    }
+};
+
+ws.onerror = function(error) {
+    console.error('WebSocket error:', error);
+};
+
+ws.onclose = function(e) {
+    console.log('WebSocket closed:', e);
+};
+```
+
+#### Calculating Position Metrics
+
+**Total Market Value:**
+```javascript
+const marketValue = position.q * position.mkt_price;
+// or use position.market_value directly
+```
+
+**Unrealized P&L:**
+```javascript
+const unrealizedPnL = (position.mkt_price - position.bal_price_a) * position.q;
+// or use position.profit_price directly
+```
+
+**P&L Percentage:**
+```javascript
+const pnlPercent = ((position.mkt_price - position.bal_price_a) / position.bal_price_a) * 100;
+```
+
+**Cost Basis:**
+```javascript
+const costBasis = position.bal_price_a * position.q;
+```
+
+#### Update Frequency
+
+- Portfolio updates are sent **in real-time** when:
+  - Trades are executed (positions change)
+  - Market prices change (affects unrealized P&L)
+  - Cash balance changes (deposits, withdrawals, settlements)
+  - Margin requirements update
+
+#### Multi-Currency Support
+
+- Each account balance (`acc`) represents one currency
+- Positions can be in different currencies
+- Use `currval` to convert to base currency
+- `base_currency` field indicates the main currency
+
+#### Settlement Information
+
+T+2 settlement fields (`t2_in`, `t2_out`):
+- Show pending settlements
+- Funds not yet available
+- Important for cash management
+
+#### Use Cases
+
+- **Portfolio monitoring** - Track positions and P&L in real-time
+- **Risk management** - Monitor margin requirements
+- **Performance tracking** - Calculate returns live
+- **Rebalancing** - Detect when positions drift from targets
+- **Alerts** - Trigger notifications on P&L thresholds
+- **Dashboard displays** - Show live portfolio value
+
+#### Best Practices
+
+1. **Authenticate first** - SID is required for portfolio subscription
+2. **Handle updates efficiently** - Updates can be frequent during market hours
+3. **Calculate totals** - Sum across positions for portfolio-level metrics
+4. **Track changes** - Compare with previous state to detect what changed
+5. **Currency conversion** - Use `currval` for accurate multi-currency totals
+6. **Handle empty portfolio** - `pos` array will be empty if no positions
+
+**Important Notes:**
+- **SID required** - Portfolio subscription only works with authenticated connection
+- **Personal data** - Contains sensitive account information
+- **Real-time updates** - Reflects market price changes immediately
+- **Multi-currency** - Handle different currencies properly
+- **Settlement timing** - Consider T+2 settlement for cash management
+- **Margin data** - Includes margin requirements for leveraged positions
 
 ---
 
 ### Subscribe to orders (WebSocket)
 
-**Status:** ⏳ AWAITING DOCUMENTATION
+Subscribe to real-time order updates via WebSocket.
+
+**Description:** Receive live updates about order status changes, fills, cancellations, and other order lifecycle events.
+
+**Availability:** WebSocket only (not available via REST API)
+
+**Event Name:** `orders`
+
+**Authorization:** **Required** (SID must be provided) - Does not work in demo mode
+
+#### Subscription Format
+
+```javascript
+// Subscribe to order updates (no parameters needed)
+ws.send(JSON.stringify(['orders']));
+```
+
+#### Server Response Event
+
+The server sends `orders` events with order updates:
+
+```javascript
+["orders", [{
+    "order_id": 8757875,
+    "instr": "FCX.US",
+    "oper": 2,
+    "type": 1,
+    "p": 6.5611,
+    "q": 2625,
+    "stat": 21,
+    // ... other fields
+}]]
+```
+
+#### Order Data Structure
+
+```typescript
+/**
+ * Order Data Row
+ */
+type OrderDataRow = {
+    aon: 0 | 1,              // All or Nothing: 0 = can be partially executed, 1 = cannot be partially executed
+    cur: string,             // Order currency
+    curr_q: number,          // Current quantity
+    date: string,            // Order date (ISO 8601)
+    exp: 1 | 2 | 3,          // Expiration: 1 = Day, 2 = Day+Ext, 3 = GTC
+    fv: number,              // Coefficient for relative currencies (futures)
+    order_id: number,        // Tradernet unique order ID
+    instr: string,           // Ticker symbol
+    leaves_qty: number,      // Remaining quantity (unfilled)
+    auth_login: string,      // Login of client who sent the order
+    creator_login: string,   // Login of order creator
+    owner_login: string,     // Login of user for whom order was created
+    mkt_id: number,          // Market unique trade ID
+    name: string,            // Company name
+    name2: string,           // Alternative company name
+    oper: number,            // Operation: 1 = Buy, 2 = Buy on Margin, 3 = Sell, 4 = Sell Short
+    p: number,               // Order price
+    q: number,               // Order quantity
+    rep: number,             // Report field
+    stat: number,            // Order status (see Order Status codes)
+    stat_d: string,          // Status modification date
+    stat_orig: number,       // Initial order status
+    stat_prev: number,       // Previous order status
+    stop: number,            // Stop price
+    stop_activated: 0 | 1,   // Stop order activation indicator
+    stop_init_price: number, // Price to activate stop order
+    trailing_price: number,  // Trailing order variance percentage
+    type: 1 | 2 | 3 | 4 | 5 | 6, // Order type (see Order Types)
+    user_order_id: number,   // User-assigned order ID
+    trade: OrderTradeInfo[]  // Trade list for this order
+}
+
+/**
+ * Order Trade Information
+ */
+type OrderTradeInfo = {
+    acd: number,    // Accumulated coupon interest
+    date: string,   // Trade date
+    fv: number,     // Coefficient for relative currencies
+    go_sum: number, // Initial margin per trade
+    id: number,     // Tradernet unique trade ID
+    p: number,      // Trade price
+    profit: number, // Trade profit
+    q: number,      // Number of securities in trade
+    v: number       // Trade amount (value)
+}
+
+/**
+ * Orders Response
+ */
+type SocketOrdersResponse = OrderDataRow[];
+```
+
+#### Order Field Reference
+
+**Order Identification:**
+| Field | Type | Description |
+|-------|------|-------------|
+| `order_id` | number | Tradernet unique order ID |
+| `user_order_id` | number | User-assigned order ID (from placement) |
+| `instr` | string | Ticker symbol |
+
+**Order Details:**
+| Field | Type | Description |
+|-------|------|-------------|
+| `oper` | number | Operation: `1` = Buy, `2` = Buy on Margin, `3` = Sell, `4` = Sell Short |
+| `type` | number | Order type: `1` = Market, `2` = Limit, `3` = Stop, `4` = Stop Limit, `5` = StopLoss, `6` = TakeProfit |
+| `p` | number | Order price |
+| `q` | number | Order quantity (total) |
+| `leaves_qty` | number | Remaining unfilled quantity |
+| `cur` | string | Order currency |
+
+**Order Status:**
+| Field | Type | Description |
+|-------|------|-------------|
+| `stat` | number | Current order status (see Order Status Codes reference) |
+| `stat_orig` | number | Initial order status (same as `stat` when working with API) |
+| `stat_prev` | number | Previous order status |
+| `stat_d` | string | Status modification date/time |
+
+**Order Timing:**
+| Field | Type | Description |
+|-------|------|-------------|
+| `date` | string | Order creation date/time (ISO 8601) |
+| `exp` | number | Expiration: `1` = Day (end-of-day), `2` = Day+Ext, `3` = GTC (good-til-cancel) |
+
+**Stop Orders:**
+| Field | Type | Description |
+|-------|------|-------------|
+| `stop` | number | Stop price |
+| `stop_init_price` | number | Price to activate stop order |
+| `stop_activated` | 0\|1 | Stop order activation indicator: `0` = not activated, `1` = activated |
+| `trailing_price` | number | Trailing order variance percentage |
+
+**Order Settings:**
+| Field | Type | Description |
+|-------|------|-------------|
+| `aon` | 0\|1 | All or Nothing: `0` = can be partially filled, `1` = must be filled completely |
+
+**User Information:**
+| Field | Type | Description |
+|-------|------|-------------|
+| `auth_login` | string | Login of client who authenticated |
+| `creator_login` | string | Login of order creator |
+| `owner_login` | string | Login of user for whom order was created |
+
+**Trade Information:**
+| Field | Type | Description |
+|-------|------|-------------|
+| `trade` | array | Array of trade executions for this order |
+| `trade[].id` | number | Unique trade ID |
+| `trade[].p` | number | Execution price |
+| `trade[].q` | number | Executed quantity |
+| `trade[].v` | number | Trade value (price × quantity) |
+| `trade[].date` | string | Trade execution date/time |
+| `trade[].profit` | number | Trade profit/loss |
+
+#### Order Type Codes
+
+| Code | Type | Description |
+|------|------|-------------|
+| `1` | Market Order | Execute at best available price |
+| `2` | Limit Order | Execute at specified price or better |
+| `3` | Stop Order | Becomes market order when stop price reached |
+| `4` | Stop Limit Order | Becomes limit order when stop price reached |
+| `5` | StopLoss | Automatic stop loss order |
+| `6` | TakeProfit | Automatic take profit order |
+
+#### Operation Codes
+
+| Code | Operation | Description |
+|------|-----------|-------------|
+| `1` | Buy | Buy without margin |
+| `2` | Buy on Margin | Buy with leverage |
+| `3` | Sell | Sell without margin |
+| `4` | Sell Short | Short sale with margin |
+
+#### Expiration Codes
+
+| Code | Type | Description |
+|------|------|-------------|
+| `1` | Day | End-of-day (valid until market close) |
+| `2` | Day+Ext | Day/Night or Night/Day (includes extended hours) |
+| `3` | GTC | Good-til-cancel (valid until manually cancelled, includes night sessions) |
+
+#### Example Implementation
+
+```javascript
+const WS_SOCKETURL = 'wss://wss.tradernet.com/?SID=<your-sid>';
+const ws = new WebSocket(WS_SOCKETURL);
+
+ws.onopen = function() {
+    console.log('Connected, subscribing to orders...');
+    // Subscribe to order updates
+    ws.send(JSON.stringify(['orders']));
+};
+
+ws.onmessage = function ({ data }) {
+    const [event, messageData] = JSON.parse(data);
+
+    if (event === 'orders') {
+        messageData.forEach(order => {
+            console.log(`Order ${order.order_id}: ${order.instr}`);
+            console.log(`  Type: ${getOrderType(order.type)} | Status: ${order.stat}`);
+            console.log(`  Quantity: ${order.q} | Filled: ${order.q - order.leaves_qty} | Remaining: ${order.leaves_qty}`);
+            console.log(`  Price: ${order.p} | Currency: ${order.cur}`);
+
+            // Display trade executions
+            if (order.trade && order.trade.length > 0) {
+                console.log(`  Executions (${order.trade.length}):`);
+                order.trade.forEach(trade => {
+                    console.log(`    ${trade.q} @ ${trade.p} = ${trade.v}`);
+                });
+            }
+        });
+    }
+};
+
+// Helper function to decode order type
+function getOrderType(typeCode) {
+    const types = {
+        1: 'Market',
+        2: 'Limit',
+        3: 'Stop',
+        4: 'Stop Limit',
+        5: 'StopLoss',
+        6: 'TakeProfit'
+    };
+    return types[typeCode] || `Unknown (${typeCode})`;
+}
+```
+
+#### Example Response
+
+```json
+[{
+    "aon": 0,
+    "cur": "USD",
+    "curr_q": 0,
+    "date": "2015-12-23T17:05:02.133",
+    "exp": 1,
+    "fv": 0,
+    "order_id": 8757875,
+    "instr": "FCX.US",
+    "leaves_qty": 0,
+    "auth_login": "virtual@virtual.com",
+    "creator_login": "virtual@virtual.com",
+    "owner_login": "virtual@virtual.com",
+    "mkt_id": 30000000001,
+    "name": "Freeport-McMoran Cp & Gld",
+    "name2": "Freeport-McMoran Cp & Gld",
+    "oper": 2,
+    "p": 6.5611,
+    "q": 2625,
+    "rep": 0,
+    "stat": 21,
+    "stat_d": "2015-12-23T17:05:03.283",
+    "stat_orig": 21,
+    "stat_prev": 10,
+    "stop": 0,
+    "stop_activated": 1,
+    "stop_init_price": 6.36,
+    "trailing_price": 0,
+    "type": 1,
+    "user_order_id": 1450879514204,
+    "trade": [{
+        "acd": 0,
+        "date": "2015-12-23T17:05:03",
+        "fv": 100,
+        "go_sum": 0,
+        "id": 13446624,
+        "p": 6.37,
+        "profit": 0,
+        "q": 2625,
+        "v": 16721.25
+    }]
+}]
+```
+
+This shows a fully executed market order (stat: 21 = executed) with one trade execution.
+
+#### Update Frequency
+
+Order updates are sent in real-time when:
+- Order is placed (initial status)
+- Order status changes (pending → active → filled/cancelled)
+- Partial fills occur (`leaves_qty` decreases)
+- Order is modified
+- Order is cancelled
+- Stop orders are triggered (`stop_activated` becomes 1)
+
+#### Order Status Tracking
+
+Use the `stat`, `stat_orig`, and `stat_prev` fields to track order lifecycle:
+- `stat_orig` - Initial status when order was placed
+- `stat_prev` - Previous status before current update
+- `stat` - Current status
+
+See the **Order Status Codes** reference section for complete status list.
+
+#### Partial Fills
+
+Track partial fills using:
+- `q` - Total order quantity
+- `leaves_qty` - Remaining unfilled quantity
+- Filled quantity = `q - leaves_qty`
+- `trade` array - Individual execution details
+
+#### Use Cases
+
+- **Order monitoring** - Track order status in real-time
+- **Execution alerts** - Notify when orders fill
+- **Order management UI** - Display live order status
+- **Trading algorithms** - React to order events
+- **Audit trail** - Record all order state changes
+- **Fill tracking** - Monitor partial and complete fills
+
+#### Best Practices
+
+1. **Authenticate first** - SID required for order subscription
+2. **Track order lifecycle** - Use stat_prev and stat to detect transitions
+3. **Handle partial fills** - Check leaves_qty for unfilled quantity
+4. **Monitor stop activation** - Track stop_activated for stop orders
+5. **Match user_order_id** - Use your own IDs to correlate orders
+6. **Process trade array** - Extract execution details from trade list
+
+**Important Notes:**
+- **SID required** - Orders subscription only works with authenticated connection
+- **Personal data** - Contains sensitive trading information
+- **Real-time updates** - Instant notification of order changes
+- **Trade executions** - `trade` array contains all fills
+- **Status transitions** - Track order lifecycle via stat fields
+- **Stop orders** - Monitor `stop_activated` and `stop_init_price`
 
 ---
 
 ### Subscribing to market statuses (WebSocket)
 
-**Status:** ⏳ AWAITING DOCUMENTATION
+Subscribe to real-time market status updates via WebSocket.
+
+**Description:** Receive live updates when markets open, close, or change status.
+
+**Availability:** WebSocket only (not available via REST API)
+
+**Event Name:** `markets`
+
+**Authorization:** Optional (works in both demo and live modes)
+
+#### Subscription Format
+
+```javascript
+// Subscribe to market status updates (no parameters needed)
+ws.send(JSON.stringify(["markets"]));
+```
+
+#### Server Response Event
+
+The server sends `markets` events with status updates:
+
+```javascript
+["markets", {
+    "t": "2020-11-18 19:29:27",
+    "m": [
+        {
+            "n": "KASE",
+            "n2": "KASE",
+            "s": "CLOSE",
+            "o": "08:20:00",
+            "c": "14:00:00",
+            "dt": "-180"
+        }
+    ]
+}]
+```
+
+#### Market Status Data Structure
+
+```typescript
+/**
+ * Market Info Row
+ */
+type MarketInfoRow = {
+    n: string,   // Full market name
+    n2: string,  // Market abbreviation/code
+    s: string,   // Current market status (OPEN, CLOSE, PRE_OPEN, POST_CLOSE)
+    o: string,   // Market opening time (MSK timezone) - Format: "HH:MM:SS"
+    c: string,   // Market closing time (MSK timezone) - Format: "HH:MM:SS"
+    dt: string   // Time difference relative to MSK in minutes (e.g., "-180")
+}
+
+/**
+ * Markets Status Response
+ */
+type MarketsStatusResponse = {
+    t: string,              // Current server time (timestamp)
+    m: MarketInfoRow[]      // Array of market status updates
+}
+```
+
+#### Response Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `t` | string | Current server request time (YYYY-MM-DD HH:MM:SS) |
+| `m` | array | Array of market information objects |
+| `m[].n` | string | Full market name (e.g., "KASE") |
+| `m[].n2` | string | Market abbreviation/code |
+| `m[].s` | string | Current market status: `"OPEN"`, `"CLOSE"`, `"PRE_OPEN"`, `"POST_CLOSE"` |
+| `m[].o` | string | Market opening time in MSK timezone (HH:MM:SS) |
+| `m[].c` | string | Market closing time in MSK timezone (HH:MM:SS) |
+| `m[].dt` | string | Time difference relative to Moscow time in minutes (negative = behind, positive = ahead) |
+
+#### Market Status Values
+
+| Status | Description |
+|--------|-------------|
+| `OPEN` | Market is currently open for trading |
+| `CLOSE` | Market is currently closed |
+| `PRE_OPEN` | Pre-market session (before official open) |
+| `POST_CLOSE` | After-hours session (after official close) |
+
+#### Example Implementation
+
+```javascript
+const WS_SOCKETURL = 'wss://wss.tradernet.com/';
+const ws = new WebSocket(WS_SOCKETURL);
+
+ws.onopen = function() {
+    console.log('Connected, subscribing to market statuses...');
+    ws.send(JSON.stringify(["markets"]));
+};
+
+ws.onmessage = function (m) {
+    const [event, data] = JSON.parse(m.data);
+
+    if (event === 'markets') {
+        console.log(`Market Status Update at ${data.t}:`);
+
+        data.m.forEach(market => {
+            console.log(`${market.n} (${market.n2}): ${market.s}`);
+            console.log(`  Open: ${market.o} | Close: ${market.c}`);
+            console.log(`  Timezone offset: ${market.dt} minutes from MSK`);
+
+            // Calculate local market time
+            const mskOffset = parseInt(market.dt);
+            console.log(`  Local offset: ${mskOffset > 0 ? '+' : ''}${mskOffset / 60} hours from MSK`);
+        });
+    }
+};
+
+ws.onerror = function(error) {
+    console.error('WebSocket error:', error);
+};
+
+ws.onclose = function(e) {
+    console.log('WebSocket closed:', e);
+};
+```
+
+#### Example Response
+
+```json
+{
+    "t": "2020-11-18 19:29:27",
+    "m": [
+        {
+            "n": "KASE",
+            "n2": "KASE",
+            "s": "CLOSE",
+            "o": "08:20:00",
+            "c": "14:00:00",
+            "dt": "-180"
+        }
+    ]
+}
+```
+
+This shows KASE (Kazakhstan Stock Exchange) is closed, opens at 08:20 MSK, closes at 14:00 MSK, and is 180 minutes (3 hours) behind Moscow time.
+
+#### Time Zone Conversion
+
+The `dt` field provides time zone offset from Moscow Standard Time (MSK):
+- **Negative values** - Market is behind MSK (e.g., `-180` = 3 hours behind)
+- **Positive values** - Market is ahead of MSK
+- **Zero** - Market is in MSK timezone
+
+**Example conversions:**
+- `dt: "-180"` = UTC+2 (MSK is UTC+3, so -180 minutes = -3 hours)
+- `dt: "60"` = UTC+4 (MSK + 1 hour)
+- `dt: "0"` = UTC+3 (same as MSK)
+
+#### Update Frequency
+
+Market status updates are sent when:
+- Markets open (CLOSE → OPEN)
+- Markets close (OPEN → CLOSE)
+- Pre-market begins (CLOSE → PRE_OPEN)
+- After-hours begins (OPEN → POST_CLOSE)
+- Extended hours end (PRE_OPEN/POST_CLOSE → CLOSE)
+
+#### Use Cases
+
+- **Trading hours** - Determine if orders can be placed
+- **Market monitoring** - Track which markets are active
+- **Automated trading** - Schedule operations based on market hours
+- **Multi-market systems** - Coordinate across different exchanges
+- **User notifications** - Alert when markets open/close
+- **Order validation** - Prevent orders when markets closed
+
+#### Best Practices
+
+1. **Subscribe on connection** - Get initial market states
+2. **Handle all statuses** - OPEN, CLOSE, PRE_OPEN, POST_CLOSE
+3. **Convert timezones** - Use `dt` field for local time calculation
+4. **Cache market info** - Store opening/closing times
+5. **React to changes** - Update UI when status changes
+6. **Validate orders** - Check market status before placing orders
+
+**Important Notes:**
+- **No SID required** - Market status works in demo and live modes
+- **MSK timezone** - All times in Moscow Standard Time (UTC+3)
+- **Time difference** - Use `dt` to convert to local timezone
+- **Real-time updates** - Instant notification of status changes
+- **Multiple markets** - Receive updates for all active markets
+- **Extended hours** - PRE_OPEN and POST_CLOSE indicate special sessions
 
 ---
 
@@ -2701,7 +5019,7 @@ Complete list of order statuses:
 
 # DOCUMENTATION COLLECTION PROGRESS
 
-**Completed:** 12/~70 endpoints + 3 reference data sections
+**Completed:** 17/~70 REST endpoints + 6 WebSocket subscriptions + 3 reference data sections
 
 **API Endpoints:**
 - [x] putTradeOrder - Sending order for execution
@@ -2714,9 +5032,9 @@ Complete list of order statuses:
 - [x] getOrdersHistory - Get orders list for period
 - [x] getTradesHistory - Retrieving trades history
 - [ ] getStockQuotesJson - Get stock ticker data
-- [ ] getHloc - Get quote historical data
-- [ ] tickerFinder - Stock ticker search
-- [ ] getMarketStatus - Get market status updates
+- [x] getHloc - Get quote historical data (candlesticks)
+- [x] tickerFinder - Stock ticker search
+- [x] getMarketStatus - Get market status updates
 - [ ] getNews - News on securities
 - [ ] getTopSecurities - Getting most traded securities
 - [ ] getOptionsByMktNameAndBaseAsset - Options
@@ -2731,7 +5049,15 @@ Complete list of order statuses:
 - [x] getSecurityInfo - Instruments details
 - [ ] getReadyList - Directory of securities
 - [ ] Authentication methods
-- [ ] WebSocket endpoints
+
+**WebSocket Subscriptions:**
+- [x] WebSocket Connection - Connection setup and authentication
+- [x] Subscribe to quotes - Real-time price updates
+- [x] Subscribe to market depth - Order book updates
+- [x] Subscribe to portfolio - Portfolio and position updates
+- [x] Subscribe to orders - Order status updates
+- [x] Subscribe to market statuses - Market open/close events
+- [ ] Subscribe to security sessions - Security session changes
 
 **Reference Data:**
 - [x] Instrument Types Reference Data - Complete type and kind combinations
