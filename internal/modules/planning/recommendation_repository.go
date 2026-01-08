@@ -38,11 +38,14 @@ type Recommendation struct {
 	CurrentPortfolioScore float64
 	NewPortfolioScore     float64
 	ScoreChange           float64
-	Status                string // "pending", "executed", "dismissed"
+	Status                string // "pending", "executed", "rejected", "expired", "failed"
 	PortfolioHash         string
 	CreatedAt             time.Time
 	UpdatedAt             time.Time
 	ExecutedAt            *time.Time
+	RetryCount            int        // Number of execution attempts
+	LastAttemptAt         *time.Time // Last execution attempt timestamp
+	FailureReason         string     // Reason for last failure
 }
 
 // NewRecommendationRepository creates a new recommendation repository
@@ -539,4 +542,56 @@ func (r *RecommendationRepository) GetRecommendationsAsPlan(getEvaluatedCount fu
 	}
 
 	return response, nil
+}
+
+// RecordFailedAttempt increments retry count and records failure reason
+// This should be called when a trade execution fails
+func (r *RecommendationRepository) RecordFailedAttempt(recUUID string, failureReason string) error {
+	now := time.Now().Unix()
+	_, err := r.db.Exec(`
+		UPDATE recommendations
+		SET retry_count = retry_count + 1,
+			last_attempt_at = ?,
+			failure_reason = ?,
+			updated_at = ?
+		WHERE uuid = ?
+	`,
+		now,
+		failureReason,
+		now,
+		recUUID,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to record failed attempt: %w", err)
+	}
+
+	return nil
+}
+
+// MarkFailed marks a recommendation as permanently failed (exceeded max retries)
+func (r *RecommendationRepository) MarkFailed(recUUID string, failureReason string) error {
+	now := time.Now().Unix()
+	_, err := r.db.Exec(`
+		UPDATE recommendations
+		SET status = 'failed',
+			failure_reason = ?,
+			updated_at = ?
+		WHERE uuid = ?
+	`,
+		failureReason,
+		now,
+		recUUID,
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to mark recommendation as failed: %w", err)
+	}
+
+	r.log.Warn().
+		Str("uuid", recUUID).
+		Str("reason", failureReason).
+		Msg("Recommendation marked as permanently failed")
+
+	return nil
 }
