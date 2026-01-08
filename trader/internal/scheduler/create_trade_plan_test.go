@@ -84,7 +84,7 @@ func TestCreateTradePlanJob_Run_Success(t *testing.T) {
 func TestCreateTradePlanJob_Run_NoPlannerService(t *testing.T) {
 	job := NewCreateTradePlanJob(nil, nil)
 	job.SetOpportunityContext(&planningdomain.OpportunityContext{
-		Positions: []planningdomain.Position{},
+		Positions: []domain.Position{},
 	})
 
 	err := job.Run()
@@ -112,7 +112,7 @@ func TestCreateTradePlanJob_Run_PlannerServiceError(t *testing.T) {
 
 	job := NewCreateTradePlanJob(mockPlannerService, nil)
 	job.SetOpportunityContext(&planningdomain.OpportunityContext{
-		Positions: []planningdomain.Position{},
+		Positions: []domain.Position{},
 	})
 
 	err := job.Run()
@@ -138,7 +138,7 @@ func TestCreateTradePlanJob_Run_ConfigRepoError(t *testing.T) {
 
 	job := NewCreateTradePlanJob(mockPlannerService, mockConfigRepo)
 	job.SetOpportunityContext(&planningdomain.OpportunityContext{
-		Positions: []planningdomain.Position{},
+		Positions: []domain.Position{},
 	})
 
 	// Should use default config when repo fails
@@ -156,7 +156,7 @@ func TestCreateTradePlanJob_Run_InvalidPlanType(t *testing.T) {
 
 	job := NewCreateTradePlanJob(mockPlannerService, nil)
 	job.SetOpportunityContext(&planningdomain.OpportunityContext{
-		Positions: []planningdomain.Position{},
+		Positions: []domain.Position{},
 	})
 
 	err := job.Run()

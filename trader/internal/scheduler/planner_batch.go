@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/aristath/sentinel/internal/events"
-	planningdomain "github.com/aristath/sentinel/internal/modules/planning/domain"
 	"github.com/rs/zerolog"
 )
 
@@ -158,20 +157,19 @@ func (j *PlannerBatchJob) Run() error {
 
 	// Emit events
 	if j.eventManager != nil {
-		planInterface, ok := plan.(*planningdomain.HolisticPlan)
-		if ok {
+		if plan != nil {
 			j.eventManager.EmitTyped(events.PlanGenerated, "planner", &events.PlanGeneratedData{
 				PortfolioHash: portfolioHash,
-				Steps:         len(planInterface.Steps),
-				EndScore:      planInterface.EndStateScore,
-				Improvement:   planInterface.Improvement,
-				Feasible:      planInterface.Feasible,
+				Steps:         len(plan.Steps),
+				EndScore:      plan.EndStateScore,
+				Improvement:   plan.Improvement,
+				Feasible:      plan.Feasible,
 			})
 
-			if len(planInterface.Steps) > 0 {
+			if len(plan.Steps) > 0 {
 				j.eventManager.EmitTyped(events.RecommendationsReady, "planner", &events.RecommendationsReadyData{
 					PortfolioHash: portfolioHash,
-					Count:         len(planInterface.Steps),
+					Count:         len(plan.Steps),
 				})
 			}
 		}
