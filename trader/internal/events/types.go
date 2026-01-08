@@ -1,10 +1,6 @@
 // Package events provides event management functionality.
 package events
 
-import (
-	"encoding/json"
-	"time"
-)
 
 // EventType represents different event types
 type EventType string
