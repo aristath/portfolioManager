@@ -489,7 +489,7 @@ func (s *TradeExecutionService) validatePriceFreshness(rec TradeRecommendation) 
 	// Fetch fresh price from Yahoo Finance
 	if s.yahooClient == nil {
 		s.log.Error().Msg("Yahoo client unavailable, cannot refresh stale price")
-		errMsg := fmt.Sprintf("Price data is stale and refresh unavailable (Yahoo client not configured)")
+		errMsg := "Price data is stale and refresh unavailable (Yahoo client not configured)"
 		return &ExecuteResult{
 			Symbol: rec.Symbol,
 			Status: "blocked",
