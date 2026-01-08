@@ -53,7 +53,7 @@ func (s *BackupService) HourlyBackup() error {
 	backupName := fmt.Sprintf("ledger_%s.db", timestamp)
 	backupPath := filepath.Join(hourlyDir, backupName)
 
-	if err := s.backupDatabase("ledger", backupPath); err != nil {
+	if err := s.BackupDatabase("ledger", backupPath); err != nil {
 		return fmt.Errorf("failed to backup ledger.db: %w", err)
 	}
 
@@ -97,7 +97,7 @@ func (s *BackupService) DailyBackup() error {
 	for _, dbName := range dbNames {
 		backupPath := filepath.Join(dailyDir, dbName+".db")
 
-		if err := s.backupDatabase(dbName, backupPath); err != nil {
+		if err := s.BackupDatabase(dbName, backupPath); err != nil {
 			s.log.Error().
 				Str("database", dbName).
 				Err(err).
@@ -150,7 +150,7 @@ func (s *BackupService) WeeklyBackup() error {
 	for _, dbName := range dbNames {
 		backupPath := filepath.Join(weekDir, dbName+".db")
 
-		if err := s.backupDatabase(dbName, backupPath); err != nil {
+		if err := s.BackupDatabase(dbName, backupPath); err != nil {
 			s.log.Error().
 				Str("database", dbName).
 				Err(err).
@@ -203,7 +203,7 @@ func (s *BackupService) MonthlyBackup() error {
 	for _, dbName := range dbNames {
 		backupPath := filepath.Join(monthDir, dbName+".db")
 
-		if err := s.backupDatabase(dbName, backupPath); err != nil {
+		if err := s.BackupDatabase(dbName, backupPath); err != nil {
 			s.log.Error().
 				Str("database", dbName).
 				Err(err).
@@ -238,8 +238,9 @@ func (s *BackupService) MonthlyBackup() error {
 	return nil
 }
 
-// backupDatabase performs backup of a single database using SQLite's VACUUM INTO
-func (s *BackupService) backupDatabase(dbName, backupPath string) error {
+// BackupDatabase backs up a single database using VACUUM INTO
+// This is exported so it can be used by R2BackupService
+func (s *BackupService) BackupDatabase(dbName, backupPath string) error {
 	db, ok := s.databases[dbName]
 	if !ok {
 		return fmt.Errorf("database %s not found", dbName)

@@ -123,6 +123,9 @@ type Container struct {
 	HealthServices            map[string]*reliability.DatabaseHealthService
 	FactorExposureTracker     *analytics.FactorExposureTracker
 	UniverseMonitor           *planninguniverse.UniverseMonitor
+	R2Client                  *reliability.R2Client
+	R2BackupService           *reliability.R2BackupService
+	RestoreService            *reliability.RestoreService
 
 	// Handlers (will be populated in handlers.go)
 	// Note: Handlers are created per-route, so we don't store them in container
@@ -182,6 +185,10 @@ type JobInstances struct {
 	WeeklyMaintenance  scheduler.Job
 	MonthlyBackup      scheduler.Job
 	MonthlyMaintenance scheduler.Job
+
+	// R2 Cloud Backup jobs
+	R2Backup         scheduler.Job
+	R2BackupRotation scheduler.Job
 
 	// Symbolic Regression jobs
 	FormulaDiscovery scheduler.Job

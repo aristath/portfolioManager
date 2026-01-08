@@ -513,6 +513,22 @@ The system runs scheduled background jobs for autonomous operation. All jobs are
 - Update scoring weights based on market regime
 - Adjust optimizer blend (MV/HRP) dynamically
 
+### Backup & Reliability Jobs
+
+**r2_backup** (Scheduled: Daily/Weekly/Monthly at 3:00 AM)
+- Creates compressed archive of all 7 databases
+- Uploads backup to Cloudflare R2 cloud storage
+- Includes SHA256 checksums and metadata
+- Schedule configurable via Settings UI (daily/weekly/monthly)
+- Only runs if R2 backups enabled in settings
+- See [docs/R2_BACKUP.md](docs/R2_BACKUP.md) for full documentation
+
+**r2_backup_rotation** (Daily at 3:30 AM)
+- Deletes old backups based on retention policy
+- Always keeps minimum 3 backups regardless of age
+- Default retention: 90 days (configurable)
+- Only runs if R2 backups enabled in settings
+
 ### Reliability Jobs
 
 **history_cleanup** (Daily at midnight)

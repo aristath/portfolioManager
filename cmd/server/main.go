@@ -12,6 +12,7 @@ import (
 	"github.com/aristath/sentinel/internal/di"
 	"github.com/aristath/sentinel/internal/modules/display"
 	"github.com/aristath/sentinel/internal/queue"
+	"github.com/aristath/sentinel/internal/reliability"
 	"github.com/aristath/sentinel/internal/scheduler"
 	"github.com/aristath/sentinel/internal/server"
 	"github.com/aristath/sentinel/pkg/logger"
@@ -48,6 +49,22 @@ func main() {
 	// Display manager (state holder for LED display) - must be initialized before server.New()
 	displayManager := display.NewStateManager(log)
 	log.Info().Msg("Display manager initialized")
+
+	// Check for pending restore BEFORE initializing databases
+	// This ensures restores are applied before any database connections are opened
+	restoreSvc := reliability.NewRestoreService(nil, cfg.DataDir, log)
+	hasPendingRestore, err := restoreSvc.CheckPendingRestore()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to check for pending restore")
+	}
+
+	if hasPendingRestore {
+		log.Warn().Msg("Pending restore detected, executing staged restore...")
+		if err := restoreSvc.ExecuteStagedRestore(); err != nil {
+			log.Fatal().Err(err).Msg("Failed to execute staged restore")
+		}
+		log.Info().Msg("Restore completed successfully, proceeding with normal startup")
+	}
 
 	// Wire all dependencies using DI container (WITHOUT deployment manager first)
 	// This initializes databases and settings repository

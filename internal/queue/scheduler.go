@@ -130,6 +130,16 @@ func (s *Scheduler) Start() {
 					s.enqueueTimeBasedJob(JobTypeDailyMaintenance, PriorityMedium, 24*time.Hour)
 				}
 
+				// R2 Backup: Daily at 3:00 AM (after local backups complete)
+				if hour == 3 && minute == 0 {
+					s.enqueueTimeBasedJob(JobTypeR2Backup, PriorityLow, 24*time.Hour)
+				}
+
+				// R2 Backup Rotation: Daily at 3:30 AM
+				if hour == 3 && minute == 30 {
+					s.enqueueTimeBasedJob(JobTypeR2BackupRotation, PriorityLow, 24*time.Hour)
+				}
+
 				// Adaptive market check: Daily at 6:00 AM
 				if hour == 6 && minute == 0 {
 					s.enqueueTimeBasedJob(JobTypeAdaptiveMarket, PriorityMedium, 24*time.Hour)

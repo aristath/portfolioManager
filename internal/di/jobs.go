@@ -141,6 +141,34 @@ func RegisterJobs(container *Container, cfg *config.Config, displayManager *disp
 	instances.MonthlyMaintenance = monthlyMaintenance
 
 	// ==========================================
+	// R2 CLOUD BACKUP JOBS (optional - only if configured)
+	// ==========================================
+
+	if container.R2BackupService != nil {
+		// Job 15: R2 Backup
+		r2BackupJob := scheduler.NewR2BackupJob(scheduler.R2BackupJobConfig{
+			Log:             log,
+			Service:         container.R2BackupService,
+			SettingsService: container.SettingsService,
+		})
+		container.JobRegistry.Register(queue.JobTypeR2Backup, queue.JobToHandler(r2BackupJob))
+		instances.R2Backup = r2BackupJob
+
+		// Job 16: R2 Backup Rotation
+		r2RotationJob := scheduler.NewR2BackupRotationJob(scheduler.R2BackupRotationJobConfig{
+			Log:             log,
+			Service:         container.R2BackupService,
+			SettingsService: container.SettingsService,
+		})
+		container.JobRegistry.Register(queue.JobTypeR2BackupRotation, queue.JobToHandler(r2RotationJob))
+		instances.R2BackupRotation = r2RotationJob
+
+		log.Info().Msg("R2 backup jobs registered")
+	} else {
+		log.Debug().Msg("R2 backup service not available - R2 jobs not registered")
+	}
+
+	// ==========================================
 	// ADAPTIVE MARKET HYPOTHESIS (AMH) SYSTEM
 	// ==========================================
 

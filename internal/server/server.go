@@ -91,6 +91,7 @@ type Server struct {
 	displayManager     *display.StateManager
 	systemHandlers     *SystemHandlers
 	deploymentHandlers *DeploymentHandlers
+	r2BackupHandlers   *R2BackupHandlers
 	statusMonitor      *StatusMonitor
 }
 
@@ -128,6 +129,17 @@ func New(cfg Config) *Server {
 		marketHoursService,
 	)
 
+	// Initialize R2 backup handlers if R2 is configured
+	var r2BackupHandlers *R2BackupHandlers
+	if cfg.Container.R2BackupService != nil && cfg.Container.RestoreService != nil {
+		r2BackupHandlers = NewR2BackupHandlers(
+			cfg.Container.R2BackupService,
+			cfg.Container.RestoreService,
+			cfg.Container.QueueManager,
+			cfg.Log,
+		)
+	}
+
 	s := &Server{
 		router:             chi.NewRouter(),
 		log:                cfg.Log.With().Str("component", "server").Logger(),
@@ -143,6 +155,7 @@ func New(cfg Config) *Server {
 		displayManager:     cfg.DisplayManager,
 		systemHandlers:     systemHandlers,
 		deploymentHandlers: cfg.DeploymentHandlers,
+		r2BackupHandlers:   r2BackupHandlers,
 		statusMonitor:      nil, // Will be initialized after setupRoutes
 	}
 
@@ -577,6 +590,19 @@ func (s *Server) setupRoutes() {
 		settingsService := s.container.SettingsService
 		settingsHandler := settingshandlers.NewHandler(settingsService, s.container.EventManager, s.log)
 		settingsHandler.RegisterRoutes(r)
+
+		// R2 Cloud Backup routes (optional - only if R2 configured)
+		if s.r2BackupHandlers != nil {
+			r.Route("/backups/r2", func(r chi.Router) {
+				r.Get("/", s.r2BackupHandlers.HandleListBackups)
+				r.Post("/", s.r2BackupHandlers.HandleCreateBackup)
+				r.Post("/test", s.r2BackupHandlers.HandleTestConnection)
+				r.Delete("/{filename}", s.r2BackupHandlers.HandleDeleteBackup)
+				r.Get("/{filename}/download", s.r2BackupHandlers.HandleDownloadBackup)
+				r.Post("/restore", s.r2BackupHandlers.HandleStageRestore)
+				r.Delete("/restore/staged", s.r2BackupHandlers.HandleCancelRestore)
+			})
+		}
 
 		// Symbolic Regression module (MIGRATED TO GO!)
 		// TODO: Extract to handlers package when module is migrated

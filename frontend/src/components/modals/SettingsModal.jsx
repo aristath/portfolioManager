@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Modal, Tabs, Text, Button, NumberInput, Switch, Slider, Group, Stack, Paper, Divider, Alert, TextInput } from '@mantine/core';
+import { Modal, Tabs, Text, Button, NumberInput, Switch, Slider, Group, Stack, Paper, Divider, Alert, TextInput, PasswordInput, Select } from '@mantine/core';
 import { useAppStore } from '../../stores/appStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { api } from '../../api/client';
 import { useNotifications } from '../../hooks/useNotifications';
+import { R2BackupModal } from './R2BackupModal';
 
 export function SettingsModal() {
   const { showSettingsModal, closeSettingsModal } = useAppStore();
@@ -12,6 +13,9 @@ export function SettingsModal() {
   const [activeTab, setActiveTab] = useState('trading');
   const [loading, setLoading] = useState(false);
   const [syncingHistorical, setSyncingHistorical] = useState(false);
+  const [testingR2Connection, setTestingR2Connection] = useState(false);
+  const [backingUpToR2, setBackingUpToR2] = useState(false);
+  const [showR2BackupModal, setShowR2BackupModal] = useState(false);
 
   useEffect(() => {
     if (showSettingsModal) {
@@ -75,6 +79,38 @@ export function SettingsModal() {
     return fixed / (0.01 - percent);
   };
 
+  const handleTestR2Connection = async () => {
+    setTestingR2Connection(true);
+    try {
+      const result = await api.testR2Connection();
+      if (result.status === 'success') {
+        showNotification('R2 connection successful', 'success');
+      } else {
+        showNotification(`R2 connection failed: ${result.message}`, 'error');
+      }
+    } catch (error) {
+      showNotification(`Failed to test R2 connection: ${error.message}`, 'error');
+    } finally {
+      setTestingR2Connection(false);
+    }
+  };
+
+  const handleBackupToR2 = async () => {
+    setBackingUpToR2(true);
+    try {
+      const result = await api.createR2Backup();
+      showNotification('Backup job started successfully', 'success');
+    } catch (error) {
+      showNotification(`Failed to create backup: ${error.message}`, 'error');
+    } finally {
+      setBackingUpToR2(false);
+    }
+  };
+
+  const handleViewR2Backups = () => {
+    setShowR2BackupModal(true);
+  };
+
   return (
     <Modal
       opened={showSettingsModal}
@@ -89,6 +125,7 @@ export function SettingsModal() {
           <Tabs.Tab value="portfolio">Portfolio</Tabs.Tab>
           <Tabs.Tab value="display">Display</Tabs.Tab>
           <Tabs.Tab value="system">System</Tabs.Tab>
+          <Tabs.Tab value="backup">Backup</Tabs.Tab>
           <Tabs.Tab value="credentials">Credentials</Tabs.Tab>
         </Tabs.List>
 
@@ -565,6 +602,117 @@ export function SettingsModal() {
           </Stack>
         </Tabs.Panel>
 
+        <Tabs.Panel value="backup" p="md">
+          <Stack gap="md">
+            {/* Cloudflare R2 Backup */}
+            <Paper p="md" withBorder>
+              <Text size="sm" fw={500} mb="xs" tt="uppercase">Cloudflare R2 Backup</Text>
+              <Text size="xs" c="dimmed" mb="md">
+                Automatically backup databases to Cloudflare R2 cloud storage. Backups include all 7 databases in a single compressed archive.
+              </Text>
+              <Stack gap="md">
+                <Switch
+                  label="Enable R2 backups"
+                  checked={getSetting('r2_backup_enabled', 0) === 1}
+                  onChange={(e) => handleUpdateSetting('r2_backup_enabled', e.currentTarget.checked ? 1 : 0)}
+                  description="Automatically backup databases to Cloudflare R2 daily at 3:00 AM"
+                />
+                <Divider />
+                <Text size="xs" fw={500} tt="uppercase" mb="xs">R2 Configuration</Text>
+                <TextInput
+                  label="Account ID"
+                  value={getSetting('r2_account_id', '') || ''}
+                  onChange={(e) => handleUpdateSetting('r2_account_id', e.target.value)}
+                  placeholder="a1b2c3d4e5f6g7h8i9j0"
+                  description="Your Cloudflare account ID"
+                />
+                <TextInput
+                  label="Access Key ID"
+                  value={getSetting('r2_access_key_id', '') || ''}
+                  onChange={(e) => handleUpdateSetting('r2_access_key_id', e.target.value)}
+                  placeholder="a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
+                  description="R2 access key ID for authentication"
+                />
+                <PasswordInput
+                  label="Secret Access Key"
+                  value={getSetting('r2_secret_access_key', '') || ''}
+                  onChange={(e) => handleUpdateSetting('r2_secret_access_key', e.target.value)}
+                  placeholder="Enter your R2 secret access key"
+                  description="R2 secret access key (hidden for security)"
+                />
+                <TextInput
+                  label="Bucket Name"
+                  value={getSetting('r2_bucket_name', '') || ''}
+                  onChange={(e) => handleUpdateSetting('r2_bucket_name', e.target.value)}
+                  placeholder="sentinel-backups"
+                  description="Name of your R2 bucket for backups"
+                />
+                <Select
+                  label="Backup Schedule"
+                  value={getSetting('r2_backup_schedule', 'daily') || 'daily'}
+                  onChange={(val) => handleUpdateSetting('r2_backup_schedule', val)}
+                  data={[
+                    { value: 'daily', label: 'Daily (recommended)' },
+                    { value: 'weekly', label: 'Weekly (Sundays)' },
+                    { value: 'monthly', label: 'Monthly (1st of month)' }
+                  ]}
+                  description="How often to automatically backup to R2"
+                />
+                <Group justify="space-between">
+                  <div>
+                    <Text size="sm">Retention Days</Text>
+                    <Text size="xs" c="dimmed">Keep backups for this many days (0 = forever)</Text>
+                  </div>
+                  <NumberInput
+                    value={getSetting('r2_backup_retention_days', 90)}
+                    onChange={(val) => handleUpdateSetting('r2_backup_retention_days', val)}
+                    min={0}
+                    step={1}
+                    w={100}
+                    size="sm"
+                  />
+                </Group>
+                <Divider />
+                <Text size="xs" fw={500} tt="uppercase" mb="xs">Actions</Text>
+                <Group gap="sm">
+                  <Button
+                    size="sm"
+                    variant="light"
+                    onClick={handleTestR2Connection}
+                    loading={testingR2Connection}
+                    disabled={!getSetting('r2_account_id', '') || !getSetting('r2_access_key_id', '')}
+                  >
+                    Test Connection
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="light"
+                    onClick={handleViewR2Backups}
+                    disabled={!getSetting('r2_account_id', '') || !getSetting('r2_access_key_id', '')}
+                  >
+                    View Backups
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="filled"
+                    onClick={handleBackupToR2}
+                    loading={backingUpToR2}
+                    disabled={!getSetting('r2_account_id', '') || !getSetting('r2_access_key_id', '')}
+                  >
+                    Backup Now
+                  </Button>
+                </Group>
+                <Alert color="blue" size="sm">
+                  <Text size="xs">
+                    Backups are stored as compressed .tar.gz archives containing all databases.
+                    Automatic backups run according to your schedule at 3:00 AM. Old backups are rotated based on retention policy.
+                  </Text>
+                </Alert>
+              </Stack>
+            </Paper>
+          </Stack>
+        </Tabs.Panel>
+
         <Tabs.Panel value="credentials" p="md">
           <Stack gap="md">
             {/* API Credentials */}
@@ -612,5 +760,9 @@ export function SettingsModal() {
         </Tabs.Panel>
       </Tabs>
     </Modal>
+    <R2BackupModal
+      opened={showR2BackupModal}
+      onClose={() => setShowR2BackupModal(false)}
+    />
   );
 }

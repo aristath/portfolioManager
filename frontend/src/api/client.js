@@ -173,7 +173,19 @@ export const api = {
   // Settings
   fetchSettings: () => fetchJSON('/api/settings'),
   updateSetting: (key, value) => {
-    const stringSettings = ['tradernet_api_key', 'tradernet_api_secret', 'trading_mode', 'display_mode', 'security_table_visible_columns'];
+    const stringSettings = [
+      'tradernet_api_key',
+      'tradernet_api_secret',
+      'trading_mode',
+      'display_mode',
+      'security_table_visible_columns',
+      'r2_account_id',
+      'r2_access_key_id',
+      'r2_secret_access_key',
+      'r2_bucket_name',
+      'r2_backup_schedule',
+      'github_token'
+    ];
     const finalValue = stringSettings.includes(key) ? value : parseFloat(value);
     return fetchJSON(`/api/settings/${key}`, {
       method: 'PUT',
@@ -187,6 +199,33 @@ export const api = {
   resetCache: () => fetchJSON('/api/settings/reset-cache', { method: 'POST' }),
   rescheduleJobs: () => fetchJSON('/api/settings/reschedule-jobs', { method: 'POST' }),
   testTradernetConnection: () => fetchJSON('/api/system/tradernet'),
+
+  // R2 Backups
+  listR2Backups: () => fetchJSON('/api/backups/r2'),
+  createR2Backup: () => fetchJSON('/api/backups/r2', { method: 'POST' }),
+  testR2Connection: () => fetchJSON('/api/backups/r2/test', { method: 'POST' }),
+  downloadR2Backup: async (filename) => {
+    // Download returns a file, not JSON
+    const response = await fetch(`/api/backups/r2/${encodeURIComponent(filename)}/download`);
+    if (!response.ok) {
+      throw new Error(`Failed to download backup: ${response.statusText}`);
+    }
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  },
+  deleteR2Backup: (filename) => fetchJSON(`/api/backups/r2/${encodeURIComponent(filename)}`, { method: 'DELETE' }),
+  stageR2Restore: (filename) => fetchJSON('/api/backups/r2/restore', {
+    method: 'POST',
+    body: JSON.stringify({ filename }),
+  }),
+  cancelR2Restore: () => fetchJSON('/api/backups/r2/restore/staged', { method: 'DELETE' }),
 
   // Planner
   regenerateSequences: () => fetchJSON('/api/planner/regenerate-sequences', { method: 'POST' }),

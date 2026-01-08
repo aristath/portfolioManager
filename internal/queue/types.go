@@ -24,6 +24,8 @@ const (
 	JobTypeAdaptiveMarket     JobType = "adaptive_market_check"
 	JobTypeHistoryCleanup     JobType = "history_cleanup"
 	JobTypeDeployment         JobType = "deployment"
+	JobTypeR2Backup           JobType = "r2_backup"
+	JobTypeR2BackupRotation   JobType = "r2_backup_rotation"
 
 	// Sync jobs - individual responsibilities split from sync_cycle
 	JobTypeSyncTrades            JobType = "sync_trades"

@@ -16,6 +16,15 @@ var SettingDefaults = map[string]interface{}{
 	"tradernet_api_secret": "", // Tradernet API secret
 	"github_token":         "", // GitHub personal access token for deployment artifact downloads
 
+	// Cloudflare R2 Backup settings
+	"r2_account_id":           "",       // Cloudflare R2 account ID
+	"r2_access_key_id":        "",       // R2 access key ID
+	"r2_secret_access_key":    "",       // R2 secret access key
+	"r2_bucket_name":          "",       // R2 bucket name
+	"r2_backup_enabled":       0.0,      // 1.0 = enabled, 0.0 = disabled
+	"r2_backup_schedule":      "daily",  // Backup schedule: "daily", "weekly", or "monthly"
+	"r2_backup_retention_days": 90.0,    // Days to keep backups (0 = keep forever)
+
 	// Portfolio Optimizer settings
 	"optimizer_blend":             0.5,   // 0.0 = pure Mean-Variance, 1.0 = pure HRP
 	"optimizer_target_return":     0.11,  // Target annual return for MV component
@@ -158,6 +167,11 @@ var StringSettings = map[string]bool{
 	"tradernet_api_secret":           true,
 	"github_token":                   true,
 	"security_table_visible_columns": true,
+	"r2_account_id":                  true,
+	"r2_access_key_id":               true,
+	"r2_secret_access_key":           true,
+	"r2_bucket_name":                 true,
+	"r2_backup_schedule":             true,
 }
 
 // SettingUpdate represents a setting value update request
