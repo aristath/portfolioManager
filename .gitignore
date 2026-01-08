@@ -46,38 +46,29 @@ node_modules/
 package-lock.json
 
 # Go binaries
-microservices/evaluator-go/evaluator-go
-microservices/evaluator-go/evaluator-go.exe
-trader/server
-trader/sentinel
-trader/sentinel-go
-trader/sentinel-go-arm64
-trader/sentinel-arm64
-# Legacy names (keep for backward compatibility)
-trader/trader
-trader/trader-go
-trader/trader-go-arm64
-trader/trader-arm64
+server
+sentinel
+sentinel-go
+sentinel-arm64
+*.test
 display/bridge/bridge
 display/bridge/display-bridge
+
+# Go test and coverage files
+coverage.out
+coverage.*.out
+test_results.txt
+
+# Embedded files (generated during build)
+pkg/embedded/frontend/
+pkg/embedded/display/
 
 .claude/
 
 build/
 
-trader/app/bin/.deploy.lock
-
-trader/tradernet-sdk
-
-sentinel-arm64
 sentinel-artifact.zip
-# Legacy names (keep for backward compatibility)
-trader-arm64
-trader-artifact.zip
-
 artifact.zip
-
-trader/test_results.txt
 
 # SQLite test database files created from :memory: connections
 **/:memory:
