@@ -1,4 +1,0 @@
-version: '3.8'
-
-# Note: All Python microservices have been migrated to Go
-# This file is kept for reference but no services are configured
