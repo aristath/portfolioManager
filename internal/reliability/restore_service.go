@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -334,7 +335,9 @@ func (s *RestoreService) extractArchive(archivePath, destDir string) error {
 		targetPath := filepath.Join(destDir, header.Name)
 
 		// Security: prevent path traversal
-		if !filepath.HasPrefix(targetPath, filepath.Clean(destDir)+string(os.PathSeparator)) {
+		cleanDest := filepath.Clean(destDir) + string(os.PathSeparator)
+		cleanTarget := filepath.Clean(targetPath)
+		if !strings.HasPrefix(cleanTarget, cleanDest) {
 			return fmt.Errorf("invalid file path in archive: %s", header.Name)
 		}
 

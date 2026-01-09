@@ -1,3 +1,4 @@
+// Package exchangerate provides currency exchange rate fetching and caching functionality.
 package exchangerate
 
 import (

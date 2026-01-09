@@ -45,7 +45,7 @@ type SecuritySetupServiceInterface interface {
 // See internal/services/README.md for service architecture documentation.
 //
 // Faithful translation from Python: app/modules/portfolio/services/portfolio_service.py
-// ExchangeRateCacheServiceInterface defines the contract for exchange rate caching
+// ExchangeRateCacheServiceInterface defines the contract for exchange rate caching.
 type ExchangeRateCacheServiceInterface interface {
 	GetRate(fromCurrency, toCurrency string) (float64, error)
 }

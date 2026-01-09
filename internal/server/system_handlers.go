@@ -286,7 +286,8 @@ type JobInfo struct {
 }
 
 // MarketsStatusResponse represents market status
-// IndividualMarketInfo represents status of a single exchange
+
+// IndividualMarketInfo represents status of a single exchange.
 type IndividualMarketInfo struct {
 	Name      string `json:"name"`
 	Code      string `json:"code"`

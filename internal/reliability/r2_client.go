@@ -39,18 +39,11 @@ func NewR2Client(accountID, accessKeyID, secretAccessKey, bucketName string, log
 		return nil, fmt.Errorf("r2 credentials incomplete")
 	}
 
-	// Create R2-specific endpoint resolver
-	r2Resolver := aws.EndpointResolverWithOptionsFunc(func(service, region string, options ...interface{}) (aws.Endpoint, error) {
-		return aws.Endpoint{
-			URL:               fmt.Sprintf("https://%s.r2.cloudflarestorage.com", accountID),
-			HostnameImmutable: true,
-			SigningRegion:     "auto",
-		}, nil
-	})
-
 	// Load config with R2 credentials and endpoint
+	// Using BaseEndpoint for R2 compatibility
+	r2Endpoint := fmt.Sprintf("https://%s.r2.cloudflarestorage.com", accountID)
 	cfg, err := config.LoadDefaultConfig(context.Background(),
-		config.WithEndpointResolverWithOptions(r2Resolver),
+		config.WithBaseEndpoint(r2Endpoint),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKeyID, secretAccessKey, "")),
 		config.WithRegion("auto"),
 	)
