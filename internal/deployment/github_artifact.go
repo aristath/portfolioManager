@@ -199,6 +199,21 @@ func (g *GitHubArtifactDeployer) DownloadArtifact(runID string, outputDir string
 		return "", fmt.Errorf("failed to create output directory: %w", err)
 	}
 
+	// Clean up any existing files in output directory to prevent "file exists" errors
+	// gh CLI can't extract if the file already exists from a previous failed download
+	expectedArtifactPath := filepath.Join(outputDir, g.artifactName)
+	if _, err := os.Stat(expectedArtifactPath); err == nil {
+		g.log.Debug().
+			Str("path", expectedArtifactPath).
+			Msg("Removing existing artifact file before download")
+		if err := os.Remove(expectedArtifactPath); err != nil {
+			g.log.Warn().
+				Err(err).
+				Str("path", expectedArtifactPath).
+				Msg("Failed to remove existing artifact file, continuing anyway")
+		}
+	}
+
 	g.log.Info().
 		Str("run_id", runID).
 		Str("artifact", g.artifactName).
