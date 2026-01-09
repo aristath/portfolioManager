@@ -94,7 +94,16 @@ func RegisterJobs(container *Container, cfg *config.Config, displayManager *disp
 	container.JobRegistry.Register(queue.JobTypeHistoryCleanup, queue.JobToHandler(historyCleanup))
 	instances.HistoryCleanup = historyCleanup
 
-	// Job 8: Hourly Backup
+	// Job 8: Recommendation Garbage Collection (24h TTL)
+	recommendationGC := scheduler.NewRecommendationGCJob(
+		container.RecommendationRepo,
+		24*time.Hour, // Max age: 24 hours
+		log,
+	)
+	container.JobRegistry.Register(queue.JobTypeRecommendationGC, queue.JobToHandler(recommendationGC))
+	instances.RecommendationGC = recommendationGC
+
+	// Job 9: Hourly Backup
 	hourlyBackup := reliability.NewHourlyBackupJob(container.BackupService)
 	container.JobRegistry.Register(queue.JobTypeHourlyBackup, queue.JobToHandler(hourlyBackup))
 	instances.HourlyBackup = hourlyBackup
@@ -112,9 +121,9 @@ func RegisterJobs(container *Container, cfg *config.Config, displayManager *disp
 		"config":    container.ConfigDB,
 		"ledger":    container.LedgerDB,
 		"portfolio": container.PortfolioDB,
-		"agents":    container.AgentsDB,
-		"history":   container.HistoryDB,
-		"cache":     container.CacheDB,
+		// "agents": removed - sequences/evaluations now in-memory
+		"history": container.HistoryDB,
+		"cache":   container.CacheDB,
 	}
 	dailyMaintenance := reliability.NewDailyMaintenanceJob(databases, container.HealthServices, backupDir, log)
 	container.JobRegistry.Register(queue.JobTypeDailyMaintenance, queue.JobToHandler(dailyMaintenance))
@@ -136,7 +145,7 @@ func RegisterJobs(container *Container, cfg *config.Config, displayManager *disp
 	instances.MonthlyBackup = monthlyBackup
 
 	// Job 14: Monthly Maintenance
-	monthlyMaintenance := reliability.NewMonthlyMaintenanceJob(databases, container.HealthServices, container.AgentsDB, backupDir, log)
+	monthlyMaintenance := reliability.NewMonthlyMaintenanceJob(databases, container.HealthServices, nil, backupDir, log) // AgentsDB removed
 	container.JobRegistry.Register(queue.JobTypeMonthlyMaintenance, queue.JobToHandler(monthlyMaintenance))
 	instances.MonthlyMaintenance = monthlyMaintenance
 
@@ -361,8 +370,7 @@ func RegisterJobs(container *Container, cfg *config.Config, displayManager *disp
 	instances.CreateTradePlan = createTradePlan
 
 	// Store Recommendations Job
-	recommendationRepoAdapter := scheduler.NewRecommendationRepositoryAdapter(container.RecommendationRepo)
-	storeRecommendations := scheduler.NewStoreRecommendationsJob(recommendationRepoAdapter, "")
+	storeRecommendations := scheduler.NewStoreRecommendationsJob(container.RecommendationRepo, "")
 	storeRecommendations.SetLogger(log)
 	container.JobRegistry.Register(queue.JobTypeStoreRecommendations, queue.JobToHandler(storeRecommendations))
 	instances.StoreRecommendations = storeRecommendations
@@ -456,7 +464,7 @@ func RegisterJobs(container *Container, cfg *config.Config, displayManager *disp
 		container.ConfigDB,
 		container.LedgerDB,
 		container.PortfolioDB,
-		container.AgentsDB,
+		nil, // AgentsDB removed - sequences/evaluations now in-memory
 	)
 	checkCoreDatabases.SetLogger(log)
 	container.JobRegistry.Register(queue.JobTypeCheckCoreDatabases, queue.JobToHandler(checkCoreDatabases))
@@ -474,7 +482,7 @@ func RegisterJobs(container *Container, cfg *config.Config, displayManager *disp
 		container.ConfigDB,
 		container.LedgerDB,
 		container.PortfolioDB,
-		container.AgentsDB,
+		nil, // AgentsDB removed - sequences/evaluations now in-memory
 		container.HistoryDB,
 		container.CacheDB,
 	)
@@ -528,9 +536,9 @@ func RegisterJobs(container *Container, cfg *config.Config, displayManager *disp
 	container.WorkerPool.Start()
 	container.TimeScheduler.Start()
 
-	jobCount := 36
+	jobCount := 38
 	if deploymentManager != nil {
-		jobCount = 37 // Include deployment job
+		jobCount = 38 // Include deployment job
 	}
 	log.Info().Int("jobs", jobCount).Msg("Jobs registered with queue system")
 

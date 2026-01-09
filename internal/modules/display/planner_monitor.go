@@ -10,14 +10,14 @@ import (
 
 // PlannerMonitor monitors pending planner recommendations and updates LED4 accordingly
 type PlannerMonitor struct {
-	recommendationRepo *planning.RecommendationRepository
+	recommendationRepo planning.RecommendationRepositoryInterface // Interface - can be DB or in-memory
 	stateManager       *StateManager
 	log                zerolog.Logger
 	interval           time.Duration
 }
 
 // NewPlannerMonitor creates a new planner monitor
-func NewPlannerMonitor(recommendationRepo *planning.RecommendationRepository, stateManager *StateManager, log zerolog.Logger) *PlannerMonitor {
+func NewPlannerMonitor(recommendationRepo planning.RecommendationRepositoryInterface, stateManager *StateManager, log zerolog.Logger) *PlannerMonitor {
 	return &PlannerMonitor{
 		recommendationRepo: recommendationRepo,
 		stateManager:       stateManager,

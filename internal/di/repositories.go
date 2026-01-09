@@ -78,11 +78,8 @@ func InitializeRepositories(container *Container, log zerolog.Logger) error {
 		log,
 	)
 
-	// Planning recommendation repository (needs cacheDB)
-	container.RecommendationRepo = planning.NewRecommendationRepository(
-		container.CacheDB.Conn(),
-		log,
-	)
+	// Planning recommendation repository (IN-MEMORY - ephemeral data)
+	container.RecommendationRepo = planning.NewInMemoryRecommendationRepository(log)
 
 	// Planner config repository (needs configDB)
 	container.PlannerConfigRepo = planningrepo.NewConfigRepository(
@@ -90,11 +87,8 @@ func InitializeRepositories(container *Container, log zerolog.Logger) error {
 		log,
 	)
 
-	// Planner repository (needs agentsDB)
-	container.PlannerRepo = planningrepo.NewPlannerRepository(
-		container.AgentsDB,
-		log,
-	)
+	// Planner repository (IN-MEMORY - ephemeral sequences/evaluations/best_results)
+	container.PlannerRepo = planningrepo.NewInMemoryPlannerRepository(log)
 
 	// Grouping repository (needs universeDB)
 	container.GroupingRepo = allocation.NewGroupingRepository(

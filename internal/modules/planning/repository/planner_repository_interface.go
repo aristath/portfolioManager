@@ -70,7 +70,22 @@ type PlannerRepositoryInterface interface {
 
 	// CountEvaluations returns the total number of evaluations for a portfolio hash
 	CountEvaluations(portfolioHash string) (int, error)
+
+	// DeleteAllSequences deletes all sequences from all portfolios
+	// Used by UniverseMonitor to clear all data when state changes
+	DeleteAllSequences() error
+
+	// DeleteAllEvaluations deletes all evaluations from all portfolios
+	// Used by UniverseMonitor to clear all data when state changes
+	DeleteAllEvaluations() error
+
+	// DeleteAllBestResults deletes all best results from all portfolios
+	// Used by UniverseMonitor to clear all data when state changes
+	DeleteAllBestResults() error
 }
 
 // Compile-time check that PlannerRepository implements PlannerRepositoryInterface
 var _ PlannerRepositoryInterface = (*PlannerRepository)(nil)
+
+// Compile-time check that InMemoryPlannerRepository implements PlannerRepositoryInterface
+var _ PlannerRepositoryInterface = (*InMemoryPlannerRepository)(nil)

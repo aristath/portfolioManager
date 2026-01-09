@@ -67,9 +67,9 @@ type Service struct {
 	brokerClient       domain.BrokerClient
 	yahooClient        yahoo.FullClientInterface
 	configRepo         *planningrepo.ConfigRepository
-	recommendationRepo *planning.RecommendationRepository
-	portfolioDB        *sql.DB // For querying scores and calculations
-	configDB           *sql.DB // For querying settings
+	recommendationRepo planning.RecommendationRepositoryInterface // Interface - can be DB or in-memory
+	portfolioDB        *sql.DB                                    // For querying scores and calculations
+	configDB           *sql.DB                                    // For querying settings
 
 	log zerolog.Logger
 }
@@ -86,9 +86,9 @@ func NewService(
 	brokerClient domain.BrokerClient,
 	yahooClient yahoo.FullClientInterface,
 	configRepo *planningrepo.ConfigRepository,
-	recommendationRepo *planning.RecommendationRepository,
+	recommendationRepo planning.RecommendationRepositoryInterface, // Interface - can be DB or in-memory
 	portfolioDB *sql.DB, // For querying scores and calculations
-	configDB *sql.DB, // For querying settings
+	configDB *sql.DB,    // For querying settings
 	log zerolog.Logger,
 ) *Service {
 	return &Service{

@@ -29,9 +29,9 @@ type UniverseMonitor struct {
 	positionRepo       *portfolio.PositionRepository
 	cashManager        domain.CashManager
 	configRepo         *planningrepo.ConfigRepository
-	recommendationRepo *planning.RecommendationRepository
-	plannerRepo        *planningrepo.PlannerRepository
-	configDB           *sql.DB // For global settings query
+	recommendationRepo planning.RecommendationRepositoryInterface // Interface - can be DB or in-memory
+	plannerRepo        planningrepo.PlannerRepositoryInterface    // Interface - can be DB or in-memory
+	configDB           *sql.DB                                    // For global settings query
 	log                zerolog.Logger
 
 	// In-memory state
@@ -50,8 +50,8 @@ func NewUniverseMonitor(
 	positionRepo *portfolio.PositionRepository,
 	cashManager domain.CashManager,
 	configRepo *planningrepo.ConfigRepository,
-	recommendationRepo *planning.RecommendationRepository,
-	plannerRepo *planningrepo.PlannerRepository,
+	recommendationRepo planning.RecommendationRepositoryInterface, // Interface - can be DB or in-memory
+	plannerRepo planningrepo.PlannerRepositoryInterface, // Interface - can be DB or in-memory
 	configDB *sql.DB,
 	log zerolog.Logger,
 ) *UniverseMonitor {

@@ -7,6 +7,7 @@ import (
 	"math"
 	"time"
 
+	planningdomain "github.com/aristath/sentinel/internal/modules/planning/domain"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 )
@@ -594,4 +595,84 @@ func (r *RecommendationRepository) MarkFailed(recUUID string, failureReason stri
 		Msg("Recommendation marked as permanently failed")
 
 	return nil
+}
+
+// StorePlan stores a complete trading plan as recommendations
+// This method converts plan steps to recommendations and dismisses old ones
+// NOTE: This database-backed implementation is deprecated - use InMemoryRecommendationRepository
+func (r *RecommendationRepository) StorePlan(plan *planningdomain.HolisticPlan, portfolioHash string) error {
+	if plan == nil {
+		return fmt.Errorf("plan cannot be nil")
+	}
+
+	// If plan has no steps, dismiss all pending recommendations
+	if len(plan.Steps) == 0 {
+		_, _ = r.DismissAllPending()
+		return nil
+	}
+
+	// Dismiss all existing pending recommendations before storing new plan
+	_, _ = r.DismissAllPending()
+
+	// Convert each step to a recommendation
+	for stepIdx, step := range plan.Steps {
+		rec := Recommendation{
+			Symbol:                step.Symbol,
+			Name:                  step.Name,
+			Side:                  step.Side,
+			Quantity:              float64(step.Quantity),
+			EstimatedPrice:        step.EstimatedPrice,
+			EstimatedValue:        step.EstimatedValue,
+			Reason:                step.Reason,
+			Currency:              step.Currency,
+			Priority:              float64(stepIdx),
+			CurrentPortfolioScore: plan.CurrentScore,
+			NewPortfolioScore:     plan.EndStateScore,
+			ScoreChange:           plan.Improvement,
+			Status:                "pending",
+			PortfolioHash:         portfolioHash,
+		}
+
+		if _, err := r.CreateOrUpdate(rec); err != nil {
+			return fmt.Errorf("failed to create recommendation for step %d: %w", stepIdx, err)
+		}
+	}
+
+	r.log.Info().
+		Int("step_count", len(plan.Steps)).
+		Str("portfolio_hash", portfolioHash).
+		Msg("Stored plan as recommendations")
+
+	return nil
+}
+
+// DeleteOlderThan deletes recommendations older than the specified duration
+// Returns the count of deleted recommendations
+// NOTE: This database-backed implementation is deprecated - use InMemoryRecommendationRepository
+func (r *RecommendationRepository) DeleteOlderThan(maxAge time.Duration) (int, error) {
+	cutoff := time.Now().UTC().Add(-maxAge).Unix()
+
+	result, err := r.db.Exec(`
+		DELETE FROM recommendations
+		WHERE created_at < ?
+	`, cutoff)
+
+	if err != nil {
+		return 0, fmt.Errorf("failed to delete old recommendations: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	count := int(rowsAffected)
+	if count > 0 {
+		r.log.Info().
+			Int("deleted_count", count).
+			Dur("max_age", maxAge).
+			Msg("Deleted stale recommendations")
+	}
+
+	return count, nil
 }

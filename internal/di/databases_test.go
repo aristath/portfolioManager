@@ -24,21 +24,21 @@ func TestInitializeDatabases(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, container)
 
-	// Verify all 7 databases are initialized
+	// Verify all 6 databases are initialized (agents.db removed)
 	assert.NotNil(t, container.UniverseDB)
 	assert.NotNil(t, container.ConfigDB)
 	assert.NotNil(t, container.LedgerDB)
 	assert.NotNil(t, container.PortfolioDB)
-	assert.NotNil(t, container.AgentsDB)
+	assert.Nil(t, container.AgentsDB) // AgentsDB removed - sequences/evaluations now in-memory
 	assert.NotNil(t, container.HistoryDB)
 	assert.NotNil(t, container.CacheDB)
 
-	// Verify database files are created
+	// Verify database files are created (6 databases, agents.db removed)
 	assert.FileExists(t, filepath.Join(tmpDir, "universe.db"))
 	assert.FileExists(t, filepath.Join(tmpDir, "config.db"))
 	assert.FileExists(t, filepath.Join(tmpDir, "ledger.db"))
 	assert.FileExists(t, filepath.Join(tmpDir, "portfolio.db"))
-	assert.FileExists(t, filepath.Join(tmpDir, "agents.db"))
+	// agents.db removed - sequences/evaluations now in-memory
 	assert.FileExists(t, filepath.Join(tmpDir, "history.db"))
 	assert.FileExists(t, filepath.Join(tmpDir, "cache.db"))
 
@@ -47,7 +47,7 @@ func TestInitializeDatabases(t *testing.T) {
 	container.ConfigDB.Close()
 	container.LedgerDB.Close()
 	container.PortfolioDB.Close()
-	container.AgentsDB.Close()
+	// container.AgentsDB.Close() // AgentsDB removed - sequences/evaluations now in-memory
 	container.HistoryDB.Close()
 	container.CacheDB.Close()
 }
@@ -87,7 +87,7 @@ func TestInitializeDatabases_SchemaMigration(t *testing.T) {
 	container.ConfigDB.Close()
 	container.LedgerDB.Close()
 	container.PortfolioDB.Close()
-	container.AgentsDB.Close()
+	// container.AgentsDB.Close() // AgentsDB removed - sequences/evaluations now in-memory
 	container.HistoryDB.Close()
 	container.CacheDB.Close()
 }

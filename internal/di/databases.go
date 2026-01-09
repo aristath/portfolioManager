@@ -9,8 +9,8 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// InitializeDatabases initializes all 7 databases and applies schemas
-// Returns a Container with databases populated
+// InitializeDatabases initializes all 6 databases and applies schemas
+// Returns a Container with databases populated (agents.db removed - data now in-memory)
 func InitializeDatabases(cfg *config.Config, log zerolog.Logger) (*Container, error) {
 	container := &Container{}
 
@@ -64,20 +64,10 @@ func InitializeDatabases(cfg *config.Config, log zerolog.Logger) (*Container, er
 	}
 	container.PortfolioDB = portfolioDB
 
-	// 5. agents.db - Strategy management (sequences, evaluations)
-	agentsDB, err := database.New(database.Config{
-		Path:    cfg.DataDir + "/agents.db",
-		Profile: database.ProfileStandard,
-		Name:    "agents",
-	})
-	if err != nil {
-		universeDB.Close()
-		configDB.Close()
-		ledgerDB.Close()
-		portfolioDB.Close()
-		return nil, fmt.Errorf("failed to initialize agents database: %w", err)
-	}
-	container.AgentsDB = agentsDB
+	// 5. agents.db - REMOVED: Sequences, evaluations, best_result now stored in-memory
+	// All ephemeral planning data is now handled by InMemoryPlannerRepository
+	// No database needed for this data - it's regenerated on each planning cycle
+	container.AgentsDB = nil // Set to nil for backward compatibility
 
 	// 6. history.db - Historical time-series data (prices, rates, cleanup tracking)
 	historyDB, err := database.New(database.Config{
@@ -90,7 +80,7 @@ func InitializeDatabases(cfg *config.Config, log zerolog.Logger) (*Container, er
 		configDB.Close()
 		ledgerDB.Close()
 		portfolioDB.Close()
-		agentsDB.Close()
+		// agentsDB removed
 		return nil, fmt.Errorf("failed to initialize history database: %w", err)
 	}
 	container.HistoryDB = historyDB
@@ -106,21 +96,21 @@ func InitializeDatabases(cfg *config.Config, log zerolog.Logger) (*Container, er
 		configDB.Close()
 		ledgerDB.Close()
 		portfolioDB.Close()
-		agentsDB.Close()
+		// agentsDB removed
 		historyDB.Close()
 		return nil, fmt.Errorf("failed to initialize cache database: %w", err)
 	}
 	container.CacheDB = cacheDB
 
 	// Apply schemas to all databases (single source of truth)
-	for _, db := range []*database.DB{universeDB, configDB, ledgerDB, portfolioDB, agentsDB, historyDB, cacheDB} {
+	// Note: agentsDB removed - sequences/evaluations now in-memory
+	for _, db := range []*database.DB{universeDB, configDB, ledgerDB, portfolioDB, historyDB, cacheDB} {
 		if err := db.Migrate(); err != nil {
 			// Cleanup on error
 			universeDB.Close()
 			configDB.Close()
 			ledgerDB.Close()
 			portfolioDB.Close()
-			agentsDB.Close()
 			historyDB.Close()
 			cacheDB.Close()
 			return nil, fmt.Errorf("failed to apply schema to %s: %w", db.Name(), err)

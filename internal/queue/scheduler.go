@@ -89,6 +89,7 @@ func (s *Scheduler) Start() {
 		// Run immediately on start, then every hour
 		s.enqueueTimeBasedJob(JobTypeHourlyBackup, PriorityMedium, 1*time.Hour)
 		s.enqueueTimeBasedJob(JobTypeRetryTrades, PriorityHigh, 1*time.Hour)
+		s.enqueueTimeBasedJob(JobTypeRecommendationGC, PriorityMedium, 1*time.Hour)
 		for {
 			select {
 			case <-s.stop:
@@ -97,6 +98,7 @@ func (s *Scheduler) Start() {
 			case <-hourlyTicker.C:
 				s.enqueueTimeBasedJob(JobTypeHourlyBackup, PriorityMedium, 1*time.Hour)
 				s.enqueueTimeBasedJob(JobTypeRetryTrades, PriorityHigh, 1*time.Hour)
+				s.enqueueTimeBasedJob(JobTypeRecommendationGC, PriorityMedium, 1*time.Hour)
 			}
 		}
 	}()

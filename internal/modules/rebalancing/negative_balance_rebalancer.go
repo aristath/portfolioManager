@@ -32,7 +32,7 @@ type NegativeBalanceRebalancer struct {
 	settingsRepo            *settings.Repository
 	currencyExchangeService *services.CurrencyExchangeService
 	tradeExecutionService   *services.TradeExecutionService
-	recommendationRepo      *planning.RecommendationRepository
+	recommendationRepo      planning.RecommendationRepositoryInterface // Interface - can be DB or in-memory
 }
 
 // NewNegativeBalanceRebalancer creates a new negative balance rebalancer
@@ -45,7 +45,7 @@ func NewNegativeBalanceRebalancer(
 	settingsRepo *settings.Repository,
 	currencyExchangeService *services.CurrencyExchangeService,
 	tradeExecutionService *services.TradeExecutionService,
-	recommendationRepo *planning.RecommendationRepository,
+	recommendationRepo planning.RecommendationRepositoryInterface, // Interface - can be DB or in-memory
 ) *NegativeBalanceRebalancer {
 	return &NegativeBalanceRebalancer{
 		log:                     log.With().Str("service", "negative_balance_rebalancer").Logger(),

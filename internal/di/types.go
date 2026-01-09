@@ -62,9 +62,9 @@ type Container struct {
 	AllocRepo          *allocation.Repository
 	SettingsRepo       *settings.Repository
 	CashFlowsRepo      *cash_flows.Repository
-	RecommendationRepo *planning.RecommendationRepository
+	RecommendationRepo planning.RecommendationRepositoryInterface // Interface - can be DB or in-memory
 	PlannerConfigRepo  *planningrepo.ConfigRepository
-	PlannerRepo        *planningrepo.PlannerRepository
+	PlannerRepo        planningrepo.PlannerRepositoryInterface // Interface - can be DB or in-memory
 	GroupingRepo       *allocation.GroupingRepository
 	HistoryDBClient    *universe.HistoryDB
 
@@ -178,6 +178,7 @@ type JobInstances struct {
 
 	// Reliability jobs
 	HistoryCleanup     scheduler.Job
+	RecommendationGC   scheduler.Job
 	HourlyBackup       scheduler.Job
 	DailyBackup        scheduler.Job
 	DailyMaintenance   scheduler.Job

@@ -56,7 +56,7 @@ func TestInitializeServices(t *testing.T) {
 	container.ConfigDB.Close()
 	container.LedgerDB.Close()
 	container.PortfolioDB.Close()
-	container.AgentsDB.Close()
+	// container.AgentsDB.Close() // AgentsDB removed - sequences/evaluations now in-memory
 	container.HistoryDB.Close()
 	container.CacheDB.Close()
 }
@@ -94,7 +94,7 @@ func TestInitializeServices_DependencyOrder(t *testing.T) {
 	container.ConfigDB.Close()
 	container.LedgerDB.Close()
 	container.PortfolioDB.Close()
-	container.AgentsDB.Close()
+	// container.AgentsDB.Close() // AgentsDB removed - sequences/evaluations now in-memory
 	container.HistoryDB.Close()
 	container.CacheDB.Close()
 }

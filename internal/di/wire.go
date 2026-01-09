@@ -31,7 +31,7 @@ func Wire(cfg *config.Config, log zerolog.Logger, displayManager *display.StateM
 		container.ConfigDB.Close()
 		container.LedgerDB.Close()
 		container.PortfolioDB.Close()
-		container.AgentsDB.Close()
+		// container.AgentsDB.Close() // AgentsDB removed - sequences/evaluations now in-memory
 		container.HistoryDB.Close()
 		container.CacheDB.Close()
 		return nil, nil, fmt.Errorf("failed to initialize repositories: %w", err)
@@ -44,7 +44,7 @@ func Wire(cfg *config.Config, log zerolog.Logger, displayManager *display.StateM
 		container.ConfigDB.Close()
 		container.LedgerDB.Close()
 		container.PortfolioDB.Close()
-		container.AgentsDB.Close()
+		// container.AgentsDB.Close() // AgentsDB removed - sequences/evaluations now in-memory
 		container.HistoryDB.Close()
 		container.CacheDB.Close()
 		return nil, nil, fmt.Errorf("failed to initialize services: %w", err)
@@ -58,7 +58,7 @@ func Wire(cfg *config.Config, log zerolog.Logger, displayManager *display.StateM
 		container.ConfigDB.Close()
 		container.LedgerDB.Close()
 		container.PortfolioDB.Close()
-		container.AgentsDB.Close()
+		// container.AgentsDB.Close() // AgentsDB removed - sequences/evaluations now in-memory
 		container.HistoryDB.Close()
 		container.CacheDB.Close()
 		return nil, nil, fmt.Errorf("failed to register jobs: %w", err)

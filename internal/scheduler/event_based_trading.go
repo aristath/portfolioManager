@@ -15,7 +15,7 @@ import (
 // to complete, then executes the recommended trades (one at a time with 15-min throttle)
 type EventBasedTradingJob struct {
 	log                zerolog.Logger
-	recommendationRepo *planning.RecommendationRepository
+	recommendationRepo planning.RecommendationRepositoryInterface // Interface - can be DB or in-memory
 	tradingService     *trading.TradingService
 	eventManager       EventManagerInterface
 
@@ -28,7 +28,7 @@ type EventBasedTradingJob struct {
 // EventBasedTradingConfig holds configuration for event-based trading job
 type EventBasedTradingConfig struct {
 	Log                zerolog.Logger
-	RecommendationRepo *planning.RecommendationRepository
+	RecommendationRepo planning.RecommendationRepositoryInterface // Interface - can be DB or in-memory
 	TradingService     *trading.TradingService
 	EventManager       EventManagerInterface
 }

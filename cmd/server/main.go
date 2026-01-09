@@ -79,7 +79,7 @@ func main() {
 	defer container.ConfigDB.Close()
 	defer container.LedgerDB.Close()
 	defer container.PortfolioDB.Close()
-	defer container.AgentsDB.Close()
+	// AgentsDB removed - sequences/evaluations now in-memory
 	defer container.HistoryDB.Close()
 	defer container.CacheDB.Close()
 
@@ -148,7 +148,7 @@ func main() {
 		ConfigDB:           container.ConfigDB,
 		LedgerDB:           container.LedgerDB,
 		PortfolioDB:        container.PortfolioDB,
-		AgentsDB:           container.AgentsDB,
+		AgentsDB:           nil, // AgentsDB removed - sequences/evaluations now in-memory
 		HistoryDB:          container.HistoryDB,
 		CacheDB:            container.CacheDB,
 		Config:             cfg,

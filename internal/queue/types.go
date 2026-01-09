@@ -23,6 +23,7 @@ const (
 	JobTypeFormulaDiscovery   JobType = "formula_discovery"
 	JobTypeAdaptiveMarket     JobType = "adaptive_market_check"
 	JobTypeHistoryCleanup     JobType = "history_cleanup"
+	JobTypeRecommendationGC   JobType = "recommendation_gc"
 	JobTypeDeployment         JobType = "deployment"
 	JobTypeR2Backup           JobType = "r2_backup"
 	JobTypeR2BackupRotation   JobType = "r2_backup_rotation"
