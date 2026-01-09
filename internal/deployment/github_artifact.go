@@ -169,12 +169,13 @@ func (g *GitHubArtifactDeployer) VerifyBinaryArchitecture(binaryPath string) err
 
 	fileOutput := strings.ToLower(string(output))
 
-	// Check for linux and arm64/aarch64
-	hasLinux := strings.Contains(fileOutput, "linux")
+	// Check for ELF (Linux binary format) and arm64/aarch64
+	// ELF binaries don't contain the word "linux" in file output - ELF itself indicates Linux
+	hasELF := strings.Contains(fileOutput, "elf")
 	hasARM64 := strings.Contains(fileOutput, "arm64") || strings.Contains(fileOutput, "aarch64")
 
-	if !hasLinux {
-		return fmt.Errorf("binary is not built for Linux (detected: %s)", strings.TrimSpace(string(output)))
+	if !hasELF {
+		return fmt.Errorf("binary is not an ELF binary (Linux format) (detected: %s)", strings.TrimSpace(string(output)))
 	}
 
 	if !hasARM64 {
