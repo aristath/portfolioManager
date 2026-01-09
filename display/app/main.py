@@ -5,10 +5,57 @@ from arduino.app_utils import App, Bridge, Logger
 import time
 import requests
 import json
+import os
+import struct
+import socket
 
 logger = Logger("trader-display")
 
-API_URL = "http://localhost:8001"
+
+def get_host_ip():
+    """Get the host IP address to connect to Sentinel API.
+
+    Since this app runs in a Docker container, it needs to connect to the host machine.
+    This function:
+    1. Checks for SENTINEL_API_HOST environment variable
+    2. Auto-detects the Docker gateway IP from routing table
+    3. Falls back to common Docker gateway IP
+
+    Returns:
+        str: The host IP address (e.g., "172.18.0.1")
+    """
+    # Check environment variable first (allows override)
+    env_host = os.environ.get("SENTINEL_API_HOST")
+    if env_host:
+        logger.debug(f"Using SENTINEL_API_HOST from environment: {env_host}")
+        return env_host
+
+    # Try to auto-detect gateway from /proc/net/route
+    try:
+        with open("/proc/net/route") as f:
+            for line in f.readlines():
+                fields = line.strip().split()
+                if fields[1] == "00000000":  # Default route (destination 0.0.0.0)
+                    gateway_hex = fields[2]
+                    # Convert hex to IP (little-endian byte order)
+                    gateway_int = int(gateway_hex, 16)
+                    gateway_ip = socket.inet_ntoa(struct.pack("<L", gateway_int))
+                    logger.debug(f"Auto-detected Docker gateway: {gateway_ip}")
+                    return gateway_ip
+    except Exception as e:
+        logger.warning(f"Failed to auto-detect gateway: {e}")
+
+    # Fall back to common Docker gateway IP
+    fallback = "172.18.0.1"
+    logger.warning(f"Using fallback gateway IP: {fallback}")
+    return fallback
+
+
+# API URL - dynamically determined based on Docker network
+SENTINEL_HOST = get_host_ip()
+API_URL = f"http://{SENTINEL_HOST}:8001"
+
+logger.info(f"Sentinel API URL: {API_URL}")
 
 # Persistent HTTP session for connection pooling (reuses TCP connections)
 _http_session = requests.Session()
