@@ -93,11 +93,17 @@ func (m *StateMonitor) checkAndEmit() {
 	lastHash := m.lastHash
 	m.hashMutex.RUnlock()
 
-	if lastHash != "" && currentHash != lastHash {
-		m.log.Info().
-			Str("old_hash", lastHash).
-			Str("new_hash", currentHash).
-			Msg("State changed - emitting StateChanged event")
+	if lastHash == "" || currentHash != lastHash {
+		if lastHash == "" {
+			m.log.Info().
+				Str("new_hash", currentHash).
+				Msg("Initial state detected - emitting StateChanged event to bootstrap recommendations")
+		} else {
+			m.log.Info().
+				Str("old_hash", lastHash).
+				Str("new_hash", currentHash).
+				Msg("State changed - emitting StateChanged event")
+		}
 
 		// Emit StateChanged event
 		if m.eventManager != nil {
@@ -111,11 +117,5 @@ func (m *StateMonitor) checkAndEmit() {
 		m.hashMutex.Lock()
 		m.lastHash = currentHash
 		m.hashMutex.Unlock()
-	} else if lastHash == "" {
-		// First run - just set hash
-		m.hashMutex.Lock()
-		m.lastHash = currentHash
-		m.hashMutex.Unlock()
-		m.log.Debug().Str("hash", currentHash).Msg("Initial state hash set")
 	}
 }
