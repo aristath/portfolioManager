@@ -107,7 +107,7 @@ func main() {
 	}
 
 	fmt.Println("Scraping Tradernet API Documentation...")
-	fmt.Println("========================================\n")
+	fmt.Println("========================================")
 
 	client := &http.Client{
 		Timeout: 30 * time.Second,

@@ -12,7 +12,7 @@ const docsDir = "./internal/clients/tradernet/docs"
 
 func main() {
 	fmt.Println("Converting Tradernet API Documentation to Markdown...")
-	fmt.Println("====================================================\n")
+	fmt.Println("====================================================")
 
 	totalFiles := 0
 	successCount := 0

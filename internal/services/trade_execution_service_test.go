@@ -838,19 +838,6 @@ func (m *mockSettingsService) Set(key string, value interface{}) (bool, error) {
 	return true, nil
 }
 
-// Mock Security Repository for testing
-type mockSecurityRepository struct {
-	security *universe.Security
-	err      error
-}
-
-func (m *mockSecurityRepository) GetBySymbol(symbol string) (*universe.Security, error) {
-	if m.err != nil {
-		return nil, m.err
-	}
-	return m.security, nil
-}
-
 // Test Suite: Price Validation and Limit Calculation for BUY Orders
 func TestValidatePriceAndCalculateLimit_BuyOrders(t *testing.T) {
 	log := logger.New(logger.Config{Level: "error", Pretty: false})
