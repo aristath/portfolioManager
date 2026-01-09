@@ -58,18 +58,27 @@ func createTestDB(t *testing.T, name string) (*database.DB, func()) {
 func TestValidateTrade_HardFailSafe_BlocksWhenSecurityRepoUnavailable(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 
+	// Create config DB for settings service
+	configDB, cleanupConfig := createTestDB(t, "config")
+	defer cleanupConfig()
+
+	// Create settings service and set trading mode to "live" so we can test security repo fail-safe
+	settingsService := settings.NewService(settings.NewRepository(configDB.Conn(), log), log)
+	err := settingsService.Set("trading_mode", "live")
+	assert.NoError(t, err)
+
 	// Create service with nil securityRepo
 	service := &TradeSafetyService{
 		tradeRepo:          nil,
 		positionRepo:       nil,
 		securityRepo:       nil, // Security repo unavailable
-		settingsService:    nil,
+		settingsService:    settingsService,
 		marketHoursService: nil,
 		log:                log,
 	}
 
 	// HARD fail-safe should block the trade
-	err := service.ValidateTrade("AAPL", "BUY", 10.0)
+	err = service.ValidateTrade("AAPL", "BUY", 10.0)
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "security repository not available")
@@ -97,6 +106,10 @@ func TestValidateTrade_SoftFailSafe_AllowsWhenMarketHoursUnavailable(t *testing.
 	securityRepo := universe.NewSecurityRepository(universeDB.Conn(), log)
 	positionRepo := portfolio.NewPositionRepository(portfolioDB.Conn(), universeDB.Conn(), log)
 	settingsService := settings.NewService(settings.NewRepository(configDB.Conn(), log), log)
+
+	// Set trading mode to "live" so we can test market hours fail-safe
+	err := settingsService.Set("trading_mode", "live")
+	assert.NoError(t, err)
 
 	// Insert test security
 	security := universe.Security{
@@ -152,9 +165,17 @@ func TestValidateTrade_HardFailSafe_BlocksWhenTradeRepoUnavailable(t *testing.T)
 	portfolioDB, cleanupPortfolio := createTestDB(t, "portfolio")
 	defer cleanupPortfolio()
 
+	configDB, cleanupConfig := createTestDB(t, "config")
+	defer cleanupConfig()
+
 	// Create repositories
 	securityRepo := universe.NewSecurityRepository(universeDB.Conn(), log)
 	positionRepo := portfolio.NewPositionRepository(portfolioDB.Conn(), universeDB.Conn(), log)
+	settingsService := settings.NewService(settings.NewRepository(configDB.Conn(), log), log)
+
+	// Set trading mode to "live" so we can test trade repo fail-safe
+	err := settingsService.Set("trading_mode", "live")
+	assert.NoError(t, err)
 
 	// Insert test security
 	security := universe.Security{
@@ -186,7 +207,7 @@ func TestValidateTrade_HardFailSafe_BlocksWhenTradeRepoUnavailable(t *testing.T)
 		tradeRepo:          nil, // Trade repo unavailable
 		positionRepo:       positionRepo,
 		securityRepo:       securityRepo,
-		settingsService:    nil,
+		settingsService:    settingsService,
 		marketHoursService: nil,
 		log:                log,
 	}
@@ -290,6 +311,10 @@ func TestValidateTrade_BlocksInsufficientQuantity(t *testing.T) {
 	positionRepo := portfolio.NewPositionRepository(portfolioDB.Conn(), universeDB.Conn(), log)
 	settingsService := settings.NewService(settings.NewRepository(configDB.Conn(), log), log)
 
+	// Set trading mode to "live" so we can test position validation
+	err := settingsService.Set("trading_mode", "live")
+	assert.NoError(t, err)
+
 	// Insert test security
 	security := universe.Security{
 		Symbol:           "AAPL",
@@ -355,6 +380,10 @@ func TestValidateTrade_AllowsValidQuantity(t *testing.T) {
 	positionRepo := portfolio.NewPositionRepository(portfolioDB.Conn(), universeDB.Conn(), log)
 	settingsService := settings.NewService(settings.NewRepository(configDB.Conn(), log), log)
 
+	// Set trading mode to "live" so we can test position validation
+	err := settingsService.Set("trading_mode", "live")
+	assert.NoError(t, err)
+
 	// Insert test security
 	security := universe.Security{
 		Symbol:           "AAPL",
@@ -404,21 +433,29 @@ func TestValidateTrade_BlocksUnknownSecurity(t *testing.T) {
 	universeDB, cleanupUniverse := createTestDB(t, "universe")
 	defer cleanupUniverse()
 
-	// Create repository
+	configDB, cleanupConfig := createTestDB(t, "config")
+	defer cleanupConfig()
+
+	// Create repositories
 	securityRepo := universe.NewSecurityRepository(universeDB.Conn(), log)
+	settingsService := settings.NewService(settings.NewRepository(configDB.Conn(), log), log)
+
+	// Set trading mode to "live" so we can test security validation
+	err := settingsService.Set("trading_mode", "live")
+	assert.NoError(t, err)
 
 	// Create service
 	service := &TradeSafetyService{
 		tradeRepo:          nil,
 		positionRepo:       nil,
 		securityRepo:       securityRepo,
-		settingsService:    nil,
+		settingsService:    settingsService,
 		marketHoursService: nil,
 		log:                log,
 	}
 
 	// Try to trade unknown security
-	err := service.ValidateTrade("UNKNOWN", "BUY", 10.0)
+	err = service.ValidateTrade("UNKNOWN", "BUY", 10.0)
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "security not found")

@@ -3,6 +3,7 @@ package tradernet
 import (
 	"testing"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -34,7 +35,8 @@ func TestTransformPositions(t *testing.T) {
 		},
 	}
 
-	positions, err := transformPositions(sdkResult)
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+	positions, err := transformPositions(sdkResult, log)
 
 	assert.NoError(t, err)
 	assert.Len(t, positions, 2)
@@ -68,7 +70,8 @@ func TestTransformPositions_EmptyArray(t *testing.T) {
 		},
 	}
 
-	positions, err := transformPositions(sdkResult)
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+	positions, err := transformPositions(sdkResult, log)
 
 	assert.NoError(t, err)
 	assert.Len(t, positions, 0)
@@ -91,7 +94,8 @@ func TestTransformPositions_MissingFields(t *testing.T) {
 		},
 	}
 
-	positions, err := transformPositions(sdkResult)
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+	positions, err := transformPositions(sdkResult, log)
 
 	assert.NoError(t, err)
 	assert.Len(t, positions, 1)

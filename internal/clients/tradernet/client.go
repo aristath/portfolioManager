@@ -139,7 +139,10 @@ func (c *Client) GetPortfolio() ([]Position, error) {
 		return nil, fmt.Errorf("failed to get account summary: %w", err)
 	}
 
-	positions, err := transformPositions(result)
+	// DEBUG: Log raw API response for investigation
+	c.log.Debug().Interface("raw_result", result).Msg("GetPortfolio: raw API response")
+
+	positions, err := transformPositions(result, c.log)
 	if err != nil {
 		c.log.Error().Err(err).Msg("GetPortfolio: transformPositions failed")
 		return nil, fmt.Errorf("failed to transform positions: %w", err)

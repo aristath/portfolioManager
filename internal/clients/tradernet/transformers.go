@@ -1,12 +1,15 @@
 package tradernet
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/rs/zerolog"
 )
 
 // transformPositions transforms SDK AccountSummary positions to []Position
-func transformPositions(sdkResult interface{}) ([]Position, error) {
+func transformPositions(sdkResult interface{}, log zerolog.Logger) ([]Position, error) {
 	resultMap, ok := sdkResult.(map[string]interface{})
 	if !ok {
 		return nil, fmt.Errorf("invalid SDK result format: expected map[string]interface{}")
@@ -34,11 +37,42 @@ func transformPositions(sdkResult interface{}) ([]Position, error) {
 			continue
 		}
 
+		symbol := getString(posMap, "i")
+
+		// DEBUG: Log all raw fields for each position, especially TSM.US
+		// Convert posMap to JSON for readable logging
+		rawJSON, _ := json.Marshal(posMap)
+		log.Debug().
+			Str("symbol", symbol).
+			RawJSON("raw_position", rawJSON).
+			Msg("transformPositions: raw position data from API")
+
+		// Extract all quantity-related fields for analysis
+		fieldQ := getFloat64(posMap, "q")
+		fieldS := getFloat64(posMap, "s")
+		fieldFV := getFloat64(posMap, "fv")
+		fieldMarketValue := getFloat64(posMap, "market_value")
+		fieldMktPrice := getFloat64(posMap, "mkt_price")
+		fieldBalPriceA := getFloat64(posMap, "bal_price_a")
+
+		// DEBUG: Log comparison of fields for investigation
+		log.Debug().
+			Str("symbol", symbol).
+			Float64("field_q", fieldQ).
+			Float64("field_s", fieldS).
+			Float64("field_fv", fieldFV).
+			Float64("api_market_value", fieldMarketValue).
+			Float64("mkt_price", fieldMktPrice).
+			Float64("bal_price_a", fieldBalPriceA).
+			Float64("calculated_from_q", fieldQ*fieldMktPrice).
+			Float64("calculated_from_s", fieldS*fieldMktPrice).
+			Msg("transformPositions: field comparison for quantity analysis")
+
 		position := Position{
-			Symbol:        getString(posMap, "i"),
-			Quantity:      getFloat64(posMap, "q"),
-			AvgPrice:      getFloat64(posMap, "bal_price_a"),
-			CurrentPrice:  getFloat64(posMap, "mkt_price"),
+			Symbol:        symbol,
+			Quantity:      fieldQ, // SUSPECTED BUG: This might be wrong field
+			AvgPrice:      fieldBalPriceA,
+			CurrentPrice:  fieldMktPrice,
 			UnrealizedPnL: getFloat64(posMap, "profit_close"),
 			Currency:      getString(posMap, "curr"),
 			CurrencyRate:  0.0, // Will be set during portfolio sync from cache
@@ -46,7 +80,7 @@ func transformPositions(sdkResult interface{}) ([]Position, error) {
 
 		// Calculate MarketValue = Quantity * CurrentPrice
 		position.MarketValue = position.Quantity * position.CurrentPrice
-		// MarketValueEUR will be calculated by client if needed
+		// BUG: MarketValueEUR assigned without currency conversion
 		position.MarketValueEUR = position.MarketValue
 
 		positions = append(positions, position)

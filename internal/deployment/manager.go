@@ -445,6 +445,67 @@ func (m *Manager) deployGoService(config GoServiceConfig, serviceName string, ru
 		return deployment
 	}
 
+	// BOOTSTRAP: Check if a binary already exists in .tmp from a previous failed deployment
+	// This handles the chicken-and-egg problem where old code downloaded new binary but couldn't deploy it
+	isSelfDeployment := serviceName == "sentinel"
+	if isSelfDeployment {
+		existingBinary := filepath.Join(tempDir, m.githubArtifactDeployer.artifactName)
+		if info, err := os.Stat(existingBinary); err == nil && !info.IsDir() {
+			m.log.Info().
+				Str("service", serviceName).
+				Str("existing_binary", existingBinary).
+				Msg("Found existing downloaded binary - using self-deployment mechanism for bootstrap")
+
+			// Verify architecture before deploying
+			if err := m.githubArtifactDeployer.VerifyBinaryArchitecture(existingBinary); err != nil {
+				m.log.Warn().
+					Err(err).
+					Str("binary", existingBinary).
+					Msg("Existing binary failed architecture verification - will download fresh")
+				os.Remove(existingBinary)
+			} else {
+				// Use self-deployment mechanism to deploy this binary
+				m.log.Info().
+					Str("service", serviceName).
+					Str("binary_path", existingBinary).
+					Msg("Deploying existing binary using self-deployment mechanism")
+
+				// Deploy binary (atomic swap) while service is still running
+				if err := m.binaryDeployer.DeployBinary(existingBinary, m.config.DeployDir, config.BinaryName, true); err != nil {
+					deployment.Error = fmt.Sprintf("bootstrap deployment failed: %v", err)
+					m.log.Error().
+						Err(err).
+						Str("service", serviceName).
+						Msg("Failed to deploy existing binary")
+					return deployment
+				}
+
+				m.log.Info().
+					Str("service", serviceName).
+					Str("binary_path", filepath.Join(m.config.DeployDir, config.BinaryName)).
+					Msg("Bootstrap: Binary replaced successfully - will now exit for systemd restart")
+
+				// Clean up temp binary
+				os.Remove(existingBinary)
+
+				// Exit gracefully to trigger systemd restart with new binary
+				m.log.Info().
+					Str("service", serviceName).
+					Msg("Bootstrap: Exiting process to allow systemd restart with new binary (Restart=always)")
+
+				// Give logs time to flush
+				time.Sleep(100 * time.Millisecond)
+
+				// Exit with success code - systemd will restart us
+				os.Exit(0)
+
+				// Unreachable
+				deployment.Success = true
+				return deployment
+			}
+		}
+	}
+
 	// GitHub artifact deployment is REQUIRED - no fallback to on-device building
 	// This ensures we always use pre-built linux/arm64 binaries from GitHub Actions
 	if m.githubArtifactDeployer == nil {
@@ -488,7 +549,7 @@ func (m *Manager) deployGoService(config GoServiceConfig, serviceName string, ru
 	// SELF-DEPLOYMENT: Special handling when Sentinel updates itself
 	// We can't use systemctl/dbus from within a NoNewPrivileges service
 	// Instead: replace binary, mark deployed, exit gracefully → systemd restarts us (Restart=always)
-	isSelfDeployment := serviceName == "sentinel"
+	// (isSelfDeployment already declared in bootstrap section above)
 
 	if isSelfDeployment {
 		m.log.Info().
