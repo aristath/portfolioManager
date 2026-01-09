@@ -163,10 +163,10 @@ var SettingDefaults = map[string]interface{}{
 	"limit_order_buffer_percent": 0.05, // 5% buffer for limit orders (buy up to 5% above Yahoo price, sell down to 5% below)
 
 	// Order Book Analysis settings
-	"enable_order_book_analysis":    1.0,  // 1.0 = enabled, 0.0 = disabled (fallback to Yahoo-only)
-	"min_liquidity_multiple":        2.0,  // Required liquidity as multiple of trade size (2.0 = need 2x quantity)
-	"order_book_depth_levels":       5.0,  // Number of order book levels to check for liquidity
-	"price_discrepancy_threshold":   0.50, // Max allowed price difference between order book and Yahoo (0.50 = 50%, asymmetric)
+	"enable_order_book_analysis":  1.0,  // 1.0 = enabled, 0.0 = disabled (fallback to Yahoo-only)
+	"min_liquidity_multiple":      2.0,  // Required liquidity as multiple of trade size (2.0 = need 2x quantity)
+	"order_book_depth_levels":     5.0,  // Number of order book levels to check for liquidity
+	"price_discrepancy_threshold": 0.50, // Max allowed price difference between order book and Yahoo (0.50 = 50%, asymmetric)
 }
 
 // StringSettings defines which settings should be treated as strings rather than floats
@@ -189,11 +189,11 @@ var StringSettings = map[string]bool{
 
 // SettingDescriptions holds human-readable descriptions for all settings
 var SettingDescriptions = map[string]string{
-	"limit_order_buffer_percent":      "Buffer percentage for limit orders (5% = buy up to 5% above Yahoo price, sell down to 5% below)",
-	"enable_order_book_analysis":      "Enable order book analysis (1.0 = yes, 0.0 = no/Yahoo-only fallback)",
-	"min_liquidity_multiple":          "Required liquidity as multiple of trade size (2.0 = need 2x quantity available)",
-	"order_book_depth_levels":         "Number of order book levels to check for liquidity (default 5)",
-	"price_discrepancy_threshold":     "Max allowed price difference between order book and Yahoo (0.50 = 50%, asymmetric: blocks overpaying on BUY, underselling on SELL)",
+	"limit_order_buffer_percent":  "Buffer percentage for limit orders (5% = buy up to 5% above Yahoo price, sell down to 5% below)",
+	"enable_order_book_analysis":  "Enable order book analysis (1.0 = yes, 0.0 = no/Yahoo-only fallback)",
+	"min_liquidity_multiple":      "Required liquidity as multiple of trade size (2.0 = need 2x quantity available)",
+	"order_book_depth_levels":     "Number of order book levels to check for liquidity (default 5)",
+	"price_discrepancy_threshold": "Max allowed price difference between order book and Yahoo (0.50 = 50%, asymmetric: blocks overpaying on BUY, underselling on SELL)",
 }
 
 // SettingUpdate represents a setting value update request

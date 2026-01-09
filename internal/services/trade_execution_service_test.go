@@ -1441,8 +1441,8 @@ func TestCalculateCommission_ConfigurableFees(t *testing.T) {
 
 	// Mock settings service with custom fees
 	mockSettings := newMockSettingsService()
-	mockSettings.Set("transaction_cost_fixed", 3.0)       // Custom: 3 EUR instead of 2
-	mockSettings.Set("transaction_cost_percent", 0.0025)  // Custom: 0.25% (as decimal) instead of 0.2%
+	mockSettings.Set("transaction_cost_fixed", 3.0)      // Custom: 3 EUR instead of 2
+	mockSettings.Set("transaction_cost_percent", 0.0025) // Custom: 0.25% (as decimal) instead of 0.2%
 
 	exchangeService := newMockCurrencyExchangeService(map[string]float64{})
 
@@ -1494,8 +1494,8 @@ func TestCalculateCommission_ConfigurableFees_USD(t *testing.T) {
 
 	// Mock settings service with custom fees
 	mockSettings := newMockSettingsService()
-	mockSettings.Set("transaction_cost_fixed", 5.0)      // Custom: 5 EUR
-	mockSettings.Set("transaction_cost_percent", 0.003)  // Custom: 0.3% (as decimal)
+	mockSettings.Set("transaction_cost_fixed", 5.0)     // Custom: 5 EUR
+	mockSettings.Set("transaction_cost_percent", 0.003) // Custom: 0.3% (as decimal)
 
 	// EUR:USD rate = 1.1 (1 EUR = 1.1 USD)
 	exchangeService := newMockCurrencyExchangeService(map[string]float64{

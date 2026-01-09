@@ -84,10 +84,10 @@ func TestConvertPricesToEUR_Mixed(t *testing.T) {
 
 	result := service.ConvertPricesToEUR(prices, securities)
 
-	assert.Equal(t, 42.5, result["VWS.AS"])            // EUR unchanged
-	assert.InDelta(t, 139.5, result["AAPL"], 0.01)     // USD converted
-	assert.InDelta(t, 9.9, result["0700.HK"], 0.01)    // HKD converted
-	assert.InDelta(t, 29.25, result["BARC.L"], 0.01)   // GBP converted
+	assert.Equal(t, 42.5, result["VWS.AS"])          // EUR unchanged
+	assert.InDelta(t, 139.5, result["AAPL"], 0.01)   // USD converted
+	assert.InDelta(t, 9.9, result["0700.HK"], 0.01)  // HKD converted
+	assert.InDelta(t, 29.25, result["BARC.L"], 0.01) // GBP converted
 }
 
 func TestConvertPricesToEUR_MissingRate(t *testing.T) {

@@ -61,9 +61,9 @@ func TestBuildOpportunityContext_Integration_EURConversion(t *testing.T) {
 
 	// Mock exchange rates
 	exchangeRates := map[string]float64{
-		"USD:EUR": 0.93,  // 1 USD = 0.93 EUR
-		"HKD:EUR": 0.11,  // 1 HKD = 0.11 EUR (497.40 HKD = ~54.71 EUR)
-		"GBP:EUR": 1.17,  // 1 GBP = 1.17 EUR
+		"USD:EUR": 0.93, // 1 USD = 0.93 EUR
+		"HKD:EUR": 0.11, // 1 HKD = 0.11 EUR (497.40 HKD = ~54.71 EUR)
+		"GBP:EUR": 1.17, // 1 GBP = 1.17 EUR
 	}
 
 	// Mock price client that returns native currency prices

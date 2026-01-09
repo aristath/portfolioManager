@@ -70,18 +70,18 @@ type TradeRecommendation struct {
 //
 // Faithful translation from Python: app/modules/trading/services/trade_execution_service.py
 type TradeExecutionService struct {
-	brokerClient    domain.BrokerClient
-	tradeRepo       TradeRepositoryInterface
-	positionRepo    *portfolio.PositionRepository
-	cashManager     domain.CashManager
-	exchangeService domain.CurrencyExchangeServiceInterface
+	brokerClient     domain.BrokerClient
+	tradeRepo        TradeRepositoryInterface
+	positionRepo     *portfolio.PositionRepository
+	cashManager      domain.CashManager
+	exchangeService  domain.CurrencyExchangeServiceInterface
 	eventManager     *events.Manager
 	settingsService  SettingsServiceInterface     // For configuration (fees, price age, etc.)
 	orderBookService OrderBookServiceInterface    // For order book analysis (liquidity validation, optimal limit pricing)
 	yahooClient      yahoo.FullClientInterface    // For fetching fresh prices
-	historyDB       *sql.DB                      // For storing updated prices
-	securityRepo    *universe.SecurityRepository // For ISIN lookup
-	log             zerolog.Logger
+	historyDB        *sql.DB                      // For storing updated prices
+	securityRepo     *universe.SecurityRepository // For ISIN lookup
+	log              zerolog.Logger
 }
 
 // ExecuteResult represents the result of executing a trade
@@ -107,18 +107,18 @@ func NewTradeExecutionService(
 	log zerolog.Logger,
 ) *TradeExecutionService {
 	return &TradeExecutionService{
-		brokerClient:    brokerClient,
-		tradeRepo:       tradeRepo,
-		positionRepo:    positionRepo,
-		cashManager:     cashManager,
+		brokerClient:     brokerClient,
+		tradeRepo:        tradeRepo,
+		positionRepo:     positionRepo,
+		cashManager:      cashManager,
 		exchangeService:  exchangeService,
 		eventManager:     eventManager,
 		settingsService:  settingsService,
 		orderBookService: orderBookService,
 		yahooClient:      yahooClient,
-		historyDB:       historyDB,
-		securityRepo:    securityRepo,
-		log:             log.With().Str("service", "trade_execution").Logger(),
+		historyDB:        historyDB,
+		securityRepo:     securityRepo,
+		log:              log.With().Str("service", "trade_execution").Logger(),
 	}
 }
 
