@@ -11,7 +11,7 @@ import './styles/terminal.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <MantineProvider theme={theme} defaultColorScheme="dark">
+    <MantineProvider theme={theme} forceColorScheme="dark">
       <Notifications />
       <App />
     </MantineProvider>

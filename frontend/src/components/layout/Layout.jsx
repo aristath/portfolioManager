@@ -18,7 +18,6 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { useTradesStore } from '../../stores/tradesStore';
 import { useLogsStore } from '../../stores/logsStore';
 import { useNotifications } from '../../hooks/useNotifications';
-import { ColorSchemeToggle } from './ColorSchemeToggle';
 
 export function Layout() {
   // Display notifications from app store
@@ -101,9 +100,6 @@ export function Layout() {
       <SecurityChartModal />
       <SettingsModal />
       <PlannerManagementModal />
-
-      {/* Color Scheme Toggle */}
-      <ColorSchemeToggle />
     </div>
   );
 }
