@@ -8,7 +8,6 @@ import (
 	"github.com/aristath/sentinel/internal/clients/yahoo"
 	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/modules/trading"
-	"github.com/aristath/sentinel/internal/modules/universe"
 	"github.com/aristath/sentinel/pkg/logger"
 	"github.com/stretchr/testify/assert"
 )
