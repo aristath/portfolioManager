@@ -526,6 +526,9 @@ func RegisterJobs(container *Container, cfg *config.Config, displayManager *disp
 			container.JobRegistry.Register(queue.JobTypeDeployment, queue.JobToHandler(deploymentJob))
 			instances.Deployment = deploymentJob
 
+			// Configure scheduler with deployment interval
+			container.TimeScheduler.SetDeploymentInterval(deploymentInterval)
+
 			log.Info().
 				Float64("interval_minutes", deploymentIntervalMinutes).
 				Msg("Deployment job registered (auto-deploy enabled)")

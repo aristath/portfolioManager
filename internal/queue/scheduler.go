@@ -16,6 +16,7 @@ type MarketStateDetectorInterface interface {
 type Scheduler struct {
 	manager             *Manager
 	marketStateDetector MarketStateDetectorInterface
+	deploymentInterval  time.Duration // Configurable deployment check interval
 	stop                chan struct{}
 	log                 zerolog.Logger
 	stopped             bool
@@ -27,9 +28,10 @@ type Scheduler struct {
 // NewScheduler creates a new time-based scheduler
 func NewScheduler(manager *Manager) *Scheduler {
 	return &Scheduler{
-		manager: manager,
-		stop:    make(chan struct{}),
-		log:     zerolog.Nop(),
+		manager:            manager,
+		deploymentInterval: 5 * time.Minute, // Default interval
+		stop:               make(chan struct{}),
+		log:                zerolog.Nop(),
 	}
 }
 
@@ -41,6 +43,14 @@ func (s *Scheduler) SetMarketStateDetector(detector MarketStateDetectorInterface
 // SetLogger sets the logger for the scheduler
 func (s *Scheduler) SetLogger(log zerolog.Logger) {
 	s.log = log.With().Str("component", "time_scheduler").Logger()
+}
+
+// SetDeploymentInterval sets the deployment check interval
+func (s *Scheduler) SetDeploymentInterval(interval time.Duration) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.deploymentInterval = interval
+	s.log.Info().Dur("interval", interval).Msg("Deployment interval configured")
 }
 
 // Start starts the scheduler
@@ -76,7 +86,10 @@ func (s *Scheduler) Start() {
 				return
 			case <-deploymentTicker.C:
 				// Enqueue deployment check (interval is checked by queue manager)
-				s.enqueueTimeBasedJob(JobTypeDeployment, PriorityMedium, 5*time.Minute)
+				s.mu.Lock()
+				interval := s.deploymentInterval
+				s.mu.Unlock()
+				s.enqueueTimeBasedJob(JobTypeDeployment, PriorityMedium, interval)
 			}
 		}
 	}()
