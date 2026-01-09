@@ -445,6 +445,25 @@ export function SettingsModal() {
 
         <Tabs.Panel value="display" p="md">
           <Stack gap="md">
+            {/* Display Mode */}
+            <Paper p="md" withBorder>
+              <Text size="sm" fw={500} mb="xs" tt="uppercase">Display Mode</Text>
+              <Text size="xs" c="dimmed" mb="md">
+                Choose what to show on the LED matrix display.
+              </Text>
+              <Select
+                label="Display Mode"
+                value={getSetting('display_mode', 'STATS') || 'STATS'}
+                onChange={(val) => handleUpdateSetting('display_mode', val)}
+                data={[
+                  { value: 'STATS', label: 'System Stats (CPU/RAM visualization)' },
+                  { value: 'TICKER', label: 'Ticker (Portfolio value, cash, actions)' },
+                  { value: 'PORTFOLIO', label: 'Portfolio (Visual holdings representation)' }
+                ]}
+                description="Select which information to display on the LED matrix"
+              />
+            </Paper>
+
             {/* LED Matrix */}
             <Paper p="md" withBorder>
               <Text size="sm" fw={500} mb="xs" tt="uppercase">LED Matrix</Text>
