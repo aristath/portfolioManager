@@ -21,13 +21,13 @@
 
 **Description of request parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| cmd |   | string | Request execution command 
-| params |   | array | Request execution parameters 
-| params | userId | string | User ID. Optional parameter. Used to retrieve the candlestick history data for a registered user. For a GET request only API v1 
-| params | id | string | ticker name. You can specify multiple tickers separated by commas 
-| params | count | signed int | the number of candlesticks that should be received in addition to the specified interval, if not required - the value should be -1. (for example, if you want to get all candlesticks for the year + 100 candlesticks before the interval, the parameter should be -100) 
+| cmd |   | string | Request execution command
+| params |   | array | Request execution parameters
+| params | userId | string | User ID. Optional parameter. Used to retrieve the candlestick history data for a registered user. For a GET request only API v1
+| params | id | string | ticker name. You can specify multiple tickers separated by commas
+| params | count | signed int | the number of candlesticks that should be received in addition to the specified interval, if not required - the value should be -1. (for example, if you want to get all candlesticks for the year + 100 candlesticks before the interval, the parameter should be -100)
 | params | timeframe | int #### Response:
 
 Getting a response if successful.
@@ -124,14 +124,14 @@ We get an answer in case of failure
 
 **Description of response parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| HLOC |   | Object.<string, number[][]> | Candlestick data: key – ticker name, value - array of arrays containing the following four elements [high, low, open, close] 
-| vl |   | Object.<string, number[][]> | Candlestick volume data: key – ticker name, value - array of arrays containing numbers which are equal to candlesticks volumes 
-| xSeries |   | Object.<Timestamps, number[][]> | Candlestick time data in seconds (!!!). The key is the name of the Ticker, the value is an array of numbers corresponding to the candlestick time 
-| maxSeries |   | Object.<Timestamp, number> | Timestamp of the most recent candlestick rendering 
-| info |   | array | Information about the requested ticker 
-| took |   | float | Calculating the execution time of a request 
+| HLOC |   | Object.<string, number[][]> | Candlestick data: key – ticker name, value - array of arrays containing the following four elements [high, low, open, close]
+| vl |   | Object.<string, number[][]> | Candlestick volume data: key – ticker name, value - array of arrays containing numbers which are equal to candlesticks volumes
+| xSeries |   | Object.<Timestamps, number[][]> | Candlestick time data in seconds (!!!). The key is the name of the Ticker, the value is an array of numbers corresponding to the candlestick time
+| maxSeries |   | Object.<Timestamp, number> | Timestamp of the most recent candlestick rendering
+| info |   | array | Information about the requested ticker
+| took |   | float | Calculating the execution time of a request
 
 ### Examples of using
 
@@ -220,4 +220,3 @@ params_ = {
 
 print(res.sendRequest(cmd_, params_).decode("utf-8"))
 ```
-

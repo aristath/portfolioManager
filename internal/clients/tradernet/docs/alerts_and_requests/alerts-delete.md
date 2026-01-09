@@ -18,33 +18,33 @@
 
 **Description of request parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| cmd |   | String | Name of the method invoked 
-| params |   | array | Parameter array 
-| params | id | number | unique alert ID 
-| params | del | boolean | Alert removal feature 
-| params | quote_type | string |   
-| params | notification_type | string |   
+| cmd |   | String | Name of the method invoked
+| params |   | array | Parameter array
+| params | id | number | unique alert ID
+| params | del | boolean | Alert removal feature
+| params | quote_type | string |
+| params | notification_type | string |
 
 **Price type description:**
 
-| Price type | Description 
+| Price type | Description
 |---|---|---|---|
-| ltp | last trade price 
-| bap | the best bid price 
-| bbp | the best ask price 
-| op | opening price 
-| pp | closing price 
+| ltp | last trade price
+| bap | the best bid price
+| bbp | the best ask price
+| op | opening price
+| pp | closing price
 
 **Notification type description:**
 
-| type of notification | Description 
+| type of notification | Description
 |---|---|---|---|
-| email | by mail only 
-| sms | only via SMS 
-| push | push notification 
-| all | via SMS and email 
+| email | by mail only
+| sms | only via SMS
+| push | push notification
+| all | via SMS and email
 
 #### Response:
 
@@ -56,9 +56,9 @@
 
 **Description of response parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| added |   | boolean | Deliverable 
+| added |   | boolean | Deliverable
 
 ### Error examples
 
@@ -112,4 +112,3 @@ function removePriceAlert(id, callback) {
 
 removePriceAlert("247", console.info.bind(console));
 ```
-

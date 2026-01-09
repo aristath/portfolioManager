@@ -17,13 +17,13 @@
 
 **Description of request parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| cmd |   | string | Request execution command 
-| SID |   | string | SID received during the user's authorization 
-| params |   | array | Request execution parameters 
-| params | from | datetime | Request execution parameters. Period start date, format ISO 8601 YYYY-MM-DD\Thh:mm:ss 
-| params | till | datetime | Request execution parameters. Period end date, format ISO 8601 YYYY-MM-DD\Thh:mm:ss 
+| cmd |   | string | Request execution command
+| SID |   | string | SID received during the user's authorization
+| params |   | array | Request execution parameters
+| params | from | datetime | Request execution parameters. Period start date, format ISO 8601 YYYY-MM-DD\Thh:mm:ss
+| params | till | datetime | Request execution parameters. Period end date, format ISO 8601 YYYY-MM-DD\Thh:mm:ss
 
 #### Response:
 
@@ -110,11 +110,11 @@ We get an answer in case of failure
 
 **Description of response parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| orders |   | array | Request list. 
-| orders | key | string | Key (login) of the user. 
-| orders | order | array|null | Request from the list of requests. 
+| orders |   | array | Request list.
+| orders | key | string | Key (login) of the user.
+| orders | order | array|null | Request from the list of requests.
 
 ### Examples of using
 
@@ -192,4 +192,3 @@ Returns
 result = trade.get_historical(start=datetime(2023, 1, 1))
 print(result)
 ```
-

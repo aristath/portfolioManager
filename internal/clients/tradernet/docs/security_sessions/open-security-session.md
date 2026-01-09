@@ -16,11 +16,11 @@ Method for the security code request via SMS
 
 **Description of request parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| cmd |   | string | Request execution command 
-| SID |   | string | SID received during the user's authorization 
-| params |   | array | Request execution parameters 
+| cmd |   | string | Request execution command
+| SID |   | string | SID received during the user's authorization
+| params |   | array | Request execution parameters
 
 #### Response:
 
@@ -55,19 +55,19 @@ We get an answer in case of failure
 
 **Description of response parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| channel |   | string|null |   
-| delay |   | int|null | A repeated request can be made in, s 
-| isRepeatAvailable |   | bool | Resend attempts available 
-| isInputAvailable |   | bool | Code entry attempts available 
-| isSent |   | bool | Code successfully sent to the client 
-| texts |   | object | Additional information on security session opening 
-| texts | sent | string|null | Code sent to the client to 
-| texts | error | string|null | Error description 
-| texts | repeat | string|null | Resend button text 
-| texts | footer | string|null | Text with link at the bottom 
-| texts | link | string|null | Link 
+| channel |   | string|null |
+| delay |   | int|null | A repeated request can be made in, s
+| isRepeatAvailable |   | bool | Resend attempts available
+| isInputAvailable |   | bool | Code entry attempts available
+| isSent |   | bool | Code successfully sent to the client
+| texts |   | object | Additional information on security session opening
+| texts | sent | string|null | Code sent to the client to
+| texts | error | string|null | Error description
+| texts | repeat | string|null | Resend button text
+| texts | footer | string|null | Text with link at the bottom
+| texts | link | string|null | Link
 
 ### Examples of using
 
@@ -121,12 +121,12 @@ Method of sending a message with a secret code from the SMS to open a security s
 
 **Description of request parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| cmd |   | string | Request execution command 
-| SID |   | string | SID received during the user's authorization 
-| params |   | array | Request execution parameters 
-| params | validationKey | string |   
+| cmd |   | string | Request execution command
+| SID |   | string | SID received during the user's authorization
+| params |   | array | Request execution parameters
+| params | validationKey | string |
 
 #### Response:
 
@@ -170,25 +170,25 @@ We get an answer in case of failure
 
 **Description of response parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| success |   | bool | Session successfully opened. 
-| isAttemptAvailable |   | bool | Attempted access 
-| sessions |   | object[]|null | Security session information 
-| sessions | id | int | Security Session ID 
-| sessions | safety_type_id | int |   
-| sessions | owner_login | string | Login of the account owner 
-| sessions | user_login | string | Login of the client that opened the session 
-| sessions | key_current | string | Unique security session key 
-| sessions | start_datetime | string | Security session start date in UTCZ format 
-| sessions | expire_datetime | string | Security session end date in UTCZ format 
-| sessions | expire | int |   
-| sessions | ip | string | IP address hash 
-| sessions | ip_client | string | Client IP address 
-| texts |   | object | Additional information on security session opening 
-| texts | error | string|null | Error description 
-| texts | footer | string|null | Text with link at the bottom 
-| texts | link | string|null | Link 
+| success |   | bool | Session successfully opened.
+| isAttemptAvailable |   | bool | Attempted access
+| sessions |   | object[]|null | Security session information
+| sessions | id | int | Security Session ID
+| sessions | safety_type_id | int |
+| sessions | owner_login | string | Login of the account owner
+| sessions | user_login | string | Login of the client that opened the session
+| sessions | key_current | string | Unique security session key
+| sessions | start_datetime | string | Security session start date in UTCZ format
+| sessions | expire_datetime | string | Security session end date in UTCZ format
+| sessions | expire | int |
+| sessions | ip | string | IP address hash
+| sessions | ip_client | string | Client IP address
+| texts |   | object | Additional information on security session opening
+| texts | error | string|null | Error description
+| texts | footer | string|null | Text with link at the bottom
+| texts | link | string|null | Link
 
 ### Examples of using
 
@@ -223,4 +223,3 @@ checkSecuritySessionCode(function(json){
     console.log(json);
 });
 ```
-

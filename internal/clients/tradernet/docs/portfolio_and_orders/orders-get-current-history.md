@@ -17,11 +17,11 @@ The method command getNotifyOrderJson
 
 **Description of request parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| cmd |   | string | Request execution command 
-| params |   | array | Request execution parameters 
-| params | active_only | int | 1/0 We show only active orders. Optional parameter 
+| cmd |   | string | Request execution command
+| params |   | array | Request execution parameters
+| params | active_only | int | 1/0 We show only active orders. Optional parameter
 
 #### Response:
 
@@ -136,9 +136,9 @@ We get an answer in case of failure
 
 **Description of response parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| orders |   | array | List of orders 
+| orders |   | array | List of orders
 
 * Order statuses are available at «Orders statuses »
 
@@ -209,4 +209,3 @@ Returns
 result = trade.get_placed()
 print(result)
 ```
-

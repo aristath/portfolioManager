@@ -18,15 +18,15 @@
 
 **Description of request parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| cmd |   | string | Request execution command 
-| SID |   | string | Session ID received during authorization 
-| params |   | array | Request execution parameters 
+| cmd |   | string | Request execution command
+| SID |   | string | Session ID received during authorization
+| params |   | array | Request execution parameters
 
-| params | id | integer | List ID 
-| params | ticker | string | Ticker 
-| params | index | integer | Ticker item number 
+| params | id | integer | List ID
+| params | ticker | string | Ticker
+| params | index | integer | Ticker item number
 
 #### Response:
 
@@ -101,4 +101,3 @@ addStockListTicker(function(json){
     console.log(json);
 });
 ```
-

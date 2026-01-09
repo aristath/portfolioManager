@@ -18,13 +18,13 @@
 
 **Description of request parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| cmd |   | string | Request execution command 
-| params |   | array | Request execution parameters 
-| params | base_currency | string | Base currency 
-| params | currencies | array | List of currencies, for which the rate is retrieved 
-| params | date | string|null | Date, as at which the rate is requested. Optional parameter. If missing, the current date shall be used 
+| cmd |   | string | Request execution command
+| params |   | array | Request execution parameters
+| params | base_currency | string | Base currency
+| params | currencies | array | List of currencies, for which the rate is retrieved
+| params | date | string|null | Date, as at which the rate is requested. Optional parameter. If missing, the current date shall be used
 
 #### Response:
 
@@ -51,9 +51,9 @@ We get an answer in case of failure
 
 **Description of response parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| rates |   | array | List of exchange rates to the base currency 
+| rates |   | array | List of exchange rates to the base currency
 
 ### Examples of using
 
@@ -84,4 +84,3 @@ getCrossRatesForDate(function(json){
     console.log(json);
 });
 ```
-

@@ -2,9 +2,8 @@
 
 Details for passport_type_id and passport_type fields can be viewed on the page «Types of documents for the application»
 
-| Name | Mandatory 
+| Name | Mandatory
 |---|---|---|---|
-| {{:key}} | {{:prop.name}} | {{:~root.getRequiredStatus(prop)}} 
+| {{:key}} | {{:prop.name}} | {{:~root.getRequiredStatus(prop)}}
 
-### 
-
+###

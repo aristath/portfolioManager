@@ -13,10 +13,10 @@
 
 **Description of request parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| cmd |   | string | Request execution command 
-| SID |   | string | Session ID received during authorization 
+| cmd |   | string | Request execution command
+| SID |   | string | Session ID received during authorization
 
 #### Response:
 
@@ -107,4 +107,3 @@ getUserStockLists(function(json){
     console.log(json);
 });
 ```
-

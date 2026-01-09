@@ -17,14 +17,14 @@
 
 **Description of request parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| cmd |   | string | Request execution command 
-| SID |   | string | Session ID received during authorization 
-| params |   | array | Request execution parameters 
+| cmd |   | string | Request execution command
+| SID |   | string | Session ID received during authorization
+| params |   | array | Request execution parameters
 
-| params | id | integer | List ID 
-| params | ticker | string | Ticker 
+| params | id | integer | List ID
+| params | ticker | string | Ticker
 
 #### Response:
 
@@ -97,4 +97,3 @@ deleteStockListTicker(function(json){
     console.log(json);
 });
 ```
-

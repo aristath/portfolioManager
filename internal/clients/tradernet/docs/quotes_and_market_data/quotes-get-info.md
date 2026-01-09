@@ -16,12 +16,12 @@
 
 **Description of request parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| cmd |   | string | Request execution command 
-| params |   | array | Request execution parameters 
-| params | ticker | string | the name of the ticker, required to retrieve data from the server 
-| params | sup | bool | IMS and trading system format 
+| cmd |   | string | Request execution command
+| params |   | array | Request execution parameters
+| params | ticker | string | the name of the ticker, required to retrieve data from the server
+| params | sup | bool | IMS and trading system format
 
 #### Response:
 
@@ -115,4 +115,3 @@ params_ = {
 res = NtApi.PublicApiClient(pub_, sec_, NtApi.PublicApiClient().V1)
 print(res.sendRequest(cmd_, params_).content.decode("utf-8"))
 ```
-

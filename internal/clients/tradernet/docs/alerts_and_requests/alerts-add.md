@@ -28,74 +28,74 @@
 
 **Description of request parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| cmd |   | String | Name of the method invoked 
-| params |   | array | Parameter array 
-| params | ticker | string | ticker in Tradernet's system 
-| params | price | array |   
-| params | price | string | price of the alert activation 
-| params | trigger_type | string |   
-| params | quote_type | string |   
-| params | notification_type | string |   
-| params | alert_period | number |   
-| params | expire | number | string |   
+| cmd |   | String | Name of the method invoked
+| params |   | array | Parameter array
+| params | ticker | string | ticker in Tradernet's system
+| params | price | array |
+| params | price | string | price of the alert activation
+| params | trigger_type | string |
+| params | quote_type | string |
+| params | notification_type | string |
+| params | alert_period | number |
+| params | expire | number | string |
 
 **Price type description:**
 
-| Price type | Description 
+| Price type | Description
 |---|---|---|---|
-| ltp | last trade price 
-| bap | the best bid price 
-| bbp | the best ask price 
-| op | opening price 
-| pp | closing price 
+| ltp | last trade price
+| bap | the best bid price
+| bbp | the best ask price
+| op | opening price
+| pp | closing price
 
 **Notification type description:**
 
-| type of notification | Description 
+| type of notification | Description
 |---|---|---|---|
-| email | by mail only 
-| sms | only via SMS 
-| push | push notification 
-| all | via SMS and email 
+| email | by mail only
+| sms | only via SMS
+| push | push notification
+| all | via SMS and email
 
 **Alert trigger event description:**
 
-| Trigger method | Description 
+| Trigger method | Description
 |---|---|---|---|
-| crossing | Crossing price 
-| crossing_down | Crossing Down 
-| crossing_up | Crossing Up 
-| less_then | Less than 
-| greater_then | Greater than 
-| channel_in | Is included in the range 
-| channel_out | Goes out of the range 
-| channel_inside | Within the range 
-| channel_outside | Outside the range 
-| moving_down_from_current | Decreases from the current price by % 
-| moving_up_from_current | Moving up from the current price by % 
-| moving_down_from_maximum | Moving down from maximum of the day by % 
-| moving_up_from_minimum | Moving up from minimum of the day by % 
+| crossing | Crossing price
+| crossing_down | Crossing Down
+| crossing_up | Crossing Up
+| less_then | Less than
+| greater_then | Greater than
+| channel_in | Is included in the range
+| channel_out | Goes out of the range
+| channel_inside | Within the range
+| channel_outside | Outside the range
+| moving_down_from_current | Decreases from the current price by %
+| moving_up_from_current | Moving up from the current price by %
+| moving_down_from_maximum | Moving down from maximum of the day by %
+| moving_up_from_minimum | Moving up from minimum of the day by %
 
 **Alert activation frequency description:**
 
-| Value | Description 
+| Value | Description
 |---|---|---|---|
-| 0 | Once 
-| 60 | Activate again in 1 min after it has worked 
-| 300 | Activate again in 5 minutes after it has worked 
-| 900 | Activate again in 15 minutes after it has worked 
-| 3600 | To re-activate after an hour of operation 
-| 86400 | Activate again in 24 hours after it worked 
+| 0 | Once
+| 60 | Activate again in 1 min after it has worked
+| 300 | Activate again in 5 minutes after it has worked
+| 900 | Activate again in 15 minutes after it has worked
+| 3600 | To re-activate after an hour of operation
+| 86400 | Activate again in 24 hours after it worked
 
 **Alert duration description:**
 
-| alert period | Description 
+| alert period | Description
 |---|---|---|---|
-| 0 | Good-Til-Cancelled 
-| end_of_day | Good-Til-Day 
-| till_time | Until a specified time 
+| 0 | Good-Til-Cancelled
+| end_of_day | Good-Til-Day
+| till_time | Until a specified time
 
 #### Response:
 
@@ -107,9 +107,9 @@
 
 **Description of response parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| added |   | boolean | Deliverable 
+| added |   | boolean | Deliverable
 
 ### Error examples
 
@@ -167,4 +167,3 @@ function togglePriceAlert(newAlert, callback) {
 
 }
 ```
-

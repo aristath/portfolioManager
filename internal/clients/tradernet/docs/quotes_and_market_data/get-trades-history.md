@@ -22,18 +22,18 @@
 
 **Description of request parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| cmd |   | string | Request execution command 
-| SID |   | string | SID received during the user's authorization 
-| params |   | array | Request execution parameters 
-| params | beginDate | date | Request execution parameters. Period start date, format ISO 8601 YYYY-MM-DD 
-| params | endDate | date | Request execution parameters. Period end date, format ISO 8601 YYYY-MM-DD 
-| params | tradeId | int|null | Request execution parameters. From which Trade ID to start retrieving report data. Optional parameter 
-| params | max | int|null | Request execution parameters. Number of trades. If 0 or no parameter is specified - then all trades. Optional parameter 
-| params | nt_ticker | string|null | Request execution parameters. Instrument ticker. Optional parameter 
-| params | curr | string|null | Request execution parameters. Base currency or quote currency. Optional parameter 
-| params | reception | int|null | Request execution parameters. Office ID. Optional parameter 
+| cmd |   | string | Request execution command
+| SID |   | string | SID received during the user's authorization
+| params |   | array | Request execution parameters
+| params | beginDate | date | Request execution parameters. Period start date, format ISO 8601 YYYY-MM-DD
+| params | endDate | date | Request execution parameters. Period end date, format ISO 8601 YYYY-MM-DD
+| params | tradeId | int|null | Request execution parameters. From which Trade ID to start retrieving report data. Optional parameter
+| params | max | int|null | Request execution parameters. Number of trades. If 0 or no parameter is specified - then all trades. Optional parameter
+| params | nt_ticker | string|null | Request execution parameters. Instrument ticker. Optional parameter
+| params | curr | string|null | Request execution parameters. Base currency or quote currency. Optional parameter
+| params | reception | int|null | Request execution parameters. Office ID. Optional parameter
 
 #### Response:
 
@@ -160,11 +160,11 @@ We get an answer in case of failure
 
 **Description of response parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| trades |   | array | Trades 
-| trades | max_trade_id | array | Last Trade ID 
-| trades | trade | array | User's trades list 
+| trades |   | array | Trades
+| trades | max_trade_id | array | Last Trade ID
+| trades | trade | array | User's trades list
 
 ### Examples of using
 
@@ -200,4 +200,3 @@ getTradesHistory(function(json){
     console.log(json);
 });
 ```
-

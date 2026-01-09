@@ -37,12 +37,12 @@ The method enables receiving data on client's cash flow.
 
 **Description of request parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| cmd |   | string | Request execution command 
-| SID |   | string | SID received during the user's authorization 
-| params |   | array | Request execution parameters 
-| params | user_id | int|null | Client ID to find the report. Optional parameter 
+| cmd |   | string | Request execution command
+| SID |   | string | SID received during the user's authorization
+| params |   | array | Request execution parameters
+| params | user_id | int|null | Client ID to find the report. Optional parameter
 | params | groupByType | int|null #### Response:
 
 Getting a response if successful.
@@ -153,10 +153,10 @@ We get an answer in case of failure
 
 **Description of response parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| total |   | int | Total data 
-| cashflow |   | array | Cash flow list 
+| total |   | int | Total data
+| cashflow |   | array | Cash flow list
 
 ### Examples of using
 
@@ -202,4 +202,3 @@ getUserCashFlows(function(json){
     console.log(json);
 });
 ```
-

@@ -18,41 +18,41 @@
 
 **Description of request parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| cmd |   | string | Request execution command 
-| params |   | array | Request execution parameters 
-| params | type | string | Instrument type 
-| params | exchange | string | Stock Exchanges 
-| params | gainers | boolean | List type 
-| params | limit | int | Number of instruments displayed,default: 10 
+| cmd |   | string | Request execution command
+| params |   | array | Request execution parameters
+| params | type | string | Instrument type
+| params | exchange | string | Stock Exchanges
+| params | gainers | boolean | List type
+| params | limit | int | Number of instruments displayed,default: 10
 
 **Description of instrument types:**
 
-| Instrument type | Description 
+| Instrument type | Description
 |---|---|---|---|
-| stocks | Stocks 
-| bonds | Bonds 
-| futures | Futures 
-| funds | Funds 
-| indexes | Indices 
+| stocks | Stocks
+| bonds | Bonds
+| futures | Futures
+| funds | Funds
+| indexes | Indices
 
 **Description of available exchanges:**
 
-| Stock Exchanges | Description 
+| Stock Exchanges | Description
 |---|---|---|---|
-| kazakhstan | Kazakhstan 
-| europe | Europe 
-| usa | USA 
-| ukraine | Ukraine 
-| currencies | Currency 
+| kazakhstan | Kazakhstan
+| europe | Europe
+| usa | USA
+| ukraine | Ukraine
+| currencies | Currency
 
 **Description of list types:**
 
-| Value | Description 
+| Value | Description
 |---|---|---|---|
-| 1 | Top fastest-growing 
-| 0 | Top by trading volume 
+| 1 | Top fastest-growing
+| 0 | Top by trading volume
 
 #### Response:
 
@@ -70,9 +70,9 @@ S"
 
 **Description of request parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| tickers |   | array | List of instruments 
+| tickers |   | array | List of instruments
 
 Exemplified reply in the event of failure
 
@@ -86,11 +86,11 @@ Exemplified reply in the event of failure
 
 **Description of response parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| code |   | int | Code error 
-| error |   | string | Error description 
-| errMsg |   | string | Error description 
+| code |   | int | Code error
+| error |   | string | Error description
+| errMsg |   | string | Error description
 
 ### Examples of using
 
@@ -127,4 +127,3 @@ getTopSecurities(exampleParams,
     }
 );
 ```
-

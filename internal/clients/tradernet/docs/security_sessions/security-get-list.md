@@ -16,11 +16,11 @@ The method command getSecuritySessions
 
 **Description of request parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| cmd |   | string | Request execution command 
-| SID |   | string | SID received during the user's authorization. Used when there is a request API V1. 
-| params |   | array | Request execution parameters 
+| cmd |   | string | Request execution command
+| SID |   | string | SID received during the user's authorization. Used when there is a request API V1.
+| params |   | array | Request execution parameters
 
 #### Responce:
 
@@ -79,10 +79,10 @@ We get an answer in case of failure
 
 **Description of response parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| order_id |   | int | Order ID of the canceled order 
-| [ ] |   | array | Array of data if successful or if the list is missing 
+| order_id |   | int | Order ID of the canceled order
+| [ ] |   | array | Array of data if successful or if the list is missing
 
 ### Examples of using
 
@@ -285,4 +285,3 @@ sidPromise.then(function (sid) {
     });
 });
 ```
-

@@ -14,9 +14,9 @@ The method command delTradeOrder
 
 **Description of request parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| order_id |   | int | Request execution command. ID of the order that we want to cancel 
+| order_id |   | int | Request execution command. ID of the order that we want to cancel
 
 #### Response:
 
@@ -53,9 +53,9 @@ We get an answer in case of failure
 
 **Description of response parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| order_id |   | int | Order ID of the canceled order 
+| order_id |   | int | Order ID of the canceled order
 
 ### Examples of using
 
@@ -204,4 +204,3 @@ Returns
 result = order.cancel(order_id=28533222)
 print(result)
 ```
-

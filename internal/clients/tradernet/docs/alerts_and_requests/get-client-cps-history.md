@@ -26,18 +26,18 @@ The method command getClientCpsHistory
 
 **Description of request parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| cmd |   | string | Request execution command 
-| SID |   | string | SID received during the user's authorization 
-| params |   | array | Request execution parameters 
-| params | cpsDocId | null|int | Request execution parameters. Request type ID. Can be viewed in section                List of request types. Optional parameter 
-| params | id | null|int | Request execution parameters. Order ID. Optional parameter 
-| params | date_from | null|string|date | Request execution parameters. Request list start date. Optional parameter 
-| params | date_to | null|string|date | Request execution parameters. Request list end date. Optional parameter 
-| params | limit | null|int | Request execution parameters. Number of orders displayed in the list. Optional parameter 
-| params | offset | null|int | Request execution parameters. Step of the list of displayed requests. Optional parameter 
-| params | cps_status | null|int | Request execution parameters. Requests statuses: 0 - draft request; 1 - in process of execution; 2 - request is rejected; 3 - request is executed. Optional parameter 
+| cmd |   | string | Request execution command
+| SID |   | string | SID received during the user's authorization
+| params |   | array | Request execution parameters
+| params | cpsDocId | null|int | Request execution parameters. Request type ID. Can be viewed in section                List of request types. Optional parameter
+| params | id | null|int | Request execution parameters. Order ID. Optional parameter
+| params | date_from | null|string|date | Request execution parameters. Request list start date. Optional parameter
+| params | date_to | null|string|date | Request execution parameters. Request list end date. Optional parameter
+| params | limit | null|int | Request execution parameters. Number of orders displayed in the list. Optional parameter
+| params | offset | null|int | Request execution parameters. Step of the list of displayed requests. Optional parameter
+| params | cps_status | null|int | Request execution parameters. Requests statuses: 0 - draft request; 1 - in process of execution; 2 - request is rejected; 3 - request is executed. Optional parameter
 
 #### Response:
 
@@ -109,10 +109,10 @@ We get an answer in case of failure
 
 **Description of response parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| total |   | int | Total requests 
-| cps |   | array | Request list 
+| total |   | int | Total requests
+| cps |   | array | Request list
 
 ### Examples of using
 
@@ -184,4 +184,3 @@ params_ = {
 res = NtApi.PublicApiClient(pub_, sec_, NtApi.PublicApiClient().V2)
 print(res.sendRequest(cmd_, params_).decode("utf-8"))
 ```
-

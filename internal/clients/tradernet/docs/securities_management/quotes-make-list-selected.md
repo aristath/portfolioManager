@@ -16,13 +16,13 @@
 
 **Description of request parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| cmd |   | string | Request execution command 
-| SID |   | string | Session ID received during authorization 
-| params |   | array | Request execution parameters 
+| cmd |   | string | Request execution command
+| SID |   | string | Session ID received during authorization
+| params |   | array | Request execution parameters
 
-| params | id | integer | Saved list ID 
+| params | id | integer | Saved list ID
 
 #### Response:
 
@@ -94,4 +94,3 @@ makeStockListSelected(function(json){
     console.log(json);
 });
 ```
-

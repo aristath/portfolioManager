@@ -20,61 +20,61 @@ The service enbles receiving information on securities from the server
 
 **Request parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
 
 |---|---|---|---|
-| take |   |   | Number of securities information on which is expected to be obtained 
-| skip |   |   |   
-| sort |   |   | Parameter used for sorting 
-| field | sort | string | Field to be used for sorting 
-| dir | sort | string | Sorting direction 
-| filter |   |   | Filtering 
-| filters | filter |   |   
-| field | filters | string | Field to be used for filtering 
-| operator | filters | string | Filtering operator 
-| value | filters | string | Value 
+| take |   |   | Number of securities information on which is expected to be obtained
+| skip |   |   |
+| sort |   |   | Parameter used for sorting
+| field | sort | string | Field to be used for sorting
+| dir | sort | string | Sorting direction
+| filter |   |   | Filtering
+| filters | filter |   |
+| field | filters | string | Field to be used for filtering
+| operator | filters | string | Filtering operator
+| value | filters | string | Value
 
 #### Description of fields that can be filtered and sorted
 
 **Description of fields that can be filtered and sorted:**
 
-| Field name (field parameter) | Type | Description | Possible values 
+| Field name (field parameter) | Type | Description | Possible values
 |---|---|---|---|
-| ticker | string | Ticker in TS |   
-| instr_type | string | Instrument type. |   
-| instr_kind | string | Instrument sub-type |   
-| instr_kind_с | integer | Instrument subtype code |   
-| code_sec | string | Day trading code |   
-| code_rep | string | Night trading code |   
-| code_nm | string | Instrument ticker on the exchange |   
-| name | string | Name (for sorting only) |   
-| reg_nb | string | Registration number |   
-| issue_nb | string | Issue number |   
-| face_curr_c | string | Currency |   
-| mkt_id | integer | Market ID |   
-| mkt_name | string | Market code |   
-| mkt_short_code | string | Market short code |   
-| fv | numeric | Bond body value |   
-| step_price | numeric | Price increment |   
-| x_short | boolean | Available in short |   
+| ticker | string | Ticker in TS |
+| instr_type | string | Instrument type. |
+| instr_kind | string | Instrument sub-type |
+| instr_kind_с | integer | Instrument subtype code |
+| code_sec | string | Day trading code |
+| code_rep | string | Night trading code |
+| code_nm | string | Instrument ticker on the exchange |
+| name | string | Name (for sorting only) |
+| reg_nb | string | Registration number |
+| issue_nb | string | Issue number |
+| face_curr_c | string | Currency |
+| mkt_id | integer | Market ID |
+| mkt_name | string | Market code |
+| mkt_short_code | string | Market short code |
+| fv | numeric | Bond body value |
+| step_price | numeric | Price increment |
+| x_short | boolean | Available in short |
 
 #### Description of filtering parameters:
 
 **Description of filtering parameters::**
 
-| Filtering operator (operator parameter) | Description 
+| Filtering operator (operator parameter) | Description
 |---|---|---|---|
-| eq | equal (default) 
-| neq | is not equal 
-| eqormore | Is greater than or equal to 
-| eqorless | Is less than or equal to 
-| isempty | For empty data 
-| contains | pattern matching anywhere in the string (similar to ILIKE%%) 
-| doesnotcontain | exclude from pattern matching anywhere in the string (similar to NOT ILIKE%%) 
-| startswith | string-start pattern matching (similar to ILIKE %) 
-| endswith | string-end pattern matching (similar to ILIKE% ) 
-| in | listing multiple values separated by commas i enabled (similar to IN ( ) 
+| eq | equal (default)
+| neq | is not equal
+| eqormore | Is greater than or equal to
+| eqorless | Is less than or equal to
+| isempty | For empty data
+| contains | pattern matching anywhere in the string (similar to ILIKE%%)
+| doesnotcontain | exclude from pattern matching anywhere in the string (similar to NOT ILIKE%%)
+| startswith | string-start pattern matching (similar to ILIKE %)
+| endswith | string-end pattern matching (similar to ILIKE% )
+| in | listing multiple values separated by commas i enabled (similar to IN ( )
 
 #### Response:
 
@@ -215,129 +215,129 @@ The service enbles receiving information on securities from the server
 
 **Description of response parameters::**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| securities |   | array |   
-| ticker | securities | string | Internal ticker in the TRADERNET system 
-| instr_type_c | securities | numeric | Instrument type 
-| instr_type | securities | string | Instrument type 
-| instr_kind_c | securities | numeric | Instrument sub-type 
-| instr_kind | securities | string | Instrument sub-type 
-| instr_id | securities | string | Instrument ID in the trading system 
-| code_sec | securities | string | Exchange trading mode" + "TQBD, WAPN, TQQQ, TQTD, RFND, FIXN, SETL, EQEU, SADM, SDBP, TQQD, EQBD, AETS, EQR2, EQMP, EQR3, PSRP, EQW2, PTTK, PRTK, EQQI, EQEO, EQRD, PSRD, PRTD, PTTD, EQLD, EQWD, EQR, PTKD, TQDE, PTOD, FUTN, TADM, LIQR, EQLP, RPMA, EQRP, TQTF, TQQI, EQDB, TQOB, TQIF, EQWP, TQOD, CETS, EQBR, PTKK, PTEQ, NADM, TRAN, TRAD, TQCB, TQBR, EQF, EQOB" 
-| code_rep | securities | string |   
-| code_nm | securities | string | Stock exchange ticker 
-| name | securities | string | Name 
-| name_alt | securities | string | Short Name 
-| reg_nb | securities | string | State registration number 
-| issue_nb | securities | string | ISIN 
-| face_curr_c | securities | string | Instrument currency 
-| mkt_id | securities | string | Market ID in the TRADERNET trading system 
-| mkt_name | securities | string | Market code in the TRADERNET trading system 
-| lot_size_q | securities | string | Lot size 
-| istrade | securities | numeric | Trading permitted in the TRADERNET trading system 
-| maturity_d | securities | string | Expiry date | fv_calc | securities | string |   
-| issuesize | securities | string | Volume of issued stock | fv | securities | string | nominal cost 
-| latname | securities | string | Name in English | accint | securities | string | Accumulated coupon interest (ACI) 
-| create_tmstmp | securities | string | Date of system entry | update_tmstmp | securities | string | Date of system update 
-| to_delete | securities | numeric | Security is removed from the system. 
-| mkt_short_code | securities | string | Short market code in the TRADERNET trading system 
-| x_short | securities | numeric | Short selling access 
-| step_price | securities | string | Price increment 
-| x_disc1 | securities | string | Discount 
-| x_descr | securities | string | Issuer description 
-| quotes | securities | JSON string | Quotes object 
-| c | quotes | string | Internal ticker in the TRADERNET system 
-| n | quotes | numeric | Serial quote number. Each ticker has its own number 
-| fv | quotes | string | nominal cost 
-| op | quotes | string | Opening price of the current trading session 
-| p5 | quotes | numeric | Price 5 days ago 
-| pp | quotes | numeric | Previous closing 
-| acd | quotes | numeric | Accumulated coupon interest (ACI) 
-| baf | quotes | numeric | Volume of the best ask 
-| bap | quotes | numeric | Best Ask 
-| bas | quotes | numeric | Best Ask size 
-| bbf | quotes | numeric | Best bid volume 
-| bbp | quotes | numeric | Best bid 
-| bbs | quotes | numeric | Best bid size 
-| chg | quotes | numeric | Change in the price of the last trade in points, relative to the closing price of the previous trading session 
-| cpn | quotes | numeric | Coupon, in the currency 
-| cpp | quotes | numeric | Coupon period (in days) 
-| dpb | quotes | numeric | Purchase margin 
-| dps | quotes | numeric | Short sale margin 
-| ltp | quotes | numeric | Last trade price 
-| ltr | quotes | string | Exchange of the latest trade 
-| lts | quotes | numeric | Last trade size 
-| ltt | quotes | string | Time of last trade 
-| mtd | quotes | string | Maturity date 
-| ncd | quotes | string | Next coupon date 
-| ncp | quotes | numeric | Latest coupon date 
-| p22 | quotes | numeric | Price 22 days ago 
-| pcp | quotes | numeric | Percentage change relative to the closing price of the previous trading session 
-| rev | quotes | numeric |   
-| vlt | quotes | numeric | Trading volume per day in currency 
-| vol | quotes | numeric | Trade volume per day, in pcs 
-| yld | quotes | numeric | Yield to maturity (for bonds) 
-| chg5 | quotes | numeric | Price change within a 5 day-period 
-| init | quotes | numeric |   
-| kind | quotes | numeric | Type of security (1 – Common, 2 – Preferred, 3 - Percent, 4 – Discount, 5 – Delivery, 6 – Rated, 7 - Interval) 
-| name | quotes | string | Name of security 
-| p110 | quotes | numeric |   
-| p220 | quotes | numeric | Price 220 days ago 
-| type | quotes | numeric | Type of security (1 - stocks, 2 - bonds, 3 - futures) 
-| chg22 | quotes | numeric | 22 day price change 
-| maxtp | quotes | numeric | Maximum trade price per day 
-| mintp | quotes | numeric | Minimum trade price per day 
-| name2 | quotes | string | Security name in Latin 
-| x_lot | quotes | numeric | Minimum lot size 
-| x_max | quotes | numeric | Maximum (for the period) 
-| x_min | quotes | numeric | Minimum (for the period) 
-| chg110 | quotes | numeric | Price change within a 110 day period 
-| chg220 | quotes | numeric |   
-| init | quotes | numeric | Price change within a 220 day-period 
-| trades | quotes | numeric | Number of trades 
-| x_curr | quotes | string | Currency 
-| x_dsc1 | quotes | numeric | Discount 
-| x_dsc2 | quotes | numeric | not used 
-| x_dsc3 | quotes | numeric | not used 
-| x_descr | quotes | string | Description 
-| x_short | quotes | numeric | Can a security be shorted? 
-| base_ltr | quotes | numeric | Base instrument market code 
-| issue_nb | quotes | numeric | ISIN 
-| min_step | quotes | numeric | Minimum price increment 
-| otc_instr | quotes | numeric | Instrument ticker on the OTC market 
-| x_currVal | quotes | numeric | Exchange rate to RUB 
-| x_istrade | quotes | numeric | Were there any trades on this security 
-| ClosePrice | quotes | numeric |   
-| step_price | quotes | numeric | Price increment 
-| scheme_calc | quotes | numeric |   
-| yld_ytm_ask | quotes | numeric | Yiled to maturity from ask prices (for bonds) 
-| yld_ytm_bid | quotes | numeric | Yield to maturity from bid prices (for bonds) 
-| base_currency | quotes | string | Base instrument currency 
-| x_agg_futures | quotes | string |   
-| virt_base_instr | quotes | string |   
-| x_dsc1_reception | quotes | string | Discount (by office) 
-| x_short_reception | quotes | string | Is it possible to short the security (by offices) 
-| TradingSessionSubID | quotes | string |   
-| TradingReferencePrice | quotes | numeric |   
-| rate | securities | numeric | Ranking in the search 
-| id | securities | numeric |   
-| min_step | securities | string | Minimum price increment 
-| issuer_country_code | securities | string | Letter code of the issuing country 
-| exchange_ticker | securities | string | Instrument code on the exchange 
-| maturity_code | securities | string |   
-| sector_code | securities | string |   
-| attributes | securities | JSON string |   
-| CFICode | attributes | string | CFI code 
-| min_step | attributes | string | Minimum price increment 
-| limit_down | attributes | string |   
-| step_price | attributes | string | Price increment 
-| base_mkt_id | attributes | string |   
-| description | attributes | string |   
-| scheme_calc | attributes | string |   
-| export_instrument_to_DIB | attributes | string |   
-| codesub_nm | securities | string |   
-| bloomberg_id | attributes | string |   
+| securities |   | array |
+| ticker | securities | string | Internal ticker in the TRADERNET system
+| instr_type_c | securities | numeric | Instrument type
+| instr_type | securities | string | Instrument type
+| instr_kind_c | securities | numeric | Instrument sub-type
+| instr_kind | securities | string | Instrument sub-type
+| instr_id | securities | string | Instrument ID in the trading system
+| code_sec | securities | string | Exchange trading mode" + "TQBD, WAPN, TQQQ, TQTD, RFND, FIXN, SETL, EQEU, SADM, SDBP, TQQD, EQBD, AETS, EQR2, EQMP, EQR3, PSRP, EQW2, PTTK, PRTK, EQQI, EQEO, EQRD, PSRD, PRTD, PTTD, EQLD, EQWD, EQR, PTKD, TQDE, PTOD, FUTN, TADM, LIQR, EQLP, RPMA, EQRP, TQTF, TQQI, EQDB, TQOB, TQIF, EQWP, TQOD, CETS, EQBR, PTKK, PTEQ, NADM, TRAN, TRAD, TQCB, TQBR, EQF, EQOB"
+| code_rep | securities | string |
+| code_nm | securities | string | Stock exchange ticker
+| name | securities | string | Name
+| name_alt | securities | string | Short Name
+| reg_nb | securities | string | State registration number
+| issue_nb | securities | string | ISIN
+| face_curr_c | securities | string | Instrument currency
+| mkt_id | securities | string | Market ID in the TRADERNET trading system
+| mkt_name | securities | string | Market code in the TRADERNET trading system
+| lot_size_q | securities | string | Lot size
+| istrade | securities | numeric | Trading permitted in the TRADERNET trading system
+| maturity_d | securities | string | Expiry date | fv_calc | securities | string |
+| issuesize | securities | string | Volume of issued stock | fv | securities | string | nominal cost
+| latname | securities | string | Name in English | accint | securities | string | Accumulated coupon interest (ACI)
+| create_tmstmp | securities | string | Date of system entry | update_tmstmp | securities | string | Date of system update
+| to_delete | securities | numeric | Security is removed from the system.
+| mkt_short_code | securities | string | Short market code in the TRADERNET trading system
+| x_short | securities | numeric | Short selling access
+| step_price | securities | string | Price increment
+| x_disc1 | securities | string | Discount
+| x_descr | securities | string | Issuer description
+| quotes | securities | JSON string | Quotes object
+| c | quotes | string | Internal ticker in the TRADERNET system
+| n | quotes | numeric | Serial quote number. Each ticker has its own number
+| fv | quotes | string | nominal cost
+| op | quotes | string | Opening price of the current trading session
+| p5 | quotes | numeric | Price 5 days ago
+| pp | quotes | numeric | Previous closing
+| acd | quotes | numeric | Accumulated coupon interest (ACI)
+| baf | quotes | numeric | Volume of the best ask
+| bap | quotes | numeric | Best Ask
+| bas | quotes | numeric | Best Ask size
+| bbf | quotes | numeric | Best bid volume
+| bbp | quotes | numeric | Best bid
+| bbs | quotes | numeric | Best bid size
+| chg | quotes | numeric | Change in the price of the last trade in points, relative to the closing price of the previous trading session
+| cpn | quotes | numeric | Coupon, in the currency
+| cpp | quotes | numeric | Coupon period (in days)
+| dpb | quotes | numeric | Purchase margin
+| dps | quotes | numeric | Short sale margin
+| ltp | quotes | numeric | Last trade price
+| ltr | quotes | string | Exchange of the latest trade
+| lts | quotes | numeric | Last trade size
+| ltt | quotes | string | Time of last trade
+| mtd | quotes | string | Maturity date
+| ncd | quotes | string | Next coupon date
+| ncp | quotes | numeric | Latest coupon date
+| p22 | quotes | numeric | Price 22 days ago
+| pcp | quotes | numeric | Percentage change relative to the closing price of the previous trading session
+| rev | quotes | numeric |
+| vlt | quotes | numeric | Trading volume per day in currency
+| vol | quotes | numeric | Trade volume per day, in pcs
+| yld | quotes | numeric | Yield to maturity (for bonds)
+| chg5 | quotes | numeric | Price change within a 5 day-period
+| init | quotes | numeric |
+| kind | quotes | numeric | Type of security (1 – Common, 2 – Preferred, 3 - Percent, 4 – Discount, 5 – Delivery, 6 – Rated, 7 - Interval)
+| name | quotes | string | Name of security
+| p110 | quotes | numeric |
+| p220 | quotes | numeric | Price 220 days ago
+| type | quotes | numeric | Type of security (1 - stocks, 2 - bonds, 3 - futures)
+| chg22 | quotes | numeric | 22 day price change
+| maxtp | quotes | numeric | Maximum trade price per day
+| mintp | quotes | numeric | Minimum trade price per day
+| name2 | quotes | string | Security name in Latin
+| x_lot | quotes | numeric | Minimum lot size
+| x_max | quotes | numeric | Maximum (for the period)
+| x_min | quotes | numeric | Minimum (for the period)
+| chg110 | quotes | numeric | Price change within a 110 day period
+| chg220 | quotes | numeric |
+| init | quotes | numeric | Price change within a 220 day-period
+| trades | quotes | numeric | Number of trades
+| x_curr | quotes | string | Currency
+| x_dsc1 | quotes | numeric | Discount
+| x_dsc2 | quotes | numeric | not used
+| x_dsc3 | quotes | numeric | not used
+| x_descr | quotes | string | Description
+| x_short | quotes | numeric | Can a security be shorted?
+| base_ltr | quotes | numeric | Base instrument market code
+| issue_nb | quotes | numeric | ISIN
+| min_step | quotes | numeric | Minimum price increment
+| otc_instr | quotes | numeric | Instrument ticker on the OTC market
+| x_currVal | quotes | numeric | Exchange rate to RUB
+| x_istrade | quotes | numeric | Were there any trades on this security
+| ClosePrice | quotes | numeric |
+| step_price | quotes | numeric | Price increment
+| scheme_calc | quotes | numeric |
+| yld_ytm_ask | quotes | numeric | Yiled to maturity from ask prices (for bonds)
+| yld_ytm_bid | quotes | numeric | Yield to maturity from bid prices (for bonds)
+| base_currency | quotes | string | Base instrument currency
+| x_agg_futures | quotes | string |
+| virt_base_instr | quotes | string |
+| x_dsc1_reception | quotes | string | Discount (by office)
+| x_short_reception | quotes | string | Is it possible to short the security (by offices)
+| TradingSessionSubID | quotes | string |
+| TradingReferencePrice | quotes | numeric |
+| rate | securities | numeric | Ranking in the search
+| id | securities | numeric |
+| min_step | securities | string | Minimum price increment
+| issuer_country_code | securities | string | Letter code of the issuing country
+| exchange_ticker | securities | string | Instrument code on the exchange
+| maturity_code | securities | string |
+| sector_code | securities | string |
+| attributes | securities | JSON string |
+| CFICode | attributes | string | CFI code
+| min_step | attributes | string | Minimum price increment
+| limit_down | attributes | string |
+| step_price | attributes | string | Price increment
+| base_mkt_id | attributes | string |
+| description | attributes | string |
+| scheme_calc | attributes | string |
+| export_instrument_to_DIB | attributes | string |
+| codesub_nm | securities | string |
+| bloomberg_id | attributes | string |
 
 #### Examples of instrument type combinations can be found at 	 Instruments details
 
@@ -420,4 +420,3 @@ $.ajax('https://tradernet.com/api/', {
 ```
 
 You can get the list of instruments in JSON format by a direct request to the server, for example
-

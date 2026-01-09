@@ -15,10 +15,10 @@ The method command getPositionJson
 
 **Description of request parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| cmd |   | string | Request execution command 
-| params |   | array | Request execution parameters 
+| cmd |   | string | Request execution command
+| params |   | array | Request execution parameters
 
 #### Response:
 
@@ -138,9 +138,9 @@ We get an answer in case of failure
 
 **Description of response parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| result |   | array | List of portfolio information 
+| result |   | array | List of portfolio information
 
 ### Examples of using
 
@@ -203,4 +203,3 @@ res = NtApi.PublicApiClient(pub_, sec_, NtApi.PublicApiClient().V2)
 
 print(res.sendRequest(cmd_).content.decode("utf-8"))
 ```
-

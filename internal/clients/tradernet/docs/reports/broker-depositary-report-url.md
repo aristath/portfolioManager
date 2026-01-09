@@ -4,12 +4,12 @@ To get the broker's report WITHOUT authorization in the system, you will require
 
 #### Links to the report receiving options:
 
-| File format | Report link 
+| File format | Report link
 |---|---|---|---|
-|   
-|   
-|   
-|   
+|
+|
+|
+|
 
 To get the report with a specific start date, you need to add the date_start parameter  ...&date_start=2020-01-01,  where it is 2020-01-01 - this is the start date for creating the report in the format YYYY-MM-DD
 
@@ -20,4 +20,3 @@ To get the report WITHOUT authorization, you need to generate an API key in the 
 you also need to specify the login of a client for whom you want to get the report and add it to the end of the link as a parameter  ...&auth_login=LOGIN,  where it is LOGIN - this is your login
 
 #### Generator of links to receive reports
-

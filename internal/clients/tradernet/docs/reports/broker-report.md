@@ -23,32 +23,32 @@ The method command getBrokerReport
 
 **Description of request parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| cmd |   | string | Request execution command 
-| SID |   | string | SID received during the user's authorization. (For API V1). Not used, if API Keys and headers are used X-NtApi-Sig, X-NtApi-PublicKey 
-| nonce |   | string | We recommend using the current timestamp as a nonce parameter. More information on the page « API key», paragraph 4. If the ID parameter is passed, the nonce parameter is not used 
-| params |   | array | Request execution parameters 
-| params | date_start | string|date|null | Starting date. Optional parameter, if flag is used recent 
-| params | date_end | string|date|null | Expiry date. Optional parameter, if flag is used recent 
-| params | time_period | string|time|null | Time cut maybe 23:59:59 or 08:40:00. Optional parameter, if flag is used recent 
-| params | recent | int|null | Accepts value of 1 or 0. Parameter that returns a date slice: report start date - yesterday 23:59:59; report end date - today 23:59:59. Optional parameter. If used, parameters are ignored date_start, date_end, time_period 
-| params | type | string|null | Data block from the report, optional parameter, possible values are shown in the table below  «Description of type parameter options» 
-| params | format | string|null | Report in the selected format. Acceptable formats: json, html, xml, xls, pdf. Default — json 
+| cmd |   | string | Request execution command
+| SID |   | string | SID received during the user's authorization. (For API V1). Not used, if API Keys and headers are used X-NtApi-Sig, X-NtApi-PublicKey
+| nonce |   | string | We recommend using the current timestamp as a nonce parameter. More information on the page « API key», paragraph 4. If the ID parameter is passed, the nonce parameter is not used
+| params |   | array | Request execution parameters
+| params | date_start | string|date|null | Starting date. Optional parameter, if flag is used recent
+| params | date_end | string|date|null | Expiry date. Optional parameter, if flag is used recent
+| params | time_period | string|time|null | Time cut maybe 23:59:59 or 08:40:00. Optional parameter, if flag is used recent
+| params | recent | int|null | Accepts value of 1 or 0. Parameter that returns a date slice: report start date - yesterday 23:59:59; report end date - today 23:59:59. Optional parameter. If used, parameters are ignored date_start, date_end, time_period
+| params | type | string|null | Data block from the report, optional parameter, possible values are shown in the table below  «Description of type parameter options»
+| params | format | string|null | Report in the selected format. Acceptable formats: json, html, xml, xls, pdf. Default — json
 
 **Description of type parameter options:**
 
-| Value | Description 
+| Value | Description
 |---|---|---|---|
-| account_at_start | Data array on the account status at the start time of the requested report period 
-| account_at_end | Data array on the account status at the date the end time of the requested report period 
-| trades | Dat array on trades for the requested report period 
-| commissions | Data array on commissions for the requested report period 
-| corporate_actions | Data array on corporate actions for the requested report period 
-| in_outs | Data array on deposits and withdrawals of funds for the requested report period 
-| in_outs_securities | Data array on deposits and withdrawals of securities for the requested report period 
-| cash_flows | Data array on all funds flows for the requested report period 
-| securities_flows | Data array on all securities movements for the requested report period 
+| account_at_start | Data array on the account status at the start time of the requested report period
+| account_at_end | Data array on the account status at the date the end time of the requested report period
+| trades | Dat array on trades for the requested report period
+| commissions | Data array on commissions for the requested report period
+| corporate_actions | Data array on corporate actions for the requested report period
+| in_outs | Data array on deposits and withdrawals of funds for the requested report period
+| in_outs_securities | Data array on deposits and withdrawals of securities for the requested report period
+| cash_flows | Data array on all funds flows for the requested report period
+| securities_flows | Data array on all securities movements for the requested report period
 
 #### Response:
 
@@ -93,9 +93,9 @@ We get an answer in case of failure
 
 **Description of response parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| resource|json |   | int | Returns a generated file or a response in json|xml format 
+| resource|json |   | int | Returns a generated file or a response in json|xml format
 
 ### Examples of using
 
@@ -223,4 +223,3 @@ print(
     jres
 )
 ```
-

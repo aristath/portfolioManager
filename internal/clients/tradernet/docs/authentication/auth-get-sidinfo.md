@@ -14,11 +14,11 @@
 
 **Description of request parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| cmd |   | string | Request execution command 
-| SID |   | string | SID received during the user's authorization 
-| params |   | array | Request execution parameters 
+| cmd |   | string | Request execution command
+| SID |   | string | SID received during the user's authorization
+| params |   | array | Request execution parameters
 
 #### Response:
 
@@ -49,11 +49,11 @@ We get an answer in case of failure
 
 **Description of response parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| error |   | string | Error description 
-| SID |   | string | Session ID or null if no active session is available 
-| user_id |   | int | User ID 
+| error |   | string | Error description
+| SID |   | string | Session ID or null if no active session is available
+| user_id |   | int | User ID
 
 ### Examples of using
 
@@ -109,4 +109,3 @@ cmd_ = 'getSidInfo'
 res = NtApi.PublicApiClient(pub_, sec_, NtApi.PublicApiClient().V2)
 print(res.sendRequest(cmd_).content.decode("utf-8"))
 ```
-

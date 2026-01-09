@@ -80,12 +80,12 @@ When connecting, the 'userdata' event with user data is received
 
 **Description of 'userdata' event parameters:**
 
-| Parameter | Type | Description 
+| Parameter | Type | Description
 |---|---|---|---|
-| isDemo | bool | Demo mode. 'True' if the SID was not transferred, the SID authorization failed, or the user has no live account. 
-| model | prod|demo | It is technically a string representation of the previous parameter 
-| authLogin | string | Authentication login. | login | string | User login. 
-| clientLogin | string | Username, under which the user logged in. 
+| isDemo | bool | Demo mode. 'True' if the SID was not transferred, the SID authorization failed, or the user has no live account.
+| model | prod|demo | It is technically a string representation of the previous parameter
+| authLogin | string | Authentication login. | login | string | User login.
+| clientLogin | string | Username, under which the user logged in.
 
 ## Examples
 
@@ -129,4 +129,3 @@ async def main() -> None:
 if __name__ == '__main__':
     asyncio.run(main())
 ```
-

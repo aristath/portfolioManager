@@ -18,13 +18,13 @@ The method command putStopLoss
 
 **Description of request parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| instr_name |   | string | Request execution command. The instrument used to issue an order 
-| take_profit |   | null|float | Request execution command. The price of the take profit order, if null - the takeprofit order does not change. Optional parameter 
-| stop_loss |   | null|float | Request execution command. Stoploss order price, if null - stoploss order does not change. Optional parameter 
-| stop_loss_percent |   | null|float | Request execution command. Stoploss order percentage. Optional parameter 
-| stoploss_trailing_percent |   | null|float | Request execution command. Percentage of the accompanying stoploss order. Optional parameter 
+| instr_name |   | string | Request execution command. The instrument used to issue an order
+| take_profit |   | null|float | Request execution command. The price of the take profit order, if null - the takeprofit order does not change. Optional parameter
+| stop_loss |   | null|float | Request execution command. Stoploss order price, if null - stoploss order does not change. Optional parameter
+| stop_loss_percent |   | null|float | Request execution command. Stoploss order percentage. Optional parameter
+| stoploss_trailing_percent |   | null|float | Request execution command. Percentage of the accompanying stoploss order. Optional parameter
 
 #### Response:
 
@@ -149,10 +149,10 @@ We get an answer in case of failure
 
 **Description of response parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| order_id |   | int | Order ID of the order 
-| order |   | array | Order data 
+| order_id |   | int | Order ID of the order
+| order |   | array | Order data
 
 * Order statuses are available at «Orders statuses »
 
@@ -345,4 +345,3 @@ print(result)
 result = order.take_profit('FRHC.US', price=0.9)
 print(result)
 ```
-

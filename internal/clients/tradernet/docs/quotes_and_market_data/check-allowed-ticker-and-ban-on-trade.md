@@ -18,12 +18,12 @@ This methods allows receiving data on options.
 
 **Description of request parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| cmd |   | string | Request execution command 
-| params |   | array | Request execution parameters 
-| params | ticker | string | Instrument ticker 
-| params | checkBan | bool|null | Should the current account restrictions be additionally checked?. Optional parameter 
+| cmd |   | string | Request execution command
+| params |   | array | Request execution parameters
+| params | ticker | string | Instrument ticker
+| params | checkBan | bool|null | Should the current account restrictions be additionally checked?. Optional parameter
 
 #### Response:
 
@@ -89,18 +89,18 @@ We get an answer in case of failure
 
 **Description of response parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| allowed |   | int | Access. 0 or 1 depending on access to the instrument 
-| allowedExpires |   | array |   
-| restriction |   | string|null | Ban description (if any) 
-| operation |   | string|null | Transaction type (if any): B, S 
-| recommendations |   | array|null | Blocking description 
-| recommendations | title | string | Blocking head 
-| recommendations | text | string | Blocking description 
-| recommendations | type | int|null | Blocking code (if any) 
-| recommendations | doc_type_id | int|null | Related document code (if any) 
-| recommendations | trading_blocked | bool | Trading ban availability 
+| allowed |   | int | Access. 0 or 1 depending on access to the instrument
+| allowedExpires |   | array |
+| restriction |   | string|null | Ban description (if any)
+| operation |   | string|null | Transaction type (if any): B, S
+| recommendations |   | array|null | Blocking description
+| recommendations | title | string | Blocking head
+| recommendations | text | string | Blocking description
+| recommendations | type | int|null | Blocking code (if any)
+| recommendations | doc_type_id | int|null | Related document code (if any)
+| recommendations | trading_blocked | bool | Trading ban availability
 
 ### Examples of using
 
@@ -131,4 +131,3 @@ checkAllowedTickerAndBanOnTrade(function(json){
     console.log(json);
 });
 ```
-

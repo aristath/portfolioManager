@@ -21,16 +21,16 @@ The method command putTradeOrder
 
 **Description of request parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| instr_name |   | string | Request execution command. The instrument used to issue an order 
-| action_id |   | int | Request execution command. Action: 1 - A Purchase (Buy); 2 - A Purchase when making trades with margin (Buy on Margin); 3 - A Sale (Sell); 4 - A Sale when making trades with margin (Sell Short)* 
-| order_type_id |   | int | Request execution command. Type of order: 1 - Market Order (Market); 2 - Order at a set price (Limit); 3 - Market Stop-order (Stop); 4 - Stop-order at a set price (Stop Limit) 
-| qty |   | int | Request execution command. Quantity in the order 
-| limit_price |   | null|float | Request execution command. Limit price. Optional parameter 
-| stop_price |   | null|float | Request execution command. Stop price. Optional parameter 
-| expiration_id |   | int | Request execution command. Order expiration: 1 - Order 'until the end of the current trading session' (Day); 2 - Order 'day/night or night/day' (Day + Ext); 3 - Order 'before cancellation' (GTC, before cancellation with participation in night sessions) 
-| user_order_id |   | null|int | Request execution command. Custom order ID. Optional parameter 
+| instr_name |   | string | Request execution command. The instrument used to issue an order
+| action_id |   | int | Request execution command. Action: 1 - A Purchase (Buy); 2 - A Purchase when making trades with margin (Buy on Margin); 3 - A Sale (Sell); 4 - A Sale when making trades with margin (Sell Short)*
+| order_type_id |   | int | Request execution command. Type of order: 1 - Market Order (Market); 2 - Order at a set price (Limit); 3 - Market Stop-order (Stop); 4 - Stop-order at a set price (Stop Limit)
+| qty |   | int | Request execution command. Quantity in the order
+| limit_price |   | null|float | Request execution command. Limit price. Optional parameter
+| stop_price |   | null|float | Request execution command. Stop price. Optional parameter
+| expiration_id |   | int | Request execution command. Order expiration: 1 - Order 'until the end of the current trading session' (Day); 2 - Order 'day/night or night/day' (Day + Ext); 3 - Order 'before cancellation' (GTC, before cancellation with participation in night sessions)
+| user_order_id |   | null|int | Request execution command. Custom order ID. Optional parameter
 
 * Tradernet allows using margin at all times. The check is only carried out in terms of adequacy of the portfolio and orders collateral. I.e., the scope of control covers the amount or number in the order placed on the side of the final terminal.. The action_id field values equal to 3 or 4 are now the same in the system.
 
@@ -62,9 +62,9 @@ We get an answer in case of failure
 
 **Description of response parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| order_id |   | int | Order ID of the created order 
+| order_id |   | int | Order ID of the created order
 
 ### Examples of using
 
@@ -252,4 +252,3 @@ Returns
 result = order.sell('FRHC.US', quantity=1, price=0.8, use_margin=False)
 print(result)
 ```
-

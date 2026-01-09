@@ -18,13 +18,13 @@ This methods allows receiving data on options.
 
 **Description of request parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| cmd |   | string | Request execution command 
-| params |   | array | Request execution parameters 
+| cmd |   | string | Request execution command
+| params |   | array | Request execution parameters
 
-| params | ltr | string | Market name 
-| params | base_contract_code | string | Underlying contract code 
+| params | ltr | string | Market name
+| params | base_contract_code | string | Underlying contract code
 
 #### Response:
 
@@ -91,4 +91,3 @@ getOptionsByMktNameAndBaseAsset(function(json){
     console.log(json);
 });
 ```
-

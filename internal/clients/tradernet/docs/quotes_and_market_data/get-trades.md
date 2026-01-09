@@ -17,13 +17,13 @@
 
 **Description of request parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| cmd |   | string | Request execution command 
-| SID |   | string | SID received during the user's authorization 
-| params |   | array | Request execution parameters 
-| params | id | string | ticker name. You can specify multiple tickers separated by commas 
-| params | timeframe | signed int | "-1" value of the parameter indicating that trade cycles are required 
+| cmd |   | string | Request execution command
+| SID |   | string | SID received during the user's authorization
+| params |   | array | Request execution parameters
+| params | id | string | ticker name. You can specify multiple tickers separated by commas
+| params | timeframe | signed int | "-1" value of the parameter indicating that trade cycles are required
 
 #### Response:
 
@@ -66,11 +66,11 @@ We get an answer in case of failure
 
 **Description of response parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| series |   | array | Trade series 
-| info |   | array | Information about the requested ticker 
-| took |   | float | Calculating the execution time of a request 
+| series |   | array | Trade series
+| info |   | array | Information about the requested ticker
+| took |   | float | Calculating the execution time of a request
 
 ### Examples of using
 
@@ -148,4 +148,3 @@ params_ = {
 
 print(res.sendRequest(cmd_, params_).decode("utf-8"))
 ```
-

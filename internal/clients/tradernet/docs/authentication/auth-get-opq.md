@@ -14,11 +14,11 @@
 
 **Description of request parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| cmd |   | string | Request execution command 
-| SID |   | string | SID received during the user's authorization 
-| params |   | array | Request execution parameters 
+| cmd |   | string | Request execution command
+| SID |   | string | SID received during the user's authorization
+| params |   | array | Request execution parameters
 
 #### Response:
 
@@ -420,9 +420,9 @@ We get an answer in case of failure
 
 **Description of response parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| OPQ |   | array[][] | All user data 
+| OPQ |   | array[][] | All user data
 
 ### Examples of using
 
@@ -451,4 +451,3 @@ getOPQ (function(json) {
     console.log(json);
 });
 ```
-

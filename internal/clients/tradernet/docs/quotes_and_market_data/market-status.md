@@ -18,10 +18,10 @@ Obtaining information about market statuses and operation.
 
 **Description of request parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| cmd |   | string | Request execution command 
-| params |   | array | Request execution parameters 
+| cmd |   | string | Request execution command
+| params |   | array | Request execution parameters
 | params | market | string #### Response:
 
 Getting a response if successful.
@@ -446,9 +446,9 @@ We get an answer in case of failure
 
 **Description of response parameters:**
 
-| Base parameter | Parameter | Type | Description 
+| Base parameter | Parameter | Type | Description
 |---|---|---|---|
-| result | markets | array[ ] | Market status list array 
+| result | markets | array[ ] | Market status list array
 
 ### Examples of using
 
@@ -496,4 +496,3 @@ ws.onopen = function() { // Waiting for the connection to open
     ws.send(JSON.stringify(["markets"]));
 }
 ```
-
