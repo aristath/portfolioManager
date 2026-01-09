@@ -230,20 +230,52 @@ func (g *GitHubArtifactDeployer) DownloadArtifact(runID string, outputDir string
 
 	// First check if artifact name exists as a file
 	artifactPath := filepath.Join(outputDir, g.artifactName)
+	g.log.Debug().
+		Str("checking_path", artifactPath).
+		Msg("Looking for downloaded artifact")
+
 	if info, err := os.Stat(artifactPath); err == nil && !info.IsDir() {
 		binaryPath = artifactPath
+		g.log.Debug().
+			Str("found", binaryPath).
+			Msg("Found artifact at expected path")
 	} else {
+		// Log why the direct path check failed
+		if err != nil {
+			g.log.Debug().
+				Err(err).
+				Str("path", artifactPath).
+				Msg("Artifact not at expected path, searching directory")
+		} else {
+			g.log.Debug().
+				Str("path", artifactPath).
+				Msg("Path exists but is a directory, searching for file")
+		}
+
 		// Try to find any file matching artifact name pattern
 		entries, err := os.ReadDir(outputDir)
 		if err != nil {
 			return "", fmt.Errorf("failed to read output directory: %w", err)
 		}
 
+		g.log.Debug().
+			Int("file_count", len(entries)).
+			Str("directory", outputDir).
+			Msg("Scanning directory for artifact")
+
 		for _, entry := range entries {
+			g.log.Debug().
+				Str("name", entry.Name()).
+				Bool("is_dir", entry.IsDir()).
+				Msg("Found entry in output directory")
+
 			if !entry.IsDir() {
 				// Match files containing artifact name or ending with -arm64
 				if strings.Contains(entry.Name(), g.artifactName) || strings.HasSuffix(entry.Name(), "-arm64") {
 					binaryPath = filepath.Join(outputDir, entry.Name())
+					g.log.Debug().
+						Str("matched", binaryPath).
+						Msg("Found matching artifact file")
 					break
 				}
 			}
@@ -251,12 +283,31 @@ func (g *GitHubArtifactDeployer) DownloadArtifact(runID string, outputDir string
 	}
 
 	if binaryPath == "" {
+		// List all files for debugging
+		entries, _ := os.ReadDir(outputDir)
+		fileList := []string{}
+		for _, entry := range entries {
+			fileList = append(fileList, entry.Name())
+		}
+		g.log.Error().
+			Str("directory", outputDir).
+			Str("files_found", strings.Join(fileList, ", ")).
+			Str("looking_for", g.artifactName).
+			Msg("Downloaded artifact not found in directory")
 		return "", fmt.Errorf("downloaded artifact not found in %s", outputDir)
 	}
 
 	// Verify binary architecture (CRITICAL: must be linux/arm64)
+	g.log.Debug().
+		Str("binary", binaryPath).
+		Msg("Verifying binary architecture (must be linux/arm64)")
+
 	if err := g.VerifyBinaryArchitecture(binaryPath); err != nil {
 		// Remove the invalid binary
+		g.log.Error().
+			Err(err).
+			Str("binary", binaryPath).
+			Msg("Binary architecture verification failed - removing invalid binary")
 		os.Remove(binaryPath)
 		return "", fmt.Errorf("binary architecture verification failed: %w", err)
 	}

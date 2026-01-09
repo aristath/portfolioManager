@@ -262,6 +262,11 @@ func (m *Manager) Deploy() (*DeploymentResult, error) {
 		errorMsgs := []string{}
 		for svc, err := range deploymentErrors {
 			errorMsgs = append(errorMsgs, fmt.Sprintf("%s: %v", svc, err))
+			// Log each service error individually for visibility
+			m.log.Error().
+				Err(err).
+				Str("service", svc).
+				Msg("Service deployment failed")
 		}
 		result.Error = fmt.Sprintf("deployment completed with errors: %v", errorMsgs)
 		result.Success = successCount > 0 // Partial success is still success
@@ -271,12 +276,18 @@ func (m *Manager) Deploy() (*DeploymentResult, error) {
 
 	result.Duration = time.Since(startTime)
 
-	m.log.Info().
+	logEvent := m.log.Info().
 		Bool("success", result.Success).
 		Bool("deployed", result.Deployed).
 		Dur("duration", result.Duration).
-		Int("services", len(result.ServicesDeployed)).
-		Msg("Deployment completed")
+		Int("services", len(result.ServicesDeployed))
+
+	// Include error in log if present
+	if result.Error != "" {
+		logEvent = logEvent.Str("error", result.Error)
+	}
+
+	logEvent.Msg("Deployment completed")
 
 	return result, nil
 }
@@ -450,6 +461,12 @@ func (m *Manager) deployGoService(config GoServiceConfig, serviceName string, ru
 	downloadedPath, err := m.githubArtifactDeployer.DeployLatest(tempDir, runID)
 	if err != nil {
 		deployment.Error = fmt.Sprintf("failed to download artifact: %v", err)
+		m.log.Error().
+			Err(err).
+			Str("service", serviceName).
+			Str("run_id", runID).
+			Str("temp_dir", tempDir).
+			Msg("Failed to download artifact from GitHub")
 		return deployment
 	}
 
