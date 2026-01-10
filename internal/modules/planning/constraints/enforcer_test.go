@@ -723,10 +723,10 @@ func createTestContextWithMultipleSecurities(securities []universe.Security) *pl
 	}
 
 	ctx := &planningdomain.OpportunityContext{
-		Securities:     domainSecurities,
-		StocksByISIN:   stocksByISIN,
-		AllowSell:      true,
-		AllowBuy:       true,
+		Securities:   domainSecurities,
+		StocksByISIN: stocksByISIN,
+		AllowSell:    true,
+		AllowBuy:     true,
 	}
 
 	return ctx
