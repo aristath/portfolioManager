@@ -151,7 +151,7 @@ func (h *Handler) HandleGetHolidays(w http.ResponseWriter, r *http.Request) {
 	// Get exchange from query param, default to all exchanges
 	exchange := r.URL.Query().Get("exchange")
 
-	exchangesToCheck := []string{}
+	var exchangesToCheck []string
 	if exchange != "" {
 		exchangesToCheck = []string{exchange}
 	} else {

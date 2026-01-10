@@ -63,44 +63,6 @@ func (m *mockSecurityRepo) GetTagsForSecurity(symbol string) ([]string, error) {
 	return []string{}, nil
 }
 
-// mockPositionRepo implements PositionRepository interface for testing
-type mockPositionRepo struct{}
-
-func (m *mockPositionRepo) GetAll() ([]interface{}, error) {
-	return []interface{}{}, nil
-}
-
-// mockAllocRepo implements AllocationRepository interface for testing
-type mockAllocRepo struct{}
-
-func (m *mockAllocRepo) GetAll() (map[string]float64, error) {
-	return map[string]float64{}, nil
-}
-
-// mockCashManager implements CashManager interface for testing
-type mockCashManager struct{}
-
-func (m *mockCashManager) GetAllCashBalances() (map[string]float64, error) {
-	return map[string]float64{"EUR": 1000.0}, nil
-}
-
-func (m *mockCashManager) GetCashBalance(currency string) (float64, error) {
-	return 1000.0, nil
-}
-
-func (m *mockCashManager) UpdateCashPosition(currency string, balance float64) error {
-	return nil
-}
-
-// mockConfigRepo implements ConfigRepository interface for testing
-type mockConfigRepo struct{}
-
-func (m *mockConfigRepo) GetDefaultConfig() (*planningdomain.PlannerConfiguration, error) {
-	return &planningdomain.PlannerConfiguration{
-		MaxOpportunitiesPerCategory: 10,
-	}, nil
-}
-
 func TestHandleGetAll(t *testing.T) {
 	logger := zerolog.New(nil).Level(zerolog.Disabled)
 	db := setupTestDB(t)

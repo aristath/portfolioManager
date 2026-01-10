@@ -523,9 +523,7 @@ func (p *Planner) buildRejectedOpportunities(
 			// Opportunity was in selected sequences, check if it was filtered by constraints
 			if constraintReasons, hasConstraints := filteredByConstraints[key]; hasConstraints {
 				// Was filtered by constraints
-				for _, reason := range constraintReasons {
-					rejected.Reasons = append(rejected.Reasons, reason)
-				}
+				rejected.Reasons = append(rejected.Reasons, constraintReasons...)
 			} else {
 				// If it's in selected sequences and not filtered by constraints, it should be in final plan
 				// Since it's not in final plan, add a generic reason

@@ -75,7 +75,7 @@ func TestEvolveGeneration(t *testing.T) {
 	// Population should still be valid
 	for _, ind := range newPopulation {
 		assert.NotNil(t, ind.Formula)
-		assert.GreaterOrEqual(t, ind.Fitness, 0.0)
+		assert.True(t, ind.Fitness >= 0.0, "Fitness should be >= 0.0, got %f", ind.Fitness)
 	}
 }
 

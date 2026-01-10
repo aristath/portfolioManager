@@ -35,16 +35,6 @@ func createEnrichedPositionWithWeight(pos domain.Position, sec domain.Security, 
 	return enriched
 }
 
-// createEnrichedPositionWithPrice is a test helper that creates an EnrichedPosition and looks up the price.
-// Looks up currentPrice from a CurrentPrices map using the position's ISIN.
-func createEnrichedPositionWithPrice(pos domain.Position, sec domain.Security, prices map[string]float64) planningdomain.EnrichedPosition {
-	currentPrice := 0.0
-	if p, ok := prices[pos.ISIN]; ok {
-		currentPrice = p
-	}
-	return createEnrichedPosition(pos, sec, currentPrice)
-}
-
 func TestAbs(t *testing.T) {
 	tests := []struct {
 		name     string
