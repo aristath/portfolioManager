@@ -3,6 +3,9 @@ package settings
 // SettingDefaults holds all default values for configurable settings
 // Faithful translation from Python: app/api/settings.py -> SETTING_DEFAULTS
 var SettingDefaults = map[string]interface{}{
+	// Controller settings (temperament adjustments)
+	"risk_tolerance": 0.5, // Overall risk tolerance (0 = avoid risk, 1 = take more risks)
+
 	// Security scoring
 	"min_security_score":   0.5,  // Minimum score for security to be recommended (0-1)
 	"target_annual_return": 0.11, // Optimal CAGR for scoring (11%)
@@ -184,6 +187,7 @@ var StringSettings = map[string]bool{
 
 // SettingDescriptions holds human-readable descriptions for all settings
 var SettingDescriptions = map[string]string{
+	"risk_tolerance":              "Overall risk tolerance (0 = avoid risk at all costs, 1 = take more risks). Adjusts internal thresholds automatically.",
 	"limit_order_buffer_percent":  "Buffer percentage for limit orders (5% = buy up to 5% above Yahoo price, sell down to 5% below)",
 	"enable_order_book_analysis":  "Enable order book analysis (1.0 = yes, 0.0 = no/Yahoo-only fallback)",
 	"min_liquidity_multiple":      "Required liquidity as multiple of trade size (2.0 = need 2x quantity available)",

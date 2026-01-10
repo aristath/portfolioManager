@@ -383,6 +383,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		container.ScoreRepo,
 		container.CashManager,
 		container.SettingsRepo,
+		container.SettingsService,
 		container.AllocRepo,
 		container.CurrencyExchangeService,
 		container.BrokerClient,

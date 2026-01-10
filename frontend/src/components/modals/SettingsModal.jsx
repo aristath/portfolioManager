@@ -116,12 +116,50 @@ export function SettingsModal() {
       >
       <Tabs value={activeTab} onChange={setActiveTab}>
         <Tabs.List grow>
+          <Tabs.Tab value="controller">Controller</Tabs.Tab>
           <Tabs.Tab value="trading">Trading</Tabs.Tab>
           <Tabs.Tab value="display">Display</Tabs.Tab>
           <Tabs.Tab value="system">System</Tabs.Tab>
           <Tabs.Tab value="backup">Backup</Tabs.Tab>
           <Tabs.Tab value="credentials">Credentials</Tabs.Tab>
         </Tabs.List>
+
+        <Tabs.Panel value="controller" p="md">
+          <Stack gap="md">
+            {/* Risk Tolerance */}
+            <Paper p="md" withBorder>
+              <Text size="sm" fw={500} mb="xs" tt="uppercase">Risk Tolerance</Text>
+              <Text size="xs" c="dimmed" mb="md">
+                Overall risk appetite: 0 = avoid risk at all costs, 1 = take more risks.
+                This adjusts internal thresholds automatically throughout the system.
+              </Text>
+              <Stack gap="sm">
+                <Slider
+                  value={getSetting('risk_tolerance', 0.5)}
+                  onChange={(val) => handleUpdateSetting('risk_tolerance', val)}
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  marks={[
+                    { value: 0, label: 'Avoid Risk' },
+                    { value: 0.5, label: 'Neutral' },
+                    { value: 1, label: 'Take Risks' }
+                  ]}
+                />
+                <Group justify="space-between" mt="xs">
+                  <Text size="xs" c="dimmed">Current: {(getSetting('risk_tolerance', 0.5) * 100).toFixed(0)}%</Text>
+                  <Text size="xs" c="dimmed">Range: 0.0 - 1.0</Text>
+                </Group>
+                <Alert color="blue" variant="light" size="sm">
+                  <Text size="xs">
+                    Adjusting risk tolerance will automatically modify thresholds like minimum security scores,
+                    affecting which securities are recommended and how the system evaluates opportunities.
+                  </Text>
+                </Alert>
+              </Stack>
+            </Paper>
+          </Stack>
+        </Tabs.Panel>
 
         <Tabs.Panel value="trading" p="md">
           <Stack gap="md">

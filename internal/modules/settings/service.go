@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/aristath/sentinel/internal/utils"
 	"github.com/rs/zerolog"
 )
 
@@ -116,6 +117,17 @@ func (s *Service) Set(key string, value interface{}) (bool, error) {
 		}
 		if floatVal < 0 {
 			return false, fmt.Errorf("virtual_test_cash must be non-negative")
+		}
+	}
+
+	// Special validation for risk_tolerance
+	if key == "risk_tolerance" {
+		floatVal, ok := value.(float64)
+		if !ok {
+			return false, fmt.Errorf("risk_tolerance must be a float")
+		}
+		if floatVal < 0.0 || floatVal > 1.0 {
+			return false, fmt.Errorf("risk_tolerance must be between 0.0 and 1.0")
 		}
 	}
 
@@ -262,4 +274,45 @@ func (s *Service) ToggleTradingMode() (string, string, error) {
 	}
 
 	return newMode, currentMode, nil
+}
+
+// GetAdjustedMinSecurityScore retrieves the min_security_score adjusted by risk_tolerance
+// This uses the temperament system to adjust the base threshold based on risk tolerance.
+// Returns the adjusted value between min (0.3, conservative) and max (0.7, aggressive).
+func (s *Service) GetAdjustedMinSecurityScore() (float64, error) {
+	// Get base min_security_score (default 0.5)
+	baseMinScore, err := s.Get("min_security_score")
+	if err != nil {
+		s.log.Warn().Err(err).Msg("Failed to get min_security_score, using default")
+		baseMinScore = SettingDefaults["min_security_score"]
+	}
+
+	baseValue, ok := baseMinScore.(float64)
+	if !ok {
+		baseValue = 0.5 // Default fallback if not float64
+	}
+
+	// Get risk_tolerance (default 0.5)
+	riskTolerance, err := s.Get("risk_tolerance")
+	if err != nil {
+		s.log.Warn().Err(err).Msg("Failed to get risk_tolerance, using default")
+		riskTolerance = SettingDefaults["risk_tolerance"]
+	}
+
+	riskValue, ok := riskTolerance.(float64)
+	if !ok {
+		riskValue = 0.5 // Default fallback if not float64
+	}
+
+	// Use temperament utility to adjust the value
+	adjustedValue := utils.GetTemperamentValue(utils.TemperamentParams{
+		Type:        "risk_tolerance",
+		Value:       riskValue,
+		Min:         0.3, // Conservative minimum
+		Max:         0.7, // Aggressive maximum
+		Progression: "sigmoid",
+		Base:        baseValue, // Current default (0.5)
+	})
+
+	return adjustedValue, nil
 }

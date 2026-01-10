@@ -18,6 +18,7 @@ type StateHashService struct {
 	scoreRepo       universe.ScoreRepositoryInterface
 	cashManager     domain.CashManager
 	settingsRepo    *settings.Repository
+	settingsService *settings.Service
 	allocRepo       *allocation.Repository
 	exchangeService domain.CurrencyExchangeServiceInterface
 	brokerClient    domain.BrokerClient
@@ -31,6 +32,7 @@ func NewStateHashService(
 	scoreRepo universe.ScoreRepositoryInterface,
 	cashManager domain.CashManager,
 	settingsRepo *settings.Repository,
+	settingsService *settings.Service,
 	allocRepo *allocation.Repository,
 	exchangeService domain.CurrencyExchangeServiceInterface,
 	brokerClient domain.BrokerClient,
@@ -42,6 +44,7 @@ func NewStateHashService(
 		scoreRepo:       scoreRepo,
 		cashManager:     cashManager,
 		settingsRepo:    settingsRepo,
+		settingsService: settingsService,
 		allocRepo:       allocRepo,
 		exchangeService: exchangeService,
 		brokerClient:    brokerClient,
@@ -172,9 +175,24 @@ func (s *StateHashService) fetchRelevantSettings() map[string]interface{} {
 
 	settingsMap := make(map[string]interface{})
 	for _, key := range relevantKeys {
-		val, err := s.settingsRepo.Get(key)
-		if err == nil && val != nil {
-			settingsMap[key] = *val
+		// Special handling for min_security_score: use adjusted value based on risk_tolerance
+		if key == "min_security_score" && s.settingsService != nil {
+			adjustedValue, err := s.settingsService.GetAdjustedMinSecurityScore()
+			if err == nil {
+				settingsMap[key] = fmt.Sprintf("%f", adjustedValue)
+			} else {
+				s.log.Warn().Err(err).Msg("Failed to get adjusted min_security_score, using raw value")
+				// Fallback to raw value
+				val, err := s.settingsRepo.Get(key)
+				if err == nil && val != nil {
+					settingsMap[key] = *val
+				}
+			}
+		} else {
+			val, err := s.settingsRepo.Get(key)
+			if err == nil && val != nil {
+				settingsMap[key] = *val
+			}
 		}
 	}
 	return settingsMap
