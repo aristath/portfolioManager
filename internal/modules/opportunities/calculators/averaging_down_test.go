@@ -53,7 +53,7 @@ func TestAveragingDownCalculator_WithTagFiltering_PreFiltersPositions(t *testing
 	securityRepo := &mockSecurityRepoAveragingDown{
 		tags: map[string][]string{
 			"TEST.US":  {"quality-value"}, // No quality-gate-fail means it passes
-			"OTHER.US": {},                 // No quality-gate-fail means it passes
+			"OTHER.US": {},                // No quality-gate-fail means it passes
 		},
 	}
 	calc := NewAveragingDownCalculator(tagFilter, securityRepo, log)

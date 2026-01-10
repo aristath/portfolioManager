@@ -22,8 +22,8 @@ func (t TradeSide) IsSell() bool {
 // for priority-based selection and sequencing.
 type ActionCandidate struct {
 	Side     TradeSide `json:"side"`
-	ISIN     string    `json:"isin"`      // International Securities Identification Number (PRIMARY identifier)
-	Symbol   string    `json:"symbol"`    // Security symbol (BOUNDARY identifier for APIs/UI)
+	ISIN     string    `json:"isin"`   // International Securities Identification Number (PRIMARY identifier)
+	Symbol   string    `json:"symbol"` // Security symbol (BOUNDARY identifier for APIs/UI)
 	Name     string    `json:"name"`
 	Currency string    `json:"currency"`
 	Reason   string    `json:"reason"`
