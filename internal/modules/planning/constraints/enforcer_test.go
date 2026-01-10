@@ -460,7 +460,13 @@ func TestEnforcer_EnforceConstraints_MaxSellPercentage(t *testing.T) {
 	}
 
 	ctx := &planningdomain.OpportunityContext{
-		Positions:         []domain.Position{position},
+		EnrichedPositions: []planningdomain.EnrichedPosition{
+			{
+				ISIN:     position.ISIN,
+				Symbol:   position.Symbol,
+				Quantity: float64(position.Quantity),
+			},
+		},
 		Securities:        []domain.Security{{Symbol: "PPA.GR", ISIN: "GR1234567890"}},
 		StocksByISIN:      map[string]domain.Security{"GR1234567890": {Symbol: "PPA.GR", ISIN: "GR1234567890"}},
 		IneligibleISINs:   map[string]bool{},
@@ -555,7 +561,7 @@ func TestEnforcer_EnforceConstraints_MaxSellPercentage_BuyNotAffected(t *testing
 	}
 
 	ctx := &planningdomain.OpportunityContext{
-		Positions:         []domain.Position{},
+		EnrichedPositions: []planningdomain.EnrichedPosition{},
 		Securities:        []domain.Security{{Symbol: "TEST.US", ISIN: "US1234567890"}},
 		StocksByISIN:      map[string]domain.Security{"US1234567890": {Symbol: "TEST.US", ISIN: "US1234567890"}},
 		IneligibleISINs:   map[string]bool{},
@@ -605,7 +611,7 @@ func TestEnforcer_EnforceConstraints_MaxSellPercentage_NoPosition(t *testing.T) 
 
 	// No positions in context
 	ctx := &planningdomain.OpportunityContext{
-		Positions:         []domain.Position{},
+		EnrichedPositions: []planningdomain.EnrichedPosition{},
 		Securities:        []domain.Security{{Symbol: "TEST.US", ISIN: "US1234567890"}},
 		StocksByISIN:      map[string]domain.Security{"US1234567890": {Symbol: "TEST.US", ISIN: "US1234567890"}},
 		IneligibleISINs:   map[string]bool{},

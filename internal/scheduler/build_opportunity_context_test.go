@@ -607,9 +607,9 @@ func TestFetchCurrentPrices_MultipleCurrencies(t *testing.T) {
 // TestBuildOpportunityContext_EnrichedPositions_AllFieldsPopulated verifies all 24 fields are populated
 func TestBuildOpportunityContext_EnrichedPositions_AllFieldsPopulated(t *testing.T) {
 	// Setup: Position with all 14 database fields
-	firstBought := int64(1640000000)  // 2021-12-20 00:00:00 UTC
-	lastSold := int64(1672531200)     // 2023-01-01 00:00:00 UTC
-	lastUpdated := int64(1704067200)  // 2024-01-01 00:00:00 UTC
+	firstBought := int64(1640000000) // 2021-12-20 00:00:00 UTC
+	lastSold := int64(1672531200)    // 2023-01-01 00:00:00 UTC
+	lastUpdated := int64(1704067200) // 2024-01-01 00:00:00 UTC
 
 	positions := []portfolio.Position{
 		{

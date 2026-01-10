@@ -18,14 +18,14 @@ import (
 
 // Handler handles snapshot HTTP requests
 type Handler struct {
-	positionRepo        *portfolio.PositionRepository
-	historyDB           *universe.HistoryDB
-	ledgerDB            *sql.DB
-	configDB            *sql.DB
-	cashManager         domain.CashManager
-	adaptiveService     *adaptation.AdaptiveMarketService
-	marketHoursService  *market_hours.MarketHoursService
-	log                 zerolog.Logger
+	positionRepo       *portfolio.PositionRepository
+	historyDB          *universe.HistoryDB
+	ledgerDB           *sql.DB
+	configDB           *sql.DB
+	cashManager        domain.CashManager
+	adaptiveService    *adaptation.AdaptiveMarketService
+	marketHoursService *market_hours.MarketHoursService
+	log                zerolog.Logger
 }
 
 // NewHandler creates a new snapshot handler
@@ -67,17 +67,12 @@ func (h *Handler) HandleGetComplete(w http.ResponseWriter, r *http.Request) {
 		Scan(&smoothedScore, &discreteRegime)
 
 	isOpen := false
-	if h.marketHoursService != nil {
-		status, err := h.marketHoursService.GetMarketStatus("XETRA", time.Now())
-		if err == nil {
-			isOpen = status.Open
-		}
+	status, err := h.marketHoursService.GetMarketStatus("XETRA", time.Now())
+	if err == nil {
+		isOpen = status.Open
 	}
 
-	weights := map[string]float64{}
-	if h.adaptiveService != nil {
-		weights = h.adaptiveService.CalculateAdaptiveWeights(smoothedScore)
-	}
+	weights := h.adaptiveService.CalculateAdaptiveWeights(smoothedScore)
 
 	// Get risk metrics
 	portfolioRisk := h.calculatePortfolioRisk()
@@ -85,8 +80,8 @@ func (h *Handler) HandleGetComplete(w http.ResponseWriter, r *http.Request) {
 	response := map[string]interface{}{
 		"data": map[string]interface{}{
 			"portfolio": map[string]interface{}{
-				"total_value":   totalValue,
-				"cash_balances": h.getCashBalances(),
+				"total_value":    totalValue,
+				"cash_balances":  h.getCashBalances(),
 				"position_count": len(positions),
 			},
 			"market_context": map[string]interface{}{
@@ -126,31 +121,37 @@ func (h *Handler) HandleGetPortfolioState(w http.ResponseWriter, r *http.Request
 		totalCostBasis += pos.AvgPrice * pos.Quantity
 
 		positionsData = append(positionsData, map[string]interface{}{
-			"symbol":              pos.Symbol,
-			"quantity":            pos.Quantity,
-			"avg_price":           pos.AvgPrice,
-			"current_price":       pos.CurrentPrice,
-			"market_value_eur":    pos.MarketValueEUR,
-			"name":                pos.StockName,
-			"country":             pos.Country,
-			"industry":            pos.Industry,
+			"symbol":           pos.Symbol,
+			"quantity":         pos.Quantity,
+			"avg_price":        pos.AvgPrice,
+			"current_price":    pos.CurrentPrice,
+			"market_value_eur": pos.MarketValueEUR,
+			"name":             pos.StockName,
+			"country":          pos.Country,
+			"industry":         pos.Industry,
 		})
 	}
 
 	// Get cash balances
 	cashBalances := h.getCashBalances()
 
+	// Get position scores from portfolio DB
+	// Note: We don't have a GetAllScores method on the repository, but scores aren't
+	// critical for the snapshot, so we can skip them or return empty array
+	scores := []map[string]interface{}{}
+
 	totalUnrealizedPnL := totalValue - totalCostBasis
 
 	response := map[string]interface{}{
 		"data": map[string]interface{}{
-			"positions": positionsData,
+			"positions":     positionsData,
+			"scores":        scores,
 			"cash_balances": cashBalances,
 			"metrics": map[string]interface{}{
-				"total_value_eur":   totalValue,
-				"total_cost_basis":  totalCostBasis,
-				"unrealized_pnl":    totalUnrealizedPnL,
-				"position_count":    len(positions),
+				"total_value_eur":  totalValue,
+				"total_cost_basis": totalCostBasis,
+				"unrealized_pnl":   totalUnrealizedPnL,
+				"position_count":   len(positions),
 			},
 		},
 		"metadata": map[string]interface{}{
@@ -177,22 +178,15 @@ func (h *Handler) HandleGetMarketContext(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Get adaptive weights
-	weights := map[string]float64{}
-	blend := float64(0.5)
-	var qualityGates *adaptation.QualityGateThresholds
-	if h.adaptiveService != nil {
-		weights = h.adaptiveService.CalculateAdaptiveWeights(smoothedScore)
-		blend = h.adaptiveService.CalculateAdaptiveBlend(smoothedScore)
-		qualityGates = h.adaptiveService.CalculateAdaptiveQualityGates(smoothedScore)
-	}
+	weights := h.adaptiveService.CalculateAdaptiveWeights(smoothedScore)
+	blend := h.adaptiveService.CalculateAdaptiveBlend(smoothedScore)
+	qualityGates := h.adaptiveService.CalculateAdaptiveQualityGates(smoothedScore)
 
 	// Get market hours status (check XETRA as primary market)
 	isOpen := false
-	if h.marketHoursService != nil {
-		status, err := h.marketHoursService.GetMarketStatus("XETRA", time.Now())
-		if err == nil {
-			isOpen = status.Open
-		}
+	status, err := h.marketHoursService.GetMarketStatus("XETRA", time.Now())
+	if err == nil {
+		isOpen = status.Open
 	}
 
 	response := map[string]interface{}{
@@ -207,15 +201,10 @@ func (h *Handler) HandleGetMarketContext(w http.ResponseWriter, r *http.Request)
 				"is_open": isOpen,
 			},
 			"adaptive_blend": blend,
-			"quality_gates": func() map[string]interface{} {
-				if qualityGates != nil {
-					return map[string]interface{}{
-						"fundamentals": qualityGates.GetFundamentals(),
-						"long_term":    qualityGates.GetLongTerm(),
-					}
-				}
-				return map[string]interface{}{}
-			}(),
+			"quality_gates": map[string]interface{}{
+				"fundamentals": qualityGates.GetFundamentals(),
+				"long_term":    qualityGates.GetLongTerm(),
+			},
 		},
 		"metadata": map[string]interface{}{
 			"timestamp": time.Now().Format(time.RFC3339),

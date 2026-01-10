@@ -236,7 +236,7 @@ func (h *Handler) writeError(w http.ResponseWriter, status int, message string) 
 func (h *Handler) HandleEvaluateSingle(w http.ResponseWriter, r *http.Request) {
 	var request struct {
 		Sequence          []evaluation.ActionCandidate `json:"sequence"`
-		EvaluationContext evaluation.EvaluationContext  `json:"evaluation_context"`
+		EvaluationContext evaluation.EvaluationContext `json:"evaluation_context"`
 	}
 
 	// Parse request body
@@ -334,13 +334,13 @@ func (h *Handler) HandleEvaluateCompare(w http.ResponseWriter, r *http.Request) 
 	response := map[string]interface{}{
 		"results": results,
 		"comparison": map[string]interface{}{
-			"count":             len(results),
-			"best_index":        bestIdx,
-			"worst_index":       worstIdx,
-			"best_score":        bestScore,
-			"worst_score":       worstScore,
-			"score_range":       bestScore - worstScore,
-			"all_feasible":      allFeasible(results),
+			"count":              len(results),
+			"best_index":         bestIdx,
+			"worst_index":        worstIdx,
+			"best_score":         bestScore,
+			"worst_score":        worstScore,
+			"score_range":        bestScore - worstScore,
+			"all_feasible":       allFeasible(results),
 			"evaluation_time_ms": elapsed.Milliseconds(),
 		},
 	}
@@ -371,9 +371,9 @@ func (h *Handler) HandleGetEvaluationCriteria(w http.ResponseWriter, r *http.Req
 			"description":    "Transaction costs reduce final score",
 		},
 		"feasibility": map[string]interface{}{
-			"min_score":      "Must be > 0",
+			"min_score":        "Must be > 0",
 			"cash_sufficiency": "Must have enough cash for all trades",
-			"description":    "Infeasible sequences get score of 0",
+			"description":      "Infeasible sequences get score of 0",
 		},
 		"allocation_fit_formula": "Weighted sum of geographic, industry, quality, and optimizer alignment",
 		"final_score_formula":    "allocation_fit - (transaction_costs * penalty_factor)",
@@ -395,7 +395,7 @@ func (h *Handler) HandleSimulateCustomPrices(w http.ResponseWriter, r *http.Requ
 	var request struct {
 		Sequence          []evaluation.ActionCandidate `json:"sequence"`
 		CustomPrices      map[string]float64           `json:"custom_prices"`
-		EvaluationContext evaluation.EvaluationContext  `json:"evaluation_context"`
+		EvaluationContext evaluation.EvaluationContext `json:"evaluation_context"`
 	}
 
 	// Parse request body
@@ -438,7 +438,7 @@ func (h *Handler) HandleSimulateCustomPrices(w http.ResponseWriter, r *http.Requ
 
 	// Build response
 	response := map[string]interface{}{
-		"result":      results[0],
+		"result":        results[0],
 		"custom_prices": request.CustomPrices,
 		"metadata": map[string]interface{}{
 			"timestamp":      time.Now().Format(time.RFC3339),
@@ -462,7 +462,7 @@ func (h *Handler) HandleMonteCarloAdvanced(w http.ResponseWriter, r *http.Reques
 	var request struct {
 		Sequence           []evaluation.ActionCandidate `json:"sequence"`
 		SymbolVolatilities map[string]float64           `json:"symbol_volatilities"`
-		EvaluationContext  evaluation.EvaluationContext  `json:"evaluation_context"`
+		EvaluationContext  evaluation.EvaluationContext `json:"evaluation_context"`
 		Paths              int                          `json:"paths"`
 		CustomDrift        map[string]float64           `json:"custom_drift,omitempty"`
 		ConservativeWeight float64                      `json:"conservative_weight,omitempty"`
@@ -520,8 +520,8 @@ func (h *Handler) HandleMonteCarloAdvanced(w http.ResponseWriter, r *http.Reques
 			"custom_drift_applied": len(request.CustomDrift),
 			"conservative_weight":  request.ConservativeWeight,
 			"score_distribution": map[string]interface{}{
-				"range":     result.BestScore - result.WorstScore,
-				"p10_to_p90": result.P90Score - result.P10Score,
+				"range":                result.BestScore - result.WorstScore,
+				"p10_to_p90":           result.P90Score - result.P10Score,
 				"percentile_range_pct": (result.P90Score - result.P10Score) / (result.BestScore - result.WorstScore) * 100,
 			},
 		},

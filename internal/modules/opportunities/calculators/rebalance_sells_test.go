@@ -82,9 +82,9 @@ func TestRebalanceSellsCalculator_MaxSellPercentage(t *testing.T) {
 			currentPrice := 10.0
 
 			ctx := &planningdomain.OpportunityContext{
-				EnrichedPositions:              []planningdomain.EnrichedPosition{
-			createEnrichedPosition(position, security, 15.0),
-		},
+				EnrichedPositions: []planningdomain.EnrichedPosition{
+					createEnrichedPosition(position, security, 15.0),
+				},
 				Securities:             []domain.Security{security},
 				CurrentPrices:          map[string]float64{"US1234567890": currentPrice},
 				StocksByISIN:           map[string]domain.Security{"US1234567890": security},
@@ -152,7 +152,7 @@ func TestRebalanceSellsCalculator_MaxSellPercentage_MultiplePositions(t *testing
 	}
 
 	ctx := &planningdomain.OpportunityContext{
-		EnrichedPositions:              []planningdomain.EnrichedPosition{
+		EnrichedPositions: []planningdomain.EnrichedPosition{
 			createEnrichedPosition(position1, security1, 10.0),
 			createEnrichedPosition(position2, security2, 20.0),
 		},
@@ -217,7 +217,7 @@ func TestRebalanceSellsCalculator_NoMaxSellPercentage_DefaultsToHardcodedCap(t *
 	}
 
 	ctx := &planningdomain.OpportunityContext{
-		EnrichedPositions:              []planningdomain.EnrichedPosition{
+		EnrichedPositions: []planningdomain.EnrichedPosition{
 			createEnrichedPosition(position, security, 15.0),
 		},
 		Securities:             []domain.Security{security},

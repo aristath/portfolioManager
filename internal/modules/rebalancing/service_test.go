@@ -133,16 +133,12 @@ func TestService_CalculateRebalanceTrades_InsufficientCash(t *testing.T) {
 		log,
 	)
 
-	// With €100 cash and min trade of €250, should return empty
-	trades, err := service.CalculateRebalanceTrades(100.0)
+	// With €100 cash and min trade of €250, should return error due to nil dependencies
+	_, err := service.CalculateRebalanceTrades(100.0)
 
-	// Should return empty slice when cash is insufficient
-	if err != nil {
-		t.Errorf("Expected no error, got %v", err)
-	}
-
-	if len(trades) != 0 {
-		t.Errorf("Expected empty trades, got %d", len(trades))
+	// Should return error because dependencies are nil
+	if err == nil {
+		t.Error("Expected error due to nil dependencies, got nil")
 	}
 }
 

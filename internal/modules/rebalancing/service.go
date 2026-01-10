@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/aristath/sentinel/internal/clients/yahoo"
 	"github.com/aristath/sentinel/internal/domain"
@@ -123,6 +124,244 @@ func (s *Service) GetNegativeBalanceRebalancer() *NegativeBalanceRebalancer {
 	return s.negativeRebalancer
 }
 
+// SimulatedPortfolio represents the simulated portfolio state after trades
+type SimulatedPortfolio struct {
+	Positions     map[string]float64 // ISIN -> quantity
+	CashBalances  map[string]float64 // Currency -> balance
+	TotalValue    float64            // Total portfolio value in EUR
+	TotalCost     float64            // Total cost of trades
+	TradesApplied int                // Number of trades successfully applied
+}
+
+// SimulateTrade represents a trade to simulate
+type SimulateTrade struct {
+	ISIN     string
+	Symbol   string
+	Side     string
+	Quantity float64
+	Price    float64
+	Currency string
+}
+
+// SimulateRebalance simulates the portfolio state after executing a set of trades
+// Returns the simulated portfolio state with new positions and cash balances
+func (s *Service) SimulateRebalance(trades []SimulateTrade) (*SimulatedPortfolio, error) {
+	// Step 1: Validate required dependencies
+	if s.positionRepo == nil {
+		return nil, fmt.Errorf("position repository is required")
+	}
+
+	// Step 2: Get current positions
+	currentPositions, err := s.positionRepo.GetAll()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current positions: %w", err)
+	}
+
+	// Step 3: Get current cash balances
+	cashBalances := make(map[string]float64)
+	if s.cashManager != nil {
+		balances, err := s.cashManager.GetAllCashBalances()
+		if err == nil {
+			cashBalances = balances
+		}
+	}
+
+	// Step 4: Build position map (ISIN -> quantity)
+	positions := make(map[string]float64)
+	for _, pos := range currentPositions {
+		if pos.ISIN != "" {
+			positions[pos.ISIN] = pos.Quantity
+		}
+	}
+
+	// Step 5: Build price lookup map for efficiency
+	priceByISIN := make(map[string]float64)
+	for _, pos := range currentPositions {
+		if pos.ISIN != "" {
+			priceByISIN[pos.ISIN] = pos.CurrentPrice
+		}
+	}
+
+	// Step 6: Simulate each trade
+	totalCost := 0.0
+	tradesApplied := 0
+
+	for _, trade := range trades {
+		// Calculate trade value
+		tradeValue := trade.Quantity * trade.Price
+
+		// Calculate commission (€2 fixed + 0.2% variable)
+		commission := 2.0 + (tradeValue * 0.002)
+
+		// Ensure currency exists in cash balances
+		if trade.Currency == "" {
+			trade.Currency = "EUR" // Default
+		}
+		if _, exists := cashBalances[trade.Currency]; !exists {
+			cashBalances[trade.Currency] = 0.0
+		}
+
+		// Apply trade
+		if trade.Side == "BUY" {
+			// Deduct cost from cash
+			totalTradeCost := tradeValue + commission
+			cashBalances[trade.Currency] -= totalTradeCost
+			totalCost += totalTradeCost
+
+			// Add to position
+			if trade.ISIN != "" {
+				positions[trade.ISIN] += trade.Quantity
+				// Store trade price for newly purchased securities
+				if _, exists := priceByISIN[trade.ISIN]; !exists {
+					priceByISIN[trade.ISIN] = trade.Price
+				}
+			}
+
+			tradesApplied++
+		} else if trade.Side == "SELL" {
+			// Add proceeds to cash
+			proceeds := tradeValue - commission
+			cashBalances[trade.Currency] += proceeds
+			totalCost += commission // Only commission counts as cost for sells
+
+			// Subtract from position
+			if trade.ISIN != "" {
+				positions[trade.ISIN] -= trade.Quantity
+				// Remove position if quantity becomes 0 or negative
+				if positions[trade.ISIN] <= 0 {
+					delete(positions, trade.ISIN)
+				}
+			}
+
+			tradesApplied++
+		}
+	}
+
+	// Step 7: Calculate total value (positions + cash)
+	totalValue := 0.0
+	for _, balance := range cashBalances {
+		totalValue += balance
+	}
+
+	// Add position values using price lookup map
+	for isin, qty := range positions {
+		if price, exists := priceByISIN[isin]; exists {
+			totalValue += qty * price
+		}
+	}
+
+	return &SimulatedPortfolio{
+		Positions:     positions,
+		CashBalances:  cashBalances,
+		TotalValue:    totalValue,
+		TotalCost:     totalCost,
+		TradesApplied: tradesApplied,
+	}, nil
+}
+
+// CheckTriggers checks if rebalancing should be triggered based on current portfolio state
+// Returns trigger result with should_rebalance flag and reason
+func (s *Service) CheckTriggers() (*TriggerResult, error) {
+	// Step 1: Validate required dependencies
+	if s.positionRepo == nil {
+		return nil, fmt.Errorf("position repository is required")
+	}
+	if s.allocRepo == nil {
+		return nil, fmt.Errorf("allocation repository is required")
+	}
+	if s.triggerChecker == nil {
+		return nil, fmt.Errorf("trigger checker is required")
+	}
+
+	// Step 2: Get positions
+	positions, err := s.positionRepo.GetAll()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get positions: %w", err)
+	}
+
+	// Step 3: Get target allocations
+	targetAllocations, err := s.allocRepo.GetAll()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get target allocations: %w", err)
+	}
+
+	// Step 4: Calculate total portfolio value and get cash balance
+	var totalValue float64
+	var cashBalance float64
+
+	// Calculate portfolio value from positions
+	for _, pos := range positions {
+		totalValue += pos.MarketValueEUR
+	}
+
+	// Get cash balances
+	if s.cashManager != nil {
+		balances, err := s.cashManager.GetAllCashBalances()
+		if err == nil {
+			for _, balance := range balances {
+				cashBalance += balance
+			}
+		}
+	}
+
+	// Add cash to total value
+	totalValue += cashBalance
+
+	// Step 5: Get settings from config DB
+	enabled := true                // Default
+	driftThreshold := 0.05         // Default 5%
+	cashThresholdMultiplier := 2.0 // Default 2x
+	minTradeSize := CalculateMinTradeAmount(2.0, 0.002, 0.01)
+
+	if s.configDB != nil {
+		// Get rebalancing_enabled
+		var enabledStr string
+		err := s.configDB.QueryRow("SELECT value FROM settings WHERE key = 'rebalancing_enabled'").Scan(&enabledStr)
+		if err == nil {
+			lowered := strings.ToLower(strings.TrimSpace(enabledStr))
+			enabled = (lowered == "true" || lowered == "1" || lowered == "yes")
+		}
+
+		// Get drift_threshold
+		var driftStr string
+		err = s.configDB.QueryRow("SELECT value FROM settings WHERE key = 'drift_threshold'").Scan(&driftStr)
+		if err == nil {
+			if val, parseErr := parseFloat(driftStr); parseErr == nil {
+				driftThreshold = val
+			}
+		}
+
+		// Get cash_threshold_multiplier
+		var cashMultStr string
+		err = s.configDB.QueryRow("SELECT value FROM settings WHERE key = 'cash_threshold_multiplier'").Scan(&cashMultStr)
+		if err == nil {
+			if val, parseErr := parseFloat(cashMultStr); parseErr == nil {
+				cashThresholdMultiplier = val
+			}
+		}
+	}
+
+	// Step 6: Convert positions to portfolio.Position pointers for trigger checker
+	positionPtrs := make([]*portfolio.Position, len(positions))
+	for i := range positions {
+		positionPtrs[i] = &positions[i]
+	}
+
+	// Step 7: Check triggers
+	result := s.triggerChecker.CheckRebalanceTriggers(
+		positionPtrs,
+		targetAllocations,
+		totalValue,
+		cashBalance,
+		enabled,
+		driftThreshold,
+		cashThresholdMultiplier,
+		minTradeSize,
+	)
+
+	return result, nil
+}
+
 // CalculateRebalanceTrades calculates optimal rebalancing trades
 //
 // This method integrates with the planning module to get trade recommendations
@@ -136,7 +375,24 @@ func (s *Service) GetNegativeBalanceRebalancer() *NegativeBalanceRebalancer {
 //
 //	List of trade recommendations
 func (s *Service) CalculateRebalanceTrades(availableCash float64) ([]RebalanceRecommendation, error) {
-	// Step 1: Check minimum trade amount
+	// Step 1: Validate required dependencies
+	if s.positionRepo == nil {
+		return nil, fmt.Errorf("position repository is required")
+	}
+	if s.securityRepo == nil {
+		return nil, fmt.Errorf("security repository is required")
+	}
+	if s.allocRepo == nil {
+		return nil, fmt.Errorf("allocation repository is required")
+	}
+	if s.planningService == nil {
+		return nil, fmt.Errorf("planning service is required")
+	}
+	if s.configRepo == nil {
+		return nil, fmt.Errorf("config repository is required")
+	}
+
+	// Step 2: Check minimum trade amount
 	minTradeAmount := CalculateMinTradeAmount(2.0, 0.002, 0.01)
 	if availableCash < minTradeAmount {
 		s.log.Info().

@@ -24,25 +24,20 @@ import (
 	adaptationhandlers "github.com/aristath/sentinel/internal/modules/adaptation/handlers"
 	allocationhandlers "github.com/aristath/sentinel/internal/modules/allocation/handlers"
 	analyticshandlers "github.com/aristath/sentinel/internal/modules/analytics/handlers"
-	historicalhandlers "github.com/aristath/sentinel/internal/modules/historical/handlers"
-	ledgerhandlers "github.com/aristath/sentinel/internal/modules/ledger/handlers"
-	markethourshandlers "github.com/aristath/sentinel/internal/modules/market_hours/handlers"
-	opportunitieshandlers "github.com/aristath/sentinel/internal/modules/opportunities/handlers"
-	riskhandlers "github.com/aristath/sentinel/internal/modules/risk/handlers"
-	snapshotshandlers "github.com/aristath/sentinel/internal/modules/snapshots/handlers"
-	sequenceshandlers "github.com/aristath/sentinel/internal/modules/sequences/handlers"
-	rebalancinghandlers "github.com/aristath/sentinel/internal/modules/rebalancing/handlers"
-	currencyhandlers "github.com/aristath/sentinel/internal/modules/currency/handlers"
-	quantumhandlers "github.com/aristath/sentinel/internal/modules/quantum/handlers"
 	"github.com/aristath/sentinel/internal/modules/cash_flows"
 	cashflowshandlers "github.com/aristath/sentinel/internal/modules/cash_flows/handlers"
 	"github.com/aristath/sentinel/internal/modules/charts"
 	chartshandlers "github.com/aristath/sentinel/internal/modules/charts/handlers"
+	currencyhandlers "github.com/aristath/sentinel/internal/modules/currency/handlers"
 	"github.com/aristath/sentinel/internal/modules/display"
 	displayhandlers "github.com/aristath/sentinel/internal/modules/display/handlers"
 	dividendhandlers "github.com/aristath/sentinel/internal/modules/dividends/handlers"
 	evaluation "github.com/aristath/sentinel/internal/modules/evaluation"
 	evaluationhandlers "github.com/aristath/sentinel/internal/modules/evaluation/handlers"
+	historicalhandlers "github.com/aristath/sentinel/internal/modules/historical/handlers"
+	ledgerhandlers "github.com/aristath/sentinel/internal/modules/ledger/handlers"
+	markethourshandlers "github.com/aristath/sentinel/internal/modules/market_hours/handlers"
+	opportunitieshandlers "github.com/aristath/sentinel/internal/modules/opportunities/handlers"
 	optimizationhandlers "github.com/aristath/sentinel/internal/modules/optimization/handlers"
 	planningconfig "github.com/aristath/sentinel/internal/modules/planning/config"
 	planninghandlers "github.com/aristath/sentinel/internal/modules/planning/handlers"
@@ -50,8 +45,13 @@ import (
 	"github.com/aristath/sentinel/internal/modules/planning/repository"
 	"github.com/aristath/sentinel/internal/modules/portfolio"
 	portfoliohandlers "github.com/aristath/sentinel/internal/modules/portfolio/handlers"
+	quantumhandlers "github.com/aristath/sentinel/internal/modules/quantum/handlers"
+	rebalancinghandlers "github.com/aristath/sentinel/internal/modules/rebalancing/handlers"
+	riskhandlers "github.com/aristath/sentinel/internal/modules/risk/handlers"
 	scoringhandlers "github.com/aristath/sentinel/internal/modules/scoring/api/handlers"
+	sequenceshandlers "github.com/aristath/sentinel/internal/modules/sequences/handlers"
 	settingshandlers "github.com/aristath/sentinel/internal/modules/settings/handlers"
+	snapshotshandlers "github.com/aristath/sentinel/internal/modules/snapshots/handlers"
 	tradinghandlers "github.com/aristath/sentinel/internal/modules/trading/handlers"
 	"github.com/aristath/sentinel/internal/modules/universe"
 	universehandlers "github.com/aristath/sentinel/internal/modules/universe/handlers"
@@ -1001,6 +1001,12 @@ func (s *Server) createAdaptationHandler() *adaptationhandlers.Handler {
 func (s *Server) createOpportunitiesHandler() *opportunitieshandlers.Handler {
 	return opportunitieshandlers.NewHandler(
 		s.container.OpportunitiesService,
+		s.container.PositionRepo,
+		s.container.SecurityRepo,
+		s.container.AllocRepo,
+		s.container.CashManager,
+		s.container.PlannerConfigRepo,
+		s.portfolioDB.Conn(),
 		s.log,
 	)
 }

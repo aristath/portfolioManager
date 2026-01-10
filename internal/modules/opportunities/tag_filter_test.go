@@ -131,7 +131,7 @@ func TestTagBasedFilter_GetOpportunityCandidates_WithCash(t *testing.T) {
 	// Create opportunity context with cash
 	ctx := planningdomain.NewOpportunityContext(
 		&scoringdomain.PortfolioContext{},
-		[]domain.Position{},
+		[]planningdomain.EnrichedPosition{},
 		[]domain.Security{},
 		2000.0, // Available cash > 1000
 		10000.0,
@@ -191,7 +191,7 @@ func TestTagBasedFilter_GetOpportunityCandidates_NoCash(t *testing.T) {
 	// Create opportunity context with low cash
 	ctx := planningdomain.NewOpportunityContext(
 		&scoringdomain.PortfolioContext{},
-		[]domain.Position{},
+		[]planningdomain.EnrichedPosition{},
 		[]domain.Security{},
 		500.0, // Available cash < 1000 (no value opportunities)
 		10000.0,
@@ -253,7 +253,7 @@ func TestTagBasedFilter_GetSellCandidates(t *testing.T) {
 	// Create opportunity context with positions
 	ctx := planningdomain.NewOpportunityContext(
 		&scoringdomain.PortfolioContext{},
-		[]domain.Position{
+		[]planningdomain.EnrichedPosition{
 			{Symbol: "AAPL", Quantity: 10},
 			{Symbol: "MSFT", Quantity: 5},
 			{Symbol: "GOOGL", Quantity: 3}, // No sell tags
@@ -289,7 +289,7 @@ func TestTagBasedFilter_GetSellCandidates_NoPositions(t *testing.T) {
 	// Create opportunity context with no positions
 	ctx := planningdomain.NewOpportunityContext(
 		&scoringdomain.PortfolioContext{},
-		[]domain.Position{},
+		[]planningdomain.EnrichedPosition{},
 		[]domain.Security{},
 		1000.0,
 		10000.0,
@@ -363,7 +363,7 @@ func TestTagBasedFilter_isMarketVolatile(t *testing.T) {
 	// Create opportunity context
 	ctx := planningdomain.NewOpportunityContext(
 		&scoringdomain.PortfolioContext{},
-		[]domain.Position{},
+		[]planningdomain.EnrichedPosition{},
 		[]domain.Security{},
 		1000.0,
 		10000.0,
@@ -418,7 +418,7 @@ func TestTagBasedFilter_isMarketVolatile_NotVolatile(t *testing.T) {
 	// Create opportunity context
 	ctx := planningdomain.NewOpportunityContext(
 		&scoringdomain.PortfolioContext{},
-		[]domain.Position{},
+		[]planningdomain.EnrichedPosition{},
 		[]domain.Security{},
 		1000.0,
 		10000.0,

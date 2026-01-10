@@ -7,11 +7,11 @@ import (
 
 func TestGetTemperamentValue_Linear(t *testing.T) {
 	params := TemperamentParams{
-		Type:       "risk_tolerance",
-		Min:        0.3,
-		Max:        0.7,
+		Type:        "risk_tolerance",
+		Min:         0.3,
+		Max:         0.7,
 		Progression: "linear",
-		Base:       0.5,
+		Base:        0.5,
 	}
 
 	// Test value = 0.0 (should return Min)
@@ -38,12 +38,12 @@ func TestGetTemperamentValue_Linear(t *testing.T) {
 
 func TestGetTemperamentValue_LinearReverse(t *testing.T) {
 	params := TemperamentParams{
-		Type:       "risk_tolerance",
-		Value:      0.0,
-		Min:        0.3,
-		Max:        0.7,
+		Type:        "risk_tolerance",
+		Value:       0.0,
+		Min:         0.3,
+		Max:         0.7,
 		Progression: "linear-reverse",
-		Base:       0.5,
+		Base:        0.5,
 	}
 
 	// Test value = 0.0 (reverse: should return Max)
@@ -69,11 +69,11 @@ func TestGetTemperamentValue_LinearReverse(t *testing.T) {
 
 func TestGetTemperamentValue_Exponential(t *testing.T) {
 	params := TemperamentParams{
-		Type:       "risk_tolerance",
-		Min:        0.3,
-		Max:        0.7,
+		Type:        "risk_tolerance",
+		Min:         0.3,
+		Max:         0.7,
 		Progression: "exponential",
-		Base:       0.5,
+		Base:        0.5,
 	}
 
 	// Test value = 0.0 (should return Min)
@@ -100,11 +100,11 @@ func TestGetTemperamentValue_Exponential(t *testing.T) {
 
 func TestGetTemperamentValue_Sigmoid(t *testing.T) {
 	params := TemperamentParams{
-		Type:       "risk_tolerance",
-		Min:        0.3,
-		Max:        0.7,
+		Type:        "risk_tolerance",
+		Min:         0.3,
+		Max:         0.7,
 		Progression: "sigmoid",
-		Base:       0.5,
+		Base:        0.5,
 	}
 
 	// Test value = 0.5 (should return Base exactly)
@@ -131,11 +131,11 @@ func TestGetTemperamentValue_Sigmoid(t *testing.T) {
 
 func TestGetTemperamentValue_Bounds(t *testing.T) {
 	params := TemperamentParams{
-		Type:       "risk_tolerance",
-		Min:        0.2,
-		Max:        0.8,
+		Type:        "risk_tolerance",
+		Min:         0.2,
+		Max:         0.8,
 		Progression: "linear",
-		Base:       0.5,
+		Base:        0.5,
 	}
 
 	// Test clamping: value < 0
@@ -192,11 +192,11 @@ func TestGetTemperamentValue_AllProgressions(t *testing.T) {
 
 func TestGetTemperamentValue_EdgeCases(t *testing.T) {
 	params := TemperamentParams{
-		Type:       "risk_tolerance",
-		Min:        0.0,
-		Max:        1.0,
+		Type:        "risk_tolerance",
+		Min:         0.0,
+		Max:         1.0,
 		Progression: "linear",
-		Base:       0.5,
+		Base:        0.5,
 	}
 
 	// Test with Base not in center

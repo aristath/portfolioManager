@@ -280,12 +280,12 @@ func (h *Handler) HandleGetPerformanceHistory(w http.ResponseWriter, r *http.Req
 
 	response := map[string]interface{}{
 		"data": map[string]interface{}{
-			"period":             period,
-			"total_return_pct":   returnPct,
-			"total_gain_loss":    totalGainLoss,
-			"total_cost_basis":   totalCost,
-			"current_value":      totalCost + totalGainLoss,
-			"note":               "Historical performance tracking requires time-series data",
+			"period":           period,
+			"total_return_pct": returnPct,
+			"total_gain_loss":  totalGainLoss,
+			"total_cost_basis": totalCost,
+			"current_value":    totalCost + totalGainLoss,
+			"note":             "Historical performance tracking requires time-series data",
 		},
 		"metadata": map[string]interface{}{
 			"timestamp": time.Now().Format(time.RFC3339),
@@ -326,11 +326,11 @@ func (h *Handler) HandleGetPerformanceVsBenchmark(w http.ResponseWriter, r *http
 
 	response := map[string]interface{}{
 		"data": map[string]interface{}{
-			"benchmark":         benchmark,
-			"portfolio_return":  portfolioReturn,
-			"benchmark_return":  0.0, // Placeholder - requires market data
-			"alpha":             portfolioReturn,
-			"note":              "Benchmark comparison requires historical market data integration",
+			"benchmark":        benchmark,
+			"portfolio_return": portfolioReturn,
+			"benchmark_return": 0.0, // Placeholder - requires market data
+			"alpha":            portfolioReturn,
+			"note":             "Benchmark comparison requires historical market data integration",
 		},
 		"metadata": map[string]interface{}{
 			"timestamp": time.Now().Format(time.RFC3339),
@@ -368,20 +368,20 @@ func (h *Handler) HandleGetPerformanceAttribution(w http.ResponseWriter, r *http
 		totalValue += marketValue
 
 		securityAttribution = append(securityAttribution, map[string]interface{}{
-			"symbol":             pos.Symbol,
-			"name":               pos.StockName,
-			"return_pct":         returnPct,
-			"contribution":       contribution,
-			"weight":             marketValue,
+			"symbol":       pos.Symbol,
+			"name":         pos.StockName,
+			"return_pct":   returnPct,
+			"contribution": contribution,
+			"weight":       marketValue,
 		})
 	}
 
 	response := map[string]interface{}{
 		"data": map[string]interface{}{
-			"total_return":       totalPortfolioReturn,
-			"total_value":        totalValue,
+			"total_return":         totalPortfolioReturn,
+			"total_value":          totalValue,
 			"security_attribution": securityAttribution,
-			"note":               "Full attribution requires factor model integration",
+			"note":                 "Full attribution requires factor model integration",
 		},
 		"metadata": map[string]interface{}{
 			"timestamp": time.Now().Format(time.RFC3339),
@@ -561,10 +561,10 @@ func (h *Handler) HandleGetUnrealizedPnLBreakdown(w http.ResponseWriter, r *http
 
 	response := map[string]interface{}{
 		"data": map[string]interface{}{
-			"total_pnl":    totalPnL,
-			"by_security":  securityPnL,
-			"by_country":   countryPnL,
-			"by_industry":  industryPnL,
+			"total_pnl":   totalPnL,
+			"by_security": securityPnL,
+			"by_country":  countryPnL,
+			"by_industry": industryPnL,
 		},
 		"metadata": map[string]interface{}{
 			"timestamp": time.Now().Format(time.RFC3339),
@@ -601,14 +601,14 @@ func (h *Handler) HandleGetCostBasis(w http.ResponseWriter, r *http.Request) {
 		totalValue += marketValue
 
 		costBasisAnalysis = append(costBasisAnalysis, map[string]interface{}{
-			"symbol":             pos.Symbol,
-			"name":               pos.StockName,
-			"quantity":           pos.Quantity,
-			"avg_price":          pos.AvgPrice,
-			"currency":           pos.Currency,
-			"cost_basis_eur":     costBasis,
-			"market_value_eur":   marketValue,
-			"unrealized_gain":    unrealizedGain,
+			"symbol":              pos.Symbol,
+			"name":                pos.StockName,
+			"quantity":            pos.Quantity,
+			"avg_price":           pos.AvgPrice,
+			"currency":            pos.Currency,
+			"cost_basis_eur":      costBasis,
+			"market_value_eur":    marketValue,
+			"unrealized_gain":     unrealizedGain,
 			"unrealized_gain_pct": unrealizedGainPct,
 		})
 	}
@@ -621,11 +621,11 @@ func (h *Handler) HandleGetCostBasis(w http.ResponseWriter, r *http.Request) {
 
 	response := map[string]interface{}{
 		"data": map[string]interface{}{
-			"total_cost_basis":   totalCost,
-			"total_market_value": totalValue,
-			"total_unrealized_gain": totalGain,
+			"total_cost_basis":          totalCost,
+			"total_market_value":        totalValue,
+			"total_unrealized_gain":     totalGain,
 			"total_unrealized_gain_pct": totalGainPct,
-			"by_security":        costBasisAnalysis,
+			"by_security":               costBasisAnalysis,
 		},
 		"metadata": map[string]interface{}{
 			"timestamp": time.Now().Format(time.RFC3339),

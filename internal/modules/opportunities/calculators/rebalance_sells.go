@@ -210,8 +210,8 @@ func (c *RebalanceSellsCalculator) Calculate(
 
 		candidate := domain.ActionCandidate{
 			Side:     "SELL",
-			ISIN:     isin,                 // PRIMARY identifier ✅
-			Symbol:   position.Symbol,      // BOUNDARY identifier
+			ISIN:     isin,                  // PRIMARY identifier ✅
+			Symbol:   position.Symbol,       // BOUNDARY identifier
 			Name:     position.SecurityName, // Embedded security metadata
 			Quantity: quantity,
 			Price:    position.CurrentPrice,

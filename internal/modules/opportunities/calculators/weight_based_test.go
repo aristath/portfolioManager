@@ -74,9 +74,9 @@ func TestWeightBasedCalculator_MaxSellPercentage(t *testing.T) {
 			// Portfolio with overweight position
 			// Current: 100% in TEST.US, Target: 40% (60% overweight)
 			ctx := &planningdomain.OpportunityContext{
-				EnrichedPositions:              []planningdomain.EnrichedPosition{
-			createEnrichedPositionWithWeight(position, security, currentPrice, 1.0),
-		},
+				EnrichedPositions: []planningdomain.EnrichedPosition{
+					createEnrichedPositionWithWeight(position, security, currentPrice, 1.0),
+				},
 				Securities:             []domain.Security{security},
 				CurrentPrices:          map[string]float64{"US1234567890": currentPrice}, // ISIN key ✅
 				StocksByISIN:           map[string]domain.Security{"US1234567890": security},
@@ -121,7 +121,7 @@ func TestWeightBasedCalculator_MaxSellPercentage_MultiplePositions(t *testing.T)
 	// Portfolio: 66% STOCK_A (10000), 33% STOCK_B (5000), total 15000
 	// Targets: 40% STOCK_A, 20% STOCK_B
 	ctx := &planningdomain.OpportunityContext{
-		EnrichedPositions:              []planningdomain.EnrichedPosition{
+		EnrichedPositions: []planningdomain.EnrichedPosition{
 			createEnrichedPositionWithWeight(position1, security1, 10.0, 0.66),
 			createEnrichedPositionWithWeight(position2, security2, 10.0, 0.33),
 		},
@@ -178,7 +178,7 @@ func TestWeightBasedCalculator_NoMaxSellPercentage(t *testing.T) {
 	}
 
 	ctx := &planningdomain.OpportunityContext{
-		EnrichedPositions:      []planningdomain.EnrichedPosition{
+		EnrichedPositions: []planningdomain.EnrichedPosition{
 			createEnrichedPositionWithWeight(position, security, 10.0, 1.0),
 		},
 		Securities:             []domain.Security{security},

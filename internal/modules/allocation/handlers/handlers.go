@@ -573,20 +573,6 @@ func buildAlertsArray(alerts []allocation.ConcentrationAlert) []map[string]inter
 	return result
 }
 
-// HandleGetAllocationHistory handles GET /api/allocation/history
-func (h *Handler) HandleGetAllocationHistory(w http.ResponseWriter, r *http.Request) {
-	// Return 501 Not Implemented - requires time-series storage
-	h.writeJSON(w, http.StatusNotImplemented, map[string]interface{}{
-		"error": map[string]interface{}{
-			"message": "Allocation history not yet implemented",
-			"code":    "NOT_IMPLEMENTED",
-			"details": map[string]string{
-				"reason": "Requires time-series database integration for historical allocation snapshots",
-			},
-		},
-	})
-}
-
 // HandleGetAllocationVsTargets handles GET /api/allocation/vs-targets
 func (h *Handler) HandleGetAllocationVsTargets(w http.ResponseWriter, r *http.Request) {
 	// Get portfolio summary
@@ -626,23 +612,23 @@ func (h *Handler) HandleGetAllocationVsTargets(w http.ResponseWriter, r *http.Re
 		}
 
 		comparison = append(comparison, map[string]interface{}{
-			"group":        alloc.Name,
-			"type":         allocType,
-			"target_pct":   alloc.TargetPct,
-			"current_pct":  alloc.CurrentPct,
-			"deviation":    deviation,
-			"status":       status,
+			"group":         alloc.Name,
+			"type":          allocType,
+			"target_pct":    alloc.TargetPct,
+			"current_pct":   alloc.CurrentPct,
+			"deviation":     deviation,
+			"status":        status,
 			"current_value": alloc.CurrentValue,
 		})
 	}
 
 	response := map[string]interface{}{
 		"data": map[string]interface{}{
-			"comparison":       comparison,
-			"total_deviation":  totalDeviation,
-			"overweight_count": overweightCount,
+			"comparison":        comparison,
+			"total_deviation":   totalDeviation,
+			"overweight_count":  overweightCount,
 			"underweight_count": underweightCount,
-			"on_target_count":  len(allocations) - overweightCount - underweightCount,
+			"on_target_count":   len(allocations) - overweightCount - underweightCount,
 		},
 		"metadata": map[string]interface{}{
 			"timestamp": time.Now().Format(time.RFC3339),
@@ -693,13 +679,13 @@ func (h *Handler) HandleGetRebalanceNeeds(w http.ResponseWriter, r *http.Request
 			}
 
 			rebalanceNeeds = append(rebalanceNeeds, map[string]interface{}{
-				"group":          alloc.Name,
-				"type":           allocType,
-				"current_value":  alloc.CurrentValue,
-				"target_value":   targetValue,
-				"value_change":   valueChange,
-				"action":         getRebalanceAction(valueChange),
-				"priority":       getPriority(abs(deviation)),
+				"group":         alloc.Name,
+				"type":          allocType,
+				"current_value": alloc.CurrentValue,
+				"target_value":  targetValue,
+				"value_change":  valueChange,
+				"action":        getRebalanceAction(valueChange),
+				"priority":      getPriority(abs(deviation)),
 			})
 		}
 		processed++
@@ -707,7 +693,7 @@ func (h *Handler) HandleGetRebalanceNeeds(w http.ResponseWriter, r *http.Request
 
 	response := map[string]interface{}{
 		"data": map[string]interface{}{
-			"rebalance_needs": rebalanceNeeds,
+			"rebalance_needs":                rebalanceNeeds,
 			"total_groups_needing_rebalance": len(rebalanceNeeds),
 			"total_rebalance_value":          totalRebalanceValue,
 			"note":                           "Rebalancing requires trading module integration",
@@ -752,20 +738,20 @@ func (h *Handler) HandleGetGroupContribution(w http.ResponseWriter, r *http.Requ
 	response := map[string]interface{}{
 		"data": map[string]interface{}{
 			"geographic": map[string]interface{}{
-				"contributions":     geographicContribution,
-				"hhi":               geographicHHI,
-				"effective_groups":  effectiveGeographicGroups,
+				"contributions":         geographicContribution,
+				"hhi":                   geographicHHI,
+				"effective_groups":      effectiveGeographicGroups,
 				"diversification_score": (1.0 - geographicHHI) * 100,
 			},
 			"industry": map[string]interface{}{
-				"contributions":     industryContribution,
-				"hhi":               industryHHI,
-				"effective_groups":  effectiveIndustryGroups,
+				"contributions":         industryContribution,
+				"hhi":                   industryHHI,
+				"effective_groups":      effectiveIndustryGroups,
 				"diversification_score": (1.0 - industryHHI) * 100,
 			},
 			"interpretation": map[string]string{
-				"hhi":                 "Lower is more diversified (range: 0-1)",
-				"effective_groups":    "Number of equally-weighted groups equivalent to current allocation",
+				"hhi":                   "Lower is more diversified (range: 0-1)",
+				"effective_groups":      "Number of equally-weighted groups equivalent to current allocation",
 				"diversification_score": "Higher is better (range: 0-100)",
 			},
 		},

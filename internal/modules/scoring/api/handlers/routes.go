@@ -13,12 +13,12 @@ func (h *Handlers) RegisterRoutes(r chi.Router) {
 		// Score Components (API extension)
 		r.Route("/components", func(r chi.Router) {
 			r.Get("/{isin}", h.HandleGetScoreComponents) // Detailed component breakdown
-			r.Get("/all", h.HandleGetAllScoreComponents)  // All securities components
+			r.Get("/all", h.HandleGetAllScoreComponents) // All securities components
 		})
 
 		// Scoring Weights (API extension)
 		r.Route("/weights", func(r chi.Router) {
-			r.Get("/current", h.HandleGetCurrentWeights)              // Current weights (base + adaptive)
+			r.Get("/current", h.HandleGetCurrentWeights)                 // Current weights (base + adaptive)
 			r.Get("/adaptive-history", h.HandleGetAdaptiveWeightHistory) // Adaptive weight changes over time
 		})
 

@@ -486,67 +486,15 @@ func (h *TradingHandlers) HandleValidateTrade(w http.ResponseWriter, r *http.Req
 
 	h.writeJSON(w, http.StatusOK, map[string]interface{}{
 		"data": map[string]interface{}{
-			"passed": passed,
-			"symbol": req.Symbol,
-			"side":   req.Side,
+			"passed":   passed,
+			"symbol":   req.Symbol,
+			"side":     req.Side,
 			"quantity": req.Quantity,
-			"errors": validationErrors,
+			"errors":   validationErrors,
 			"warnings": warnings,
 		},
 		"metadata": map[string]interface{}{
 			"timestamp": time.Now().Format(time.RFC3339),
-		},
-	})
-}
-
-// HandleCheckMarketHours handles POST /api/trade-validation/check-market-hours
-// Market hours validation
-func (h *TradingHandlers) HandleCheckMarketHours(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Symbol string `json:"symbol"`
-		Side   string `json:"side"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.writeError(w, http.StatusBadRequest, "Invalid request body")
-		return
-	}
-
-	// This endpoint delegates to the full ValidateTrade which includes market hours check
-	// Return 501 to indicate client should use /validate-trade instead
-	h.writeJSON(w, http.StatusNotImplemented, map[string]interface{}{
-		"error": map[string]interface{}{
-			"message": "Market hours check not yet implemented as standalone endpoint",
-			"code":    "NOT_IMPLEMENTED",
-			"details": map[string]string{
-				"reason":      "Use /trade-validation/validate-trade for full validation including market hours",
-				"alternative": "/api/trade-validation/validate-trade",
-			},
-		},
-	})
-}
-
-// HandleCheckPriceFreshness handles POST /api/trade-validation/check-price-freshness
-// Price staleness check
-func (h *TradingHandlers) HandleCheckPriceFreshness(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Symbol string `json:"symbol"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.writeError(w, http.StatusBadRequest, "Invalid request body")
-		return
-	}
-
-	// Return 501 Not Implemented - requires price database access
-	h.writeJSON(w, http.StatusNotImplemented, map[string]interface{}{
-		"error": map[string]interface{}{
-			"message": "Price freshness check not yet implemented as standalone endpoint",
-			"code":    "NOT_IMPLEMENTED",
-			"details": map[string]string{
-				"reason":      "Requires integration with price database",
-				"alternative": "/api/trade-validation/validate-trade",
-			},
 		},
 	})
 }
@@ -589,12 +537,12 @@ func (h *TradingHandlers) HandleCalculateCommission(w http.ResponseWriter, r *ht
 
 	h.writeJSON(w, http.StatusOK, map[string]interface{}{
 		"data": map[string]interface{}{
-			"symbol":               req.Symbol,
-			"trade_value":          tradeValue,
-			"fixed_commission":     fixedCommissionEUR,
-			"variable_commission":  variableCommission,
-			"total_commission":     totalCommission,
-			"commission_currency":  "EUR",
+			"symbol":              req.Symbol,
+			"trade_value":         tradeValue,
+			"fixed_commission":    fixedCommissionEUR,
+			"variable_commission": variableCommission,
+			"total_commission":    totalCommission,
+			"commission_currency": "EUR",
 		},
 		"metadata": map[string]interface{}{
 			"timestamp": time.Now().Format(time.RFC3339),
@@ -606,10 +554,10 @@ func (h *TradingHandlers) HandleCalculateCommission(w http.ResponseWriter, r *ht
 // Limit price calculation
 func (h *TradingHandlers) HandleCalculateLimitPrice(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Symbol        string  `json:"symbol"`
-		Side          string  `json:"side"`
-		CurrentPrice  float64 `json:"current_price"`
-		SlippagePct   float64 `json:"slippage_pct,omitempty"`
+		Symbol       string  `json:"symbol"`
+		Side         string  `json:"side"`
+		CurrentPrice float64 `json:"current_price"`
+		SlippagePct  float64 `json:"slippage_pct,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -674,11 +622,11 @@ func (h *TradingHandlers) HandleCheckEligibility(w http.ResponseWriter, r *http.
 
 	h.writeJSON(w, http.StatusOK, map[string]interface{}{
 		"data": map[string]interface{}{
-			"symbol":         req.Symbol,
-			"eligible":       eligible,
-			"reasons":        reasons,
-			"can_buy":        eligible,
-			"can_sell":       eligible,
+			"symbol":   req.Symbol,
+			"eligible": eligible,
+			"reasons":  reasons,
+			"can_buy":  eligible,
+			"can_sell": eligible,
 		},
 		"metadata": map[string]interface{}{
 			"timestamp": time.Now().Format(time.RFC3339),
@@ -738,13 +686,13 @@ func (h *TradingHandlers) HandleCheckCashSufficiency(w http.ResponseWriter, r *h
 
 	h.writeJSON(w, http.StatusOK, map[string]interface{}{
 		"data": map[string]interface{}{
-			"sufficient":      sufficient,
-			"cash_balance":    cashBalance,
-			"required_cash":   requiredCash,
-			"trade_value":     tradeValue,
-			"commission":      commission,
-			"shortfall":       shortfall,
-			"currency":        "EUR",
+			"sufficient":    sufficient,
+			"cash_balance":  cashBalance,
+			"required_cash": requiredCash,
+			"trade_value":   tradeValue,
+			"commission":    commission,
+			"shortfall":     shortfall,
+			"currency":      "EUR",
 		},
 		"metadata": map[string]interface{}{
 			"timestamp": time.Now().Format(time.RFC3339),

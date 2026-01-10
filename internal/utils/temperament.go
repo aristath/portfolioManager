@@ -57,14 +57,14 @@ func GetTemperamentValue(params TemperamentParams) float64 {
 			progressionValue = 0.0
 		} else {
 			logMax := math.Log10(10.0)
-			progressionValue = math.Log10(1.0 + 9.0*value) / logMax
+			progressionValue = math.Log10(1.0+9.0*value) / logMax
 		}
 	case "logarithmic-reverse":
 		if value == 1.0 {
 			progressionValue = 0.0
 		} else {
 			logMax := math.Log10(10.0)
-			progressionValue = math.Log10(1.0 + 9.0*(1.0-value)) / logMax
+			progressionValue = math.Log10(1.0+9.0*(1.0-value)) / logMax
 		}
 	case "sigmoid":
 		exponent := -12.0 * (value - 0.5)
@@ -101,12 +101,12 @@ func GetTemperamentValue(params TemperamentParams) float64 {
 	case "logarithmic":
 		logMax := math.Log10(10.0)
 		progAtZero = 0.0
-		progAtHalf = math.Log10(1.0 + 9.0*0.5) / logMax
+		progAtHalf = math.Log10(1.0+9.0*0.5) / logMax
 		progAtOne = 1.0
 	case "logarithmic-reverse":
 		logMax := math.Log10(10.0)
 		progAtZero = 1.0
-		progAtHalf = math.Log10(1.0 + 9.0*0.5) / logMax
+		progAtHalf = math.Log10(1.0+9.0*0.5) / logMax
 		progAtOne = 0.0
 	case "sigmoid":
 		progAtZero = 1.0 / (1.0 + math.Exp(6.0))

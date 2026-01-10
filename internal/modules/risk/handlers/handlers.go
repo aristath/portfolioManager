@@ -193,11 +193,11 @@ func (h *Handler) HandleGetPortfolioCVaR(w http.ResponseWriter, r *http.Request)
 
 			pos := positionMap[isin]
 			contributions = append(contributions, map[string]interface{}{
-				"isin":              isin,
-				"symbol":            pos.Symbol,
-				"contribution":      -contribution, // Negative for loss
-				"contribution_pct":  -contribution / cvar95 * 100,
-				"weight":            weight,
+				"isin":             isin,
+				"symbol":           pos.Symbol,
+				"contribution":     -contribution, // Negative for loss
+				"contribution_pct": -contribution / cvar95 * 100,
+				"weight":           weight,
 			})
 		}
 	}

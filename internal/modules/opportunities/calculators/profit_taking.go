@@ -239,8 +239,8 @@ func (c *ProfitTakingCalculator) Calculate(
 
 		candidate := domain.ActionCandidate{
 			Side:     "SELL",
-			ISIN:     isin,                 // PRIMARY identifier ✅
-			Symbol:   position.Symbol,      // BOUNDARY identifier
+			ISIN:     isin,                  // PRIMARY identifier ✅
+			Symbol:   position.Symbol,       // BOUNDARY identifier
 			Name:     position.SecurityName, // Embedded security metadata
 			Quantity: int(quantity),
 			Price:    currentPrice,

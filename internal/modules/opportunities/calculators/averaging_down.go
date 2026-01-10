@@ -352,8 +352,8 @@ func (c *AveragingDownCalculator) Calculate(
 
 		candidate := domain.ActionCandidate{
 			Side:     "BUY",
-			ISIN:     isin,                 // PRIMARY identifier ✅
-			Symbol:   position.Symbol,      // BOUNDARY identifier
+			ISIN:     isin,                  // PRIMARY identifier ✅
+			Symbol:   position.Symbol,       // BOUNDARY identifier
 			Name:     position.SecurityName, // Embedded security metadata
 			Quantity: quantity,
 			Price:    currentPrice,

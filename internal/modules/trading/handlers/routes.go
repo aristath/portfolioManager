@@ -16,12 +16,10 @@ func (h *TradingHandlers) RegisterRoutes(r chi.Router) {
 
 	// Trade Validation endpoints (API extension)
 	r.Route("/trade-validation", func(r chi.Router) {
-		r.Post("/validate-trade", h.HandleValidateTrade)               // Full trade validation
-		r.Post("/check-market-hours", h.HandleCheckMarketHours)        // Market hours check
-		r.Post("/check-price-freshness", h.HandleCheckPriceFreshness)  // Price staleness check
-		r.Post("/calculate-commission", h.HandleCalculateCommission)   // Commission calculation
-		r.Post("/calculate-limit-price", h.HandleCalculateLimitPrice)  // Limit price calculation
-		r.Post("/check-eligibility", h.HandleCheckEligibility)         // Security eligibility
+		r.Post("/validate-trade", h.HandleValidateTrade)                // Full trade validation
+		r.Post("/calculate-commission", h.HandleCalculateCommission)    // Commission calculation
+		r.Post("/calculate-limit-price", h.HandleCalculateLimitPrice)   // Limit price calculation
+		r.Post("/check-eligibility", h.HandleCheckEligibility)          // Security eligibility
 		r.Post("/check-cash-sufficiency", h.HandleCheckCashSufficiency) // Cash sufficiency check
 	})
 }

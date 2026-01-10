@@ -387,19 +387,19 @@ func (j *BuildOpportunityContextJob) buildOpportunityContext(
 			LastSoldAt:       lastSold,
 
 			// Security metadata (7 fields from StocksByISIN)
-			SecurityName:     security.Name,
-			Country:          security.Country,
-			Exchange:         security.Exchange,
-			Active:           security.Active,
-			AllowBuy:         security.AllowBuy,
-			AllowSell:        security.AllowSell,
-			MinLot:           security.MinLot,
+			SecurityName: security.Name,
+			Country:      security.Country,
+			Exchange:     security.Exchange,
+			Active:       security.Active,
+			AllowBuy:     security.AllowBuy,
+			AllowSell:    security.AllowSell,
+			MinLot:       security.MinLot,
 
 			// Market data (1 field from CurrentPrices)
-			CurrentPrice:     currentPrice,
+			CurrentPrice: currentPrice,
 
 			// Calculated fields (2 fields - WeightInPortfolio calculated below)
-			DaysHeld:         daysHeld,
+			DaysHeld:          daysHeld,
 			WeightInPortfolio: 0.0, // Calculated in second pass
 		}
 

@@ -115,9 +115,9 @@ func TestProfitTakingCalculator_MaxSellPercentage(t *testing.T) {
 			currentPrice := 15.0 // 50% gain
 
 			ctx := &planningdomain.OpportunityContext{
-				EnrichedPositions:         []planningdomain.EnrichedPosition{
-			createEnrichedPosition(position, security, 15.0),
-		},
+				EnrichedPositions: []planningdomain.EnrichedPosition{
+					createEnrichedPosition(position, security, 15.0),
+				},
 				Securities:        []domain.Security{security},
 				CurrentPrices:     map[string]float64{"US1234567890": currentPrice},
 				StocksByISIN:      map[string]domain.Security{"US1234567890": security},
@@ -173,7 +173,7 @@ func TestProfitTakingCalculator_MaxSellPercentage_WithSellPercentageParam(t *tes
 	}
 
 	ctx := &planningdomain.OpportunityContext{
-		EnrichedPositions:         []planningdomain.EnrichedPosition{
+		EnrichedPositions: []planningdomain.EnrichedPosition{
 			createEnrichedPosition(position, security, 15.0),
 		},
 		Securities:        []domain.Security{security},
@@ -260,7 +260,7 @@ func TestProfitTakingCalculator_NoMaxSellPercentage(t *testing.T) {
 	}
 
 	ctx := &planningdomain.OpportunityContext{
-		EnrichedPositions:         []planningdomain.EnrichedPosition{
+		EnrichedPositions: []planningdomain.EnrichedPosition{
 			createEnrichedPosition(position, security, 15.0),
 		},
 		Securities:        []domain.Security{security},

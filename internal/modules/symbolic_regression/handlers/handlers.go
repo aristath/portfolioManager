@@ -446,11 +446,11 @@ func (h *Handlers) HandleGetTrainingData(w http.ResponseWriter, r *http.Request)
 
 	h.respondJSON(w, http.StatusOK, map[string]interface{}{
 		"data": map[string]interface{}{
-			"isin":            isin,
-			"training_date":   trainingDateStr,
-			"forward_months":  forwardMonths,
-			"examples":        filteredExamples,
-			"examples_count":  len(filteredExamples),
+			"isin":           isin,
+			"training_date":  trainingDateStr,
+			"forward_months": forwardMonths,
+			"examples":       filteredExamples,
+			"examples_count": len(filteredExamples),
 		},
 		"metadata": map[string]interface{}{
 			"timestamp": time.Now().Format(time.RFC3339),

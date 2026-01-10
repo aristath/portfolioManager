@@ -29,7 +29,6 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 		r.Put("/groups/targets/industry", h.HandleUpdateIndustryGroupTargets)
 
 		// Allocation Analytics (API extension)
-		r.Get("/history", h.HandleGetAllocationHistory)
 		r.Get("/vs-targets", h.HandleGetAllocationVsTargets)
 		r.Get("/rebalance-needs", h.HandleGetRebalanceNeeds)
 		r.Get("/groups/contribution", h.HandleGetGroupContribution)

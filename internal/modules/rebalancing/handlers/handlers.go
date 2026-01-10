@@ -46,8 +46,8 @@ type SimulateRebalanceRequest struct {
 
 // NegativeBalanceCheckRequest represents a request to check for negative balance scenarios
 type NegativeBalanceCheckRequest struct {
-	Trades        []map[string]interface{} `json:"trades"`
-	CashBalances  map[string]float64       `json:"cash_balances"`
+	Trades       []map[string]interface{} `json:"trades"`
+	CashBalances map[string]float64       `json:"cash_balances"`
 }
 
 // HandleCalculateRebalance handles POST /api/rebalancing/calculate
@@ -64,18 +64,8 @@ func (h *Handler) HandleCalculateRebalance(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Try to calculate rebalancing trades with panic recovery
-	var recommendations []rebalancing.RebalanceRecommendation
-	var err error
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				h.log.Warn().Interface("panic", r).Msg("Panic during rebalancing calculation")
-				err = fmt.Errorf("service dependencies not available")
-			}
-		}()
-		recommendations, err = h.service.CalculateRebalanceTrades(req.AvailableCash)
-	}()
+	// Calculate rebalancing trades
+	recommendations, err := h.service.CalculateRebalanceTrades(req.AvailableCash)
 
 	if err != nil {
 		h.log.Warn().Err(err).Msg("Failed to calculate rebalancing trades - returning placeholder")
@@ -132,17 +122,7 @@ func (h *Handler) HandleCalculateTargetWeights(w http.ResponseWriter, r *http.Re
 
 	// Note: This is a placeholder - full implementation requires custom allocation targets
 	// For now, we calculate standard rebalancing and note the custom targets
-	var recommendations []rebalancing.RebalanceRecommendation
-	var err error
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				h.log.Warn().Interface("panic", r).Msg("Panic during target weight rebalancing calculation")
-				err = fmt.Errorf("service dependencies not available")
-			}
-		}()
-		recommendations, err = h.service.CalculateRebalanceTrades(req.AvailableCash)
-	}()
+	recommendations, err := h.service.CalculateRebalanceTrades(req.AvailableCash)
 
 	if err != nil {
 		h.log.Warn().Err(err).Msg("Failed to calculate target weight rebalancing - returning placeholder")
@@ -181,22 +161,31 @@ func (h *Handler) HandleCalculateTargetWeights(w http.ResponseWriter, r *http.Re
 
 // HandleGetTriggers handles GET /api/rebalancing/triggers
 func (h *Handler) HandleGetTriggers(w http.ResponseWriter, r *http.Request) {
-	h.writeJSON(w, http.StatusNotImplemented, map[string]interface{}{
-		"error": map[string]interface{}{
-			"message": "Rebalancing trigger checking not yet implemented as standalone API",
-			"code":    "NOT_IMPLEMENTED",
-			"details": map[string]string{
-				"reason": "Requires full portfolio state and allocation target access which cannot be easily constructed from API request alone",
-				"note":   "This functionality is available internally to the planner but not exposed as a standalone API endpoint yet",
-			},
+	// Check triggers using current portfolio state
+	result, err := h.service.CheckTriggers()
+	if err != nil {
+		h.log.Error().Err(err).Msg("Failed to check rebalancing triggers")
+		http.Error(w, "Failed to check rebalancing triggers", http.StatusInternalServerError)
+		return
+	}
+
+	response := map[string]interface{}{
+		"data": map[string]interface{}{
+			"should_rebalance": result.ShouldRebalance,
+			"reason":           result.Reason,
 		},
-	})
+		"metadata": map[string]interface{}{
+			"timestamp": time.Now().Format(time.RFC3339),
+		},
+	}
+
+	h.writeJSON(w, http.StatusOK, response)
 }
 
 // HandleGetMinTradeAmount handles GET /api/rebalancing/min-trade-amount
 func (h *Handler) HandleGetMinTradeAmount(w http.ResponseWriter, r *http.Request) {
 	// Query parameters with defaults
-	transactionCostFixed := 2.0    // €2.00 fixed cost
+	transactionCostFixed := 2.0     // €2.00 fixed cost
 	transactionCostPercent := 0.002 // 0.2% variable cost
 	maxCostRatio := 0.01            // 1% max cost ratio
 
@@ -244,16 +233,67 @@ func (h *Handler) HandleGetMinTradeAmount(w http.ResponseWriter, r *http.Request
 
 // HandleSimulateRebalance handles POST /api/rebalancing/simulate-rebalance
 func (h *Handler) HandleSimulateRebalance(w http.ResponseWriter, r *http.Request) {
-	h.writeJSON(w, http.StatusNotImplemented, map[string]interface{}{
-		"error": map[string]interface{}{
-			"message": "Rebalance simulation not yet implemented as standalone API",
-			"code":    "NOT_IMPLEMENTED",
-			"details": map[string]string{
-				"reason": "Requires full portfolio state access and simulation of resulting portfolio composition which cannot be easily constructed from API request alone",
-				"note":   "This functionality is available internally to the planner but not exposed as a standalone API endpoint yet",
-			},
+	var req SimulateRebalanceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.log.Error().Err(err).Msg("Failed to decode request body")
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if len(req.Trades) == 0 {
+		http.Error(w, "trades is required and must not be empty", http.StatusBadRequest)
+		return
+	}
+
+	// Convert request trades to service trades
+	trades := make([]rebalancing.SimulateTrade, 0, len(req.Trades))
+	for _, tradeMap := range req.Trades {
+		// Extract trade fields
+		isin, _ := tradeMap["isin"].(string)
+		symbol, _ := tradeMap["symbol"].(string)
+		side, _ := tradeMap["side"].(string)
+		quantity, _ := tradeMap["quantity"].(float64)
+		price, _ := tradeMap["price"].(float64)
+		currency, _ := tradeMap["currency"].(string)
+
+		// Validate required fields
+		if side == "" || quantity <= 0 || price <= 0 {
+			http.Error(w, "Each trade must have side, quantity > 0, and price > 0", http.StatusBadRequest)
+			return
+		}
+
+		trades = append(trades, rebalancing.SimulateTrade{
+			ISIN:     isin,
+			Symbol:   symbol,
+			Side:     side,
+			Quantity: quantity,
+			Price:    price,
+			Currency: currency,
+		})
+	}
+
+	// Simulate rebalance
+	result, err := h.service.SimulateRebalance(trades)
+	if err != nil {
+		h.log.Error().Err(err).Msg("Failed to simulate rebalance")
+		http.Error(w, "Failed to simulate rebalance", http.StatusInternalServerError)
+		return
+	}
+
+	response := map[string]interface{}{
+		"data": map[string]interface{}{
+			"simulated_positions": result.Positions,
+			"simulated_cash":      result.CashBalances,
+			"total_value":         result.TotalValue,
+			"total_cost":          result.TotalCost,
+			"trades_applied":      result.TradesApplied,
 		},
-	})
+		"metadata": map[string]interface{}{
+			"timestamp": time.Now().Format(time.RFC3339),
+		},
+	}
+
+	h.writeJSON(w, http.StatusOK, response)
 }
 
 // HandleNegativeBalanceCheck handles POST /api/rebalancing/negative-balance-check

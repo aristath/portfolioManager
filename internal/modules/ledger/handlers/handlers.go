@@ -453,10 +453,10 @@ func (h *Handler) HandleGetDividendReinvestmentStats(w http.ResponseWriter, r *h
 
 	response := map[string]interface{}{
 		"data": map[string]interface{}{
-			"total_dividends":         totalDividends,
-			"reinvested_count":        reinvestedCount,
-			"pending_count":           pendingCount,
-			"total_reinvested_eur":    totalReinvestedEUR,
+			"total_dividends":          totalDividends,
+			"reinvested_count":         reinvestedCount,
+			"pending_count":            pendingCount,
+			"total_reinvested_eur":     totalReinvestedEUR,
 			"pending_reinvestment_eur": pendingReinvestmentEUR,
 		},
 		"metadata": map[string]interface{}{

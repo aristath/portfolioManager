@@ -18,7 +18,7 @@ func TestRegisterRoutes(t *testing.T) {
 	securityRepo := &mockSecurityRepo{}
 	service := opportunities.NewService(tagFilter, securityRepo, logger)
 
-	handler := NewHandler(service, logger)
+	handler := NewHandler(service, nil, nil, nil, nil, nil, db, logger)
 
 	router := chi.NewRouter()
 

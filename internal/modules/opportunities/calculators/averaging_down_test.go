@@ -92,7 +92,7 @@ func TestAveragingDownCalculator_WithTagFiltering_PreFiltersPositions(t *testing
 	}
 
 	ctx := &planningdomain.OpportunityContext{
-		EnrichedPositions:   []planningdomain.EnrichedPosition{
+		EnrichedPositions: []planningdomain.EnrichedPosition{
 			createEnrichedPosition(position1, security1, 15.0),
 			createEnrichedPosition(position2, security2, 15.0),
 		},
@@ -163,7 +163,7 @@ func TestAveragingDownCalculator_WithoutTagFiltering_ProcessesAllPositions(t *te
 	}
 
 	ctx := &planningdomain.OpportunityContext{
-		EnrichedPositions:           []planningdomain.EnrichedPosition{
+		EnrichedPositions: []planningdomain.EnrichedPosition{
 			createEnrichedPosition(position1, security1, 15.0),
 			createEnrichedPosition(position2, security2, 15.0),
 		},
@@ -217,7 +217,7 @@ func TestAveragingDownCalculator_EnforcesAllowBuy(t *testing.T) {
 	}
 
 	ctx := &planningdomain.OpportunityContext{
-		EnrichedPositions:           []planningdomain.EnrichedPosition{
+		EnrichedPositions: []planningdomain.EnrichedPosition{
 			createEnrichedPosition(position, security, 15.0),
 		},
 		Securities:          []domain.Security{security},
@@ -267,7 +267,7 @@ func TestAveragingDownCalculator_RoundsToLotSize(t *testing.T) {
 	}
 
 	ctx := &planningdomain.OpportunityContext{
-		EnrichedPositions:              []planningdomain.EnrichedPosition{
+		EnrichedPositions: []planningdomain.EnrichedPosition{
 			createEnrichedPosition(position, security, 15.0),
 		},
 		Securities:             []domain.Security{security},
@@ -324,7 +324,7 @@ func TestAveragingDownCalculator_KellyBasedQuantity_WhenAvailable(t *testing.T) 
 	}
 
 	ctx := &planningdomain.OpportunityContext{
-		EnrichedPositions:              []planningdomain.EnrichedPosition{
+		EnrichedPositions: []planningdomain.EnrichedPosition{
 			createEnrichedPosition(position, security, 15.0),
 		},
 		Securities:             []domain.Security{security},
@@ -384,7 +384,7 @@ func TestAveragingDownCalculator_PercentageBasedQuantity_Fallback(t *testing.T) 
 	}
 
 	ctx := &planningdomain.OpportunityContext{
-		EnrichedPositions:              []planningdomain.EnrichedPosition{
+		EnrichedPositions: []planningdomain.EnrichedPosition{
 			createEnrichedPosition(position, security, 15.0),
 		},
 		Securities:             []domain.Security{security},
@@ -440,7 +440,7 @@ func TestAveragingDownCalculator_UsesConfigurablePercent_NotHardcoded(t *testing
 	}
 
 	ctx := &planningdomain.OpportunityContext{
-		EnrichedPositions:           []planningdomain.EnrichedPosition{
+		EnrichedPositions: []planningdomain.EnrichedPosition{
 			createEnrichedPosition(position, security, 15.0),
 		},
 		Securities:          []domain.Security{security},
@@ -509,7 +509,7 @@ func TestAveragingDownCalculator_SkipsAveragingDown_WhenAtKellyOptimal(t *testin
 	}
 
 	ctx := &planningdomain.OpportunityContext{
-		EnrichedPositions:              []planningdomain.EnrichedPosition{
+		EnrichedPositions: []planningdomain.EnrichedPosition{
 			createEnrichedPosition(position, security, 15.0),
 		},
 		Securities:             []domain.Security{security},
@@ -567,7 +567,7 @@ func TestAveragingDownCalculator_TagBasedQualityGates_ValueTrap(t *testing.T) {
 	}
 
 	ctx := &planningdomain.OpportunityContext{
-		EnrichedPositions:           []planningdomain.EnrichedPosition{
+		EnrichedPositions: []planningdomain.EnrichedPosition{
 			createEnrichedPosition(position, security, 15.0),
 		},
 		Securities:          []domain.Security{security},
@@ -639,7 +639,7 @@ func TestAveragingDownCalculator_TagBasedPriorityBoosting_QualityValue(t *testin
 	}
 
 	ctx := &planningdomain.OpportunityContext{
-		EnrichedPositions:           []planningdomain.EnrichedPosition{
+		EnrichedPositions: []planningdomain.EnrichedPosition{
 			createEnrichedPosition(position1, security1, 15.0),
 			createEnrichedPosition(position2, security2, 15.0),
 		},
@@ -795,7 +795,7 @@ func TestAveragingDownCalculator_RespectsMaxPositionsLimit(t *testing.T) {
 	}
 
 	ctx := &planningdomain.OpportunityContext{
-		EnrichedPositions:           enrichedPositions,
+		EnrichedPositions:   enrichedPositions,
 		Securities:          securities,
 		CurrentPrices:       prices,
 		StocksByISIN:        stocksByISIN,
