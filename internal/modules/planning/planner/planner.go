@@ -59,7 +59,7 @@ func NewPlanner(opportunitiesService *opportunities.Service, sequencesService *s
 
 // PlanResult wraps a HolisticPlan with rejected opportunities
 type PlanResult struct {
-	Plan               *domain.HolisticPlan
+	Plan                  *domain.HolisticPlan
 	RejectedOpportunities []domain.RejectedOpportunity
 }
 
@@ -159,7 +159,7 @@ func (p *Planner) CreatePlanWithRejections(ctx *domain.OpportunityContext, confi
 		}
 		rejected := p.buildRejectedOpportunities(identifiedOpportunitiesList, opportunitiesInSequences, opportunitiesInSelectedSequence, plan, filteredActions)
 		return &PlanResult{
-			Plan:                 plan,
+			Plan:                  plan,
 			RejectedOpportunities: rejected,
 		}, nil
 	}
@@ -247,7 +247,7 @@ func (p *Planner) CreatePlanWithRejections(ctx *domain.OpportunityContext, confi
 	rejected := p.buildRejectedOpportunities(identifiedOpportunitiesList, opportunitiesInSequences, opportunitiesInSelectedSequences, bestPlan, bestFilteredActions)
 
 	return &PlanResult{
-		Plan:                 bestPlan,
+		Plan:                  bestPlan,
 		RejectedOpportunities: rejected,
 	}, nil
 }

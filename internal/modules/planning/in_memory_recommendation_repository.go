@@ -13,10 +13,10 @@ import (
 )
 
 type InMemoryRecommendationRepository struct {
-	recommendations      map[string]*Recommendation
+	recommendations       map[string]*Recommendation
 	rejectedOpportunities map[string][]planningdomain.RejectedOpportunity // key: portfolioHash
-	mu                   sync.RWMutex
-	log                  zerolog.Logger
+	mu                    sync.RWMutex
+	log                   zerolog.Logger
 }
 
 func NewInMemoryRecommendationRepository(log zerolog.Logger) *InMemoryRecommendationRepository {

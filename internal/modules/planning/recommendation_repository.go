@@ -21,7 +21,7 @@ import (
 // Faithful translation from Python: app/repositories/recommendation.py
 // Database: cache.db (recommendations table)
 type RecommendationRepository struct {
-	db                    *sql.DB // cache.db
+	db                    *sql.DB                                         // cache.db
 	rejectedOpportunities map[string][]planningdomain.RejectedOpportunity // key: portfolioHash (in-memory)
 	rejectedMu            sync.RWMutex
 	log                   zerolog.Logger
