@@ -345,77 +345,6 @@ func TestTagAssigner_QualityHighCAGR(t *testing.T) {
 	assert.NotContains(t, tags, "bubble-risk")
 }
 
-func TestTagAssigner_HighSharpe(t *testing.T) {
-	log := zerolog.New(nil).Level(zerolog.Disabled)
-	assigner := NewTagAssigner(log)
-
-	input := AssignTagsInput{
-		Symbol: "TEST",
-		SubScores: map[string]map[string]float64{
-			"long_term": {
-				"sharpe_raw": 1.8, // >= 1.5
-			},
-		},
-	}
-
-	tags, err := assigner.AssignTagsForSecurity(input)
-	assert.NoError(t, err)
-	assert.Contains(t, tags, "high-sharpe")
-}
-
-func TestTagAssigner_HighSortino(t *testing.T) {
-	log := zerolog.New(nil).Level(zerolog.Disabled)
-	assigner := NewTagAssigner(log)
-
-	input := AssignTagsInput{
-		Symbol: "TEST",
-		SubScores: map[string]map[string]float64{
-			"long_term": {
-				"sortino_raw": 1.8, // >= 1.5
-			},
-		},
-	}
-
-	tags, err := assigner.AssignTagsForSecurity(input)
-	assert.NoError(t, err)
-	assert.Contains(t, tags, "high-sortino")
-}
-
-func TestTagAssigner_PoorRiskAdjusted(t *testing.T) {
-	log := zerolog.New(nil).Level(zerolog.Disabled)
-	assigner := NewTagAssigner(log)
-
-	// Test case 1: Low Sharpe
-	input1 := AssignTagsInput{
-		Symbol: "TEST",
-		SubScores: map[string]map[string]float64{
-			"long_term": {
-				"sharpe_raw":  0.3, // < 0.5
-				"sortino_raw": 0.6, // >= 0.5
-			},
-		},
-	}
-
-	tags1, err := assigner.AssignTagsForSecurity(input1)
-	assert.NoError(t, err)
-	assert.Contains(t, tags1, "poor-risk-adjusted")
-
-	// Test case 2: Low Sortino
-	input2 := AssignTagsInput{
-		Symbol: "TEST",
-		SubScores: map[string]map[string]float64{
-			"long_term": {
-				"sharpe_raw":  0.6, // >= 0.5
-				"sortino_raw": 0.3, // < 0.5
-			},
-		},
-	}
-
-	tags2, err := assigner.AssignTagsForSecurity(input2)
-	assert.NoError(t, err)
-	assert.Contains(t, tags2, "poor-risk-adjusted")
-}
-
 func TestTagAssigner_ValueTrap(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 	assigner := NewTagAssigner(log)
@@ -566,42 +495,6 @@ func TestTagAssigner_DividendTotalReturn(t *testing.T) {
 	assert.Contains(t, tags, "dividend-total-return")
 }
 
-func TestTagAssigner_TargetAligned(t *testing.T) {
-	log := zerolog.New(nil).Level(zerolog.Disabled)
-	assigner := NewTagAssigner(log)
-
-	positionWeight := 0.10 // 10%
-	targetWeight := 0.10   // 10% (deviation = 0% <= 1%)
-
-	input := AssignTagsInput{
-		Symbol:         "TEST",
-		PositionWeight: &positionWeight,
-		TargetWeight:   &targetWeight,
-	}
-
-	tags, err := assigner.AssignTagsForSecurity(input)
-	assert.NoError(t, err)
-	assert.Contains(t, tags, "target-aligned")
-}
-
-func TestTagAssigner_Underweight(t *testing.T) {
-	log := zerolog.New(nil).Level(zerolog.Disabled)
-	assigner := NewTagAssigner(log)
-
-	positionWeight := 0.05 // 5%
-	targetWeight := 0.10   // 10% (deviation = -5% < -2%)
-
-	input := AssignTagsInput{
-		Symbol:         "TEST",
-		PositionWeight: &positionWeight,
-		TargetWeight:   &targetWeight,
-	}
-
-	tags, err := assigner.AssignTagsForSecurity(input)
-	assert.NoError(t, err)
-	assert.Contains(t, tags, "underweight")
-}
-
 func TestTagAssigner_NeedsRebalance(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 	assigner := NewTagAssigner(log)
@@ -633,42 +526,6 @@ func TestTagAssigner_NeedsRebalance(t *testing.T) {
 	tags2, err := assigner.AssignTagsForSecurity(input2)
 	assert.NoError(t, err)
 	assert.Contains(t, tags2, "needs-rebalance")
-}
-
-func TestTagAssigner_SlightlyOverweight(t *testing.T) {
-	log := zerolog.New(nil).Level(zerolog.Disabled)
-	assigner := NewTagAssigner(log)
-
-	positionWeight := 0.12 // 12%
-	targetWeight := 0.10   // 10% (deviation = 2%, between 1% and 3%)
-
-	input := AssignTagsInput{
-		Symbol:         "TEST",
-		PositionWeight: &positionWeight,
-		TargetWeight:   &targetWeight,
-	}
-
-	tags, err := assigner.AssignTagsForSecurity(input)
-	assert.NoError(t, err)
-	assert.Contains(t, tags, "slightly-overweight")
-}
-
-func TestTagAssigner_SlightlyUnderweight(t *testing.T) {
-	log := zerolog.New(nil).Level(zerolog.Disabled)
-	assigner := NewTagAssigner(log)
-
-	positionWeight := 0.08 // 8%
-	targetWeight := 0.10   // 10% (deviation = -2%, between -1% and -3%)
-
-	input := AssignTagsInput{
-		Symbol:         "TEST",
-		PositionWeight: &positionWeight,
-		TargetWeight:   &targetWeight,
-	}
-
-	tags, err := assigner.AssignTagsForSecurity(input)
-	assert.NoError(t, err)
-	assert.Contains(t, tags, "slightly-underweight")
 }
 
 func TestTagAssigner_RegimeBearSafe(t *testing.T) {

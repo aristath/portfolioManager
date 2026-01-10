@@ -177,10 +177,10 @@ func TestWeightBasedCalculator_NoMaxSellPercentage(t *testing.T) {
 	ctx := &planningdomain.OpportunityContext{
 		Positions:              []domain.Position{position},
 		Securities:             []domain.Security{security},
-		CurrentPrices:          map[string]float64{"TEST.US": 10.0}, // Use Symbol as key
+		CurrentPrices:          map[string]float64{"US1234567890": 10.0}, // ISIN key ✅
 		StocksByISIN:           map[string]domain.Security{"US1234567890": security},
 		TotalPortfolioValueEUR: 10000,
-		TargetWeights:          map[string]float64{"TEST.US": 0.20}, // Severely overweight
+		TargetWeights:          map[string]float64{"US1234567890": 0.20}, // Severely overweight (ISIN key ✅)
 		IneligibleISINs:        map[string]bool{},
 		RecentlySoldISINs:      map[string]bool{},
 		AllowSell:              true,
