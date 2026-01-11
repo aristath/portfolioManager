@@ -8,6 +8,8 @@ package services
 
 import (
 	"fmt"
+	"sync"
+	"time"
 
 	"github.com/aristath/sentinel/internal/domain"
 	"github.com/rs/zerolog"
@@ -31,15 +33,32 @@ type ExchangeRate struct {
 	Symbol       string
 }
 
+// cacheEntry holds a cached exchange rate with expiration time
+type cacheEntry struct {
+	rate      float64
+	expiresAt time.Time
+}
+
+const (
+	// cacheTTL is how long FX rates are cached in memory (5 minutes)
+	// FX rates change relatively slowly, so 5 minutes is a good balance
+	// between freshness and API call reduction
+	cacheTTL = 5 * time.Minute
+)
+
 // CurrencyExchangeService handles currency conversions via broker FX pairs
 //
 // Supports direct conversions between EUR, USD, HKD, and GBP.
 // For pairs without direct instruments (GBP<->HKD), routes via EUR.
 //
+// Uses in-memory caching to reduce API calls and prevent rate limiting.
+//
 // Faithful translation from Python: app/shared/services/currency_exchange_service.py
 type CurrencyExchangeService struct {
 	brokerClient domain.BrokerClient
 	log          zerolog.Logger
+	cache        map[string]cacheEntry // key: "FROM:TO"
+	cacheMu      sync.RWMutex          // Protects cache map
 }
 
 // DirectPairs contains direct currency pairs available on broker
@@ -71,6 +90,55 @@ func NewCurrencyExchangeService(brokerClient domain.BrokerClient, log zerolog.Lo
 	return &CurrencyExchangeService{
 		brokerClient: brokerClient,
 		log:          log.With().Str("service", "currency_exchange").Logger(),
+		cache:        make(map[string]cacheEntry),
+	}
+}
+
+// getCacheKey generates a cache key from currency pair
+func (s *CurrencyExchangeService) getCacheKey(fromCurrency, toCurrency string) string {
+	return fromCurrency + ":" + toCurrency
+}
+
+// getFromCache retrieves a rate from cache if valid (not expired)
+func (s *CurrencyExchangeService) getFromCache(fromCurrency, toCurrency string) (float64, bool) {
+	key := s.getCacheKey(fromCurrency, toCurrency)
+
+	s.cacheMu.RLock()
+	defer s.cacheMu.RUnlock()
+
+	// Handle nil cache (e.g., in tests that create struct directly)
+	if s.cache == nil {
+		return 0, false
+	}
+
+	entry, exists := s.cache[key]
+	if !exists {
+		return 0, false
+	}
+
+	// Check if cache entry is expired
+	if time.Now().After(entry.expiresAt) {
+		return 0, false
+	}
+
+	return entry.rate, true
+}
+
+// storeInCache stores a rate in cache with expiration time
+func (s *CurrencyExchangeService) storeInCache(fromCurrency, toCurrency string, rate float64) {
+	key := s.getCacheKey(fromCurrency, toCurrency)
+
+	s.cacheMu.Lock()
+	defer s.cacheMu.Unlock()
+
+	// Initialize cache if nil (e.g., in tests that create struct directly)
+	if s.cache == nil {
+		s.cache = make(map[string]cacheEntry)
+	}
+
+	s.cache[key] = cacheEntry{
+		rate:      rate,
+		expiresAt: time.Now().Add(cacheTTL),
 	}
 }
 
@@ -130,9 +198,21 @@ func (s *CurrencyExchangeService) GetConversionPath(fromCurrency, toCurrency str
 // GetRate returns the current exchange rate between two currencies
 //
 // Returns how many units of toCurrency per 1 fromCurrency
+//
+// Uses in-memory cache to reduce API calls. Cache entries expire after 5 minutes.
 func (s *CurrencyExchangeService) GetRate(fromCurrency, toCurrency string) (float64, error) {
 	if fromCurrency == toCurrency {
 		return 1.0, nil
+	}
+
+	// Check cache first
+	if cachedRate, ok := s.getFromCache(fromCurrency, toCurrency); ok {
+		s.log.Debug().
+			Str("from", fromCurrency).
+			Str("to", toCurrency).
+			Float64("rate", cachedRate).
+			Msg("Using cached FX rate")
+		return cachedRate, nil
 	}
 
 	if !s.brokerClient.IsConnected() {
@@ -164,6 +244,9 @@ func (s *CurrencyExchangeService) GetRate(fromCurrency, toCurrency string) (floa
 		return 0, fmt.Errorf("invalid rate: %f", rate)
 	}
 
+	// Store in cache for future requests
+	s.storeInCache(fromCurrency, toCurrency, rate)
+
 	return rate, nil
 }
 
@@ -175,18 +258,10 @@ func (s *CurrencyExchangeService) getRateViaPath(fromCurrency, toCurrency string
 	}
 
 	if len(path) == 1 {
-		// Single step: use GetFXRates directly
-		rates, err := s.brokerClient.GetFXRates(path[0].FromCurrency, []string{path[0].ToCurrency})
-		if err != nil {
-			return 0, fmt.Errorf("failed to get FX rates for %s to %s: %w", path[0].FromCurrency, path[0].ToCurrency, err)
-		}
-		rate, ok := rates[path[0].ToCurrency]
-		if !ok || rate <= 0 {
-			return 0, fmt.Errorf("invalid rate for %s to %s", path[0].FromCurrency, path[0].ToCurrency)
-		}
-		return rate, nil
+		// Single step: use GetRate to benefit from caching
+		return s.GetRate(path[0].FromCurrency, path[0].ToCurrency)
 	} else if len(path) == 2 {
-		// Multi-step: multiply rates
+		// Multi-step: multiply rates (both calls to GetRate will use cache)
 		rate1, err := s.GetRate(path[0].FromCurrency, path[0].ToCurrency)
 		if err != nil {
 			return 0, err
