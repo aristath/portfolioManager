@@ -4,18 +4,27 @@ import (
 	"testing"
 
 	planningdomain "github.com/aristath/sentinel/internal/modules/planning/domain"
+	"github.com/aristath/sentinel/internal/modules/planning/planner"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // MockPlannerService is a mock implementation of PlannerServiceInterface
 type MockPlannerService struct {
-	CreatePlanFunc func(ctx interface{}, config interface{}) (interface{}, error)
+	CreatePlanFunc               func(ctx interface{}, config interface{}) (interface{}, error)
+	CreatePlanWithRejectionsFunc func(ctx interface{}, config interface{}) (interface{}, error)
 }
 
 func (m *MockPlannerService) CreatePlan(ctx interface{}, config interface{}) (interface{}, error) {
 	if m.CreatePlanFunc != nil {
 		return m.CreatePlanFunc(ctx, config)
+	}
+	return nil, nil
+}
+
+func (m *MockPlannerService) CreatePlanWithRejections(ctx interface{}, config interface{}) (interface{}, error) {
+	if m.CreatePlanWithRejectionsFunc != nil {
+		return m.CreatePlanWithRejectionsFunc(ctx, config)
 	}
 	return nil, nil
 }
@@ -43,13 +52,16 @@ func TestCreateTradePlanJob_Run_Success(t *testing.T) {
 	var calledConfig interface{}
 
 	mockPlannerService := &MockPlannerService{
-		CreatePlanFunc: func(ctx interface{}, config interface{}) (interface{}, error) {
+		CreatePlanWithRejectionsFunc: func(ctx interface{}, config interface{}) (interface{}, error) {
 			createPlanCalled = true
 			calledContext = ctx
 			calledConfig = config
-			return &planningdomain.HolisticPlan{
-				Steps:    []planningdomain.HolisticStep{},
-				Feasible: true,
+			return &planner.PlanResult{
+				Plan: &planningdomain.HolisticPlan{
+					Steps:    []planningdomain.HolisticStep{},
+					Feasible: true,
+				},
+				RejectedOpportunities: []planningdomain.RejectedOpportunity{},
 			}, nil
 		},
 	}
@@ -71,13 +83,16 @@ func TestCreateTradePlanJob_Run_Success(t *testing.T) {
 
 	err := job.Run()
 	require.NoError(t, err)
-	assert.True(t, createPlanCalled, "CreatePlan should have been called")
+	assert.True(t, createPlanCalled, "CreatePlanWithRejections should have been called")
 	assert.Equal(t, opportunityContext, calledContext)
 	assert.NotNil(t, calledConfig)
 
 	plan := job.GetPlan()
 	require.NotNil(t, plan)
 	assert.NotNil(t, plan.Steps)
+
+	rejected := job.GetRejectedOpportunities()
+	assert.NotNil(t, rejected)
 }
 
 func TestCreateTradePlanJob_Run_NoPlannerService(t *testing.T) {
@@ -104,7 +119,7 @@ func TestCreateTradePlanJob_Run_NoOpportunityContext(t *testing.T) {
 
 func TestCreateTradePlanJob_Run_PlannerServiceError(t *testing.T) {
 	mockPlannerService := &MockPlannerService{
-		CreatePlanFunc: func(ctx interface{}, config interface{}) (interface{}, error) {
+		CreatePlanWithRejectionsFunc: func(ctx interface{}, config interface{}) (interface{}, error) {
 			return nil, assert.AnError
 		},
 	}
@@ -121,10 +136,13 @@ func TestCreateTradePlanJob_Run_PlannerServiceError(t *testing.T) {
 
 func TestCreateTradePlanJob_Run_ConfigRepoError(t *testing.T) {
 	mockPlannerService := &MockPlannerService{
-		CreatePlanFunc: func(ctx interface{}, config interface{}) (interface{}, error) {
-			return &planningdomain.HolisticPlan{
-				Steps:    []planningdomain.HolisticStep{},
-				Feasible: true,
+		CreatePlanWithRejectionsFunc: func(ctx interface{}, config interface{}) (interface{}, error) {
+			return &planner.PlanResult{
+				Plan: &planningdomain.HolisticPlan{
+					Steps:    []planningdomain.HolisticStep{},
+					Feasible: true,
+				},
+				RejectedOpportunities: []planningdomain.RejectedOpportunity{},
 			}, nil
 		},
 	}
@@ -147,8 +165,8 @@ func TestCreateTradePlanJob_Run_ConfigRepoError(t *testing.T) {
 
 func TestCreateTradePlanJob_Run_InvalidPlanType(t *testing.T) {
 	mockPlannerService := &MockPlannerService{
-		CreatePlanFunc: func(ctx interface{}, config interface{}) (interface{}, error) {
-			// Return wrong type
+		CreatePlanWithRejectionsFunc: func(ctx interface{}, config interface{}) (interface{}, error) {
+			// Return wrong type (not PlanResult)
 			return map[string]interface{}{}, nil
 		},
 	}
@@ -160,5 +178,5 @@ func TestCreateTradePlanJob_Run_InvalidPlanType(t *testing.T) {
 
 	err := job.Run()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "plan has invalid type")
+	assert.Contains(t, err.Error(), "plan result has invalid type")
 }

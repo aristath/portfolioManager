@@ -10,12 +10,20 @@ import (
 
 // MockRecommendationRepoForStore is a mock implementation of RecommendationRepositoryInterface
 type MockRecommendationRepoForStore struct {
-	StorePlanFunc func(plan *planningdomain.HolisticPlan, portfolioHash string) error
+	StorePlanFunc                  func(plan *planningdomain.HolisticPlan, portfolioHash string) error
+	StoreRejectedOpportunitiesFunc func(rejected []planningdomain.RejectedOpportunity, portfolioHash string) error
 }
 
 func (m *MockRecommendationRepoForStore) StorePlan(plan *planningdomain.HolisticPlan, portfolioHash string) error {
 	if m.StorePlanFunc != nil {
 		return m.StorePlanFunc(plan, portfolioHash)
+	}
+	return nil
+}
+
+func (m *MockRecommendationRepoForStore) StoreRejectedOpportunities(rejected []planningdomain.RejectedOpportunity, portfolioHash string) error {
+	if m.StoreRejectedOpportunitiesFunc != nil {
+		return m.StoreRejectedOpportunitiesFunc(rejected, portfolioHash)
 	}
 	return nil
 }

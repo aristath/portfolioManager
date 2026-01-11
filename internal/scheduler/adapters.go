@@ -483,6 +483,18 @@ func (a *PlannerServiceAdapter) CreatePlan(ctx interface{}, config interface{}) 
 	return a.service.CreatePlan(opportunityContext, plannerConfig)
 }
 
+func (a *PlannerServiceAdapter) CreatePlanWithRejections(ctx interface{}, config interface{}) (interface{}, error) {
+	opportunityContext, ok := ctx.(*planningdomain.OpportunityContext)
+	if !ok {
+		return nil, fmt.Errorf("invalid context type")
+	}
+	plannerConfig, ok := config.(*planningdomain.PlannerConfiguration)
+	if !ok {
+		return nil, fmt.Errorf("invalid config type")
+	}
+	return a.service.CreatePlanWithRejections(opportunityContext, plannerConfig)
+}
+
 // RecommendationRepositoryAdapter adapts *planning.RecommendationRepository to RecommendationRepositoryInterface
 type RecommendationRepositoryAdapter struct {
 	repo *planning.RecommendationRepository
