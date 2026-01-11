@@ -281,13 +281,13 @@ func TestTradernetBrokerAdapter_GetAllCashFlows(t *testing.T) {
 		getClientCpsHistoryResult: map[string]interface{}{
 			"cps": []interface{}{
 				map[string]interface{}{
-					"id":          "cf-1",
+					"id":             "cf-1",
 					"transaction_id": "tx-1",
-					"type":        "deposit",
-					"sm":          "1000.0", // Tradernet returns amounts as strings
-					"curr":        "EUR",
-					"dt":          "2025-01-08",
-					"description": "Monthly deposit",
+					"type":           "deposit",
+					"sm":             "1000.0", // Tradernet returns amounts as strings
+					"curr":           "EUR",
+					"dt":             "2025-01-08",
+					"description":    "Monthly deposit",
 				},
 			},
 			"total": "1000.0",
