@@ -32,7 +32,7 @@ func TestNewProgressReporter(t *testing.T) {
 func TestProgressReporter_Report(t *testing.T) {
 	eventManager, bus := setupEventManager()
 	eventsChan := make(chan events.Event, 10)
-	bus.Subscribe(events.JobProgress, func(event *events.Event) {
+	_ = bus.Subscribe(events.JobProgress, func(event *events.Event) {
 		eventsChan <- *event
 	})
 
@@ -71,7 +71,7 @@ func TestProgressReporter_Report(t *testing.T) {
 func TestProgressReporter_Throttling(t *testing.T) {
 	eventManager, bus := setupEventManager()
 	eventsChan := make(chan events.Event, 10)
-	bus.Subscribe(events.JobProgress, func(event *events.Event) {
+	_ = bus.Subscribe(events.JobProgress, func(event *events.Event) {
 		eventsChan <- *event
 	})
 
@@ -121,7 +121,7 @@ func TestProgressReporter_Throttling(t *testing.T) {
 func TestProgressReporter_NoThrottleAtCompletion(t *testing.T) {
 	eventManager, bus := setupEventManager()
 	eventsChan := make(chan events.Event, 10)
-	bus.Subscribe(events.JobProgress, func(event *events.Event) {
+	_ = bus.Subscribe(events.JobProgress, func(event *events.Event) {
 		eventsChan <- *event
 	})
 
@@ -152,7 +152,7 @@ func TestProgressReporter_NoThrottleAtCompletion(t *testing.T) {
 func TestProgressReporter_ReportMessage(t *testing.T) {
 	eventManager, bus := setupEventManager()
 	eventsChan := make(chan events.Event, 10)
-	bus.Subscribe(events.JobProgress, func(event *events.Event) {
+	_ = bus.Subscribe(events.JobProgress, func(event *events.Event) {
 		eventsChan <- *event
 	})
 
@@ -179,7 +179,7 @@ func TestProgressReporter_ReportMessage(t *testing.T) {
 func TestProgressReporter_MessageThrottling(t *testing.T) {
 	eventManager, bus := setupEventManager()
 	eventsChan := make(chan events.Event, 10)
-	bus.Subscribe(events.JobProgress, func(event *events.Event) {
+	_ = bus.Subscribe(events.JobProgress, func(event *events.Event) {
 		eventsChan <- *event
 	})
 
@@ -219,7 +219,7 @@ func TestProgressReporter_NilEventManager(t *testing.T) {
 func TestProgressReporter_JobDescriptionMapping(t *testing.T) {
 	eventManager, bus := setupEventManager()
 	eventsChan := make(chan events.Event, 10)
-	bus.Subscribe(events.JobProgress, func(event *events.Event) {
+	_ = bus.Subscribe(events.JobProgress, func(event *events.Event) {
 		eventsChan <- *event
 	})
 
@@ -255,7 +255,7 @@ func TestProgressReporter_JobDescriptionMapping(t *testing.T) {
 func TestProgressReporter_ConcurrentReports(t *testing.T) {
 	eventManager, bus := setupEventManager()
 	eventsChan := make(chan events.Event, 100)
-	bus.Subscribe(events.JobProgress, func(event *events.Event) {
+	_ = bus.Subscribe(events.JobProgress, func(event *events.Event) {
 		eventsChan <- *event
 	})
 

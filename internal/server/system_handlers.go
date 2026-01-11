@@ -346,9 +346,18 @@ type DiskUsageResponse struct {
 	AvailableMB float64 `json:"available_mb,omitempty"`
 }
 
-// HandleSystemStatus returns comprehensive system status
-func (h *SystemHandlers) HandleSystemStatus(w http.ResponseWriter, r *http.Request) {
-	h.log.Debug().Msg("Getting system status")
+// GetSystemStatusSnapshot returns a snapshot of the current system status.
+func (h *SystemHandlers) GetSystemStatusSnapshot() (SystemStatusResponse, error) {
+	if h == nil {
+		return SystemStatusResponse{}, fmt.Errorf("system handlers not initialized")
+	}
+
+	var firstErr error
+	recordErr := func(err error) {
+		if err != nil && err != sql.ErrNoRows && firstErr == nil {
+			firstErr = err
+		}
+	}
 
 	// Query positions to get last sync time and count
 	var lastSync sql.NullString
@@ -361,15 +370,14 @@ func (h *SystemHandlers) HandleSystemStatus(w http.ResponseWriter, r *http.Reque
 
 	if err != nil && err != sql.ErrNoRows {
 		h.log.Error().Err(err).Msg("Failed to query positions")
+		recordErr(err)
 	}
 
-	// Active positions count (all positions are now non-cash)
 	activePositionCount := totalPositionCount
 
 	// Format last sync time if available
 	var lastSyncFormatted string
 	if lastSync.Valid && lastSync.String != "" {
-		// Parse and reformat to "YYYY-MM-DD HH:MM"
 		if t, err := time.Parse(time.RFC3339, lastSync.String); err == nil {
 			lastSyncFormatted = t.Format("2006-01-02 15:04")
 		} else {
@@ -385,61 +393,38 @@ func (h *SystemHandlers) HandleSystemStatus(w http.ResponseWriter, r *http.Reque
 
 	if err != nil && err != sql.ErrNoRows {
 		h.log.Error().Err(err).Msg("Failed to query securities")
+		recordErr(err)
 	}
 
 	// Get cash balances from CashManager
 	cashBalances, err := h.cashManager.GetAllCashBalances()
 	if err != nil {
 		h.log.Error().Err(err).Msg("Failed to get cash balances")
-		// Fallback to zero balances on error
+		recordErr(err)
 		cashBalances = make(map[string]float64)
 	}
 
-	// Calculate EUR-only cash balance
 	var cashBalanceEUR float64
 	if eurBalance, ok := cashBalances["EUR"]; ok {
 		cashBalanceEUR = eurBalance
 	}
 
-	// Calculate total cash balance in EUR (all currencies converted)
 	var totalCashEUR float64
 	for currency, balance := range cashBalances {
 		if currency == "EUR" {
 			totalCashEUR += balance
-		} else {
-			// Convert to EUR using exchange service
-			if h.currencyExchangeService != nil {
-				rate, err := h.currencyExchangeService.GetRate(currency, "EUR")
-				if err != nil {
-					h.log.Warn().
-						Err(err).
-						Str("currency", currency).
-						Float64("balance", balance).
-						Msg("Failed to get exchange rate, using fallback")
-					// Fallback rates for autonomous operation
-					switch currency {
-					case "USD":
-						totalCashEUR += balance * 0.9
-					case "GBP":
-						totalCashEUR += balance * 1.2
-					case "HKD":
-						totalCashEUR += balance * 0.11
-					default:
-						h.log.Warn().
-							Str("currency", currency).
-							Float64("balance", balance).
-							Msg("Unknown currency, using 1:1 conversion")
-						totalCashEUR += balance // Assume 1:1 for unknown currencies
-					}
-				} else {
-					totalCashEUR += balance * rate
-				}
-			} else {
-				// No exchange service available, use fallback rates
+			continue
+		}
+
+		if h.currencyExchangeService != nil {
+			rate, rateErr := h.currencyExchangeService.GetRate(currency, "EUR")
+			if rateErr != nil {
 				h.log.Warn().
+					Err(rateErr).
 					Str("currency", currency).
 					Float64("balance", balance).
-					Msg("Exchange service not available, using fallback rates")
+					Msg("Failed to get exchange rate, using fallback")
+				recordErr(rateErr)
 				switch currency {
 				case "USD":
 					totalCashEUR += balance * 0.9
@@ -448,9 +433,32 @@ func (h *SystemHandlers) HandleSystemStatus(w http.ResponseWriter, r *http.Reque
 				case "HKD":
 					totalCashEUR += balance * 0.11
 				default:
-					totalCashEUR += balance // Assume 1:1 for unknown currencies
+					h.log.Warn().
+						Str("currency", currency).
+						Float64("balance", balance).
+						Msg("Unknown currency, using 1:1 conversion")
+					totalCashEUR += balance
 				}
+			} else {
+				totalCashEUR += balance * rate
 			}
+			continue
+		}
+
+		h.log.Warn().
+			Str("currency", currency).
+			Float64("balance", balance).
+			Msg("Exchange service not available, using fallback rates")
+
+		switch currency {
+		case "USD":
+			totalCashEUR += balance * 0.9
+		case "GBP":
+			totalCashEUR += balance * 1.2
+		case "HKD":
+			totalCashEUR += balance * 0.11
+		default:
+			totalCashEUR += balance
 		}
 	}
 
@@ -458,12 +466,24 @@ func (h *SystemHandlers) HandleSystemStatus(w http.ResponseWriter, r *http.Reque
 		Status:           "healthy",
 		CashBalanceEUR:   cashBalanceEUR,
 		CashBalanceTotal: totalCashEUR,
-		CashBalance:      totalCashEUR, // Backward compatibility
+		CashBalance:      totalCashEUR,
 		SecurityCount:    securityCount,
 		PositionCount:    totalPositionCount,
 		ActivePositions:  activePositionCount,
 		LastSync:         lastSyncFormatted,
 		UniverseActive:   securityCount,
+	}
+
+	return response, firstErr
+}
+
+// HandleSystemStatus returns comprehensive system status
+func (h *SystemHandlers) HandleSystemStatus(w http.ResponseWriter, r *http.Request) {
+	h.log.Debug().Msg("Getting system status")
+
+	response, err := h.GetSystemStatusSnapshot()
+	if err != nil {
+		h.log.Warn().Err(err).Msg("System status collected with warnings")
 	}
 
 	w.Header().Set("Content-Type", "application/json")

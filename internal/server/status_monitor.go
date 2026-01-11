@@ -15,8 +15,11 @@ type StatusMonitor struct {
 	log            zerolog.Logger
 
 	// Track previous states
-	lastSystemStatus    map[string]interface{}
+	lastSystemStatus    *SystemStatusResponse
 	lastTradernetStatus bool
+
+	// Dependency injection for testing
+	getSystemStatus func() (SystemStatusResponse, error)
 }
 
 // NewStatusMonitor creates a new status monitor
@@ -26,10 +29,15 @@ func NewStatusMonitor(
 	log zerolog.Logger,
 ) *StatusMonitor {
 	return &StatusMonitor{
-		eventManager:     eventManager,
-		systemHandlers:   systemHandlers,
-		log:              log.With().Str("component", "status_monitor").Logger(),
-		lastSystemStatus: make(map[string]interface{}),
+		eventManager:   eventManager,
+		systemHandlers: systemHandlers,
+		log:            log.With().Str("component", "status_monitor").Logger(),
+		getSystemStatus: func() (SystemStatusResponse, error) {
+			if systemHandlers == nil {
+				return SystemStatusResponse{}, nil
+			}
+			return systemHandlers.GetSystemStatusSnapshot()
+		},
 	}
 }
 
@@ -63,13 +71,34 @@ func (m *StatusMonitor) checkStatuses() {
 
 // checkSystemStatus checks if system status has changed
 func (m *StatusMonitor) checkSystemStatus() {
-	// For now, emit SYSTEM_STATUS_CHANGED periodically
-	// In a production system, we'd track specific metrics and compare
-	if m.eventManager != nil {
-		m.eventManager.Emit(events.SystemStatusChanged, "status_monitor", map[string]interface{}{
-			"timestamp": time.Now().Format(time.RFC3339),
-		})
+	if m.eventManager == nil || m.getSystemStatus == nil {
+		return
 	}
+
+	status, err := m.getSystemStatus()
+	if err != nil {
+		m.log.Warn().Err(err).Msg("Unable to get system status snapshot")
+		return
+	}
+
+	if m.lastSystemStatus != nil && systemStatusEqual(*m.lastSystemStatus, status) {
+		return
+	}
+
+	m.eventManager.Emit(events.SystemStatusChanged, "status_monitor", map[string]interface{}{
+		"status":             status.Status,
+		"cash_balance_eur":   status.CashBalanceEUR,
+		"cash_balance":       status.CashBalance,
+		"cash_balance_total": status.CashBalanceTotal,
+		"security_count":     status.SecurityCount,
+		"position_count":     status.PositionCount,
+		"active_positions":   status.ActivePositions,
+		"last_sync":          status.LastSync,
+		"universe_active":    status.UniverseActive,
+		"timestamp":          time.Now().Format(time.RFC3339),
+	})
+
+	m.lastSystemStatus = &status
 }
 
 // checkTradernetStatus checks if tradernet connection status has changed
@@ -91,4 +120,16 @@ func (m *StatusMonitor) checkTradernetStatus() {
 		}
 		m.lastTradernetStatus = connected
 	}
+}
+
+func systemStatusEqual(a, b SystemStatusResponse) bool {
+	return a.Status == b.Status &&
+		a.CashBalanceEUR == b.CashBalanceEUR &&
+		a.CashBalanceTotal == b.CashBalanceTotal &&
+		a.CashBalance == b.CashBalance &&
+		a.SecurityCount == b.SecurityCount &&
+		a.PositionCount == b.PositionCount &&
+		a.ActivePositions == b.ActivePositions &&
+		a.LastSync == b.LastSync &&
+		a.UniverseActive == b.UniverseActive
 }

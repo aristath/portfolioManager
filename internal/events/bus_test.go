@@ -3,6 +3,7 @@ package events
 import (
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -26,7 +27,7 @@ func TestBus_SubscribeAndEmit(t *testing.T) {
 		wg.Done()
 	}
 
-	bus.Subscribe(PortfolioChanged, handler)
+	_ = bus.Subscribe(PortfolioChanged, handler)
 
 	data := map[string]interface{}{
 		"portfolio_hash": "abc123",
@@ -68,8 +69,8 @@ func TestBus_MultipleSubscribers(t *testing.T) {
 		wg.Done()
 	}
 
-	bus.Subscribe(PortfolioChanged, handler1)
-	bus.Subscribe(PortfolioChanged, handler2)
+	_ = bus.Subscribe(PortfolioChanged, handler1)
+	_ = bus.Subscribe(PortfolioChanged, handler2)
 
 	bus.Emit(PortfolioChanged, "test", map[string]interface{}{})
 
@@ -99,13 +100,13 @@ func TestBus_DifferentEventTypes(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(2)
 
-	bus.Subscribe(PortfolioChanged, func(*Event) {
+	_ = bus.Subscribe(PortfolioChanged, func(*Event) {
 		mu.Lock()
 		portfolioCount++
 		mu.Unlock()
 		wg.Done()
 	})
-	bus.Subscribe(PriceUpdated, func(*Event) {
+	_ = bus.Subscribe(PriceUpdated, func(*Event) {
 		mu.Lock()
 		priceCount++
 		mu.Unlock()
@@ -120,5 +121,34 @@ func TestBus_DifferentEventTypes(t *testing.T) {
 	mu.Lock()
 	assert.Equal(t, 1, portfolioCount)
 	assert.Equal(t, 1, priceCount)
+	mu.Unlock()
+}
+
+func TestBus_UnsubscribeStopsDelivery(t *testing.T) {
+	bus := NewBus(zerolog.Nop())
+
+	var callCount int
+	var mu sync.Mutex
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	sub := bus.Subscribe(PortfolioChanged, func(*Event) {
+		mu.Lock()
+		callCount++
+		mu.Unlock()
+		wg.Done()
+	})
+
+	bus.Emit(PortfolioChanged, "test", map[string]interface{}{})
+	wg.Wait()
+
+	bus.Unsubscribe(sub)
+
+	bus.Emit(PortfolioChanged, "test", map[string]interface{}{})
+	time.Sleep(50 * time.Millisecond)
+
+	mu.Lock()
+	assert.Equal(t, 1, callCount, "handler should not be called after unsubscribe")
 	mu.Unlock()
 }

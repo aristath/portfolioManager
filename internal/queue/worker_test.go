@@ -179,7 +179,7 @@ func TestWorkerPool_EmitsJobStarted(t *testing.T) {
 	pool.SetEventManager(eventManager)
 
 	eventsChan := make(chan events.Event, 10)
-	bus.Subscribe(events.JobStarted, func(event *events.Event) {
+	_ = bus.Subscribe(events.JobStarted, func(event *events.Event) {
 		eventsChan <- *event
 	})
 
@@ -234,7 +234,7 @@ func TestWorkerPool_EmitsJobCompleted(t *testing.T) {
 	pool.SetEventManager(eventManager)
 
 	eventsChan := make(chan events.Event, 10)
-	bus.Subscribe(events.JobCompleted, func(event *events.Event) {
+	_ = bus.Subscribe(events.JobCompleted, func(event *events.Event) {
 		eventsChan <- *event
 	})
 
@@ -289,7 +289,7 @@ func TestWorkerPool_EmitsJobFailed(t *testing.T) {
 	pool.SetEventManager(eventManager)
 
 	eventsChan := make(chan events.Event, 10)
-	bus.Subscribe(events.JobFailed, func(event *events.Event) {
+	_ = bus.Subscribe(events.JobFailed, func(event *events.Event) {
 		eventsChan <- *event
 	})
 
@@ -342,7 +342,7 @@ func TestWorkerPool_EmitsJobFailedOnPanic(t *testing.T) {
 	pool.SetEventManager(eventManager)
 
 	eventsChan := make(chan events.Event, 10)
-	bus.Subscribe(events.JobFailed, func(event *events.Event) {
+	_ = bus.Subscribe(events.JobFailed, func(event *events.Event) {
 		eventsChan <- *event
 	})
 
@@ -502,10 +502,10 @@ func TestWorkerPool_MultipleJobEvents(t *testing.T) {
 
 	startedChan := make(chan events.Event, 10)
 	completedChan := make(chan events.Event, 10)
-	bus.Subscribe(events.JobStarted, func(event *events.Event) {
+	_ = bus.Subscribe(events.JobStarted, func(event *events.Event) {
 		startedChan <- *event
 	})
-	bus.Subscribe(events.JobCompleted, func(event *events.Event) {
+	_ = bus.Subscribe(events.JobCompleted, func(event *events.Event) {
 		completedChan <- *event
 	})
 

@@ -90,15 +90,10 @@ func (h *EventsStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 
-		// Non-blocking send (drop if channel full)
-		select {
-		case eventChan <- event:
-		default:
-			h.log.Warn().
-				Str("event_type", string(event.Type)).
-				Msg("Event channel full, dropping event")
-		}
+		h.enqueueEvent(eventChan, event)
 	}
+
+	var subscriptions []events.Subscription
 
 	// Subscribe to all event types we care about
 	eventTypes := []events.EventType{
@@ -132,12 +127,12 @@ func (h *EventsStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	if allowedTypes == nil {
 		// Subscribe to all known types
 		for _, eventType := range eventTypes {
-			h.eventBus.Subscribe(eventType, eventHandler)
+			subscriptions = append(subscriptions, h.eventBus.Subscribe(eventType, eventHandler))
 		}
 	} else {
 		// Subscribe only to filtered types
 		for eventType := range allowedTypes {
-			h.eventBus.Subscribe(eventType, eventHandler)
+			subscriptions = append(subscriptions, h.eventBus.Subscribe(eventType, eventHandler))
 		}
 	}
 
@@ -167,6 +162,9 @@ func (h *EventsStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 			// Client disconnected
 			if logWatcher != nil {
 				h.stopLogWatcher(logFile)
+			}
+			for _, sub := range subscriptions {
+				h.eventBus.Unsubscribe(sub)
 			}
 			h.log.Info().Msg("Client disconnected from event stream")
 			return
@@ -208,6 +206,30 @@ func (h *EventsStreamHandler) encodeEvent(event map[string]interface{}) string {
 		return `{"error":"failed to encode event"}`
 	}
 	return string(data)
+}
+
+// enqueueEvent delivers an event to a buffered channel, dropping the oldest
+// entry if the buffer is full so the latest event is preserved.
+func (h *EventsStreamHandler) enqueueEvent(eventChan chan *events.Event, event *events.Event) {
+	select {
+	case eventChan <- event:
+		return
+	default:
+		// Drop the oldest event, then deliver the latest
+		select {
+		case <-eventChan:
+		default:
+		}
+
+		select {
+		case eventChan <- event:
+			h.log.Warn().
+				Str("event_type", string(event.Type)).
+				Msg("Event channel full, dropped oldest to deliver latest")
+		default:
+			// Channel likely closed; nothing to do.
+		}
+	}
 }
 
 // startLogWatcher starts watching a log file for changes.
@@ -305,12 +327,8 @@ func (h *EventsStreamHandler) startLogWatcher(logFile string, eventChan chan *ev
 						},
 					}
 
-					// Non-blocking send
-					select {
-					case eventChan <- event:
-					default:
-						// Channel full, drop event
-					}
+					// Use same drop-oldest logic as main event handler
+					h.enqueueEvent(eventChan, event)
 				}
 			}
 		}

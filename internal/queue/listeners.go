@@ -14,7 +14,7 @@ func RegisterListeners(bus *events.Bus, manager *Manager, registry *Registry, lo
 	// StateChanged -> planner_batch (CRITICAL priority - unified state monitoring)
 	// This is the new primary trigger for recommendation regeneration
 	// Replaces separate PortfolioChanged, ScoreUpdated, and other triggers
-	bus.Subscribe(events.StateChanged, func(event *events.Event) {
+	_ = bus.Subscribe(events.StateChanged, func(event *events.Event) {
 		job := &Job{
 			ID:          fmt.Sprintf("%s-%d", JobTypePlannerBatch, event.Timestamp.UnixNano()),
 			Type:        JobTypePlannerBatch,
@@ -46,7 +46,7 @@ func RegisterListeners(bus *events.Bus, manager *Manager, registry *Registry, lo
 	// PortfolioChanged -> planner_batch (HIGH priority)
 	// NOTE: This is now redundant with StateChanged but kept for backward compatibility
 	// TODO: Remove once StateMonitor is confirmed working
-	bus.Subscribe(events.PortfolioChanged, func(event *events.Event) {
+	_ = bus.Subscribe(events.PortfolioChanged, func(event *events.Event) {
 		job := &Job{
 			ID:          fmt.Sprintf("%s-%d", JobTypePlannerBatch, event.Timestamp.UnixNano()),
 			Type:        JobTypePlannerBatch,
@@ -69,7 +69,7 @@ func RegisterListeners(bus *events.Bus, manager *Manager, registry *Registry, lo
 
 	// RecommendationsReady -> event_based_trading (CRITICAL priority)
 	// Note: Job has in-memory 15-minute throttle and processes ONE trade at a time
-	bus.Subscribe(events.RecommendationsReady, func(event *events.Event) {
+	_ = bus.Subscribe(events.RecommendationsReady, func(event *events.Event) {
 		job := &Job{
 			ID:          fmt.Sprintf("%s-%d", JobTypeEventBasedTrading, event.Timestamp.UnixNano()),
 			Type:        JobTypeEventBasedTrading,
@@ -91,7 +91,7 @@ func RegisterListeners(bus *events.Bus, manager *Manager, registry *Registry, lo
 	})
 
 	// PlanGenerated -> tag_update (MEDIUM priority)
-	bus.Subscribe(events.PlanGenerated, func(event *events.Event) {
+	_ = bus.Subscribe(events.PlanGenerated, func(event *events.Event) {
 		job := &Job{
 			ID:          fmt.Sprintf("%s-%d", JobTypeTagUpdate, event.Timestamp.UnixNano()),
 			Type:        JobTypeTagUpdate,
@@ -113,7 +113,7 @@ func RegisterListeners(bus *events.Bus, manager *Manager, registry *Registry, lo
 	})
 
 	// PriceUpdated -> tag_update (LOW priority, will be debounced by manager)
-	bus.Subscribe(events.PriceUpdated, func(event *events.Event) {
+	_ = bus.Subscribe(events.PriceUpdated, func(event *events.Event) {
 		job := &Job{
 			ID:          fmt.Sprintf("%s-%d", JobTypeTagUpdate, event.Timestamp.UnixNano()),
 			Type:        JobTypeTagUpdate,
@@ -135,7 +135,7 @@ func RegisterListeners(bus *events.Bus, manager *Manager, registry *Registry, lo
 	})
 
 	// ScoreUpdated -> tag_update (LOW priority)
-	bus.Subscribe(events.ScoreUpdated, func(event *events.Event) {
+	_ = bus.Subscribe(events.ScoreUpdated, func(event *events.Event) {
 		job := &Job{
 			ID:          fmt.Sprintf("%s-%d", JobTypeTagUpdate, event.Timestamp.UnixNano()),
 			Type:        JobTypeTagUpdate,
@@ -157,7 +157,7 @@ func RegisterListeners(bus *events.Bus, manager *Manager, registry *Registry, lo
 	})
 
 	// DividendDetected -> dividend_reinvestment (HIGH priority)
-	bus.Subscribe(events.DividendDetected, func(event *events.Event) {
+	_ = bus.Subscribe(events.DividendDetected, func(event *events.Event) {
 		job := &Job{
 			ID:          fmt.Sprintf("%s-%d", JobTypeDividendReinvest, event.Timestamp.UnixNano()),
 			Type:        JobTypeDividendReinvest,
