@@ -23,14 +23,15 @@ func NewViewGenerator(log zerolog.Logger) *ViewGenerator {
 
 // GenerateViewsFromScores converts security scores to BL views.
 // High scores (>0.8) = positive view, Low scores (<0.5) = negative view.
+// Maps are keyed by ISIN.
 func (vg *ViewGenerator) GenerateViewsFromScores(
 	scores map[string]float64,
 	expectedReturns map[string]float64,
 ) ([]View, error) {
 	views := make([]View, 0)
 
-	for symbol, score := range scores {
-		expectedReturn, hasReturn := expectedReturns[symbol]
+	for isin, score := range scores {
+		expectedReturn, hasReturn := expectedReturns[isin]
 		if !hasReturn {
 			continue
 		}
@@ -44,7 +45,7 @@ func (vg *ViewGenerator) GenerateViewsFromScores(
 
 			views = append(views, View{
 				Type:       "absolute",
-				Symbol:     symbol,
+				ISIN:       isin,
 				Return:     viewReturn,
 				Confidence: confidence,
 			})
@@ -56,7 +57,7 @@ func (vg *ViewGenerator) GenerateViewsFromScores(
 
 			views = append(views, View{
 				Type:       "absolute",
-				Symbol:     symbol,
+				ISIN:       isin,
 				Return:     viewReturn,
 				Confidence: confidence,
 			})
@@ -99,18 +100,18 @@ func (vg *ViewGenerator) CreateViewMatrix(views []View, symbols []string) ([][]f
 
 		if view.Type == "absolute" {
 			// Absolute view: single security
-			for j, symbol := range symbols {
-				if symbol == view.Symbol {
+			for j, isin := range symbols {
+				if isin == view.ISIN {
 					P[i][j] = 1.0
 					break
 				}
 			}
 		} else if view.Type == "relative" {
-			// Relative view: Symbol1 outperforms Symbol2
-			for j, symbol := range symbols {
-				if symbol == view.Symbol1 {
+			// Relative view: ISIN1 outperforms ISIN2
+			for j, isin := range symbols {
+				if isin == view.ISIN1 {
 					P[i][j] = 1.0
-				} else if symbol == view.Symbol2 {
+				} else if isin == view.ISIN2 {
 					P[i][j] = -1.0
 				}
 			}

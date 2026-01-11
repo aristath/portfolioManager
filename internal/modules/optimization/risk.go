@@ -497,8 +497,8 @@ func (rb *RiskModelBuilder) getCorrelations(
 				// Check if correlation exceeds threshold (absolute value)
 				if math.Abs(correlation) >= threshold {
 					correlations = append(correlations, CorrelationPair{
-						Symbol1:     isins[i], // ISIN ✅
-						Symbol2:     isins[j], // ISIN ✅
+						ISIN1:       isins[i],
+						ISIN2:       isins[j],
 						Correlation: correlation,
 					})
 
@@ -516,15 +516,14 @@ func (rb *RiskModelBuilder) getCorrelations(
 }
 
 // BuildCorrelationMap converts a slice of CorrelationPair to a map for efficient lookups.
-// The map uses keys in "SYMBOL1:SYMBOL2" format and stores both orderings for symmetric access.
-// This format matches the Python implementation and enables O(1) correlation lookups.
+// The map uses keys in "ISIN1:ISIN2" format and stores both orderings for symmetric access.
 func BuildCorrelationMap(pairs []CorrelationPair) map[string]float64 {
 	correlationMap := make(map[string]float64, len(pairs)*2)
 
 	for _, pair := range pairs {
 		// Store both orderings for symmetric lookup
-		key1 := pair.Symbol1 + ":" + pair.Symbol2
-		key2 := pair.Symbol2 + ":" + pair.Symbol1
+		key1 := pair.ISIN1 + ":" + pair.ISIN2
+		key2 := pair.ISIN2 + ":" + pair.ISIN1
 
 		correlationMap[key1] = pair.Correlation
 		correlationMap[key2] = pair.Correlation

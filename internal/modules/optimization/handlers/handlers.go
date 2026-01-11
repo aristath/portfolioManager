@@ -324,11 +324,11 @@ func (h *Handler) getSecurities() ([]optimization.Security, error) {
 func (h *Handler) getPositions() (map[string]optimization.Position, error) {
 	query := `
 		SELECT
-			symbol,
+			isin,
 			COALESCE(quantity, 0.0) as quantity,
 			COALESCE(market_value_eur, 0.0) as value_eur
 		FROM positions
-		WHERE quantity > 0
+		WHERE quantity > 0 AND isin IS NOT NULL AND isin != ''
 	`
 
 	rows, err := h.db.Query(query)
@@ -340,11 +340,11 @@ func (h *Handler) getPositions() (map[string]optimization.Position, error) {
 	positions := make(map[string]optimization.Position)
 	for rows.Next() {
 		var pos optimization.Position
-		err := rows.Scan(&pos.Symbol, &pos.Quantity, &pos.ValueEUR)
+		err := rows.Scan(&pos.ISIN, &pos.Quantity, &pos.ValueEUR)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan position: %w", err)
 		}
-		positions[pos.Symbol] = pos
+		positions[pos.ISIN] = pos
 	}
 
 	return positions, rows.Err()
@@ -574,7 +574,7 @@ func (h *Handler) optimizationResultToDict(result *optimization.Result, portfoli
 		}
 
 		topChanges = append(topChanges, map[string]interface{}{
-			"symbol":      wc.Symbol,
+			"isin":        wc.ISIN,
 			"current_pct": math.Round(wc.CurrentWeight*1000) / 10,
 			"target_pct":  math.Round(wc.TargetWeight*1000) / 10,
 			"change_pct":  math.Round(wc.Change*1000) / 10,
@@ -592,7 +592,7 @@ func (h *Handler) optimizationResultToDict(result *optimization.Result, portfoli
 			action = "Sell"
 		}
 		changeEUR := top["change_eur"].(float64)
-		actionStr := fmt.Sprintf("%s %s ~€%.0f", action, top["symbol"], math.Abs(changeEUR))
+		actionStr := fmt.Sprintf("%s %s ~€%.0f", action, top["isin"], math.Abs(changeEUR))
 		nextAction = &actionStr
 	}
 

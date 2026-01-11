@@ -90,7 +90,7 @@ func (rc *ReturnsCalculator) CalculateExpectedReturns(
 		}
 
 		if expReturn != nil {
-			expectedReturns[security.Symbol] = *expReturn
+			expectedReturns[security.ISIN] = *expReturn
 		}
 	}
 

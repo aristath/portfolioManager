@@ -24,7 +24,8 @@ type ActionCandidate struct {
 type HolisticStep struct {
 	StepNumber      int      `json:"step_number"`       // Step sequence number (1-based)
 	Side            string   `json:"side"`              // "BUY" or "SELL"
-	Symbol          string   `json:"symbol"`            // Security symbol
+	ISIN            string   `json:"isin"`              // Primary identifier for internal operations
+	Symbol          string   `json:"symbol"`            // Security symbol (for broker API and UI display)
 	Name            string   `json:"name"`              // Security name
 	Quantity        int      `json:"quantity"`          // Number of units to trade
 	EstimatedPrice  float64  `json:"estimated_price"`   // Estimated price per unit (in EUR)

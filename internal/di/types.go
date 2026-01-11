@@ -24,7 +24,6 @@ import (
 	planningplanner "github.com/aristath/sentinel/internal/modules/planning/planner"
 	planningrepo "github.com/aristath/sentinel/internal/modules/planning/repository"
 	planningstatemonitor "github.com/aristath/sentinel/internal/modules/planning/state_monitor"
-	planninguniverse "github.com/aristath/sentinel/internal/modules/planning/universe_monitor"
 	"github.com/aristath/sentinel/internal/modules/portfolio"
 	"github.com/aristath/sentinel/internal/modules/quantum"
 	"github.com/aristath/sentinel/internal/modules/rebalancing"
@@ -130,7 +129,6 @@ type Container struct {
 	BackupService             *reliability.BackupService
 	HealthServices            map[string]*reliability.DatabaseHealthService
 	FactorExposureTracker     *analytics.FactorExposureTracker
-	UniverseMonitor           *planninguniverse.UniverseMonitor
 	StateHashService          *planninghash.StateHashService
 	StateMonitor              *planningstatemonitor.StateMonitor
 	R2Client                  *reliability.R2Client

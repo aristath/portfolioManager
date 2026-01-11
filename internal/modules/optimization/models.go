@@ -22,7 +22,7 @@ type Result struct {
 
 // WeightChange represents a change in portfolio weight for a security.
 type WeightChange struct {
-	Symbol        string
+	ISIN          string // Security identifier
 	CurrentWeight float64
 	TargetWeight  float64
 	Change        float64
@@ -31,8 +31,8 @@ type WeightChange struct {
 
 // CorrelationPair represents a pair of highly correlated securities.
 type CorrelationPair struct {
-	Symbol1     string
-	Symbol2     string
+	ISIN1       string // First security identifier
+	ISIN2       string // Second security identifier
 	Correlation float64
 }
 
@@ -60,11 +60,11 @@ type PortfolioState struct {
 	DividendBonuses map[string]float64
 }
 
-// Security represents a security in the portfolio (placeholder - actual definition elsewhere).
+// Security represents a security for optimization.
 type Security struct {
-	Symbol             string
-	ISIN               string // ISIN for score lookups (scores table uses ISIN as primary key)
-	ProductType        string // Product type: EQUITY, ETF, MUTUALFUND, ETC, CASH, UNKNOWN
+	ISIN               string // Primary identifier
+	Symbol             string // Broker symbol (needed for trade execution)
+	ProductType        string // EQUITY, ETF, MUTUALFUND, ETC, CASH, UNKNOWN
 	Country            string
 	Industry           string
 	MinPortfolioTarget float64
@@ -76,9 +76,9 @@ type Security struct {
 	TargetPriceEUR     float64
 }
 
-// Position represents a position in the portfolio (placeholder - actual definition elsewhere).
+// Position represents a position for optimization calculations.
 type Position struct {
-	Symbol   string
+	ISIN     string // Security identifier
 	Quantity float64
 	ValueEUR float64
 }
@@ -115,24 +115,23 @@ type Settings struct {
 // TimeSeriesData represents time series price data.
 type TimeSeriesData struct {
 	Dates []string             // Date strings in YYYY-MM-DD format
-	Data  map[string][]float64 // Symbol -> prices array
+	Data  map[string][]float64 // ISIN -> prices array (keyed by ISIN for internal operations)
 }
 
 // Constraints
 
 // SectorConstraint represents sector allocation constraints.
 type SectorConstraint struct {
-	SectorMapper map[string]string  // Maps ISIN to sector name ✅
+	SectorMapper map[string]string  // Maps ISIN to sector name
 	SectorLower  map[string]float64 // Lower bounds per sector
 	SectorUpper  map[string]float64 // Upper bounds per sector
 }
 
 // Constraints contains all constraints for optimization.
-// All keys are ISINs (not Symbols).
+// All keys are ISINs.
 type Constraints struct {
-	ISINs             []string           // Ordered ISIN list ✅ (renamed from Symbols)
-	MinWeights        map[string]float64 // Minimum weight per ISIN ✅
-	MaxWeights        map[string]float64 // Maximum weight per ISIN ✅
+	ISINs             []string           // Ordered ISIN list
+	MinWeights        map[string]float64 // Minimum weight per ISIN
+	MaxWeights        map[string]float64 // Maximum weight per ISIN
 	SectorConstraints []SectorConstraint // Country/industry constraints
-	// DELETED: WeightBounds [][2]float64 - replaced by MinWeights/MaxWeights maps
 }

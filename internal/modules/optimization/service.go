@@ -166,9 +166,15 @@ func (os *OptimizerService) Optimize(state PortfolioState, settings Settings) (*
 		Msg("Calculated expected returns")
 
 	// 2. Adjust expected returns for transaction costs
+	// Build ISIN to Symbol mapping for position lookups
+	isinToSymbol := make(map[string]string)
+	for _, sec := range activeSecurities {
+		isinToSymbol[sec.ISIN] = sec.Symbol
+	}
 	expectedReturns = os.adjustReturnsForTransactionCosts(
 		expectedReturns,
 		state.Positions,
+		isinToSymbol,
 		state.PortfolioValue,
 		settings.TransactionCostPct,
 	)
@@ -211,20 +217,20 @@ func (os *OptimizerService) Optimize(state PortfolioState, settings Settings) (*
 		}
 
 		// Create views for securities with significantly different returns
-		for isin, ret := range expectedReturns { // Use ISIN ✅
+		for isin, ret := range expectedReturns {
 			if ret > avgReturn*1.1 {
 				// Outperform view
 				views = append(views, View{
 					Type:       "absolute",
-					Symbol:     isin, // ISIN field (Symbol field name kept for compatibility) ✅
+					ISIN:       isin,
 					Return:     ret,
-					Confidence: 0.6, // Moderate confidence
+					Confidence: 0.6,
 				})
 			} else if ret < avgReturn*0.9 {
 				// Underperform view
 				views = append(views, View{
 					Type:       "absolute",
-					Symbol:     isin, // ISIN field (Symbol field name kept for compatibility) ✅
+					ISIN:       isin,
 					Return:     ret,
 					Confidence: 0.6,
 				})
@@ -661,9 +667,11 @@ func (os *OptimizerService) applyWeightCutoff(
 }
 
 // adjustReturnsForTransactionCosts adjusts expected returns to account for transaction costs.
+// expectedReturns is ISIN-keyed, positions is Symbol-keyed, so isinToSymbol mapping is needed.
 func (os *OptimizerService) adjustReturnsForTransactionCosts(
-	expectedReturns map[string]float64,
-	positions map[string]Position,
+	expectedReturns map[string]float64, // ISIN-keyed
+	positions map[string]Position, // Symbol-keyed
+	isinToSymbol map[string]string, // ISIN -> Symbol mapping
 	portfolioValue float64,
 	transactionCostPct float64,
 ) map[string]float64 {
@@ -672,7 +680,10 @@ func (os *OptimizerService) adjustReturnsForTransactionCosts(
 	// Minimum trade value where cost = 1% of value
 	minTradeValue := DefaultTransactionCostFixed / (0.01 - transactionCostPct)
 
-	for symbol, expReturn := range expectedReturns {
+	for isin, expReturn := range expectedReturns {
+		// Map ISIN to Symbol for position lookup
+		symbol := isinToSymbol[isin]
+
 		// Get current position value
 		pos, hasPos := positions[symbol]
 		currentValue := 0.0
@@ -703,7 +714,7 @@ func (os *OptimizerService) adjustReturnsForTransactionCosts(
 		costReduction := math.Min(costRatio, 0.02)
 		adjustedReturn := expReturn - costReduction
 
-		adjusted[symbol] = adjustedReturn
+		adjusted[isin] = adjustedReturn // Keep ISIN keys in output
 	}
 
 	return adjusted
@@ -780,6 +791,7 @@ func (os *OptimizerService) applyGradualAdjustment(
 }
 
 // calculateWeightChanges calculates weight changes from current to target.
+// All maps are keyed by ISIN.
 func (os *OptimizerService) calculateWeightChanges(
 	targetWeights map[string]float64,
 	positions map[string]Position,
@@ -787,31 +799,31 @@ func (os *OptimizerService) calculateWeightChanges(
 ) []WeightChange {
 	changes := make([]WeightChange, 0)
 
-	// Get all symbols
-	allSymbols := make(map[string]bool)
-	for s := range targetWeights {
-		allSymbols[s] = true
+	// Get all ISINs
+	allISINs := make(map[string]bool)
+	for isin := range targetWeights {
+		allISINs[isin] = true
 	}
-	for s := range positions {
-		allSymbols[s] = true
+	for isin := range positions {
+		allISINs[isin] = true
 	}
 
-	for symbol := range allSymbols {
+	for isin := range allISINs {
 		// Current weight
 		current := 0.0
-		if pos, ok := positions[symbol]; ok && portfolioValue > 0 {
+		if pos, ok := positions[isin]; ok && portfolioValue > 0 {
 			current = pos.ValueEUR / portfolioValue
 		}
 
 		// Target weight
-		target := targetWeights[symbol]
+		target := targetWeights[isin]
 
 		// Change
 		change := target - current
 
 		if math.Abs(change) > 0.001 { // Ignore tiny changes
 			changes = append(changes, WeightChange{
-				Symbol:        symbol,
+				ISIN:          isin,
 				CurrentWeight: round(current, 4),
 				TargetWeight:  round(target, 4),
 				Change:        round(change, 4),

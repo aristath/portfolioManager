@@ -28,6 +28,7 @@ import (
 type SystemHandlers struct {
 	log                     zerolog.Logger
 	dataDir                 string
+	startupTime             time.Time
 	portfolioDB             *database.DB
 	configDB                *database.DB
 	universeDB              *database.DB
@@ -110,6 +111,7 @@ func NewSystemHandlers(
 	return &SystemHandlers{
 		log:                     log.With().Str("component", "system_handlers").Logger(),
 		dataDir:                 dataDir,
+		startupTime:             time.Now(),
 		portfolioDB:             portfolioDB,
 		configDB:                configDB,
 		universeDB:              universeDB,
@@ -614,8 +616,9 @@ func (h *SystemHandlers) HandleLEDDisplay(w http.ResponseWriter, r *http.Request
 	default: // STATS mode
 		// Calculate actual CPU and RAM percentages
 		cpuPercent, ramPercent := h.getSystemStats()
+		uptimeHours := time.Since(h.startupTime).Hours()
 		response.SystemStats = map[string]interface{}{
-			"uptime_hours": 0, // TODO: Calculate actual uptime
+			"uptime_hours": uptimeHours,
 			"cpu_percent":  cpuPercent,
 			"ram_percent":  ramPercent,
 		}
@@ -713,12 +716,35 @@ func (h *SystemHandlers) RefreshCredentials() error {
 func (h *SystemHandlers) HandleJobsStatus(w http.ResponseWriter, r *http.Request) {
 	h.log.Debug().Msg("Getting jobs status")
 
-	// TODO: Integrate with actual scheduler
+	var jobs []JobInfo
+	var lastRun, nextRun time.Time
+	lastRun = time.Now().Add(-5 * time.Minute) // Default
+	nextRun = time.Now().Add(5 * time.Minute)  // Default
+
+	// Get job history from queue manager
+	if h.queueManager != nil {
+		history, err := h.queueManager.GetJobHistory()
+		if err != nil {
+			h.log.Warn().Err(err).Msg("Failed to get job history")
+		} else {
+			for _, entry := range history {
+				jobs = append(jobs, JobInfo{
+					Name:    entry.JobType,
+					Status:  entry.Status,
+					LastRun: entry.LastRunAt.Format(time.RFC3339),
+				})
+				if entry.LastRunAt.After(lastRun) {
+					lastRun = entry.LastRunAt
+				}
+			}
+		}
+	}
+
 	response := JobsStatusResponse{
-		TotalJobs: 0,
-		Jobs:      []JobInfo{},
-		LastRun:   time.Now().Add(-5 * time.Minute).Format(time.RFC3339),
-		NextRun:   time.Now().Add(5 * time.Minute).Format(time.RFC3339),
+		TotalJobs: len(jobs),
+		Jobs:      jobs,
+		LastRun:   lastRun.Format(time.RFC3339),
+		NextRun:   nextRun.Format(time.RFC3339),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1163,13 +1189,33 @@ func (h *SystemHandlers) HandleSyncPortfolio(w http.ResponseWriter, r *http.Requ
 
 	h.log.Info().Msg("Manual portfolio sync triggered")
 
-	// TODO: Implement portfolio sync in Go
-	// For now, this is handled by the sync_cycle job which includes portfolio sync
-	// The sync cycle job calls cash_flows sync which includes portfolio sync
+	// Trigger the sync_cycle job which includes portfolio sync (Step 3)
+	// The sync_cycle job orchestrates: trades -> cash_flows -> portfolio -> exchange_rates -> balances -> prices -> dividends
+	if h.queueManager != nil {
+		job := &queue.Job{
+			ID:          fmt.Sprintf("sync_cycle-%d", time.Now().UnixNano()),
+			Type:        queue.JobTypeSyncCycle,
+			Priority:    queue.PriorityHigh,
+			Payload:     map[string]interface{}{"trigger": "manual_portfolio_sync"},
+			CreatedAt:   time.Now(),
+			AvailableAt: time.Now(),
+			MaxRetries:  1,
+		}
+		if err := h.queueManager.Enqueue(job); err != nil {
+			h.log.Error().Err(err).Msg("Failed to enqueue sync_cycle job")
+			http.Error(w, "Failed to trigger portfolio sync", http.StatusInternalServerError)
+			return
+		}
+		h.writeJSON(w, map[string]string{
+			"status":  "success",
+			"message": "Portfolio sync job enqueued",
+		})
+		return
+	}
 
 	h.writeJSON(w, map[string]string{
-		"status":  "success",
-		"message": "Portfolio sync delegated to sync cycle (handled by cash flows module)",
+		"status":  "error",
+		"message": "Queue manager not available",
 	})
 }
 
@@ -1205,19 +1251,33 @@ func (h *SystemHandlers) HandleSyncRecommendations(w http.ResponseWriter, r *htt
 
 	h.log.Info().Msg("Manual recommendation sync triggered")
 
-	// TODO: Implement recommendation generation in Go
-	// This requires:
-	// 1. Clear recommendation caches
-	// 2. Generate fresh recommendations via planning module
-	// 3. Update LED display
-	//
-	// For now, recommendations are generated on-demand via:
-	// POST /api/planning/recommendations or POST /api/trades/recommendations
+	// Trigger the planner_batch job which generates fresh recommendations
+	// This clears caches and generates new recommendations via the planning module
+	if h.queueManager != nil {
+		job := &queue.Job{
+			ID:          fmt.Sprintf("planner_batch-%d", time.Now().UnixNano()),
+			Type:        queue.JobTypePlannerBatch,
+			Priority:    queue.PriorityHigh,
+			Payload:     map[string]interface{}{"trigger": "manual_recommendation_sync"},
+			CreatedAt:   time.Now(),
+			AvailableAt: time.Now(),
+			MaxRetries:  1,
+		}
+		if err := h.queueManager.Enqueue(job); err != nil {
+			h.log.Error().Err(err).Msg("Failed to enqueue planner_batch job")
+			http.Error(w, "Failed to trigger recommendation generation", http.StatusInternalServerError)
+			return
+		}
+		h.writeJSON(w, map[string]string{
+			"status":  "success",
+			"message": "Recommendation generation job enqueued",
+		})
+		return
+	}
 
 	h.writeJSON(w, map[string]string{
-		"status":  "success",
-		"message": "Recommendations are generated on-demand via planning module",
-		"note":    "Use POST /api/planning/recommendations or POST /api/trades/recommendations",
+		"status":  "error",
+		"message": "Queue manager not available",
 	})
 }
 

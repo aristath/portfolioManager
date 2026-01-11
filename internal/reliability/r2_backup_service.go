@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aristath/sentinel/internal/version"
 	"github.com/rs/zerolog"
 )
 
@@ -86,7 +87,7 @@ func (s *R2BackupService) CreateAndUploadBackup(ctx context.Context) error {
 	metadata := BackupMetadata{
 		Timestamp:       time.Now().UTC(),
 		Version:         "1.0.0",
-		SentinelVersion: "0.1.0", // TODO: Get from version package
+		SentinelVersion: version.Version,
 		Databases:       make([]DatabaseMetadata, 0, len(dbNames)),
 	}
 

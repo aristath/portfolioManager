@@ -63,3 +63,8 @@ func (m *Manager) Size() int {
 func (m *Manager) RecordExecution(jobType JobType, status string) error {
 	return m.history.RecordExecution(jobType, time.Now(), status)
 }
+
+// GetJobHistory returns all job history entries
+func (m *Manager) GetJobHistory() ([]JobHistoryEntry, error) {
+	return m.history.GetAllHistory()
+}

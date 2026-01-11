@@ -12,10 +12,8 @@ import (
 )
 
 func TestRegisterRoutes(t *testing.T) {
-	// Create mock dependencies
-	// For analytics, we'll create a minimal handler with nil dependencies
-	// The actual handler creation is complex, so we'll test route registration differently
-	handler := NewHandler(nil, nil, nil, nil, nil, zerolog.Nop())
+	// Create handler with minimal dependencies
+	handler := NewHandler(nil, nil, zerolog.Nop())
 
 	// Create router and register routes - this should not panic
 	router := chi.NewRouter()
@@ -67,7 +65,7 @@ func TestRegisterRoutes(t *testing.T) {
 
 func TestRegisterRoutes_RoutePrefix(t *testing.T) {
 	// Verify that routes are registered under /analytics prefix
-	handler := NewHandler(nil, nil, nil, nil, nil, zerolog.Nop())
+	handler := NewHandler(nil, nil, zerolog.Nop())
 
 	router := chi.NewRouter()
 	handler.RegisterRoutes(router)

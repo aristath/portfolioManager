@@ -13,30 +13,21 @@ import (
 
 // Handler provides HTTP handlers for analytics endpoints
 type Handler struct {
-	factorTracker    *analytics.FactorExposureTracker
-	portfolioService interface{} // TODO: Replace with actual portfolio service type
-	positionRepo     interface{} // TODO: Replace with actual position repository type
-	scoreRepo        interface{} // TODO: Replace with actual score repository type
-	portfolioDB      *sql.DB
-	log              zerolog.Logger
+	factorTracker *analytics.FactorExposureTracker
+	portfolioDB   *sql.DB
+	log           zerolog.Logger
 }
 
 // NewHandler creates a new analytics handler
 func NewHandler(
 	factorTracker *analytics.FactorExposureTracker,
-	portfolioService interface{},
-	positionRepo interface{},
-	scoreRepo interface{},
 	portfolioDB *sql.DB,
 	log zerolog.Logger,
 ) *Handler {
 	return &Handler{
-		factorTracker:    factorTracker,
-		portfolioService: portfolioService,
-		positionRepo:     positionRepo,
-		scoreRepo:        scoreRepo,
-		portfolioDB:      portfolioDB,
-		log:              log.With().Str("handler", "analytics").Logger(),
+		factorTracker: factorTracker,
+		portfolioDB:   portfolioDB,
+		log:           log.With().Str("handler", "analytics").Logger(),
 	}
 }
 

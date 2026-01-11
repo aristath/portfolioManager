@@ -121,19 +121,17 @@ func (cm *ConstraintsManager) calculateWeightBounds(
 		upper := cm.getMaxConcentration(security.ProductType)
 
 		// If Kelly sizing is enabled, use Kelly-optimal size as upper bound (but still respect max concentration)
-		// TODO: Update KellyPositionSizer to use ISIN instead of Symbol
 		if cm.kellySizer != nil && expectedReturns != nil && covMatrix != nil && len(isins) > 0 {
 			// Use default confidence of 0.5 (moderate confidence)
 			// In future enhancements, this could be derived from security scores
 			confidence := 0.5
 
-			// TEMPORARY: Kelly sizer still uses Symbol-based API
-			// This will be updated when we migrate KellyPositionSizer
-			kellySize, err := cm.kellySizer.CalculateOptimalSizeForSymbol(
-				symbol,          // TEMPORARY: Still using Symbol
-				expectedReturns, // ISIN-keyed (sizer will need update)
+			// Use ISIN-based API
+			kellySize, err := cm.kellySizer.CalculateOptimalSizeForISIN(
+				isin,            // Use ISIN ✅
+				expectedReturns, // ISIN-keyed ✅
 				covMatrix,
-				isins, // ISIN array (sizer will need update)
+				isins, // ISIN array ✅
 				confidence,
 				regimeScore,
 			)

@@ -21,7 +21,7 @@ func TestBuildCorrelationMap(t *testing.T) {
 		{
 			name: "single pair",
 			pairs: []CorrelationPair{
-				{Symbol1: "AAPL", Symbol2: "MSFT", Correlation: 0.85},
+				{ISIN1: "AAPL", ISIN2: "MSFT", Correlation: 0.85},
 			},
 			expected: map[string]float64{
 				"AAPL:MSFT": 0.85,
@@ -31,8 +31,8 @@ func TestBuildCorrelationMap(t *testing.T) {
 		{
 			name: "multiple pairs",
 			pairs: []CorrelationPair{
-				{Symbol1: "AAPL", Symbol2: "MSFT", Correlation: 0.85},
-				{Symbol1: "GOOGL", Symbol2: "AMZN", Correlation: 0.90},
+				{ISIN1: "AAPL", ISIN2: "MSFT", Correlation: 0.85},
+				{ISIN1: "GOOGL", ISIN2: "AMZN", Correlation: 0.90},
 			},
 			expected: map[string]float64{
 				"AAPL:MSFT":  0.85,
@@ -44,7 +44,7 @@ func TestBuildCorrelationMap(t *testing.T) {
 		{
 			name: "negative correlation",
 			pairs: []CorrelationPair{
-				{Symbol1: "AAPL", Symbol2: "GOLD", Correlation: -0.30},
+				{ISIN1: "AAPL", ISIN2: "GOLD", Correlation: -0.30},
 			},
 			expected: map[string]float64{
 				"AAPL:GOLD": -0.30,

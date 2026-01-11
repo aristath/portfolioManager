@@ -19,9 +19,10 @@ func TestRegisterListeners(t *testing.T) {
 
 	RegisterListeners(bus, manager, registry, zerolog.Nop())
 
-	// Emit portfolio changed event
-	bus.Emit(events.PortfolioChanged, "test", map[string]interface{}{
-		"portfolio_hash": "abc123",
+	// Emit state changed event (triggers planner_batch)
+	bus.Emit(events.StateChanged, "test", map[string]interface{}{
+		"old_hash": "abc123",
+		"new_hash": "def456",
 	})
 
 	// Give listener time to process
@@ -33,7 +34,7 @@ func TestRegisterListeners(t *testing.T) {
 	job, err := manager.Dequeue()
 	require.NoError(t, err)
 	assert.Equal(t, JobTypePlannerBatch, job.Type)
-	assert.Equal(t, PriorityHigh, job.Priority)
+	assert.Equal(t, PriorityCritical, job.Priority)
 }
 
 func TestListeners_MultipleEvents(t *testing.T) {
@@ -46,7 +47,7 @@ func TestListeners_MultipleEvents(t *testing.T) {
 	RegisterListeners(bus, manager, registry, zerolog.Nop())
 
 	// Emit multiple events
-	bus.Emit(events.PortfolioChanged, "test", map[string]interface{}{})
+	bus.Emit(events.StateChanged, "test", map[string]interface{}{"old_hash": "a", "new_hash": "b"})
 	bus.Emit(events.PriceUpdated, "test", map[string]interface{}{})
 	bus.Emit(events.RecommendationsReady, "test", map[string]interface{}{})
 

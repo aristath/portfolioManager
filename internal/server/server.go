@@ -562,7 +562,7 @@ func (s *Server) setupRoutes() {
 			planningIncrementalPlanner,
 			planningEventBroadcaster,
 			s.container.EventManager,
-			nil, // TODO: Pass trade executor
+			s.container.TradeExecutionService, // Trade executor for plan execution
 			s.log,
 		)
 		planningHandler.RegisterRoutes(r)
@@ -602,18 +602,9 @@ func (s *Server) setupRoutes() {
 		}
 
 		// Symbolic Regression module (MIGRATED TO GO!)
-		// TODO: Extract to handlers package when module is migrated
-
 		// Analytics module (Factor Exposure, etc.)
-		analyticsFactorTracker := s.container.FactorExposureTracker
-		analyticsPortfolioService := s.container.PortfolioService
-		analyticsPositionRepo := s.container.PositionRepo
-		analyticsScoreRepo := s.container.ScoreRepo
 		analyticsHandler := analyticshandlers.NewHandler(
-			analyticsFactorTracker,
-			analyticsPortfolioService,
-			analyticsPositionRepo,
-			analyticsScoreRepo,
+			s.container.FactorExposureTracker,
 			s.portfolioDB.Conn(),
 			s.log,
 		)

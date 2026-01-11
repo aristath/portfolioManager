@@ -72,3 +72,40 @@ func (h *History) RecordExecution(jobType JobType, timestamp time.Time, status s
 
 	return nil
 }
+
+// JobHistoryEntry represents a job history entry
+type JobHistoryEntry struct {
+	JobType   string    `json:"job_type"`
+	LastRunAt time.Time `json:"last_run_at"`
+	Status    string    `json:"status"`
+}
+
+// GetAllHistory returns all job history entries
+func (h *History) GetAllHistory() ([]JobHistoryEntry, error) {
+	if h.db == nil {
+		return []JobHistoryEntry{}, nil
+	}
+
+	rows, err := h.db.Query(`
+		SELECT job_type, last_run_at, last_status
+		FROM job_history
+		ORDER BY last_run_at DESC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query job history: %w", err)
+	}
+	defer rows.Close()
+
+	var entries []JobHistoryEntry
+	for rows.Next() {
+		var entry JobHistoryEntry
+		var lastRunAtUnix int64
+		if err := rows.Scan(&entry.JobType, &lastRunAtUnix, &entry.Status); err != nil {
+			return nil, fmt.Errorf("failed to scan job history row: %w", err)
+		}
+		entry.LastRunAt = time.Unix(lastRunAtUnix, 0).UTC()
+		entries = append(entries, entry)
+	}
+
+	return entries, nil
+}

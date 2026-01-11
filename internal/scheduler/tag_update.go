@@ -473,14 +473,10 @@ func (j *TagUpdateJob) updateTagsForSecurity(security universe.Security) error {
 }
 
 // getTargetReturnSettings fetches target return and threshold from settings
-// Returns defaults if not available: 0.11 (11%) target, 0.80 (80%) threshold
+// Returns defaults: 0.11 (11%) target, 0.80 (80%) threshold
+// These match the system defaults in planning/domain/config.go
 func (j *TagUpdateJob) getTargetReturnSettings() (float64, float64) {
-	// Use defaults for now (can be enhanced to query from configDB if available)
-	targetReturn := 0.11 // Default: 11%
-	thresholdPct := 0.80 // Default: 80%
-
-	// TODO: Query from configDB if available (similar to planner_batch.go)
-	// For now, use defaults which match the system defaults
-
+	targetReturn := 0.11 // 11% - matches DefaultConfig().OptimizerTargetReturn
+	thresholdPct := 0.80 // 80% - standard threshold
 	return targetReturn, thresholdPct
 }

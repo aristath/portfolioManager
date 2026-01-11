@@ -469,13 +469,23 @@ func (r *PlannerRepository) UpsertBestResult(
 	result domain.EvaluationResult,
 	sequence domain.ActionSequence,
 ) error {
+	// Calculate cash required and generated from sequence actions
+	var cashRequired, cashGenerated float64
+	for _, action := range sequence.Actions {
+		if action.Side == "BUY" {
+			cashRequired += action.ValueEUR
+		} else if action.Side == "SELL" {
+			cashGenerated += action.ValueEUR
+		}
+	}
+
 	// Convert sequence to HolisticPlan for storage
 	plan := &domain.HolisticPlan{
 		Steps:          []domain.HolisticStep{}, // Will be populated from sequence if needed
 		EndStateScore:  result.EndScore,
 		ScoreBreakdown: result.ScoreBreakdown,
-		CashRequired:   0.0, // TODO: Calculate from sequence
-		CashGenerated:  0.0, // TODO: Calculate from sequence
+		CashRequired:   cashRequired,
+		CashGenerated:  cashGenerated,
 		Feasible:       result.Feasible,
 	}
 

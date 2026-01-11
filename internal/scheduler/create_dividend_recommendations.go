@@ -160,7 +160,8 @@ func (j *CreateDividendRecommendationsJob) createSameSecurityReinvestment(
 
 	// Create BUY step
 	step := &domain.HolisticStep{
-		Symbol:         symbol,
+		ISIN:           security.ISIN, // Primary identifier
+		Symbol:         symbol,        // For broker API and UI display
 		Name:           security.Name,
 		Side:           "BUY",
 		Quantity:       quantity,

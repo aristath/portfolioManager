@@ -302,7 +302,8 @@ func (p *Planner) convertToPlanWithFiltered(sequence domain.ActionSequence, ctx 
 		step := domain.HolisticStep{
 			StepNumber:     i + 1,
 			Side:           action.Side,
-			Symbol:         action.Symbol,
+			ISIN:           action.ISIN,   // Primary identifier
+			Symbol:         action.Symbol, // For broker API and UI display
 			Name:           action.Name,
 			Quantity:       action.Quantity,
 			EstimatedPrice: priceEUR, // Now in EUR

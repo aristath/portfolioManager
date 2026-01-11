@@ -18,8 +18,8 @@ func TestOptimizerService_OptimizeISINKeys(t *testing.T) {
 func TestPortfolioState_ISINKeyedMaps(t *testing.T) {
 	state := PortfolioState{
 		Positions: map[string]Position{
-			"US0378331005": {Symbol: "AAPL.US", Quantity: 10, ValueEUR: 1500}, // ISIN key ✅
-			"US5949181045": {Symbol: "MSFT.US", Quantity: 5, ValueEUR: 1500},  // ISIN key ✅
+			"US0378331005": {ISIN: "US0378331005", Quantity: 10, ValueEUR: 1500},
+			"US5949181045": {ISIN: "US5949181045", Quantity: 5, ValueEUR: 1500},
 		},
 		CurrentPrices: map[string]float64{
 			"US0378331005": 150.0, // ISIN key ✅
@@ -130,7 +130,7 @@ func TestSectorConstraint_ISINMapper(t *testing.T) {
 func TestNoDualKeyDuplication(t *testing.T) {
 	state := PortfolioState{
 		Positions: map[string]Position{
-			"US0378331005": {Symbol: "AAPL.US", Quantity: 10, ValueEUR: 1500},
+			"US0378331005": {ISIN: "US0378331005", Quantity: 10, ValueEUR: 1500},
 		},
 		CurrentPrices: map[string]float64{
 			"US0378331005": 150.0,

@@ -284,14 +284,19 @@ func (s *Service) EvaluateSingleSequence(ctx context.Context, sequence domain.Ac
 }
 
 // BatchEvaluateWithOptions provides more control over evaluation parameters.
+// Currently supports deterministic evaluation only.
+// Monte Carlo and stochastic simulation are not implemented - the options are ignored.
 func (s *Service) BatchEvaluateWithOptions(ctx context.Context, sequences []domain.ActionSequence, portfolioHash string, opts EvaluationOptions, opportunityCtx *domain.OpportunityContext) ([]domain.EvaluationResult, error) {
-	// TODO: Implement Monte Carlo and stochastic when worker pool supports it
+	// Monte Carlo and stochastic evaluation require price simulation infrastructure.
+	// These options are currently ignored and deterministic evaluation is used.
 	if opts.UseMonteCarlo || opts.UseStochastic {
-		s.log.Warn().Msg("Monte Carlo and stochastic evaluation not yet implemented in direct mode")
+		s.log.Debug().
+			Bool("monte_carlo_requested", opts.UseMonteCarlo).
+			Bool("stochastic_requested", opts.UseStochastic).
+			Msg("Advanced evaluation modes not available, using deterministic evaluation")
 	}
 
-	// For now, just use standard batch evaluation
-	// Note: opts doesn't contain config, so we use nil (will use defaults)
+	// Use standard batch evaluation with deterministic pricing
 	return s.BatchEvaluate(ctx, sequences, portfolioHash, nil, opportunityCtx)
 }
 

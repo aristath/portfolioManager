@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,10 +16,8 @@ import (
 
 // RecommendationRepository handles CRUD operations for recommendations
 //
-// Minimal implementation for emergency rebalancing.
-// TODO: Full implementation matching Python can be added later.
-//
-// Faithful translation from Python: app/repositories/recommendation.py
+// Provides full CRUD operations for trade recommendations.
+// Reference: app/repositories/recommendation.py (Python)
 // Database: cache.db (recommendations table)
 type RecommendationRepository struct {
 	db                    *sql.DB                                         // cache.db
@@ -517,7 +516,7 @@ func (r *RecommendationRepository) GetRecommendationsAsPlan(getEvaluatedCount fu
 			"score_change":           rec.ScoreChange,
 			"available_cash_before":  availableCashBefore,
 			"available_cash_after":   availableCashAfter,
-			"is_emergency":           false, // TODO: Determine from reason or other criteria
+			"is_emergency":           isEmergencyReason(rec.Reason),
 		}
 
 		steps = append(steps, step)
@@ -710,4 +709,26 @@ func (r *RecommendationRepository) StoreRejectedOpportunities(rejected []plannin
 		Msg("Stored rejected opportunities")
 
 	return nil
+}
+
+// isEmergencyReason determines if a recommendation reason indicates an emergency
+func isEmergencyReason(reason string) bool {
+	emergencyPatterns := []string{
+		"emergency",
+		"negative balance",
+		"margin call",
+		"urgent",
+		"critical",
+		"risk limit",
+		"stop loss",
+		"forced",
+	}
+
+	reasonLower := strings.ToLower(reason)
+	for _, pattern := range emergencyPatterns {
+		if strings.Contains(reasonLower, pattern) {
+			return true
+		}
+	}
+	return false
 }

@@ -43,30 +43,6 @@ func RegisterListeners(bus *events.Bus, manager *Manager, registry *Registry, lo
 		}
 	})
 
-	// PortfolioChanged -> planner_batch (HIGH priority)
-	// NOTE: This is now redundant with StateChanged but kept for backward compatibility
-	// TODO: Remove once StateMonitor is confirmed working
-	_ = bus.Subscribe(events.PortfolioChanged, func(event *events.Event) {
-		job := &Job{
-			ID:          fmt.Sprintf("%s-%d", JobTypePlannerBatch, event.Timestamp.UnixNano()),
-			Type:        JobTypePlannerBatch,
-			Priority:    PriorityHigh,
-			Payload:     event.Data,
-			CreatedAt:   event.Timestamp,
-			AvailableAt: event.Timestamp,
-			Retries:     0,
-			MaxRetries:  3,
-		}
-		if err := manager.Enqueue(job); err != nil {
-			log.Error().
-				Err(err).
-				Str("event_type", string(events.PortfolioChanged)).
-				Str("job_type", string(JobTypePlannerBatch)).
-				Str("job_id", job.ID).
-				Msg("Failed to enqueue job from event")
-		}
-	})
-
 	// RecommendationsReady -> event_based_trading (CRITICAL priority)
 	// Note: Job has in-memory 15-minute throttle and processes ONE trade at a time
 	_ = bus.Subscribe(events.RecommendationsReady, func(event *events.Event) {

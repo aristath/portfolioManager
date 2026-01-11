@@ -221,11 +221,11 @@ func TestGetCorrelations(t *testing.T) {
 	foundAB := false
 	foundBC := false
 	for _, pair := range correlations {
-		if (pair.Symbol1 == "A" && pair.Symbol2 == "B") || (pair.Symbol1 == "B" && pair.Symbol2 == "A") {
+		if (pair.ISIN1 == "A" && pair.ISIN2 == "B") || (pair.ISIN1 == "B" && pair.ISIN2 == "A") {
 			assert.InDelta(t, 0.577, math.Abs(pair.Correlation), 0.1)
 			foundAB = true
 		}
-		if (pair.Symbol1 == "B" && pair.Symbol2 == "C") || (pair.Symbol1 == "C" && pair.Symbol2 == "B") {
+		if (pair.ISIN1 == "B" && pair.ISIN2 == "C") || (pair.ISIN1 == "C" && pair.ISIN2 == "B") {
 			assert.InDelta(t, 0.548, math.Abs(pair.Correlation), 0.1)
 			foundBC = true
 		}

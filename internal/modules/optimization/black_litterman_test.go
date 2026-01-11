@@ -69,7 +69,7 @@ func TestBlackLittermanOptimizer_BlendViewsWithEquilibrium(t *testing.T) {
 	views := []View{
 		{
 			Type:       "absolute",
-			Symbol:     "A",
+			ISIN:       "A",
 			Return:     0.12, // 2% above equilibrium
 			Confidence: 0.5,
 		},
@@ -100,7 +100,7 @@ func TestBlackLittermanOptimizer_CalculateBLReturns(t *testing.T) {
 	views := []View{
 		{
 			Type:       "absolute",
-			Symbol:     "A",
+			ISIN:       "A",
 			Return:     0.12,
 			Confidence: 0.5,
 		},

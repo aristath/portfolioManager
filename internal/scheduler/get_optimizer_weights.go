@@ -161,8 +161,8 @@ func (j *GetOptimizerWeightsJob) Run() error {
 		if price, ok := currentPrices[isin]; ok { // ISIN lookup ✅
 			valueEUR = price * float64(pos.Quantity)
 		}
-		optimizerPositions[isin] = optimization.Position{ // ISIN key ✅
-			Symbol:   pos.Symbol,
+		optimizerPositions[isin] = optimization.Position{
+			ISIN:     isin,
 			Quantity: float64(pos.Quantity),
 			ValueEUR: valueEUR,
 		}

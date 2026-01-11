@@ -26,7 +26,6 @@ import (
 	planninghash "github.com/aristath/sentinel/internal/modules/planning/hash"
 	planningplanner "github.com/aristath/sentinel/internal/modules/planning/planner"
 	planningstatemonitor "github.com/aristath/sentinel/internal/modules/planning/state_monitor"
-	planninguniverse "github.com/aristath/sentinel/internal/modules/planning/universe_monitor"
 	"github.com/aristath/sentinel/internal/modules/portfolio"
 	"github.com/aristath/sentinel/internal/modules/quantum"
 	"github.com/aristath/sentinel/internal/modules/rebalancing"
@@ -199,11 +198,12 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		container.CurrencyExchangeService,
 		container.EventManager,
 		container.SettingsService,
-		container.PlannerConfigRepo, // NEW: Planner config for transaction costs
-		container.OrderBookService,  // NEW: Order book analysis for optimal limit pricing
+		container.PlannerConfigRepo,
+		container.OrderBookService,
 		container.YahooClient,
-		container.HistoryDB.Conn(), // Get underlying *sql.DB
+		container.HistoryDB.Conn(),
 		container.SecurityRepo,
+		container.MarketHoursService, // Market hours validation
 		log,
 	)
 
@@ -359,22 +359,6 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		container.CurrencyExchangeService,
 		log,
 	)
-
-	// Universe monitor (monitors state changes and invalidates recommendations)
-	// DEPRECATED: Now replaced by StateMonitor with unified state hashing
-	// Kept for backward compatibility but not started
-	// TODO: Remove once StateMonitor is confirmed working
-	container.UniverseMonitor = planninguniverse.NewUniverseMonitor(
-		container.SecurityRepo,
-		container.PositionRepo,
-		container.CashManager,
-		container.PlannerConfigRepo,
-		container.RecommendationRepo,
-		container.PlannerRepo,
-		container.ConfigDB.Conn(),
-		log,
-	)
-	log.Info().Msg("Universe monitor initialized (not started - replaced by StateMonitor)")
 
 	// State hash service (calculates unified state hash for change detection)
 	container.StateHashService = planninghash.NewStateHashService(

@@ -77,9 +77,10 @@ type PortfolioSummary struct {
 // PositionWithSecurity represents position with security information
 // Used by get_with_security_info() - combines Position + Security data
 type PositionWithSecurity struct {
+	ISIN             string  `db:"isin"` // Primary identifier for internal operations
 	Country          string  `db:"country"`
 	StockName        string  `db:"name"`
-	Symbol           string  `db:"symbol"`
+	Symbol           string  `db:"symbol"` // For broker API and UI display
 	Currency         string  `db:"currency"`
 	FullExchangeName string  `db:"fullExchangeName"`
 	Industry         string  `db:"industry"`

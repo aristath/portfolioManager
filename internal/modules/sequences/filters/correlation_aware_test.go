@@ -54,7 +54,7 @@ func TestCorrelationAwareFilter_NoCorrelatedSymbols(t *testing.T) {
 	// Mock correlations below threshold
 	mockBuilder := &mockRiskBuilder{
 		correlations: []optimization.CorrelationPair{
-			{Symbol1: "AAPL", Symbol2: "MSFT", Correlation: 0.5},
+			{ISIN1: "AAPL", ISIN2: "MSFT", Correlation: 0.5},
 		},
 		err: nil,
 	}
@@ -90,7 +90,7 @@ func TestCorrelationAwareFilter_HighCorrelation(t *testing.T) {
 	// Mock high correlation
 	mockBuilder := &mockRiskBuilder{
 		correlations: []optimization.CorrelationPair{
-			{Symbol1: "AAPL", Symbol2: "MSFT", Correlation: 0.9},
+			{ISIN1: "AAPL", ISIN2: "MSFT", Correlation: 0.9},
 		},
 		err: nil,
 	}
@@ -137,7 +137,7 @@ func TestCorrelationAwareFilter_OnlyBUYActionsChecked(t *testing.T) {
 	// High correlation between AAPL and MSFT
 	mockBuilder := &mockRiskBuilder{
 		correlations: []optimization.CorrelationPair{
-			{Symbol1: "AAPL", Symbol2: "MSFT", Correlation: 0.9},
+			{ISIN1: "AAPL", ISIN2: "MSFT", Correlation: 0.9},
 		},
 		err: nil,
 	}
@@ -173,7 +173,7 @@ func TestCorrelationAwareFilter_SingleBUYPerSequence(t *testing.T) {
 
 	mockBuilder := &mockRiskBuilder{
 		correlations: []optimization.CorrelationPair{
-			{Symbol1: "AAPL", Symbol2: "MSFT", Correlation: 0.9},
+			{ISIN1: "AAPL", ISIN2: "MSFT", Correlation: 0.9},
 		},
 		err: nil,
 	}
@@ -250,7 +250,7 @@ func TestCorrelationAwareFilter_SymmetricKeys(t *testing.T) {
 
 	mockBuilder := &mockRiskBuilder{
 		correlations: []optimization.CorrelationPair{
-			{Symbol1: "AAPL", Symbol2: "MSFT", Correlation: 0.9},
+			{ISIN1: "AAPL", ISIN2: "MSFT", Correlation: 0.9},
 		},
 		err: nil,
 	}
@@ -288,7 +288,7 @@ func TestCorrelationAwareFilter_NegativeCorrelation(t *testing.T) {
 	// Negative correlation (inverse relationship)
 	mockBuilder := &mockRiskBuilder{
 		correlations: []optimization.CorrelationPair{
-			{Symbol1: "AAPL", Symbol2: "MSFT", Correlation: -0.9},
+			{ISIN1: "AAPL", ISIN2: "MSFT", Correlation: -0.9},
 		},
 		err: nil,
 	}
@@ -342,8 +342,8 @@ func TestCorrelationAwareFilter_EmptySequences(t *testing.T) {
 
 func TestBuildCorrelationMap(t *testing.T) {
 	pairs := []optimization.CorrelationPair{
-		{Symbol1: "AAPL", Symbol2: "MSFT", Correlation: 0.85},
-		{Symbol1: "GOOGL", Symbol2: "AMZN", Correlation: 0.75},
+		{ISIN1: "AAPL", ISIN2: "MSFT", Correlation: 0.85},
+		{ISIN1: "GOOGL", ISIN2: "AMZN", Correlation: 0.75},
 	}
 
 	correlationMap := optimization.BuildCorrelationMap(pairs)

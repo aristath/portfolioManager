@@ -1,7 +1,6 @@
 package tradernet
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -11,7 +10,7 @@ import (
 )
 
 // transformPositions transforms SDK AccountSummary positions to []Position
-func transformPositions(sdkResult interface{}, log zerolog.Logger) ([]Position, error) {
+func transformPositions(sdkResult interface{}, _ zerolog.Logger) ([]Position, error) {
 	resultMap, ok := sdkResult.(map[string]interface{})
 	if !ok {
 		return nil, fmt.Errorf("invalid SDK result format: expected map[string]interface{}")
@@ -41,40 +40,19 @@ func transformPositions(sdkResult interface{}, log zerolog.Logger) ([]Position, 
 
 		symbol := getString(posMap, "i")
 
-		// DEBUG: Log all raw fields for each position, especially TSM.US
-		// Convert posMap to JSON for readable logging
-		rawJSON, _ := json.Marshal(posMap)
-		log.Debug().
-			Str("symbol", symbol).
-			RawJSON("raw_position", rawJSON).
-			Msg("transformPositions: raw position data from API")
-
-		// Extract all quantity-related fields for analysis
-		fieldQ := getFloat64(posMap, "q")
-		fieldS := getFloat64(posMap, "s")
-		fieldFV := getFloat64(posMap, "fv")
-		fieldMarketValue := getFloat64(posMap, "market_value")
-		fieldMktPrice := getFloat64(posMap, "mkt_price")
-		fieldBalPriceA := getFloat64(posMap, "bal_price_a")
-
-		// DEBUG: Log comparison of fields for investigation
-		log.Debug().
-			Str("symbol", symbol).
-			Float64("field_q", fieldQ).
-			Float64("field_s", fieldS).
-			Float64("field_fv", fieldFV).
-			Float64("api_market_value", fieldMarketValue).
-			Float64("mkt_price", fieldMktPrice).
-			Float64("bal_price_a", fieldBalPriceA).
-			Float64("calculated_from_q", fieldQ*fieldMktPrice).
-			Float64("calculated_from_s", fieldS*fieldMktPrice).
-			Msg("transformPositions: field comparison for quantity analysis")
+		// Extract position fields per API documentation:
+		// - q: Number of securities in the position (quantity)
+		// - mkt_price: Current market price
+		// - bal_price_a: Book value (average cost basis)
+		quantity := getFloat64(posMap, "q")
+		currentPrice := getFloat64(posMap, "mkt_price")
+		avgPrice := getFloat64(posMap, "bal_price_a")
 
 		position := Position{
 			Symbol:        symbol,
-			Quantity:      fieldQ, // SUSPECTED BUG: This might be wrong field
-			AvgPrice:      fieldBalPriceA,
-			CurrentPrice:  fieldMktPrice,
+			Quantity:      quantity,
+			AvgPrice:      avgPrice,
+			CurrentPrice:  currentPrice,
 			UnrealizedPnL: getFloat64(posMap, "profit_close"),
 			Currency:      getString(posMap, "curr"),
 			CurrencyRate:  0.0, // Will be set during portfolio sync from cache
@@ -351,16 +329,6 @@ func transformTrades(sdkResult interface{}) ([]Trade, error) {
 	if !ok {
 		return nil, fmt.Errorf("invalid SDK result format: expected map[string]interface{}, got %T", sdkResult)
 	}
-
-	// DEBUG: Log the raw response structure for diagnostics
-	responseKeys := make([]string, 0)
-	for key := range resultMap {
-		responseKeys = append(responseKeys, key)
-	}
-
-	// Log all available keys in response
-	rawJSON, _ := json.Marshal(resultMap)
-	_ = fmt.Sprintf("DEBUG transformTrades response keys: %v, full response: %s", responseKeys, string(rawJSON))
 
 	// Check if API returned an error
 	if errMsg, ok := resultMap["errMsg"].(string); ok && errMsg != "" {

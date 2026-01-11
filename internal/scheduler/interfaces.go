@@ -186,8 +186,9 @@ type SecurityRepositoryForDividendsInterface interface {
 
 // SecurityForDividends is a simplified interface for security data
 type SecurityForDividends struct {
-	Symbol      string
-	YahooSymbol string
+	ISIN        string // Primary identifier for internal operations
+	Symbol      string // For broker API
+	YahooSymbol string // For Yahoo Finance API
 	Name        string
 	Currency    string
 	MinLot      int
@@ -213,7 +214,8 @@ type TradeExecutionServiceInterface interface {
 
 // TradeRecommendationForDividends is a simplified trade recommendation
 type TradeRecommendationForDividends struct {
-	Symbol         string
+	ISIN           string // Primary identifier for internal operations
+	Symbol         string // For broker API
 	Side           string
 	Quantity       float64
 	EstimatedPrice float64

@@ -99,8 +99,36 @@ func (ks *KellyPositionSizer) CalculateOptimalSize(
 	return finalSize
 }
 
-// CalculateOptimalSizeForSymbol calculates optimal size for a security by symbol.
+// CalculateOptimalSizeForISIN calculates optimal size for a security by ISIN.
 // This is a convenience method that looks up expected return and variance.
+func (ks *KellyPositionSizer) CalculateOptimalSizeForISIN(
+	isin string,
+	expectedReturns map[string]float64, // ISIN-keyed
+	covMatrix [][]float64,
+	isins []string, // ISIN array
+	confidence float64,
+	regimeScore float64,
+) (float64, error) {
+	// Get expected return
+	expectedReturn, hasReturn := expectedReturns[isin]
+	if !hasReturn {
+		return ks.minPositionSize, fmt.Errorf("no expected return for ISIN %s", isin)
+	}
+
+	// Get variance from covariance matrix diagonal
+	variance, err := ks.getVarianceFromCovMatrix(isin, covMatrix, isins)
+	if err != nil {
+		return ks.minPositionSize, fmt.Errorf("failed to get variance for ISIN %s: %w", isin, err)
+	}
+
+	// Calculate optimal size
+	optimalSize := ks.CalculateOptimalSize(expectedReturn, variance, confidence, regimeScore)
+
+	return optimalSize, nil
+}
+
+// CalculateOptimalSizeForSymbol calculates optimal size for a security by symbol.
+// DEPRECATED: Use CalculateOptimalSizeForISIN instead. This method is kept for backward compatibility.
 func (ks *KellyPositionSizer) CalculateOptimalSizeForSymbol(
 	symbol string,
 	expectedReturns map[string]float64,
@@ -233,34 +261,34 @@ func (ks *KellyPositionSizer) applyRegimeAdjustment(kellyFraction float64, regim
 	return kellyFraction * reductionFactor
 }
 
-// getVarianceFromCovMatrix extracts variance for a symbol from covariance matrix.
-func (ks *KellyPositionSizer) getVarianceFromCovMatrix(symbol string, covMatrix [][]float64, symbols []string) (float64, error) {
-	// Find symbol index
-	symbolIndex := -1
-	for i, s := range symbols {
-		if s == symbol {
-			symbolIndex = i
+// getVarianceFromCovMatrix extracts variance for an identifier (ISIN or Symbol) from covariance matrix.
+func (ks *KellyPositionSizer) getVarianceFromCovMatrix(identifier string, covMatrix [][]float64, identifiers []string) (float64, error) {
+	// Find identifier index
+	identifierIndex := -1
+	for i, id := range identifiers {
+		if id == identifier {
+			identifierIndex = i
 			break
 		}
 	}
 
-	if symbolIndex < 0 {
-		return 0.0, fmt.Errorf("symbol %s not found in symbols list", symbol)
+	if identifierIndex < 0 {
+		return 0.0, fmt.Errorf("identifier %s not found in identifiers list", identifier)
 	}
 
-	if symbolIndex >= len(covMatrix) {
-		return 0.0, fmt.Errorf("symbol index %d out of bounds for covariance matrix", symbolIndex)
+	if identifierIndex >= len(covMatrix) {
+		return 0.0, fmt.Errorf("identifier index %d out of bounds for covariance matrix", identifierIndex)
 	}
 
-	if symbolIndex >= len(covMatrix[symbolIndex]) {
-		return 0.0, fmt.Errorf("covariance matrix row %d has insufficient columns", symbolIndex)
+	if identifierIndex >= len(covMatrix[identifierIndex]) {
+		return 0.0, fmt.Errorf("covariance matrix row %d has insufficient columns", identifierIndex)
 	}
 
 	// Variance is the diagonal element
-	variance := covMatrix[symbolIndex][symbolIndex]
+	variance := covMatrix[identifierIndex][identifierIndex]
 
 	if variance < 0 {
-		return 0.0, fmt.Errorf("negative variance for symbol %s: %f", symbol, variance)
+		return 0.0, fmt.Errorf("negative variance for identifier %s: %f", identifier, variance)
 	}
 
 	return variance, nil

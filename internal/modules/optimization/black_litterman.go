@@ -11,9 +11,9 @@ import (
 // View represents a Black-Litterman view (investor opinion).
 type View struct {
 	Type       string  // "absolute" or "relative"
-	Symbol     string  // For absolute views
-	Symbol1    string  // For relative views (outperformer)
-	Symbol2    string  // For relative views (underperformer)
+	ISIN       string  // For absolute views
+	ISIN1      string  // For relative views (outperformer)
+	ISIN2      string  // For relative views (underperformer)
 	Return     float64 // Expected return (absolute) or outperformance (relative)
 	Confidence float64 // Confidence level (0.0 to 1.0)
 }
@@ -135,18 +135,18 @@ func (bl *BlackLittermanOptimizer) BlendViewsWithEquilibrium(
 		// Set P matrix based on view type
 		if view.Type == "absolute" {
 			// Absolute view: single security
-			for j, symbol := range symbols {
-				if symbol == view.Symbol {
+			for j, isin := range symbols {
+				if isin == view.ISIN {
 					P.Set(i, j, 1.0)
 					break
 				}
 			}
 		} else if view.Type == "relative" {
-			// Relative view: Symbol1 outperforms Symbol2
-			for j, symbol := range symbols {
-				if symbol == view.Symbol1 {
+			// Relative view: ISIN1 outperforms ISIN2
+			for j, isin := range symbols {
+				if isin == view.ISIN1 {
 					P.Set(i, j, 1.0)
-				} else if symbol == view.Symbol2 {
+				} else if isin == view.ISIN2 {
 					P.Set(i, j, -1.0)
 				}
 			}
