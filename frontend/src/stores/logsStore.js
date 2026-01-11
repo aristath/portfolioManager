@@ -1,6 +1,41 @@
 import { create } from 'zustand';
 import { api } from '../api/client';
 
+// Parse raw log string into structured object
+function parseLogLine(line) {
+  // Format: "Jan 11 10:30:00 hostname sentinel: [LEVEL] message" or similar
+  const parts = line.split(': ');
+  if (parts.length < 2) {
+    return {
+      timestamp: new Date().toISOString(),
+      level: 'INFO',
+      message: line,
+    };
+  }
+
+  const [dateHostService, ...messageParts] = parts;
+  const message = messageParts.join(': ');
+
+  // Extract log level from message
+  let level = 'INFO';
+  const levelMatch = message.match(/\[(DEBUG|INFO|WARNING|ERROR|CRITICAL)\]/) ||
+    message.match(/^(DEBUG|INFO|WARNING|ERROR|CRITICAL):/i);
+  if (levelMatch) {
+    level = levelMatch[1].toUpperCase();
+  }
+
+  // Try to parse timestamp from the date part
+  // Format is typically "Jan 11 10:30:00" or similar
+  const dateMatch = dateHostService.match(/^(\w+ \d+ \d+:\d+:\d+)/);
+  const timestamp = dateMatch ? dateMatch[1] : new Date().toISOString();
+
+  return {
+    timestamp,
+    level,
+    message,
+  };
+}
+
 export const useLogsStore = create((set, get) => ({
   entries: [],
   filterLevel: null,
@@ -25,8 +60,11 @@ export const useLogsStore = create((set, get) => ({
         data = await api.fetchLogs(lineCount, filterLevel, searchQuery || null);
       }
 
+      // Parse raw log lines into structured objects
+      const parsedEntries = (data.lines || []).map(parseLogLine);
+
       set({
-        entries: data.lines || [],
+        entries: parsedEntries,
         totalLines: data.total || 0,
         loading: false,
       });
