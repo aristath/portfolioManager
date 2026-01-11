@@ -34,14 +34,9 @@ func TestUserInfo_CallsCorrectEndpoint(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		publicKey:  "test_public",
-		privateKey: "test_private",
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
-
+	client := NewClient("test_public", "test_private", log)
+	client.baseURL = server.URL
+	defer client.Close()
 	result, err := client.UserInfo()
 
 	assert.NoError(t, err)
@@ -71,14 +66,9 @@ func TestUserInfo_UsesAuthorizedRequest(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		publicKey:  "test_public",
-		privateKey: "test_private",
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
-
+	client := NewClient("test_public", "test_private", log)
+	client.baseURL = server.URL
+	defer client.Close()
 	_, err := client.UserInfo()
 
 	assert.NoError(t, err)
@@ -108,14 +98,9 @@ func TestUserInfo_ResponseParsing(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		publicKey:  "test_public",
-		privateKey: "test_private",
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
-
+	client := NewClient("test_public", "test_private", log)
+	client.baseURL = server.URL
+	defer client.Close()
 	result, err := client.UserInfo()
 
 	assert.NoError(t, err)
@@ -150,14 +135,9 @@ func TestUserInfo_ErrorHandling(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		publicKey:  "test_public",
-		privateKey: "test_private",
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
-
+	client := NewClient("test_public", "test_private", log)
+	client.baseURL = server.URL
+	defer client.Close()
 	result, err := client.UserInfo()
 
 	// Should not return error (matches Python SDK behavior - logs but doesn't raise)
@@ -192,14 +172,9 @@ func TestUserInfo_EmptyParams(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		publicKey:  "test_public",
-		privateKey: "test_private",
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
-
+	client := NewClient("test_public", "test_private", log)
+	client.baseURL = server.URL
+	defer client.Close()
 	_, err := client.UserInfo()
 
 	assert.NoError(t, err)
@@ -230,14 +205,9 @@ func TestGetCrossRatesForDate_CallsCorrectEndpoint(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		publicKey:  "test_public",
-		privateKey: "test_private",
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
-
+	client := NewClient("test_public", "test_private", log)
+	client.baseURL = server.URL
+	defer client.Close()
 	date := "2024-05-01"
 	result, err := client.GetCrossRatesForDate("USD", []string{"EUR", "HKD"}, &date)
 
@@ -263,14 +233,9 @@ func TestGetCrossRatesForDate_WithDate(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		publicKey:  "test_public",
-		privateKey: "test_private",
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
-
+	client := NewClient("test_public", "test_private", log)
+	client.baseURL = server.URL
+	defer client.Close()
 	date := "2024-05-01"
 	result, err := client.GetCrossRatesForDate("USD", []string{"EUR", "HKD"}, &date)
 
@@ -302,14 +267,9 @@ func TestGetCrossRatesForDate_WithNilDate(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		publicKey:  "test_public",
-		privateKey: "test_private",
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
-
+	client := NewClient("test_public", "test_private", log)
+	client.baseURL = server.URL
+	defer client.Close()
 	result, err := client.GetCrossRatesForDate("USD", []string{"EUR"}, nil)
 
 	assert.NoError(t, err)
@@ -338,14 +298,9 @@ func TestGetCrossRatesForDate_ErrorHandling(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		publicKey:  "test_public",
-		privateKey: "test_private",
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
-
+	client := NewClient("test_public", "test_private", log)
+	client.baseURL = server.URL
+	defer client.Close()
 	date := "2024-05-01"
 	result, err := client.GetCrossRatesForDate("USD", []string{"EUR"}, &date)
 

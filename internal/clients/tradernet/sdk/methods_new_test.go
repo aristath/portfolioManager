@@ -36,11 +36,9 @@ func TestNewUser(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
+	client := NewClient("", "", log)
+	client.baseURL = server.URL
+	defer client.Close()
 
 	password := "testpass"
 	tariffID := 1
@@ -79,13 +77,9 @@ func TestCheckMissingFields(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		publicKey:  "test_public",
-		privateKey: "test_private",
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
+	client := NewClient("", "", log)
+	client.baseURL = server.URL
+	defer client.Close()
 
 	result, err := client.CheckMissingFields(1, "office1")
 
@@ -120,13 +114,9 @@ func TestGetProfileFields(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		publicKey:  "test_public",
-		privateKey: "test_private",
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
+	client := NewClient("", "", log)
+	client.baseURL = server.URL
+	defer client.Close()
 
 	result, err := client.GetProfileFields(35)
 
@@ -156,13 +146,9 @@ func TestGetUserData(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		publicKey:  "test_public",
-		privateKey: "test_private",
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
+	client := NewClient("", "", log)
+	client.baseURL = server.URL
+	defer client.Close()
 
 	result, err := client.GetUserData()
 
@@ -192,13 +178,9 @@ func TestGetMarketStatus(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		publicKey:  "test_public",
-		privateKey: "test_private",
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
+	client := NewClient("", "", log)
+	client.baseURL = server.URL
+	defer client.Close()
 
 	// Test with default market
 	result, err := client.GetMarketStatus("", nil)
@@ -235,13 +217,9 @@ func TestGetOptions(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		publicKey:  "test_public",
-		privateKey: "test_private",
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
+	client := NewClient("", "", log)
+	client.baseURL = server.URL
+	defer client.Close()
 
 	result, err := client.GetOptions("AAPL.US", "CBOE")
 
@@ -272,11 +250,9 @@ func TestGetMostTraded(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
+	client := NewClient("", "", log)
+	client.baseURL = server.URL
+	defer client.Close()
 
 	// Test with defaults
 	result, err := client.GetMostTraded("", "", true, 0)
@@ -312,13 +288,9 @@ func TestStop(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		publicKey:  "test_public",
-		privateKey: "test_private",
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
+	client := NewClient("", "", log)
+	client.baseURL = server.URL
+	defer client.Close()
 
 	result, err := client.Stop("AAPL.US", 150.0)
 
@@ -349,13 +321,9 @@ func TestTrailingStop(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		publicKey:  "test_public",
-		privateKey: "test_private",
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
+	client := NewClient("", "", log)
+	client.baseURL = server.URL
+	defer client.Close()
 
 	result, err := client.TrailingStop("AAPL.US", 5.0)
 
@@ -387,13 +355,9 @@ func TestTakeProfit(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		publicKey:  "test_public",
-		privateKey: "test_private",
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
+	client := NewClient("", "", log)
+	client.baseURL = server.URL
+	defer client.Close()
 
 	result, err := client.TakeProfit("AAPL.US", 200.0)
 
@@ -437,13 +401,9 @@ func TestCancelAll(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		publicKey:  "test_public",
-		privateKey: "test_private",
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
+	client := NewClient("", "", log)
+	client.baseURL = server.URL
+	defer client.Close()
 
 	result, err := client.CancelAll()
 
@@ -474,13 +434,9 @@ func TestGetHistorical(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		publicKey:  "test_public",
-		privateKey: "test_private",
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
+	client := NewClient("", "", log)
+	client.baseURL = server.URL
+	defer client.Close()
 
 	start := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
 	end := time.Date(2023, 12, 31, 23, 59, 59, 0, time.UTC)
@@ -514,13 +470,9 @@ func TestGetOrderFiles(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		publicKey:  "test_public",
-		privateKey: "test_private",
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
+	client := NewClient("", "", log)
+	client.baseURL = server.URL
+	defer client.Close()
 
 	orderID := 12345
 	result, err := client.GetOrderFiles(&orderID, nil)
@@ -558,13 +510,9 @@ func TestGetBrokerReport(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		publicKey:  "test_public",
-		privateKey: "test_private",
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
+	client := NewClient("", "", log)
+	client.baseURL = server.URL
+	defer client.Close()
 
 	start := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
 	end := time.Date(2023, 12, 31, 0, 0, 0, 0, time.UTC)
@@ -603,13 +551,9 @@ func TestGetNews(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		publicKey:  "test_public",
-		privateKey: "test_private",
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
+	client := NewClient("", "", log)
+	client.baseURL = server.URL
+	defer client.Close()
 
 	symbol := "AAPL.US"
 	result, err := client.GetNews("AAPL", &symbol, nil, 30)
@@ -642,13 +586,9 @@ func TestSymbol(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		publicKey:  "test_public",
-		privateKey: "test_private",
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
+	client := NewClient("", "", log)
+	client.baseURL = server.URL
+	defer client.Close()
 
 	result, err := client.Symbol("AAPL.US", "en")
 
@@ -679,13 +619,9 @@ func TestSymbols(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		publicKey:  "test_public",
-		privateKey: "test_private",
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
+	client := NewClient("", "", log)
+	client.baseURL = server.URL
+	defer client.Close()
 
 	exchange := "USA"
 	result, err := client.Symbols(&exchange)
@@ -715,13 +651,9 @@ func TestCorporateActions(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		publicKey:  "test_public",
-		privateKey: "test_private",
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
+	client := NewClient("", "", log)
+	client.baseURL = server.URL
+	defer client.Close()
 
 	result, err := client.CorporateActions(35)
 
@@ -749,13 +681,9 @@ func TestGetPriceAlerts(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		publicKey:  "test_public",
-		privateKey: "test_private",
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
+	client := NewClient("", "", log)
+	client.baseURL = server.URL
+	defer client.Close()
 
 	symbol := "AAPL.US"
 	result, err := client.GetPriceAlerts(&symbol)
@@ -791,13 +719,9 @@ func TestAddPriceAlert(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		publicKey:  "test_public",
-		privateKey: "test_private",
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
+	client := NewClient("", "", log)
+	client.baseURL = server.URL
+	defer client.Close()
 
 	// Test with single price
 	result, err := client.AddPriceAlert("AAPL.US", 150.0, "crossing", "ltp", "email", 0, 0)
@@ -838,13 +762,9 @@ func TestDeletePriceAlert(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		publicKey:  "test_public",
-		privateKey: "test_private",
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
+	client := NewClient("", "", log)
+	client.baseURL = server.URL
+	defer client.Close()
 
 	result, err := client.DeletePriceAlert(12345)
 
@@ -873,13 +793,9 @@ func TestGetTariffsList(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		publicKey:  "test_public",
-		privateKey: "test_private",
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
+	client := NewClient("test_public", "test_private", log)
+	client.baseURL = server.URL
+	defer client.Close()
 
 	result, err := client.GetTariffsList()
 

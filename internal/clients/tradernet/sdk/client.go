@@ -9,44 +9,192 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
 )
 
+const (
+	rateLimitDelay    = 1500 * time.Millisecond // 1.5 seconds between requests
+	requestQueueSize  = 100                      // Reasonable buffer size
+)
+
+// requestJob represents a job in the rate limiting queue
+type requestJob struct {
+	cmd      string
+	params   interface{}
+	isAuth   bool
+	resultCh chan requestResult
+}
+
+// requestResult represents the result of a request
+type requestResult struct {
+	data interface{}
+	err  error
+}
+
 // Client represents the Tradernet SDK client
 type Client struct {
-	publicKey  string
-	privateKey string
-	baseURL    string
-	httpClient *http.Client
-	log        zerolog.Logger
+	publicKey   string
+	privateKey  string
+	baseURL     string
+	httpClient  *http.Client
+	log         zerolog.Logger
+	requestQueue chan requestJob
+	stopChan     chan struct{}
+	workerDone   chan struct{}
+	once         sync.Once
 }
 
 // NewClient creates a new Tradernet SDK client
 func NewClient(publicKey, privateKey string, log zerolog.Logger) *Client {
-	return &Client{
-		publicKey:  publicKey,
-		privateKey: privateKey,
-		baseURL:    "https://freedom24.com",
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
-		log: log.With().Str("component", "tradernet-sdk").Logger(),
+	c := &Client{
+		publicKey:   publicKey,
+		privateKey:  privateKey,
+		baseURL:     "https://freedom24.com",
+		httpClient:  &http.Client{Timeout: 30 * time.Second},
+		log:         log.With().Str("component", "tradernet-sdk").Logger(),
+		requestQueue: make(chan requestJob, requestQueueSize),
+		stopChan:     make(chan struct{}),
+		workerDone:   make(chan struct{}),
 	}
+
+	// Start the rate limiting worker
+	go c.worker()
+
+	return c
 }
 
 // authorizedRequest makes an authenticated request to the Tradernet API
 // This matches the Python SDK's authorized_request() method
+// Requests are rate-limited through the request queue
 func (c *Client) authorizedRequest(cmd string, params interface{}) (interface{}, error) {
+	// Create result channel
+	resultCh := make(chan requestResult, 1)
+
+	// Create job
+	job := requestJob{
+		cmd:      cmd,
+		params:   params,
+		isAuth:   true,
+		resultCh: resultCh,
+	}
+
+	// Send job to queue
+	select {
+	case c.requestQueue <- job:
+		// Job queued successfully
+	case <-c.stopChan:
+		// Client is closed
+		return nil, fmt.Errorf("client is closed")
+	default:
+		// Queue is full
+		return nil, fmt.Errorf("request queue is full")
+	}
+
+	// Wait for result
+	result := <-resultCh
+	return result.data, result.err
+}
+
+// plainRequest makes an unauthenticated GET request to the Tradernet API
+// Used for endpoints like findSymbol that don't require authentication
+// CRITICAL: URL is /api (not /api/{cmd}), query parameter is ?q=<json>
+// Requests are rate-limited through the request queue
+func (c *Client) plainRequest(cmd string, params map[string]interface{}) (interface{}, error) {
+	// Create result channel
+	resultCh := make(chan requestResult, 1)
+
+	// Create job
+	job := requestJob{
+		cmd:      cmd,
+		params:   params,
+		isAuth:   false,
+		resultCh: resultCh,
+	}
+
+	// Send job to queue
+	select {
+	case c.requestQueue <- job:
+		// Job queued successfully
+	case <-c.stopChan:
+		// Client is closed
+		return nil, fmt.Errorf("client is closed")
+	default:
+		// Queue is full
+		return nil, fmt.Errorf("request queue is full")
+	}
+
+	// Wait for result
+	result := <-resultCh
+	return result.data, result.err
+}
+
+// worker processes requests from the queue sequentially with rate limiting
+func (c *Client) worker() {
+	defer close(c.workerDone)
+
+	var lastRequestTime time.Time
+	firstRequest := true
+
+	for {
+		select {
+		case <-c.stopChan:
+			return
+		case job, ok := <-c.requestQueue:
+			if !ok {
+				// Queue closed
+				return
+			}
+
+			// Wait for rate limit delay (except before first request)
+			if !firstRequest {
+				elapsed := time.Since(lastRequestTime)
+				if elapsed < rateLimitDelay {
+					time.Sleep(rateLimitDelay - elapsed)
+				}
+			}
+			firstRequest = false
+
+			// Process the request
+			var result requestResult
+			if job.isAuth {
+				result.data, result.err = c.authorizedRequestInternal(job.cmd, job.params)
+			} else {
+				if params, ok := job.params.(map[string]interface{}); ok {
+					result.data, result.err = c.plainRequestInternal(job.cmd, params)
+				} else {
+					result.err = fmt.Errorf("invalid params type for plain request")
+				}
+			}
+
+			lastRequestTime = time.Now()
+
+			// Send result back
+			job.resultCh <- result
+		}
+	}
+}
+
+// Close gracefully shuts down the rate limiting worker
+func (c *Client) Close() {
+	c.once.Do(func() {
+		close(c.stopChan)
+		close(c.requestQueue)
+		<-c.workerDone
+	})
+}
+
+// authorizedRequestInternal makes an authenticated request without rate limiting
+// This is the internal implementation extracted from authorizedRequest
+func (c *Client) authorizedRequestInternal(cmd string, params interface{}) (interface{}, error) {
 	// CRITICAL: Validate credentials (matches Python SDK behavior)
 	if c.publicKey == "" || c.privateKey == "" {
 		return nil, fmt.Errorf("keypair is not valid")
 	}
 
 	// Step 1: JSON stringify params (no spaces, no key sorting)
-	// Python SDK does: params = params or {} (handles None/empty)
-	// For Go structs, empty structs serialize to {} which is correct
 	payload, err := stringify(params)
 	if err != nil {
 		return nil, fmt.Errorf("failed to stringify params: %w", err)
@@ -106,8 +254,6 @@ func (c *Client) authorizedRequest(cmd string, params interface{}) (interface{},
 	}
 
 	// Step 10: Parse JSON response
-	// Some endpoints return arrays directly, others return objects with "result" key
-	// We need to handle both cases and normalize to a consistent format
 	var rawResult interface{}
 	if err := json.Unmarshal(body, &rawResult); err != nil {
 		bodyStr := string(body)
@@ -123,12 +269,9 @@ func (c *Client) authorizedRequest(cmd string, params interface{}) (interface{},
 	}
 
 	// Step 11: Normalize response format
-	// If the response is an array, wrap it in a map with "result" key
-	// This ensures transformers can always expect the same format
 	var result map[string]interface{}
 	switch v := rawResult.(type) {
 	case []interface{}:
-		// API returned an array directly - wrap it in a map
 		result = map[string]interface{}{
 			"result": v,
 		}
@@ -137,10 +280,8 @@ func (c *Client) authorizedRequest(cmd string, params interface{}) (interface{},
 			Int("array_length", len(v)).
 			Msg("API returned array, wrapped in result key")
 	case map[string]interface{}:
-		// API returned a map - use as-is
 		result = v
 	default:
-		// Unexpected type - wrap it
 		result = map[string]interface{}{
 			"result": v,
 		}
@@ -158,10 +299,9 @@ func (c *Client) authorizedRequest(cmd string, params interface{}) (interface{},
 	return result, nil
 }
 
-// plainRequest makes an unauthenticated GET request to the Tradernet API
-// Used for endpoints like findSymbol that don't require authentication
-// CRITICAL: URL is /api (not /api/{cmd}), query parameter is ?q=<json>
-func (c *Client) plainRequest(cmd string, params map[string]interface{}) (interface{}, error) {
+// plainRequestInternal makes an unauthenticated GET request without rate limiting
+// This is the internal implementation extracted from plainRequest
+func (c *Client) plainRequestInternal(cmd string, params map[string]interface{}) (interface{}, error) {
 	// Build message: {'cmd': cmd, 'params': params}
 	message := map[string]interface{}{
 		"cmd": cmd,
@@ -227,27 +367,21 @@ func (c *Client) plainRequest(cmd string, params map[string]interface{}) (interf
 	}
 
 	// Parse JSON response
-	// Some endpoints return arrays directly, others return objects with "result" key
-	// We need to handle both cases and normalize to a consistent format
 	var rawResult interface{}
 	if err := json.Unmarshal(body, &rawResult); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
 
 	// Normalize response format
-	// If the response is an array, wrap it in a map with "result" key
 	var result map[string]interface{}
 	switch v := rawResult.(type) {
 	case []interface{}:
-		// API returned an array directly - wrap it in a map
 		result = map[string]interface{}{
 			"result": v,
 		}
 	case map[string]interface{}:
-		// API returned a map - use as-is
 		result = v
 	default:
-		// Unexpected type - wrap it
 		result = map[string]interface{}{
 			"result": v,
 		}

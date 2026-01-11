@@ -36,13 +36,9 @@ func TestAuthorizedRequest_SetsCorrectHeaders(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		publicKey:  "test_public_key",
-		privateKey: "test_private_key",
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
+	client := NewClient("test_public_key", "test_private_key", log)
+	client.baseURL = server.URL
+	defer client.Close()
 
 	params := map[string]interface{}{}
 	_, err := client.authorizedRequest("GetAllUserTexInfo", params)
@@ -83,13 +79,9 @@ func TestAuthorizedRequest_TimestampFormat(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		publicKey:  "test_public_key",
-		privateKey: "test_private_key",
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
+	client := NewClient("test_public_key", "test_private_key", log)
+	client.baseURL = server.URL
+	defer client.Close()
 
 	params := map[string]interface{}{}
 	_, err := client.authorizedRequest("GetAllUserTexInfo", params)
@@ -130,13 +122,9 @@ func TestAuthorizedRequest_SignatureMatchesPython(t *testing.T) {
 	publicKey := "test_public"
 	privateKey := "test_private"
 
-	client := &Client{
-		publicKey:  publicKey,
-		privateKey: privateKey,
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
+	client := NewClient(publicKey, privateKey, log)
+	client.baseURL = server.URL
+	defer client.Close()
 
 	params := map[string]interface{}{}
 	_, err := client.authorizedRequest("GetAllUserTexInfo", params)
@@ -173,13 +161,9 @@ func TestAuthorizedRequest_ResponseParsing(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		publicKey:  "test_public",
-		privateKey: "test_private",
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
+	client := NewClient("test_public", "test_private", log)
+	client.baseURL = server.URL
+	defer client.Close()
 
 	params := map[string]interface{}{}
 	result, err := client.authorizedRequest("GetAllUserTexInfo", params)
@@ -220,11 +204,9 @@ func TestPlainRequest(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := &Client{
-		baseURL:    server.URL,
-		httpClient: &http.Client{},
-		log:        log,
-	}
+	client := NewClient("", "", log)
+	client.baseURL = server.URL
+	defer client.Close()
 
 	params := map[string]interface{}{
 		"q": `{"ticker":"AAPL.US"}`,
