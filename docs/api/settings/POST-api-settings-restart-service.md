@@ -3,30 +3,38 @@
 Restart the Sentinel service.
 
 **Description:**
-Restarts the Sentinel systemd service using `sudo systemctl restart sentinel`. This is a system-level operation that requires sudo privileges.
+Restarts the Sentinel service using systemctl. This endpoint sends a restart command to the system service manager to restart the Sentinel application. The service will be stopped and then started again, which may cause a brief interruption in API availability.
 
 **Request:**
 - Method: `POST`
 - Path: `/api/settings/restart-service`
-- Body: None
+- Body: None (empty request body)
 
 **Response:**
 - Status: `200 OK`
 - Body:
   ```json
   {
-    "status": "ok",
+    "status": "success",
     "message": "Service restart initiated"
   }
   ```
-  - `status` (string): "ok" on success, "error" on failure
-  - `message` (string): Status message or error output
+  - `status` (string): Response status ("success" or "error")
+  - `message` (string): Human-readable message
 
 **Error Responses:**
-- Response may contain `status: "error"` if restart command fails
+- `500 Internal Server Error`: Failed to restart service (e.g., systemctl command failed, insufficient permissions)
 
 **Side Effects:**
-- Executes `sudo systemctl restart sentinel`
-- Service will restart (connection may be lost)
+- Executes `systemctl restart sentinel` command
+- Service is stopped and then started
+- Brief interruption in API availability during restart
+- All in-memory state is lost
+- Active connections are terminated
 
-**Warning:** This endpoint requires sudo privileges and will restart the service, potentially interrupting active connections.
+**Notes:**
+- Requires system-level permissions to execute systemctl commands
+- The restart is performed asynchronously - the response may return before the service is fully restarted
+- All active API requests will be interrupted
+
+---
