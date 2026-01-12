@@ -4,11 +4,31 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/aristath/sentinel/internal/clients/openfigi"
 	"github.com/aristath/sentinel/internal/clients/yahoo"
 	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/events"
 	"github.com/rs/zerolog"
 )
+
+// MetadataFetcher defines the interface for fetching security metadata.
+// This interface is implemented by services.DataFetcherService.
+type MetadataFetcher interface {
+	// GetSecurityMetadata fetches company metadata with automatic fallback between data sources.
+	// Returns metadata, the source that was used, and any error.
+	GetSecurityMetadata(tradernetSymbol string, yahooSymbol string) (*SecurityMetadataResult, string, error)
+}
+
+// SecurityMetadataResult represents metadata from any source.
+type SecurityMetadataResult struct {
+	Name        string
+	Country     string
+	Exchange    string
+	Industry    string
+	Sector      string
+	Currency    string
+	ProductType string
+}
 
 // SecuritySetupService handles comprehensive security onboarding
 // Faithful translation from Python: app/modules/universe/services/security_setup_service.py
@@ -17,6 +37,8 @@ type SecuritySetupService struct {
 	securityRepo    *SecurityRepository
 	brokerClient    domain.BrokerClient
 	yahooClient     yahoo.FullClientInterface
+	openFIGIClient  *openfigi.Client // Optional - for ISIN lookup fallback
+	metadataFetcher MetadataFetcher  // Optional - for multi-source metadata with fallback
 	historicalSync  *HistoricalSyncService
 	eventManager    *events.Manager
 	scoreCalculator ScoreCalculator // Interface for score calculation
@@ -55,6 +77,17 @@ func NewSecuritySetupService(
 // SetScoreCalculator sets the score calculator (for deferred wiring)
 func (s *SecuritySetupService) SetScoreCalculator(calculator ScoreCalculator) {
 	s.scoreCalculator = calculator
+}
+
+// SetOpenFIGIClient sets the OpenFIGI client for ISIN lookup fallback
+func (s *SecuritySetupService) SetOpenFIGIClient(client *openfigi.Client) {
+	s.openFIGIClient = client
+}
+
+// SetMetadataFetcher sets the metadata fetcher for multi-source metadata with fallback.
+// When set, the service will use configurable data source priorities for metadata.
+func (s *SecuritySetupService) SetMetadataFetcher(fetcher MetadataFetcher) {
+	s.metadataFetcher = fetcher
 }
 
 // CreateSecurity creates a security with explicit symbol and name
@@ -341,7 +374,7 @@ func (s *SecuritySetupService) AddSecurityByIdentifier(
 		return nil, fmt.Errorf("ISIN is required but could not be obtained from Tradernet API for symbol: %s. Please ensure the security exists in Tradernet and has an ISIN", tradernetSymbol)
 	}
 
-	// Step 3: Fetch data from Yahoo Finance
+	// Step 3: Fetch metadata (country, exchange, industry)
 	yahooSymbol := symbolInfo.YahooSymbol
 	if yahooSymbol == "" && *isin != "" {
 		yahooSymbol = *isin
@@ -350,15 +383,41 @@ func (s *SecuritySetupService) AddSecurityByIdentifier(
 		yahooSymbol = tradernetSymbol
 	}
 
-	yahooSymbolPtr := &yahooSymbol
-	country, fullExchangeName, err := s.yahooClient.GetSecurityCountryAndExchange(tradernetSymbol, yahooSymbolPtr)
-	if err != nil {
-		s.log.Warn().Err(err).Str("symbol", tradernetSymbol).Msg("Failed to get country/exchange from Yahoo")
-	}
+	var country, fullExchangeName, industry *string
+	var productType ProductType = ProductTypeUnknown
 
-	industry, err := s.yahooClient.GetSecurityIndustry(tradernetSymbol, yahooSymbolPtr)
-	if err != nil {
-		s.log.Warn().Err(err).Str("symbol", tradernetSymbol).Msg("Failed to get industry from Yahoo")
+	// Use MetadataFetcher if available, otherwise fall back to Yahoo client directly
+	if s.metadataFetcher != nil {
+		metadata, source, err := s.metadataFetcher.GetSecurityMetadata(tradernetSymbol, yahooSymbol)
+		if err != nil {
+			s.log.Warn().Err(err).Str("symbol", tradernetSymbol).Msg("Failed to get metadata from DataFetcherService")
+		} else if metadata != nil {
+			s.log.Debug().Str("symbol", tradernetSymbol).Str("source", source).Msg("Fetched metadata via DataFetcherService")
+			if metadata.Country != "" {
+				country = &metadata.Country
+			}
+			if metadata.Exchange != "" {
+				fullExchangeName = &metadata.Exchange
+			}
+			if metadata.Industry != "" {
+				industry = &metadata.Industry
+			}
+			if metadata.ProductType != "" {
+				productType = ProductType(metadata.ProductType)
+			}
+		}
+	} else {
+		// Fallback to direct Yahoo client
+		yahooSymbolPtr := &yahooSymbol
+		country, fullExchangeName, err = s.yahooClient.GetSecurityCountryAndExchange(tradernetSymbol, yahooSymbolPtr)
+		if err != nil {
+			s.log.Warn().Err(err).Str("symbol", tradernetSymbol).Msg("Failed to get country/exchange from Yahoo")
+		}
+
+		industry, err = s.yahooClient.GetSecurityIndustry(tradernetSymbol, yahooSymbolPtr)
+		if err != nil {
+			s.log.Warn().Err(err).Str("symbol", tradernetSymbol).Msg("Failed to get industry from Yahoo")
+		}
 	}
 
 	// Get name - prefer Tradernet name, fallback to Yahoo Finance
@@ -366,6 +425,7 @@ func (s *SecuritySetupService) AddSecurityByIdentifier(
 	if tradernetName != nil && *tradernetName != "" {
 		name = *tradernetName
 	} else {
+		yahooSymbolPtr := &yahooSymbol
 		yaName, err := s.getSecurityNameFromYahoo(tradernetSymbol, yahooSymbolPtr)
 		if err == nil && yaName != nil {
 			name = *yaName
@@ -383,11 +443,16 @@ func (s *SecuritySetupService) AddSecurityByIdentifier(
 		return nil, fmt.Errorf("ISIN is required but missing for security: %s (symbol: %s). Cannot create security without ISIN", name, tradernetSymbol)
 	}
 
-	// Detect product type using Yahoo Finance with heuristics
-	productType, err := s.detectProductType(tradernetSymbol, yahooSymbolPtr, name)
-	if err != nil {
-		s.log.Warn().Err(err).Str("symbol", tradernetSymbol).Msg("Failed to detect product type, using UNKNOWN")
-		productType = ProductTypeUnknown
+	// Detect product type using Yahoo Finance with heuristics (if not already set by MetadataFetcher)
+	if productType == ProductTypeUnknown {
+		yahooSymbolPtr := &yahooSymbol
+		detectedType, err := s.detectProductType(tradernetSymbol, yahooSymbolPtr, name)
+		if err != nil {
+			s.log.Warn().Err(err).Str("symbol", tradernetSymbol).Msg("Failed to detect product type, using UNKNOWN")
+			productType = ProductTypeUnknown
+		} else {
+			productType = detectedType
+		}
 	}
 
 	// Step 4: Create security

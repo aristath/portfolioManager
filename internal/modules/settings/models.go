@@ -20,6 +20,18 @@ var SettingDefaults = map[string]interface{}{
 	"tradernet_api_key":    "", // Tradernet API key
 	"tradernet_api_secret": "", // Tradernet API secret
 	"github_token":         "", // GitHub personal access token for deployment artifact downloads
+	"alphavantage_api_key": "", // Alpha Vantage API key (25 requests/day on free tier)
+	"openfigi_api_key":     "", // OpenFIGI API key (optional - increases rate limits)
+
+	// Data Source Priorities (JSON arrays stored as strings)
+	// These define the fallback order for each type of data
+	"datasource_fundamentals":     `["alphavantage","yahoo"]`,                    // Fundamentals (P/E, margins, company overview)
+	"datasource_current_prices":   `["tradernet","alphavantage","yahoo"]`,        // Real-time/delayed quotes
+	"datasource_historical":       `["tradernet","alphavantage","yahoo"]`,        // OHLCV time series
+	"datasource_technicals":       `["alphavantage","yahoo"]`,                    // RSI, SMA, MACD, etc.
+	"datasource_exchange_rates":   `["exchangerate","tradernet","alphavantage"]`, // Currency conversion
+	"datasource_isin_lookup":      `["openfigi","yahoo"]`,                        // ISIN to ticker resolution
+	"datasource_company_metadata": `["alphavantage","yahoo","openfigi"]`,         // Industry, sector, country, etc.
 
 	// Cloudflare R2 Backup settings
 	"r2_account_id":            "",      // Cloudflare R2 account ID
@@ -179,6 +191,15 @@ var StringSettings = map[string]bool{
 	"tradernet_api_key":              true,
 	"tradernet_api_secret":           true,
 	"github_token":                   true,
+	"alphavantage_api_key":           true,
+	"openfigi_api_key":               true,
+	"datasource_fundamentals":        true,
+	"datasource_current_prices":      true,
+	"datasource_historical":          true,
+	"datasource_technicals":          true,
+	"datasource_exchange_rates":      true,
+	"datasource_isin_lookup":         true,
+	"datasource_company_metadata":    true,
 	"security_table_visible_columns": true,
 	"r2_account_id":                  true,
 	"r2_access_key_id":               true,

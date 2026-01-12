@@ -33,5 +33,11 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 
 		// POST /api/settings/trading-mode - Toggle trading mode
 		r.Post("/trading-mode", h.HandleToggleTradingMode)
+
+		// GET /api/settings/data-sources - Get data source priorities configuration
+		r.Get("/data-sources", h.HandleGetDataSources)
+
+		// PUT /api/settings/data-sources/{type} - Update data source priority for a type
+		r.Put("/data-sources/{type}", h.HandleUpdateDataSource)
 	})
 }

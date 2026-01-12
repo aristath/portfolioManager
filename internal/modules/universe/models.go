@@ -21,6 +21,7 @@ type Security struct {
 	Country            string   `json:"country,omitempty"`
 	FullExchangeName   string   `json:"fullExchangeName,omitempty"`
 	YahooSymbol        string   `json:"yahoo_symbol,omitempty"`
+	AlphaVantageSymbol string   `json:"alphavantage_symbol,omitempty"`
 	ISIN               string   `json:"isin,omitempty"` // Required: PRIMARY KEY after migration 030
 	Industry           string   `json:"industry,omitempty"`
 	Symbol             string   `json:"symbol"`
@@ -109,6 +110,7 @@ type SecurityWithScore struct {
 	Currency           string   `json:"currency,omitempty"`
 	ProductType        string   `json:"product_type,omitempty"`
 	YahooSymbol        string   `json:"yahoo_symbol,omitempty"`
+	AlphaVantageSymbol string   `json:"alphavantage_symbol,omitempty"`
 	ISIN               string   `json:"isin,omitempty"`
 	PriorityMultiplier float64  `json:"priority_multiplier"`
 	MaxPortfolioTarget float64  `json:"max_portfolio_target,omitempty"`

@@ -1,4 +1,4 @@
-import { Paper, Group, Button, Text, Stack, Divider, Title } from '@mantine/core';
+import { Paper, Group, Button, Text, Stack, Divider, Title, Collapse } from '@mantine/core';
 import { api } from '../../api/client';
 import { useState } from 'react';
 
@@ -61,6 +61,7 @@ const jobCategories = [
 export function JobFooter() {
   const [loading, setLoading] = useState({});
   const [messages, setMessages] = useState({});
+  const [opened, setOpened] = useState(false);
 
   const triggerJob = async (job) => {
     if (loading[job.id]) return;
@@ -128,41 +129,54 @@ export function JobFooter() {
         border: '1px solid var(--mantine-color-dark-6)',
       }}
     >
-      <Title order={4} mb="md" style={{ fontFamily: 'var(--mantine-font-family)' }}>Manual Job Triggers</Title>
-      <Stack gap="lg">
-        {jobCategories.map((category) => (
-          <Stack key={category.name} gap="xs">
-            <Text size="sm" fw={600} c="dimmed" tt="uppercase" style={{ fontFamily: 'var(--mantine-font-family)' }}>
-              {category.name}
-            </Text>
-            <Group gap="xs" wrap="wrap">
-              {category.jobs.map((job) => (
-                <Stack key={job.id} gap="xs" style={{ minWidth: '140px' }}>
-                  <Button
-                    size="xs"
-                    variant="light"
-                    onClick={() => triggerJob(job)}
-                    loading={loading[job.id]}
-                    fullWidth
-                  >
-                    {job.name}
-                  </Button>
-                  {messages[job.id] && (
-                    <Text
+      <Title 
+        order={4} 
+        mb="md" 
+        onClick={() => setOpened((o) => !o)}
+        style={{ 
+          fontFamily: 'var(--mantine-font-family)',
+          cursor: 'pointer',
+          userSelect: 'none'
+        }}
+      >
+        Manual Job Triggers
+      </Title>
+      <Collapse in={opened}>
+        <Stack gap="lg">
+          {jobCategories.map((category) => (
+            <Stack key={category.name} gap="xs">
+              <Text size="sm" fw={600} c="dimmed" tt="uppercase" style={{ fontFamily: 'var(--mantine-font-family)' }}>
+                {category.name}
+              </Text>
+              <Group gap="xs" wrap="wrap">
+                {category.jobs.map((job) => (
+                  <Stack key={job.id} gap="xs" style={{ minWidth: '140px' }}>
+                    <Button
                       size="xs"
-                      c={messages[job.id].type === 'success' ? 'green' : 'red'}
-                      ta="center"
+                      variant="light"
+                      onClick={() => triggerJob(job)}
+                      loading={loading[job.id]}
+                      fullWidth
                     >
-                      {messages[job.id].text}
-                    </Text>
-                  )}
-                </Stack>
-              ))}
-            </Group>
-            <Divider />
-          </Stack>
-        ))}
-      </Stack>
+                      {job.name}
+                    </Button>
+                    {messages[job.id] && (
+                      <Text
+                        size="xs"
+                        c={messages[job.id].type === 'success' ? 'green' : 'red'}
+                        ta="center"
+                      >
+                        {messages[job.id].text}
+                      </Text>
+                    )}
+                  </Stack>
+                ))}
+              </Group>
+              <Divider />
+            </Stack>
+          ))}
+        </Stack>
+      </Collapse>
     </Paper>
   );
 }

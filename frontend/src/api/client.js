@@ -185,7 +185,16 @@ export const api = {
       'r2_secret_access_key',
       'r2_bucket_name',
       'r2_backup_schedule',
-      'github_token'
+      'github_token',
+      'alphavantage_api_key',
+      'openfigi_api_key',
+      'datasource_fundamentals',
+      'datasource_current_prices',
+      'datasource_historical',
+      'datasource_technicals',
+      'datasource_exchange_rates',
+      'datasource_isin_lookup',
+      'datasource_company_metadata',
     ];
     const finalValue = stringSettings.includes(key) ? value : parseFloat(value);
     return fetchJSON(`/api/settings/${key}`, {
@@ -200,6 +209,13 @@ export const api = {
   resetCache: () => fetchJSON('/api/settings/reset-cache', { method: 'POST' }),
   rescheduleJobs: () => fetchJSON('/api/settings/reschedule-jobs', { method: 'POST' }),
   testTradernetConnection: () => fetchJSON('/api/system/tradernet'),
+
+  // Data Sources
+  fetchDataSources: () => fetchJSON('/api/settings/data-sources'),
+  updateDataSourcePriority: (dataType, priorities) => fetchJSON(`/api/settings/data-sources/${dataType}`, {
+    method: 'PUT',
+    body: JSON.stringify({ priorities }),
+  }),
 
   // R2 Backups
   listR2Backups: () => fetchJSON('/api/backups/r2'),

@@ -3,13 +3,18 @@ package di
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/aristath/sentinel/internal/clients/alphavantage"
 	"github.com/aristath/sentinel/internal/clients/exchangerate"
+	"github.com/aristath/sentinel/internal/clients/openfigi"
+	"github.com/aristath/sentinel/internal/clients/symbols"
 	"github.com/aristath/sentinel/internal/clients/tradernet"
 	"github.com/aristath/sentinel/internal/clients/yahoo"
 	"github.com/aristath/sentinel/internal/config"
 	"github.com/aristath/sentinel/internal/database"
+	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/events"
 	"github.com/aristath/sentinel/internal/market_regime"
 	"github.com/aristath/sentinel/internal/modules/adaptation"
@@ -76,6 +81,66 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	container.ExchangeRateAPIClient = exchangerate.NewClient(log)
 	log.Info().Msg("ExchangeRateAPI client initialized")
 
+	// Alpha Vantage client (fundamentals, technical indicators, etc.)
+	// Get API key from settings or config
+	avAPIKey := ""
+	if container.SettingsRepo != nil {
+		if key, err := container.SettingsRepo.Get("alphavantage_api_key"); err == nil && key != nil {
+			avAPIKey = *key
+		}
+	}
+	container.AlphaVantageClient = alphavantage.NewClient(avAPIKey, log)
+	if avAPIKey != "" {
+		log.Info().Msg("Alpha Vantage client initialized with API key")
+	} else {
+		log.Info().Msg("Alpha Vantage client initialized (no API key configured)")
+	}
+
+	// OpenFIGI client (ISIN to ticker mapping)
+	// Get API key from settings (optional - increases rate limits)
+	openFIGIKey := ""
+	if container.SettingsRepo != nil {
+		if key, err := container.SettingsRepo.Get("openfigi_api_key"); err == nil && key != nil {
+			openFIGIKey = *key
+		}
+	}
+	container.OpenFIGIClient = openfigi.NewClient(openFIGIKey, log)
+	if openFIGIKey != "" {
+		log.Info().Msg("OpenFIGI client initialized with API key (25k requests/min)")
+	} else {
+		log.Info().Msg("OpenFIGI client initialized (25 requests/min without key)")
+	}
+
+	// Symbol mapper for converting symbols between providers
+	container.SymbolMapper = symbols.NewMapper()
+	log.Info().Msg("Symbol mapper initialized")
+
+	// Data source router for configurable provider priorities
+	// Create settings adapter for DataSourceRouter
+	settingsAdapter := &dataSourceSettingsAdapter{repo: container.SettingsRepo}
+	clientsConfig := &services.DataSourceClients{
+		AlphaVantageAPIKey: avAPIKey,
+		OpenFIGIAPIKey:     openFIGIKey,
+	}
+	container.DataSourceRouter = services.NewDataSourceRouter(settingsAdapter, clientsConfig)
+	container.DataSourceRouter.SetLogger(log)
+	log.Info().Msg("Data source router initialized")
+
+	// Subscribe to SETTINGS_CHANGED events to refresh data source priorities dynamically
+	// Note: EventBus is initialized later, so we defer the subscription
+	dataSourceRouter := container.DataSourceRouter // Capture for closure
+
+	// Data fetcher service - provides unified data fetching with configurable priorities
+	container.DataFetcherService = services.NewDataFetcherService(
+		container.DataSourceRouter,
+		container.SymbolMapper,
+		&brokerClientAdapter{client: container.BrokerClient},
+		&yahooClientAdapter{client: container.YahooClient},
+		container.AlphaVantageClient,
+		log,
+	)
+	log.Info().Msg("Data fetcher service initialized")
+
 	// ==========================================
 	// STEP 2: Initialize Basic Services
 	// ==========================================
@@ -96,6 +161,17 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	// Event system (new bus-based architecture)
 	container.EventBus = events.NewBus(log)
 	container.EventManager = events.NewManager(container.EventBus, log)
+
+	// Subscribe DataSourceRouter to settings changes for dynamic priority refresh
+	container.EventBus.Subscribe(events.SettingsChanged, func(e *events.Event) {
+		// Check if this is a data source priority change
+		if key, ok := e.Data["key"].(string); ok {
+			if strings.HasPrefix(key, "datasource_") {
+				log.Debug().Str("key", key).Msg("Refreshing data source priorities due to settings change")
+				dataSourceRouter.RefreshPriorities()
+			}
+		}
+	})
 
 	// Market status WebSocket client
 	container.MarketStatusWS = tradernet.NewMarketStatusWebSocket(
@@ -141,15 +217,17 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		log.With().Str("service", "order_book").Logger(),
 	)
 
-	// Exchange rate cache service (wraps ExchangeRateAPI + CurrencyExchangeService + Yahoo fallback)
+	// Exchange rate cache service (wraps ExchangeRateAPI + CurrencyExchangeService + Alpha Vantage + Yahoo fallback)
 	container.ExchangeRateCacheService = services.NewExchangeRateCacheService(
-		container.ExchangeRateAPIClient,   // NEW: Primary source (exchangerate-api.com)
-		container.CurrencyExchangeService, // Tradernet (now secondary)
+		container.ExchangeRateAPIClient,   // Primary source (exchangerate-api.com)
+		container.CurrencyExchangeService, // Tradernet (secondary)
 		container.YahooClient,
 		container.HistoryDBClient,
 		container.SettingsService,
 		log,
 	)
+	// Wire Alpha Vantage as additional exchange rate fallback
+	container.ExchangeRateCacheService.SetAlphaVantageClient(container.AlphaVantageClient)
 
 	// Price conversion service (converts native currency prices to EUR)
 	container.PriceConversionService = services.NewPriceConversionService(
@@ -220,6 +298,11 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		log,
 	)
 
+	// Wire DataFetcherService for multi-source historical price fetching
+	container.HistoricalSyncService.SetDataFetcher(&historicalDataFetcherAdapter{
+		fetcher: container.DataFetcherService,
+	})
+
 	// Symbol resolver
 	container.SymbolResolver = universe.NewSymbolResolver(
 		container.BrokerClient,
@@ -238,6 +321,14 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		nil, // scoreCalculator - will be set later
 		log,
 	)
+
+	// Wire OpenFIGI client for ISIN lookup fallback
+	container.SetupService.SetOpenFIGIClient(container.OpenFIGIClient)
+
+	// Wire DataFetcherService for multi-source metadata fetching
+	container.SetupService.SetMetadataFetcher(&metadataFetcherAdapter{
+		fetcher: container.DataFetcherService,
+	})
 
 	// Create adapter for SecuritySetupService to match portfolio.SecuritySetupServiceInterface
 	setupServiceAdapter := &securitySetupServiceAdapter{service: container.SetupService}
@@ -830,4 +921,147 @@ func (a *tagSettingsAdapter) GetAdjustedVolatilityParams() universe.VolatilityPa
 		MaxAcceptable:         params.MaxAcceptable,
 		MaxAcceptableDrawdown: params.MaxAcceptableDrawdown,
 	}
+}
+
+// dataSourceSettingsAdapter adapts settings.Repository to services.SettingsGetter
+type dataSourceSettingsAdapter struct {
+	repo *settings.Repository
+}
+
+func (a *dataSourceSettingsAdapter) Get(key string) (*string, error) {
+	if a.repo == nil {
+		return nil, nil
+	}
+	return a.repo.Get(key)
+}
+
+// brokerClientAdapter adapts domain.BrokerClient to services.BrokerClientInterface
+type brokerClientAdapter struct {
+	client domain.BrokerClient
+}
+
+func (a *brokerClientAdapter) GetHistoricalPrices(symbol string, from, to int64, interval int) ([]domain.BrokerOHLCV, error) {
+	if a.client == nil {
+		return nil, fmt.Errorf("broker client not available")
+	}
+	return a.client.GetHistoricalPrices(symbol, from, to, interval)
+}
+
+func (a *brokerClientAdapter) GetQuotes(symbols []string) (map[string]*domain.BrokerQuote, error) {
+	if a.client == nil {
+		return nil, fmt.Errorf("broker client not available")
+	}
+	return a.client.GetQuotes(symbols)
+}
+
+func (a *brokerClientAdapter) IsConnected() bool {
+	if a.client == nil {
+		return false
+	}
+	return a.client.IsConnected()
+}
+
+// yahooClientAdapter adapts yahoo.NativeClient to services.DataFetcherYahooClient
+type yahooClientAdapter struct {
+	client *yahoo.NativeClient
+}
+
+func (a *yahooClientAdapter) GetHistoricalPrices(symbol string, yahooSymbolOverride *string, period string) ([]yahoo.HistoricalPrice, error) {
+	if a.client == nil {
+		return nil, fmt.Errorf("yahoo client not available")
+	}
+	return a.client.GetHistoricalPrices(symbol, yahooSymbolOverride, period)
+}
+
+func (a *yahooClientAdapter) GetSecurityCountryAndExchange(symbol string, yahooSymbolOverride *string) (*string, *string, error) {
+	if a.client == nil {
+		return nil, nil, fmt.Errorf("yahoo client not available")
+	}
+	return a.client.GetSecurityCountryAndExchange(symbol, yahooSymbolOverride)
+}
+
+func (a *yahooClientAdapter) GetSecurityIndustry(symbol string, yahooSymbolOverride *string) (*string, error) {
+	if a.client == nil {
+		return nil, fmt.Errorf("yahoo client not available")
+	}
+	return a.client.GetSecurityIndustry(symbol, yahooSymbolOverride)
+}
+
+func (a *yahooClientAdapter) GetQuoteName(symbol string, yahooSymbolOverride *string) (*string, error) {
+	if a.client == nil {
+		return nil, fmt.Errorf("yahoo client not available")
+	}
+	return a.client.GetQuoteName(symbol, yahooSymbolOverride)
+}
+
+func (a *yahooClientAdapter) GetQuoteType(symbol string, yahooSymbolOverride *string) (string, error) {
+	if a.client == nil {
+		return "", fmt.Errorf("yahoo client not available")
+	}
+	return a.client.GetQuoteType(symbol, yahooSymbolOverride)
+}
+
+func (a *yahooClientAdapter) GetBatchQuotes(symbolMap map[string]*string) (map[string]*float64, error) {
+	if a.client == nil {
+		return nil, fmt.Errorf("yahoo client not available")
+	}
+	return a.client.GetBatchQuotes(symbolMap)
+}
+
+// historicalDataFetcherAdapter adapts services.DataFetcherService to universe.HistoricalDataFetcher
+type historicalDataFetcherAdapter struct {
+	fetcher *services.DataFetcherService
+}
+
+func (a *historicalDataFetcherAdapter) GetHistoricalPrices(tradernetSymbol string, yahooSymbol string, years int) ([]universe.HistoricalPriceData, string, error) {
+	if a.fetcher == nil {
+		return nil, "", fmt.Errorf("data fetcher service not available")
+	}
+
+	prices, source, err := a.fetcher.GetHistoricalPrices(tradernetSymbol, yahooSymbol, years)
+	if err != nil {
+		return nil, "", err
+	}
+
+	// Convert services.HistoricalPrice to universe.HistoricalPriceData
+	result := make([]universe.HistoricalPriceData, len(prices))
+	for i, p := range prices {
+		result[i] = universe.HistoricalPriceData{
+			Date:   p.Date,
+			Open:   p.Open,
+			High:   p.High,
+			Low:    p.Low,
+			Close:  p.Close,
+			Volume: p.Volume,
+		}
+	}
+
+	return result, string(source), nil
+}
+
+// metadataFetcherAdapter adapts services.DataFetcherService to universe.MetadataFetcher
+type metadataFetcherAdapter struct {
+	fetcher *services.DataFetcherService
+}
+
+func (a *metadataFetcherAdapter) GetSecurityMetadata(tradernetSymbol string, yahooSymbol string) (*universe.SecurityMetadataResult, string, error) {
+	if a.fetcher == nil {
+		return nil, "", fmt.Errorf("data fetcher service not available")
+	}
+
+	metadata, source, err := a.fetcher.GetSecurityMetadata(tradernetSymbol, yahooSymbol)
+	if err != nil {
+		return nil, "", err
+	}
+
+	// Convert services.SecurityMetadata to universe.SecurityMetadataResult
+	return &universe.SecurityMetadataResult{
+		Name:        metadata.Name,
+		Country:     metadata.Country,
+		Exchange:    metadata.Exchange,
+		Industry:    metadata.Industry,
+		Sector:      metadata.Sector,
+		Currency:    metadata.Currency,
+		ProductType: metadata.ProductType,
+	}, string(source), nil
 }

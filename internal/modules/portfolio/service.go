@@ -634,13 +634,13 @@ func (s *PortfolioService) SyncFromTradernet() error {
 		// Convert tradernet.Position to portfolio.Position
 		// Use Tradernet data for all position info including current price
 		dbPos := Position{
-			ISIN:         isin,                       // Required for Upsert (PRIMARY KEY)
+			ISIN:         isin, // Required for Upsert (PRIMARY KEY)
 			Symbol:       tradernetPos.Symbol,
-			Quantity:     tradernetPos.Quantity,      // From Tradernet
-			AvgPrice:     tradernetPos.AvgPrice,      // From Tradernet (historical)
-			CurrentPrice: tradernetPos.CurrentPrice,  // From Tradernet (correct currency)
-			Currency:     tradernetPos.Currency,      // From Tradernet
-			CurrencyRate: 1.0,                        // Will be set below from cache
+			Quantity:     tradernetPos.Quantity,     // From Tradernet
+			AvgPrice:     tradernetPos.AvgPrice,     // From Tradernet (historical)
+			CurrentPrice: tradernetPos.CurrentPrice, // From Tradernet (correct currency)
+			Currency:     tradernetPos.Currency,     // From Tradernet
+			CurrencyRate: 1.0,                       // Will be set below from cache
 			LastUpdated:  &now,
 		}
 

@@ -2,7 +2,10 @@
 package di
 
 import (
+	"github.com/aristath/sentinel/internal/clients/alphavantage"
 	"github.com/aristath/sentinel/internal/clients/exchangerate"
+	"github.com/aristath/sentinel/internal/clients/openfigi"
+	"github.com/aristath/sentinel/internal/clients/symbols"
 	"github.com/aristath/sentinel/internal/clients/tradernet"
 	"github.com/aristath/sentinel/internal/clients/yahoo"
 	"github.com/aristath/sentinel/internal/database"
@@ -54,6 +57,8 @@ type Container struct {
 	// Clients
 	BrokerClient          domain.BrokerClient
 	YahooClient           *yahoo.NativeClient
+	AlphaVantageClient    *alphavantage.Client
+	OpenFIGIClient        *openfigi.Client
 	ExchangeRateAPIClient *exchangerate.Client
 	MarketStatusWS        *tradernet.MarketStatusWebSocket
 
@@ -74,6 +79,9 @@ type Container struct {
 	HistoryDBClient    *universe.HistoryDB
 
 	// Services
+	DataSourceRouter          *services.DataSourceRouter
+	SymbolMapper              *symbols.Mapper
+	DataFetcherService        *services.DataFetcherService
 	CurrencyExchangeService   *services.CurrencyExchangeService
 	ExchangeRateCacheService  *services.ExchangeRateCacheService
 	PriceConversionService    *services.PriceConversionService
