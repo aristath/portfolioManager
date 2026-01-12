@@ -719,7 +719,7 @@ func TestAddPriceAlert(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("", "", log)
+	client := NewClient("test_public_key", "test_private_key", log)
 	client.baseURL = server.URL
 	defer client.Close()
 
@@ -762,7 +762,7 @@ func TestDeletePriceAlert(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("", "", log)
+	client := NewClient("test_public_key", "test_private_key", log)
 	client.baseURL = server.URL
 	defer client.Close()
 
