@@ -43,7 +43,7 @@ func (c *RebalanceBuysCalculator) Category() domain.OpportunityCategory {
 func (c *RebalanceBuysCalculator) Calculate(
 	ctx *domain.OpportunityContext,
 	params map[string]interface{},
-) ([]domain.ActionCandidate, error) {
+) (domain.CalculatorResult, error) {
 	// Parameters with defaults
 	minUnderweightThreshold := GetFloatParam(params, "min_underweight_threshold", 0.05) // 5% underweight
 	maxValuePerPosition := GetFloatParam(params, "max_value_per_position", 500.0)
@@ -53,6 +53,9 @@ func (c *RebalanceBuysCalculator) Calculate(
 	// Calculate minimum trade amount based on transaction costs (default: 1% max cost ratio)
 	maxCostRatio := GetFloatParam(params, "max_cost_ratio", 0.01) // Default 1% max cost
 	minTradeAmount := ctx.CalculateMinTradeAmount(maxCostRatio)
+
+	// Initialize exclusion collector
+	exclusions := NewExclusionCollector(c.Name())
 
 	// Extract config for tag filtering
 	var config *domain.PlannerConfiguration
@@ -67,12 +70,12 @@ func (c *RebalanceBuysCalculator) Calculate(
 	if config.EnableTagFiltering && c.tagFilter != nil {
 		candidateSymbols, err := c.tagFilter.GetOpportunityCandidates(ctx, config)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get tag-based candidates: %w", err)
+			return domain.CalculatorResult{PreFiltered: exclusions.Result()}, fmt.Errorf("failed to get tag-based candidates: %w", err)
 		}
 
 		if len(candidateSymbols) == 0 {
 			c.log.Debug().Msg("No tag-based candidates found")
-			return nil, nil
+			return domain.CalculatorResult{PreFiltered: exclusions.Result()}, nil
 		}
 
 		// Build lookup map
@@ -88,7 +91,7 @@ func (c *RebalanceBuysCalculator) Calculate(
 
 	if !ctx.AllowBuy {
 		c.log.Debug().Msg("Buying not allowed, skipping rebalance buys")
-		return nil, nil
+		return domain.CalculatorResult{PreFiltered: exclusions.Result()}, nil
 	}
 
 	if ctx.AvailableCashEUR <= minTradeAmount {
@@ -96,13 +99,13 @@ func (c *RebalanceBuysCalculator) Calculate(
 			Float64("available_cash", ctx.AvailableCashEUR).
 			Float64("min_trade_amount", minTradeAmount).
 			Msg("No available cash (below minimum trade amount)")
-		return nil, nil
+		return domain.CalculatorResult{PreFiltered: exclusions.Result()}, nil
 	}
 
 	// Check if we have country allocations and weights
 	if ctx.CountryAllocations == nil || ctx.CountryWeights == nil {
 		c.log.Debug().Msg("No country allocation data available")
-		return nil, nil
+		return domain.CalculatorResult{PreFiltered: exclusions.Result()}, nil
 	}
 
 	c.log.Debug().
@@ -127,7 +130,7 @@ func (c *RebalanceBuysCalculator) Calculate(
 
 	if len(underweightCountries) == 0 {
 		c.log.Debug().Msg("No underweight countries")
-		return nil, nil
+		return domain.CalculatorResult{PreFiltered: exclusions.Result()}, nil
 	}
 
 	// Build candidates for securities in underweight countries
@@ -141,16 +144,19 @@ func (c *RebalanceBuysCalculator) Calculate(
 	var scoredCandidates []scoredCandidate
 
 	for isin, security := range ctx.StocksByISIN {
+		symbol := security.Symbol
+		securityName := security.Name
+
 		// Skip if recently bought (ISIN lookup)
 		if ctx.RecentlyBoughtISINs[isin] { // ISIN key ✅
+			exclusions.Add(isin, symbol, securityName, "recently bought (cooling off period)")
 			continue
 		}
-
-		symbol := security.Symbol
 
 		// Skip if tag-based pre-filtering is enabled and symbol not in candidate set
 		if config.EnableTagFiltering && candidateMap != nil {
 			if !candidateMap[symbol] {
+				exclusions.Add(isin, symbol, securityName, "no matching opportunity tags")
 				continue
 			}
 		}
@@ -158,7 +164,8 @@ func (c *RebalanceBuysCalculator) Calculate(
 		// Get security and extract country
 		country := security.Country
 		if country == "" {
-			continue // Skip securities without country
+			exclusions.Add(isin, symbol, securityName, "no country assigned")
+			continue
 		}
 
 		// Check per-security constraint: AllowBuy must be true
@@ -166,6 +173,7 @@ func (c *RebalanceBuysCalculator) Calculate(
 			c.log.Debug().
 				Str("symbol", symbol).
 				Msg("Skipping security: allow_buy=false")
+			exclusions.Add(isin, symbol, securityName, "allow_buy=false")
 			continue
 		}
 
@@ -182,6 +190,7 @@ func (c *RebalanceBuysCalculator) Calculate(
 		// Check if this group is underweight
 		underweight, ok := underweightCountries[group]
 		if !ok {
+			exclusions.Add(isin, symbol, securityName, fmt.Sprintf("country group %s is not underweight", group))
 			continue
 		}
 
@@ -195,6 +204,7 @@ func (c *RebalanceBuysCalculator) Calculate(
 
 		// Filter by minimum score
 		if score < minScore {
+			exclusions.Add(isin, symbol, securityName, fmt.Sprintf("score %.2f below minimum %.2f", score, minScore))
 			continue
 		}
 
@@ -208,18 +218,21 @@ func (c *RebalanceBuysCalculator) Calculate(
 					c.log.Debug().
 						Str("symbol", symbol).
 						Msg("Skipping - value trap detected (tag-based check)")
+					exclusions.Add(isin, symbol, securityName, "value trap detected (tag-based)")
 					continue
 				}
 				if contains(securityTags, "bubble-risk") || contains(securityTags, "ensemble-bubble-risk") {
 					c.log.Debug().
 						Str("symbol", symbol).
 						Msg("Skipping - bubble risk detected (tag-based check)")
+					exclusions.Add(isin, symbol, securityName, "bubble risk detected (tag-based)")
 					continue
 				}
 				if contains(securityTags, "below-minimum-return") {
 					c.log.Debug().
 						Str("symbol", symbol).
 						Msg("Skipping - below minimum return (tag-based check)")
+					exclusions.Add(isin, symbol, securityName, "below minimum return (tag-based)")
 					continue
 				}
 				// Skip if quality gate failed (inverted logic - cleaner)
@@ -227,6 +240,7 @@ func (c *RebalanceBuysCalculator) Calculate(
 					c.log.Debug().
 						Str("symbol", symbol).
 						Msg("Skipping - quality gate failed (tag-based check)")
+					exclusions.Add(isin, symbol, securityName, "quality gate failed (tag-based)")
 					continue
 				}
 			}
@@ -237,24 +251,28 @@ func (c *RebalanceBuysCalculator) Calculate(
 				c.log.Debug().
 					Str("symbol", symbol).
 					Msg("Skipping - value trap detected (score-based check)")
+				exclusions.Add(isin, symbol, securityName, "value trap detected (score-based)")
 				continue
 			}
 			if qualityCheck.IsBubbleRisk {
 				c.log.Debug().
 					Str("symbol", symbol).
 					Msg("Skipping - bubble risk detected (score-based check)")
+				exclusions.Add(isin, symbol, securityName, "bubble risk detected (score-based)")
 				continue
 			}
 			if qualityCheck.BelowMinimumReturn {
 				c.log.Debug().
 					Str("symbol", symbol).
 					Msg("Skipping - below minimum return (score-based check)")
+				exclusions.Add(isin, symbol, securityName, "below minimum return (score-based)")
 				continue
 			}
 			if !qualityCheck.PassesQualityGate {
 				c.log.Debug().
 					Str("symbol", symbol).
 					Msg("Skipping - quality gate failed (score-based check)")
+				exclusions.Add(isin, symbol, securityName, fmt.Sprintf("quality gate failed: %s (score-based)", qualityCheck.QualityGateReason))
 				continue
 			}
 		}
@@ -289,8 +307,11 @@ func (c *RebalanceBuysCalculator) Calculate(
 		// Get security info (direct ISIN lookup)
 		security, ok := ctx.StocksByISIN[isin] // ISIN key ✅
 		if !ok {
+			exclusions.Add(isin, symbol, "", "security not found in StocksByISIN")
 			continue
 		}
+
+		securityName := security.Name
 
 		// Get current price (direct ISIN lookup)
 		currentPrice, ok := ctx.CurrentPrices[isin] // ISIN key ✅
@@ -298,6 +319,7 @@ func (c *RebalanceBuysCalculator) Calculate(
 			c.log.Warn().
 				Str("symbol", symbol).
 				Msg("No current price available")
+			exclusions.Add(isin, symbol, securityName, "no current price available")
 			continue
 		}
 
@@ -319,6 +341,7 @@ func (c *RebalanceBuysCalculator) Calculate(
 				Str("symbol", symbol).
 				Int("min_lot", security.MinLot).
 				Msg("Skipping security: quantity below minimum lot size after rounding")
+			exclusions.Add(isin, symbol, securityName, fmt.Sprintf("quantity below minimum lot size %d", security.MinLot))
 			continue
 		}
 
@@ -332,6 +355,7 @@ func (c *RebalanceBuysCalculator) Calculate(
 				Float64("trade_value", valueEUR).
 				Float64("min_trade_amount", minTradeAmount).
 				Msg("Skipping trade below minimum trade amount after lot size rounding")
+			exclusions.Add(isin, symbol, securityName, fmt.Sprintf("trade value €%.2f below minimum €%.2f", valueEUR, minTradeAmount))
 			continue
 		}
 
@@ -339,18 +363,9 @@ func (c *RebalanceBuysCalculator) Calculate(
 		transactionCost := ctx.TransactionCostFixed + (valueEUR * ctx.TransactionCostPercent)
 		totalCostEUR := valueEUR + transactionCost
 
-		// Check if trade meets minimum trade amount (transaction cost efficiency)
-		if valueEUR < minTradeAmount {
-			c.log.Debug().
-				Str("symbol", symbol).
-				Float64("trade_value", valueEUR).
-				Float64("min_trade_amount", minTradeAmount).
-				Msg("Skipping trade below minimum trade amount")
-			continue
-		}
-
 		// Check if we have enough cash
 		if totalCostEUR > ctx.AvailableCashEUR {
+			exclusions.Add(isin, symbol, securityName, fmt.Sprintf("insufficient cash: need €%.2f, have €%.2f", totalCostEUR, ctx.AvailableCashEUR))
 			continue
 		}
 
@@ -393,7 +408,11 @@ func (c *RebalanceBuysCalculator) Calculate(
 	c.log.Info().
 		Int("candidates", len(candidates)).
 		Int("underweight_countries", len(underweightCountries)).
+		Int("pre_filtered", len(exclusions.Result())).
 		Msg("Rebalance buy opportunities identified")
 
-	return candidates, nil
+	return domain.CalculatorResult{
+		Candidates:  candidates,
+		PreFiltered: exclusions.Result(),
+	}, nil
 }

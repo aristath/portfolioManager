@@ -101,11 +101,11 @@ func TestRebalanceSellsCalculator_MaxSellPercentage(t *testing.T) {
 				"max_sell_percentage":      tt.maxSellPercentage,
 			}
 
-			candidates, err := calc.Calculate(ctx, params)
+			result, err := calc.Calculate(ctx, params)
 			require.NoError(t, err)
-			require.Len(t, candidates, 1, "Should generate one sell candidate")
+			require.Len(t, result.Candidates, 1, "Should generate one sell candidate")
 
-			candidate := candidates[0]
+			candidate := result.Candidates[0]
 			assert.Equal(t, "SELL", candidate.Side)
 			assert.Equal(t, "TEST.US", candidate.Symbol)
 			assert.LessOrEqual(t, candidate.Quantity, tt.expectedMaxQuantity,
@@ -172,12 +172,12 @@ func TestRebalanceSellsCalculator_MaxSellPercentage_MultiplePositions(t *testing
 		"max_sell_percentage":      0.28, // 28% max sell
 	}
 
-	candidates, err := calc.Calculate(ctx, params)
+	result, err := calc.Calculate(ctx, params)
 	require.NoError(t, err)
-	require.GreaterOrEqual(t, len(candidates), 1, "Should generate at least one sell candidate")
+	require.GreaterOrEqual(t, len(result.Candidates), 1, "Should generate at least one sell candidate")
 
 	// Each position should respect its own max_sell_percentage
-	for _, candidate := range candidates {
+	for _, candidate := range result.Candidates {
 		switch candidate.Symbol {
 		case "STOCK_A.US":
 			assert.LessOrEqual(t, candidate.Quantity, 280, "STOCK_A: max 28% of 1000 = 280")
@@ -236,10 +236,10 @@ func TestRebalanceSellsCalculator_NoMaxSellPercentage_DefaultsToHardcodedCap(t *
 		// No max_sell_percentage provided
 	}
 
-	candidates, err := calc.Calculate(ctx, params)
+	result, err := calc.Calculate(ctx, params)
 	require.NoError(t, err)
-	require.Len(t, candidates, 1)
+	require.Len(t, result.Candidates, 1)
 
 	// Without max_sell_percentage, should still cap at 50% (old hardcoded limit)
-	assert.LessOrEqual(t, candidates[0].Quantity, 500, "Should cap at 50% when max_sell_percentage not provided")
+	assert.LessOrEqual(t, result.Candidates[0].Quantity, 500, "Should cap at 50% when max_sell_percentage not provided")
 }

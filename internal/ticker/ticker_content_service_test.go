@@ -17,31 +17,31 @@ func TestFormatCurrency_EUR(t *testing.T) {
 			name:     "positive EUR with thousands",
 			amount:   1234.56,
 			currency: "EUR",
-			expected: "€1,234",
+			expected: "EUR1,234",
 		},
 		{
 			name:     "positive EUR without thousands",
 			amount:   567.89,
 			currency: "EUR",
-			expected: "€567",
+			expected: "EUR567",
 		},
 		{
 			name:     "zero EUR",
 			amount:   0,
 			currency: "EUR",
-			expected: "€0",
+			expected: "EUR0",
 		},
 		{
 			name:     "negative EUR",
 			amount:   -500.0,
 			currency: "EUR",
-			expected: "-€500",
+			expected: "-EUR500",
 		},
 		{
 			name:     "large EUR with millions",
 			amount:   1234567.89,
 			currency: "EUR",
-			expected: "€1,234,567",
+			expected: "EUR1,234,567",
 		},
 	}
 
@@ -116,25 +116,25 @@ func TestFormatCurrency_Truncation(t *testing.T) {
 			name:     "truncates at 0.5",
 			amount:   123.5,
 			currency: "EUR",
-			expected: "€123",
+			expected: "EUR123",
 		},
 		{
 			name:     "truncates below 0.5",
 			amount:   123.4,
 			currency: "EUR",
-			expected: "€123",
+			expected: "EUR123",
 		},
 		{
 			name:     "truncates above 0.5",
 			amount:   123.6,
 			currency: "EUR",
-			expected: "€123",
+			expected: "EUR123",
 		},
 		{
 			name:     "negative truncates correctly",
 			amount:   -123.5,
 			currency: "EUR",
-			expected: "-€123",
+			expected: "-EUR123",
 		},
 	}
 

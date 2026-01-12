@@ -114,12 +114,12 @@ func TestAveragingDownCalculator_WithTagFiltering_PreFiltersPositions(t *testing
 		"config":           config,
 	}
 
-	candidates, err := calc.Calculate(ctx, params)
+	result, err := calc.Calculate(ctx, params)
 	require.NoError(t, err)
 
 	// Only TEST.US should be included (tag pre-filtered)
-	assert.Len(t, candidates, 1, "Should only include pre-filtered position")
-	assert.Equal(t, "TEST.US", candidates[0].Symbol)
+	assert.Len(t, result.Candidates, 1, "Should only include pre-filtered position")
+	assert.Equal(t, "TEST.US", result.Candidates[0].Symbol)
 }
 
 func TestAveragingDownCalculator_WithoutTagFiltering_ProcessesAllPositions(t *testing.T) {
@@ -186,11 +186,11 @@ func TestAveragingDownCalculator_WithoutTagFiltering_ProcessesAllPositions(t *te
 		"config":           config,
 	}
 
-	candidates, err := calc.Calculate(ctx, params)
+	result, err := calc.Calculate(ctx, params)
 	require.NoError(t, err)
 
 	// Both positions should be included (no tag filtering)
-	assert.Len(t, candidates, 2, "Should process all positions when tag filtering disabled")
+	assert.Len(t, result.Candidates, 2, "Should process all positions when tag filtering disabled")
 }
 
 func TestAveragingDownCalculator_EnforcesAllowBuy(t *testing.T) {
@@ -238,9 +238,9 @@ func TestAveragingDownCalculator_EnforcesAllowBuy(t *testing.T) {
 		"config":           config,
 	}
 
-	candidates, err := calc.Calculate(ctx, params)
+	result, err := calc.Calculate(ctx, params)
 	require.NoError(t, err)
-	assert.Empty(t, candidates, "Should skip securities with AllowBuy=false")
+	assert.Empty(t, result.Candidates, "Should skip securities with AllowBuy=false")
 }
 
 func TestAveragingDownCalculator_RoundsToLotSize(t *testing.T) {
@@ -292,12 +292,12 @@ func TestAveragingDownCalculator_RoundsToLotSize(t *testing.T) {
 		"config":                 config,
 	}
 
-	candidates, err := calc.Calculate(ctx, params)
+	result, err := calc.Calculate(ctx, params)
 	require.NoError(t, err)
-	require.Len(t, candidates, 1)
+	require.Len(t, result.Candidates, 1)
 
 	// Quantity should be rounded to whole number (88 shares)
-	assert.Equal(t, 88, candidates[0].Quantity, "Should round 88.8 shares to 88")
+	assert.Equal(t, 88, result.Candidates[0].Quantity, "Should round 88.8 shares to 88")
 }
 
 func TestAveragingDownCalculator_KellyBasedQuantity_WhenAvailable(t *testing.T) {
@@ -348,16 +348,16 @@ func TestAveragingDownCalculator_KellyBasedQuantity_WhenAvailable(t *testing.T) 
 		"config":                 config,
 	}
 
-	candidates, err := calc.Calculate(ctx, params)
+	result, err := calc.Calculate(ctx, params)
 	require.NoError(t, err)
-	require.Len(t, candidates, 1)
+	require.Len(t, result.Candidates, 1)
 
 	// Kelly calculation:
 	// Kelly target value = 0.20 * 10000 = 2000 EUR
 	// Kelly target shares = 2000 / 15 = 133.33 shares
 	// Current shares = 100
 	// Additional shares = 133.33 - 100 = 33.33 → 33 shares
-	assert.Equal(t, 33, candidates[0].Quantity, "Should use Kelly-based quantity (133 target - 100 current = 33)")
+	assert.Equal(t, 33, result.Candidates[0].Quantity, "Should use Kelly-based quantity (133 target - 100 current = 33)")
 }
 
 func TestAveragingDownCalculator_PercentageBasedQuantity_Fallback(t *testing.T) {
@@ -408,12 +408,12 @@ func TestAveragingDownCalculator_PercentageBasedQuantity_Fallback(t *testing.T) 
 		"config":                 config,
 	}
 
-	candidates, err := calc.Calculate(ctx, params)
+	result, err := calc.Calculate(ctx, params)
 	require.NoError(t, err)
-	require.Len(t, candidates, 1)
+	require.Len(t, result.Candidates, 1)
 
 	// Percentage-based calculation: 100 * 0.15 = 15 shares
-	assert.Equal(t, 15, candidates[0].Quantity, "Should use percentage-based fallback (100 * 0.15 = 15)")
+	assert.Equal(t, 15, result.Candidates[0].Quantity, "Should use percentage-based fallback (100 * 0.15 = 15)")
 }
 
 func TestAveragingDownCalculator_UsesConfigurablePercent_NotHardcoded(t *testing.T) {
@@ -475,11 +475,11 @@ func TestAveragingDownCalculator_UsesConfigurablePercent_NotHardcoded(t *testing
 				"config":                 config,
 			}
 
-			candidates, err := calc.Calculate(ctx, params)
+			result, err := calc.Calculate(ctx, params)
 			require.NoError(t, err)
-			require.Len(t, candidates, 1)
+			require.Len(t, result.Candidates, 1)
 
-			assert.Equal(t, tt.expectedQuantity, candidates[0].Quantity,
+			assert.Equal(t, tt.expectedQuantity, result.Candidates[0].Quantity,
 				"Should use configurable percentage: 100 * %.2f = %d", tt.averagingDownPercent, tt.expectedQuantity)
 		})
 	}
@@ -532,11 +532,11 @@ func TestAveragingDownCalculator_SkipsAveragingDown_WhenAtKellyOptimal(t *testin
 		"config":           config,
 	}
 
-	candidates, err := calc.Calculate(ctx, params)
+	result, err := calc.Calculate(ctx, params)
 	require.NoError(t, err)
 
 	// Should skip - already at Kelly optimal
-	assert.Empty(t, candidates, "Should skip averaging down when already at Kelly optimal")
+	assert.Empty(t, result.Candidates, "Should skip averaging down when already at Kelly optimal")
 }
 
 func TestAveragingDownCalculator_TagBasedQualityGates_ValueTrap(t *testing.T) {
@@ -588,9 +588,9 @@ func TestAveragingDownCalculator_TagBasedQualityGates_ValueTrap(t *testing.T) {
 		"config":           config,
 	}
 
-	candidates, err := calc.Calculate(ctx, params)
+	result, err := calc.Calculate(ctx, params)
 	require.NoError(t, err)
-	assert.Empty(t, candidates, "Should exclude value traps")
+	assert.Empty(t, result.Candidates, "Should exclude value traps")
 }
 
 func TestAveragingDownCalculator_TagBasedPriorityBoosting_QualityValue(t *testing.T) {
@@ -661,13 +661,13 @@ func TestAveragingDownCalculator_TagBasedPriorityBoosting_QualityValue(t *testin
 		"config":           config,
 	}
 
-	candidates, err := calc.Calculate(ctx, params)
+	result, err := calc.Calculate(ctx, params)
 	require.NoError(t, err)
-	require.Len(t, candidates, 2)
+	require.Len(t, result.Candidates, 2)
 
 	// QUALITY.US should have higher priority (1.5x boost)
-	assert.Equal(t, "QUALITY.US", candidates[0].Symbol, "Quality value should be first")
-	assert.Greater(t, candidates[0].Priority, candidates[1].Priority, "Quality value should have higher priority")
+	assert.Equal(t, "QUALITY.US", result.Candidates[0].Symbol, "Quality value should be first")
+	assert.Greater(t, result.Candidates[0].Priority, result.Candidates[1].Priority, "Quality value should have higher priority")
 }
 
 func TestAveragingDownCalculator_SortsByPriorityDescending(t *testing.T) {
@@ -738,13 +738,13 @@ func TestAveragingDownCalculator_SortsByPriorityDescending(t *testing.T) {
 		"config":           config,
 	}
 
-	candidates, err := calc.Calculate(ctx, params)
+	result, err := calc.Calculate(ctx, params)
 	require.NoError(t, err)
-	require.Len(t, candidates, 2)
+	require.Len(t, result.Candidates, 2)
 
 	// DEEP.US should be first (deeper loss = higher priority)
-	assert.Equal(t, "DEEP.US", candidates[0].Symbol, "Deeper loss should have higher priority")
-	assert.Greater(t, candidates[0].Priority, candidates[1].Priority)
+	assert.Equal(t, "DEEP.US", result.Candidates[0].Symbol, "Deeper loss should have higher priority")
+	assert.Greater(t, result.Candidates[0].Priority, result.Candidates[1].Priority)
 }
 
 func TestAveragingDownCalculator_RespectsMaxPositionsLimit(t *testing.T) {
@@ -815,8 +815,8 @@ func TestAveragingDownCalculator_RespectsMaxPositionsLimit(t *testing.T) {
 		"config":           config,
 	}
 
-	candidates, err := calc.Calculate(ctx, params)
+	result, err := calc.Calculate(ctx, params)
 	require.NoError(t, err)
 
-	assert.Len(t, candidates, 3, "Should respect max_positions limit")
+	assert.Len(t, result.Candidates, 3, "Should respect max_positions limit")
 }

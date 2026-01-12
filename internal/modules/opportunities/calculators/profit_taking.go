@@ -43,7 +43,7 @@ func (c *ProfitTakingCalculator) Category() domain.OpportunityCategory {
 func (c *ProfitTakingCalculator) Calculate(
 	ctx *domain.OpportunityContext,
 	params map[string]interface{},
-) ([]domain.ActionCandidate, error) {
+) (domain.CalculatorResult, error) {
 	// Parameters with defaults
 	minGainThreshold := GetFloatParam(params, "min_gain_threshold", 0.15)  // 15% minimum gain
 	windfallThreshold := GetFloatParam(params, "windfall_threshold", 0.30) // 30% for windfall
@@ -51,15 +51,19 @@ func (c *ProfitTakingCalculator) Calculate(
 	sellPercentage := GetFloatParam(params, "sell_percentage", 1.0)        // Sell 100% by default
 	maxSellPercentage := GetFloatParam(params, "max_sell_percentage", 1.0) // Risk management cap (from config)
 	maxPositions := GetIntParam(params, "max_positions", 0)                // 0 = unlimited
+	_ = minHoldDays                                                        // Reserved for future use
+
+	// Initialize exclusion collector
+	exclusions := NewExclusionCollector(c.Name())
 
 	if !ctx.AllowSell {
 		c.log.Debug().Msg("Selling not allowed, skipping profit taking")
-		return nil, nil
+		return domain.CalculatorResult{PreFiltered: exclusions.Result()}, nil
 	}
 
 	if len(ctx.EnrichedPositions) == 0 {
 		c.log.Debug().Msg("No positions available for profit taking")
-		return nil, nil
+		return domain.CalculatorResult{PreFiltered: exclusions.Result()}, nil
 	}
 
 	// Extract config for tag filtering
@@ -75,12 +79,12 @@ func (c *ProfitTakingCalculator) Calculate(
 	if config.EnableTagFiltering && c.tagFilter != nil {
 		candidateSymbols, err := c.tagFilter.GetSellCandidates(ctx, config)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get tag-based sell candidates: %w", err)
+			return domain.CalculatorResult{PreFiltered: exclusions.Result()}, fmt.Errorf("failed to get tag-based sell candidates: %w", err)
 		}
 
 		if len(candidateSymbols) == 0 {
 			c.log.Debug().Msg("No tag-based sell candidates found")
-			return nil, nil
+			return domain.CalculatorResult{PreFiltered: exclusions.Result()}, nil
 		}
 
 		// Build lookup map
@@ -104,30 +108,35 @@ func (c *ProfitTakingCalculator) Calculate(
 		Msg("Calculating profit-taking opportunities")
 
 	for _, position := range ctx.EnrichedPositions {
+		isin := position.ISIN
+		symbol := position.Symbol
+		securityName := position.SecurityName
+
 		// Skip if not in tag-filtered candidates (when tag filtering enabled)
-		if candidateMap != nil && !candidateMap[position.Symbol] {
+		if candidateMap != nil && !candidateMap[symbol] {
+			exclusions.Add(isin, symbol, securityName, "no matching sell tags")
 			continue
 		}
 
-		// ISIN always present in EnrichedPosition (validated during enrichment)
-		isin := position.ISIN
-
 		// Skip if ineligible (ISIN lookup)
 		if ctx.IneligibleISINs[isin] { // ISIN key ✅
+			exclusions.Add(isin, symbol, securityName, "marked as ineligible")
 			continue
 		}
 
 		// Skip if recently sold (ISIN lookup)
 		if ctx.RecentlySoldISINs[isin] { // ISIN key ✅
+			exclusions.Add(isin, symbol, securityName, "recently sold (cooling off period)")
 			continue
 		}
 
 		// Check per-security constraint: AllowSell embedded in position
 		if !position.CanSell() {
 			c.log.Debug().
-				Str("symbol", position.Symbol).
+				Str("symbol", symbol).
 				Str("isin", isin).
 				Msg("Skipping security: allow_sell=false or inactive")
+			exclusions.Add(isin, symbol, securityName, "allow_sell=false or inactive")
 			continue
 		}
 
@@ -135,15 +144,17 @@ func (c *ProfitTakingCalculator) Calculate(
 		currentPrice := position.CurrentPrice
 		if currentPrice <= 0 {
 			c.log.Debug().
-				Str("symbol", position.Symbol).
+				Str("symbol", symbol).
 				Str("isin", isin).
 				Msg("No current price available, skipping")
+			exclusions.Add(isin, symbol, securityName, "no current price available")
 			continue
 		}
 
 		// Calculate gain using embedded helper (no map lookups)
 		costBasis := position.AverageCost
 		if costBasis <= 0 {
+			exclusions.Add(isin, symbol, securityName, "no cost basis available")
 			continue
 		}
 
@@ -151,6 +162,7 @@ func (c *ProfitTakingCalculator) Calculate(
 
 		// Check if gain meets threshold
 		if gainPercent < minGainThreshold {
+			exclusions.Add(isin, symbol, securityName, fmt.Sprintf("gain %.1f%% below threshold %.1f%%", gainPercent*100, minGainThreshold*100))
 			continue
 		}
 
@@ -175,9 +187,10 @@ func (c *ProfitTakingCalculator) Calculate(
 		quantityInt = RoundToLotSize(quantityInt, position.MinLot)
 		if quantityInt <= 0 {
 			c.log.Debug().
-				Str("symbol", position.Symbol).
+				Str("symbol", symbol).
 				Int("min_lot", position.MinLot).
 				Msg("Skipping security: quantity below minimum lot size after rounding")
+			exclusions.Add(isin, symbol, securityName, fmt.Sprintf("quantity below minimum lot size %d", position.MinLot))
 			continue
 		}
 		quantity = float64(quantityInt)
@@ -239,9 +252,9 @@ func (c *ProfitTakingCalculator) Calculate(
 
 		candidate := domain.ActionCandidate{
 			Side:     "SELL",
-			ISIN:     isin,                  // PRIMARY identifier ✅
-			Symbol:   position.Symbol,       // BOUNDARY identifier
-			Name:     position.SecurityName, // Embedded security metadata
+			ISIN:     isin,         // PRIMARY identifier ✅
+			Symbol:   symbol,       // BOUNDARY identifier
+			Name:     securityName, // Embedded security metadata
 			Quantity: int(quantity),
 			Price:    currentPrice,
 			ValueEUR: netValueEUR,
@@ -268,9 +281,12 @@ func (c *ProfitTakingCalculator) Calculate(
 	if candidateMap != nil {
 		logMsg = logMsg.Int("filtered_from", len(candidateMap))
 	}
-	logMsg.Msg("Profit-taking opportunities identified")
+	logMsg.Int("pre_filtered", len(exclusions.Result())).Msg("Profit-taking opportunities identified")
 
-	return candidates, nil
+	return domain.CalculatorResult{
+		Candidates:  candidates,
+		PreFiltered: exclusions.Result(),
+	}, nil
 }
 
 // calculatePriority calculates priority with optional tag-based boosting.

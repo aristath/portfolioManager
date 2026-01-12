@@ -128,6 +128,7 @@ type PlannerServiceInterface interface {
 type RecommendationRepositoryInterface interface {
 	StorePlan(plan *planningdomain.HolisticPlan, portfolioHash string) error
 	StoreRejectedOpportunities(rejected []planningdomain.RejectedOpportunity, portfolioHash string) error
+	StorePreFilteredSecurities(preFiltered []planningdomain.PreFilteredSecurity, portfolioHash string) error
 }
 
 // PriceClientInterface defines the contract for price fetching operations

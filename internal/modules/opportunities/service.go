@@ -36,7 +36,20 @@ func (s *Service) IdentifyOpportunities(
 	ctx *domain.OpportunityContext,
 	config *domain.PlannerConfiguration,
 ) (domain.OpportunitiesByCategory, error) {
-	s.log.Info().Msg("Identifying opportunities")
+	result, err := s.IdentifyOpportunitiesWithExclusions(ctx, config)
+	if err != nil {
+		return nil, err
+	}
+	return result.ToOpportunitiesByCategory(), nil
+}
+
+// IdentifyOpportunitiesWithExclusions identifies all trading opportunities and returns
+// both the opportunities and the pre-filtered securities that were excluded.
+func (s *Service) IdentifyOpportunitiesWithExclusions(
+	ctx *domain.OpportunityContext,
+	config *domain.PlannerConfiguration,
+) (domain.OpportunitiesResultByCategory, error) {
+	s.log.Info().Msg("Identifying opportunities with exclusions")
 
 	if ctx == nil {
 		return nil, fmt.Errorf("opportunity context is nil")
@@ -47,17 +60,17 @@ func (s *Service) IdentifyOpportunities(
 	}
 
 	// Use registry to run all enabled calculators
-	opportunities, err := s.registry.IdentifyOpportunities(ctx, config)
+	results, err := s.registry.IdentifyOpportunitiesWithExclusions(ctx, config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to identify opportunities: %w", err)
 	}
 
-	// Apply max opportunities per category limit
+	// Apply max opportunities per category limit (to candidates only)
 	if config.MaxOpportunitiesPerCategory > 0 {
-		opportunities = s.limitOpportunitiesPerCategory(opportunities, config.MaxOpportunitiesPerCategory)
+		results = s.limitOpportunitiesPerCategoryWithExclusions(results, config.MaxOpportunitiesPerCategory)
 	}
 
-	return opportunities, nil
+	return results, nil
 }
 
 // GetRegistry returns the calculator registry for advanced usage.
@@ -65,21 +78,25 @@ func (s *Service) GetRegistry() *calculators.CalculatorRegistry {
 	return s.registry
 }
 
-// limitOpportunitiesPerCategory limits the number of opportunities per category.
-func (s *Service) limitOpportunitiesPerCategory(
-	opportunities domain.OpportunitiesByCategory,
+// limitOpportunitiesPerCategoryWithExclusions limits the number of candidates per category,
+// preserving pre-filtered securities.
+func (s *Service) limitOpportunitiesPerCategoryWithExclusions(
+	results domain.OpportunitiesResultByCategory,
 	maxPerCategory int,
-) domain.OpportunitiesByCategory {
-	limited := make(domain.OpportunitiesByCategory)
+) domain.OpportunitiesResultByCategory {
+	limited := make(domain.OpportunitiesResultByCategory)
 
-	for category, candidates := range opportunities {
+	for category, result := range results {
+		candidates := result.Candidates
 		if len(candidates) <= maxPerCategory {
-			limited[category] = candidates
+			limited[category] = result
 		} else {
 			// Take top N by priority
-			// Sort by priority descending (already done by calculators, but ensure it)
 			sortByPriority(candidates)
-			limited[category] = candidates[:maxPerCategory]
+			limited[category] = domain.CalculatorResult{
+				Candidates:  candidates[:maxPerCategory],
+				PreFiltered: result.PreFiltered, // Preserve all pre-filtered
+			}
 
 			s.log.Debug().
 				Str("category", string(category)).

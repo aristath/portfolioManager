@@ -42,11 +42,14 @@ func (c *RebalanceSellsCalculator) Category() domain.OpportunityCategory {
 func (c *RebalanceSellsCalculator) Calculate(
 	ctx *domain.OpportunityContext,
 	params map[string]interface{},
-) ([]domain.ActionCandidate, error) {
+) (domain.CalculatorResult, error) {
 	// Parameters with defaults
 	minOverweightThreshold := GetFloatParam(params, "min_overweight_threshold", 0.05) // 5% overweight
 	maxSellPercentage := GetFloatParam(params, "max_sell_percentage", 0.50)           // Risk management cap (default 50%)
 	maxPositions := GetIntParam(params, "max_positions", 0)                           // 0 = unlimited
+
+	// Initialize exclusion collector
+	exclusions := NewExclusionCollector(c.Name())
 
 	// Extract config for tag filtering (will be used in Phase 4 for priority boosting)
 	var config *domain.PlannerConfiguration
@@ -55,22 +58,21 @@ func (c *RebalanceSellsCalculator) Calculate(
 	} else {
 		config = domain.NewDefaultConfiguration()
 	}
-	_ = config // Reserved for future use in priority boosting (Phase 4)
 
 	if !ctx.AllowSell {
 		c.log.Debug().Msg("Selling not allowed, skipping rebalance sells")
-		return nil, nil
+		return domain.CalculatorResult{PreFiltered: exclusions.Result()}, nil
 	}
 
 	// Check if we have country allocations and weights
 	if ctx.CountryAllocations == nil || ctx.CountryWeights == nil {
 		c.log.Debug().Msg("No country allocation data available")
-		return nil, nil
+		return domain.CalculatorResult{PreFiltered: exclusions.Result()}, nil
 	}
 
 	if ctx.TotalPortfolioValueEUR <= 0 {
 		c.log.Debug().Msg("Invalid portfolio value")
-		return nil, nil
+		return domain.CalculatorResult{PreFiltered: exclusions.Result()}, nil
 	}
 
 	c.log.Debug().
@@ -99,38 +101,43 @@ func (c *RebalanceSellsCalculator) Calculate(
 
 	if len(overweightCountries) == 0 {
 		c.log.Debug().Msg("No overweight countries")
-		return nil, nil
+		return domain.CalculatorResult{PreFiltered: exclusions.Result()}, nil
 	}
 
 	var candidates []domain.ActionCandidate
 
 	for _, position := range ctx.EnrichedPositions {
-		// ISIN always present in EnrichedPosition (validated during enrichment)
 		isin := position.ISIN
+		symbol := position.Symbol
+		securityName := position.SecurityName
 
 		// Skip if ineligible (ISIN lookup)
 		if ctx.IneligibleISINs[isin] { // ISIN key ✅
+			exclusions.Add(isin, symbol, securityName, "marked as ineligible")
 			continue
 		}
 
 		// Skip if recently sold (ISIN lookup)
 		if ctx.RecentlySoldISINs[isin] { // ISIN key ✅
+			exclusions.Add(isin, symbol, securityName, "recently sold (cooling off period)")
 			continue
 		}
 
 		// Check per-security constraint: AllowSell embedded in position
 		if !position.CanSell() {
 			c.log.Debug().
-				Str("symbol", position.Symbol).
+				Str("symbol", symbol).
 				Str("isin", isin).
 				Msg("Skipping security: allow_sell=false or inactive")
+			exclusions.Add(isin, symbol, securityName, "allow_sell=false or inactive")
 			continue
 		}
 
 		// Get country from embedded security metadata
 		country := position.Country
 		if country == "" {
-			continue // Skip securities without country
+			exclusions.Add(isin, symbol, securityName, "no country assigned")
+			continue
 		}
 
 		// Map country to group
@@ -146,6 +153,7 @@ func (c *RebalanceSellsCalculator) Calculate(
 		// Check if this group is overweight
 		overweight, ok := overweightCountries[group]
 		if !ok {
+			exclusions.Add(isin, symbol, securityName, fmt.Sprintf("country group %s is not overweight", group))
 			continue
 		}
 
@@ -153,9 +161,10 @@ func (c *RebalanceSellsCalculator) Calculate(
 		currentPrice := position.CurrentPrice
 		if currentPrice <= 0 {
 			c.log.Warn().
-				Str("symbol", position.Symbol).
+				Str("symbol", symbol).
 				Str("isin", isin).
 				Msg("No current price available")
+			exclusions.Add(isin, symbol, securityName, "no current price available")
 			continue
 		}
 
@@ -177,9 +186,10 @@ func (c *RebalanceSellsCalculator) Calculate(
 		quantity = RoundToLotSize(quantity, position.MinLot)
 		if quantity <= 0 {
 			c.log.Debug().
-				Str("symbol", position.Symbol).
+				Str("symbol", symbol).
 				Int("min_lot", position.MinLot).
 				Msg("Skipping security: quantity below minimum lot size after rounding")
+			exclusions.Add(isin, symbol, securityName, fmt.Sprintf("quantity below minimum lot size %d", position.MinLot))
 			continue
 		}
 
@@ -210,9 +220,9 @@ func (c *RebalanceSellsCalculator) Calculate(
 
 		candidate := domain.ActionCandidate{
 			Side:     "SELL",
-			ISIN:     isin,                  // PRIMARY identifier ✅
-			Symbol:   position.Symbol,       // BOUNDARY identifier
-			Name:     position.SecurityName, // Embedded security metadata
+			ISIN:     isin,         // PRIMARY identifier ✅
+			Symbol:   symbol,       // BOUNDARY identifier
+			Name:     securityName, // Embedded security metadata
 			Quantity: quantity,
 			Price:    position.CurrentPrice,
 			ValueEUR: netValueEUR,
@@ -233,7 +243,11 @@ func (c *RebalanceSellsCalculator) Calculate(
 	c.log.Info().
 		Int("candidates", len(candidates)).
 		Int("overweight_countries", len(overweightCountries)).
+		Int("pre_filtered", len(exclusions.Result())).
 		Msg("Rebalance sell opportunities identified")
 
-	return candidates, nil
+	return domain.CalculatorResult{
+		Candidates:  candidates,
+		PreFiltered: exclusions.Result(),
+	}, nil
 }

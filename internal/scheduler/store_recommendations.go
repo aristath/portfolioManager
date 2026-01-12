@@ -17,6 +17,7 @@ type StoreRecommendationsJob struct {
 	portfolioHash         string
 	plan                  *planningdomain.HolisticPlan
 	rejectedOpportunities []planningdomain.RejectedOpportunity
+	preFilteredSecurities []planningdomain.PreFilteredSecurity
 }
 
 // NewStoreRecommendationsJob creates a new StoreRecommendationsJob
@@ -58,6 +59,11 @@ func (j *StoreRecommendationsJob) SetRejectedOpportunities(rejected []planningdo
 	j.rejectedOpportunities = rejected
 }
 
+// SetPreFilteredSecurities sets the pre-filtered securities to store
+func (j *StoreRecommendationsJob) SetPreFilteredSecurities(preFiltered []planningdomain.PreFilteredSecurity) {
+	j.preFilteredSecurities = preFiltered
+}
+
 // Name returns the job name
 func (j *StoreRecommendationsJob) Name() string {
 	return "store_recommendations"
@@ -83,6 +89,19 @@ func (j *StoreRecommendationsJob) Run() error {
 				Int("rejected_count", len(j.rejectedOpportunities)).
 				Str("portfolio_hash", j.portfolioHash).
 				Msg("Stored rejected opportunities")
+		}
+	}
+
+	// Store pre-filtered securities (if available)
+	if len(j.preFilteredSecurities) > 0 && j.portfolioHash != "" {
+		if err := j.recommendationRepo.StorePreFilteredSecurities(j.preFilteredSecurities, j.portfolioHash); err != nil {
+			j.log.Warn().Err(err).Msg("Failed to store pre-filtered securities")
+			// Don't fail - continue to store plan
+		} else {
+			j.log.Info().
+				Int("pre_filtered_count", len(j.preFilteredSecurities)).
+				Str("portfolio_hash", j.portfolioHash).
+				Msg("Stored pre-filtered securities")
 		}
 	}
 

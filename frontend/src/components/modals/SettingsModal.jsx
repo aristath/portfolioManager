@@ -110,6 +110,7 @@ export function SettingsModal() {
   const [testingR2Connection, setTestingR2Connection] = useState(false);
   const [backingUpToR2, setBackingUpToR2] = useState(false);
   const [showR2BackupModal, setShowR2BackupModal] = useState(false);
+  const [uploadingSketch, setUploadingSketch] = useState(false);
 
   useEffect(() => {
     if (showSettingsModal) {
@@ -197,6 +198,22 @@ export function SettingsModal() {
 
   const handleViewR2Backups = () => {
     setShowR2BackupModal(true);
+  };
+
+  const handleUploadSketch = async () => {
+    setUploadingSketch(true);
+    try {
+      const result = await api.uploadSketch();
+      if (result.status === 'success') {
+        showNotification('Sketch uploaded successfully', 'success');
+      } else {
+        showNotification(`Sketch upload failed: ${result.message}`, 'error');
+      }
+    } catch (error) {
+      showNotification(`Failed to upload sketch: ${error.message}`, 'error');
+    } finally {
+      setUploadingSketch(false);
+    }
   };
 
   return (
@@ -637,6 +654,30 @@ export function SettingsModal() {
                     loading={loading}
                   >
                     Restart
+                  </Button>
+                </Group>
+              </Stack>
+            </Paper>
+
+            {/* Hardware Actions */}
+            <Paper p="md" withBorder>
+              <Text size="sm" fw={500} mb="xs" tt="uppercase">Hardware</Text>
+              <Text size="xs" c="dimmed" mb="md">
+                Manage Arduino MCU hardware. These actions only work when running on Arduino hardware.
+              </Text>
+              <Stack gap="sm">
+                <Group justify="space-between">
+                  <div>
+                    <Text size="sm">LED Display Sketch</Text>
+                    <Text size="xs" c="dimmed">Compile and upload sketch to MCU</Text>
+                  </div>
+                  <Button
+                    size="xs"
+                    variant="light"
+                    onClick={handleUploadSketch}
+                    loading={uploadingSketch}
+                  >
+                    {uploadingSketch ? 'Uploading...' : 'Reflash'}
                   </Button>
                 </Group>
               </Stack>

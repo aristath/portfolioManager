@@ -355,6 +355,11 @@ func (s *Server) setupRoutes() {
 			r.Get("/database/stats", systemHandlers.HandleDatabaseStats)
 			r.Get("/disk", systemHandlers.HandleDiskUsage)
 
+			// MCU/Display hardware operations
+			r.Route("/mcu", func(r chi.Router) {
+				r.Post("/upload-sketch", systemHandlers.HandleUploadSketch)
+			})
+
 			// Log access
 			r.Get("/logs/list", logHandlers.HandleListLogs)
 			r.Get("/logs", logHandlers.HandleGetLogs)

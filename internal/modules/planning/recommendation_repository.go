@@ -22,7 +22,9 @@ import (
 type RecommendationRepository struct {
 	db                    *sql.DB                                         // cache.db
 	rejectedOpportunities map[string][]planningdomain.RejectedOpportunity // key: portfolioHash (in-memory)
+	preFilteredSecurities map[string][]planningdomain.PreFilteredSecurity // key: portfolioHash (in-memory)
 	rejectedMu            sync.RWMutex
+	preFilteredMu         sync.RWMutex
 	log                   zerolog.Logger
 }
 
@@ -56,6 +58,7 @@ func NewRecommendationRepository(db *sql.DB, log zerolog.Logger) *Recommendation
 	return &RecommendationRepository{
 		db:                    db,
 		rejectedOpportunities: make(map[string][]planningdomain.RejectedOpportunity),
+		preFilteredSecurities: make(map[string][]planningdomain.PreFilteredSecurity),
 		log:                   log.With().Str("repository", "recommendation").Logger(),
 	}
 }
@@ -543,6 +546,14 @@ func (r *RecommendationRepository) GetRecommendationsAsPlan(getEvaluatedCount fu
 	}
 	r.rejectedMu.RUnlock()
 
+	// Get pre-filtered securities for this portfolio hash
+	var preFilteredSecurities interface{} = nil
+	r.preFilteredMu.RLock()
+	if preFiltered, exists := r.preFilteredSecurities[portfolioHash]; exists && len(preFiltered) > 0 {
+		preFilteredSecurities = preFiltered
+	}
+	r.preFilteredMu.RUnlock()
+
 	// Build response matching frontend expectations
 	response := map[string]interface{}{
 		"steps":                   steps,
@@ -555,6 +566,10 @@ func (r *RecommendationRepository) GetRecommendationsAsPlan(getEvaluatedCount fu
 
 	if rejectedOpportunities != nil {
 		response["rejected_opportunities"] = rejectedOpportunities
+	}
+
+	if preFilteredSecurities != nil {
+		response["pre_filtered_securities"] = preFilteredSecurities
 	}
 
 	return response, nil
@@ -708,6 +723,33 @@ func (r *RecommendationRepository) StoreRejectedOpportunities(rejected []plannin
 		Int("rejected_count", len(rejected)).
 		Msg("Stored rejected opportunities")
 
+	return nil
+}
+
+// StorePreFilteredSecurities stores pre-filtered securities for a portfolio hash (in-memory)
+// Pre-filtered securities are those excluded before reaching the opportunity stage
+func (r *RecommendationRepository) StorePreFilteredSecurities(preFiltered []planningdomain.PreFilteredSecurity, portfolioHash string) error {
+	r.preFilteredMu.Lock()
+	defer r.preFilteredMu.Unlock()
+
+	r.preFilteredSecurities[portfolioHash] = preFiltered
+
+	r.log.Info().
+		Str("portfolio_hash", portfolioHash).
+		Int("pre_filtered_count", len(preFiltered)).
+		Msg("Stored pre-filtered securities")
+
+	return nil
+}
+
+// GetPreFilteredSecurities retrieves pre-filtered securities for a portfolio hash
+func (r *RecommendationRepository) GetPreFilteredSecurities(portfolioHash string) []planningdomain.PreFilteredSecurity {
+	r.preFilteredMu.RLock()
+	defer r.preFilteredMu.RUnlock()
+
+	if preFiltered, exists := r.preFilteredSecurities[portfolioHash]; exists {
+		return preFiltered
+	}
 	return nil
 }
 

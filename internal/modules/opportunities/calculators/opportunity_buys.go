@@ -45,7 +45,7 @@ func (c *OpportunityBuysCalculator) Category() planningdomain.OpportunityCategor
 func (c *OpportunityBuysCalculator) Calculate(
 	ctx *planningdomain.OpportunityContext,
 	params map[string]interface{},
-) ([]planningdomain.ActionCandidate, error) {
+) (planningdomain.CalculatorResult, error) {
 	// Parameters with defaults
 	minScore := GetFloatParam(params, "min_score", 0.65) // Aligned with relaxed Path 3 (0.65 opportunity score)
 	maxValuePerPosition := GetFloatParam(params, "max_value_per_position", 500.0)
@@ -56,9 +56,12 @@ func (c *OpportunityBuysCalculator) Calculate(
 	maxCostRatio := GetFloatParam(params, "max_cost_ratio", 0.01) // Default 1% max cost
 	minTradeAmount := ctx.CalculateMinTradeAmount(maxCostRatio)
 
+	// Initialize exclusion collector to track pre-filtered securities
+	exclusions := NewExclusionCollector(c.Name())
+
 	if !ctx.AllowBuy {
 		c.log.Debug().Msg("Buying not allowed, skipping opportunity buys")
-		return nil, nil
+		return planningdomain.CalculatorResult{PreFiltered: exclusions.Result()}, nil
 	}
 
 	if ctx.AvailableCashEUR <= minTradeAmount {
@@ -66,7 +69,7 @@ func (c *OpportunityBuysCalculator) Calculate(
 			Float64("available_cash", ctx.AvailableCashEUR).
 			Float64("min_trade_amount", minTradeAmount).
 			Msg("Insufficient cash for opportunity buys (below minimum trade amount)")
-		return nil, nil
+		return planningdomain.CalculatorResult{PreFiltered: exclusions.Result()}, nil
 	}
 
 	// Extract config for tag filtering
@@ -92,12 +95,12 @@ func (c *OpportunityBuysCalculator) Calculate(
 	if config.EnableTagFiltering && c.tagFilter != nil {
 		symbols, err := c.tagFilter.GetOpportunityCandidates(ctx, config)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get tag-based candidates: %w", err)
+			return planningdomain.CalculatorResult{PreFiltered: exclusions.Result()}, fmt.Errorf("failed to get tag-based candidates: %w", err)
 		}
 
 		if len(symbols) == 0 {
 			c.log.Debug().Msg("No tag-based candidates found")
-			return nil, nil
+			return planningdomain.CalculatorResult{PreFiltered: exclusions.Result()}, nil
 		}
 
 		candidateSymbols = symbols
@@ -113,7 +116,7 @@ func (c *OpportunityBuysCalculator) Calculate(
 		// No tag filtering - process all securities with scores (ISINs from SecurityScores)
 		if len(ctx.SecurityScores) == 0 {
 			c.log.Debug().Msg("No security scores available")
-			return nil, nil
+			return planningdomain.CalculatorResult{PreFiltered: exclusions.Result()}, nil
 		}
 
 		// SecurityScores is ISIN-keyed, but we need to match with tag filter logic
@@ -156,24 +159,33 @@ func (c *OpportunityBuysCalculator) Calculate(
 			c.log.Debug().
 				Str("symbol", symbol).
 				Msg("Security not found or missing ISIN, skipping")
+			exclusions.Add("", symbol, "", "missing ISIN or security not found")
 			continue
 		}
 
 		isin := security.ISIN
+		securityName := security.Name
 
 		// Get score by ISIN
 		score, ok := ctx.SecurityScores[isin] // ISIN key ✅
-		if !ok || score < minScore {
+		if !ok {
+			exclusions.Add(isin, symbol, securityName, "no score available")
+			continue
+		}
+		if score < minScore {
+			exclusions.Add(isin, symbol, securityName, fmt.Sprintf("score %.2f below minimum %.2f", score, minScore))
 			continue
 		}
 
 		// Skip if we already have this position and exclude_existing is true
 		if excludeExisting && existingPositions[isin] { // ISIN key ✅
+			exclusions.Add(isin, symbol, securityName, "already have position (exclude_existing=true)")
 			continue
 		}
 
 		// Skip if recently bought (ISIN lookup)
 		if ctx.RecentlyBoughtISINs[isin] { // ISIN key ✅
+			exclusions.Add(isin, symbol, securityName, "recently bought (cooling off period)")
 			continue
 		}
 
@@ -208,8 +220,11 @@ func (c *OpportunityBuysCalculator) Calculate(
 				Str("isin", isin).
 				Str("symbol", symbol).
 				Msg("Security not found in StocksByISIN")
+			exclusions.Add(isin, symbol, "", "security not found in StocksByISIN")
 			continue
 		}
+
+		securityName := security.Name
 
 		// Check per-security constraint: AllowBuy must be true
 		if !security.AllowBuy {
@@ -217,6 +232,7 @@ func (c *OpportunityBuysCalculator) Calculate(
 				Str("isin", isin).
 				Str("symbol", symbol).
 				Msg("Skipping security: allow_buy=false")
+			exclusions.Add(isin, symbol, securityName, "allow_buy=false")
 			continue
 		}
 
@@ -251,6 +267,7 @@ func (c *OpportunityBuysCalculator) Calculate(
 				Float64("cagr", *cagr).
 				Float64("absolute_min", absoluteMinCAGR).
 				Msg("Filtered out: below absolute minimum CAGR (hard filter)")
+			exclusions.Add(isin, symbol, securityName, fmt.Sprintf("CAGR %.1f%% below absolute minimum %.1f%%", *cagr*100, absoluteMinCAGR*100))
 			continue
 		}
 
@@ -327,6 +344,7 @@ func (c *OpportunityBuysCalculator) Calculate(
 				c.log.Debug().
 					Str("symbol", symbol).
 					Msg("Skipping value trap (tag-based detection)")
+				exclusions.Add(isin, symbol, securityName, "value trap detected (tag-based)")
 				continue
 			}
 
@@ -336,6 +354,7 @@ func (c *OpportunityBuysCalculator) Calculate(
 				c.log.Debug().
 					Str("symbol", symbol).
 					Msg("Skipping bubble risk (tag-based detection)")
+				exclusions.Add(isin, symbol, securityName, "bubble risk detected (tag-based)")
 				continue
 			}
 
@@ -344,6 +363,7 @@ func (c *OpportunityBuysCalculator) Calculate(
 				c.log.Debug().
 					Str("symbol", symbol).
 					Msg("Skipping - below absolute minimum return (tag-based filter)")
+				exclusions.Add(isin, symbol, securityName, "below minimum return (tag-based)")
 				continue
 			}
 
@@ -352,6 +372,7 @@ func (c *OpportunityBuysCalculator) Calculate(
 				c.log.Debug().
 					Str("symbol", symbol).
 					Msg("Skipping - quality gate failed (tag-based)")
+				exclusions.Add(isin, symbol, securityName, "quality gate failed (tag-based)")
 				continue
 			}
 		} else {
@@ -362,6 +383,7 @@ func (c *OpportunityBuysCalculator) Calculate(
 				c.log.Debug().
 					Str("symbol", symbol).
 					Msg("Skipping value trap (score-based detection)")
+				exclusions.Add(isin, symbol, securityName, "value trap detected (score-based)")
 				continue
 			}
 
@@ -369,6 +391,7 @@ func (c *OpportunityBuysCalculator) Calculate(
 				c.log.Debug().
 					Str("symbol", symbol).
 					Msg("Skipping bubble risk (score-based detection)")
+				exclusions.Add(isin, symbol, securityName, "bubble risk detected (score-based)")
 				continue
 			}
 
@@ -376,6 +399,7 @@ func (c *OpportunityBuysCalculator) Calculate(
 				c.log.Debug().
 					Str("symbol", symbol).
 					Msg("Skipping - below absolute minimum return (score-based filter)")
+				exclusions.Add(isin, symbol, securityName, "below minimum return (score-based)")
 				continue
 			}
 
@@ -384,6 +408,7 @@ func (c *OpportunityBuysCalculator) Calculate(
 					Str("symbol", symbol).
 					Str("reason", qualityCheck.QualityGateReason).
 					Msg("Skipping - quality gate failed (score-based)")
+				exclusions.Add(isin, symbol, securityName, fmt.Sprintf("quality gate failed: %s (score-based)", qualityCheck.QualityGateReason))
 				continue
 			}
 		}
@@ -395,6 +420,7 @@ func (c *OpportunityBuysCalculator) Calculate(
 				Str("symbol", symbol).
 				Str("isin", isin).
 				Msg("No current price available")
+			exclusions.Add(isin, symbol, securityName, "no current price available")
 			continue
 		}
 
@@ -436,6 +462,7 @@ func (c *OpportunityBuysCalculator) Calculate(
 				Str("symbol", symbol).
 				Int("min_lot", security.MinLot).
 				Msg("Skipping security: quantity below minimum lot size after rounding")
+			exclusions.Add(isin, symbol, securityName, fmt.Sprintf("quantity below minimum lot size %d", security.MinLot))
 			continue
 		}
 
@@ -449,6 +476,7 @@ func (c *OpportunityBuysCalculator) Calculate(
 				Float64("trade_value", valueEUR).
 				Float64("min_trade_amount", minTradeAmount).
 				Msg("Skipping trade below minimum trade amount after lot size rounding")
+			exclusions.Add(isin, symbol, securityName, fmt.Sprintf("trade value €%.2f below minimum €%.2f", valueEUR, minTradeAmount))
 			continue
 		}
 
@@ -458,6 +486,7 @@ func (c *OpportunityBuysCalculator) Calculate(
 
 		// Check if we have enough cash
 		if totalCostEUR > ctx.AvailableCashEUR {
+			exclusions.Add(isin, symbol, securityName, fmt.Sprintf("insufficient cash: need €%.2f, have €%.2f", totalCostEUR, ctx.AvailableCashEUR))
 			continue
 		}
 
@@ -525,9 +554,12 @@ func (c *OpportunityBuysCalculator) Calculate(
 	if candidateMap != nil {
 		logMsg = logMsg.Int("filtered_from", len(candidateMap))
 	}
-	logMsg.Msg("Opportunity buy candidates identified")
+	logMsg.Int("pre_filtered", len(exclusions.Result())).Msg("Opportunity buy candidates identified")
 
-	return candidates, nil
+	return planningdomain.CalculatorResult{
+		Candidates:  candidates,
+		PreFiltered: exclusions.Result(),
+	}, nil
 }
 
 // calculatePriority calculates priority with optional tag-based boosting.

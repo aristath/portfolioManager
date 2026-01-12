@@ -424,7 +424,7 @@ func decodeHTMLEntities(text string) string {
 		"&copy;":   "©",
 		"&reg;":    "®",
 		"&trade;":  "™",
-		"&euro;":   "€",
+		"&euro;":   "EUR",
 		"&pound;":  "£",
 		"&yen;":    "¥",
 	}

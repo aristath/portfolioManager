@@ -62,10 +62,11 @@ func NewPlanner(opportunitiesService *opportunities.Service, sequencesService *s
 	}
 }
 
-// PlanResult wraps a HolisticPlan with rejected opportunities
+// PlanResult wraps a HolisticPlan with rejected opportunities and pre-filtered securities
 type PlanResult struct {
 	Plan                  *domain.HolisticPlan
 	RejectedOpportunities []domain.RejectedOpportunity
+	PreFilteredSecurities []domain.PreFilteredSecurity
 }
 
 func (p *Planner) CreatePlan(ctx *domain.OpportunityContext, config *domain.PlannerConfiguration) (*domain.HolisticPlan, error) {
@@ -86,11 +87,17 @@ func (p *Planner) CreatePlanWithRejections(ctx *domain.OpportunityContext, confi
 	allIdentifiedOpportunities := make(map[string]domain.ActionCandidate) // key: "symbol|side"
 	var identifiedOpportunitiesList []domain.ActionCandidate
 
-	// Step 1: Identify opportunities
-	opportunities, err := p.opportunitiesService.IdentifyOpportunities(ctx, config)
+	// Step 1: Identify opportunities with exclusions
+	opportunitiesResult, err := p.opportunitiesService.IdentifyOpportunitiesWithExclusions(ctx, config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to identify opportunities: %w", err)
 	}
+
+	// Extract opportunities for backward compatibility with sequence generation
+	opportunities := opportunitiesResult.ToOpportunitiesByCategory()
+
+	// Collect all pre-filtered securities across categories
+	preFilteredSecurities := opportunitiesResult.AllPreFiltered()
 
 	// Collect all identified opportunities
 	for _, candidates := range opportunities {
@@ -127,6 +134,7 @@ func (p *Planner) CreatePlanWithRejections(ctx *domain.OpportunityContext, confi
 				Feasible:      true,
 			},
 			RejectedOpportunities: rejected,
+			PreFilteredSecurities: preFilteredSecurities,
 		}, nil
 	}
 
@@ -160,12 +168,14 @@ func (p *Planner) CreatePlanWithRejections(ctx *domain.OpportunityContext, confi
 					Feasible:      true,
 				},
 				RejectedOpportunities: rejected,
+				PreFilteredSecurities: preFilteredSecurities,
 			}, nil
 		}
 		rejected := p.buildRejectedOpportunities(identifiedOpportunitiesList, opportunitiesInSequences, opportunitiesInSelectedSequence, plan, filteredActions)
 		return &PlanResult{
 			Plan:                  plan,
 			RejectedOpportunities: rejected,
+			PreFilteredSecurities: preFilteredSecurities,
 		}, nil
 	}
 
@@ -181,6 +191,7 @@ func (p *Planner) CreatePlanWithRejections(ctx *domain.OpportunityContext, confi
 				Feasible:      true,
 			},
 			RejectedOpportunities: rejected,
+			PreFilteredSecurities: preFilteredSecurities,
 		}, fmt.Errorf("no valid sequence found")
 	}
 
@@ -238,6 +249,7 @@ func (p *Planner) CreatePlanWithRejections(ctx *domain.OpportunityContext, confi
 				Feasible:      true,
 			},
 			RejectedOpportunities: rejected,
+			PreFilteredSecurities: preFilteredSecurities,
 		}, nil
 	}
 
@@ -254,6 +266,7 @@ func (p *Planner) CreatePlanWithRejections(ctx *domain.OpportunityContext, confi
 	return &PlanResult{
 		Plan:                  bestPlan,
 		RejectedOpportunities: rejected,
+		PreFilteredSecurities: preFilteredSecurities,
 	}, nil
 }
 

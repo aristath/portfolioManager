@@ -13,8 +13,8 @@ type OpportunityCalculator interface {
 	Name() string
 
 	// Calculate identifies trading opportunities based on the opportunity context.
-	// Returns a list of action candidates with priorities and reasons.
-	Calculate(ctx *domain.OpportunityContext, params map[string]interface{}) ([]domain.ActionCandidate, error)
+	// Returns candidates that passed all filters and securities that were pre-filtered out.
+	Calculate(ctx *domain.OpportunityContext, params map[string]interface{}) (domain.CalculatorResult, error)
 
 	// Category returns the opportunity category this calculator produces.
 	Category() domain.OpportunityCategory
@@ -30,6 +30,55 @@ func NewBaseCalculator(log zerolog.Logger, name string) *BaseCalculator {
 	return &BaseCalculator{
 		log: log.With().Str("calculator", name).Logger(),
 	}
+}
+
+// ExclusionCollector helps calculators track pre-filtered securities with reasons.
+// Use this to collect exclusion reasons during calculation.
+type ExclusionCollector struct {
+	calculator string
+	exclusions map[string]*domain.PreFilteredSecurity // keyed by ISIN
+}
+
+// NewExclusionCollector creates a new exclusion collector for a calculator.
+func NewExclusionCollector(calculatorName string) *ExclusionCollector {
+	return &ExclusionCollector{
+		calculator: calculatorName,
+		exclusions: make(map[string]*domain.PreFilteredSecurity),
+	}
+}
+
+// Add records an exclusion reason for a security.
+// Multiple calls for the same ISIN will accumulate reasons.
+func (c *ExclusionCollector) Add(isin, symbol, name, reason string) {
+	if isin == "" {
+		return
+	}
+	if existing, ok := c.exclusions[isin]; ok {
+		// Add reason if not already present
+		for _, r := range existing.Reasons {
+			if r == reason {
+				return
+			}
+		}
+		existing.Reasons = append(existing.Reasons, reason)
+	} else {
+		c.exclusions[isin] = &domain.PreFilteredSecurity{
+			ISIN:       isin,
+			Symbol:     symbol,
+			Name:       name,
+			Calculator: c.calculator,
+			Reasons:    []string{reason},
+		}
+	}
+}
+
+// Result returns all collected pre-filtered securities.
+func (c *ExclusionCollector) Result() []domain.PreFilteredSecurity {
+	result := make([]domain.PreFilteredSecurity, 0, len(c.exclusions))
+	for _, pf := range c.exclusions {
+		result = append(result, *pf)
+	}
+	return result
 }
 
 // GetFloatParam retrieves a float parameter with a default value.

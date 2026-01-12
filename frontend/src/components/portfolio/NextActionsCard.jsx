@@ -128,6 +128,8 @@ export function NextActionsCard() {
           <Text size="sm" c="dimmed">
             {recommendations?.rejected_opportunities && recommendations.rejected_opportunities.length > 0
               ? 'All opportunities were filtered out'
+              : recommendations?.pre_filtered_securities && recommendations.pre_filtered_securities.length > 0
+              ? 'All securities were pre-filtered - expand details below'
               : 'Portfolio is optimally balanced'}
           </Text>
         </Stack>
@@ -301,6 +303,62 @@ export function NextActionsCard() {
                   <Text size="xs" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family)', lineHeight: 1.5 }}>
                     {rejected.reasons.join('; ')}
                   </Text>
+                )}
+              </Paper>
+            ))}
+          </Stack>
+        </div>
+      )}
+
+      {/* Pre-Filtered Securities - Securities excluded before reaching opportunity stage */}
+      {recommendations?.pre_filtered_securities && recommendations.pre_filtered_securities.length > 0 && (
+        <div style={{
+          marginTop: (hasRecommendations || recommendations?.rejected_opportunities?.length > 0) ? '1rem' : '0',
+          borderTop: (hasRecommendations || recommendations?.rejected_opportunities?.length > 0) ? '1px solid var(--mantine-color-dark-6)' : 'none',
+          paddingTop: (hasRecommendations || recommendations?.rejected_opportunities?.length > 0) ? '1rem' : '0'
+        }}>
+          <Text size="sm" c="dimmed" fw={500} mb="sm" style={{ fontFamily: 'var(--mantine-font-family)' }}>
+            Pre-Filtered Securities ({recommendations.pre_filtered_securities.length})
+          </Text>
+          <Text size="xs" c="dimmed" mb="sm" style={{ fontFamily: 'var(--mantine-font-family)', fontStyle: 'italic' }}>
+            Securities excluded before reaching the opportunity identification stage
+          </Text>
+          <Stack gap="xs">
+            {recommendations.pre_filtered_securities.map((filtered, index) => (
+              <Paper
+                key={`filtered-${filtered.isin}-${index}`}
+                p="sm"
+                style={{
+                  border: '1px solid var(--mantine-color-dark-5)',
+                  backgroundColor: 'var(--mantine-color-dark-8)',
+                }}
+              >
+                <Group gap="xs" mb="xs" wrap="wrap">
+                  <Badge
+                    size="sm"
+                    color="gray"
+                    variant="light"
+                    style={{ fontFamily: 'var(--mantine-font-family)' }}
+                  >
+                    {filtered.calculator}
+                  </Badge>
+                  <Text size="sm" fw={600} style={{ fontFamily: 'var(--mantine-font-family)' }} c="dimmed">
+                    {filtered.symbol || filtered.isin}
+                  </Text>
+                  {filtered.name && (
+                    <Text size="sm" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family)' }}>
+                      - {filtered.name}
+                    </Text>
+                  )}
+                </Group>
+                {filtered.reasons && filtered.reasons.length > 0 && (
+                  <Stack gap={4}>
+                    {filtered.reasons.map((reason, reasonIndex) => (
+                      <Text key={reasonIndex} size="xs" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family)', lineHeight: 1.4 }}>
+                        • {reason}
+                      </Text>
+                    ))}
+                  </Stack>
                 )}
               </Paper>
             ))}

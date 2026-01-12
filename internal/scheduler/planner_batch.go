@@ -196,6 +196,15 @@ func (j *PlannerBatchJob) Run() error {
 			Msg("Passing rejected opportunities to store job")
 	}
 
+	// Pass pre-filtered securities from plan job to store job
+	preFilteredSecurities := planJob.GetPreFilteredSecurities()
+	storeJob.SetPreFilteredSecurities(preFilteredSecurities)
+	if len(preFilteredSecurities) > 0 {
+		j.log.Info().
+			Int("pre_filtered_count", len(preFilteredSecurities)).
+			Msg("Passing pre-filtered securities to store job")
+	}
+
 	if err := j.storeRecommendationsJob.Run(); err != nil {
 		return fmt.Errorf("failed to store recommendations: %w", err)
 	}

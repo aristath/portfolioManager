@@ -135,11 +135,11 @@ func TestProfitTakingCalculator_MaxSellPercentage(t *testing.T) {
 				"config":              config,
 			}
 
-			candidates, err := calc.Calculate(ctx, params)
+			result, err := calc.Calculate(ctx, params)
 			require.NoError(t, err)
-			require.Len(t, candidates, 1, "Should generate one sell candidate")
+			require.Len(t, result.Candidates, 1, "Should generate one sell candidate")
 
-			candidate := candidates[0]
+			candidate := result.Candidates[0]
 			assert.Equal(t, "SELL", candidate.Side)
 			assert.Equal(t, "TEST.US", candidate.Symbol)
 			assert.LessOrEqual(t, candidate.Quantity, tt.expectedMaxQuantity,
@@ -226,12 +226,12 @@ func TestProfitTakingCalculator_MaxSellPercentage_WithSellPercentageParam(t *tes
 				"config":              config,
 			}
 
-			candidates, err := calc.Calculate(ctx, params)
+			result, err := calc.Calculate(ctx, params)
 			require.NoError(t, err)
-			require.Len(t, candidates, 1)
+			require.Len(t, result.Candidates, 1)
 
-			assert.LessOrEqual(t, candidates[0].Quantity, tt.expectedMaxQuantity,
-				"Quantity %d should not exceed %d", candidates[0].Quantity, tt.expectedMaxQuantity)
+			assert.LessOrEqual(t, result.Candidates[0].Quantity, tt.expectedMaxQuantity,
+				"Quantity %d should not exceed %d", result.Candidates[0].Quantity, tt.expectedMaxQuantity)
 		})
 	}
 }
@@ -280,10 +280,10 @@ func TestProfitTakingCalculator_NoMaxSellPercentage(t *testing.T) {
 		// No max_sell_percentage provided
 	}
 
-	candidates, err := calc.Calculate(ctx, params)
+	result, err := calc.Calculate(ctx, params)
 	require.NoError(t, err)
-	require.Len(t, candidates, 1)
+	require.Len(t, result.Candidates, 1)
 
 	// Should sell 100% (1000 shares) when no max_sell_percentage is set
-	assert.Equal(t, 1000, candidates[0].Quantity)
+	assert.Equal(t, 1000, result.Candidates[0].Quantity)
 }

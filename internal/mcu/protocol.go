@@ -98,7 +98,7 @@ func (c *Client) Notify(method string, params ...interface{}) error {
 func (c *Client) sendMessage(conn io.Writer, msg interface{}) error {
 	// Set write deadline if supported
 	if nc, ok := conn.(net.Conn); ok {
-		nc.SetWriteDeadline(time.Now().Add(WriteTimeout))
+		_ = nc.SetWriteDeadline(time.Now().Add(WriteTimeout))
 	}
 
 	encoder := msgpack.NewEncoder(conn)
@@ -109,7 +109,7 @@ func (c *Client) sendMessage(conn io.Writer, msg interface{}) error {
 func (c *Client) readResponse(conn io.Reader) ([]interface{}, error) {
 	// Set read deadline if supported
 	if nc, ok := conn.(net.Conn); ok {
-		nc.SetReadDeadline(time.Now().Add(ReadTimeout))
+		_ = nc.SetReadDeadline(time.Now().Add(ReadTimeout))
 	}
 
 	decoder := msgpack.NewDecoder(conn)

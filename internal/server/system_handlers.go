@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -1716,6 +1717,74 @@ func (h *SystemHandlers) HandlePendingOrders(w http.ResponseWriter, r *http.Requ
 		"pending_orders": orders,
 		"count":          len(orders),
 		"timestamp":      time.Now().Format(time.RFC3339),
+	})
+}
+
+// HandleUploadSketch compiles and uploads the Arduino sketch to the MCU
+// POST /api/system/mcu/upload-sketch
+func (h *SystemHandlers) HandleUploadSketch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	h.log.Info().Msg("Manual MCU sketch upload triggered")
+
+	// Check if sketch directory exists
+	sketchDir := "/home/arduino/ArduinoApps/trader-display/sketch"
+	if _, err := os.Stat(sketchDir); os.IsNotExist(err) {
+		h.log.Warn().Str("sketch_dir", sketchDir).Msg("Sketch directory not found - not running on Arduino hardware")
+		h.writeJSON(w, map[string]interface{}{
+			"status":  "error",
+			"message": "Sketch directory not found - not running on Arduino hardware",
+		})
+		return
+	}
+
+	// Compile the sketch
+	h.log.Info().Msg("Compiling Arduino sketch...")
+	compileCmd := exec.Command("arduino-cli", "compile", "--fqbn", "arduino:zephyr:unoq", sketchDir)
+	compileOutput, err := compileCmd.CombinedOutput()
+	if err != nil {
+		h.log.Error().Err(err).Str("output", string(compileOutput)).Msg("Failed to compile sketch")
+		h.writeJSON(w, map[string]interface{}{
+			"status":  "error",
+			"message": fmt.Sprintf("Failed to compile sketch: %v", err),
+			"output":  string(compileOutput),
+		})
+		return
+	}
+	h.log.Info().Str("output", string(compileOutput)).Msg("Sketch compiled successfully")
+
+	// Upload the sketch
+	h.log.Info().Msg("Uploading sketch to MCU...")
+	uploadCmd := exec.Command("arduino-cli", "upload", "--fqbn", "arduino:zephyr:unoq", sketchDir)
+	uploadOutput, err := uploadCmd.CombinedOutput()
+	if err != nil {
+		h.log.Error().Err(err).Str("output", string(uploadOutput)).Msg("Failed to upload sketch")
+		h.writeJSON(w, map[string]interface{}{
+			"status":  "error",
+			"message": fmt.Sprintf("Failed to upload sketch: %v", err),
+			"output":  string(uploadOutput),
+		})
+		return
+	}
+	h.log.Info().Str("output", string(uploadOutput)).Msg("Sketch uploaded successfully")
+
+	// Restart arduino-router service to re-establish serial connection with MCU
+	// This is required for the MCU to register its RPC methods with the router
+	h.log.Info().Msg("Restarting arduino-router service...")
+	restartCmd := exec.Command("sudo", "systemctl", "restart", "arduino-router")
+	restartOutput, err := restartCmd.CombinedOutput()
+	if err != nil {
+		h.log.Warn().Err(err).Str("output", string(restartOutput)).Msg("Failed to restart arduino-router (sketch uploaded but may need manual service restart)")
+	} else {
+		h.log.Info().Msg("arduino-router service restarted successfully")
+	}
+
+	h.writeJSON(w, map[string]interface{}{
+		"status":  "success",
+		"message": "Sketch compiled and uploaded successfully",
 	})
 }
 

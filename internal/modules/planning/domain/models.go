@@ -98,3 +98,53 @@ type RejectedOpportunity struct {
 	Reasons        []string `json:"reasons"`                   // Array of rejection reasons (deduplicated)
 	OriginalReason string   `json:"original_reason,omitempty"` // Original opportunity reason if available (from calculator)
 }
+
+// PreFilteredSecurity represents a security that was excluded during pre-filtering
+// (before it could become an opportunity candidate). This provides visibility into
+// why securities never reached the opportunity stage.
+type PreFilteredSecurity struct {
+	ISIN       string   `json:"isin"`           // Security ISIN
+	Symbol     string   `json:"symbol"`         // Security symbol
+	Name       string   `json:"name,omitempty"` // Security name (if available)
+	Calculator string   `json:"calculator"`     // Calculator that filtered this security
+	Reasons    []string `json:"reasons"`        // Why this security was filtered out
+}
+
+// CalculatorResult wraps the output of a calculator, including both
+// identified candidates and securities that were pre-filtered out.
+type CalculatorResult struct {
+	Candidates  []ActionCandidate     `json:"candidates"`   // Opportunities that passed all filters
+	PreFiltered []PreFilteredSecurity `json:"pre_filtered"` // Securities excluded during filtering
+}
+
+// OpportunitiesResultByCategory organizes calculator results by category,
+// including both candidates and pre-filtered securities.
+type OpportunitiesResultByCategory map[OpportunityCategory]CalculatorResult
+
+// AllPreFiltered aggregates all pre-filtered securities across all categories.
+func (r OpportunitiesResultByCategory) AllPreFiltered() []PreFilteredSecurity {
+	var all []PreFilteredSecurity
+	for _, result := range r {
+		all = append(all, result.PreFiltered...)
+	}
+	return all
+}
+
+// AllCandidates aggregates all candidates across all categories.
+func (r OpportunitiesResultByCategory) AllCandidates() []ActionCandidate {
+	var all []ActionCandidate
+	for _, result := range r {
+		all = append(all, result.Candidates...)
+	}
+	return all
+}
+
+// ToOpportunitiesByCategory converts to the legacy format (candidates only).
+// This maintains backward compatibility with existing code.
+func (r OpportunitiesResultByCategory) ToOpportunitiesByCategory() OpportunitiesByCategory {
+	legacy := make(OpportunitiesByCategory)
+	for category, result := range r {
+		legacy[category] = result.Candidates
+	}
+	return legacy
+}

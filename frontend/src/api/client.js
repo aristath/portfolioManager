@@ -207,6 +207,7 @@ export const api = {
   restartService: () => fetchJSON('/api/settings/restart-service', { method: 'POST' }),
   restartSystem: () => fetchJSON('/api/settings/restart', { method: 'POST' }),
   resetCache: () => fetchJSON('/api/settings/reset-cache', { method: 'POST' }),
+  uploadSketch: () => fetchJSON('/api/system/mcu/upload-sketch', { method: 'POST', timeout: 120000 }),
   rescheduleJobs: () => fetchJSON('/api/settings/reschedule-jobs', { method: 'POST' }),
   testTradernetConnection: () => fetchJSON('/api/system/tradernet'),
 

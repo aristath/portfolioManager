@@ -38,7 +38,7 @@ func (c *WeightBasedCalculator) Category() planningdomain.OpportunityCategory {
 func (c *WeightBasedCalculator) Calculate(
 	ctx *planningdomain.OpportunityContext,
 	params map[string]interface{},
-) ([]planningdomain.ActionCandidate, error) {
+) (planningdomain.CalculatorResult, error) {
 	// Parameters with defaults
 	minWeightDiff := GetFloatParam(params, "min_weight_diff", 0.02) // 2% minimum difference
 	maxValuePerTrade := GetFloatParam(params, "max_value_per_trade", 500.0)
@@ -50,15 +50,18 @@ func (c *WeightBasedCalculator) Calculate(
 	maxCostRatio := GetFloatParam(params, "max_cost_ratio", 0.01) // Default 1% max cost
 	minTradeAmount := ctx.CalculateMinTradeAmount(maxCostRatio)
 
+	// Initialize exclusion collector
+	exclusions := NewExclusionCollector(c.Name())
+
 	// Check if we have target weights
 	if len(ctx.TargetWeights) == 0 {
 		c.log.Debug().Msg("No target weights available")
-		return nil, nil
+		return planningdomain.CalculatorResult{PreFiltered: exclusions.Result()}, nil
 	}
 
 	if ctx.TotalPortfolioValueEUR <= 0 {
 		c.log.Debug().Msg("Invalid portfolio value")
-		return nil, nil
+		return planningdomain.CalculatorResult{PreFiltered: exclusions.Result()}, nil
 	}
 
 	c.log.Debug().
@@ -124,10 +127,12 @@ func (c *WeightBasedCalculator) Calculate(
 			c.log.Warn().
 				Str("isin", isin).
 				Msg("Security not found in StocksByISIN")
+			exclusions.Add(isin, "", "", "security not found in StocksByISIN")
 			continue
 		}
 
 		symbol := security.Symbol // Get Symbol for logging/tags
+		securityName := security.Name
 
 		// Get current price (direct ISIN lookup)
 		currentPrice, ok := ctx.CurrentPrices[isin] // ISIN key ✅
@@ -136,18 +141,26 @@ func (c *WeightBasedCalculator) Calculate(
 				Str("symbol", symbol).
 				Str("isin", isin).
 				Msg("No current price available")
+			exclusions.Add(isin, symbol, securityName, "no current price available")
 			continue
 		}
 
 		if diff > 0 {
 			// Need to BUY (underweight)
-			if !ctx.AllowBuy || buyCount >= maxBuyPositions {
+			if !ctx.AllowBuy {
+				exclusions.Add(isin, symbol, securityName, "buying not allowed")
+				continue
+			}
+			if buyCount >= maxBuyPositions {
+				exclusions.Add(isin, symbol, securityName, fmt.Sprintf("max buy positions reached (%d)", maxBuyPositions))
 				continue
 			}
 			if ctx.RecentlyBoughtISINs[isin] { // ISIN key ✅
+				exclusions.Add(isin, symbol, securityName, "recently bought (cooling off period)")
 				continue
 			}
 			if ctx.AvailableCashEUR <= 0 {
+				exclusions.Add(isin, symbol, securityName, "no available cash")
 				continue
 			}
 
@@ -156,6 +169,7 @@ func (c *WeightBasedCalculator) Calculate(
 				c.log.Debug().
 					Str("symbol", symbol).
 					Msg("Skipping security: allow_buy=false")
+				exclusions.Add(isin, symbol, securityName, "allow_buy=false")
 				continue
 			}
 
@@ -177,6 +191,7 @@ func (c *WeightBasedCalculator) Calculate(
 						c.log.Debug().
 							Str("symbol", symbol).
 							Msg("Skipping value trap (ensemble detection)")
+						exclusions.Add(isin, symbol, securityName, "value trap detected (tag-based)")
 						continue
 					}
 
@@ -186,6 +201,7 @@ func (c *WeightBasedCalculator) Calculate(
 						c.log.Debug().
 							Str("symbol", symbol).
 							Msg("Skipping bubble risk (ensemble detection)")
+						exclusions.Add(isin, symbol, securityName, "bubble risk detected (tag-based)")
 						continue
 					}
 
@@ -194,6 +210,7 @@ func (c *WeightBasedCalculator) Calculate(
 						c.log.Debug().
 							Str("symbol", symbol).
 							Msg("Skipping - below absolute minimum return (tag-based filter)")
+						exclusions.Add(isin, symbol, securityName, "below minimum return (tag-based)")
 						continue
 					}
 
@@ -212,6 +229,7 @@ func (c *WeightBasedCalculator) Calculate(
 							Str("symbol", symbol).
 							Str("isin", isin).
 							Msg("Skipping - quality gate failed (new position)")
+						exclusions.Add(isin, symbol, securityName, "quality gate failed (tag-based, new position)")
 						continue
 					}
 				} else {
@@ -234,6 +252,7 @@ func (c *WeightBasedCalculator) Calculate(
 							Bool("quantum", qualityCheck.IsQuantumValueTrap).
 							Float64("quantum_prob", qualityCheck.QuantumValueTrapProb).
 							Msg("Skipping value trap (ensemble detection)")
+						exclusions.Add(isin, symbol, securityName, "value trap detected (score-based)")
 						continue
 					}
 
@@ -241,6 +260,7 @@ func (c *WeightBasedCalculator) Calculate(
 						c.log.Debug().
 							Str("symbol", symbol).
 							Msg("Skipping bubble risk (score-based detection)")
+						exclusions.Add(isin, symbol, securityName, "bubble risk detected (score-based)")
 						continue
 					}
 
@@ -248,6 +268,7 @@ func (c *WeightBasedCalculator) Calculate(
 						c.log.Debug().
 							Str("symbol", symbol).
 							Msg("Skipping - below absolute minimum return (score-based filter)")
+						exclusions.Add(isin, symbol, securityName, "below minimum return (score-based)")
 						continue
 					}
 
@@ -256,6 +277,7 @@ func (c *WeightBasedCalculator) Calculate(
 							Str("symbol", symbol).
 							Str("reason", qualityCheck.QualityGateReason).
 							Msg("Skipping - quality gate failed (score-based check)")
+						exclusions.Add(isin, symbol, securityName, fmt.Sprintf("quality gate failed: %s (score-based)", qualityCheck.QualityGateReason))
 						continue
 					}
 				}
@@ -302,6 +324,7 @@ func (c *WeightBasedCalculator) Calculate(
 					Str("symbol", symbol).
 					Int("min_lot", security.MinLot).
 					Msg("Skipping security: quantity below minimum lot size after rounding")
+				exclusions.Add(isin, symbol, securityName, fmt.Sprintf("quantity below minimum lot size %d", security.MinLot))
 				continue
 			}
 
@@ -317,20 +340,12 @@ func (c *WeightBasedCalculator) Calculate(
 					Float64("trade_value", valueEUR).
 					Float64("min_trade_amount", minTradeAmount).
 					Msg("Skipping trade below minimum trade amount after lot size rounding")
-				continue
-			}
-
-			// Check if trade meets minimum trade amount (transaction cost efficiency)
-			if valueEUR < minTradeAmount {
-				c.log.Debug().
-					Str("symbol", symbol).
-					Float64("trade_value", valueEUR).
-					Float64("min_trade_amount", minTradeAmount).
-					Msg("Skipping trade below minimum trade amount")
+				exclusions.Add(isin, symbol, securityName, fmt.Sprintf("trade value €%.2f below minimum €%.2f", valueEUR, minTradeAmount))
 				continue
 			}
 
 			if totalCostEUR > ctx.AvailableCashEUR {
+				exclusions.Add(isin, symbol, securityName, fmt.Sprintf("insufficient cash: need €%.2f, have €%.2f", totalCostEUR, ctx.AvailableCashEUR))
 				continue
 			}
 
@@ -387,10 +402,20 @@ func (c *WeightBasedCalculator) Calculate(
 
 		} else {
 			// Need to SELL (overweight)
-			if !ctx.AllowSell || sellCount >= maxSellPositions {
+			if !ctx.AllowSell {
+				exclusions.Add(isin, symbol, securityName, "selling not allowed")
 				continue
 			}
-			if ctx.IneligibleISINs[isin] || ctx.RecentlySoldISINs[isin] { // ISIN keys ✅
+			if sellCount >= maxSellPositions {
+				exclusions.Add(isin, symbol, securityName, fmt.Sprintf("max sell positions reached (%d)", maxSellPositions))
+				continue
+			}
+			if ctx.IneligibleISINs[isin] { // ISIN keys ✅
+				exclusions.Add(isin, symbol, securityName, "marked as ineligible")
+				continue
+			}
+			if ctx.RecentlySoldISINs[isin] { // ISIN keys ✅
+				exclusions.Add(isin, symbol, securityName, "recently sold (cooling off period)")
 				continue
 			}
 
@@ -400,6 +425,7 @@ func (c *WeightBasedCalculator) Calculate(
 					Str("symbol", symbol).
 					Str("isin", isin).
 					Msg("Skipping security: allow_sell=false")
+				exclusions.Add(isin, symbol, securityName, "allow_sell=false")
 				continue
 			}
 
@@ -413,6 +439,7 @@ func (c *WeightBasedCalculator) Calculate(
 				}
 			}
 			if foundPosition == nil {
+				exclusions.Add(isin, symbol, securityName, "no position found to sell")
 				continue
 			}
 
@@ -445,6 +472,7 @@ func (c *WeightBasedCalculator) Calculate(
 					Str("symbol", symbol).
 					Int("min_lot", security.MinLot).
 					Msg("Skipping security: quantity below minimum lot size after rounding")
+				exclusions.Add(isin, symbol, securityName, fmt.Sprintf("quantity below minimum lot size %d", security.MinLot))
 				continue
 			}
 
@@ -459,6 +487,7 @@ func (c *WeightBasedCalculator) Calculate(
 						Int("min_lot", security.MinLot).
 						Float64("position_quantity", foundPosition.Quantity).
 						Msg("Skipping security: position quantity too small for minimum lot size")
+					exclusions.Add(isin, symbol, securityName, fmt.Sprintf("position quantity %.0f too small for minimum lot size %d", foundPosition.Quantity, security.MinLot))
 					continue
 				}
 			}
@@ -497,9 +526,13 @@ func (c *WeightBasedCalculator) Calculate(
 		Int("candidates", len(candidates)).
 		Int("buys", buyCount).
 		Int("sells", sellCount).
+		Int("pre_filtered", len(exclusions.Result())).
 		Msg("Weight-based opportunities identified")
 
-	return candidates, nil
+	return planningdomain.CalculatorResult{
+		Candidates:  candidates,
+		PreFiltered: exclusions.Result(),
+	}, nil
 }
 
 // abs returns the absolute value of a float64.

@@ -43,7 +43,7 @@ func (c *AveragingDownCalculator) Category() domain.OpportunityCategory {
 func (c *AveragingDownCalculator) Calculate(
 	ctx *domain.OpportunityContext,
 	params map[string]interface{},
-) ([]domain.ActionCandidate, error) {
+) (domain.CalculatorResult, error) {
 	// Parameters with defaults
 	maxLossThreshold := GetFloatParam(params, "max_loss_percent", -0.20) // -20% maximum loss
 	minLossThreshold := GetFloatParam(params, "min_loss_percent", -0.05) // -5% minimum loss
@@ -55,14 +55,17 @@ func (c *AveragingDownCalculator) Calculate(
 	maxCostRatio := GetFloatParam(params, "max_cost_ratio", 0.01)
 	minTradeAmount := ctx.CalculateMinTradeAmount(maxCostRatio)
 
+	// Initialize exclusion collector
+	exclusions := NewExclusionCollector(c.Name())
+
 	if !ctx.AllowBuy {
 		c.log.Debug().Msg("Buying not allowed, skipping averaging down")
-		return nil, nil
+		return domain.CalculatorResult{PreFiltered: exclusions.Result()}, nil
 	}
 
 	if len(ctx.EnrichedPositions) == 0 {
 		c.log.Debug().Msg("No positions available for averaging down")
-		return nil, nil
+		return domain.CalculatorResult{PreFiltered: exclusions.Result()}, nil
 	}
 
 	// Extract config for tag filtering
@@ -78,12 +81,12 @@ func (c *AveragingDownCalculator) Calculate(
 	if config.EnableTagFiltering && c.tagFilter != nil {
 		candidateSymbols, err := c.tagFilter.GetOpportunityCandidates(ctx, config)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get tag-based candidates: %w", err)
+			return domain.CalculatorResult{PreFiltered: exclusions.Result()}, fmt.Errorf("failed to get tag-based candidates: %w", err)
 		}
 
 		if len(candidateSymbols) == 0 {
 			c.log.Debug().Msg("No tag-based candidates found")
-			return nil, nil
+			return domain.CalculatorResult{PreFiltered: exclusions.Result()}, nil
 		}
 
 		// Build lookup map
@@ -107,25 +110,29 @@ func (c *AveragingDownCalculator) Calculate(
 		Msg("Calculating averaging-down opportunities")
 
 	for _, position := range ctx.EnrichedPositions {
+		isin := position.ISIN
+		symbol := position.Symbol
+		securityName := position.SecurityName
+
 		// Skip if not in tag-filtered candidates (when tag filtering enabled)
-		if candidateMap != nil && !candidateMap[position.Symbol] {
+		if candidateMap != nil && !candidateMap[symbol] {
+			exclusions.Add(isin, symbol, securityName, "no matching opportunity tags")
 			continue
 		}
 
-		// ISIN always present in EnrichedPosition (validated during enrichment)
-		isin := position.ISIN
-
 		// Skip if recently bought (ISIN lookup)
 		if ctx.RecentlyBoughtISINs[isin] { // ISIN key ✅
+			exclusions.Add(isin, symbol, securityName, "recently bought (cooling off period)")
 			continue
 		}
 
 		// Check per-security constraint: AllowBuy embedded in position
 		if !position.CanBuy() {
 			c.log.Debug().
-				Str("symbol", position.Symbol).
+				Str("symbol", symbol).
 				Str("isin", isin).
 				Msg("Skipping security: allow_buy=false or inactive")
+			exclusions.Add(isin, symbol, securityName, "allow_buy=false or inactive")
 			continue
 		}
 
@@ -133,15 +140,17 @@ func (c *AveragingDownCalculator) Calculate(
 		currentPrice := position.CurrentPrice
 		if currentPrice <= 0 {
 			c.log.Debug().
-				Str("symbol", position.Symbol).
+				Str("symbol", symbol).
 				Str("isin", isin).
 				Msg("No current price available, skipping")
+			exclusions.Add(isin, symbol, securityName, "no current price available")
 			continue
 		}
 
 		// Calculate loss using embedded data (no map lookups)
 		costBasis := position.AverageCost
 		if costBasis <= 0 {
+			exclusions.Add(isin, symbol, securityName, "no cost basis available")
 			continue
 		}
 
@@ -149,7 +158,16 @@ func (c *AveragingDownCalculator) Calculate(
 
 		// CRITICAL: Only average down on positions with losses
 		// Must be between minLossThreshold and maxLossThreshold
-		if lossPercent >= 0 || lossPercent < maxLossThreshold || lossPercent > minLossThreshold {
+		if lossPercent >= 0 {
+			exclusions.Add(isin, symbol, securityName, fmt.Sprintf("position has gain (%.1f%%), not a loss", lossPercent*100))
+			continue
+		}
+		if lossPercent < maxLossThreshold {
+			exclusions.Add(isin, symbol, securityName, fmt.Sprintf("loss %.1f%% exceeds max threshold %.1f%%", lossPercent*100, maxLossThreshold*100))
+			continue
+		}
+		if lossPercent > minLossThreshold {
+			exclusions.Add(isin, symbol, securityName, fmt.Sprintf("loss %.1f%% below min threshold %.1f%%", lossPercent*100, minLossThreshold*100))
 			continue
 		}
 
@@ -170,56 +188,62 @@ func (c *AveragingDownCalculator) Calculate(
 			// CRITICAL: Exclude value traps (classical or ensemble)
 			if contains(securityTags, "value-trap") || contains(securityTags, "ensemble-value-trap") {
 				c.log.Debug().
-					Str("symbol", position.Symbol).
+					Str("symbol", symbol).
 					Msg("Skipping value trap (tag-based detection)")
+				exclusions.Add(isin, symbol, securityName, "value trap detected (tag-based)")
 				continue
 			}
 
 			// CRITICAL: Skip securities below absolute minimum return
 			if contains(securityTags, "below-minimum-return") {
 				c.log.Debug().
-					Str("symbol", position.Symbol).
+					Str("symbol", symbol).
 					Msg("Skipping - below absolute minimum return (tag-based filter)")
+				exclusions.Add(isin, symbol, securityName, "below minimum return (tag-based)")
 				continue
 			}
 
 			// CRITICAL: Skip if quality gate failed (inverted logic - cleaner)
 			if contains(securityTags, "quality-gate-fail") {
 				c.log.Debug().
-					Str("symbol", position.Symbol).
+					Str("symbol", symbol).
 					Msg("Skipping - quality gate failed (tag-based check)")
+				exclusions.Add(isin, symbol, securityName, "quality gate failed (tag-based)")
 				continue
 			}
 		} else {
 			// Score-based fallback
-			qualityCheck := CheckQualityGates(ctx, position.ISIN, false, config)
+			qualityCheck := CheckQualityGates(ctx, isin, false, config)
 
 			if qualityCheck.IsEnsembleValueTrap {
 				c.log.Debug().
-					Str("symbol", position.Symbol).
+					Str("symbol", symbol).
 					Bool("classical", qualityCheck.IsValueTrap).
 					Bool("quantum", qualityCheck.IsQuantumValueTrap).
 					Float64("quantum_prob", qualityCheck.QuantumValueTrapProb).
 					Msg("Skipping value trap (ensemble detection)")
+				exclusions.Add(isin, symbol, securityName, "value trap detected (score-based)")
 				continue
 			}
 
 			if qualityCheck.BelowMinimumReturn {
 				c.log.Debug().
-					Str("symbol", position.Symbol).
+					Str("symbol", symbol).
 					Msg("Skipping - below absolute minimum return (score-based filter)")
+				exclusions.Add(isin, symbol, securityName, "below minimum return (score-based)")
 				continue
 			}
 
 			// For averaging down, we're less strict on quality (already in position)
 			// Only skip if quality is very poor
 			if qualityCheck.QualityGateReason == "quality_gate_fail" {
-				fundamentalsScore := GetScoreFromContext(ctx, position.ISIN, ctx.FundamentalsScores)
+				fundamentalsScore := GetScoreFromContext(ctx, isin, ctx.FundamentalsScores)
 				if fundamentalsScore > 0 && fundamentalsScore < 0.4 {
 					c.log.Debug().
-						Str("symbol", position.Symbol).
+						Str("symbol", symbol).
 						Float64("fundamentals_score", fundamentalsScore).
 						Msg("Skipping - extremely poor quality (score-based check)")
+					exclusions.Add(isin, symbol, securityName, fmt.Sprintf("extremely poor fundamentals score %.2f (score-based)", fundamentalsScore))
 					continue
 				}
 			}
@@ -239,7 +263,7 @@ func (c *AveragingDownCalculator) Calculate(
 				if additionalShares > 0 {
 					quantity = int(additionalShares)
 					c.log.Debug().
-						Str("symbol", position.Symbol).
+						Str("symbol", symbol).
 						Str("isin", isin).
 						Float64("kelly_target_shares", kellyTargetShares).
 						Float64("current_shares", currentShares).
@@ -248,11 +272,12 @@ func (c *AveragingDownCalculator) Calculate(
 				} else {
 					// Already at or above Kelly optimal - skip averaging down
 					c.log.Debug().
-						Str("symbol", position.Symbol).
+						Str("symbol", symbol).
 						Str("isin", isin).
 						Float64("kelly_target_shares", kellyTargetShares).
 						Float64("current_shares", currentShares).
 						Msg("Skipping - already at or above Kelly optimal")
+					exclusions.Add(isin, symbol, securityName, "already at or above Kelly optimal size")
 					continue
 				}
 			}
@@ -288,9 +313,10 @@ func (c *AveragingDownCalculator) Calculate(
 		quantityInt = RoundToLotSize(quantityInt, position.MinLot)
 		if quantityInt <= 0 {
 			c.log.Debug().
-				Str("symbol", position.Symbol).
+				Str("symbol", symbol).
 				Int("min_lot", position.MinLot).
 				Msg("Skipping security: quantity below minimum lot size after rounding")
+			exclusions.Add(isin, symbol, securityName, fmt.Sprintf("quantity below minimum lot size %d", position.MinLot))
 			continue
 		}
 		quantity = quantityInt
@@ -305,15 +331,17 @@ func (c *AveragingDownCalculator) Calculate(
 		// Check if trade meets minimum trade amount (transaction cost efficiency)
 		if valueEUR < minTradeAmount {
 			c.log.Debug().
-				Str("symbol", position.Symbol).
+				Str("symbol", symbol).
 				Float64("trade_value", valueEUR).
 				Float64("min_trade_amount", minTradeAmount).
 				Msg("Skipping trade below minimum trade amount")
+			exclusions.Add(isin, symbol, securityName, fmt.Sprintf("trade value €%.2f below minimum €%.2f", valueEUR, minTradeAmount))
 			continue
 		}
 
 		// Check if we have enough cash
 		if totalCostEUR > ctx.AvailableCashEUR {
+			exclusions.Add(isin, symbol, securityName, fmt.Sprintf("insufficient cash: need €%.2f, have €%.2f", totalCostEUR, ctx.AvailableCashEUR))
 			continue
 		}
 
@@ -352,9 +380,9 @@ func (c *AveragingDownCalculator) Calculate(
 
 		candidate := domain.ActionCandidate{
 			Side:     "BUY",
-			ISIN:     isin,                  // PRIMARY identifier ✅
-			Symbol:   position.Symbol,       // BOUNDARY identifier
-			Name:     position.SecurityName, // Embedded security metadata
+			ISIN:     isin,         // PRIMARY identifier ✅
+			Symbol:   symbol,       // BOUNDARY identifier
+			Name:     securityName, // Embedded security metadata
 			Quantity: quantity,
 			Price:    currentPrice,
 			ValueEUR: totalCostEUR,
@@ -381,9 +409,12 @@ func (c *AveragingDownCalculator) Calculate(
 	if candidateMap != nil {
 		logMsg = logMsg.Int("filtered_from", len(candidateMap))
 	}
-	logMsg.Msg("Averaging-down opportunities identified")
+	logMsg.Int("pre_filtered", len(exclusions.Result())).Msg("Averaging-down opportunities identified")
 
-	return candidates, nil
+	return domain.CalculatorResult{
+		Candidates:  candidates,
+		PreFiltered: exclusions.Result(),
+	}, nil
 }
 
 // calculatePriority calculates priority with optional tag-based boosting.

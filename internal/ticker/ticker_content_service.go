@@ -168,9 +168,9 @@ func (s *TickerContentService) getRecommendationsText(limit int, showAmounts boo
 	return strings.Join(parts, " * "), nil
 }
 
-// formatCurrency formats amount as "€1,234"
+// formatCurrency formats amount as "EUR1,234"
 func formatCurrency(amount float64, currency string) string {
-	symbol := "€"
+	symbol := "EUR"
 	if currency == "USD" {
 		symbol = "$"
 	} else if currency == "RUB" {

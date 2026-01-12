@@ -236,3 +236,56 @@ func TestNewBaseCalculator(t *testing.T) {
 	assert.NotNil(t, calc)
 	assert.NotNil(t, calc.log)
 }
+
+func TestExclusionCollector(t *testing.T) {
+	t.Run("collects exclusions", func(t *testing.T) {
+		collector := NewExclusionCollector("opportunity_buys")
+
+		collector.Add("US0378331005", "AAPL", "Apple Inc.", "score below minimum")
+		collector.Add("US5949181045", "MSFT", "Microsoft Corp.", "value trap detected")
+
+		result := collector.Result()
+		assert.Len(t, result, 2)
+	})
+
+	t.Run("accumulates reasons for same ISIN", func(t *testing.T) {
+		collector := NewExclusionCollector("opportunity_buys")
+
+		collector.Add("US0378331005", "AAPL", "Apple Inc.", "score below minimum")
+		collector.Add("US0378331005", "AAPL", "Apple Inc.", "quality gate failed")
+
+		result := collector.Result()
+		assert.Len(t, result, 1)
+		assert.Len(t, result[0].Reasons, 2)
+		assert.Contains(t, result[0].Reasons, "score below minimum")
+		assert.Contains(t, result[0].Reasons, "quality gate failed")
+	})
+
+	t.Run("deduplicates same reason", func(t *testing.T) {
+		collector := NewExclusionCollector("opportunity_buys")
+
+		collector.Add("US0378331005", "AAPL", "Apple Inc.", "score below minimum")
+		collector.Add("US0378331005", "AAPL", "Apple Inc.", "score below minimum")
+
+		result := collector.Result()
+		assert.Len(t, result, 1)
+		assert.Len(t, result[0].Reasons, 1)
+	})
+
+	t.Run("ignores empty ISIN", func(t *testing.T) {
+		collector := NewExclusionCollector("opportunity_buys")
+
+		collector.Add("", "AAPL", "Apple Inc.", "no ISIN")
+
+		result := collector.Result()
+		assert.Empty(t, result)
+	})
+
+	t.Run("sets calculator name", func(t *testing.T) {
+		collector := NewExclusionCollector("averaging_down")
+		collector.Add("US0378331005", "AAPL", "Apple Inc.", "reason")
+
+		result := collector.Result()
+		assert.Equal(t, "averaging_down", result[0].Calculator)
+	})
+}

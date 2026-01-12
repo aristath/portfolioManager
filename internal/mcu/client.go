@@ -16,12 +16,6 @@ const (
 	// DefaultSocketPath is the default path to the arduino-router Unix socket.
 	DefaultSocketPath = "/var/run/arduino-router.sock"
 
-	// RetryInterval is the time to wait between reconnection attempts.
-	RetryInterval = 120 * time.Second
-
-	// MaxRetries is the maximum number of reconnection attempts.
-	MaxRetries = 120
-
 	// ReadTimeout is the timeout for reading responses from the socket.
 	ReadTimeout = 5 * time.Second
 
@@ -35,9 +29,6 @@ var (
 
 	// ErrSocketNotFound is returned when the socket file doesn't exist.
 	ErrSocketNotFound = errors.New("MCU socket not found")
-
-	// ErrMaxRetriesExceeded is returned when max reconnection attempts are exceeded.
-	ErrMaxRetriesExceeded = errors.New("max reconnection retries exceeded")
 )
 
 // Client manages the connection to the arduino-router Unix socket.
@@ -47,7 +38,6 @@ type Client struct {
 	mu          sync.Mutex
 	log         zerolog.Logger
 	msgID       uint32
-	retryCount  int
 	isConnected bool
 }
 
@@ -102,47 +92,9 @@ func (c *Client) connectLocked() error {
 
 	c.conn = conn
 	c.isConnected = true
-	c.retryCount = 0
 	c.log.Info().Str("socket_path", c.socketPath).Msg("Connected to MCU socket")
 
 	return nil
-}
-
-// reconnect attempts to reconnect with retry logic.
-func (c *Client) reconnect() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	return c.reconnectLocked()
-}
-
-// reconnectLocked attempts to reconnect (caller must hold mutex).
-func (c *Client) reconnectLocked() error {
-	for c.retryCount < MaxRetries {
-		c.retryCount++
-		c.log.Info().
-			Int("attempt", c.retryCount).
-			Int("max_retries", MaxRetries).
-			Dur("retry_interval", RetryInterval).
-			Msg("Attempting MCU reconnection")
-
-		// Wait before retry (except on first attempt after disconnect)
-		if c.retryCount > 1 {
-			c.mu.Unlock()
-			time.Sleep(RetryInterval)
-			c.mu.Lock()
-		}
-
-		err := c.connectLocked()
-		if err == nil {
-			return nil
-		}
-
-		c.log.Warn().Err(err).Int("attempt", c.retryCount).Msg("MCU reconnection attempt failed")
-	}
-
-	c.log.Error().Int("max_retries", MaxRetries).Msg("Max MCU reconnection retries exceeded")
-	return ErrMaxRetriesExceeded
 }
 
 // Close closes the connection to the MCU.

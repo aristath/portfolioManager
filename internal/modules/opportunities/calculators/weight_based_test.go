@@ -92,11 +92,11 @@ func TestWeightBasedCalculator_MaxSellPercentage(t *testing.T) {
 				"max_sell_percentage": tt.maxSellPercentage,
 			}
 
-			candidates, err := calc.Calculate(ctx, params)
+			result, err := calc.Calculate(ctx, params)
 			require.NoError(t, err)
-			require.Len(t, candidates, 1, "Should generate one sell candidate")
+			require.Len(t, result.Candidates, 1, "Should generate one sell candidate")
 
-			candidate := candidates[0]
+			candidate := result.Candidates[0]
 			assert.Equal(t, "SELL", candidate.Side)
 			assert.Equal(t, "TEST.US", candidate.Symbol)
 			assert.LessOrEqual(t, candidate.Quantity, tt.expectedMaxQuantity,
@@ -140,12 +140,12 @@ func TestWeightBasedCalculator_MaxSellPercentage_MultiplePositions(t *testing.T)
 		"max_sell_percentage": 0.28, // 28% max sell
 	}
 
-	candidates, err := calc.Calculate(ctx, params)
+	result, err := calc.Calculate(ctx, params)
 	require.NoError(t, err)
-	require.GreaterOrEqual(t, len(candidates), 1, "Should generate at least one sell candidate")
+	require.GreaterOrEqual(t, len(result.Candidates), 1, "Should generate at least one sell candidate")
 
 	// Each position should respect its own max_sell_percentage
-	for _, candidate := range candidates {
+	for _, candidate := range result.Candidates {
 		if candidate.Side == "SELL" {
 			switch candidate.Symbol {
 			case "STOCK_A.US":
@@ -196,11 +196,11 @@ func TestWeightBasedCalculator_NoMaxSellPercentage(t *testing.T) {
 		// No max_sell_percentage provided
 	}
 
-	candidates, err := calc.Calculate(ctx, params)
+	result, err := calc.Calculate(ctx, params)
 	require.NoError(t, err)
-	require.Len(t, candidates, 1)
+	require.Len(t, result.Candidates, 1)
 
 	// Should be able to sell more than 50% when no max_sell_percentage is set
 	// (will be capped by weight calculation, not by artificial limit)
-	assert.Equal(t, "SELL", candidates[0].Side)
+	assert.Equal(t, "SELL", result.Candidates[0].Side)
 }

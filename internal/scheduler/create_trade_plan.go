@@ -17,6 +17,7 @@ type CreateTradePlanJob struct {
 	opportunityContext    *planningdomain.OpportunityContext
 	plan                  *planningdomain.HolisticPlan
 	rejectedOpportunities []planningdomain.RejectedOpportunity
+	preFilteredSecurities []planningdomain.PreFilteredSecurity
 }
 
 // NewCreateTradePlanJob creates a new CreateTradePlanJob
@@ -49,6 +50,11 @@ func (j *CreateTradePlanJob) GetPlan() *planningdomain.HolisticPlan {
 // GetRejectedOpportunities returns the rejected opportunities from plan creation
 func (j *CreateTradePlanJob) GetRejectedOpportunities() []planningdomain.RejectedOpportunity {
 	return j.rejectedOpportunities
+}
+
+// GetPreFilteredSecurities returns the pre-filtered securities from plan creation
+func (j *CreateTradePlanJob) GetPreFilteredSecurities() []planningdomain.PreFilteredSecurity {
+	return j.preFilteredSecurities
 }
 
 // Name returns the job name
@@ -88,9 +94,11 @@ func (j *CreateTradePlanJob) Run() error {
 
 	j.plan = planResult.Plan
 	j.rejectedOpportunities = planResult.RejectedOpportunities
+	j.preFilteredSecurities = planResult.PreFilteredSecurities
 
 	j.log.Info().
 		Int("rejected_count", len(j.rejectedOpportunities)).
+		Int("pre_filtered_count", len(j.preFilteredSecurities)).
 		Msg("Successfully created trade plan")
 
 	return nil

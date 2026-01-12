@@ -41,6 +41,13 @@ type RecommendationRepositoryInterface interface {
 	// Used to track why opportunities were not selected in the final plan
 	StoreRejectedOpportunities(rejected []planningdomain.RejectedOpportunity, portfolioHash string) error
 
+	// StorePreFilteredSecurities stores pre-filtered securities for a portfolio hash
+	// Used to track why securities were excluded before reaching the opportunity stage
+	StorePreFilteredSecurities(preFiltered []planningdomain.PreFilteredSecurity, portfolioHash string) error
+
+	// GetPreFilteredSecurities retrieves pre-filtered securities for a portfolio hash
+	GetPreFilteredSecurities(portfolioHash string) []planningdomain.PreFilteredSecurity
+
 	// DeleteOlderThan deletes recommendations older than the specified duration
 	// Used by RecommendationGCJob for garbage collection (24h TTL)
 	DeleteOlderThan(maxAge time.Duration) (int, error)

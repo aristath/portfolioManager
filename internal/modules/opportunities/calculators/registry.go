@@ -82,12 +82,26 @@ func (r *CalculatorRegistry) List() []OpportunityCalculator {
 }
 
 // IdentifyOpportunities runs all enabled calculators and aggregates results by category.
+// Returns OpportunitiesByCategory for backward compatibility.
 func (r *CalculatorRegistry) IdentifyOpportunities(
 	ctx *domain.OpportunityContext,
 	config *domain.PlannerConfiguration,
 ) (domain.OpportunitiesByCategory, error) {
+	result, err := r.IdentifyOpportunitiesWithExclusions(ctx, config)
+	if err != nil {
+		return nil, err
+	}
+	return result.ToOpportunitiesByCategory(), nil
+}
+
+// IdentifyOpportunitiesWithExclusions runs all enabled calculators and aggregates results by category,
+// including both candidates and pre-filtered securities.
+func (r *CalculatorRegistry) IdentifyOpportunitiesWithExclusions(
+	ctx *domain.OpportunityContext,
+	config *domain.PlannerConfiguration,
+) (domain.OpportunitiesResultByCategory, error) {
 	enabled := r.GetEnabled(config)
-	opportunities := make(domain.OpportunitiesByCategory)
+	results := make(domain.OpportunitiesResultByCategory)
 
 	r.log.Info().
 		Int("enabled_calculators", len(enabled)).
@@ -105,7 +119,7 @@ func (r *CalculatorRegistry) IdentifyOpportunities(
 			Str("category", string(category)).
 			Msg("Running calculator")
 
-		candidates, err := calculator.Calculate(ctx, params)
+		result, err := calculator.Calculate(ctx, params)
 		if err != nil {
 			r.log.Error().
 				Err(err).
@@ -116,29 +130,37 @@ func (r *CalculatorRegistry) IdentifyOpportunities(
 
 		r.log.Debug().
 			Str("calculator", name).
-			Int("candidates", len(candidates)).
+			Int("candidates", len(result.Candidates)).
+			Int("pre_filtered", len(result.PreFiltered)).
 			Msg("Calculator completed")
 
-		// Append to category
-		opportunities[category] = append(opportunities[category], candidates...)
+		// Merge into category results
+		existing := results[category]
+		existing.Candidates = append(existing.Candidates, result.Candidates...)
+		existing.PreFiltered = append(existing.PreFiltered, result.PreFiltered...)
+		results[category] = existing
 	}
 
 	// Log summary
 	totalCandidates := 0
-	for category, candidates := range opportunities {
-		totalCandidates += len(candidates)
+	totalPreFiltered := 0
+	for category, result := range results {
+		totalCandidates += len(result.Candidates)
+		totalPreFiltered += len(result.PreFiltered)
 		r.log.Info().
 			Str("category", string(category)).
-			Int("candidates", len(candidates)).
+			Int("candidates", len(result.Candidates)).
+			Int("pre_filtered", len(result.PreFiltered)).
 			Msg("Opportunities by category")
 	}
 
 	r.log.Info().
 		Int("total_candidates", totalCandidates).
-		Int("categories", len(opportunities)).
+		Int("total_pre_filtered", totalPreFiltered).
+		Int("categories", len(results)).
 		Msg("Opportunity identification complete")
 
-	return opportunities, nil
+	return results, nil
 }
 
 // NewPopulatedRegistry creates a new calculator registry with all calculators registered.

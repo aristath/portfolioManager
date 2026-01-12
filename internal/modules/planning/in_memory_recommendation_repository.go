@@ -15,6 +15,7 @@ import (
 type InMemoryRecommendationRepository struct {
 	recommendations       map[string]*Recommendation
 	rejectedOpportunities map[string][]planningdomain.RejectedOpportunity // key: portfolioHash
+	preFilteredSecurities map[string][]planningdomain.PreFilteredSecurity // key: portfolioHash
 	mu                    sync.RWMutex
 	log                   zerolog.Logger
 }
@@ -23,6 +24,7 @@ func NewInMemoryRecommendationRepository(log zerolog.Logger) *InMemoryRecommenda
 	return &InMemoryRecommendationRepository{
 		recommendations:       make(map[string]*Recommendation),
 		rejectedOpportunities: make(map[string][]planningdomain.RejectedOpportunity),
+		preFilteredSecurities: make(map[string][]planningdomain.PreFilteredSecurity),
 		log:                   log.With().Str("repository", "recommendation_inmemory").Logger(),
 	}
 }
@@ -273,6 +275,14 @@ func (r *InMemoryRecommendationRepository) GetRecommendationsAsPlan(getEvaluated
 	}
 	r.mu.RUnlock()
 
+	// Get pre-filtered securities for this portfolio hash
+	var preFilteredSecurities interface{} = nil
+	r.mu.RLock()
+	if preFiltered, exists := r.preFilteredSecurities[portfolioHash]; exists && len(preFiltered) > 0 {
+		preFilteredSecurities = preFiltered
+	}
+	r.mu.RUnlock()
+
 	response := map[string]interface{}{
 		"steps":                   steps,
 		"current_score":           currentScore,
@@ -284,6 +294,10 @@ func (r *InMemoryRecommendationRepository) GetRecommendationsAsPlan(getEvaluated
 
 	if rejectedOpportunities != nil {
 		response["rejected_opportunities"] = rejectedOpportunities
+	}
+
+	if preFilteredSecurities != nil {
+		response["pre_filtered_securities"] = preFilteredSecurities
 	}
 
 	return response, nil
@@ -399,5 +413,29 @@ func (r *InMemoryRecommendationRepository) StoreRejectedOpportunities(rejected [
 		Int("rejected_count", len(rejected)).
 		Msg("Stored rejected opportunities")
 
+	return nil
+}
+
+func (r *InMemoryRecommendationRepository) StorePreFilteredSecurities(preFiltered []planningdomain.PreFilteredSecurity, portfolioHash string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.preFilteredSecurities[portfolioHash] = preFiltered
+
+	r.log.Info().
+		Str("portfolio_hash", portfolioHash).
+		Int("pre_filtered_count", len(preFiltered)).
+		Msg("Stored pre-filtered securities")
+
+	return nil
+}
+
+func (r *InMemoryRecommendationRepository) GetPreFilteredSecurities(portfolioHash string) []planningdomain.PreFilteredSecurity {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if preFiltered, exists := r.preFilteredSecurities[portfolioHash]; exists {
+		return preFiltered
+	}
 	return nil
 }
