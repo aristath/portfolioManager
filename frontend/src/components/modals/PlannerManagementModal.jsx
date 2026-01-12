@@ -6,22 +6,13 @@ import { api } from '../../api/client';
 import { useNotifications } from '../../hooks/useNotifications';
 
 const DEFAULT_CONFIG = {
-  name: 'default',
-  description: '',
   enable_batch_generation: true,
-  max_depth: 5,
-  max_opportunities_per_category: 5,
   enable_diverse_selection: true,
   diversity_weight: 0.3,
   transaction_cost_fixed: 5.0,
   transaction_cost_percent: 0.001,
   allow_sell: true,
   allow_buy: true,
-  min_hold_days: 90,
-  sell_cooldown_days: 180,
-  max_loss_threshold: -0.20,
-  max_sell_percentage: 0.20,
-  averaging_down_percent: 0.10,
   // Portfolio optimizer
   optimizer_target_return: 0.11,
   min_cash_reserve: 500.0,
@@ -61,27 +52,47 @@ const DEFAULT_CONFIG = {
   enable_tag_filtering: true,
 };
 
+// Default temperament settings (stored in global settings, not planner config)
+const DEFAULT_TEMPERAMENT = {
+  risk_tolerance: 0.5,       // Conservative (0) to Risk-Taking (1)
+  temperament_aggression: 0.5, // Passive (0) to Aggressive (1)
+  temperament_patience: 0.5,   // Impatient (0) to Patient (1)
+};
+
 export function PlannerManagementModal() {
   const { showPlannerManagementModal, closePlannerManagementModal } = useAppStore();
   const { showNotification } = useNotifications();
-  const [activeTab, setActiveTab] = useState('general');
+  const [activeTab, setActiveTab] = useState('temperament');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
+  const [temperament, setTemperament] = useState(DEFAULT_TEMPERAMENT);
 
   const loadConfig = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      // Fetch the single config directly
-      const response = await api.fetchPlannerConfig();
-      setConfig(response.config || DEFAULT_CONFIG);
+      // Fetch planner config and temperament settings in parallel
+      const [plannerResponse, settingsResponse] = await Promise.all([
+        api.fetchPlannerConfig(),
+        api.fetchSettings(),
+      ]);
+      setConfig(plannerResponse.config || DEFAULT_CONFIG);
+
+      // Extract temperament settings from global settings
+      const settings = settingsResponse.settings || {};
+      setTemperament({
+        risk_tolerance: settings.risk_tolerance ?? 0.5,
+        temperament_aggression: settings.temperament_aggression ?? 0.5,
+        temperament_patience: settings.temperament_patience ?? 0.5,
+      });
     } catch (error) {
       setError(`Failed to load configuration: ${error.message}`);
       showNotification(`Failed to load configuration: ${error.message}`, 'error');
       // Use defaults on error
       setConfig(DEFAULT_CONFIG);
+      setTemperament(DEFAULT_TEMPERAMENT);
     } finally {
       setLoading(false);
     }
@@ -98,8 +109,14 @@ export function PlannerManagementModal() {
     setError(null);
 
     try {
-      await api.updatePlannerConfig(config, 'ui', 'Updated via UI');
-      showNotification('Planner configuration saved successfully', 'success');
+      // Save planner config and temperament settings
+      await Promise.all([
+        api.updatePlannerConfig(config, 'ui', 'Updated via UI'),
+        api.updateSetting('risk_tolerance', temperament.risk_tolerance),
+        api.updateSetting('temperament_aggression', temperament.temperament_aggression),
+        api.updateSetting('temperament_patience', temperament.temperament_patience),
+      ]);
+      showNotification('Configuration saved successfully', 'success');
     } catch (error) {
       const errorMsg = error.message || 'Failed to save configuration';
       setError(errorMsg);
@@ -113,8 +130,16 @@ export function PlannerManagementModal() {
     setConfig({ ...config, [field]: value });
   };
 
+  const updateTemperament = (field, value) => {
+    setTemperament({ ...temperament, [field]: value });
+  };
+
   const getConfigValue = (field, defaultValue) => {
     return config[field] ?? defaultValue;
+  };
+
+  const getTemperamentValue = (field, defaultValue) => {
+    return temperament[field] ?? defaultValue;
   };
 
   return (
@@ -140,6 +165,7 @@ export function PlannerManagementModal() {
 
           <Tabs value={activeTab} onChange={setActiveTab}>
             <Tabs.List grow>
+              <Tabs.Tab value="temperament">Temperament</Tabs.Tab>
               <Tabs.Tab value="general">General</Tabs.Tab>
               <Tabs.Tab value="planner">Planner</Tabs.Tab>
               <Tabs.Tab value="transaction">Costs</Tabs.Tab>
@@ -149,26 +175,119 @@ export function PlannerManagementModal() {
               <Tabs.Tab value="filters">Filters</Tabs.Tab>
             </Tabs.List>
 
+            {/* Temperament Tab */}
+            <Tabs.Panel value="temperament" p="md">
+              <Stack gap="md">
+                <Alert color="blue" title="Investment Temperament" icon={<IconInfoCircle />}>
+                  These three sliders control 150+ parameters across the system, defining how the planner behaves.
+                  Move sliders to adjust your investment philosophy. Changes affect evaluation weights, thresholds,
+                  hold periods, position sizing, and more.
+                </Alert>
+
+                <Paper p="md" withBorder>
+                  <Text size="sm" fw={500} mb="md" tt="uppercase">Risk Tolerance</Text>
+                  <Text size="xs" c="dimmed" mb="md">
+                    Controls volatility acceptance, drawdown tolerance, position concentration, and quality floors.
+                    Conservative investors prefer stable, high-quality positions while risk-takers accept more volatility for higher returns.
+                  </Text>
+                  <div>
+                    <Group justify="space-between" mb="xs">
+                      <Text size="sm">Conservative</Text>
+                      <Text size="sm" fw={500}>
+                        {(getTemperamentValue('risk_tolerance', 0.5) * 100).toFixed(0)}%
+                      </Text>
+                      <Text size="sm">Risk-Taking</Text>
+                    </Group>
+                    <Slider
+                      value={getTemperamentValue('risk_tolerance', 0.5)}
+                      onChange={(val) => updateTemperament('risk_tolerance', val)}
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      marks={[
+                        { value: 0, label: '0' },
+                        { value: 0.25, label: '25' },
+                        { value: 0.5, label: '50' },
+                        { value: 0.75, label: '75' },
+                        { value: 1, label: '100' },
+                      ]}
+                      mb="xl"
+                    />
+                  </div>
+                </Paper>
+
+                <Paper p="md" withBorder>
+                  <Text size="sm" fw={500} mb="md" tt="uppercase">Aggression</Text>
+                  <Text size="xs" c="dimmed" mb="md">
+                    Controls scoring thresholds, action frequency, evaluation weights, position sizing, and opportunity pursuit.
+                    Passive investors wait for clear opportunities while aggressive investors act more readily on signals.
+                  </Text>
+                  <div>
+                    <Group justify="space-between" mb="xs">
+                      <Text size="sm">Passive</Text>
+                      <Text size="sm" fw={500}>
+                        {(getTemperamentValue('temperament_aggression', 0.5) * 100).toFixed(0)}%
+                      </Text>
+                      <Text size="sm">Aggressive</Text>
+                    </Group>
+                    <Slider
+                      value={getTemperamentValue('temperament_aggression', 0.5)}
+                      onChange={(val) => updateTemperament('temperament_aggression', val)}
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      marks={[
+                        { value: 0, label: '0' },
+                        { value: 0.25, label: '25' },
+                        { value: 0.5, label: '50' },
+                        { value: 0.75, label: '75' },
+                        { value: 1, label: '100' },
+                      ]}
+                      mb="xl"
+                    />
+                  </div>
+                </Paper>
+
+                <Paper p="md" withBorder>
+                  <Text size="sm" fw={500} mb="md" tt="uppercase">Patience</Text>
+                  <Text size="xs" c="dimmed" mb="md">
+                    Controls hold periods, cooldowns, windfall thresholds, rebalance triggers, and dividend focus.
+                    Impatient investors seek quick wins while patient investors let positions mature.
+                  </Text>
+                  <div>
+                    <Group justify="space-between" mb="xs">
+                      <Text size="sm">Impatient</Text>
+                      <Text size="sm" fw={500}>
+                        {(getTemperamentValue('temperament_patience', 0.5) * 100).toFixed(0)}%
+                      </Text>
+                      <Text size="sm">Patient</Text>
+                    </Group>
+                    <Slider
+                      value={getTemperamentValue('temperament_patience', 0.5)}
+                      onChange={(val) => updateTemperament('temperament_patience', val)}
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      marks={[
+                        { value: 0, label: '0' },
+                        { value: 0.25, label: '25' },
+                        { value: 0.5, label: '50' },
+                        { value: 0.75, label: '75' },
+                        { value: 1, label: '100' },
+                      ]}
+                      mb="xl"
+                    />
+                  </div>
+                </Paper>
+              </Stack>
+            </Tabs.Panel>
+
             {/* General Tab */}
             <Tabs.Panel value="general" p="md">
               <Stack gap="md">
                 <Paper p="md" withBorder>
-                  <Text size="sm" fw={500} mb="xs" tt="uppercase">Basic Information</Text>
+                  <Text size="sm" fw={500} mb="xs" tt="uppercase">Batch Processing</Text>
                   <Stack gap="sm">
-                    <TextInput
-                      label="Name"
-                      value={getConfigValue('name', '')}
-                      onChange={(e) => updateConfig('name', e.currentTarget.value)}
-                      placeholder="e.g., Default Strategy"
-                      required
-                    />
-                    <Textarea
-                      label="Description"
-                      value={getConfigValue('description', '')}
-                      onChange={(e) => updateConfig('description', e.currentTarget.value)}
-                      placeholder="Optional description"
-                      minRows={2}
-                    />
                     <Switch
                       label="Enable Batch Generation"
                       checked={getConfigValue('enable_batch_generation', true)}
@@ -200,51 +319,8 @@ export function PlannerManagementModal() {
             <Tabs.Panel value="planner" p="md">
               <Stack gap="md">
                 <Paper p="md" withBorder>
-                  <Text size="sm" fw={500} mb="xs" tt="uppercase">Planner Settings</Text>
+                  <Text size="sm" fw={500} mb="xs" tt="uppercase">Sequence Selection</Text>
                   <Stack gap="md">
-                    <Group justify="space-between">
-                      <div>
-                        <Text size="sm">Max Depth</Text>
-                        <Text size="xs" c="dimmed">Maximum sequence depth (1-10)</Text>
-                      </div>
-                      <NumberInput
-                        value={getConfigValue('max_depth', 5)}
-                        onChange={(val) => updateConfig('max_depth', val)}
-                        min={1}
-                        max={10}
-                        step={1}
-                        w={80}
-                        size="sm"
-                      />
-                    </Group>
-
-                    <Group justify="space-between">
-                      <div style={{ flex: 1 }}>
-                        <Group gap="xs" mb={4}>
-                          <Text size="sm">Max Opportunities Per Category</Text>
-                          <Tooltip
-                            label="Categories: profit_taking (sell winners), averaging_down (buy more of losers), opportunity_buys (general buys), rebalance_sells (sell overweight), rebalance_buys (buy underweight), weight_based (optimizer targets). This setting limits how many opportunities are kept per category (e.g., max 5 profit-taking, max 5 averaging-down, etc.)"
-                            multiline
-                            w={300}
-                            withArrow
-                          >
-                            <ActionIcon size="xs" variant="subtle" color="gray">
-                              <IconInfoCircle size={16} />
-                            </ActionIcon>
-                          </Tooltip>
-                        </Group>
-                        <Text size="xs" c="dimmed">Maximum opportunities per category</Text>
-                      </div>
-                      <NumberInput
-                        value={getConfigValue('max_opportunities_per_category', 5)}
-                        onChange={(val) => updateConfig('max_opportunities_per_category', val)}
-                        min={1}
-                        step={1}
-                        w={80}
-                        size="sm"
-                      />
-                    </Group>
-
                     <Switch
                       label="Enable Diverse Selection"
                       checked={getConfigValue('enable_diverse_selection', true)}
@@ -338,96 +414,13 @@ export function PlannerManagementModal() {
                   </Stack>
                 </Paper>
 
-                <Paper p="md" withBorder>
-                  <Text size="sm" fw={500} mb="xs" tt="uppercase">Risk Management</Text>
-                  <Stack gap="md">
-                    <Group justify="space-between">
-                      <div>
-                        <Text size="sm">Min Hold Days</Text>
-                        <Text size="xs" c="dimmed">Minimum days a position must be held before selling</Text>
-                      </div>
-                      <NumberInput
-                        value={getConfigValue('min_hold_days', 90)}
-                        onChange={(val) => updateConfig('min_hold_days', val)}
-                        min={0}
-                        max={365}
-                        step={1}
-                        w={80}
-                        size="sm"
-                      />
-                    </Group>
-
-                    <Group justify="space-between">
-                      <div>
-                        <Text size="sm">Sell Cooldown Days</Text>
-                        <Text size="xs" c="dimmed">Days to wait after selling before buying again</Text>
-                      </div>
-                      <NumberInput
-                        value={getConfigValue('sell_cooldown_days', 180)}
-                        onChange={(val) => updateConfig('sell_cooldown_days', val)}
-                        min={0}
-                        max={365}
-                        step={1}
-                        w={80}
-                        size="sm"
-                      />
-                    </Group>
-
-                    <div>
-                      <Group justify="space-between" mb="xs">
-                        <Text size="sm">Max Loss Threshold</Text>
-                        <Text size="sm" fw={500}>
-                          {(getConfigValue('max_loss_threshold', -0.20) * 100).toFixed(0)}%
-                        </Text>
-                      </Group>
-                      <Slider
-                        value={getConfigValue('max_loss_threshold', -0.20)}
-                        onChange={(val) => updateConfig('max_loss_threshold', val)}
-                        min={-1.0}
-                        max={0.0}
-                        step={0.01}
-                        mb="xs"
-                      />
-                      <Text size="xs" c="dimmed">Maximum loss threshold before forced selling consideration (-100% to 0%)</Text>
-                    </div>
-
-                    <div>
-                      <Group justify="space-between" mb="xs">
-                        <Text size="sm">Max Sell Percentage</Text>
-                        <Text size="sm" fw={500}>
-                          {(getConfigValue('max_sell_percentage', 0.20) * 100).toFixed(0)}%
-                        </Text>
-                      </Group>
-                      <Slider
-                        value={getConfigValue('max_sell_percentage', 0.20)}
-                        onChange={(val) => updateConfig('max_sell_percentage', val)}
-                        min={0.01}
-                        max={1.0}
-                        step={0.01}
-                        mb="xs"
-                      />
-                      <Text size="xs" c="dimmed">Maximum percentage of position allowed to sell per transaction (1% to 100%)</Text>
-                    </div>
-
-                    <div>
-                      <Group justify="space-between" mb="xs">
-                        <Text size="sm">Averaging Down Percent</Text>
-                        <Text size="sm" fw={500}>
-                          {(getConfigValue('averaging_down_percent', 0.10) * 100).toFixed(0)}%
-                        </Text>
-                      </Group>
-                      <Slider
-                        value={getConfigValue('averaging_down_percent', 0.10)}
-                        onChange={(val) => updateConfig('averaging_down_percent', val)}
-                        min={0.01}
-                        max={0.50}
-                        step={0.01}
-                        mb="xs"
-                      />
-                      <Text size="xs" c="dimmed">Maximum percentage of existing position to add when averaging down (1% to 50%, default 10%). Kelly sizing will be used as upper bound when available.</Text>
-                    </div>
-                  </Stack>
-                </Paper>
+                <Alert color="gray" variant="light">
+                  <Text size="xs">
+                    Risk management settings (hold periods, cooldowns, loss thresholds, sell percentages)
+                    are now controlled by the Temperament sliders. Adjust the Patience and Risk Tolerance
+                    sliders to change these behaviors.
+                  </Text>
+                </Alert>
               </Stack>
             </Tabs.Panel>
 
@@ -686,7 +679,7 @@ export function PlannerManagementModal() {
             </Button>
             <Button
               onClick={handleSave}
-              disabled={saving || !getConfigValue('name')}
+              disabled={saving}
               loading={saving}
             >
               Save Configuration

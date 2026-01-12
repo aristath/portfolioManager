@@ -51,13 +51,14 @@ func EvaluateMonteCarlo(req models.MonteCarloRequest) models.MonteCarloResult {
 				priceAdj,
 			)
 
-			// Evaluate end state
+			// Evaluate end state (using temperament config if available)
 			endScore := EvaluateEndState(
 				endContext,
 				req.Sequence,
 				req.EvaluationContext.TransactionCostFixed,
 				req.EvaluationContext.TransactionCostPercent,
 				0.0, // No cost penalty for Monte Carlo
+				req.EvaluationContext.ScoringConfig,
 			)
 
 			results <- pathResult{pathIdx: pathIdx, score: endScore}
@@ -181,13 +182,14 @@ func EvaluateStochastic(req models.StochasticRequest) models.StochasticResult {
 				priceAdj,
 			)
 
-			// Evaluate end state
+			// Evaluate end state (using temperament config if available)
 			endScore := EvaluateEndState(
 				endContext,
 				req.Sequence,
 				req.EvaluationContext.TransactionCostFixed,
 				req.EvaluationContext.TransactionCostPercent,
 				0.0, // No cost penalty for stochastic
+				req.EvaluationContext.ScoringConfig,
 			)
 
 			results <- scenarioResult{shift: s, score: endScore}

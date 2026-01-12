@@ -12,8 +12,8 @@ func TestNewDefaultConfiguration(t *testing.T) {
 	assert.NotNil(t, config)
 	assert.Equal(t, "default", config.Name)
 	assert.True(t, config.EnableBatchGeneration)
-	assert.Equal(t, 5, config.MaxDepth)
-	assert.Equal(t, 5, config.MaxOpportunitiesPerCategory)
+	assert.Equal(t, 10, config.MaxDepth)                    // Hardcoded for maximum complexity
+	assert.Equal(t, 10, config.MaxOpportunitiesPerCategory) // Hardcoded for maximum opportunities
 	assert.True(t, config.EnableDiverseSelection)
 	assert.Equal(t, 0.3, config.DiversityWeight)
 	assert.Equal(t, 5.0, config.TransactionCostFixed)

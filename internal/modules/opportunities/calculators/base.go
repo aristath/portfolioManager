@@ -178,6 +178,36 @@ func DetectCurrentRegime(securityRepo SecurityRepository) string {
 	return "neutral"
 }
 
+// DefaultCalculatorBoosts returns the default boost multipliers.
+// These match the original hardcoded values for backward compatibility.
+func DefaultCalculatorBoosts() CalculatorBoosts {
+	return CalculatorBoosts{
+		// Risk Profile boosts
+		LowRiskBoost:    1.15,
+		MediumRiskBoost: 1.05,
+		HighRiskPenalty: 0.90,
+		// Regime-Aware boosts
+		BullGrowthBoost:       1.15,
+		BearValueBoost:        1.15,
+		SidewaysDividendBoost: 1.12,
+		NeutralGrowthBoost:    1.08,
+		NeutralValueBoost:     1.08,
+		NeutralDividendBoost:  1.10,
+		// Quality boosts
+		StrongFundamentalsBoost: 1.12,
+		ConsistentGrowerBoost:   1.10,
+		StableBoost:             1.08,
+		// Dividend boosts
+		DividendTotalReturnBoost: 1.12,
+		// Performance boosts (sell)
+		UnsustainableGainsBoost: 1.25,
+		StagnantBoost:           1.15,
+		UnderperformingBoost:    1.20,
+		// Performance boosts (buy)
+		MeetsTargetReturnBoost: 1.10,
+	}
+}
+
 // ApplyTagBasedPriorityBoosts applies priority multipliers based on security tags.
 // Implements intelligent prioritization based on 14 tags across 5 categories:
 // - Risk Profile (3 tags): low-risk, medium-risk, high-risk
@@ -186,14 +216,33 @@ func DetectCurrentRegime(securityRepo SecurityRepository) string {
 // - Dividend (1 tag): dividend-total-return
 // - Performance (4 tags): meets-target-return, unsustainable-gains, stagnant, underperforming
 // Optional securityRepo parameter enables regime-aware classification boosts.
+// Uses default boost multipliers. For temperament-adjusted boosts, use ApplyTagBasedPriorityBoostsWithConfig.
 func ApplyTagBasedPriorityBoosts(
 	priority float64,
 	securityTags []string,
 	calculatorType string,
 	securityRepo ...SecurityRepository, // Optional: enables regime-aware logic
 ) float64 {
+	return ApplyTagBasedPriorityBoostsWithConfig(priority, securityTags, calculatorType, nil, securityRepo...)
+}
+
+// ApplyTagBasedPriorityBoostsWithConfig applies priority multipliers based on security tags
+// using temperament-adjusted boost multipliers from config.
+func ApplyTagBasedPriorityBoostsWithConfig(
+	priority float64,
+	securityTags []string,
+	calculatorType string,
+	boosts *CalculatorBoosts, // nil uses defaults
+	securityRepo ...SecurityRepository, // Optional: enables regime-aware logic
+) float64 {
 	if len(securityTags) == 0 {
 		return priority
+	}
+
+	// Use provided boosts or defaults
+	b := DefaultCalculatorBoosts()
+	if boosts != nil {
+		b = *boosts
 	}
 
 	multiplier := 1.0
@@ -201,11 +250,11 @@ func ApplyTagBasedPriorityBoosts(
 	// Risk Profile Boosts (buy calculators only)
 	if calculatorType == "opportunity_buys" || calculatorType == "averaging_down" || calculatorType == "rebalance_buys" {
 		if contains(securityTags, "low-risk") {
-			multiplier *= 1.15 // 15% boost for low risk
+			multiplier *= b.LowRiskBoost
 		} else if contains(securityTags, "medium-risk") {
-			multiplier *= 1.05 // 5% boost for medium risk
+			multiplier *= b.MediumRiskBoost
 		} else if contains(securityTags, "high-risk") {
-			multiplier *= 0.90 // 10% penalty for high risk
+			multiplier *= b.HighRiskPenalty
 		}
 	}
 
@@ -219,67 +268,67 @@ func ApplyTagBasedPriorityBoosts(
 		// Regime-aware classification boosts
 		regime := DetectCurrentRegime(repo)
 		if regime == "bull" && contains(securityTags, "growth") {
-			multiplier *= 1.15 // 15% boost for growth in bull market
+			multiplier *= b.BullGrowthBoost
 		} else if regime == "bear" && contains(securityTags, "value") {
-			multiplier *= 1.15 // 15% boost for value in bear market
+			multiplier *= b.BearValueBoost
 		} else if regime == "sideways" && contains(securityTags, "dividend-focused") {
-			multiplier *= 1.12 // 12% boost for dividends in sideways market
+			multiplier *= b.SidewaysDividendBoost
 		} else {
 			// Neutral market or non-matching tags - apply standard boosts
 			if contains(securityTags, "growth") {
-				multiplier *= 1.08
+				multiplier *= b.NeutralGrowthBoost
 			}
 			if contains(securityTags, "value") {
-				multiplier *= 1.08
+				multiplier *= b.NeutralValueBoost
 			}
 			if contains(securityTags, "dividend-focused") {
-				multiplier *= 1.10
+				multiplier *= b.NeutralDividendBoost
 			}
 		}
 	} else {
 		// No regime detection - apply standard boosts
 		if contains(securityTags, "growth") {
-			multiplier *= 1.08 // 8% boost for growth
+			multiplier *= b.NeutralGrowthBoost
 		}
 		if contains(securityTags, "value") {
-			multiplier *= 1.08 // 8% boost for value
+			multiplier *= b.NeutralValueBoost
 		}
 		if contains(securityTags, "dividend-focused") {
-			multiplier *= 1.10 // 10% boost for dividend focus
+			multiplier *= b.NeutralDividendBoost
 		}
 	}
 
 	// Quality Boosts (applicable to all buy calculators)
 	if contains(securityTags, "strong-fundamentals") {
-		multiplier *= 1.12 // 12% boost for strong fundamentals
+		multiplier *= b.StrongFundamentalsBoost
 	}
 	if contains(securityTags, "consistent-grower") {
-		multiplier *= 1.10 // 10% boost for consistency
+		multiplier *= b.ConsistentGrowerBoost
 	}
 	if contains(securityTags, "stable") {
-		multiplier *= 1.08 // 8% boost for stability
+		multiplier *= b.StableBoost
 	}
 
 	// Dividend Total Return Boost
 	if contains(securityTags, "dividend-total-return") {
-		multiplier *= 1.12 // 12% boost for high total return from dividends
+		multiplier *= b.DividendTotalReturnBoost
 	}
 
 	// Performance Boosts (sell calculators primarily)
 	if calculatorType == "profit_taking" || calculatorType == "rebalance_sells" {
 		if contains(securityTags, "unsustainable-gains") {
-			multiplier *= 1.25 // 25% boost to sell unsustainable gains
+			multiplier *= b.UnsustainableGainsBoost
 		}
 		if contains(securityTags, "stagnant") {
-			multiplier *= 1.15 // 15% boost to sell stagnant positions
+			multiplier *= b.StagnantBoost
 		}
 		if contains(securityTags, "underperforming") {
-			multiplier *= 1.20 // 20% boost to sell underperformers
+			multiplier *= b.UnderperformingBoost
 		}
 	} else {
 		// Buy calculators - boost securities meeting target return
 		if contains(securityTags, "meets-target-return") {
-			multiplier *= 1.10 // 10% boost for meeting target
+			multiplier *= b.MeetsTargetReturnBoost
 		}
 	}
 

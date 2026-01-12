@@ -317,6 +317,9 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 
 	// Tag assigner for auto-tagging securities
 	container.TagAssigner = universe.NewTagAssigner(log)
+	// Wire settings service for temperament-aware tag thresholds
+	tagSettingsAdapterInstance := &tagSettingsAdapter{service: container.SettingsService}
+	container.TagAssigner.SetSettingsService(tagSettingsAdapterInstance)
 
 	// Security scorer (used by handlers)
 	container.SecurityScorer = scorers.NewSecurityScorer()
@@ -339,6 +342,8 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 
 	// Evaluation service (4 workers)
 	container.EvaluationService = planningevaluation.NewService(4, log)
+	// Wire settings service for temperament-aware scoring
+	container.EvaluationService.SetSettingsService(container.SettingsService)
 
 	// Planner service (core planner)
 	container.PlannerService = planningplanner.NewPlanner(
@@ -404,13 +409,16 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	// Kelly Position Sizer
 	container.KellySizer = optimization.NewKellyPositionSizer(
 		0.02,  // riskFreeRate: 2%
-		0.5,   // fixedFractional: 0.5 (half-Kelly)
-		0.005, // minPositionSize: 0.5%
-		0.20,  // maxPositionSize: 20%
+		0.5,   // fixedFractional: 0.5 (half-Kelly) - default, will be overridden by temperament
+		0.005, // minPositionSize: 0.5% - default, will be overridden by temperament
+		0.20,  // maxPositionSize: 20% - default, will be overridden by temperament
 		container.ReturnsCalc,
 		container.RiskBuilder,
 		container.RegimeDetector,
 	)
+	// Wire settings service for temperament-aware Kelly parameters
+	kellySettingsAdapterInstance := &kellySettingsAdapter{service: container.SettingsService}
+	container.KellySizer.SetSettingsService(kellySettingsAdapterInstance)
 
 	// CVaR Calculator
 	container.CVaRCalculator = optimization.NewCVaRCalculator(
@@ -644,4 +652,176 @@ type qualityGatesAdapter struct {
 func (a *qualityGatesAdapter) CalculateAdaptiveQualityGates(regimeScore float64) universe.QualityGateThresholdsProvider {
 	thresholds := a.service.CalculateAdaptiveQualityGates(regimeScore)
 	return thresholds // *adaptation.QualityGateThresholds implements the interface via GetFundamentals/GetLongTerm
+}
+
+// kellySettingsAdapter adapts settings.Service to optimization.KellySettingsService
+type kellySettingsAdapter struct {
+	service *settings.Service
+}
+
+func (a *kellySettingsAdapter) GetAdjustedKellyParams() optimization.KellyParamsConfig {
+	params := a.service.GetAdjustedKellyParams()
+	return optimization.KellyParamsConfig{
+		FixedFractional:           params.FixedFractional,
+		MinPositionSize:           params.MinPositionSize,
+		MaxPositionSize:           params.MaxPositionSize,
+		BearReduction:             params.BearReduction,
+		BaseMultiplier:            params.BaseMultiplier,
+		ConfidenceAdjustmentRange: params.ConfidenceAdjustmentRange,
+		RegimeAdjustmentRange:     params.RegimeAdjustmentRange,
+		MinMultiplier:             params.MinMultiplier,
+		MaxMultiplier:             params.MaxMultiplier,
+		BearMaxReduction:          params.BearMaxReduction,
+		BullThreshold:             params.BullThreshold,
+		BearThreshold:             params.BearThreshold,
+	}
+}
+
+// tagSettingsAdapter adapts settings.Service to universe.TagSettingsService
+type tagSettingsAdapter struct {
+	service *settings.Service
+}
+
+func (a *tagSettingsAdapter) GetAdjustedValueThresholds() universe.ValueThresholds {
+	params := a.service.GetAdjustedValueThresholds()
+	return universe.ValueThresholds{
+		ValueOpportunityDiscountPct: params.ValueOpportunityDiscountPct,
+		DeepValueDiscountPct:        params.DeepValueDiscountPct,
+		DeepValueExtremePct:         params.DeepValueExtremePct,
+		UndervaluedPEThreshold:      params.UndervaluedPEThreshold,
+		Below52wHighThreshold:       params.Below52wHighThreshold,
+	}
+}
+
+func (a *tagSettingsAdapter) GetAdjustedQualityThresholds() universe.QualityThresholds {
+	params := a.service.GetAdjustedQualityThresholds()
+	return universe.QualityThresholds{
+		HighQualityFundamentals:     params.HighQualityFundamentals,
+		HighQualityLongTerm:         params.HighQualityLongTerm,
+		StableFundamentals:          params.StableFundamentals,
+		StableVolatilityMax:         params.StableVolatilityMax,
+		StableConsistency:           params.StableConsistency,
+		ConsistentGrowerConsistency: params.ConsistentGrowerConsistency,
+		ConsistentGrowerCAGR:        params.ConsistentGrowerCAGR,
+		StrongFundamentalsThreshold: params.StrongFundamentalsThreshold,
+	}
+}
+
+func (a *tagSettingsAdapter) GetAdjustedTechnicalThresholds() universe.TechnicalThresholds {
+	params := a.service.GetAdjustedTechnicalThresholds()
+	return universe.TechnicalThresholds{
+		RSIOversold:               params.RSIOversold,
+		RSIOverbought:             params.RSIOverbought,
+		RecoveryMomentumThreshold: params.RecoveryMomentumThreshold,
+		RecoveryFundamentalsMin:   params.RecoveryFundamentalsMin,
+		RecoveryDiscountMin:       params.RecoveryDiscountMin,
+	}
+}
+
+func (a *tagSettingsAdapter) GetAdjustedDividendThresholds() universe.DividendThresholds {
+	params := a.service.GetAdjustedDividendThresholds()
+	return universe.DividendThresholds{
+		HighDividendYield:        params.HighDividendYield,
+		DividendOpportunityScore: params.DividendOpportunityScore,
+		DividendOpportunityYield: params.DividendOpportunityYield,
+		DividendConsistencyScore: params.DividendConsistencyScore,
+	}
+}
+
+func (a *tagSettingsAdapter) GetAdjustedDangerThresholds() universe.DangerThresholds {
+	params := a.service.GetAdjustedDangerThresholds()
+	return universe.DangerThresholds{
+		OvervaluedPEThreshold:    params.OvervaluedPEThreshold,
+		OvervaluedNearHighPct:    params.OvervaluedNearHighPct,
+		UnsustainableGainsReturn: params.UnsustainableGainsReturn,
+		ValuationStretchEMA:      params.ValuationStretchEMA,
+		UnderperformingDays:      params.UnderperformingDays,
+		StagnantReturnThreshold:  params.StagnantReturnThreshold,
+		StagnantDaysThreshold:    params.StagnantDaysThreshold,
+	}
+}
+
+func (a *tagSettingsAdapter) GetAdjustedPortfolioRiskThresholds() universe.PortfolioRiskThresholds {
+	params := a.service.GetAdjustedPortfolioRiskThresholds()
+	return universe.PortfolioRiskThresholds{
+		OverweightDeviation:        params.OverweightDeviation,
+		OverweightAbsolute:         params.OverweightAbsolute,
+		ConcentrationRiskThreshold: params.ConcentrationRiskThreshold,
+		NeedsRebalanceDeviation:    params.NeedsRebalanceDeviation,
+	}
+}
+
+func (a *tagSettingsAdapter) GetAdjustedRiskProfileThresholds() universe.RiskProfileThresholds {
+	params := a.service.GetAdjustedRiskProfileThresholds()
+	return universe.RiskProfileThresholds{
+		LowRiskVolatilityMax:          params.LowRiskVolatilityMax,
+		LowRiskFundamentalsMin:        params.LowRiskFundamentalsMin,
+		LowRiskDrawdownMax:            params.LowRiskDrawdownMax,
+		MediumRiskVolatilityMin:       params.MediumRiskVolatilityMin,
+		MediumRiskVolatilityMax:       params.MediumRiskVolatilityMax,
+		MediumRiskFundamentalsMin:     params.MediumRiskFundamentalsMin,
+		HighRiskVolatilityThreshold:   params.HighRiskVolatilityThreshold,
+		HighRiskFundamentalsThreshold: params.HighRiskFundamentalsThreshold,
+	}
+}
+
+func (a *tagSettingsAdapter) GetAdjustedBubbleTrapThresholds() universe.BubbleTrapThresholds {
+	params := a.service.GetAdjustedBubbleTrapThresholds()
+	return universe.BubbleTrapThresholds{
+		BubbleCAGRThreshold:         params.BubbleCAGRThreshold,
+		BubbleSharpeThreshold:       params.BubbleSharpeThreshold,
+		BubbleVolatilityThreshold:   params.BubbleVolatilityThreshold,
+		BubbleFundamentalsThreshold: params.BubbleFundamentalsThreshold,
+		ValueTrapFundamentals:       params.ValueTrapFundamentals,
+		ValueTrapLongTerm:           params.ValueTrapLongTerm,
+		ValueTrapMomentum:           params.ValueTrapMomentum,
+		ValueTrapVolatility:         params.ValueTrapVolatility,
+		QuantumBubbleHighProb:       params.QuantumBubbleHighProb,
+		QuantumBubbleWarningProb:    params.QuantumBubbleWarningProb,
+		QuantumTrapHighProb:         params.QuantumTrapHighProb,
+		QuantumTrapWarningProb:      params.QuantumTrapWarningProb,
+	}
+}
+
+func (a *tagSettingsAdapter) GetAdjustedTotalReturnThresholds() universe.TotalReturnThresholds {
+	params := a.service.GetAdjustedTotalReturnThresholds()
+	return universe.TotalReturnThresholds{
+		ExcellentTotalReturn:     params.ExcellentTotalReturn,
+		HighTotalReturn:          params.HighTotalReturn,
+		ModerateTotalReturn:      params.ModerateTotalReturn,
+		DividendTotalReturnYield: params.DividendTotalReturnYield,
+		DividendTotalReturnCAGR:  params.DividendTotalReturnCAGR,
+	}
+}
+
+func (a *tagSettingsAdapter) GetAdjustedRegimeThresholds() universe.RegimeThresholds {
+	params := a.service.GetAdjustedRegimeThresholds()
+	return universe.RegimeThresholds{
+		BearSafeVolatility:       params.BearSafeVolatility,
+		BearSafeFundamentals:     params.BearSafeFundamentals,
+		BearSafeDrawdown:         params.BearSafeDrawdown,
+		BullGrowthCAGR:           params.BullGrowthCAGR,
+		BullGrowthFundamentals:   params.BullGrowthFundamentals,
+		RegimeVolatileVolatility: params.RegimeVolatileVolatility,
+	}
+}
+
+func (a *tagSettingsAdapter) GetAdjustedQualityGateParams() universe.QualityGateParams {
+	params := a.service.GetAdjustedQualityGateParams()
+	return universe.QualityGateParams{
+		FundamentalsThreshold: params.FundamentalsThreshold,
+		LongTermThreshold:     params.LongTermThreshold,
+		ExceptionalThreshold:  params.ExceptionalThreshold,
+		AbsoluteMinCAGR:       params.AbsoluteMinCAGR,
+	}
+}
+
+func (a *tagSettingsAdapter) GetAdjustedVolatilityParams() universe.VolatilityParams {
+	params := a.service.GetAdjustedVolatilityParams()
+	return universe.VolatilityParams{
+		VolatileThreshold:     params.VolatileThreshold,
+		HighThreshold:         params.HighThreshold,
+		MaxAcceptable:         params.MaxAcceptable,
+		MaxAcceptableDrawdown: params.MaxAcceptableDrawdown,
+	}
 }

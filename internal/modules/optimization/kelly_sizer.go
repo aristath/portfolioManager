@@ -19,6 +19,7 @@ type KellyPositionSizer struct {
 	returnsCalc     *ReturnsCalculator
 	riskBuilder     *RiskModelBuilder
 	regimeDetector  *market_regime.MarketRegimeDetector
+	settingsService KellySettingsService // Optional: for temperament-adjusted parameters
 	log             zerolog.Logger
 }
 
@@ -66,6 +67,59 @@ func (ks *KellyPositionSizer) SetFractionalMode(mode string) {
 	}
 }
 
+// SetSettingsService sets the settings service for temperament-aware configuration.
+// When set, the Kelly sizer will use temperament-adjusted parameters from the settings service.
+func (ks *KellyPositionSizer) SetSettingsService(settingsService KellySettingsService) {
+	ks.settingsService = settingsService
+	ks.log.Info().Msg("Settings service configured for Kelly sizer (temperament-aware)")
+}
+
+// KellySettingsService interface for temperament-aware Kelly parameters.
+// This interface is implemented by settings.Service.
+type KellySettingsService interface {
+	GetAdjustedKellyParams() KellyParamsConfig
+}
+
+// KellyParamsConfig holds temperament-adjusted Kelly parameters.
+type KellyParamsConfig struct {
+	FixedFractional           float64
+	MinPositionSize           float64
+	MaxPositionSize           float64
+	BearReduction             float64
+	BaseMultiplier            float64
+	ConfidenceAdjustmentRange float64
+	RegimeAdjustmentRange     float64
+	MinMultiplier             float64
+	MaxMultiplier             float64
+	BearMaxReduction          float64
+	BullThreshold             float64
+	BearThreshold             float64
+}
+
+// getKellyParams returns temperament-adjusted Kelly parameters if settings service is available,
+// otherwise returns the constructor-provided defaults that match original hardcoded behavior.
+func (ks *KellyPositionSizer) getKellyParams() KellyParamsConfig {
+	if ks.settingsService != nil {
+		return ks.settingsService.GetAdjustedKellyParams()
+	}
+	// Fallback to constructor-provided values + original hardcoded defaults
+	// These match the original hardcoded values in the methods before temperament integration
+	return KellyParamsConfig{
+		FixedFractional:           ks.fixedFractional,
+		MinPositionSize:           ks.minPositionSize,
+		MaxPositionSize:           ks.maxPositionSize,
+		BearReduction:             0.5,  // Not used in current logic
+		BaseMultiplier:            0.5,  // Original: 0.5 (half-Kelly)
+		ConfidenceAdjustmentRange: 0.3,  // Original: (confidence - 0.5) * 0.3 = ±0.15
+		RegimeAdjustmentRange:     0.2,  // Original: ±0.10
+		MinMultiplier:             0.25, // Original: clamp min 0.25
+		MaxMultiplier:             0.75, // Original: clamp max 0.75
+		BearMaxReduction:          0.25, // Original: 1.0 - 0.25 * |regime| = max 25% reduction
+		BullThreshold:             0.5,  // Original: regimeScore > 0.5
+		BearThreshold:             -0.5, // Original: regimeScore < -0.5
+	}
+}
+
 // CalculateOptimalSize calculates the optimal position size using Kelly Criterion
 // with constraints and adaptive adjustments.
 //
@@ -101,6 +155,7 @@ func (ks *KellyPositionSizer) CalculateOptimalSize(
 
 // CalculateOptimalSizeForISIN calculates optimal size for a security by ISIN.
 // This is a convenience method that looks up expected return and variance.
+// Uses temperament-adjusted parameters when settings service is available.
 func (ks *KellyPositionSizer) CalculateOptimalSizeForISIN(
 	isin string,
 	expectedReturns map[string]float64, // ISIN-keyed
@@ -109,16 +164,18 @@ func (ks *KellyPositionSizer) CalculateOptimalSizeForISIN(
 	confidence float64,
 	regimeScore float64,
 ) (float64, error) {
+	params := ks.getKellyParams()
+
 	// Get expected return
 	expectedReturn, hasReturn := expectedReturns[isin]
 	if !hasReturn {
-		return ks.minPositionSize, fmt.Errorf("no expected return for ISIN %s", isin)
+		return params.MinPositionSize, fmt.Errorf("no expected return for ISIN %s", isin)
 	}
 
 	// Get variance from covariance matrix diagonal
 	variance, err := ks.getVarianceFromCovMatrix(isin, covMatrix, isins)
 	if err != nil {
-		return ks.minPositionSize, fmt.Errorf("failed to get variance for ISIN %s: %w", isin, err)
+		return params.MinPositionSize, fmt.Errorf("failed to get variance for ISIN %s: %w", isin, err)
 	}
 
 	// Calculate optimal size
@@ -129,6 +186,7 @@ func (ks *KellyPositionSizer) CalculateOptimalSizeForISIN(
 
 // CalculateOptimalSizeForSymbol calculates optimal size for a security by symbol.
 // DEPRECATED: Use CalculateOptimalSizeForISIN instead. This method is kept for backward compatibility.
+// Uses temperament-adjusted parameters when settings service is available.
 func (ks *KellyPositionSizer) CalculateOptimalSizeForSymbol(
 	symbol string,
 	expectedReturns map[string]float64,
@@ -137,16 +195,18 @@ func (ks *KellyPositionSizer) CalculateOptimalSizeForSymbol(
 	confidence float64,
 	regimeScore float64,
 ) (float64, error) {
+	params := ks.getKellyParams()
+
 	// Get expected return
 	expectedReturn, hasReturn := expectedReturns[symbol]
 	if !hasReturn {
-		return ks.minPositionSize, fmt.Errorf("no expected return for symbol %s", symbol)
+		return params.MinPositionSize, fmt.Errorf("no expected return for symbol %s", symbol)
 	}
 
 	// Get variance from covariance matrix diagonal
 	variance, err := ks.getVarianceFromCovMatrix(symbol, covMatrix, symbols)
 	if err != nil {
-		return ks.minPositionSize, fmt.Errorf("failed to get variance for %s: %w", symbol, err)
+		return params.MinPositionSize, fmt.Errorf("failed to get variance for %s: %w", symbol, err)
 	}
 
 	// Calculate optimal size
@@ -183,15 +243,18 @@ func (ks *KellyPositionSizer) calculateKellyFraction(expectedReturn, riskFreeRat
 }
 
 // applyConstraints applies min/max constraints to Kelly fraction.
+// Uses temperament-adjusted min/max position sizes when settings service is available.
 func (ks *KellyPositionSizer) applyConstraints(kellyFraction float64) float64 {
+	params := ks.getKellyParams()
+
 	// Floor at minimum position size
-	if kellyFraction < ks.minPositionSize {
-		return ks.minPositionSize
+	if kellyFraction < params.MinPositionSize {
+		return params.MinPositionSize
 	}
 
 	// Cap at maximum position size
-	if kellyFraction > ks.maxPositionSize {
-		return ks.maxPositionSize
+	if kellyFraction > params.MaxPositionSize {
+		return params.MaxPositionSize
 	}
 
 	return kellyFraction
@@ -204,58 +267,63 @@ func (ks *KellyPositionSizer) applyFractionalKelly(kellyFraction float64, regime
 }
 
 // getFractionalMultiplier returns the fractional Kelly multiplier based on mode.
+// Uses temperament-adjusted parameters when settings service is available.
 func (ks *KellyPositionSizer) getFractionalMultiplier(regimeScore float64, confidence float64) float64 {
+	params := ks.getKellyParams()
+
 	if ks.fractionalMode == "fixed" {
-		return ks.fixedFractional
+		return params.FixedFractional
 	}
 
 	// Adaptive mode: multiplier based on regime and confidence
-	// Range: 0.25 (very conservative) to 0.75 (moderate)
-	// Base: 0.5 (half-Kelly)
-	baseMultiplier := 0.5
+	// Base multiplier from temperament settings
+	baseMultiplier := params.BaseMultiplier
 
-	// Confidence adjustment: ±0.15 based on confidence (0.0 to 1.0)
-	// High confidence (0.8+) → +0.15, Low confidence (0.3-) → -0.15
-	confidenceAdjustment := (confidence - 0.5) * 0.3 // Maps 0.0-1.0 to -0.15 to +0.15
+	// Confidence adjustment: based on temperament-adjusted range
+	// High confidence (0.8+) → +range/2, Low confidence (0.3-) → -range/2
+	confidenceAdjustment := (confidence - 0.5) * params.ConfidenceAdjustmentRange
 
-	// Regime adjustment: ±0.10 based on regime
-	// Bull (0.5+) → +0.10, Bear (-0.5-) → -0.10
+	// Regime adjustment: based on temperament-adjusted range
+	// Bull (above BullThreshold) → +range/2, Bear (below BearThreshold) → -range/2
 	regimeAdjustment := 0.0
-	if regimeScore > 0.5 {
-		regimeAdjustment = 0.10 // Bull market: more aggressive
-	} else if regimeScore < -0.5 {
-		regimeAdjustment = -0.10 // Bear market: more conservative
+	if regimeScore > params.BullThreshold {
+		regimeAdjustment = params.RegimeAdjustmentRange / 2 // Bull market: more aggressive
+	} else if regimeScore < params.BearThreshold {
+		regimeAdjustment = -params.RegimeAdjustmentRange / 2 // Bear market: more conservative
 	}
 
 	// Calculate final multiplier
 	multiplier := baseMultiplier + confidenceAdjustment + regimeAdjustment
 
-	// Clamp to range [0.25, 0.75]
-	if multiplier < 0.25 {
-		multiplier = 0.25
+	// Clamp to temperament-adjusted range
+	if multiplier < params.MinMultiplier {
+		multiplier = params.MinMultiplier
 	}
-	if multiplier > 0.75 {
-		multiplier = 0.75
+	if multiplier > params.MaxMultiplier {
+		multiplier = params.MaxMultiplier
 	}
 
 	return multiplier
 }
 
 // applyRegimeAdjustment applies regime-based adjustment to Kelly fraction.
-// More conservative in bear markets.
+// More conservative in bear markets. Uses temperament-adjusted parameters.
 func (ks *KellyPositionSizer) applyRegimeAdjustment(kellyFraction float64, regimeScore float64) float64 {
+	params := ks.getKellyParams()
+
 	// Only reduce in bear markets (regimeScore < 0)
 	if regimeScore >= 0 {
 		return kellyFraction
 	}
 
-	// Reduction factor: 1.0 (no reduction) to 0.75 (25% reduction) as regime goes 0 to -1.0
-	// Formula: 1.0 - 0.25 * |regimeScore| for negative regime scores
-	reductionFactor := 1.0 - 0.25*math.Abs(regimeScore)
+	// Reduction factor: 1.0 (no reduction) to (1 - BearMaxReduction) as regime goes 0 to -1.0
+	// BearMaxReduction is temperament-adjusted (e.g., 0.25 means max 25% reduction)
+	reductionFactor := 1.0 - params.BearMaxReduction*math.Abs(regimeScore)
 
-	// Clamp reduction factor to [0.75, 1.0]
-	if reductionFactor < 0.75 {
-		reductionFactor = 0.75
+	// Clamp reduction factor to minimum (1 - BearMaxReduction)
+	minReductionFactor := 1.0 - params.BearMaxReduction
+	if reductionFactor < minReductionFactor {
+		reductionFactor = minReductionFactor
 	}
 
 	return kellyFraction * reductionFactor
@@ -295,6 +363,7 @@ func (ks *KellyPositionSizer) getVarianceFromCovMatrix(identifier string, covMat
 }
 
 // CalculateOptimalSizesForAll calculates optimal sizes for all securities.
+// Uses temperament-adjusted parameters when settings service is available.
 func (ks *KellyPositionSizer) CalculateOptimalSizesForAll(
 	expectedReturns map[string]float64,
 	covMatrix [][]float64,
@@ -302,6 +371,7 @@ func (ks *KellyPositionSizer) CalculateOptimalSizesForAll(
 	confidences map[string]float64,
 	regimeScore float64,
 ) (map[string]float64, error) {
+	params := ks.getKellyParams()
 	result := make(map[string]float64, len(symbols))
 
 	for _, symbol := range symbols {
@@ -324,7 +394,7 @@ func (ks *KellyPositionSizer) CalculateOptimalSizesForAll(
 				Str("symbol", symbol).
 				Err(err).
 				Msg("Failed to calculate Kelly size, using min size")
-			optimalSize = ks.minPositionSize
+			optimalSize = params.MinPositionSize
 		}
 
 		result[symbol] = optimalSize

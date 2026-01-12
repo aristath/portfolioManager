@@ -14,13 +14,15 @@ import (
 	"github.com/aristath/sentinel/internal/evaluation/workers"
 	"github.com/aristath/sentinel/internal/modules/planning/domain"
 	scoringdomain "github.com/aristath/sentinel/internal/modules/scoring/domain"
+	"github.com/aristath/sentinel/internal/modules/settings"
 	"github.com/rs/zerolog"
 )
 
 // Service provides direct evaluation using worker pool (replaces HTTP client).
 type Service struct {
-	workerPool *workers.WorkerPool
-	log        zerolog.Logger
+	workerPool      *workers.WorkerPool
+	settingsService *settings.Service
+	log             zerolog.Logger
 }
 
 // NewService creates a new evaluation service that calls worker pool directly.
@@ -28,6 +30,50 @@ func NewService(numWorkers int, log zerolog.Logger) *Service {
 	return &Service{
 		workerPool: workers.NewWorkerPool(numWorkers),
 		log:        log.With().Str("component", "evaluation_service").Logger(),
+	}
+}
+
+// SetSettingsService sets the settings service for temperament-aware scoring.
+func (s *Service) SetSettingsService(settingsService *settings.Service) {
+	s.settingsService = settingsService
+	s.log.Info().Msg("Settings service configured for evaluation service (temperament-aware scoring)")
+}
+
+// buildScoringConfig creates a ScoringConfig from the settings service.
+// Returns nil if no settings service is configured (will use defaults).
+func (s *Service) buildScoringConfig() *models.ScoringConfig {
+	if s.settingsService == nil {
+		return nil // Use defaults
+	}
+
+	// Get temperament-adjusted weights and params
+	weights := s.settingsService.GetAdjustedEvaluationWeights()
+	scoring := s.settingsService.GetAdjustedScoringParams()
+
+	return &models.ScoringConfig{
+		// Main weights
+		WeightOpportunityCapture:       weights.OpportunityCapture,
+		WeightPortfolioQuality:         weights.PortfolioQuality,
+		WeightDiversificationAlignment: weights.DiversificationAlignment,
+		WeightRiskAdjustedMetrics:      weights.RiskAdjustedMetrics,
+		WeightRegimeRobustness:         weights.RegimeRobustness,
+		// Scoring thresholds
+		WindfallExcessHigh:   scoring.WindfallExcessHigh,
+		WindfallExcessMedium: scoring.WindfallExcessMedium,
+		DeviationScale:       scoring.DeviationScale,
+		// Regime thresholds
+		RegimeBullThreshold: scoring.RegimeBullThreshold,
+		RegimeBearThreshold: scoring.RegimeBearThreshold,
+		// Risk thresholds
+		VolatilityExcellent:  scoring.VolatilityExcellent,
+		VolatilityGood:       scoring.VolatilityGood,
+		VolatilityAcceptable: scoring.VolatilityAcceptable,
+		DrawdownExcellent:    scoring.DrawdownExcellent,
+		DrawdownGood:         scoring.DrawdownGood,
+		DrawdownAcceptable:   scoring.DrawdownAcceptable,
+		SharpeExcellent:      scoring.SharpeExcellent,
+		SharpeGood:           scoring.SharpeGood,
+		SharpeAcceptable:     scoring.SharpeAcceptable,
 	}
 }
 
@@ -183,6 +229,7 @@ func (s *Service) BatchEvaluate(ctx context.Context, sequences []domain.ActionSe
 		TransactionCostFixed:   transactionCostFixed,
 		TransactionCostPercent: transactionCostPercent,
 		CostPenaltyFactor:      0.1, // Default cost penalty factor
+		ScoringConfig:          s.buildScoringConfig(),
 	}
 
 	// Evaluate using worker pool

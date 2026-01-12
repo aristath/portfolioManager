@@ -78,11 +78,11 @@ type PlannerConfiguration struct {
 // NewDefaultConfiguration creates a PlannerConfiguration with default settings.
 func NewDefaultConfiguration() *PlannerConfiguration {
 	return &PlannerConfiguration{
-		Name:                        "default",
-		Description:                 "",
+		Name:                        "default", // Legacy field - will be removed
+		Description:                 "",        // Legacy field - will be removed
 		EnableBatchGeneration:       true,
-		MaxDepth:                    5,
-		MaxOpportunitiesPerCategory: 5,
+		MaxDepth:                    10, // Hardcoded for maximum complexity
+		MaxOpportunitiesPerCategory: 10, // Hardcoded for maximum opportunities
 		MaxSequenceAttempts:         20, // Try top 20 sequences until one passes constraints
 		EnableDiverseSelection:      true,
 		DiversityWeight:             0.3,

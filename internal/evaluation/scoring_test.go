@@ -129,6 +129,7 @@ func TestEvaluateEndState_BasicScore(t *testing.T) {
 		2.0,   // Fixed cost
 		0.002, // Percent cost
 		0.0,   // No cost penalty
+		nil,   // Use default scoring config
 	)
 
 	assert.Greater(t, score, 0.0, "Score should be positive")
@@ -157,6 +158,7 @@ func TestEvaluateEndState_WithCostPenalty(t *testing.T) {
 		2.0,
 		0.002,
 		0.0, // No penalty
+		nil, // Use default scoring config
 	)
 
 	scoreWithPenalty := EvaluateEndState(
@@ -165,6 +167,7 @@ func TestEvaluateEndState_WithCostPenalty(t *testing.T) {
 		2.0,
 		0.002,
 		1.0, // High penalty
+		nil, // Use default scoring config
 	)
 
 	assert.Less(t, scoreWithPenalty, scoreWithoutPenalty, "Score with penalty should be lower")

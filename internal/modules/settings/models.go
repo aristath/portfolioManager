@@ -3,8 +3,10 @@ package settings
 // SettingDefaults holds all default values for configurable settings
 // Faithful translation from Python: app/api/settings.py -> SETTING_DEFAULTS
 var SettingDefaults = map[string]interface{}{
-	// Controller settings (temperament adjustments)
-	"risk_tolerance": 0.5, // Overall risk tolerance (0 = avoid risk, 1 = take more risks)
+	// Temperament settings (controls 150+ parameters system-wide)
+	"risk_tolerance":         0.5, // Risk tolerance (0 = conservative, 0.5 = balanced, 1 = risk-taking)
+	"temperament_aggression": 0.5, // Aggression level (0 = passive, 0.5 = balanced, 1 = aggressive)
+	"temperament_patience":   0.5, // Patience level (0 = impatient, 0.5 = balanced, 1 = patient)
 
 	// Security scoring
 	"min_security_score":   0.5,  // Minimum score for security to be recommended (0-1)
@@ -187,7 +189,12 @@ var StringSettings = map[string]bool{
 
 // SettingDescriptions holds human-readable descriptions for all settings
 var SettingDescriptions = map[string]string{
-	"risk_tolerance":              "Overall risk tolerance (0 = avoid risk at all costs, 1 = take more risks). Adjusts internal thresholds automatically.",
+	// Temperament settings
+	"risk_tolerance":         "Risk tolerance level (0 = conservative/risk-averse, 0.5 = balanced, 1 = risk-taking). Controls volatility acceptance, drawdown tolerance, position concentration, quality floors.",
+	"temperament_aggression": "Aggression level (0 = passive/conservative, 0.5 = balanced, 1 = aggressive). Controls scoring thresholds, action frequency, evaluation weights, position sizing, and opportunity pursuit.",
+	"temperament_patience":   "Patience level (0 = impatient, 0.5 = balanced, 1 = patient). Controls hold periods, cooldowns, windfall thresholds, rebalance triggers, and dividend focus.",
+
+	// Trading settings
 	"limit_order_buffer_percent":  "Buffer percentage for limit orders (5% = buy up to 5% above Yahoo price, sell down to 5% below)",
 	"enable_order_book_analysis":  "Enable order book analysis (1.0 = yes, 0.0 = no/Yahoo-only fallback)",
 	"min_liquidity_multiple":      "Required liquidity as multiple of trade size (2.0 = need 2x quantity available)",

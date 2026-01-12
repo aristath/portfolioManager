@@ -24,3 +24,74 @@ func TestSettingDescriptions_LimitOrderBuffer(t *testing.T) {
 	assert.NotEmpty(t, desc, "description must not be empty")
 	assert.Contains(t, desc, "Buffer", "description should mention buffer")
 }
+
+// ============================================================================
+// TEMPERAMENT SETTINGS TESTS
+// ============================================================================
+
+func TestSettingDefaults_TemperamentRiskTolerance(t *testing.T) {
+	// Verify default exists
+	val, exists := SettingDefaults["risk_tolerance"]
+	assert.True(t, exists, "risk_tolerance must exist in defaults")
+
+	// Verify default value is 0.5 (balanced)
+	floatVal, ok := val.(float64)
+	assert.True(t, ok, "risk_tolerance must be float64")
+	assert.Equal(t, 0.5, floatVal, "default should be 0.5 (balanced)")
+}
+
+func TestSettingDefaults_TemperamentAggression(t *testing.T) {
+	// Verify default exists
+	val, exists := SettingDefaults["temperament_aggression"]
+	assert.True(t, exists, "temperament_aggression must exist in defaults")
+
+	// Verify default value is 0.5 (balanced)
+	floatVal, ok := val.(float64)
+	assert.True(t, ok, "temperament_aggression must be float64")
+	assert.Equal(t, 0.5, floatVal, "default should be 0.5 (balanced)")
+}
+
+func TestSettingDefaults_TemperamentPatience(t *testing.T) {
+	// Verify default exists
+	val, exists := SettingDefaults["temperament_patience"]
+	assert.True(t, exists, "temperament_patience must exist in defaults")
+
+	// Verify default value is 0.5 (balanced)
+	floatVal, ok := val.(float64)
+	assert.True(t, ok, "temperament_patience must be float64")
+	assert.Equal(t, 0.5, floatVal, "default should be 0.5 (balanced)")
+}
+
+func TestSettingDescriptions_TemperamentSettings(t *testing.T) {
+	// Verify descriptions exist for all temperament settings
+	temperamentSettings := []string{
+		"risk_tolerance",
+		"temperament_aggression",
+		"temperament_patience",
+	}
+
+	for _, setting := range temperamentSettings {
+		desc, exists := SettingDescriptions[setting]
+		assert.True(t, exists, "%s description must exist", setting)
+		assert.NotEmpty(t, desc, "%s description must not be empty", setting)
+	}
+}
+
+func TestTemperamentSettingsInValidRange(t *testing.T) {
+	// All temperament settings should default to a value between 0 and 1
+	temperamentSettings := []string{
+		"risk_tolerance",
+		"temperament_aggression",
+		"temperament_patience",
+	}
+
+	for _, setting := range temperamentSettings {
+		val, exists := SettingDefaults[setting]
+		assert.True(t, exists, "%s must exist", setting)
+
+		floatVal, ok := val.(float64)
+		assert.True(t, ok, "%s must be float64", setting)
+		assert.GreaterOrEqual(t, floatVal, 0.0, "%s must be >= 0", setting)
+		assert.LessOrEqual(t, floatVal, 1.0, "%s must be <= 1", setting)
+	}
+}

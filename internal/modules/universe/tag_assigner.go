@@ -24,11 +24,138 @@ type RegimeScoreProvider interface {
 	GetCurrentRegimeScore() (float64, error)
 }
 
+// TagSettingsService interface for temperament-aware tag thresholds.
+// This allows the tag assigner to get temperament-adjusted thresholds from the settings service.
+type TagSettingsService interface {
+	GetAdjustedValueThresholds() ValueThresholds
+	GetAdjustedQualityThresholds() QualityThresholds
+	GetAdjustedTechnicalThresholds() TechnicalThresholds
+	GetAdjustedDividendThresholds() DividendThresholds
+	GetAdjustedDangerThresholds() DangerThresholds
+	GetAdjustedPortfolioRiskThresholds() PortfolioRiskThresholds
+	GetAdjustedRiskProfileThresholds() RiskProfileThresholds
+	GetAdjustedBubbleTrapThresholds() BubbleTrapThresholds
+	GetAdjustedTotalReturnThresholds() TotalReturnThresholds
+	GetAdjustedRegimeThresholds() RegimeThresholds
+	GetAdjustedQualityGateParams() QualityGateParams
+	GetAdjustedVolatilityParams() VolatilityParams
+}
+
+// Threshold types for temperament-aware configuration (mirrors settings types)
+type ValueThresholds struct {
+	ValueOpportunityDiscountPct float64
+	DeepValueDiscountPct        float64
+	DeepValueExtremePct         float64
+	UndervaluedPEThreshold      float64
+	Below52wHighThreshold       float64
+}
+
+type QualityThresholds struct {
+	HighQualityFundamentals     float64
+	HighQualityLongTerm         float64
+	StableFundamentals          float64
+	StableVolatilityMax         float64
+	StableConsistency           float64
+	ConsistentGrowerConsistency float64
+	ConsistentGrowerCAGR        float64
+	StrongFundamentalsThreshold float64
+}
+
+type TechnicalThresholds struct {
+	RSIOversold               float64
+	RSIOverbought             float64
+	RecoveryMomentumThreshold float64
+	RecoveryFundamentalsMin   float64
+	RecoveryDiscountMin       float64
+}
+
+type DividendThresholds struct {
+	HighDividendYield        float64
+	DividendOpportunityScore float64
+	DividendOpportunityYield float64
+	DividendConsistencyScore float64
+}
+
+type DangerThresholds struct {
+	OvervaluedPEThreshold    float64
+	OvervaluedNearHighPct    float64
+	UnsustainableGainsReturn float64
+	ValuationStretchEMA      float64
+	UnderperformingDays      int
+	StagnantReturnThreshold  float64
+	StagnantDaysThreshold    int
+}
+
+type PortfolioRiskThresholds struct {
+	OverweightDeviation        float64
+	OverweightAbsolute         float64
+	ConcentrationRiskThreshold float64
+	NeedsRebalanceDeviation    float64
+}
+
+type RiskProfileThresholds struct {
+	LowRiskVolatilityMax          float64
+	LowRiskFundamentalsMin        float64
+	LowRiskDrawdownMax            float64
+	MediumRiskVolatilityMin       float64
+	MediumRiskVolatilityMax       float64
+	MediumRiskFundamentalsMin     float64
+	HighRiskVolatilityThreshold   float64
+	HighRiskFundamentalsThreshold float64
+}
+
+type BubbleTrapThresholds struct {
+	BubbleCAGRThreshold         float64
+	BubbleSharpeThreshold       float64
+	BubbleVolatilityThreshold   float64
+	BubbleFundamentalsThreshold float64
+	ValueTrapFundamentals       float64
+	ValueTrapLongTerm           float64
+	ValueTrapMomentum           float64
+	ValueTrapVolatility         float64
+	QuantumBubbleHighProb       float64
+	QuantumBubbleWarningProb    float64
+	QuantumTrapHighProb         float64
+	QuantumTrapWarningProb      float64
+}
+
+type TotalReturnThresholds struct {
+	ExcellentTotalReturn     float64
+	HighTotalReturn          float64
+	ModerateTotalReturn      float64
+	DividendTotalReturnYield float64
+	DividendTotalReturnCAGR  float64
+}
+
+type RegimeThresholds struct {
+	BearSafeVolatility       float64
+	BearSafeFundamentals     float64
+	BearSafeDrawdown         float64
+	BullGrowthCAGR           float64
+	BullGrowthFundamentals   float64
+	RegimeVolatileVolatility float64
+}
+
+type QualityGateParams struct {
+	FundamentalsThreshold float64
+	LongTermThreshold     float64
+	ExceptionalThreshold  float64
+	AbsoluteMinCAGR       float64
+}
+
+type VolatilityParams struct {
+	VolatileThreshold     float64
+	HighThreshold         float64
+	MaxAcceptable         float64
+	MaxAcceptableDrawdown float64
+}
+
 // TagAssigner assigns tags to securities based on analysis
 type TagAssigner struct {
 	log                 zerolog.Logger
 	adaptiveService     AdaptiveQualityGatesProvider          // Optional: adaptive market service
 	regimeScoreProvider RegimeScoreProvider                   // Optional: regime score provider
+	settingsService     TagSettingsService                    // Optional: for temperament-adjusted thresholds
 	quantumCalculator   *quantum.QuantumProbabilityCalculator // Quantum probability calculator
 }
 
@@ -48,6 +175,144 @@ func (ta *TagAssigner) SetAdaptiveService(service AdaptiveQualityGatesProvider) 
 // SetRegimeScoreProvider sets the regime score provider for getting current regime
 func (ta *TagAssigner) SetRegimeScoreProvider(provider RegimeScoreProvider) {
 	ta.regimeScoreProvider = provider
+}
+
+// SetSettingsService sets the settings service for temperament-aware thresholds.
+// When set, the tag assigner will use temperament-adjusted thresholds from the settings service.
+func (ta *TagAssigner) SetSettingsService(service TagSettingsService) {
+	ta.settingsService = service
+	ta.log.Info().Msg("Settings service configured for TagAssigner (temperament-aware)")
+}
+
+// getValueThresholds returns temperament-adjusted value thresholds, with fallback defaults.
+func (ta *TagAssigner) getValueThresholds() ValueThresholds {
+	if ta.settingsService != nil {
+		return ta.settingsService.GetAdjustedValueThresholds()
+	}
+	// Default thresholds matching original hardcoded values
+	return ValueThresholds{
+		ValueOpportunityDiscountPct: 15.0,
+		DeepValueDiscountPct:        25.0,
+		DeepValueExtremePct:         30.0,
+		UndervaluedPEThreshold:      -0.20,
+		Below52wHighThreshold:       10.0,
+	}
+}
+
+// getQualityThresholds returns temperament-adjusted quality thresholds, with fallback defaults.
+func (ta *TagAssigner) getQualityThresholds() QualityThresholds {
+	if ta.settingsService != nil {
+		return ta.settingsService.GetAdjustedQualityThresholds()
+	}
+	return QualityThresholds{
+		HighQualityFundamentals:     0.70,
+		HighQualityLongTerm:         0.70,
+		StableFundamentals:          0.75,
+		StableVolatilityMax:         0.25,
+		StableConsistency:           0.75,
+		ConsistentGrowerConsistency: 0.75,
+		ConsistentGrowerCAGR:        0.09,
+		StrongFundamentalsThreshold: 0.75,
+	}
+}
+
+// getTechnicalThresholds returns temperament-adjusted technical thresholds, with fallback defaults.
+func (ta *TagAssigner) getTechnicalThresholds() TechnicalThresholds {
+	if ta.settingsService != nil {
+		return ta.settingsService.GetAdjustedTechnicalThresholds()
+	}
+	return TechnicalThresholds{
+		RSIOversold:               30.0,
+		RSIOverbought:             70.0,
+		RecoveryMomentumThreshold: 0.0, // momentum < 0
+		RecoveryFundamentalsMin:   0.65,
+		RecoveryDiscountMin:       12.0,
+	}
+}
+
+// getDividendThresholds returns temperament-adjusted dividend thresholds, with fallback defaults.
+func (ta *TagAssigner) getDividendThresholds() DividendThresholds {
+	if ta.settingsService != nil {
+		return ta.settingsService.GetAdjustedDividendThresholds()
+	}
+	return DividendThresholds{
+		HighDividendYield:        0.04,
+		DividendOpportunityScore: 0.55,
+		DividendOpportunityYield: 0.025,
+		DividendConsistencyScore: 0.70,
+	}
+}
+
+// getDangerThresholds returns temperament-adjusted danger thresholds, with fallback defaults.
+func (ta *TagAssigner) getDangerThresholds() DangerThresholds {
+	if ta.settingsService != nil {
+		return ta.settingsService.GetAdjustedDangerThresholds()
+	}
+	return DangerThresholds{
+		OvervaluedPEThreshold:    0.20,
+		OvervaluedNearHighPct:    5.0,
+		UnsustainableGainsReturn: 0.50,
+		ValuationStretchEMA:      0.30,
+		UnderperformingDays:      180,
+		StagnantReturnThreshold:  0.05,
+		StagnantDaysThreshold:    365,
+	}
+}
+
+// getPortfolioRiskThresholds returns temperament-adjusted portfolio risk thresholds, with fallback defaults.
+func (ta *TagAssigner) getPortfolioRiskThresholds() PortfolioRiskThresholds {
+	if ta.settingsService != nil {
+		return ta.settingsService.GetAdjustedPortfolioRiskThresholds()
+	}
+	return PortfolioRiskThresholds{
+		OverweightDeviation:        0.02,
+		OverweightAbsolute:         0.10,
+		ConcentrationRiskThreshold: 0.15,
+		NeedsRebalanceDeviation:    0.03,
+	}
+}
+
+// getRiskProfileThresholds returns temperament-adjusted risk profile thresholds, with fallback defaults.
+func (ta *TagAssigner) getRiskProfileThresholds() RiskProfileThresholds {
+	if ta.settingsService != nil {
+		return ta.settingsService.GetAdjustedRiskProfileThresholds()
+	}
+	return RiskProfileThresholds{
+		LowRiskVolatilityMax:          0.15,
+		LowRiskFundamentalsMin:        0.70,
+		LowRiskDrawdownMax:            20.0,
+		MediumRiskVolatilityMin:       0.15,
+		MediumRiskVolatilityMax:       0.30,
+		MediumRiskFundamentalsMin:     0.55,
+		HighRiskVolatilityThreshold:   0.30,
+		HighRiskFundamentalsThreshold: 0.50,
+	}
+}
+
+// getQualityGateParams returns temperament-adjusted quality gate params, with fallback defaults.
+func (ta *TagAssigner) getQualityGateParams() QualityGateParams {
+	if ta.settingsService != nil {
+		return ta.settingsService.GetAdjustedQualityGateParams()
+	}
+	return QualityGateParams{
+		FundamentalsThreshold: 0.55,
+		LongTermThreshold:     0.45,
+		ExceptionalThreshold:  0.85,
+		AbsoluteMinCAGR:       0.05,
+	}
+}
+
+// getVolatilityParams returns temperament-adjusted volatility params, with fallback defaults.
+func (ta *TagAssigner) getVolatilityParams() VolatilityParams {
+	if ta.settingsService != nil {
+		return ta.settingsService.GetAdjustedVolatilityParams()
+	}
+	return VolatilityParams{
+		VolatileThreshold:     0.30,
+		HighThreshold:         0.40,
+		MaxAcceptable:         0.50,
+		MaxAcceptableDrawdown: 30.0,
+	}
 }
 
 // AssignTagsInput contains all data needed to assign tags to a security
@@ -82,6 +347,17 @@ type AssignTagsInput struct {
 // AssignTagsForSecurity analyzes a security and returns appropriate tag IDs
 func (ta *TagAssigner) AssignTagsForSecurity(input AssignTagsInput) ([]string, error) {
 	var tags []string
+
+	// Get temperament-adjusted thresholds (uses defaults if no settings service)
+	valueThresh := ta.getValueThresholds()
+	qualityThresh := ta.getQualityThresholds()
+	techThresh := ta.getTechnicalThresholds()
+	divThresh := ta.getDividendThresholds()
+	dangerThresh := ta.getDangerThresholds()
+	portfolioRiskThresh := ta.getPortfolioRiskThresholds()
+	riskProfileThresh := ta.getRiskProfileThresholds()
+	volatilityParams := ta.getVolatilityParams()
+	qualityGateParams := ta.getQualityGateParams()
 
 	// Extract scores for easier access
 	opportunityScore := getScore(input.GroupScores, "opportunity")
@@ -167,62 +443,60 @@ func (ta *TagAssigner) AssignTagsForSecurity(input AssignTagsInput) ([]string, e
 
 	// === OPPORTUNITY TAGS ===
 
-	// Value Opportunities
-	if opportunityScore > 0.65 && (below52wHighPct > 15.0 || peVsMarket < -0.20) {
+	// Value Opportunities (using temperament-adjusted thresholds)
+	if opportunityScore > 0.65 && (below52wHighPct > valueThresh.ValueOpportunityDiscountPct || peVsMarket < valueThresh.UndervaluedPEThreshold) {
 		tags = append(tags, "value-opportunity")
 	}
 
-	// Deep value: 25%+ discount AND cheap PE, OR 30%+ discount alone
-	if (below52wHighPct > 25.0 && peVsMarket < -0.20) || below52wHighPct > 30.0 {
+	// Deep value: significant discount AND cheap PE, OR extreme discount alone
+	if (below52wHighPct > valueThresh.DeepValueDiscountPct && peVsMarket < valueThresh.UndervaluedPEThreshold) || below52wHighPct > valueThresh.DeepValueExtremePct {
 		tags = append(tags, "deep-value")
 	}
 
-	if below52wHighPct > 10.0 {
+	if below52wHighPct > valueThresh.Below52wHighThreshold {
 		tags = append(tags, "below-52w-high")
 	}
 
-	if peVsMarket < -0.20 {
+	if peVsMarket < valueThresh.UndervaluedPEThreshold {
 		tags = append(tags, "undervalued-pe")
 	}
 
-	// Quality Opportunities
-	if fundamentalsScore > 0.7 && longTermScore > 0.7 {
+	// Quality Opportunities (using temperament-adjusted thresholds)
+	if fundamentalsScore > qualityThresh.HighQualityFundamentals && longTermScore > qualityThresh.HighQualityLongTerm {
 		tags = append(tags, "high-quality")
 	}
 
-	if fundamentalsScore > 0.75 && volatility < 0.25 && consistencyScore > 0.75 {
+	if fundamentalsScore > qualityThresh.StableFundamentals && volatility < qualityThresh.StableVolatilityMax && consistencyScore > qualityThresh.StableConsistency {
 		tags = append(tags, "stable")
 	}
 
 	// Consistent grower: requires both consistency and meaningful growth
-	// 9% CAGR threshold ensures meaningful growth for a retirement fund targeting 11%
-	if consistencyScore > 0.75 && cagrRaw > 0.09 {
+	if consistencyScore > qualityThresh.ConsistentGrowerConsistency && cagrRaw > qualityThresh.ConsistentGrowerCAGR {
 		tags = append(tags, "consistent-grower")
 	}
 
-	if fundamentalsScore > 0.75 {
+	if fundamentalsScore > qualityThresh.StrongFundamentalsThreshold {
 		tags = append(tags, "strong-fundamentals")
 	}
 
-	// Technical Opportunities
-	// Only tag as oversold if RSI is actually available (not nil) and below 30
-	// Defaulting to 0.0 when RSI is missing would incorrectly tag all securities
-	if input.RSI != nil && *input.RSI < 30 {
+	// Technical Opportunities (using temperament-adjusted thresholds)
+	// Only tag as oversold if RSI is actually available (not nil) and below threshold
+	if input.RSI != nil && *input.RSI < techThresh.RSIOversold {
 		tags = append(tags, "oversold")
 	}
 
 	// Removed: below-ema and bollinger-oversold tags (unused)
 
-	// Dividend Opportunities
-	if dividendYield > 0.04 {
+	// Dividend Opportunities (using temperament-adjusted thresholds)
+	if dividendYield > divThresh.HighDividendYield {
 		tags = append(tags, "high-dividend")
 	}
 
-	if dividendScore > 0.55 && dividendYield > 0.025 {
+	if dividendScore > divThresh.DividendOpportunityScore && dividendYield > divThresh.DividendOpportunityYield {
 		tags = append(tags, "dividend-opportunity")
 	}
 
-	if dividendConsistencyScore > 0.7 && input.FiveYearAvgDivYield != nil && dividendYield > 0 {
+	if dividendConsistencyScore > divThresh.DividendConsistencyScore && input.FiveYearAvgDivYield != nil && dividendYield > 0 {
 		if *input.FiveYearAvgDivYield > dividendYield {
 			tags = append(tags, "dividend-grower")
 		}
@@ -231,7 +505,7 @@ func (ta *TagAssigner) AssignTagsForSecurity(input AssignTagsInput) ([]string, e
 	// Momentum Opportunities
 	// Removed: positive-momentum tag (unused)
 
-	if momentumScore < 0 && fundamentalsScore > 0.65 && below52wHighPct > 12.0 {
+	if momentumScore < techThresh.RecoveryMomentumThreshold && fundamentalsScore > techThresh.RecoveryFundamentalsMin && below52wHighPct > techThresh.RecoveryDiscountMin {
 		tags = append(tags, "recovery-candidate")
 	}
 
@@ -242,10 +516,10 @@ func (ta *TagAssigner) AssignTagsForSecurity(input AssignTagsInput) ([]string, e
 
 	// Removed: good-opportunity tag (unused)
 
-	// === DANGER TAGS ===
+	// === DANGER TAGS === (using temperament-adjusted thresholds)
 
 	// Volatility Warnings
-	if volatility > 0.30 {
+	if volatility > volatilityParams.VolatileThreshold {
 		tags = append(tags, "volatile")
 	}
 
@@ -253,100 +527,100 @@ func (ta *TagAssigner) AssignTagsForSecurity(input AssignTagsInput) ([]string, e
 		tags = append(tags, "volatility-spike")
 	}
 
-	if volatility > 0.40 {
+	if volatility > volatilityParams.HighThreshold {
 		tags = append(tags, "high-volatility")
 	}
 
 	// Overvaluation Warnings
-	if peVsMarket > 0.20 && below52wHighPct < 5.0 {
+	if peVsMarket > dangerThresh.OvervaluedPEThreshold && below52wHighPct < dangerThresh.OvervaluedNearHighPct {
 		tags = append(tags, "overvalued")
 	}
 
 	// Removed: near-52w-high and above-ema tags (unused)
 
-	// Only tag as overbought if RSI is actually available (not nil) and above 70
-	// Defaulting to 0.0 when RSI is missing would incorrectly tag securities
-	if input.RSI != nil && *input.RSI > 70 {
+	// Only tag as overbought if RSI is actually available (not nil) and above threshold
+	if input.RSI != nil && *input.RSI > techThresh.RSIOverbought {
 		tags = append(tags, "overbought")
 	}
 
 	// Instability Warnings
 	// Note: Instability score from sell scorer not available in current input
 	// Would need to be added if available
-	if annualizedReturn > 0.50 && volatilitySpike {
+	if annualizedReturn > dangerThresh.UnsustainableGainsReturn && volatilitySpike {
 		tags = append(tags, "unsustainable-gains")
 	}
 
-	if math.Abs(distanceFromEMA) > 0.30 {
+	if math.Abs(distanceFromEMA) > dangerThresh.ValuationStretchEMA {
 		tags = append(tags, "valuation-stretch")
 	}
 
 	// Underperformance Warnings
-	if annualizedReturn < 0.0 && daysHeld > 180 {
+	if annualizedReturn < 0.0 && daysHeld > dangerThresh.UnderperformingDays {
 		tags = append(tags, "underperforming")
 	}
 
-	if annualizedReturn < 0.05 && daysHeld > 365 {
+	if annualizedReturn < dangerThresh.StagnantReturnThreshold && daysHeld > dangerThresh.StagnantDaysThreshold {
 		tags = append(tags, "stagnant")
 	}
 
-	if maxDrawdown > 30.0 {
+	if maxDrawdown > volatilityParams.MaxAcceptableDrawdown {
 		tags = append(tags, "high-drawdown")
 	}
 
-	// Portfolio Risk Warnings
-	if positionWeight > targetWeight+0.02 || positionWeight > 0.10 {
+	// Portfolio Risk Warnings (using temperament-adjusted thresholds)
+	if positionWeight > targetWeight+portfolioRiskThresh.OverweightDeviation || positionWeight > portfolioRiskThresh.OverweightAbsolute {
 		tags = append(tags, "overweight")
 	}
 
-	if positionWeight > 0.15 {
+	if positionWeight > portfolioRiskThresh.ConcentrationRiskThreshold {
 		tags = append(tags, "concentration-risk")
 	}
 
-	// === NEW: OPTIMIZER ALIGNMENT TAGS ===
+	// === OPTIMIZER ALIGNMENT TAGS ===
 
 	if targetWeight > 0 {
 		deviation := positionWeight - targetWeight
 
 		// Only tag significant deviations (keep needs-rebalance, removed unused weight tags)
-		if deviation > 0.03 || deviation < -0.03 {
+		if deviation > portfolioRiskThresh.NeedsRebalanceDeviation || deviation < -portfolioRiskThresh.NeedsRebalanceDeviation {
 			tags = append(tags, "needs-rebalance")
 		}
 	}
 
-	// === CHARACTERISTIC TAGS ===
+	// === CHARACTERISTIC TAGS === (using temperament-adjusted thresholds)
 
 	// Risk Profile
-	if volatility < 0.15 && fundamentalsScore > 0.7 && maxDrawdown < 20.0 {
+	if volatility < riskProfileThresh.LowRiskVolatilityMax && fundamentalsScore > riskProfileThresh.LowRiskFundamentalsMin && maxDrawdown < riskProfileThresh.LowRiskDrawdownMax {
 		tags = append(tags, "low-risk")
 	}
 
-	if volatility >= 0.15 && volatility <= 0.30 && fundamentalsScore > 0.55 {
+	if volatility >= riskProfileThresh.MediumRiskVolatilityMin && volatility <= riskProfileThresh.MediumRiskVolatilityMax && fundamentalsScore > riskProfileThresh.MediumRiskFundamentalsMin {
 		tags = append(tags, "medium-risk")
 	}
 
-	if volatility > 0.30 || fundamentalsScore < 0.5 {
+	if volatility > riskProfileThresh.HighRiskVolatilityThreshold || fundamentalsScore < riskProfileThresh.HighRiskFundamentalsThreshold {
 		tags = append(tags, "high-risk")
 	}
 
 	// Growth Profile
-	if cagrRaw > 0.15 && fundamentalsScore > 0.7 {
+	if cagrRaw > 0.15 && fundamentalsScore > qualityThresh.HighQualityFundamentals {
 		tags = append(tags, "growth")
 	}
 
-	if peVsMarket < 0 && opportunityScore > 0.7 {
+	if peVsMarket < 0 && opportunityScore > qualityThresh.HighQualityLongTerm {
 		tags = append(tags, "value")
 	}
 
-	if dividendYield > 0.04 && dividendScore > 0.65 {
+	if dividendYield > divThresh.HighDividendYield && dividendScore > 0.65 {
 		tags = append(tags, "dividend-focused")
 	}
 
 	// === MULTI-PATH QUALITY GATE TAGS ===
 
 	// Get adaptive quality gate thresholds (for Path 1 only)
-	fundamentalsThreshold := 0.55 // Relaxed from 0.6
-	longTermThreshold := 0.45     // Relaxed from 0.5
+	// Start with temperament-adjusted defaults
+	fundamentalsThreshold := qualityGateParams.FundamentalsThreshold
+	longTermThreshold := qualityGateParams.LongTermThreshold
 
 	if ta.adaptiveService != nil {
 		// Get current regime score if provider is available, otherwise use neutral (0.0)
@@ -359,6 +633,7 @@ func (ta *TagAssigner) AssignTagsForSecurity(input AssignTagsInput) ([]string, e
 		}
 
 		// Calculate adaptive thresholds based on current regime score
+		// This may override temperament defaults based on market conditions
 		thresholds := ta.adaptiveService.CalculateAdaptiveQualityGates(regimeScore)
 		if thresholds != nil {
 			fundamentalsThreshold = thresholds.GetFundamentals()

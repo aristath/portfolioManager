@@ -60,36 +60,66 @@ const (
 // =============================================================================
 // Weights shift based on market conditions while maintaining overall philosophy.
 
-// GetRegimeAdaptiveWeights returns evaluation weights adjusted for market regime
+// GetRegimeAdaptiveWeights returns evaluation weights adjusted for market regime.
+// Uses default hardcoded weights. For temperament-adjusted weights, use getWeightsWithConfig.
 func GetRegimeAdaptiveWeights(regimeScore float64) map[string]float64 {
+	return getWeightsWithConfig(regimeScore, nil)
+}
+
+// getWeightsWithConfig returns evaluation weights adjusted for market regime,
+// using temperament-adjusted base weights if a config is provided.
+func getWeightsWithConfig(regimeScore float64, config *models.ScoringConfig) map[string]float64 {
 	// Clamp regime score to valid range
 	score := math.Max(-1.0, math.Min(1.0, regimeScore))
 
-	// Base weights (neutral market)
+	// Get base weights from config or use defaults
+	var baseOpportunity, baseQuality, baseDiversification, baseRisk, baseRobustness float64
+	var bullThreshold, bearThreshold float64
+
+	if config != nil {
+		baseOpportunity = config.WeightOpportunityCapture
+		baseQuality = config.WeightPortfolioQuality
+		baseDiversification = config.WeightDiversificationAlignment
+		baseRisk = config.WeightRiskAdjustedMetrics
+		baseRobustness = config.WeightRegimeRobustness
+		bullThreshold = config.RegimeBullThreshold
+		bearThreshold = config.RegimeBearThreshold
+	} else {
+		// Default hardcoded values for backward compatibility
+		baseOpportunity = WeightOpportunityCapture
+		baseQuality = WeightPortfolioQuality
+		baseDiversification = WeightDiversificationAlignment
+		baseRisk = WeightRiskAdjustedMetrics
+		baseRobustness = WeightRegimeRobustness
+		bullThreshold = 0.3
+		bearThreshold = -0.3
+	}
+
+	// Start with base weights
 	weights := map[string]float64{
-		"opportunity":     WeightOpportunityCapture,
-		"quality":         WeightPortfolioQuality,
-		"diversification": WeightDiversificationAlignment,
-		"risk":            WeightRiskAdjustedMetrics,
-		"robustness":      WeightRegimeRobustness,
+		"opportunity":     baseOpportunity,
+		"quality":         baseQuality,
+		"diversification": baseDiversification,
+		"risk":            baseRisk,
+		"robustness":      baseRobustness,
 	}
 
 	// Adjust based on regime
-	if score > 0.3 { // Bull market
+	if score > bullThreshold { // Bull market
 		// More aggressive: increase opportunity capture, decrease risk focus
-		bullFactor := (score - 0.3) / 0.7                   // 0 to 1 as score goes from 0.3 to 1.0
-		weights["opportunity"] = 0.30 + 0.05*bullFactor     // 30% -> 35%
-		weights["risk"] = 0.15 - 0.03*bullFactor            // 15% -> 12%
-		weights["diversification"] = 0.20 - 0.02*bullFactor // 20% -> 18%
-		weights["robustness"] = 0.10 + 0.02*bullFactor      // 10% -> 12%
-	} else if score < -0.3 { // Bear market
+		bullFactor := (score - bullThreshold) / (1.0 - bullThreshold) // 0 to 1
+		weights["opportunity"] = baseOpportunity + 0.05*bullFactor
+		weights["risk"] = baseRisk - 0.03*bullFactor
+		weights["diversification"] = baseDiversification - 0.02*bullFactor
+		weights["robustness"] = baseRobustness + 0.02*bullFactor
+	} else if score < bearThreshold { // Bear market
 		// More defensive: decrease opportunity, increase risk focus
-		bearFactor := (-score - 0.3) / 0.7                  // 0 to 1 as score goes from -0.3 to -1.0
-		weights["opportunity"] = 0.30 - 0.10*bearFactor     // 30% -> 20%
-		weights["risk"] = 0.15 + 0.10*bearFactor            // 15% -> 25%
-		weights["diversification"] = 0.20 + 0.05*bearFactor // 20% -> 25%
-		weights["quality"] = 0.25 - 0.02*bearFactor         // 25% -> 23%
-		weights["robustness"] = 0.10 - 0.03*bearFactor      // 10% -> 7%
+		bearFactor := (bearThreshold - score) / (bearThreshold - (-1.0)) // 0 to 1
+		weights["opportunity"] = baseOpportunity - 0.10*bearFactor
+		weights["risk"] = baseRisk + 0.10*bearFactor
+		weights["diversification"] = baseDiversification + 0.05*bearFactor
+		weights["quality"] = baseQuality - 0.02*bearFactor
+		weights["robustness"] = baseRobustness - 0.03*bearFactor
 	}
 
 	return weights
@@ -114,6 +144,7 @@ func GetRegimeAdaptiveWeights(regimeScore float64) map[string]float64 {
 //   - transactionCostFixed: Fixed cost per trade (EUR)
 //   - transactionCostPercent: Variable cost as fraction
 //   - costPenaltyFactor: Penalty factor for transaction costs (0.0 = no penalty)
+//   - scoringConfig: Optional temperament-adjusted scoring parameters (nil uses defaults)
 //
 // Returns:
 //   - Final score (0-1 scale)
@@ -123,9 +154,10 @@ func EvaluateEndState(
 	transactionCostFixed float64,
 	transactionCostPercent float64,
 	costPenaltyFactor float64,
+	scoringConfig *models.ScoringConfig,
 ) float64 {
-	// Get regime-adaptive weights
-	weights := GetRegimeAdaptiveWeights(endContext.MarketRegimeScore)
+	// Get regime-adaptive weights (uses config if provided, defaults otherwise)
+	weights := getWeightsWithConfig(endContext.MarketRegimeScore, scoringConfig)
 
 	// 1. OPPORTUNITY CAPTURE (30% default)
 	opportunityScore := calculateOpportunityCaptureScore(endContext, sequence)
@@ -903,13 +935,14 @@ func EvaluateSequence(
 		context.TransactionCostPercent,
 	)
 
-	// Evaluate end state with unified scoring
+	// Evaluate end state with unified scoring (using temperament config if available)
 	score := EvaluateEndState(
 		endPortfolio,
 		sequence,
 		context.TransactionCostFixed,
 		context.TransactionCostPercent,
 		context.CostPenaltyFactor,
+		context.ScoringConfig,
 	)
 
 	return models.SequenceEvaluationResult{

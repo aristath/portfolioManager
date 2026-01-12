@@ -124,6 +124,41 @@ type EvaluationContext struct {
 
 	// Optional: Price adjustment scenarios for stochastic evaluation
 	PriceAdjustments map[string]float64 `json:"price_adjustments,omitempty"` // ISIN -> multiplier (e.g., 1.05 for +5%)
+
+	// Optional: Temperament-adjusted scoring configuration
+	// If nil, default hardcoded values will be used for backward compatibility
+	ScoringConfig *ScoringConfig `json:"scoring_config,omitempty"`
+}
+
+// ScoringConfig holds temperament-adjusted scoring parameters.
+// This allows the scorer to use weights and thresholds from temperament settings.
+type ScoringConfig struct {
+	// Main evaluation component weights (should sum to ~1.0)
+	WeightOpportunityCapture       float64 `json:"weight_opportunity_capture"`
+	WeightPortfolioQuality         float64 `json:"weight_portfolio_quality"`
+	WeightDiversificationAlignment float64 `json:"weight_diversification_alignment"`
+	WeightRiskAdjustedMetrics      float64 `json:"weight_risk_adjusted_metrics"`
+	WeightRegimeRobustness         float64 `json:"weight_regime_robustness"`
+
+	// Scoring thresholds
+	WindfallExcessHigh   float64 `json:"windfall_excess_high"`
+	WindfallExcessMedium float64 `json:"windfall_excess_medium"`
+	DeviationScale       float64 `json:"deviation_scale"`
+
+	// Regime thresholds
+	RegimeBullThreshold float64 `json:"regime_bull_threshold"`
+	RegimeBearThreshold float64 `json:"regime_bear_threshold"`
+
+	// Risk thresholds
+	VolatilityExcellent  float64 `json:"volatility_excellent"`
+	VolatilityGood       float64 `json:"volatility_good"`
+	VolatilityAcceptable float64 `json:"volatility_acceptable"`
+	DrawdownExcellent    float64 `json:"drawdown_excellent"`
+	DrawdownGood         float64 `json:"drawdown_good"`
+	DrawdownAcceptable   float64 `json:"drawdown_acceptable"`
+	SharpeExcellent      float64 `json:"sharpe_excellent"`
+	SharpeGood           float64 `json:"sharpe_good"`
+	SharpeAcceptable     float64 `json:"sharpe_acceptable"`
 }
 
 // SequenceEvaluationResult represents the result of evaluating a single sequence

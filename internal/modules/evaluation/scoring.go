@@ -165,6 +165,7 @@ func EvaluateEndState(
 		transactionCostFixed,
 		transactionCostPercent,
 		costPenaltyFactor,
+		nil, // Use default scoring config (temperament config would need to be passed through)
 	)
 }
 
@@ -292,7 +293,7 @@ func calculateOptimizerAlignment(ctx PortfolioContext, totalValue float64) float
 // calculatePortfolioQualityScore is exposed for testing
 func calculatePortfolioQualityScore(ctx PortfolioContext) float64 {
 	coreContext := convertToCorePortfolioContext(ctx)
-	return coreevaluation.EvaluateEndState(coreContext, nil, 0, 0, 0)
+	return coreevaluation.EvaluateEndState(coreContext, nil, 0, 0, 0, nil)
 }
 
 // calculateRiskAdjustedScore is exposed for testing - returns neutral if no data
@@ -342,7 +343,7 @@ func calculateWindfallScore(ctx PortfolioContext, sequence []ActionCandidate) fl
 	coreSequence := convertToCoreSequence(sequence)
 	// Windfall is part of opportunity capture, but we can approximate
 	// by evaluating with only the sequence
-	return coreevaluation.EvaluateEndState(coreContext, coreSequence, 0, 0, 0)
+	return coreevaluation.EvaluateEndState(coreContext, coreSequence, 0, 0, 0, nil)
 }
 
 // calculateActionPriorityScore is exposed for testing
