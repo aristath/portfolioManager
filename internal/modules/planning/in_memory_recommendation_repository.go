@@ -197,10 +197,6 @@ func (r *InMemoryRecommendationRepository) GetRecommendationsAsPlan(getEvaluated
 		return nil, fmt.Errorf("failed to get pending recommendations: %w", err)
 	}
 
-	if len(recs) == 0 {
-		return map[string]interface{}{"steps": []interface{}{}}, nil
-	}
-
 	steps := make([]map[string]interface{}, 0, len(recs))
 	var totalScoreImprovement float64
 	var currentScore float64
@@ -267,17 +263,29 @@ func (r *InMemoryRecommendationRepository) GetRecommendationsAsPlan(getEvaluated
 		}
 	}
 
-	// Get rejected opportunities for this portfolio hash
-	var rejectedOpportunities interface{} = nil
+	// Get rejected opportunities and pre-filtered securities
+	// When there are no recommendations, we need to find the latest portfolioHash from stored data
 	r.mu.RLock()
+	if portfolioHash == "" {
+		// Find the most recently used portfolioHash from pre-filtered or rejected data
+		for hash := range r.preFilteredSecurities {
+			portfolioHash = hash
+			break
+		}
+		if portfolioHash == "" {
+			for hash := range r.rejectedOpportunities {
+				portfolioHash = hash
+				break
+			}
+		}
+	}
+
+	var rejectedOpportunities interface{} = nil
 	if rejected, exists := r.rejectedOpportunities[portfolioHash]; exists && len(rejected) > 0 {
 		rejectedOpportunities = rejected
 	}
-	r.mu.RUnlock()
 
-	// Get pre-filtered securities for this portfolio hash
 	var preFilteredSecurities interface{} = nil
-	r.mu.RLock()
 	if preFiltered, exists := r.preFilteredSecurities[portfolioHash]; exists && len(preFiltered) > 0 {
 		preFilteredSecurities = preFiltered
 	}
