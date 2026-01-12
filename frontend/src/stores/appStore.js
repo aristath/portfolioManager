@@ -10,9 +10,6 @@ export const useAppStore = create((set, get) => ({
   tradernetConnectionStatus: null,
   markets: {},
 
-  // Planner status
-  plannerStatus: null,
-
   // Job status tracking
   runningJobs: {},     // Map: jobId -> { jobType, status, description, startedAt, progress }
   completedJobs: {},   // Map: jobId -> { jobType, status, description, completedAt, duration }
@@ -188,20 +185,14 @@ export const useAppStore = create((set, get) => ({
     }
   },
 
-  regenerateSequences: async () => {
+  triggerPlannerBatch: async () => {
     try {
-      await api.regenerateSequences();
-      get().showMessage('Sequences regenerated. New sequences will be generated on next batch run.', 'success');
-      await get().fetchRecommendations();
+      await api.triggerPlannerBatch();
+      get().showMessage('Planning job triggered', 'success');
     } catch (e) {
-      console.error('Failed to regenerate sequences:', e);
-      get().showMessage('Failed to regenerate sequences', 'error');
+      console.error('Failed to trigger planner batch:', e);
+      get().showMessage('Failed to trigger planning', 'error');
     }
-  },
-
-  // Planner status update (called by event handler)
-  updatePlannerStatus: (status) => {
-    set({ plannerStatus: status });
   },
 
   // Job status management (called by event handlers)

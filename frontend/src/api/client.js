@@ -246,7 +246,7 @@ export const api = {
   cancelR2Restore: () => fetchJSON('/api/backups/r2/restore/staged', { method: 'DELETE' }),
 
   // Planner
-  regenerateSequences: () => fetchJSON('/api/planner/regenerate-sequences', { method: 'POST' }),
+  triggerPlannerBatch: () => fetchJSON('/api/jobs/planner-batch', { method: 'POST' }),
 
   // Planner Configuration (single config - no ID needed)
   fetchPlannerConfig: () => fetchJSON('/api/planning/config'),

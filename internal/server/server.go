@@ -41,7 +41,6 @@ import (
 	optimizationhandlers "github.com/aristath/sentinel/internal/modules/optimization/handlers"
 	planningconfig "github.com/aristath/sentinel/internal/modules/planning/config"
 	planninghandlers "github.com/aristath/sentinel/internal/modules/planning/handlers"
-	"github.com/aristath/sentinel/internal/modules/planning/planner"
 	"github.com/aristath/sentinel/internal/modules/planning/repository"
 	"github.com/aristath/sentinel/internal/modules/portfolio"
 	portfoliohandlers "github.com/aristath/sentinel/internal/modules/portfolio/handlers"
@@ -550,22 +549,14 @@ func (s *Server) setupRoutes() {
 		// Planning module (MIGRATED TO GO!)
 		planningService := s.container.PlanningService
 		planningConfigRepo := s.container.PlannerConfigRepo
-		planningCorePlanner := s.container.PlannerService
 		planningPlannerRepo := repository.NewPlannerRepository(s.agentsDB, s.log)
 		planningValidator := planningconfig.NewValidator()
-		planningIncrementalPlanner := planner.NewIncrementalPlanner(
-			planningCorePlanner,
-			planningPlannerRepo,
-			s.log,
-		)
 		planningEventBroadcaster := planninghandlers.NewEventBroadcaster(s.log)
 		planningHandler := planninghandlers.NewHandler(
 			planningService,
 			planningConfigRepo,
-			planningCorePlanner,
 			planningPlannerRepo,
 			planningValidator,
-			planningIncrementalPlanner,
 			planningEventBroadcaster,
 			s.container.EventManager,
 			s.container.TradeExecutionService, // Trade executor for plan execution

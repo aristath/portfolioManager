@@ -6,12 +6,6 @@ import (
 
 // PlannerRepositoryInterface defines the contract for planner repository operations
 type PlannerRepositoryInterface interface {
-	// InsertSequence inserts a new sequence into the database
-	InsertSequence(
-		portfolioHash string,
-		sequence domain.ActionSequence,
-	) error
-
 	// GetSequence retrieves a sequence by sequence hash and portfolio hash
 	GetSequence(sequenceHash, portfolioHash string) (*domain.ActionSequence, error)
 
@@ -33,11 +27,6 @@ type PlannerRepositoryInterface interface {
 	// DeleteSequencesByPortfolioHash deletes all sequences for a portfolio hash
 	DeleteSequencesByPortfolioHash(portfolioHash string) error
 
-	// InsertEvaluation inserts a new evaluation into the database
-	InsertEvaluation(
-		evaluation domain.EvaluationResult,
-	) error
-
 	// GetEvaluation retrieves an evaluation by sequence hash and portfolio hash
 	GetEvaluation(sequenceHash, portfolioHash string) (*domain.EvaluationResult, error)
 
@@ -48,13 +37,6 @@ type PlannerRepositoryInterface interface {
 
 	// DeleteEvaluationsByPortfolioHash deletes all evaluations for a portfolio hash
 	DeleteEvaluationsByPortfolioHash(portfolioHash string) error
-
-	// UpsertBestResult inserts or updates the best result for a portfolio hash
-	UpsertBestResult(
-		portfolioHash string,
-		result domain.EvaluationResult,
-		sequence domain.ActionSequence,
-	) error
 
 	// GetBestResult retrieves the best result for a portfolio hash
 	GetBestResult(portfolioHash string) (*domain.HolisticPlan, error)

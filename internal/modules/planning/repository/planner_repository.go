@@ -63,43 +63,6 @@ type BestResultRecord struct {
 	UpdatedAt     time.Time
 }
 
-// InsertSequence inserts a new sequence into the database.
-// Uses INSERT OR IGNORE to handle duplicate sequences gracefully (hash-based deduplication).
-func (r *PlannerRepository) InsertSequence(
-	portfolioHash string,
-	sequence domain.ActionSequence,
-) error {
-	// Ensure sequence hash is set
-	if sequence.SequenceHash == "" {
-		return fmt.Errorf("sequence.SequenceHash is required but was empty")
-	}
-
-	// Marshal only the actions (as per schema: sequence_json is List[ActionCandidate])
-	actionsJSON, err := json.Marshal(sequence.Actions)
-	if err != nil {
-		return fmt.Errorf("failed to marshal sequence actions: %w", err)
-	}
-
-	now := time.Now().Unix()
-	_, err = r.db.Exec(`
-		INSERT OR IGNORE INTO sequences
-		(sequence_hash, portfolio_hash, sequence_json, pattern_type, depth, priority, completed, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-	`, sequence.SequenceHash, portfolioHash, string(actionsJSON), sequence.PatternType, sequence.Depth, sequence.Priority, 0, now)
-
-	if err != nil {
-		return fmt.Errorf("failed to insert sequence: %w", err)
-	}
-
-	r.log.Debug().
-		Str("sequence_hash", sequence.SequenceHash).
-		Str("portfolio_hash", portfolioHash).
-		Str("pattern_type", sequence.PatternType).
-		Msg("Inserted sequence")
-
-	return nil
-}
-
 // GetSequence retrieves a sequence by sequence hash and portfolio hash.
 func (r *PlannerRepository) GetSequence(sequenceHash, portfolioHash string) (*domain.ActionSequence, error) {
 	var record SequenceRecord
@@ -300,42 +263,6 @@ func (r *PlannerRepository) DeleteAllSequences() error {
 	return nil
 }
 
-// InsertEvaluation inserts a new evaluation into the database.
-func (r *PlannerRepository) InsertEvaluation(
-	evaluation domain.EvaluationResult,
-) error {
-	breakdownJSON, err := json.Marshal(evaluation.ScoreBreakdown)
-	if err != nil {
-		return fmt.Errorf("failed to marshal score breakdown: %w", err)
-	}
-
-	endContextPositionsJSON, err := json.Marshal(evaluation.EndContextPositions)
-	if err != nil {
-		return fmt.Errorf("failed to marshal end context positions: %w", err)
-	}
-
-	now := time.Now().Unix()
-	_, err = r.db.Exec(`
-		INSERT OR REPLACE INTO evaluations
-		(sequence_hash, portfolio_hash, end_score, breakdown_json, end_cash, end_context_positions_json, div_score, total_value, evaluated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, evaluation.SequenceHash, evaluation.PortfolioHash, evaluation.EndScore,
-		string(breakdownJSON), evaluation.EndCash, string(endContextPositionsJSON),
-		evaluation.DiversificationScore, evaluation.TotalValue, now)
-
-	if err != nil {
-		return fmt.Errorf("failed to insert evaluation: %w", err)
-	}
-
-	r.log.Debug().
-		Str("sequence_hash", evaluation.SequenceHash).
-		Str("portfolio_hash", evaluation.PortfolioHash).
-		Float64("end_score", evaluation.EndScore).
-		Msg("Inserted evaluation")
-
-	return nil
-}
-
 // GetEvaluation retrieves an evaluation by sequence hash and portfolio hash.
 func (r *PlannerRepository) GetEvaluation(sequenceHash, portfolioHash string) (*domain.EvaluationResult, error) {
 	var record EvaluationRecord
@@ -459,62 +386,6 @@ func (r *PlannerRepository) DeleteAllEvaluations() error {
 	r.log.Info().
 		Int64("rows_deleted", rowsAffected).
 		Msg("Deleted all evaluations")
-
-	return nil
-}
-
-// UpsertBestResult inserts or updates the best result for a portfolio hash.
-func (r *PlannerRepository) UpsertBestResult(
-	portfolioHash string,
-	result domain.EvaluationResult,
-	sequence domain.ActionSequence,
-) error {
-	// Calculate cash required and generated from sequence actions
-	var cashRequired, cashGenerated float64
-	for _, action := range sequence.Actions {
-		if action.Side == "BUY" {
-			cashRequired += action.ValueEUR
-		} else if action.Side == "SELL" {
-			cashGenerated += action.ValueEUR
-		}
-	}
-
-	// Convert sequence to HolisticPlan for storage
-	plan := &domain.HolisticPlan{
-		Steps:          []domain.HolisticStep{}, // Will be populated from sequence if needed
-		EndStateScore:  result.EndScore,
-		ScoreBreakdown: result.ScoreBreakdown,
-		CashRequired:   cashRequired,
-		CashGenerated:  cashGenerated,
-		Feasible:       result.Feasible,
-	}
-
-	// Marshal the plan data
-	planData, err := json.Marshal(plan)
-	if err != nil {
-		return fmt.Errorf("failed to marshal plan: %w", err)
-	}
-
-	now := time.Now().Unix()
-	_, err = r.db.Exec(`
-		INSERT INTO best_result (portfolio_hash, sequence_hash, plan_data, score, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?)
-		ON CONFLICT(portfolio_hash) DO UPDATE SET
-			sequence_hash = excluded.sequence_hash,
-			plan_data = excluded.plan_data,
-			score = excluded.score,
-			updated_at = excluded.updated_at
-	`, portfolioHash, result.SequenceHash, string(planData), result.EndScore, now, now)
-
-	if err != nil {
-		return fmt.Errorf("failed to upsert best result: %w", err)
-	}
-
-	r.log.Info().
-		Str("portfolio_hash", portfolioHash).
-		Str("sequence_hash", result.SequenceHash).
-		Float64("score", result.EndScore).
-		Msg("Upserted best result")
 
 	return nil
 }

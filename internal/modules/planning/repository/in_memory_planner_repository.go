@@ -32,40 +32,6 @@ func makeKey(sequenceHash, portfolioHash string) string {
 	return fmt.Sprintf("%s:%s", sequenceHash, portfolioHash)
 }
 
-func (r *InMemoryPlannerRepository) InsertSequence(portfolioHash string, sequence domain.ActionSequence) error {
-	if sequence.SequenceHash == "" {
-		return fmt.Errorf("sequence.SequenceHash is required but was empty")
-	}
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	key := makeKey(sequence.SequenceHash, portfolioHash)
-	if _, exists := r.sequences[key]; exists {
-		return nil
-	}
-
-	actionsJSON, err := json.Marshal(sequence.Actions)
-	if err != nil {
-		return fmt.Errorf("failed to marshal sequence actions: %w", err)
-	}
-
-	record := &SequenceRecord{
-		SequenceHash:  sequence.SequenceHash,
-		PortfolioHash: portfolioHash,
-		SequenceJSON:  string(actionsJSON),
-		PatternType:   sequence.PatternType,
-		Depth:         sequence.Depth,
-		Priority:      sequence.Priority,
-		Completed:     false,
-		EvaluatedAt:   nil,
-		CreatedAt:     time.Now().UTC(),
-	}
-
-	r.sequences[key] = record
-	return nil
-}
-
 func (r *InMemoryPlannerRepository) GetSequence(sequenceHash, portfolioHash string) (*domain.ActionSequence, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -214,38 +180,6 @@ func (r *InMemoryPlannerRepository) CountPendingSequences(portfolioHash string) 
 	return count, nil
 }
 
-func (r *InMemoryPlannerRepository) InsertEvaluation(evaluation domain.EvaluationResult) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	breakdownJSON, err := json.Marshal(evaluation.ScoreBreakdown)
-	if err != nil {
-		return fmt.Errorf("failed to marshal score breakdown: %w", err)
-	}
-
-	endContextPositionsJSON, err := json.Marshal(evaluation.EndContextPositions)
-	if err != nil {
-		return fmt.Errorf("failed to marshal end context positions: %w", err)
-	}
-
-	key := makeKey(evaluation.SequenceHash, evaluation.PortfolioHash)
-
-	record := &EvaluationRecord{
-		SequenceHash:            evaluation.SequenceHash,
-		PortfolioHash:           evaluation.PortfolioHash,
-		EndScore:                evaluation.EndScore,
-		BreakdownJSON:           string(breakdownJSON),
-		EndCash:                 evaluation.EndCash,
-		EndContextPositionsJSON: string(endContextPositionsJSON),
-		DiversificationScore:    evaluation.DiversificationScore,
-		TotalValue:              evaluation.TotalValue,
-		EvaluatedAt:             time.Now().UTC(),
-	}
-
-	r.evaluations[key] = record
-	return nil
-}
-
 func (r *InMemoryPlannerRepository) GetEvaluation(sequenceHash, portfolioHash string) (*domain.EvaluationResult, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -340,48 +274,6 @@ func (r *InMemoryPlannerRepository) CountEvaluations(portfolioHash string) (int,
 	}
 
 	return count, nil
-}
-
-func (r *InMemoryPlannerRepository) UpsertBestResult(portfolioHash string, result domain.EvaluationResult, sequence domain.ActionSequence) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	plan := &domain.HolisticPlan{
-		Steps:          []domain.HolisticStep{},
-		EndStateScore:  result.EndScore,
-		ScoreBreakdown: result.ScoreBreakdown,
-		CashRequired:   0.0,
-		CashGenerated:  0.0,
-		Feasible:       result.Feasible,
-	}
-
-	planData, err := json.Marshal(plan)
-	if err != nil {
-		return fmt.Errorf("failed to marshal plan: %w", err)
-	}
-
-	now := time.Now().UTC()
-
-	existing, exists := r.bestResults[portfolioHash]
-	if exists {
-		existing.SequenceHash = result.SequenceHash
-		existing.PlanData = string(planData)
-		existing.Score = result.EndScore
-		existing.UpdatedAt = now
-	} else {
-		record := &BestResultRecord{
-			PortfolioHash: portfolioHash,
-			SequenceHash:  result.SequenceHash,
-			PlanData:      string(planData),
-			Score:         result.EndScore,
-			CreatedAt:     now,
-			UpdatedAt:     now,
-		}
-		r.bestResults[portfolioHash] = record
-	}
-
-	r.log.Info().Str("portfolio_hash", portfolioHash).Str("sequence_hash", result.SequenceHash).Float64("score", result.EndScore).Msg("Upserted best result")
-	return nil
 }
 
 func (r *InMemoryPlannerRepository) GetBestResult(portfolioHash string) (*domain.HolisticPlan, error) {

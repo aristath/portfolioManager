@@ -1,4 +1,4 @@
-import { Card, Group, Text, Badge, Progress, Stack, Paper, ActionIcon } from '@mantine/core';
+import { Card, Group, Text, Badge, Progress, Stack, Paper, ActionIcon, Loader } from '@mantine/core';
 import { IconRefresh, IconRotateClockwise } from '@tabler/icons-react';
 import { useAppStore } from '../../stores/appStore';
 import { usePortfolioStore } from '../../stores/portfolioStore';
@@ -8,17 +8,21 @@ import { formatCurrency } from '../../utils/formatters';
 export function NextActionsCard() {
   const {
     recommendations,
-    plannerStatus,
+    runningJobs,
     loading,
     fetchRecommendations,
-    regenerateSequences,
+    triggerPlannerBatch,
   } = useAppStore();
   const { allocation } = usePortfolioStore();
   const { settings } = useSettingsStore();
 
-  const handleRegenerateSequences = async () => {
-    if (confirm('This will delete existing sequences and regenerate them with current settings. Existing evaluations will be preserved. Continue?')) {
-      await regenerateSequences();
+  // Find planner_batch job in running jobs
+  const plannerJob = Object.values(runningJobs).find(j => j.jobType === 'planner_batch');
+  const isPlanning = !!plannerJob;
+
+  const handleTriggerPlanner = async () => {
+    if (confirm('This will trigger a new planning job to regenerate recommendations. Continue?')) {
+      await triggerPlannerBatch();
     }
   };
 
@@ -66,55 +70,40 @@ export function NextActionsCard() {
           >
             <IconRefresh size={18} />
           </ActionIcon>
-          {settings.incremental_planner_enabled === 1 && (
-            <ActionIcon
-              variant="subtle"
-              onClick={handleRegenerateSequences}
-              title="Regenerate sequences"
-            >
-              <IconRotateClockwise size={18} />
-            </ActionIcon>
-          )}
+          <ActionIcon
+            variant="subtle"
+            onClick={handleTriggerPlanner}
+            disabled={isPlanning}
+            title="Trigger planning job"
+          >
+            <IconRotateClockwise size={18} />
+          </ActionIcon>
         </Group>
       </Group>
 
-      {/* Planner Status */}
-      {plannerStatus && (
+      {/* Planner Job Status */}
+      {isPlanning && (
         <Paper p="md" mb="md" style={{ border: '1px solid var(--mantine-color-blue-0)', backgroundColor: 'var(--mantine-color-dark-7)' }}>
           <Group gap="xs" mb="sm">
-            {plannerStatus.is_planning && <Text c="blue">⏳</Text>}
-            {!plannerStatus.is_planning && !plannerStatus.is_finished && plannerStatus.has_sequences && <Text c="dimmed">⏸</Text>}
-            {plannerStatus.is_finished && <Text c="green">✓</Text>}
-            <Text size="sm" fw={600} c={plannerStatus.is_planning ? 'blue' : plannerStatus.is_finished ? 'green' : 'dimmed'}>
-              {plannerStatus.is_planning
-                ? 'Planning...'
-                : plannerStatus.is_finished
-                ? 'Planning Complete'
-                : plannerStatus.has_sequences
-                ? 'Waiting...'
-                : 'Generating Scenarios...'}
+            <Loader size={14} color="blue" />
+            <Text size="sm" fw={600} c="blue">
+              {plannerJob.description || 'Planning...'}
             </Text>
           </Group>
 
-          {plannerStatus.has_sequences && (
+          {plannerJob.progress && plannerJob.progress.total > 0 && (
             <div>
               <Progress
-                value={Math.min(plannerStatus.progress_percentage || 0, 100)}
+                value={(plannerJob.progress.current / plannerJob.progress.total) * 100}
                 size="sm"
                 mb="xs"
                 color="blue"
               />
               <Text size="xs" c="dimmed" ta="center">
-                {(plannerStatus.evaluated_count || 0).toLocaleString()} / {(plannerStatus.total_sequences || 0).toLocaleString()} scenarios evaluated (
-                {Math.round(plannerStatus.progress_percentage || 0)}%)
+                Step {plannerJob.progress.current} of {plannerJob.progress.total}
+                {plannerJob.progress.description && ` - ${plannerJob.progress.description}`}
               </Text>
             </div>
-          )}
-
-          {!plannerStatus.has_sequences && (
-            <Text size="sm" c="dimmed" ta="center">
-              Generating scenarios...
-            </Text>
           )}
         </Paper>
       )}
@@ -311,60 +300,80 @@ export function NextActionsCard() {
       )}
 
       {/* Pre-Filtered Securities - Securities excluded before reaching opportunity stage */}
-      {recommendations?.pre_filtered_securities && recommendations.pre_filtered_securities.length > 0 && (
-        <div style={{
-          marginTop: (hasRecommendations || recommendations?.rejected_opportunities?.length > 0) ? '1rem' : '0',
-          borderTop: (hasRecommendations || recommendations?.rejected_opportunities?.length > 0) ? '1px solid var(--mantine-color-dark-6)' : 'none',
-          paddingTop: (hasRecommendations || recommendations?.rejected_opportunities?.length > 0) ? '1rem' : '0'
-        }}>
-          <Text size="sm" c="dimmed" fw={500} mb="sm" style={{ fontFamily: 'var(--mantine-font-family)' }}>
-            Pre-Filtered Securities ({recommendations.pre_filtered_securities.length})
-          </Text>
-          <Text size="xs" c="dimmed" mb="sm" style={{ fontFamily: 'var(--mantine-font-family)', fontStyle: 'italic' }}>
-            Securities excluded before reaching the opportunity identification stage
-          </Text>
-          <Stack gap="xs">
-            {recommendations.pre_filtered_securities.map((filtered, index) => (
-              <Paper
-                key={`filtered-${filtered.isin}-${index}`}
-                p="sm"
-                style={{
-                  border: '1px solid var(--mantine-color-dark-5)',
-                  backgroundColor: 'var(--mantine-color-dark-8)',
-                }}
-              >
-                <Group gap="xs" mb="xs" wrap="wrap">
-                  <Badge
-                    size="sm"
-                    color="gray"
-                    variant="light"
-                    style={{ fontFamily: 'var(--mantine-font-family)' }}
-                  >
-                    {filtered.calculator}
-                  </Badge>
-                  <Text size="sm" fw={600} style={{ fontFamily: 'var(--mantine-font-family)' }} c="dimmed">
-                    {filtered.symbol || filtered.isin}
-                  </Text>
-                  {filtered.name && (
-                    <Text size="sm" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family)' }}>
-                      - {filtered.name}
+      {recommendations?.pre_filtered_securities && recommendations.pre_filtered_securities.length > 0 && (() => {
+        // Group pre-filtered securities by symbol/ISIN
+        const groupedBySymbol = recommendations.pre_filtered_securities.reduce((acc, filtered) => {
+          const key = filtered.symbol || filtered.isin;
+          if (!acc[key]) {
+            acc[key] = {
+              symbol: filtered.symbol,
+              isin: filtered.isin,
+              name: filtered.name,
+              reasons: [] // Array of { calculator, reasons }
+            };
+          }
+          // Add calculator and its reasons
+          acc[key].reasons.push({
+            calculator: filtered.calculator,
+            reasons: filtered.reasons || []
+          });
+          return acc;
+        }, {});
+
+        const groupedSecurities = Object.values(groupedBySymbol);
+
+        return (
+          <div style={{
+            marginTop: (hasRecommendations || recommendations?.rejected_opportunities?.length > 0) ? '1rem' : '0',
+            borderTop: (hasRecommendations || recommendations?.rejected_opportunities?.length > 0) ? '1px solid var(--mantine-color-dark-6)' : 'none',
+            paddingTop: (hasRecommendations || recommendations?.rejected_opportunities?.length > 0) ? '1rem' : '0'
+          }}>
+            <Text size="sm" c="dimmed" fw={500} mb="sm" style={{ fontFamily: 'var(--mantine-font-family)' }}>
+              Pre-Filtered Securities ({groupedSecurities.length} securities)
+            </Text>
+            <Text size="xs" c="dimmed" mb="sm" style={{ fontFamily: 'var(--mantine-font-family)', fontStyle: 'italic' }}>
+              Securities excluded before reaching the opportunity identification stage
+            </Text>
+            <Stack gap="xs">
+              {groupedSecurities.map((security) => (
+                <Paper
+                  key={`filtered-${security.isin}`}
+                  p="sm"
+                  style={{
+                    border: '1px solid var(--mantine-color-dark-5)',
+                    backgroundColor: 'var(--mantine-color-dark-8)',
+                  }}
+                >
+                  <Group gap="xs" mb="xs" wrap="wrap">
+                    <Text size="sm" fw={600} style={{ fontFamily: 'var(--mantine-font-family)' }} c="dimmed">
+                      {security.symbol || security.isin}
                     </Text>
-                  )}
-                </Group>
-                {filtered.reasons && filtered.reasons.length > 0 && (
-                  <Stack gap={4}>
-                    {filtered.reasons.map((reason, reasonIndex) => (
-                      <Text key={reasonIndex} size="xs" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family)', lineHeight: 1.4 }}>
-                        • {reason}
+                    {security.name && (
+                      <Text size="sm" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family)' }}>
+                        - {security.name}
                       </Text>
+                    )}
+                  </Group>
+                  <Stack gap={4}>
+                    {security.reasons.map((entry, entryIndex) => (
+                      entry.reasons.map((reason, reasonIndex) => (
+                        <Text
+                          key={`${entryIndex}-${reasonIndex}`}
+                          size="xs"
+                          c="dimmed"
+                          style={{ fontFamily: 'var(--mantine-font-family)', lineHeight: 1.4 }}
+                        >
+                          • <Text span size="xs" c="gray.5" style={{ fontFamily: 'var(--mantine-font-family)' }}>{entry.calculator}</Text> {reason}
+                        </Text>
+                      ))
                     ))}
                   </Stack>
-                )}
-              </Paper>
-            ))}
-          </Stack>
-        </div>
-      )}
+                </Paper>
+              ))}
+            </Stack>
+          </div>
+        );
+      })()}
     </Card>
   );
 }

@@ -7,7 +7,6 @@ import (
 
 	"github.com/aristath/sentinel/internal/modules/planning"
 	"github.com/aristath/sentinel/internal/modules/planning/config"
-	"github.com/aristath/sentinel/internal/modules/planning/planner"
 	"github.com/aristath/sentinel/internal/modules/planning/repository"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
@@ -21,20 +20,16 @@ func TestRegisterRoutes(t *testing.T) {
 	// The actual handler creation is complex, so we'll test route registration differently
 	planningService := &planning.Service{}
 	configRepo := &repository.ConfigRepository{}
-	corePlanner := &planner.Planner{}
 	plannerRepo := repository.NewPlannerRepository(nil, zerolog.Nop())
 	validator := config.NewValidator()
-	incrementalPlanner := planner.NewIncrementalPlanner(corePlanner, plannerRepo, zerolog.Nop())
 	eventBroadcaster := NewEventBroadcaster(zerolog.Nop())
 
 	// Create handler - we're only testing that RegisterRoutes works, not handler execution
 	handler := NewHandler(
 		planningService,
 		configRepo,
-		corePlanner,
 		plannerRepo,
 		validator,
-		incrementalPlanner,
 		eventBroadcaster,
 		nil, // eventManager
 		nil, // tradeExecutor
@@ -54,14 +49,12 @@ func TestRegisterRoutes(t *testing.T) {
 		path   string
 		name   string
 	}{
-		{"GET", "/planning/status", "GetStatus"},
 		{"GET", "/planning/recommendations", "GetRecommendations"},
 		{"POST", "/planning/recommendations", "PostRecommendations"},
 		{"GET", "/planning/config", "GetConfig"},
 		{"PUT", "/planning/config", "PutConfig"},
 		{"DELETE", "/planning/config", "DeleteConfig"},
 		{"POST", "/planning/config/validate", "ValidateConfig"},
-		{"POST", "/planning/batch", "PostBatch"},
 		{"POST", "/planning/execute", "PostExecute"},
 		// Skip stream test - SSE connections stay open and cause timeout
 	}
@@ -104,19 +97,15 @@ func TestRegisterRoutes_RoutePrefix(t *testing.T) {
 	// Verify that routes are registered under /planning prefix
 	planningService := &planning.Service{}
 	configRepo := &repository.ConfigRepository{}
-	corePlanner := &planner.Planner{}
 	plannerRepo := repository.NewPlannerRepository(nil, zerolog.Nop())
 	validator := config.NewValidator()
-	incrementalPlanner := planner.NewIncrementalPlanner(corePlanner, plannerRepo, zerolog.Nop())
 	eventBroadcaster := NewEventBroadcaster(zerolog.Nop())
 
 	handler := NewHandler(
 		planningService,
 		configRepo,
-		corePlanner,
 		plannerRepo,
 		validator,
-		incrementalPlanner,
 		eventBroadcaster,
 		nil, // eventManager
 		nil, // tradeExecutor
@@ -127,7 +116,7 @@ func TestRegisterRoutes_RoutePrefix(t *testing.T) {
 	handler.RegisterRoutes(router)
 
 	// Test that routes outside /planning prefix return 404
-	req := httptest.NewRequest("GET", "/status", nil)
+	req := httptest.NewRequest("GET", "/recommendations", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusNotFound, rec.Code, "Route without /planning prefix should return 404")
