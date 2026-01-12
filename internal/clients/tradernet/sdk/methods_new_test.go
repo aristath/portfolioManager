@@ -36,7 +36,7 @@ func TestNewUser(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("", "", log)
+	client := NewClient("test_public_key", "test_private_key", log)
 	client.baseURL = server.URL
 	defer client.Close()
 
@@ -77,7 +77,7 @@ func TestCheckMissingFields(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("", "", log)
+	client := NewClient("test_public_key", "test_private_key", log)
 	client.baseURL = server.URL
 	defer client.Close()
 
@@ -114,7 +114,7 @@ func TestGetProfileFields(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("", "", log)
+	client := NewClient("test_public_key", "test_private_key", log)
 	client.baseURL = server.URL
 	defer client.Close()
 
@@ -146,7 +146,7 @@ func TestGetUserData(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("", "", log)
+	client := NewClient("test_public_key", "test_private_key", log)
 	client.baseURL = server.URL
 	defer client.Close()
 
@@ -178,7 +178,7 @@ func TestGetMarketStatus(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("", "", log)
+	client := NewClient("test_public_key", "test_private_key", log)
 	client.baseURL = server.URL
 	defer client.Close()
 
@@ -217,7 +217,7 @@ func TestGetOptions(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("", "", log)
+	client := NewClient("test_public_key", "test_private_key", log)
 	client.baseURL = server.URL
 	defer client.Close()
 
@@ -250,7 +250,7 @@ func TestGetMostTraded(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("", "", log)
+	client := NewClient("test_public_key", "test_private_key", log)
 	client.baseURL = server.URL
 	defer client.Close()
 
@@ -288,7 +288,7 @@ func TestStop(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("", "", log)
+	client := NewClient("test_public_key", "test_private_key", log)
 	client.baseURL = server.URL
 	defer client.Close()
 
@@ -321,7 +321,7 @@ func TestTrailingStop(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("", "", log)
+	client := NewClient("test_public_key", "test_private_key", log)
 	client.baseURL = server.URL
 	defer client.Close()
 
@@ -355,7 +355,7 @@ func TestTakeProfit(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("", "", log)
+	client := NewClient("test_public_key", "test_private_key", log)
 	client.baseURL = server.URL
 	defer client.Close()
 
@@ -401,7 +401,7 @@ func TestCancelAll(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("", "", log)
+	client := NewClient("test_public_key", "test_private_key", log)
 	client.baseURL = server.URL
 	defer client.Close()
 
@@ -434,7 +434,7 @@ func TestGetHistorical(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("", "", log)
+	client := NewClient("test_public_key", "test_private_key", log)
 	client.baseURL = server.URL
 	defer client.Close()
 
@@ -470,7 +470,7 @@ func TestGetOrderFiles(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("", "", log)
+	client := NewClient("test_public_key", "test_private_key", log)
 	client.baseURL = server.URL
 	defer client.Close()
 
@@ -510,7 +510,7 @@ func TestGetBrokerReport(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("", "", log)
+	client := NewClient("test_public_key", "test_private_key", log)
 	client.baseURL = server.URL
 	defer client.Close()
 
@@ -551,7 +551,7 @@ func TestGetNews(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("", "", log)
+	client := NewClient("test_public_key", "test_private_key", log)
 	client.baseURL = server.URL
 	defer client.Close()
 
@@ -586,7 +586,7 @@ func TestSymbol(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("", "", log)
+	client := NewClient("test_public_key", "test_private_key", log)
 	client.baseURL = server.URL
 	defer client.Close()
 
@@ -619,7 +619,7 @@ func TestSymbols(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("", "", log)
+	client := NewClient("test_public_key", "test_private_key", log)
 	client.baseURL = server.URL
 	defer client.Close()
 
@@ -651,7 +651,7 @@ func TestCorporateActions(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("", "", log)
+	client := NewClient("test_public_key", "test_private_key", log)
 	client.baseURL = server.URL
 	defer client.Close()
 
