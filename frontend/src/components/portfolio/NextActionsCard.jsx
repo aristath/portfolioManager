@@ -126,7 +126,9 @@ export function NextActionsCard() {
             No recommendations pending
           </Text>
           <Text size="sm" c="dimmed">
-            Portfolio is optimally balanced
+            {recommendations?.rejected_opportunities && recommendations.rejected_opportunities.length > 0
+              ? 'All opportunities were filtered out'
+              : 'Portfolio is optimally balanced'}
           </Text>
         </Stack>
       )}
@@ -257,9 +259,13 @@ export function NextActionsCard() {
         </Stack>
       )}
 
-      {/* Rejected Opportunities - Always visible */}
+      {/* Rejected Opportunities - Always visible when present */}
       {recommendations?.rejected_opportunities && recommendations.rejected_opportunities.length > 0 && (
-        <div style={{ marginTop: '1rem', borderTop: '1px solid var(--mantine-color-dark-6)', paddingTop: '1rem' }}>
+        <div style={{
+          marginTop: hasRecommendations ? '1rem' : '0',
+          borderTop: hasRecommendations ? '1px solid var(--mantine-color-dark-6)' : 'none',
+          paddingTop: hasRecommendations ? '1rem' : '0'
+        }}>
           <Text size="sm" c="dimmed" fw={500} mb="sm" style={{ fontFamily: 'var(--mantine-font-family)' }}>
             Rejected Opportunities ({recommendations.rejected_opportunities.length})
           </Text>
