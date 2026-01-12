@@ -283,6 +283,9 @@ func convertPortfolioContext(
 
 // convertPortfolioContextWithOpportunityData converts with additional data from OpportunityContext.
 // This ensures all available data flows through to evaluation.
+//
+// IMPORTANT: OpportunityContext stores metrics by ISIN (e.g., CAGRs, Volatility),
+// but scoring functions look up by Symbol. We must convert ISIN keys to Symbol keys.
 func convertPortfolioContextWithOpportunityData(
 	scoringCtx *scoringdomain.PortfolioContext,
 	opportunityCtx *domain.OpportunityContext,
@@ -296,7 +299,16 @@ func convertPortfolioContextWithOpportunityData(
 
 	// Enrich with OpportunityContext data if available
 	if opportunityCtx != nil {
-		// Optimizer targets
+		// Build ISIN -> Symbol mapping for key conversion
+		// OpportunityContext stores data by ISIN, but scoring uses Symbol keys
+		isinToSymbol := make(map[string]string)
+		for _, sec := range opportunityCtx.Securities {
+			if sec.ISIN != "" && sec.Symbol != "" {
+				isinToSymbol[sec.ISIN] = sec.Symbol
+			}
+		}
+
+		// Optimizer targets (already keyed by Symbol in OpportunityContext)
 		if len(opportunityCtx.TargetWeights) > 0 {
 			result.OptimizerTargetWeights = make(map[string]float64)
 			for k, v := range opportunityCtx.TargetWeights {
@@ -304,19 +316,62 @@ func convertPortfolioContextWithOpportunityData(
 			}
 		}
 
-		// CAGRs from OpportunityContext
+		// CAGRs from OpportunityContext (keyed by ISIN, convert to Symbol)
 		if len(opportunityCtx.CAGRs) > 0 {
 			result.SecurityCAGRs = make(map[string]float64)
-			for k, v := range opportunityCtx.CAGRs {
-				result.SecurityCAGRs[k] = v
+			for isin, v := range opportunityCtx.CAGRs {
+				if symbol, ok := isinToSymbol[isin]; ok {
+					result.SecurityCAGRs[symbol] = v
+				}
+				// Also keep ISIN key for action lookups that might use ISIN
+				result.SecurityCAGRs[isin] = v
 			}
 		}
 
-		// Volatility from OpportunityContext
+		// Volatility from OpportunityContext (keyed by ISIN, convert to Symbol)
 		if len(opportunityCtx.Volatility) > 0 {
 			result.SecurityVolatility = make(map[string]float64)
-			for k, v := range opportunityCtx.Volatility {
-				result.SecurityVolatility[k] = v
+			for isin, v := range opportunityCtx.Volatility {
+				if symbol, ok := isinToSymbol[isin]; ok {
+					result.SecurityVolatility[symbol] = v
+				}
+				// Also keep ISIN key for action lookups that might use ISIN
+				result.SecurityVolatility[isin] = v
+			}
+		}
+
+		// Sharpe ratios from OpportunityContext (keyed by ISIN, convert to Symbol)
+		if len(opportunityCtx.Sharpe) > 0 {
+			result.SecuritySharpe = make(map[string]float64)
+			for isin, v := range opportunityCtx.Sharpe {
+				if symbol, ok := isinToSymbol[isin]; ok {
+					result.SecuritySharpe[symbol] = v
+				}
+				// Also keep ISIN key for action lookups
+				result.SecuritySharpe[isin] = v
+			}
+		} else if len(opportunityCtx.MomentumScores) > 0 {
+			// Fallback: Use momentum as proxy for Sharpe if actual Sharpe unavailable
+			result.SecuritySharpe = make(map[string]float64)
+			for isin, v := range opportunityCtx.MomentumScores {
+				if symbol, ok := isinToSymbol[isin]; ok {
+					// Convert momentum score (0-1) to approximate Sharpe (-1 to 3)
+					// Momentum 0.5 = Sharpe 0, Momentum 1.0 = Sharpe 2
+					approxSharpe := (v - 0.5) * 4.0
+					result.SecuritySharpe[symbol] = approxSharpe
+				}
+			}
+		}
+
+		// MaxDrawdown from OpportunityContext (keyed by ISIN, convert to Symbol)
+		if len(opportunityCtx.MaxDrawdown) > 0 {
+			result.SecurityMaxDrawdown = make(map[string]float64)
+			for isin, v := range opportunityCtx.MaxDrawdown {
+				if symbol, ok := isinToSymbol[isin]; ok {
+					result.SecurityMaxDrawdown[symbol] = v
+				}
+				// Also keep ISIN key for action lookups
+				result.SecurityMaxDrawdown[isin] = v
 			}
 		}
 

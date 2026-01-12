@@ -155,6 +155,7 @@ type ScoresRepositoryInterface interface {
 	GetQualityScores(isinList []string) (map[string]float64, map[string]float64, error)                     // Returns longTermScores, fundamentalsScores
 	GetValueTrapData(isinList []string) (map[string]float64, map[string]float64, map[string]float64, error) // Returns opportunityScores, momentumScores, volatility
 	GetTotalScores(isinList []string) (map[string]float64, error)                                           // Returns total scores keyed by ISIN
+	GetRiskMetrics(isinList []string) (map[string]float64, map[string]float64, error)                       // Returns sharpe, maxDrawdown keyed by ISIN
 }
 
 // SettingsRepositoryInterface defines the contract for settings database operations

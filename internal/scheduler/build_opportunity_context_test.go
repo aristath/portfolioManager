@@ -16,6 +16,7 @@ type MockScoresRepoForContext struct {
 	GetQualityScoresFunc func(isinList []string) (map[string]float64, map[string]float64, error)
 	GetValueTrapDataFunc func(isinList []string) (map[string]float64, map[string]float64, map[string]float64, error)
 	GetTotalScoresFunc   func(isinList []string) (map[string]float64, error)
+	GetRiskMetricsFunc   func(isinList []string) (map[string]float64, map[string]float64, error)
 }
 
 func (m *MockScoresRepoForContext) GetCAGRs(isinList []string) (map[string]float64, error) {
@@ -44,6 +45,13 @@ func (m *MockScoresRepoForContext) GetTotalScores(isinList []string) (map[string
 		return m.GetTotalScoresFunc(isinList)
 	}
 	return map[string]float64{}, nil
+}
+
+func (m *MockScoresRepoForContext) GetRiskMetrics(isinList []string) (map[string]float64, map[string]float64, error) {
+	if m.GetRiskMetricsFunc != nil {
+		return m.GetRiskMetricsFunc(isinList)
+	}
+	return map[string]float64{}, map[string]float64{}, nil
 }
 
 // MockSettingsRepoForContext is a mock implementation of SettingsRepositoryInterface

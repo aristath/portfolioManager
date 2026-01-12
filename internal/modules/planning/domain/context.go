@@ -44,6 +44,10 @@ type OpportunityContext struct {
 	Volatility        map[string]float64 `json:"volatility,omitempty"`         // Volatility by ISIN (optional)
 	RegimeScore       float64            `json:"regime_score,omitempty"`       // Current market regime score (single value, -1 to +1)
 
+	// Risk metrics for evaluation
+	Sharpe      map[string]float64 `json:"sharpe,omitempty"`       // Sharpe ratios by ISIN
+	MaxDrawdown map[string]float64 `json:"max_drawdown,omitempty"` // Max drawdown by ISIN (negative values)
+
 	// Constraints (ALL KEYS ARE ISIN)
 	IneligibleISINs     map[string]bool `json:"ineligible_isins"`      // Key: ISIN - Can't sell these
 	RecentlySoldISINs   map[string]bool `json:"recently_sold_isins"`   // Key: ISIN - Recently sold (cooldown)

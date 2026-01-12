@@ -579,6 +579,9 @@ func (j *BuildOpportunityContextJob) buildOpportunityContext(
 	// Populate value trap detection data
 	valueTrapData := j.populateValueTrapData(securities)
 
+	// Populate risk metrics (Sharpe, MaxDrawdown)
+	sharpe, maxDrawdown := j.populateRiskMetrics(securities)
+
 	return &planningdomain.OpportunityContext{
 		PortfolioContext:         portfolioCtx,
 		EnrichedPositions:        enrichedPositions, // REPLACES old Positions field
@@ -603,6 +606,8 @@ func (j *BuildOpportunityContextJob) buildOpportunityContext(
 		MomentumScores:           valueTrapData.MomentumScores,
 		Volatility:               valueTrapData.Volatility,
 		RegimeScore:              valueTrapData.RegimeScore,
+		Sharpe:                   sharpe,
+		MaxDrawdown:              maxDrawdown,
 	}, nil
 }
 
@@ -936,6 +941,52 @@ func (j *BuildOpportunityContextJob) populateValueTrapData(securities []universe
 		Msg("Populated value trap detection data")
 
 	return data
+}
+
+// populateRiskMetrics fetches Sharpe and MaxDrawdown from scores repository
+func (j *BuildOpportunityContextJob) populateRiskMetrics(securities []universe.Security) (map[string]float64, map[string]float64) {
+	sharpe := make(map[string]float64)
+	maxDrawdown := make(map[string]float64)
+
+	if j.scoresRepo == nil {
+		j.log.Debug().Msg("Scores repository not available, skipping risk metrics population")
+		return sharpe, maxDrawdown
+	}
+
+	// Build ISIN list for securities
+	isinList := make([]string, 0)
+	for _, sec := range securities {
+		if sec.ISIN != "" {
+			isinList = append(isinList, sec.ISIN)
+		}
+	}
+
+	if len(isinList) == 0 {
+		j.log.Debug().Msg("No ISINs available, skipping risk metrics population")
+		return sharpe, maxDrawdown
+	}
+
+	// Get risk metrics from repository
+	sharpeByISIN, drawdownByISIN, err := j.scoresRepo.GetRiskMetrics(isinList)
+	if err != nil {
+		j.log.Warn().Err(err).Msg("Failed to get risk metrics from repository")
+		return sharpe, maxDrawdown
+	}
+
+	// Direct assignment - ISIN keys only
+	for isin, val := range sharpeByISIN {
+		sharpe[isin] = val
+	}
+	for isin, val := range drawdownByISIN {
+		maxDrawdown[isin] = val
+	}
+
+	j.log.Debug().
+		Int("sharpe_count", len(sharpe)).
+		Int("drawdown_count", len(maxDrawdown)).
+		Msg("Populated risk metrics for evaluation")
+
+	return sharpe, maxDrawdown
 }
 
 // addVirtualTestCash adds virtual test cash to cash balances if in research mode

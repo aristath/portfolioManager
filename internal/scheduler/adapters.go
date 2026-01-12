@@ -321,6 +321,50 @@ func (a *ScoresRepositoryAdapter) GetTotalScores(isinList []string) (map[string]
 	return totalScores, nil
 }
 
+// GetRiskMetrics retrieves Sharpe ratio and max drawdown from the scores database
+func (a *ScoresRepositoryAdapter) GetRiskMetrics(isinList []string) (map[string]float64, map[string]float64, error) {
+	sharpe := make(map[string]float64)
+	maxDrawdown := make(map[string]float64)
+	if len(isinList) == 0 {
+		return sharpe, maxDrawdown, nil
+	}
+
+	placeholders := strings.Repeat("?,", len(isinList))
+	placeholders = placeholders[:len(placeholders)-1]
+	query := fmt.Sprintf(`
+		SELECT isin, sharpe_score, drawdown_score
+		FROM scores
+		WHERE isin IN (%s)
+	`, placeholders)
+
+	args := make([]interface{}, len(isinList))
+	for i, isin := range isinList {
+		args[i] = isin
+	}
+
+	rows, err := a.db.Query(query, args...)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var isin string
+		var sharpeScore, drawdownScore sql.NullFloat64
+		if err := rows.Scan(&isin, &sharpeScore, &drawdownScore); err != nil {
+			continue
+		}
+		if sharpeScore.Valid {
+			sharpe[isin] = sharpeScore.Float64
+		}
+		if drawdownScore.Valid {
+			// drawdown_score is stored as negative percentage (e.g., -0.25 for 25% drawdown)
+			maxDrawdown[isin] = drawdownScore.Float64
+		}
+	}
+	return sharpe, maxDrawdown, nil
+}
+
 // convertCAGRScoreToCAGRAdapter converts normalized cagr_score to CAGR percentage
 func convertCAGRScoreToCAGRAdapter(cagrScore float64) float64 {
 	if cagrScore <= 0 {
