@@ -68,19 +68,30 @@ type PortfolioContext struct {
 	// Additional data for portfolio scoring
 	SecurityCountries  map[string]string  `json:"security_countries,omitempty"`  // symbol -> country (individual)
 	SecurityIndustries map[string]string  `json:"security_industries,omitempty"` // symbol -> industry (individual)
-	SecurityScores     map[string]float64 `json:"security_scores,omitempty"`     // symbol -> quality_score
+	SecurityScores     map[string]float64 `json:"security_scores,omitempty"`     // symbol -> quality_score (0-1)
 	SecurityDividends  map[string]float64 `json:"security_dividends,omitempty"`  // symbol -> dividend_yield
 
 	// Group mappings (for mapping individual countries/industries to groups)
 	CountryToGroup  map[string]string `json:"country_to_group,omitempty"`  // country -> group_name
 	IndustryToGroup map[string]string `json:"industry_to_group,omitempty"` // industry -> group_name
 
-	// Cost basis data for averaging down
+	// Cost basis data for averaging down and windfall detection
 	PositionAvgPrices map[string]float64 `json:"position_avg_prices,omitempty"` // symbol -> avg_purchase_price
 	CurrentPrices     map[string]float64 `json:"current_prices,omitempty"`      // symbol -> current_market_price
 
 	// Optimizer target allocations (for alignment scoring)
 	OptimizerTargetWeights map[string]float64 `json:"optimizer_target_weights,omitempty"` // symbol -> target_weight (0 to 1)
+
+	// Extended metrics for comprehensive evaluation
+	SecurityCAGRs       map[string]float64 `json:"security_cagrs,omitempty"`        // symbol -> historical CAGR
+	SecurityVolatility  map[string]float64 `json:"security_volatility,omitempty"`   // symbol -> annual volatility
+	SecuritySharpe      map[string]float64 `json:"security_sharpe,omitempty"`       // symbol -> Sharpe ratio
+	SecuritySortino     map[string]float64 `json:"security_sortino,omitempty"`      // symbol -> Sortino ratio
+	SecurityMaxDrawdown map[string]float64 `json:"security_max_drawdown,omitempty"` // symbol -> max drawdown (negative)
+
+	// Market regime and adaptive weights
+	MarketRegimeScore float64            `json:"market_regime_score,omitempty"` // -1 (bear) to +1 (bull)
+	AdaptiveWeights   map[string]float64 `json:"adaptive_weights,omitempty"`    // component -> adaptive weight
 }
 
 // EvaluationContext contains all data needed to simulate and score action sequences

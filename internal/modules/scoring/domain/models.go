@@ -63,6 +63,7 @@ type SellScore struct {
 
 // PortfolioContext represents portfolio context for allocation fit calculations
 type PortfolioContext struct {
+	// Core allocation data
 	CountryWeights     map[string]float64 `json:"country_weights"`
 	IndustryWeights    map[string]float64 `json:"industry_weights"`
 	Positions          map[string]float64 `json:"positions"`
@@ -75,6 +76,17 @@ type PortfolioContext struct {
 	PositionAvgPrices  map[string]float64 `json:"position_avg_prices"`
 	CurrentPrices      map[string]float64 `json:"current_prices"`
 	TotalValue         float64            `json:"total_value"`
+
+	// Extended metrics for comprehensive evaluation
+	SecurityCAGRs       map[string]float64 `json:"security_cagrs,omitempty"`        // symbol -> historical CAGR
+	SecurityVolatility  map[string]float64 `json:"security_volatility,omitempty"`   // symbol -> annual volatility
+	SecuritySharpe      map[string]float64 `json:"security_sharpe,omitempty"`       // symbol -> Sharpe ratio
+	SecuritySortino     map[string]float64 `json:"security_sortino,omitempty"`      // symbol -> Sortino ratio
+	SecurityMaxDrawdown map[string]float64 `json:"security_max_drawdown,omitempty"` // symbol -> max drawdown (negative)
+
+	// Market regime and optimizer targets
+	MarketRegimeScore      float64            `json:"market_regime_score,omitempty"`      // -1 (bear) to +1 (bull)
+	OptimizerTargetWeights map[string]float64 `json:"optimizer_target_weights,omitempty"` // symbol -> target weight
 }
 
 // PortfolioScore represents overall portfolio health score

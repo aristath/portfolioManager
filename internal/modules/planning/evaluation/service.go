@@ -105,9 +105,10 @@ func (s *Service) BatchEvaluate(ctx context.Context, sequences []domain.ActionSe
 	}
 
 	// Build PortfolioContext from OpportunityContext if available
+	// Use enhanced conversion that includes CAGRs, Volatility, RegimeScore
 	var portfolioCtx models.PortfolioContext
 	if opportunityCtx != nil && opportunityCtx.PortfolioContext != nil {
-		portfolioCtx = convertPortfolioContext(opportunityCtx.PortfolioContext, opportunityCtx.TargetWeights)
+		portfolioCtx = convertPortfolioContextWithOpportunityData(opportunityCtx.PortfolioContext, opportunityCtx)
 	}
 
 	// Build complete EvaluationContext with all required data
@@ -237,7 +238,7 @@ func (s *Service) BatchEvaluate(ctx context.Context, sequences []domain.ActionSe
 }
 
 // convertPortfolioContext converts scoringdomain.PortfolioContext to evaluation models.PortfolioContext,
-// including optimizer target weights.
+// including optimizer target weights and extended metrics.
 func convertPortfolioContext(
 	scoringCtx *scoringdomain.PortfolioContext,
 	optimizerTargets map[string]float64,
@@ -253,20 +254,79 @@ func convertPortfolioContext(
 	}
 
 	return models.PortfolioContext{
-		CountryWeights:         scoringCtx.CountryWeights,
-		IndustryWeights:        scoringCtx.IndustryWeights,
-		Positions:              scoringCtx.Positions,
-		SecurityCountries:      scoringCtx.SecurityCountries,
-		SecurityIndustries:     scoringCtx.SecurityIndustries,
-		SecurityScores:         scoringCtx.SecurityScores,
-		SecurityDividends:      scoringCtx.SecurityDividends,
-		CountryToGroup:         scoringCtx.CountryToGroup,
-		IndustryToGroup:        scoringCtx.IndustryToGroup,
-		PositionAvgPrices:      scoringCtx.PositionAvgPrices,
-		CurrentPrices:          scoringCtx.CurrentPrices,
+		// Core allocation data
+		CountryWeights:     scoringCtx.CountryWeights,
+		IndustryWeights:    scoringCtx.IndustryWeights,
+		Positions:          scoringCtx.Positions,
+		SecurityCountries:  scoringCtx.SecurityCountries,
+		SecurityIndustries: scoringCtx.SecurityIndustries,
+		SecurityScores:     scoringCtx.SecurityScores,
+		SecurityDividends:  scoringCtx.SecurityDividends,
+		CountryToGroup:     scoringCtx.CountryToGroup,
+		IndustryToGroup:    scoringCtx.IndustryToGroup,
+		PositionAvgPrices:  scoringCtx.PositionAvgPrices,
+		CurrentPrices:      scoringCtx.CurrentPrices,
+		TotalValue:         scoringCtx.TotalValue,
+
+		// Extended metrics (from scoringCtx if available)
+		SecurityCAGRs:       scoringCtx.SecurityCAGRs,
+		SecurityVolatility:  scoringCtx.SecurityVolatility,
+		SecuritySharpe:      scoringCtx.SecuritySharpe,
+		SecuritySortino:     scoringCtx.SecuritySortino,
+		SecurityMaxDrawdown: scoringCtx.SecurityMaxDrawdown,
+
+		// Market regime and optimizer targets
+		MarketRegimeScore:      scoringCtx.MarketRegimeScore,
 		OptimizerTargetWeights: optimizerTargetWeights,
-		TotalValue:             scoringCtx.TotalValue,
 	}
+}
+
+// convertPortfolioContextWithOpportunityData converts with additional data from OpportunityContext.
+// This ensures all available data flows through to evaluation.
+func convertPortfolioContextWithOpportunityData(
+	scoringCtx *scoringdomain.PortfolioContext,
+	opportunityCtx *domain.OpportunityContext,
+) models.PortfolioContext {
+	if scoringCtx == nil {
+		return models.PortfolioContext{}
+	}
+
+	// Start with base conversion
+	result := convertPortfolioContext(scoringCtx, nil)
+
+	// Enrich with OpportunityContext data if available
+	if opportunityCtx != nil {
+		// Optimizer targets
+		if len(opportunityCtx.TargetWeights) > 0 {
+			result.OptimizerTargetWeights = make(map[string]float64)
+			for k, v := range opportunityCtx.TargetWeights {
+				result.OptimizerTargetWeights[k] = v
+			}
+		}
+
+		// CAGRs from OpportunityContext
+		if len(opportunityCtx.CAGRs) > 0 {
+			result.SecurityCAGRs = make(map[string]float64)
+			for k, v := range opportunityCtx.CAGRs {
+				result.SecurityCAGRs[k] = v
+			}
+		}
+
+		// Volatility from OpportunityContext
+		if len(opportunityCtx.Volatility) > 0 {
+			result.SecurityVolatility = make(map[string]float64)
+			for k, v := range opportunityCtx.Volatility {
+				result.SecurityVolatility[k] = v
+			}
+		}
+
+		// Market regime score
+		if opportunityCtx.RegimeScore != 0 {
+			result.MarketRegimeScore = opportunityCtx.RegimeScore
+		}
+	}
+
+	return result
 }
 
 // EvaluateSingleSequence evaluates a single sequence.

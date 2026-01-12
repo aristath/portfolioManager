@@ -64,8 +64,10 @@ func TestCalculateDiversificationScore_PerfectAllocation(t *testing.T) {
 
 	score := CalculateDiversificationScore(portfolioContext)
 
-	// Score should be high (close to 1.0) for perfect allocation
-	assert.Greater(t, score, 0.7, "Perfect allocation should have high score")
+	// Score should be reasonable for perfect geographic allocation
+	// Note: diversification score now combines geo (35%), industry (30%), and optimizer (35%)
+	// With only geo data provided, the score will be lower
+	assert.Greater(t, score, 0.5, "Perfect geographic allocation should have reasonable score")
 }
 
 func TestCalculateDiversificationScore_ImbalancedAllocation(t *testing.T) {

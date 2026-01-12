@@ -71,6 +71,17 @@ type PortfolioContext struct {
 	CurrentPrices          map[string]float64 `json:"current_prices,omitempty"`
 	OptimizerTargetWeights map[string]float64 `json:"optimizer_target_weights,omitempty"` // Optimizer target allocations
 	TotalValue             float64            `json:"total_value"`
+
+	// Extended metrics for comprehensive evaluation
+	SecurityCAGRs       map[string]float64 `json:"security_cagrs,omitempty"`        // symbol -> historical CAGR
+	SecurityVolatility  map[string]float64 `json:"security_volatility,omitempty"`   // symbol -> annual volatility
+	SecuritySharpe      map[string]float64 `json:"security_sharpe,omitempty"`       // symbol -> Sharpe ratio
+	SecuritySortino     map[string]float64 `json:"security_sortino,omitempty"`      // symbol -> Sortino ratio
+	SecurityMaxDrawdown map[string]float64 `json:"security_max_drawdown,omitempty"` // symbol -> max drawdown (negative)
+
+	// Market regime and adaptive weights
+	MarketRegimeScore float64            `json:"market_regime_score,omitempty"` // -1 (bear) to +1 (bull)
+	AdaptiveWeights   map[string]float64 `json:"adaptive_weights,omitempty"`    // component -> adaptive weight
 }
 
 // EvaluationContext contains all data needed to simulate and score action sequences
