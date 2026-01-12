@@ -146,6 +146,22 @@ func (m *MockTradernetClient) GetLevel1Quote(symbol string) (*domain.BrokerOrder
 	return args.Get(0).(*domain.BrokerOrderBook), args.Error(1)
 }
 
+func (m *MockTradernetClient) GetQuotes(symbols []string) (map[string]*domain.BrokerQuote, error) {
+	args := m.Called(symbols)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(map[string]*domain.BrokerQuote), args.Error(1)
+}
+
+func (m *MockTradernetClient) GetHistoricalPrices(symbol string, start, end int64, timeframeSeconds int) ([]domain.BrokerOHLCV, error) {
+	args := m.Called(symbol, start, end, timeframeSeconds)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]domain.BrokerOHLCV), args.Error(1)
+}
+
 // MockPositionRepository is a mock position repository for testing
 type MockPositionRepository struct {
 	mock.Mock

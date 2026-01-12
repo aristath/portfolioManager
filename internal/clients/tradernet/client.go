@@ -456,6 +456,16 @@ type OrderBookLevel struct {
 	Side     string  `json:"s"` // Side: "B"=bid, "S"=ask (Tradernet: "s")
 }
 
+// OHLCV represents a single OHLCV candlestick data point
+type OHLCV struct {
+	Timestamp int64   `json:"timestamp"` // Unix timestamp in seconds
+	Open      float64 `json:"open"`      // Opening price
+	High      float64 `json:"high"`      // Highest price
+	Low       float64 `json:"low"`       // Lowest price
+	Close     float64 `json:"close"`     // Closing price
+	Volume    int64   `json:"volume"`    // Trading volume
+}
+
 // GetQuote gets current quote for a symbol
 func (c *Client) GetQuote(symbol string) (*Quote, error) {
 	if c.sdkClient == nil {
@@ -477,6 +487,65 @@ func (c *Client) GetQuote(symbol string) (*Quote, error) {
 	}
 
 	return quote, nil
+}
+
+// GetQuotes fetches quotes for multiple symbols in a single batch call
+func (c *Client) GetQuotes(symbols []string) (map[string]*Quote, error) {
+	if c.sdkClient == nil {
+		return nil, fmt.Errorf("SDK client not initialized")
+	}
+
+	if len(symbols) == 0 {
+		return make(map[string]*Quote), nil
+	}
+
+	c.log.Debug().Strs("symbols", symbols).Msg("GetQuotes: calling SDK GetQuotes")
+
+	result, err := c.sdkClient.GetQuotes(symbols)
+	if err != nil {
+		c.log.Error().Err(err).Msg("GetQuotes: SDK GetQuotes failed")
+		return nil, fmt.Errorf("failed to get quotes: %w", err)
+	}
+
+	quotes, err := transformQuotes(result)
+	if err != nil {
+		c.log.Error().Err(err).Msg("GetQuotes: transformQuotes failed")
+		return nil, fmt.Errorf("failed to transform quotes: %w", err)
+	}
+
+	return quotes, nil
+}
+
+// GetHistoricalPrices fetches OHLCV candlestick data for a symbol
+// Uses getHloc API endpoint
+func (c *Client) GetHistoricalPrices(symbol string, start, end int64, timeframeSeconds int) ([]OHLCV, error) {
+	if c.sdkClient == nil {
+		return nil, fmt.Errorf("SDK client not initialized")
+	}
+
+	startTime := time.Unix(start, 0)
+	endTime := time.Unix(end, 0)
+
+	c.log.Debug().
+		Str("symbol", symbol).
+		Time("start", startTime).
+		Time("end", endTime).
+		Int("timeframe", timeframeSeconds).
+		Msg("GetHistoricalPrices: calling SDK GetCandles")
+
+	result, err := c.sdkClient.GetCandles(symbol, startTime, endTime, timeframeSeconds)
+	if err != nil {
+		c.log.Error().Err(err).Msg("GetHistoricalPrices: SDK GetCandles failed")
+		return nil, fmt.Errorf("failed to get historical prices: %w", err)
+	}
+
+	candles, err := transformCandles(result, symbol)
+	if err != nil {
+		c.log.Error().Err(err).Msg("GetHistoricalPrices: transformCandles failed")
+		return nil, fmt.Errorf("failed to transform candles: %w", err)
+	}
+
+	return candles, nil
 }
 
 // GetFXRates retrieves currency exchange rates for today's date

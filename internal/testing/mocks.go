@@ -1224,6 +1224,30 @@ func (m *MockTradernetClient) SetCredentials(apiKey, apiSecret string) {
 	// Mock implementation - does nothing
 }
 
+// GetQuotes retrieves batch quotes for multiple symbols (mock implementation)
+func (m *MockTradernetClient) GetQuotes(symbols []string) (map[string]*domain.BrokerQuote, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.err != nil {
+		return nil, m.err
+	}
+	result := make(map[string]*domain.BrokerQuote)
+	for _, symbol := range symbols {
+		result[symbol] = &domain.BrokerQuote{Symbol: symbol, Price: 100.0}
+	}
+	return result, nil
+}
+
+// GetHistoricalPrices retrieves historical OHLCV data (mock implementation)
+func (m *MockTradernetClient) GetHistoricalPrices(symbol string, start, end int64, timeframeSeconds int) ([]domain.BrokerOHLCV, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.err != nil {
+		return nil, m.err
+	}
+	return []domain.BrokerOHLCV{}, nil
+}
+
 // Verify interface implementation
 
 // MockBrokerClient is a thread-safe mock implementation of domain.BrokerClient for testing
@@ -1426,6 +1450,34 @@ func (m *MockBrokerClient) GetQuote(symbol string) (*domain.BrokerQuote, error) 
 		return nil, fmt.Errorf("no quote configured for symbol: %s", symbol)
 	}
 	return quote, nil
+}
+
+// GetQuotes implements domain.BrokerClient
+// Returns quotes for multiple symbols
+func (m *MockBrokerClient) GetQuotes(symbols []string) (map[string]*domain.BrokerQuote, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.err != nil {
+		return nil, m.err
+	}
+	result := make(map[string]*domain.BrokerQuote)
+	for _, symbol := range symbols {
+		if quote, exists := m.quotes[symbol]; exists {
+			result[symbol] = quote
+		}
+	}
+	return result, nil
+}
+
+// GetHistoricalPrices implements domain.BrokerClient
+// Returns empty OHLCV data (can be configured via SetHistoricalPrices if needed)
+func (m *MockBrokerClient) GetHistoricalPrices(symbol string, start, end int64, timeframeSeconds int) ([]domain.BrokerOHLCV, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.err != nil {
+		return nil, m.err
+	}
+	return []domain.BrokerOHLCV{}, nil
 }
 
 // GetLevel1Quote implements domain.BrokerClient

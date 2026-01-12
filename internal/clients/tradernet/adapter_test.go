@@ -502,5 +502,217 @@ func TestTradernetBrokerAdapter_GetFXRates_Error(t *testing.T) {
 	assert.Nil(t, rates)
 }
 
+// TestTradernetBrokerAdapter_GetHistoricalPrices tests GetHistoricalPrices transformation
+func TestTradernetBrokerAdapter_GetHistoricalPrices(t *testing.T) {
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+
+	t.Run("success with daily data", func(t *testing.T) {
+		// Tradernet returns hloc data in format: {hloc: {symbol: [[h,l,o,c], ...]}, vl: {symbol: [vol, ...]}, xSeries: {symbol: [ts, ...]}}
+		mockSDK := &mockSDKClient{
+			getCandlesResult: map[string]interface{}{
+				"hloc": map[string]interface{}{
+					"AAPL.US": []interface{}{
+						[]interface{}{155.0, 148.0, 150.0, 152.0}, // [high, low, open, close]
+						[]interface{}{158.0, 151.0, 153.0, 157.0},
+					},
+				},
+				"vl": map[string]interface{}{
+					"AAPL.US": []interface{}{float64(1000000), float64(1200000)},
+				},
+				"xSeries": map[string]interface{}{
+					"AAPL.US": []interface{}{float64(1704067200), float64(1704153600)}, // Unix timestamps
+				},
+			},
+		}
+
+		client := NewClientWithSDK(mockSDK, log)
+		adapter := &TradernetBrokerAdapter{client: client}
+
+		start := int64(1704067200) // 2024-01-01
+		end := int64(1704153600)   // 2024-01-02
+		candles, err := adapter.GetHistoricalPrices("AAPL.US", start, end, 86400)
+		require.NoError(t, err)
+		assert.Len(t, candles, 2)
+
+		// Check first candle
+		assert.Equal(t, int64(1704067200), candles[0].Timestamp)
+		assert.Equal(t, 150.0, candles[0].Open)
+		assert.Equal(t, 155.0, candles[0].High)
+		assert.Equal(t, 148.0, candles[0].Low)
+		assert.Equal(t, 152.0, candles[0].Close)
+		assert.Equal(t, int64(1000000), candles[0].Volume)
+
+		// Check second candle
+		assert.Equal(t, int64(1704153600), candles[1].Timestamp)
+		assert.Equal(t, 153.0, candles[1].Open)
+		assert.Equal(t, 158.0, candles[1].High)
+		assert.Equal(t, 151.0, candles[1].Low)
+		assert.Equal(t, 157.0, candles[1].Close)
+		assert.Equal(t, int64(1200000), candles[1].Volume)
+	})
+
+	t.Run("sdk error", func(t *testing.T) {
+		mockSDK := &mockSDKClient{
+			getCandlesError: errors.New("SDK error"),
+		}
+
+		client := NewClientWithSDK(mockSDK, log)
+		adapter := &TradernetBrokerAdapter{client: client}
+
+		candles, err := adapter.GetHistoricalPrices("AAPL.US", 0, 0, 86400)
+		assert.Error(t, err)
+		assert.Nil(t, candles)
+	})
+
+	t.Run("empty result", func(t *testing.T) {
+		mockSDK := &mockSDKClient{
+			getCandlesResult: map[string]interface{}{
+				"hloc":    map[string]interface{}{},
+				"vl":      map[string]interface{}{},
+				"xSeries": map[string]interface{}{},
+			},
+		}
+
+		client := NewClientWithSDK(mockSDK, log)
+		adapter := &TradernetBrokerAdapter{client: client}
+
+		candles, err := adapter.GetHistoricalPrices("UNKNOWN.US", 0, 0, 86400)
+		require.NoError(t, err)
+		assert.Len(t, candles, 0)
+	})
+}
+
+// TestTradernetBrokerAdapter_GetQuotes tests GetQuotes batch transformation
+func TestTradernetBrokerAdapter_GetQuotes(t *testing.T) {
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+
+	t.Run("success with multiple symbols", func(t *testing.T) {
+		mockSDK := &mockSDKClient{
+			getQuotesResult: map[string]interface{}{
+				"result": map[string]interface{}{
+					"q": []interface{}{
+						map[string]interface{}{
+							"c":   "AAPL.US",
+							"ltp": 150.50,
+							"chg": 2.5,
+							"pcp": 1.69,
+							"vol": float64(1000000),
+						},
+						map[string]interface{}{
+							"c":   "MSFT.US",
+							"ltp": 380.25,
+							"chg": -1.5,
+							"pcp": -0.39,
+							"vol": float64(500000),
+						},
+					},
+				},
+			},
+		}
+
+		client := NewClientWithSDK(mockSDK, log)
+		adapter := &TradernetBrokerAdapter{client: client}
+
+		quotes, err := adapter.GetQuotes([]string{"AAPL.US", "MSFT.US"})
+		require.NoError(t, err)
+		assert.Len(t, quotes, 2)
+
+		// Check AAPL quote
+		aapl, ok := quotes["AAPL.US"]
+		assert.True(t, ok)
+		assert.Equal(t, "AAPL.US", aapl.Symbol)
+		assert.Equal(t, 150.50, aapl.Price)
+
+		// Check MSFT quote
+		msft, ok := quotes["MSFT.US"]
+		assert.True(t, ok)
+		assert.Equal(t, "MSFT.US", msft.Symbol)
+		assert.Equal(t, 380.25, msft.Price)
+	})
+
+	t.Run("success with single symbol", func(t *testing.T) {
+		mockSDK := &mockSDKClient{
+			getQuotesResult: map[string]interface{}{
+				"result": map[string]interface{}{
+					"q": []interface{}{
+						map[string]interface{}{
+							"c":   "GOOGL.US",
+							"ltp": 140.50,
+							"chg": 2.5,
+							"pcp": 1.8,
+							"vol": float64(1000000),
+						},
+					},
+				},
+			},
+		}
+
+		client := NewClientWithSDK(mockSDK, log)
+		adapter := &TradernetBrokerAdapter{client: client}
+
+		quotes, err := adapter.GetQuotes([]string{"GOOGL.US"})
+		require.NoError(t, err)
+		assert.Len(t, quotes, 1)
+		assert.Equal(t, "GOOGL.US", quotes["GOOGL.US"].Symbol)
+		assert.Equal(t, 140.50, quotes["GOOGL.US"].Price)
+	})
+
+	t.Run("empty symbols returns empty map", func(t *testing.T) {
+		mockSDK := &mockSDKClient{}
+
+		client := NewClientWithSDK(mockSDK, log)
+		adapter := &TradernetBrokerAdapter{client: client}
+
+		quotes, err := adapter.GetQuotes([]string{})
+		require.NoError(t, err)
+		assert.NotNil(t, quotes)
+		assert.Len(t, quotes, 0)
+	})
+
+	t.Run("sdk error", func(t *testing.T) {
+		mockSDK := &mockSDKClient{
+			getQuotesError: errors.New("SDK error"),
+		}
+
+		client := NewClientWithSDK(mockSDK, log)
+		adapter := &TradernetBrokerAdapter{client: client}
+
+		quotes, err := adapter.GetQuotes([]string{"AAPL.US"})
+		assert.Error(t, err)
+		assert.Nil(t, quotes)
+	})
+
+	t.Run("partial failure - some symbols not found", func(t *testing.T) {
+		mockSDK := &mockSDKClient{
+			getQuotesResult: map[string]interface{}{
+				"result": map[string]interface{}{
+					"q": []interface{}{
+						map[string]interface{}{
+							"c":   "AAPL.US",
+							"ltp": 150.50,
+							"chg": 2.5,
+							"pcp": 1.69,
+							"vol": float64(1000000),
+						},
+						// INVALID.US not returned - simulates symbol not found
+					},
+				},
+			},
+		}
+
+		client := NewClientWithSDK(mockSDK, log)
+		adapter := &TradernetBrokerAdapter{client: client}
+
+		quotes, err := adapter.GetQuotes([]string{"AAPL.US", "INVALID.US"})
+		require.NoError(t, err)
+		// Should still return valid quotes
+		assert.Len(t, quotes, 1)
+		_, ok := quotes["AAPL.US"]
+		assert.True(t, ok)
+		_, ok = quotes["INVALID.US"]
+		assert.False(t, ok)
+	})
+}
+
 // Compile-time check that TradernetBrokerAdapter implements domain.BrokerClient
 var _ domain.BrokerClient = (*TradernetBrokerAdapter)(nil)

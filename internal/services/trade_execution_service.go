@@ -536,17 +536,17 @@ func (s *TradeExecutionService) validatePriceFreshness(rec TradeRecommendation) 
 		return nil
 	}
 
-	// Price is stale, attempt to refresh
+	// Price is stale, attempt to refresh from Tradernet (primary source)
 	s.log.Warn().
 		Err(err).
 		Str("symbol", rec.Symbol).
 		Str("isin", security.ISIN).
-		Msg("Price data is stale, attempting to refresh from Yahoo Finance")
+		Msg("Price data is stale, attempting to refresh from Tradernet")
 
-	// Fetch fresh price from Yahoo Finance
-	if s.yahooClient == nil {
-		s.log.Error().Msg("Yahoo client unavailable, cannot refresh stale price")
-		errMsg := "Price data is stale and refresh unavailable (Yahoo client not configured)"
+	// Fetch fresh price from Tradernet (primary source)
+	if s.brokerClient == nil {
+		s.log.Error().Msg("Broker client unavailable, cannot refresh stale price")
+		errMsg := "Price data is stale and refresh unavailable (broker client not configured)"
 		return &ExecuteResult{
 			Symbol: rec.Symbol,
 			Status: "blocked",
@@ -554,22 +554,40 @@ func (s *TradeExecutionService) validatePriceFreshness(rec TradeRecommendation) 
 		}
 	}
 
-	// Get current price from Yahoo
-	var yahooSymbolPtr *string
-	if security.YahooSymbol != "" {
-		yahooSymbolPtr = &security.YahooSymbol
-	}
-	currentPrice, err := s.yahooClient.GetCurrentPrice(rec.Symbol, yahooSymbolPtr, 3)
-	if err != nil || currentPrice == nil {
+	// Get current price from Tradernet
+	quotes, err := s.brokerClient.GetQuotes([]string{rec.Symbol})
+	if err != nil || quotes[rec.Symbol] == nil || quotes[rec.Symbol].Price <= 0 {
 		s.log.Error().
 			Err(err).
 			Str("symbol", rec.Symbol).
-			Msg("Failed to fetch fresh price from Yahoo Finance")
+			Msg("Failed to fetch fresh price from Tradernet")
 		errMsg := fmt.Sprintf("Price data is stale (older than %.0f hours) and refresh failed", maxAgeHours)
 		return &ExecuteResult{
 			Symbol: rec.Symbol,
 			Status: "blocked",
 			Error:  &errMsg,
+		}
+	}
+
+	currentPrice := quotes[rec.Symbol].Price
+
+	// Optional: Yahoo sanity check (non-blocking)
+	if s.yahooClient != nil {
+		var yahooSymbolPtr *string
+		if security.YahooSymbol != "" {
+			yahooSymbolPtr = &security.YahooSymbol
+		}
+		yahooPrice, yahooErr := s.yahooClient.GetCurrentPrice(rec.Symbol, yahooSymbolPtr, 1)
+		if yahooErr == nil && yahooPrice != nil && *yahooPrice > 0 {
+			// Sanity check: if Tradernet price is >50% higher than Yahoo, log warning
+			if currentPrice > *yahooPrice*1.5 {
+				s.log.Warn().
+					Str("symbol", rec.Symbol).
+					Float64("tradernet_price", currentPrice).
+					Float64("yahoo_price", *yahooPrice).
+					Msg("Price anomaly detected: Tradernet price >50% higher than Yahoo, using Yahoo price")
+				currentPrice = *yahooPrice
+			}
 		}
 	}
 
@@ -584,33 +602,34 @@ func (s *TradeExecutionService) validatePriceFreshness(rec TradeRecommendation) 
 	`
 
 	dateUnix := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).Unix()
-	_, err = s.historyDB.Exec(insertQuery, security.ISIN, dateUnix, *currentPrice, *currentPrice, *currentPrice, *currentPrice)
+	_, err = s.historyDB.Exec(insertQuery, security.ISIN, dateUnix, currentPrice, currentPrice, currentPrice, currentPrice)
 	if err != nil {
 		s.log.Warn().
 			Err(err).
 			Str("symbol", rec.Symbol).
-			Float64("price", *currentPrice).
+			Float64("price", currentPrice).
 			Msg("Failed to store refreshed price in history.db, but proceeding with trade")
 		// Don't block trade if storage fails - we have the fresh price
 	} else {
 		s.log.Info().
 			Str("symbol", rec.Symbol).
 			Str("date", todayStr).
-			Float64("price", *currentPrice).
-			Msg("Successfully refreshed stale price from Yahoo Finance")
+			Float64("price", currentPrice).
+			Msg("Successfully refreshed stale price from Tradernet")
 	}
 
 	// Fresh price obtained, allow trade to proceed
 	return nil
 }
 
-// validatePriceAndCalculateLimit fetches trusted price from Yahoo Finance and calculates limit price.
+// validatePriceAndCalculateLimit fetches price from Tradernet (primary) and calculates limit price.
+// Uses Yahoo as a non-blocking sanity check (if Tradernet price is >50% higher, uses Yahoo).
 //
-// For BUY orders: limit = yahooPrice × (1 + buffer)  // Allow buying slightly above
-// For SELL orders: limit = yahooPrice × (1 - buffer) // Allow selling slightly below
+// For BUY orders: limit = price × (1 + buffer)  // Allow buying slightly above
+// For SELL orders: limit = price × (1 - buffer) // Allow selling slightly below
 //
 // Returns limit price and nil error if successful.
-// Returns 0 and error if Yahoo unavailable (blocks trade for safety).
+// Returns 0 and error if Tradernet unavailable (blocks trade for safety).
 func (s *TradeExecutionService) validatePriceAndCalculateLimit(rec TradeRecommendation) (float64, error) {
 	// Get buffer from settings (existing logic)
 	buffer := s.getBuffer()
@@ -632,10 +651,10 @@ func (s *TradeExecutionService) validatePriceAndCalculateLimit(rec TradeRecommen
 		return limitPrice, nil
 	}
 
-	// Fallback to Yahoo-only (existing behavior)
+	// Fallback to Tradernet-primary (with Yahoo sanity check)
 	s.log.Debug().
 		Str("symbol", rec.Symbol).
-		Msg("Order book analysis disabled or unavailable - using Yahoo-only fallback")
+		Msg("Order book analysis disabled or unavailable - using Tradernet with Yahoo sanity check")
 	return s.calculateLegacyLimit(rec, buffer)
 }
 
@@ -652,48 +671,75 @@ func (s *TradeExecutionService) getBuffer() float64 {
 	return buffer
 }
 
-// calculateLegacyLimit is the old Yahoo-only logic (fallback)
+// calculateLegacyLimit uses Tradernet as primary source with Yahoo as sanity check
 func (s *TradeExecutionService) calculateLegacyLimit(rec TradeRecommendation, buffer float64) (float64, error) {
-	// Check if Yahoo client is available
-	if s.yahooClient == nil {
-		return 0, fmt.Errorf("yahoo Finance client unavailable and order book disabled")
+	// Check if broker client is available (primary source)
+	if s.brokerClient == nil {
+		return 0, fmt.Errorf("broker client unavailable and order book disabled")
 	}
 
 	// Get security for Yahoo symbol override
-	var yahooSymbolPtr *string
+	var yahooSymbol string
 	if s.securityRepo != nil {
 		security, err := s.securityRepo.GetBySymbol(rec.Symbol)
 		if err == nil && security != nil && security.YahooSymbol != "" {
-			yahooSymbolPtr = &security.YahooSymbol
+			yahooSymbol = security.YahooSymbol
 		}
 	}
 
-	// Fetch current price from Yahoo Finance (3 retries)
-	yahooPrice, err := s.yahooClient.GetCurrentPrice(rec.Symbol, yahooSymbolPtr, 3)
-	if err != nil || yahooPrice == nil {
-		return 0, fmt.Errorf("failed to fetch Yahoo price for %s: %w", rec.Symbol, err)
+	// Fetch current price from Tradernet (primary source)
+	quotes, err := s.brokerClient.GetQuotes([]string{rec.Symbol})
+	if err != nil || quotes[rec.Symbol] == nil {
+		return 0, fmt.Errorf("failed to fetch Tradernet price for %s: %w", rec.Symbol, err)
 	}
 
+	tradernetPrice := quotes[rec.Symbol].Price
+
 	// Validate price is reasonable
-	if *yahooPrice <= 0 {
-		return 0, fmt.Errorf("invalid Yahoo price for %s: %.2f (must be positive)", rec.Symbol, *yahooPrice)
+	if tradernetPrice <= 0 {
+		return 0, fmt.Errorf("invalid Tradernet price for %s: %.2f (must be positive)", rec.Symbol, tradernetPrice)
+	}
+
+	// Use Tradernet price as default
+	validatedPrice := tradernetPrice
+
+	// Optional: Yahoo sanity check (non-blocking)
+	if s.yahooClient != nil {
+		var yahooSymbolPtr *string
+		if yahooSymbol != "" {
+			yahooSymbolPtr = &yahooSymbol
+		}
+		yahooPrice, yahooErr := s.yahooClient.GetCurrentPrice(rec.Symbol, yahooSymbolPtr, 1)
+		if yahooErr == nil && yahooPrice != nil && *yahooPrice > 0 {
+			// Sanity check: if Tradernet price is >50% higher than Yahoo, use Yahoo
+			if tradernetPrice > *yahooPrice*1.5 {
+				s.log.Warn().
+					Str("symbol", rec.Symbol).
+					Float64("tradernet_price", tradernetPrice).
+					Float64("yahoo_price", *yahooPrice).
+					Msg("Price anomaly detected for limit calculation: using Yahoo price")
+				validatedPrice = *yahooPrice
+			}
+		}
+		// If Yahoo unavailable, continue with Tradernet price (non-blocking)
 	}
 
 	// Calculate limit price with buffer
 	var limitPrice float64
 	if rec.Side == "BUY" {
-		limitPrice = *yahooPrice * (1 + buffer)
+		limitPrice = validatedPrice * (1 + buffer)
 	} else {
-		limitPrice = *yahooPrice * (1 - buffer)
+		limitPrice = validatedPrice * (1 - buffer)
 	}
 
 	s.log.Info().
 		Str("symbol", rec.Symbol).
 		Str("side", rec.Side).
-		Float64("yahoo_price", *yahooPrice).
+		Float64("tradernet_price", tradernetPrice).
+		Float64("validated_price", validatedPrice).
 		Float64("limit_price", limitPrice).
 		Float64("buffer_pct", buffer*100).
-		Msg("Calculated limit price from Yahoo Finance (legacy mode)")
+		Msg("Calculated limit price from Tradernet (with Yahoo sanity check)")
 
 	return limitPrice, nil
 }

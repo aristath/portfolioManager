@@ -570,10 +570,6 @@ func (s *PortfolioService) SyncFromTradernet() error {
 			continue
 		}
 
-		// Before upserting, get existing position to preserve Yahoo prices
-		// GetBySymbol looks up ISIN first, then queries by ISIN
-		existingPos, _ := s.positionRepo.GetBySymbol(tradernetPos.Symbol)
-
 		// Lookup ISIN from securities table (required for Upsert)
 		// Note: Cash positions should not come from Tradernet positions - they're synced separately
 		var isin string
@@ -635,20 +631,17 @@ func (s *PortfolioService) SyncFromTradernet() error {
 		// Convert tradernet.Position to portfolio.Position
 		// Use Tradernet data for position info, but preserve Yahoo prices
 		now := time.Now().Unix()
+		// Convert tradernet.Position to portfolio.Position
+		// Use Tradernet data for all position info including current price
 		dbPos := Position{
-			ISIN:         isin, // Required for Upsert (PRIMARY KEY)
+			ISIN:         isin,                       // Required for Upsert (PRIMARY KEY)
 			Symbol:       tradernetPos.Symbol,
-			Quantity:     tradernetPos.Quantity, // From Tradernet
-			AvgPrice:     tradernetPos.AvgPrice, // From Tradernet (historical)
-			Currency:     tradernetPos.Currency, // From Tradernet
-			CurrencyRate: 1.0,                   // Will be set below from cache
+			Quantity:     tradernetPos.Quantity,      // From Tradernet
+			AvgPrice:     tradernetPos.AvgPrice,      // From Tradernet (historical)
+			CurrentPrice: tradernetPos.CurrentPrice,  // From Tradernet (correct currency)
+			Currency:     tradernetPos.Currency,      // From Tradernet
+			CurrencyRate: 1.0,                        // Will be set below from cache
 			LastUpdated:  &now,
-		}
-
-		// Preserve Yahoo prices - DO NOT use Tradernet prices
-		if existingPos != nil {
-			dbPos.CurrentPrice = existingPos.CurrentPrice     // Keep Yahoo price
-			dbPos.MarketValueEUR = existingPos.MarketValueEUR // Keep Yahoo-calculated value
 		}
 
 		// Fetch currency rate from cache service

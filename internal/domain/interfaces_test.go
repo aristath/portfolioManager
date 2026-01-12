@@ -111,6 +111,14 @@ func (m *mockBrokerClient) GetFXRates(baseCurrency string, currencies []string) 
 	return map[string]float64{}, nil
 }
 
+func (m *mockBrokerClient) GetQuotes(symbols []string) (map[string]*BrokerQuote, error) {
+	return make(map[string]*BrokerQuote), nil
+}
+
+func (m *mockBrokerClient) GetHistoricalPrices(symbol string, start, end int64, timeframeSeconds int) ([]BrokerOHLCV, error) {
+	return []BrokerOHLCV{}, nil
+}
+
 type mockCurrencyExchangeService struct{}
 
 func (m *mockCurrencyExchangeService) GetRate(fromCurrency, toCurrency string) (float64, error) {

@@ -9,11 +9,12 @@ import (
 )
 
 // SyncService handles data synchronization for securities
-// Faithful translation from Python: app/jobs/securities_data_sync.py
+// Uses Tradernet as primary price source, Yahoo as sanity check via PriceValidator
 type SyncService struct {
 	securityRepo    *SecurityRepository
 	historicalSync  *HistoricalSyncService
 	yahooClient     YahooClientInterface
+	priceValidator  PriceValidatorInterface
 	scoreCalculator ScoreCalculator
 	brokerClient    domain.BrokerClient
 	setupService    *SecuritySetupService
@@ -21,11 +22,20 @@ type SyncService struct {
 	log             zerolog.Logger
 }
 
+// PriceValidatorInterface defines the contract for price validation operations
+// Used by SyncService to validate Tradernet prices against Yahoo sanity check
+type PriceValidatorInterface interface {
+	// ValidatePrice returns the validated price for a symbol
+	// Primary: Tradernet price, Sanity check: If Tradernet > Yahoo * 1.5, use Yahoo instead
+	ValidatePrice(symbol string, yahooSymbol string, tradernetPrice float64) float64
+}
+
 // NewSyncService creates a new sync service
 func NewSyncService(
 	securityRepo *SecurityRepository,
 	historicalSync *HistoricalSyncService,
 	yahooClient YahooClientInterface,
+	priceValidator PriceValidatorInterface,
 	scoreCalculator ScoreCalculator,
 	brokerClient domain.BrokerClient,
 	setupService *SecuritySetupService,
@@ -36,6 +46,7 @@ func NewSyncService(
 		securityRepo:    securityRepo,
 		historicalSync:  historicalSync,
 		yahooClient:     yahooClient,
+		priceValidator:  priceValidator,
 		scoreCalculator: scoreCalculator,
 		brokerClient:    brokerClient,
 		setupService:    setupService,
@@ -342,8 +353,10 @@ func (s *SyncService) SyncAllPrices() (int, error) {
 	return s.SyncAllPricesWithReporter(nil)
 }
 
+// SyncAllPricesWithReporter syncs current prices using Tradernet as primary source
+// Uses PriceValidator for sanity check (Yahoo fallback if Tradernet price > 150% of Yahoo)
 func (s *SyncService) SyncAllPricesWithReporter(reporter ProgressReporter) (int, error) {
-	s.log.Info().Msg("Starting price sync for all active securities")
+	s.log.Info().Msg("Starting price sync for all active securities (Tradernet primary)")
 
 	const totalSteps = 3
 
@@ -362,51 +375,57 @@ func (s *SyncService) SyncAllPricesWithReporter(reporter ProgressReporter) (int,
 		return 0, nil
 	}
 
-	// Step 2: Build symbol map (tradernet_symbol -> yahoo_override) and symbol->ISIN mapping
-	if reporter != nil {
-		reporter.Report(2, totalSteps, "Fetching prices")
-	}
-
-	symbolMap := make(map[string]*string)
-	symbolToISIN := make(map[string]string) // Map symbol -> ISIN for position updates
+	// Build symbol list and mappings
+	symbols := make([]string, 0, len(securities))
+	symbolToSecurity := make(map[string]Security)
 	for _, security := range securities {
-		var yahooSymbolPtr *string
-		if security.YahooSymbol != "" {
-			// Create new string to avoid range variable issues
-			yahooSymbol := security.YahooSymbol
-			yahooSymbolPtr = &yahooSymbol
-		}
-		symbolMap[security.Symbol] = yahooSymbolPtr
-		if security.ISIN != "" {
-			symbolToISIN[security.Symbol] = security.ISIN
-		}
+		symbols = append(symbols, security.Symbol)
+		symbolToSecurity[security.Symbol] = security
 	}
 
-	// 3. Fetch batch quotes from Yahoo
-	quotes, err := s.yahooClient.GetBatchQuotes(symbolMap)
+	// Step 2: Fetch quotes from Tradernet (primary source)
+	if reporter != nil {
+		reporter.Report(2, totalSteps, "Fetching prices from Tradernet")
+	}
+
+	if s.brokerClient == nil {
+		return 0, fmt.Errorf("broker client not available")
+	}
+
+	quotes, err := s.brokerClient.GetQuotes(symbols)
 	if err != nil {
-		return 0, fmt.Errorf("failed to fetch batch quotes: %w", err)
+		return 0, fmt.Errorf("failed to fetch quotes from Tradernet: %w", err)
 	}
 
-	// Step 3: Update position prices in state.db (using ISIN)
+	// Step 3: Validate and update prices
 	if reporter != nil {
 		reporter.Report(3, totalSteps, "Updating positions")
 	}
 
 	updated := 0
-	now := time.Now().Unix() // Convert to Unix timestamp (INTEGER)
+	now := time.Now().Unix()
 
-	for symbol, price := range quotes {
-		if price == nil {
-			s.log.Warn().Str("symbol", symbol).Msg("No price data received")
+	for symbol, quote := range quotes {
+		if quote == nil || quote.Price <= 0 {
+			s.log.Debug().Str("symbol", symbol).Msg("No price data from Tradernet")
 			continue
 		}
 
-		// Lookup ISIN for this symbol
-		isin, hasISIN := symbolToISIN[symbol]
-		if !hasISIN || isin == "" {
-			s.log.Warn().Str("symbol", symbol).Msg("No ISIN found for symbol, skipping position update")
+		security, hasSecurity := symbolToSecurity[symbol]
+		if !hasSecurity {
+			s.log.Warn().Str("symbol", symbol).Msg("Security not found in mapping")
 			continue
+		}
+
+		if security.ISIN == "" {
+			s.log.Warn().Str("symbol", symbol).Msg("No ISIN found for symbol")
+			continue
+		}
+
+		// Validate price using PriceValidator (Tradernet primary, Yahoo sanity check)
+		validatedPrice := quote.Price
+		if s.priceValidator != nil {
+			validatedPrice = s.priceValidator.ValidatePrice(symbol, security.YahooSymbol, quote.Price)
 		}
 
 		// Update positions table (using ISIN as PRIMARY KEY)
@@ -416,10 +435,10 @@ func (s *SyncService) SyncAllPricesWithReporter(reporter ProgressReporter) (int,
 				market_value_eur = quantity * ? / currency_rate,
 				last_updated = ?
 			WHERE isin = ?
-		`, *price, *price, now, isin)
+		`, validatedPrice, validatedPrice, now, security.ISIN)
 
 		if err != nil {
-			s.log.Error().Err(err).Str("symbol", symbol).Str("isin", isin).Msg("Failed to update position price")
+			s.log.Error().Err(err).Str("symbol", symbol).Str("isin", security.ISIN).Msg("Failed to update position price")
 			continue
 		}
 
@@ -432,7 +451,7 @@ func (s *SyncService) SyncAllPricesWithReporter(reporter ProgressReporter) (int,
 	s.log.Info().
 		Int("total", len(securities)).
 		Int("updated", updated).
-		Msg("Price sync complete")
+		Msg("Price sync complete (Tradernet primary)")
 
 	return updated, nil
 }
@@ -565,19 +584,30 @@ func (s *SyncService) RebuildUniverseFromPortfolio() (int, error) {
 }
 
 // SyncPricesForSymbols syncs prices for a filtered set of symbols
-// Similar to SyncAllPrices but accepts a pre-filtered symbol map
-// After migration: converts symbol to ISIN for position updates
+// Uses Tradernet as primary source, with Yahoo sanity check via PriceValidator
+// The symbolMap parameter (tradernet_symbol -> yahoo_override) is converted to a symbol list for Tradernet
 func (s *SyncService) SyncPricesForSymbols(symbolMap map[string]*string) (int, error) {
-	s.log.Info().Int("symbols", len(symbolMap)).Msg("Starting filtered price sync")
+	s.log.Info().Int("symbols", len(symbolMap)).Msg("Starting filtered price sync (Tradernet primary)")
 
 	if len(symbolMap) == 0 {
 		s.log.Info().Msg("No symbols to sync prices for")
 		return 0, nil
 	}
 
-	// Build symbol->ISIN mapping for position updates
+	if s.brokerClient == nil {
+		return 0, fmt.Errorf("broker client not available")
+	}
+
+	// Build symbol list and mappings
+	symbols := make([]string, 0, len(symbolMap))
+	symbolToYahoo := make(map[string]string) // symbol -> yahoo override
 	symbolToISIN := make(map[string]string)
-	for symbol := range symbolMap {
+
+	for symbol, yahooOverride := range symbolMap {
+		symbols = append(symbols, symbol)
+		if yahooOverride != nil && *yahooOverride != "" {
+			symbolToYahoo[symbol] = *yahooOverride
+		}
 		// Lookup ISIN from securities table (if securityRepo is available)
 		if s.securityRepo != nil {
 			security, err := s.securityRepo.GetBySymbol(symbol)
@@ -590,19 +620,19 @@ func (s *SyncService) SyncPricesForSymbols(symbolMap map[string]*string) (int, e
 		symbolToISIN[symbol] = symbol
 	}
 
-	// Fetch batch quotes from Yahoo
-	quotes, err := s.yahooClient.GetBatchQuotes(symbolMap)
+	// Fetch quotes from Tradernet (primary source)
+	quotes, err := s.brokerClient.GetQuotes(symbols)
 	if err != nil {
-		return 0, fmt.Errorf("failed to fetch batch quotes: %w", err)
+		return 0, fmt.Errorf("failed to fetch quotes from Tradernet: %w", err)
 	}
 
 	// Update position prices in state.db (using ISIN)
 	updated := 0
-	now := time.Now()
+	now := time.Now().Unix()
 
-	for symbol, price := range quotes {
-		if price == nil {
-			s.log.Warn().Str("symbol", symbol).Msg("No price data received")
+	for symbol, quote := range quotes {
+		if quote == nil || quote.Price <= 0 {
+			s.log.Debug().Str("symbol", symbol).Msg("No price data from Tradernet")
 			continue
 		}
 
@@ -613,6 +643,13 @@ func (s *SyncService) SyncPricesForSymbols(symbolMap map[string]*string) (int, e
 			continue
 		}
 
+		// Validate price using PriceValidator (Tradernet primary, Yahoo sanity check)
+		yahooSymbol := symbolToYahoo[symbol]
+		validatedPrice := quote.Price
+		if s.priceValidator != nil {
+			validatedPrice = s.priceValidator.ValidatePrice(symbol, yahooSymbol, quote.Price)
+		}
+
 		// Update positions table (using ISIN as PRIMARY KEY)
 		result, err := s.db.Exec(`
 			UPDATE positions
@@ -620,7 +657,7 @@ func (s *SyncService) SyncPricesForSymbols(symbolMap map[string]*string) (int, e
 				market_value_eur = quantity * ? / currency_rate,
 				last_updated = ?
 			WHERE isin = ?
-		`, *price, *price, now, isin)
+		`, validatedPrice, validatedPrice, now, isin)
 
 		if err != nil {
 			s.log.Error().Err(err).Str("symbol", symbol).Str("isin", isin).Msg("Failed to update position price")
@@ -636,7 +673,7 @@ func (s *SyncService) SyncPricesForSymbols(symbolMap map[string]*string) (int, e
 	s.log.Info().
 		Int("requested", len(symbolMap)).
 		Int("updated", updated).
-		Msg("Filtered price sync complete")
+		Msg("Filtered price sync complete (Tradernet primary)")
 
 	return updated, nil
 }

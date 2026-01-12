@@ -627,14 +627,15 @@ func (s *Service) buildOpportunityContext(availableCash float64) (*planningdomai
 	return ctx, nil
 }
 
-// fetchCurrentPrices fetches current prices for all securities from Yahoo Finance and converts to EUR
+// fetchCurrentPrices fetches current prices for all securities from Tradernet and converts to EUR
 // After migration: Returns map keyed by ISIN (internal identifier) with EUR-converted prices
+// Uses Tradernet as primary source (correct currency - GBP not GBp for UK stocks)
 func (s *Service) fetchCurrentPrices(securities []universe.Security) map[string]float64 {
 	prices := make(map[string]float64)
 
-	// Skip if Yahoo client is not available
-	if s.yahooClient == nil {
-		s.log.Warn().Msg("Yahoo client not available, using empty prices")
+	// Skip if broker client is not available
+	if s.brokerClient == nil {
+		s.log.Warn().Msg("Broker client not available, using empty prices")
 		return prices
 	}
 
@@ -642,35 +643,28 @@ func (s *Service) fetchCurrentPrices(securities []universe.Security) map[string]
 		return prices
 	}
 
-	// Build symbol map (tradernet_symbol -> yahoo_symbol override) for Yahoo API
-	symbolMap := make(map[string]*string)
-	// Build symbol -> ISIN mapping to convert API response to ISIN keys
+	// Build symbol list and ISIN mapping
+	symbols := make([]string, 0, len(securities))
 	symbolToISIN := make(map[string]string)
 	for _, security := range securities {
-		var yahooSymbolPtr *string
-		if security.YahooSymbol != "" {
-			// Create new string to avoid range variable issues
-			yahooSymbol := security.YahooSymbol
-			yahooSymbolPtr = &yahooSymbol
-		}
-		symbolMap[security.Symbol] = yahooSymbolPtr
+		symbols = append(symbols, security.Symbol)
 		if security.ISIN != "" {
 			symbolToISIN[security.Symbol] = security.ISIN
 		}
 	}
 
-	// Fetch batch quotes from Yahoo (returns map keyed by Tradernet symbol, prices in native currencies)
-	quotes, err := s.yahooClient.GetBatchQuotes(symbolMap)
+	// Fetch batch quotes from Tradernet (primary source - correct currency)
+	quotes, err := s.brokerClient.GetQuotes(symbols)
 	if err != nil {
-		s.log.Warn().Err(err).Msg("Failed to fetch batch quotes from Yahoo, using empty prices")
+		s.log.Warn().Err(err).Msg("Failed to fetch batch quotes from Tradernet, using empty prices")
 		return prices
 	}
 
 	// Convert quotes map to native currency prices keyed by symbol
 	nativePrices := make(map[string]float64)
-	for symbol, price := range quotes {
-		if price != nil {
-			nativePrices[symbol] = *price
+	for symbol, quote := range quotes {
+		if quote != nil && quote.Price > 0 {
+			nativePrices[symbol] = quote.Price
 		}
 	}
 

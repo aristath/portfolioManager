@@ -98,6 +98,27 @@ func (m *mockBrokerClientForTest) GetLevel1Quote(symbol string) (*BrokerOrderBoo
 	}, nil
 }
 
+// GetQuotes implements BrokerClient
+func (m *mockBrokerClientForTest) GetQuotes(symbols []string) (map[string]*BrokerQuote, error) {
+	if m.returnError {
+		return nil, errors.New("mock error")
+	}
+	// Return a map with the single quote if available
+	result := make(map[string]*BrokerQuote)
+	if m.quote != nil && len(symbols) > 0 {
+		result[symbols[0]] = m.quote
+	}
+	return result, nil
+}
+
+// GetHistoricalPrices implements BrokerClient
+func (m *mockBrokerClientForTest) GetHistoricalPrices(symbol string, start, end int64, timeframeSeconds int) ([]BrokerOHLCV, error) {
+	if m.returnError {
+		return nil, errors.New("mock error")
+	}
+	return []BrokerOHLCV{}, nil
+}
+
 // GetFXRates implements BrokerClient
 func (m *mockBrokerClientForTest) GetFXRates(baseCurrency string, currencies []string) (map[string]float64, error) {
 	if m.returnError {

@@ -351,41 +351,63 @@ func (h *Handler) getPositions() (map[string]optimization.Position, error) {
 }
 
 func (h *Handler) getCurrentPrices(securities []optimization.Security) (map[string]float64, error) {
-	// Fetch current prices from Yahoo Finance with fallback to price_history table
+	// Fetch current prices from Tradernet (primary) with fallback to price_history table
 	prices := make(map[string]float64)
 
-	for _, sec := range securities {
-		// Try to get current price from Yahoo Finance
-		price, err := h.yahooClient.GetCurrentPrice(sec.Symbol, nil, 3)
+	if len(securities) == 0 {
+		return prices, nil
+	}
+
+	// Build symbol list for batch fetch
+	symbols := make([]string, len(securities))
+	for i, sec := range securities {
+		symbols[i] = sec.Symbol
+	}
+
+	// Fetch batch quotes from Tradernet (primary source)
+	var quotes map[string]*domain.BrokerQuote
+	if h.brokerClient != nil {
+		var err error
+		quotes, err = h.brokerClient.GetQuotes(symbols)
 		if err != nil {
-			h.log.Debug().
-				Str("symbol", sec.Symbol).
-				Err(err).
-				Msg("Failed to get price from Yahoo Finance, falling back to price_history")
+			h.log.Warn().Err(err).Msg("Failed to fetch batch quotes from Tradernet, will use fallback for all")
+		}
+	}
 
-			// Fallback: use last known price from price_history table
-			query := `
-				SELECT close
-				FROM price_history
-				WHERE symbol = ?
-				ORDER BY date DESC
-				LIMIT 1
-			`
-
-			var fallbackPrice float64
-			err := h.db.QueryRow(query, sec.Symbol).Scan(&fallbackPrice)
-			if err != nil && err != sql.ErrNoRows {
-				h.log.Warn().
-					Str("symbol", sec.Symbol).
-					Err(err).
-					Msg("Failed to get price from both Yahoo and price_history")
+	// Process each security
+	for _, sec := range securities {
+		// Try Tradernet quote first
+		if quotes != nil {
+			if quote, ok := quotes[sec.Symbol]; ok && quote != nil && quote.Price > 0 {
+				prices[sec.Symbol] = quote.Price
 				continue
 			}
-			if err == nil {
-				prices[sec.Symbol] = fallbackPrice
-			}
-		} else if price != nil {
-			prices[sec.Symbol] = *price
+		}
+
+		// Fallback: use last known price from price_history table
+		h.log.Debug().
+			Str("symbol", sec.Symbol).
+			Msg("No Tradernet price, falling back to price_history")
+
+		query := `
+			SELECT close
+			FROM price_history
+			WHERE symbol = ?
+			ORDER BY date DESC
+			LIMIT 1
+		`
+
+		var fallbackPrice float64
+		err := h.db.QueryRow(query, sec.Symbol).Scan(&fallbackPrice)
+		if err != nil && err != sql.ErrNoRows {
+			h.log.Warn().
+				Str("symbol", sec.Symbol).
+				Err(err).
+				Msg("Failed to get price from both Tradernet and price_history")
+			continue
+		}
+		if err == nil {
+			prices[sec.Symbol] = fallbackPrice
 		}
 	}
 

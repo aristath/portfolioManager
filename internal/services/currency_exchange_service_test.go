@@ -201,6 +201,14 @@ func (m *mockBrokerClientCurrencyTest) GetLevel1Quote(symbol string) (*domain.Br
 	return nil, nil
 }
 
+func (m *mockBrokerClientCurrencyTest) GetQuotes(symbols []string) (map[string]*domain.BrokerQuote, error) {
+	return make(map[string]*domain.BrokerQuote), nil
+}
+
+func (m *mockBrokerClientCurrencyTest) GetHistoricalPrices(symbol string, start, end int64, timeframeSeconds int) ([]domain.BrokerOHLCV, error) {
+	return []domain.BrokerOHLCV{}, nil
+}
+
 func (m *mockBrokerClientCurrencyTest) GetFXRates(baseCurrency string, currencies []string) (map[string]float64, error) {
 	m.getFXRatesCalled = true
 	m.getFXRatesBaseCurr = baseCurrency
@@ -452,6 +460,14 @@ func (m *mockBrokerClientCurrencyTestNotConnected) GetPendingOrders() ([]domain.
 
 func (m *mockBrokerClientCurrencyTestNotConnected) GetQuote(symbol string) (*domain.BrokerQuote, error) {
 	return nil, nil
+}
+
+func (m *mockBrokerClientCurrencyTestNotConnected) GetQuotes(symbols []string) (map[string]*domain.BrokerQuote, error) {
+	return make(map[string]*domain.BrokerQuote), nil
+}
+
+func (m *mockBrokerClientCurrencyTestNotConnected) GetHistoricalPrices(symbol string, start, end int64, timeframeSeconds int) ([]domain.BrokerOHLCV, error) {
+	return []domain.BrokerOHLCV{}, nil
 }
 
 func (m *mockBrokerClientCurrencyTestNotConnected) FindSymbol(symbol string, exchange *string) ([]domain.BrokerSecurityInfo, error) {

@@ -101,6 +101,16 @@ type BrokerHealthResult struct {
 	Timestamp string // Timestamp of health check
 }
 
+// BrokerOHLCV represents a single OHLCV candlestick data point (broker-agnostic)
+type BrokerOHLCV struct {
+	Timestamp int64   // Unix timestamp in seconds
+	Open      float64 // Opening price
+	High      float64 // Highest price
+	Low       float64 // Lowest price
+	Close     float64 // Closing price
+	Volume    int64   // Trading volume
+}
+
 // BrokerOrderBook represents real-time market depth (bid/ask orders at different price levels)
 type BrokerOrderBook struct {
 	Symbol    string           // Security symbol (e.g., "AAPL.US")

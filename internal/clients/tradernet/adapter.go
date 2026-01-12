@@ -74,6 +74,30 @@ func (a *TradernetBrokerAdapter) GetQuote(symbol string) (*domain.BrokerQuote, e
 	return transformQuoteToDomain(tnQuote), nil
 }
 
+// GetQuotes implements domain.BrokerClient
+// Fetches quotes for multiple symbols in a single batch call
+func (a *TradernetBrokerAdapter) GetQuotes(symbols []string) (map[string]*domain.BrokerQuote, error) {
+	if len(symbols) == 0 {
+		return make(map[string]*domain.BrokerQuote), nil
+	}
+
+	tnQuotes, err := a.client.GetQuotes(symbols)
+	if err != nil {
+		return nil, err
+	}
+	return transformQuotesToDomain(tnQuotes), nil
+}
+
+// GetHistoricalPrices implements domain.BrokerClient
+// Fetches OHLCV candlestick data for a symbol
+func (a *TradernetBrokerAdapter) GetHistoricalPrices(symbol string, start, end int64, timeframeSeconds int) ([]domain.BrokerOHLCV, error) {
+	tnCandles, err := a.client.GetHistoricalPrices(symbol, start, end, timeframeSeconds)
+	if err != nil {
+		return nil, err
+	}
+	return transformOHLCVToDomain(tnCandles), nil
+}
+
 // GetLevel1Quote implements domain.BrokerClient
 // Fetches Level 1 market data (best bid and best ask) from Tradernet
 func (a *TradernetBrokerAdapter) GetLevel1Quote(symbol string) (*domain.BrokerOrderBook, error) {

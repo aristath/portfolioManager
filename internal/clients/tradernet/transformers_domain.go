@@ -127,6 +127,37 @@ func transformQuoteToDomain(tnQuote *Quote) *domain.BrokerQuote {
 	}
 }
 
+// transformQuotesToDomain converts a map of Tradernet quotes to domain broker quotes
+func transformQuotesToDomain(tnQuotes map[string]*Quote) map[string]*domain.BrokerQuote {
+	if tnQuotes == nil {
+		return nil
+	}
+	result := make(map[string]*domain.BrokerQuote, len(tnQuotes))
+	for symbol, quote := range tnQuotes {
+		result[symbol] = transformQuoteToDomain(quote)
+	}
+	return result
+}
+
+// transformOHLCVToDomain converts Tradernet OHLCV data to domain broker OHLCV
+func transformOHLCVToDomain(tnCandles []OHLCV) []domain.BrokerOHLCV {
+	if tnCandles == nil {
+		return nil
+	}
+	result := make([]domain.BrokerOHLCV, len(tnCandles))
+	for i, candle := range tnCandles {
+		result[i] = domain.BrokerOHLCV{
+			Timestamp: candle.Timestamp,
+			Open:      candle.Open,
+			High:      candle.High,
+			Low:       candle.Low,
+			Close:     candle.Close,
+			Volume:    candle.Volume,
+		}
+	}
+	return result
+}
+
 // transformPendingOrdersToDomain converts Tradernet pending orders to domain broker pending orders
 func transformPendingOrdersToDomain(tnOrders []PendingOrder) []domain.BrokerPendingOrder {
 	result := make([]domain.BrokerPendingOrder, len(tnOrders))

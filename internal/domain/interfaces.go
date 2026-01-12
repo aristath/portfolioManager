@@ -32,9 +32,16 @@ type BrokerClient interface {
 
 	// Market data operations
 	GetQuote(symbol string) (*BrokerQuote, error)
+	// GetQuotes fetches quotes for multiple symbols in a single batch call
+	// Returns a map of symbol -> quote for all successfully retrieved quotes
+	// Symbols not found are simply omitted from the result (not an error)
+	GetQuotes(symbols []string) (map[string]*BrokerQuote, error)
 	// GetLevel1Quote fetches Level 1 market data (best bid and best ask only)
 	// Returns BrokerOrderBook with Bids[0] and Asks[0] populated
 	GetLevel1Quote(symbol string) (*BrokerOrderBook, error)
+	// GetHistoricalPrices fetches OHLCV candlestick data for a symbol
+	// timeframeSeconds: 86400 for daily, 3600 for hourly, etc.
+	GetHistoricalPrices(symbol string, start, end int64, timeframeSeconds int) ([]BrokerOHLCV, error)
 	FindSymbol(symbol string, exchange *string) ([]BrokerSecurityInfo, error)
 	// GetFXRates retrieves currency exchange rates for today's date
 	// Returns a map of currency codes to exchange rates relative to baseCurrency

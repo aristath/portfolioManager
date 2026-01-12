@@ -81,6 +81,14 @@ func (m *mockTradernetClient) HealthCheck() (*domain.BrokerHealthResult, error) 
 func (m *mockTradernetClient) SetCredentials(apiKey, apiSecret string) {
 }
 
+func (m *mockTradernetClient) GetQuotes(symbols []string) (map[string]*domain.BrokerQuote, error) {
+	return make(map[string]*domain.BrokerQuote), nil
+}
+
+func (m *mockTradernetClient) GetHistoricalPrices(symbol string, start, end int64, timeframeSeconds int) ([]domain.BrokerOHLCV, error) {
+	return []domain.BrokerOHLCV{}, nil
+}
+
 // Mock Trade Repository for testing
 
 type mockTradeRepository struct {

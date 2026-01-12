@@ -1,5 +1,7 @@
 package tradernet
 
+import "time"
+
 // SDKClient interface for dependency injection in tests
 // This interface matches the SDK client methods we need
 type SDKClient interface {
@@ -14,6 +16,8 @@ type SDKClient interface {
 	GetQuotes(symbols []string) (interface{}, error)
 	// GetLevel1Quote fetches Level 1 market data (best bid/ask only)
 	GetLevel1Quote(symbol string) (interface{}, error)
+	// GetCandles fetches historical OHLC candlestick data (uses getHloc API)
+	GetCandles(symbol string, start, end time.Time, timeframeSeconds int) (interface{}, error)
 	GetCrossRatesForDate(baseCurrency string, currencies []string, date *string) (interface{}, error)
 	UserInfo() (interface{}, error)
 }

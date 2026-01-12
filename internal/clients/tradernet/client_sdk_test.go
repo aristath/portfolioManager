@@ -3,6 +3,7 @@ package tradernet
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -30,6 +31,8 @@ type mockSDKClient struct {
 	getQuotesError             error
 	getLevel1QuoteResult       interface{}
 	getLevel1QuoteError        error
+	getCandlesResult           interface{}
+	getCandlesError            error
 	getCrossRatesForDateResult interface{}
 	getCrossRatesForDateError  error
 	userInfoResult             interface{}
@@ -77,6 +80,10 @@ func (m *mockSDKClient) GetQuotes(symbols []string) (interface{}, error) {
 
 func (m *mockSDKClient) GetLevel1Quote(symbol string) (interface{}, error) {
 	return m.getLevel1QuoteResult, m.getLevel1QuoteError
+}
+
+func (m *mockSDKClient) GetCandles(symbol string, start, end time.Time, timeframeSeconds int) (interface{}, error) {
+	return m.getCandlesResult, m.getCandlesError
 }
 
 func (m *mockSDKClient) GetCrossRatesForDate(baseCurrency string, currencies []string, date *string) (interface{}, error) {

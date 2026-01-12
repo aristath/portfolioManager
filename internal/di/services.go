@@ -211,9 +211,9 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	// STEP 5: Initialize Universe Services
 	// ==========================================
 
-	// Historical sync service
+	// Historical sync service (uses Tradernet as primary source for historical data)
 	container.HistoricalSyncService = universe.NewHistoricalSyncService(
-		container.YahooClient,
+		container.BrokerClient, // Changed from YahooClient - Tradernet is now single source of truth
 		container.SecurityRepo,
 		container.HistoryDBClient,
 		time.Second*2, // Rate limit delay
@@ -294,12 +294,18 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	// STEP 8: Initialize Remaining Universe Services
 	// ==========================================
 
+	// Price validator (Tradernet primary, Yahoo sanity check)
+	// Create Yahoo price adapter to satisfy PriceValidator's interface
+	yahooPriceAdapter := services.NewYahooPriceAdapter(container.YahooClient)
+	priceValidatorService := services.NewPriceValidator(yahooPriceAdapter, log)
+
 	// Sync service (scoreCalculator will be set later)
 	container.SyncService = universe.NewSyncService(
 		container.SecurityRepo,
 		container.HistoricalSyncService,
 		container.YahooClient,
-		nil, // scoreCalculator - will be set later
+		priceValidatorService, // PriceValidator for Tradernet-primary price sync
+		nil,                   // scoreCalculator - will be set later
 		container.BrokerClient,
 		container.SetupService,
 		container.PortfolioDB.Conn(),

@@ -591,6 +591,111 @@ func transformQuote(sdkResult interface{}, symbol string) (*Quote, error) {
 	return quote, nil
 }
 
+// transformQuotes transforms SDK GetQuotes response to map[symbol]*Quote
+// Handles the getStockQuotesJson response format with "q" array
+func transformQuotes(sdkResult interface{}) (map[string]*Quote, error) {
+	resultMap, ok := sdkResult.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid SDK result format: expected map[string]interface{}")
+	}
+
+	result, ok := resultMap["result"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid SDK result format: missing or invalid 'result' field")
+	}
+
+	quotesArray, ok := result["q"].([]interface{})
+	if !ok {
+		// Empty result - return empty map
+		return make(map[string]*Quote), nil
+	}
+
+	quotes := make(map[string]*Quote, len(quotesArray))
+	for _, item := range quotesArray {
+		itemMap, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Get symbol from "c" field (Tradernet uses "c" for ticker in getStockQuotesJson)
+		symbol := getString(itemMap, "c")
+		if symbol == "" {
+			continue
+		}
+
+		quote := &Quote{
+			Symbol:    symbol,
+			Price:     getFloat64(itemMap, "ltp"), // last trade price
+			Change:    getFloat64(itemMap, "chg"), // change
+			ChangePct: getFloat64(itemMap, "pcp"), // change percent
+			Volume:    int64(getFloat64(itemMap, "vol")),
+			Timestamp: time.Now().Format(time.RFC3339),
+		}
+
+		quotes[symbol] = quote
+	}
+
+	return quotes, nil
+}
+
+// transformCandles transforms SDK GetCandles (getHloc) response to []OHLCV
+// Response format: {hloc: {symbol: [[h,l,o,c], ...]}, vl: {symbol: [vol, ...]}, xSeries: {symbol: [ts, ...]}}
+func transformCandles(sdkResult interface{}, symbol string) ([]OHLCV, error) {
+	resultMap, ok := sdkResult.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid SDK result format: expected map[string]interface{}")
+	}
+
+	// Extract hloc data
+	hlocMap, ok := resultMap["hloc"].(map[string]interface{})
+	if !ok {
+		return []OHLCV{}, nil // Empty result
+	}
+
+	symbolHloc, ok := hlocMap[symbol].([]interface{})
+	if !ok {
+		return []OHLCV{}, nil // No data for this symbol
+	}
+
+	// Extract volumes
+	vlMap, _ := resultMap["vl"].(map[string]interface{})
+	symbolVol, _ := vlMap[symbol].([]interface{})
+
+	// Extract timestamps
+	xSeriesMap, _ := resultMap["xSeries"].(map[string]interface{})
+	symbolTimestamps, _ := xSeriesMap[symbol].([]interface{})
+
+	// Build OHLCV slice
+	candles := make([]OHLCV, 0, len(symbolHloc))
+	for i, hlocItem := range symbolHloc {
+		hlocArr, ok := hlocItem.([]interface{})
+		if !ok || len(hlocArr) < 4 {
+			continue
+		}
+
+		candle := OHLCV{
+			High:  getFloat64FromValue(hlocArr[0]),
+			Low:   getFloat64FromValue(hlocArr[1]),
+			Open:  getFloat64FromValue(hlocArr[2]),
+			Close: getFloat64FromValue(hlocArr[3]),
+		}
+
+		// Get volume if available
+		if i < len(symbolVol) {
+			candle.Volume = int64(getFloat64FromValue(symbolVol[i]))
+		}
+
+		// Get timestamp if available
+		if i < len(symbolTimestamps) {
+			candle.Timestamp = int64(getFloat64FromValue(symbolTimestamps[i]))
+		}
+
+		candles = append(candles, candle)
+	}
+
+	return candles, nil
+}
+
 // Helper functions
 
 // getString safely extracts a string value from a map
