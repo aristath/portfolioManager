@@ -14,6 +14,7 @@ import (
 	planningdomain "github.com/aristath/sentinel/internal/modules/planning/domain"
 	planningrepo "github.com/aristath/sentinel/internal/modules/planning/repository"
 	"github.com/aristath/sentinel/internal/modules/portfolio"
+	"github.com/aristath/sentinel/internal/modules/trading"
 	"github.com/aristath/sentinel/internal/modules/universe"
 	"github.com/rs/zerolog"
 )
@@ -27,6 +28,8 @@ type Handler struct {
 	cashManager  domain.CashManager
 	configRepo   *planningrepo.ConfigRepository
 	portfolioDB  *sql.DB
+	tradeRepo    trading.TradeRepositoryInterface // For recently traded ISINs
+	brokerClient domain.BrokerClient              // For pending orders
 	log          zerolog.Logger
 }
 
@@ -39,6 +42,8 @@ func NewHandler(
 	cashManager domain.CashManager,
 	configRepo *planningrepo.ConfigRepository,
 	portfolioDB *sql.DB,
+	tradeRepo trading.TradeRepositoryInterface,
+	brokerClient domain.BrokerClient,
 	log zerolog.Logger,
 ) *Handler {
 	return &Handler{
@@ -49,6 +54,8 @@ func NewHandler(
 		cashManager:  cashManager,
 		configRepo:   configRepo,
 		portfolioDB:  portfolioDB,
+		tradeRepo:    tradeRepo,
+		brokerClient: brokerClient,
 		log:          log.With().Str("handler", "opportunities").Logger(),
 	}
 }
@@ -280,9 +287,10 @@ func (h *Handler) buildOpportunityContext() (*planningdomain.OpportunityContext,
 		}
 	}
 
-	// Convert securities to domain format
+	// Convert securities to domain format and build symbol-to-ISIN lookup
 	domainSecurities := make([]domain.Security, 0, len(securities))
 	stocksByISIN := make(map[string]domain.Security)
+	symbolToISIN := make(map[string]string) // For pending order ISIN lookup
 	for _, sec := range securities {
 		domainSec := domain.Security{
 			Symbol:   sec.Symbol,
@@ -295,6 +303,9 @@ func (h *Handler) buildOpportunityContext() (*planningdomain.OpportunityContext,
 		domainSecurities = append(domainSecurities, domainSec)
 		if sec.ISIN != "" {
 			stocksByISIN[sec.ISIN] = domainSec
+			if sec.Symbol != "" {
+				symbolToISIN[sec.Symbol] = sec.ISIN
+			}
 		}
 	}
 
@@ -366,6 +377,73 @@ func (h *Handler) buildOpportunityContext() (*planningdomain.OpportunityContext,
 		}
 	}
 
+	// Initialize cooloff maps
+	recentlySoldISINs := make(map[string]bool)
+	recentlyBoughtISINs := make(map[string]bool)
+
+	// Get cooloff days from planner config (default to 180 if not available)
+	cooloffDays := 180
+	if h.configRepo != nil {
+		config, err := h.configRepo.GetDefaultConfig()
+		if err == nil && config.SellCooldownDays > 0 {
+			cooloffDays = config.SellCooldownDays
+		}
+	}
+
+	// Populate recently traded ISINs from trade repository
+	if h.tradeRepo != nil {
+		// Get recently sold ISINs
+		soldISINs, err := h.tradeRepo.GetRecentlySoldISINs(cooloffDays)
+		if err != nil {
+			h.log.Warn().Err(err).Int("days", cooloffDays).Msg("Failed to get recently sold ISINs")
+		} else {
+			for isin := range soldISINs {
+				recentlySoldISINs[isin] = true
+			}
+			h.log.Debug().Int("count", len(soldISINs)).Int("days", cooloffDays).Msg("Loaded recently sold ISINs for cooloff")
+		}
+
+		// Get recently bought ISINs
+		boughtISINs, err := h.tradeRepo.GetRecentlyBoughtISINs(cooloffDays)
+		if err != nil {
+			h.log.Warn().Err(err).Int("days", cooloffDays).Msg("Failed to get recently bought ISINs")
+		} else {
+			for isin := range boughtISINs {
+				recentlyBoughtISINs[isin] = true
+			}
+			h.log.Debug().Int("count", len(boughtISINs)).Int("days", cooloffDays).Msg("Loaded recently bought ISINs for cooloff")
+		}
+	}
+
+	// Add pending orders to cooloff maps (assume they will complete successfully)
+	if h.brokerClient != nil && h.brokerClient.IsConnected() {
+		pendingOrders, err := h.brokerClient.GetPendingOrders()
+		if err != nil {
+			h.log.Warn().Err(err).Msg("Failed to get pending orders for cooloff")
+		} else {
+			for _, order := range pendingOrders {
+				// Look up ISIN from symbol
+				isin, ok := symbolToISIN[order.Symbol]
+				if !ok {
+					h.log.Debug().Str("symbol", order.Symbol).Msg("Could not find ISIN for pending order symbol")
+					continue
+				}
+
+				// Add to appropriate cooloff map based on side
+				if order.Side == "BUY" {
+					recentlyBoughtISINs[isin] = true
+					h.log.Debug().Str("symbol", order.Symbol).Str("isin", isin).Msg("Added pending BUY order to cooloff")
+				} else if order.Side == "SELL" {
+					recentlySoldISINs[isin] = true
+					h.log.Debug().Str("symbol", order.Symbol).Str("isin", isin).Msg("Added pending SELL order to cooloff")
+				}
+			}
+			if len(pendingOrders) > 0 {
+				h.log.Info().Int("pending_orders", len(pendingOrders)).Msg("Added pending orders to cooloff maps")
+			}
+		}
+	}
+
 	// Build opportunity context with all required fields
 	ctx := &planningdomain.OpportunityContext{
 		EnrichedPositions:      enrichedPositions,
@@ -375,10 +453,10 @@ func (h *Handler) buildOpportunityContext() (*planningdomain.OpportunityContext,
 		CurrentPrices:          currentPrices,
 		AvailableCashEUR:       availableCashEUR,
 		CountryAllocations:     allocations, // These are allocation targets
-		// Initialize constraint maps to avoid nil pointer issues
+		// Populate cooloff maps from trade history and pending orders
 		IneligibleISINs:     make(map[string]bool),
-		RecentlySoldISINs:   make(map[string]bool),
-		RecentlyBoughtISINs: make(map[string]bool),
+		RecentlySoldISINs:   recentlySoldISINs,
+		RecentlyBoughtISINs: recentlyBoughtISINs,
 		// Default transaction costs (will be overridden by ApplyConfig)
 		TransactionCostFixed:   2.0,
 		TransactionCostPercent: 0.002,

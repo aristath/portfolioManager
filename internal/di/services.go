@@ -347,6 +347,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		container.EvaluationService,
 		container.SecurityRepo,
 		container.CurrencyExchangeService,
+		container.BrokerClient,
 		log,
 	)
 
@@ -357,6 +358,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		container.EvaluationService,
 		container.SecurityRepo,
 		container.CurrencyExchangeService,
+		container.BrokerClient,
 		log,
 	)
 

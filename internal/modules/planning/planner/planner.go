@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 
+	maindomain "github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/modules/opportunities"
 	planningconstraints "github.com/aristath/sentinel/internal/modules/planning/constraints"
 	"github.com/aristath/sentinel/internal/modules/planning/domain"
@@ -22,10 +23,12 @@ type Planner struct {
 	evaluationService       *evaluation.Service
 	constraintEnforcer      *planningconstraints.Enforcer
 	currencyExchangeService *services.CurrencyExchangeService
+	brokerClient            maindomain.BrokerClient
+	securityRepo            *universe.SecurityRepository // For symbol-to-ISIN lookups
 	log                     zerolog.Logger
 }
 
-func NewPlanner(opportunitiesService *opportunities.Service, sequencesService *sequences.Service, evaluationService *evaluation.Service, securityRepo *universe.SecurityRepository, currencyExchangeService *services.CurrencyExchangeService, log zerolog.Logger) *Planner {
+func NewPlanner(opportunitiesService *opportunities.Service, sequencesService *sequences.Service, evaluationService *evaluation.Service, securityRepo *universe.SecurityRepository, currencyExchangeService *services.CurrencyExchangeService, brokerClient maindomain.BrokerClient, log zerolog.Logger) *Planner {
 	// Create security lookup function for constraint enforcer
 	securityLookup := func(symbol, isin string) (*universe.Security, bool) {
 		// Try ISIN first
@@ -53,6 +56,8 @@ func NewPlanner(opportunitiesService *opportunities.Service, sequencesService *s
 		evaluationService:       evaluationService,
 		constraintEnforcer:      constraintEnforcer,
 		currencyExchangeService: currencyExchangeService,
+		brokerClient:            brokerClient,
+		securityRepo:            securityRepo,
 		log:                     log.With().Str("component", "planner").Logger(),
 	}
 }
@@ -367,11 +372,47 @@ func (p *Planner) generatePortfolioHash(ctx *domain.OpportunityContext) string {
 		cashBalances["EUR"] = ctx.AvailableCashEUR
 	}
 
-	// No pending orders in this context
-	pendingOrders := []hash.PendingOrder{}
+	// Fetch pending orders from broker and convert to hash format
+	pendingOrders := p.fetchPendingOrdersForHash()
 
 	// Generate the hash using the proper hash package
 	return hash.GeneratePortfolioHash(positions, securities, cashBalances, pendingOrders)
+}
+
+// fetchPendingOrdersForHash fetches pending orders from the broker and converts them to hash.PendingOrder format.
+// This assumes all pending trades will complete successfully - the portfolio hash should reflect the expected future state.
+func (p *Planner) fetchPendingOrdersForHash() []hash.PendingOrder {
+	pendingOrders := []hash.PendingOrder{}
+
+	// Check if broker client is available
+	if p.brokerClient == nil || !p.brokerClient.IsConnected() {
+		p.log.Debug().Msg("Broker client not available - skipping pending orders in hash")
+		return pendingOrders
+	}
+
+	// Fetch pending orders from broker
+	brokerOrders, err := p.brokerClient.GetPendingOrders()
+	if err != nil {
+		p.log.Warn().Err(err).Msg("Failed to fetch pending orders for portfolio hash")
+		return pendingOrders
+	}
+
+	// Convert to hash.PendingOrder format
+	for _, order := range brokerOrders {
+		pendingOrders = append(pendingOrders, hash.PendingOrder{
+			Symbol:   order.Symbol,
+			Side:     order.Side,
+			Quantity: int(order.Quantity),
+			Price:    order.Price,
+			Currency: order.Currency,
+		})
+	}
+
+	if len(pendingOrders) > 0 {
+		p.log.Info().Int("count", len(pendingOrders)).Msg("Including pending orders in portfolio hash")
+	}
+
+	return pendingOrders
 }
 
 // selectByPriority selects the sequence with highest priority (fallback when evaluation fails).

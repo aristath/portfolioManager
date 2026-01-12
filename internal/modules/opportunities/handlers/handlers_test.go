@@ -72,7 +72,7 @@ func TestHandleGetAll(t *testing.T) {
 	securityRepo := &mockSecurityRepo{}
 	service := opportunities.NewService(tagFilter, securityRepo, logger)
 
-	handler := NewHandler(service, nil, nil, nil, nil, nil, db, logger)
+	handler := NewHandler(service, nil, nil, nil, nil, nil, db, nil, nil, logger)
 
 	req := httptest.NewRequest("GET", "/api/opportunities/all", nil)
 	w := httptest.NewRecorder()
@@ -92,7 +92,7 @@ func TestHandleGetProfitTaking(t *testing.T) {
 	securityRepo := &mockSecurityRepo{}
 	service := opportunities.NewService(tagFilter, securityRepo, logger)
 
-	handler := NewHandler(service, nil, nil, nil, nil, nil, db, logger)
+	handler := NewHandler(service, nil, nil, nil, nil, nil, db, nil, nil, logger)
 
 	req := httptest.NewRequest("GET", "/api/opportunities/profit-taking", nil)
 	w := httptest.NewRecorder()
@@ -112,7 +112,7 @@ func TestHandleGetAveragingDown(t *testing.T) {
 	securityRepo := &mockSecurityRepo{}
 	service := opportunities.NewService(tagFilter, securityRepo, logger)
 
-	handler := NewHandler(service, nil, nil, nil, nil, nil, db, logger)
+	handler := NewHandler(service, nil, nil, nil, nil, nil, db, nil, nil, logger)
 
 	req := httptest.NewRequest("GET", "/api/opportunities/averaging-down", nil)
 	w := httptest.NewRecorder()
@@ -132,7 +132,7 @@ func TestHandleGetOpportunityBuys(t *testing.T) {
 	securityRepo := &mockSecurityRepo{}
 	service := opportunities.NewService(tagFilter, securityRepo, logger)
 
-	handler := NewHandler(service, nil, nil, nil, nil, nil, db, logger)
+	handler := NewHandler(service, nil, nil, nil, nil, nil, db, nil, nil, logger)
 
 	req := httptest.NewRequest("GET", "/api/opportunities/opportunity-buys", nil)
 	w := httptest.NewRecorder()
@@ -152,7 +152,7 @@ func TestHandleGetRebalanceBuys(t *testing.T) {
 	securityRepo := &mockSecurityRepo{}
 	service := opportunities.NewService(tagFilter, securityRepo, logger)
 
-	handler := NewHandler(service, nil, nil, nil, nil, nil, db, logger)
+	handler := NewHandler(service, nil, nil, nil, nil, nil, db, nil, nil, logger)
 
 	req := httptest.NewRequest("GET", "/api/opportunities/rebalance-buys", nil)
 	w := httptest.NewRecorder()
@@ -172,7 +172,7 @@ func TestHandleGetRebalanceSells(t *testing.T) {
 	securityRepo := &mockSecurityRepo{}
 	service := opportunities.NewService(tagFilter, securityRepo, logger)
 
-	handler := NewHandler(service, nil, nil, nil, nil, nil, db, logger)
+	handler := NewHandler(service, nil, nil, nil, nil, nil, db, nil, nil, logger)
 
 	req := httptest.NewRequest("GET", "/api/opportunities/rebalance-sells", nil)
 	w := httptest.NewRecorder()
@@ -192,7 +192,7 @@ func TestHandleGetWeightBased(t *testing.T) {
 	securityRepo := &mockSecurityRepo{}
 	service := opportunities.NewService(tagFilter, securityRepo, logger)
 
-	handler := NewHandler(service, nil, nil, nil, nil, nil, db, logger)
+	handler := NewHandler(service, nil, nil, nil, nil, nil, db, nil, nil, logger)
 
 	req := httptest.NewRequest("GET", "/api/opportunities/weight-based", nil)
 	w := httptest.NewRecorder()
@@ -212,7 +212,7 @@ func TestHandleGetRegistry(t *testing.T) {
 	securityRepo := &mockSecurityRepo{}
 	service := opportunities.NewService(tagFilter, securityRepo, logger)
 
-	handler := NewHandler(service, nil, nil, nil, nil, nil, db, logger)
+	handler := NewHandler(service, nil, nil, nil, nil, nil, db, nil, nil, logger)
 
 	req := httptest.NewRequest("GET", "/api/opportunities/registry", nil)
 	w := httptest.NewRecorder()
@@ -243,7 +243,7 @@ func TestRouteIntegration(t *testing.T) {
 	securityRepo := &mockSecurityRepo{}
 	service := opportunities.NewService(tagFilter, securityRepo, logger)
 
-	handler := NewHandler(service, nil, nil, nil, nil, nil, db, logger)
+	handler := NewHandler(service, nil, nil, nil, nil, nil, db, nil, nil, logger)
 
 	router := chi.NewRouter()
 	handler.RegisterRoutes(router)

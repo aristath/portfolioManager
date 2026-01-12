@@ -1668,6 +1668,57 @@ func (h *SystemHandlers) HandleTriggerCheckWALCheckpoints(w http.ResponseWriter,
 	h.writeJSON(w, map[string]string{"status": "success", "message": "Check WAL checkpoints triggered successfully"})
 }
 
+// HandlePendingOrders handles GET /api/system/pending-orders
+// Returns pending orders from the broker with their ISIN mappings
+func (h *SystemHandlers) HandlePendingOrders(w http.ResponseWriter, r *http.Request) {
+	if h.brokerClient == nil {
+		h.writeJSON(w, map[string]interface{}{
+			"error":   "Broker client not configured",
+			"success": false,
+		})
+		return
+	}
+
+	if !h.brokerClient.IsConnected() {
+		h.writeJSON(w, map[string]interface{}{
+			"error":   "Broker not connected",
+			"success": false,
+		})
+		return
+	}
+
+	// Fetch pending orders from broker
+	pendingOrders, err := h.brokerClient.GetPendingOrders()
+	if err != nil {
+		h.log.Error().Err(err).Msg("Failed to fetch pending orders")
+		h.writeJSON(w, map[string]interface{}{
+			"error":   fmt.Sprintf("Failed to fetch pending orders: %v", err),
+			"success": false,
+		})
+		return
+	}
+
+	// Convert to response format
+	orders := make([]map[string]interface{}, 0, len(pendingOrders))
+	for _, order := range pendingOrders {
+		orders = append(orders, map[string]interface{}{
+			"order_id": order.OrderID,
+			"symbol":   order.Symbol,
+			"side":     order.Side,
+			"quantity": order.Quantity,
+			"price":    order.Price,
+			"currency": order.Currency,
+		})
+	}
+
+	h.writeJSON(w, map[string]interface{}{
+		"success":        true,
+		"pending_orders": orders,
+		"count":          len(orders),
+		"timestamp":      time.Now().Format(time.RFC3339),
+	})
+}
+
 // writeJSON writes a JSON response
 func (h *SystemHandlers) writeJSON(w http.ResponseWriter, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")

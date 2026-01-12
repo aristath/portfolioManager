@@ -1,6 +1,7 @@
 package planning
 
 import (
+	maindomain "github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/modules/opportunities"
 	"github.com/aristath/sentinel/internal/modules/planning/domain"
 	"github.com/aristath/sentinel/internal/modules/planning/evaluation"
@@ -16,9 +17,9 @@ type Service struct {
 	log     zerolog.Logger
 }
 
-func NewService(opportunitiesService *opportunities.Service, sequencesService *sequences.Service, evaluationService *evaluation.Service, securityRepo *universe.SecurityRepository, currencyExchangeService *services.CurrencyExchangeService, log zerolog.Logger) *Service {
+func NewService(opportunitiesService *opportunities.Service, sequencesService *sequences.Service, evaluationService *evaluation.Service, securityRepo *universe.SecurityRepository, currencyExchangeService *services.CurrencyExchangeService, brokerClient maindomain.BrokerClient, log zerolog.Logger) *Service {
 	return &Service{
-		planner: planner.NewPlanner(opportunitiesService, sequencesService, evaluationService, securityRepo, currencyExchangeService, log),
+		planner: planner.NewPlanner(opportunitiesService, sequencesService, evaluationService, securityRepo, currencyExchangeService, brokerClient, log),
 		log:     log.With().Str("module", "planning").Logger(),
 	}
 }

@@ -349,6 +349,7 @@ func (s *Server) setupRoutes() {
 			r.Get("/status", systemHandlers.HandleSystemStatus)
 			r.Get("/led/display", systemHandlers.HandleLEDDisplay)
 			r.Get("/tradernet", systemHandlers.HandleTradernetStatus)
+			r.Get("/pending-orders", systemHandlers.HandlePendingOrders)
 			r.Get("/jobs", systemHandlers.HandleJobsStatus)
 			r.Get("/markets", systemHandlers.HandleMarketsStatus)
 			r.Get("/database/stats", systemHandlers.HandleDatabaseStats)
@@ -759,6 +760,7 @@ func (s *Server) _setupSystemRoutes_OLD(r chi.Router) {
 		r.Get("/status", systemHandlers.HandleSystemStatus)
 		r.Get("/led/display", systemHandlers.HandleLEDDisplay)
 		r.Get("/tradernet", systemHandlers.HandleTradernetStatus)
+		r.Get("/pending-orders", systemHandlers.HandlePendingOrders)
 		r.Get("/jobs", systemHandlers.HandleJobsStatus)
 		r.Get("/markets", systemHandlers.HandleMarketsStatus)
 		r.Get("/database/stats", systemHandlers.HandleDatabaseStats)
@@ -996,6 +998,8 @@ func (s *Server) createOpportunitiesHandler() *opportunitieshandlers.Handler {
 		s.container.CashManager,
 		s.container.PlannerConfigRepo,
 		s.portfolioDB.Conn(),
+		s.container.TradeRepo,
+		s.container.BrokerClient,
 		s.log,
 	)
 }
