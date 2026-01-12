@@ -39,11 +39,9 @@ func NewR2Client(accountID, accessKeyID, secretAccessKey, bucketName string, log
 		return nil, fmt.Errorf("r2 credentials incomplete")
 	}
 
-	// Load config with R2 credentials and endpoint
-	// Using BaseEndpoint for R2 compatibility
-	r2Endpoint := fmt.Sprintf("https://%s.r2.cloudflarestorage.com", accountID)
+	// Load config with R2 credentials
+	// Note: Region must be "auto" for Cloudflare R2
 	cfg, err := config.LoadDefaultConfig(context.Background(),
-		config.WithBaseEndpoint(r2Endpoint),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKeyID, secretAccessKey, "")),
 		config.WithRegion("auto"),
 	)
@@ -51,8 +49,12 @@ func NewR2Client(accountID, accessKeyID, secretAccessKey, bucketName string, log
 		return nil, fmt.Errorf("failed to load aws config: %w", err)
 	}
 
-	// Create S3 client
-	client := s3.NewFromConfig(cfg)
+	// Create S3 client with R2-specific endpoint
+	// The endpoint must be set at the S3 client level, not the config level
+	r2Endpoint := fmt.Sprintf("https://%s.r2.cloudflarestorage.com", accountID)
+	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.BaseEndpoint = aws.String(r2Endpoint)
+	})
 
 	// Create uploader and downloader with custom settings
 	uploader := manager.NewUploader(client, func(u *manager.Uploader) {
