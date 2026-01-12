@@ -302,6 +302,7 @@ GOOS=linux GOARCH=arm64 go build -o sentinel-arm64 ./cmd/server
 - **Scheduler**: robfig/cron for time-based scheduling + custom queue system
 - **Logging**: zerolog (structured, high-performance)
 - **Frontend**: React + Vite
+- **Git Hooks**: Lefthook (fast, no stashing, single binary)
 - **Configuration**: godotenv (deprecated for credentials, use Settings UI)
 
 ## Important Notes
@@ -326,3 +327,17 @@ The codebase has documented violations in the README.md Architecture section. Be
 - Frontend is built with Vite and embedded in the Go binary via `pkg/embedded`
 - Built assets are in `frontend/dist/`
 - Served as static files by the HTTP server
+
+### Git Hooks (Lefthook)
+- Git hooks are managed by **Lefthook** (not pre-commit framework)
+- Configuration in `lefthook.yml`
+- **Key benefit**: No automatic stashing of unstaged changes (safer!)
+- Install hooks: `lefthook install`
+- Run manually: `lefthook run pre-commit`
+- Skip once: `git commit --no-verify`
+
+Hooks run on pre-commit:
+- File checks: trailing whitespace, EOF newlines, YAML/JSON/TOML validation, merge conflicts, large files
+- Go: `gofmt`, `go vet`, `go mod tidy`, `go build`, `golangci-lint`
+- Version: Auto-generates `internal/version/version.go`
+- Frontend: Builds and stages `frontend/dist/` when source changes

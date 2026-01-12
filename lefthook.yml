@@ -1,0 +1,231 @@
+# Lefthook configuration for Sentinel
+# Migrated from pre-commit framework to avoid stashing issues
+# https://github.com/evilmartians/lefthook
+#
+# Key differences from pre-commit:
+# - NO automatic stashing of unstaged changes (safer!)
+# - Parallel execution by default (faster!)
+# - Single binary, no Python dependency
+#
+# Install: go install github.com/evilmartians/lefthook@latest
+# Setup:   lefthook install
+
+# Minimum lefthook version required
+min_version: 1.5.0
+
+# Output configuration
+output:
+  - meta           # Print lefthook version
+  - summary        # Print summary block (successful and failed commands)
+  - empty_summary  # Print summary heading even when there are no commands
+  - success        # Print successful commands
+  - failure        # Print failed commands
+  - execution_info # Print execution time and number of files
+
+# Pre-commit hook
+pre-commit:
+  # Run commands in parallel for speed
+  parallel: true
+
+  commands:
+    # =========================================================================
+    # STAGE 1: File checks (fast, run on all files)
+    # =========================================================================
+
+    trailing-whitespace:
+      glob: "*.{go,js,jsx,ts,tsx,json,yaml,yml,md,sh,sql,css,html}"
+      exclude: "^frontend/dist/|^node_modules/"
+      run: |
+        for file in {staged_files}; do
+          if [ -f "$file" ]; then
+            # Remove trailing whitespace
+            if [[ "$OSTYPE" == "darwin"* ]]; then
+              sed -i '' 's/[[:space:]]*$//' "$file"
+            else
+              sed -i 's/[[:space:]]*$//' "$file"
+            fi
+          fi
+        done
+      stage_fixed: true
+
+    end-of-file-fixer:
+      glob: "*.{go,js,jsx,ts,tsx,json,yaml,yml,md,sh,sql,css,html}"
+      exclude: "^frontend/dist/|^node_modules/"
+      run: |
+        for file in {staged_files}; do
+          if [ -f "$file" ] && [ -s "$file" ]; then
+            # Ensure file ends with newline
+            if [ "$(tail -c 1 "$file" | wc -l)" -eq 0 ]; then
+              echo "" >> "$file"
+            fi
+          fi
+        done
+      stage_fixed: true
+
+    check-yaml:
+      glob: "*.{yaml,yml}"
+      run: |
+        for file in {staged_files}; do
+          if command -v python3 &> /dev/null; then
+            python3 -c "import yaml; yaml.safe_load(open('$file'))" || exit 1
+          elif command -v yq &> /dev/null; then
+            yq e '.' "$file" > /dev/null || exit 1
+          fi
+        done
+
+    check-json:
+      glob: "*.json"
+      exclude: "^node_modules/|^frontend/node_modules/"
+      run: |
+        for file in {staged_files}; do
+          if command -v python3 &> /dev/null; then
+            python3 -c "import json; json.load(open('$file'))" || exit 1
+          elif command -v jq &> /dev/null; then
+            jq empty "$file" || exit 1
+          fi
+        done
+
+    check-toml:
+      glob: "*.toml"
+      run: |
+        for file in {staged_files}; do
+          if command -v python3 &> /dev/null; then
+            python3 -c "import tomllib; tomllib.load(open('$file', 'rb'))" 2>/dev/null || \
+            python3 -c "import toml; toml.load('$file')" || exit 1
+          fi
+        done
+
+    check-merge-conflict:
+      glob: "*"
+      exclude: "^frontend/dist/|^node_modules/"
+      run: |
+        for file in {staged_files}; do
+          if [ -f "$file" ]; then
+            if grep -qE '^(<<<<<<<|=======|>>>>>>>)' "$file" 2>/dev/null; then
+              echo "❌ Merge conflict markers found in: $file"
+              exit 1
+            fi
+          fi
+        done
+
+    check-large-files:
+      glob: "*"
+      exclude: "^frontend/dist/|^node_modules/|^vendor/"
+      run: |
+        MAX_SIZE=1048576  # 1MB in bytes
+        for file in {staged_files}; do
+          if [ -f "$file" ]; then
+            size=$(wc -c < "$file" | tr -d ' ')
+            if [ "$size" -gt "$MAX_SIZE" ]; then
+              echo "❌ File too large (>1MB): $file ($size bytes)"
+              exit 1
+            fi
+          fi
+        done
+
+    # =========================================================================
+    # STAGE 2: Go checks (run when Go files change)
+    # =========================================================================
+
+    go-fmt:
+      glob: "*.go"
+      exclude: "^vendor/"
+      run: gofmt -w {staged_files}
+      stage_fixed: true
+
+    go-vet:
+      glob: "*.go"
+      exclude: "^vendor/"
+      run: go vet ./...
+
+    go-mod-tidy:
+      glob: "*.go"
+      run: |
+        go mod tidy
+        if ! git diff --quiet go.mod go.sum 2>/dev/null; then
+          git add go.mod go.sum
+          echo "✓ go.mod/go.sum updated and staged"
+        fi
+      stage_fixed: true
+
+    go-build:
+      glob: "*.go"
+      exclude: "^vendor/"
+      run: go build ./...
+
+    golangci-lint:
+      glob: "*.go"
+      exclude: "^vendor/"
+      run: golangci-lint run --timeout=5m --config .golangci.yml ./...
+
+    # =========================================================================
+    # STAGE 3: Version generation (always runs)
+    # =========================================================================
+
+    generate-version:
+      run: |
+        VERSION="v$(date -u +%Y.%m.%d.%H.%M)"
+        mkdir -p internal/version
+        cat > internal/version/version.go <<EOF
+        // Package version contains the build version information.
+        package version
+
+        // Version is the build version (generated by lefthook)
+        var Version = "$VERSION"
+        EOF
+        git add internal/version/version.go
+        echo "✓ Generated version: $VERSION"
+      stage_fixed: true
+
+    # =========================================================================
+    # STAGE 4: Frontend build (runs when frontend files change)
+    # =========================================================================
+
+    build-frontend:
+      glob: "frontend/**/*.{js,jsx,ts,tsx,css,html,json}"
+      exclude: "^frontend/dist/|^frontend/node_modules/"
+      run: |
+        # Check if any frontend source files are staged
+        STAGED=$(git diff --cached --name-only --diff-filter=ACM | grep -E '^frontend/' | grep -vE '^frontend/(dist|node_modules)/' || true)
+        if [ -z "$STAGED" ]; then
+          exit 0
+        fi
+
+        echo "Frontend source files changed, building..."
+        cd frontend
+
+        # Install deps if needed
+        if [ ! -d "node_modules" ]; then
+          echo "Installing dependencies..."
+          npm install
+        fi
+
+        # Build
+        npm run build
+        cd ..
+
+        # Stage dist
+        git add frontend/dist/
+        echo "✓ Frontend built and staged"
+      stage_fixed: true
+
+    # =========================================================================
+    # STAGE 5: Copy embedded files (runs when Go files change)
+    # =========================================================================
+
+    copy-embedded-files:
+      glob: "*.go"
+      run: |
+        mkdir -p pkg/embedded/frontend pkg/embedded/display
+        cp -r frontend/dist pkg/embedded/frontend/ 2>/dev/null || true
+        cp -r display/app pkg/embedded/display/ 2>/dev/null || true
+        cp display/app.yaml pkg/embedded/display/ 2>/dev/null || true
+        cp -r display/sketch pkg/embedded/display/ 2>/dev/null || true
+        echo "✓ Copied files for embedding"
+
+# Pre-push hook (optional - add tests here if desired)
+# pre-push:
+#   commands:
+#     go-test:
+#       glob: "*.go"
+#       run: go test -timeout=10m -short ./...

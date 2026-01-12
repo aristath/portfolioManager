@@ -1041,10 +1041,38 @@ The following utility scripts are available for manual operations:
 - `scripts/logs.sh [SERVICE]` - View service logs
 - `scripts/restart.sh [SERVICE]` - Restart services manually
 - `scripts/config.sh` - Configuration file (used by other scripts)
-- `scripts/pre-commit-build-frontend.sh` - Git pre-commit hook for frontend builds
 - `scripts/build.sh [arch]` - Build script (used by Makefile)
 
 **Note:** Deployment is fully automated. These scripts are for monitoring and troubleshooting only.
+
+### Git Hooks (Lefthook)
+
+Git hooks are managed by [Lefthook](https://github.com/evilmartians/lefthook), a fast Git hooks manager written in Go.
+
+**Why Lefthook?**
+- **No stashing**: Unlike pre-commit framework, lefthook does NOT stash unstaged changes (prevents data loss!)
+- **Fast**: Single binary, parallel execution, no Python dependency
+- **Simple**: YAML configuration, easy to understand and modify
+
+**Setup:**
+```bash
+# Install lefthook
+go install github.com/evilmartians/lefthook@latest
+
+# Install hooks
+lefthook install
+```
+
+**Usage:**
+```bash
+# Run hooks manually
+lefthook run pre-commit
+
+# Skip hooks for one commit
+git commit --no-verify
+```
+
+**Configuration:** See `lefthook.yml` for hook definitions.
 
 ---
 

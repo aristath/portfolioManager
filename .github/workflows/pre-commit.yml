@@ -1,4 +1,4 @@
-name: Pre-commit Checks
+name: Lefthook Checks
 
 on:
   push:
@@ -7,17 +7,12 @@ on:
     branches: [ main ]
 
 jobs:
-  pre-commit:
+  lefthook:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     steps:
     - uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.13'
 
     - name: Set up Go
       uses: actions/setup-go@v5
@@ -25,8 +20,14 @@ jobs:
         go-version: '1.23.2'
         cache-dependency-path: go.sum
 
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
     - name: Copy files for embedding
-      working-directory: .
       run: |
         # Copy frontend/dist, display/app, display/app.yaml, and display/sketch into pkg/embedded/ for embedding
         # This allows embed directive to access all files without using .. paths
@@ -54,13 +55,56 @@ jobs:
         cp -r display/sketch pkg/embedded/display/
         echo "✓ Copied files for embedding"
 
-    - name: Install Go tools for pre-commit hooks
+    - name: Install Go tools
       run: |
         go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-        export PATH="$(go env GOPATH)/bin:$PATH"
+        go install github.com/evilmartians/lefthook@latest
         echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
-    - name: Run pre-commit
-      uses: pre-commit/action@v3.0.1
-      with:
-        extra_args: --all-files --hook-stage commit
+    - name: Verify tools
+      run: |
+        export PATH="$(go env GOPATH)/bin:$PATH"
+        golangci-lint --version
+        lefthook version
+
+    - name: Run lefthook checks
+      run: |
+        export PATH="$(go env GOPATH)/bin:$PATH"
+        # Run individual checks instead of full pre-commit hook
+        # This avoids issues with git staging in CI environment
+
+        echo "=== Checking Go formatting ==="
+        gofmt -l . | tee /tmp/gofmt.out
+        if [ -s /tmp/gofmt.out ]; then
+          echo "❌ Go files not formatted. Run: gofmt -w ."
+          exit 1
+        fi
+        echo "✓ Go formatting OK"
+
+        echo ""
+        echo "=== Running go vet ==="
+        go vet ./...
+        echo "✓ go vet OK"
+
+        echo ""
+        echo "=== Running go mod tidy check ==="
+        go mod tidy
+        if ! git diff --quiet go.mod go.sum 2>/dev/null; then
+          echo "❌ go.mod or go.sum is not tidy. Run: go mod tidy"
+          git diff go.mod go.sum
+          exit 1
+        fi
+        echo "✓ go mod tidy OK"
+
+        echo ""
+        echo "=== Running go build ==="
+        go build ./...
+        echo "✓ go build OK"
+
+        echo ""
+        echo "=== Running golangci-lint ==="
+        golangci-lint run --timeout=5m --config .golangci.yml ./...
+        echo "✓ golangci-lint OK"
+
+        echo ""
+        echo "=== All checks passed! ==="
