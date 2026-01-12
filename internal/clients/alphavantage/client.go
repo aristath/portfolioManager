@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -50,14 +51,15 @@ type cacheEntry struct {
 
 // Client is the Alpha Vantage API client.
 type Client struct {
-	apiKey     string
+	apiKeys    []string // Multiple API keys for round-robin rotation
+	keyIndex   uint32   // Atomic counter for round-robin key selection
 	httpClient *http.Client
 	log        zerolog.Logger
 	cacheTTL   CacheTTL
 
-	// Rate limiting
+	// Rate limiting (per-key)
 	mu           sync.Mutex
-	dailyCounter int
+	keyCounters  []int // Daily counter per key
 	counterReset time.Time
 
 	// Response cache
@@ -66,15 +68,25 @@ type Client struct {
 }
 
 // NewClient creates a new Alpha Vantage client.
-func NewClient(apiKey string, log zerolog.Logger) *Client {
+// apiKeysCSV can be a single key or multiple comma-separated keys for round-robin rotation.
+func NewClient(apiKeysCSV string, log zerolog.Logger) *Client {
+	// Parse comma-separated keys, trim whitespace, filter empty
+	var keys []string
+	for _, k := range strings.Split(apiKeysCSV, ",") {
+		k = strings.TrimSpace(k)
+		if k != "" {
+			keys = append(keys, k)
+		}
+	}
+
 	return &Client{
-		apiKey: apiKey,
+		apiKeys: keys,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
 		log:          log.With().Str("component", "alphavantage").Logger(),
 		cacheTTL:     DefaultCacheTTL(),
-		dailyCounter: 0,
+		keyCounters:  make([]int, max(len(keys), 1)), // At least 1 slot for empty key case
 		counterReset: nextMidnightUTC(),
 		cache:        make(map[string]cacheEntry),
 	}
@@ -85,48 +97,111 @@ func (c *Client) SetCacheTTL(ttl CacheTTL) {
 	c.cacheTTL = ttl
 }
 
-// GetRemainingRequests returns the number of remaining API requests for today.
+// GetRemainingRequests returns the total number of remaining API requests for today across all keys.
 func (c *Client) GetRemainingRequests() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	c.checkDailyReset()
-	return freeRequestLimit - c.dailyCounter
+
+	// Sum remaining requests across all keys
+	numKeys := len(c.apiKeys)
+	if numKeys == 0 {
+		return 0
+	}
+
+	totalRemaining := 0
+	for i := 0; i < numKeys; i++ {
+		remaining := freeRequestLimit - c.keyCounters[i]
+		if remaining > 0 {
+			totalRemaining += remaining
+		}
+	}
+	return totalRemaining
 }
 
-// ResetDailyCounter resets the daily request counter (for testing).
+// ResetDailyCounter resets the daily request counters for all keys (for testing).
 func (c *Client) ResetDailyCounter() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.dailyCounter = 0
+	for i := range c.keyCounters {
+		c.keyCounters[i] = 0
+	}
 	c.counterReset = nextMidnightUTC()
 }
 
-// checkDailyReset resets the counter if a new day has started.
+// checkDailyReset resets all key counters if a new day has started.
 // Must be called with mutex held.
 func (c *Client) checkDailyReset() {
 	if time.Now().UTC().After(c.counterReset) {
-		c.dailyCounter = 0
+		for i := range c.keyCounters {
+			c.keyCounters[i] = 0
+		}
 		c.counterReset = nextMidnightUTC()
 	}
 }
 
-// checkRateLimit checks if we've hit the daily limit and increments the counter.
+// getNextKeyIndex returns the next key index using round-robin rotation.
+// Returns the index atomically for thread safety.
+func (c *Client) getNextKeyIndex() int {
+	if len(c.apiKeys) == 0 {
+		return 0
+	}
+	idx := atomic.AddUint32(&c.keyIndex, 1) - 1
+	return int(idx % uint32(len(c.apiKeys)))
+}
+
+// checkRateLimitForKey checks if the specified key has hit the daily limit and increments its counter.
+// Must be called with mutex held.
+func (c *Client) checkRateLimitForKey(keyIdx int) error {
+	c.checkDailyReset()
+
+	if keyIdx >= len(c.keyCounters) {
+		return ErrRateLimitExceeded{}
+	}
+
+	remaining := freeRequestLimit - c.keyCounters[keyIdx]
+	totalRemaining := c.getTotalRemainingLocked()
+
+	if totalRemaining <= 5 && totalRemaining > 0 {
+		c.log.Warn().Int("remaining", totalRemaining).Int("key_index", keyIdx).Msg("Daily limit approaching")
+	}
+	if remaining <= 0 {
+		return ErrRateLimitExceeded{}
+	}
+	c.keyCounters[keyIdx]++
+	return nil
+}
+
+// getTotalRemainingLocked returns total remaining requests across all keys.
+// Must be called with mutex held.
+func (c *Client) getTotalRemainingLocked() int {
+	total := 0
+	for i := 0; i < len(c.apiKeys); i++ {
+		remaining := freeRequestLimit - c.keyCounters[i]
+		if remaining > 0 {
+			total += remaining
+		}
+	}
+	return total
+}
+
+// checkRateLimit checks if we've hit the daily limit across all keys.
+// This is used for backward compatibility - actual rate checking is done per-key in doRequest.
 func (c *Client) checkRateLimit() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	c.checkDailyReset()
 
-	remaining := freeRequestLimit - c.dailyCounter
-	if remaining <= 5 && remaining > 0 {
-		c.log.Warn().Int("remaining", remaining).Msg("Daily limit approaching")
+	// Check if any key has remaining capacity
+	for i := range c.keyCounters {
+		if c.keyCounters[i] < freeRequestLimit {
+			c.keyCounters[i]++
+			return nil
+		}
 	}
-	if remaining <= 0 {
-		return ErrRateLimitExceeded{}
-	}
-	c.dailyCounter++
-	return nil
+	return ErrRateLimitExceeded{}
 }
 
 // getFromCache retrieves a cached response if it exists and hasn't expired.
@@ -184,11 +259,24 @@ func buildCacheKey(function string, params map[string]string) string {
 }
 
 // doRequest performs an HTTP request to the Alpha Vantage API.
+// It uses round-robin key selection for load balancing across multiple API keys.
 func (c *Client) doRequest(function string, params map[string]string) ([]byte, error) {
-	// Check rate limit
-	if err := c.checkRateLimit(); err != nil {
+	if len(c.apiKeys) == 0 {
+		return nil, ErrInvalidAPIKey{}
+	}
+
+	// Get next key index using round-robin
+	keyIdx := c.getNextKeyIndex()
+
+	// Check rate limit for this specific key
+	c.mu.Lock()
+	err := c.checkRateLimitForKey(keyIdx)
+	c.mu.Unlock()
+	if err != nil {
 		return nil, err
 	}
+
+	apiKey := c.apiKeys[keyIdx]
 
 	// Build URL
 	u, err := url.Parse(baseURL)
@@ -198,13 +286,13 @@ func (c *Client) doRequest(function string, params map[string]string) ([]byte, e
 
 	q := u.Query()
 	q.Set("function", function)
-	q.Set("apikey", c.apiKey)
+	q.Set("apikey", apiKey)
 	for k, v := range params {
 		q.Set(k, v)
 	}
 	u.RawQuery = q.Encode()
 
-	c.log.Debug().Str("function", function).Msg("Making API request")
+	c.log.Debug().Str("function", function).Int("key_index", keyIdx).Msg("Making API request")
 
 	// Make request
 	resp, err := c.httpClient.Get(u.String())
@@ -223,21 +311,21 @@ func (c *Client) doRequest(function string, params map[string]string) ([]byte, e
 	}
 
 	// Check for API error responses
-	if err := c.checkAPIError(body); err != nil {
+	if err := c.checkAPIErrorForKey(body, keyIdx); err != nil {
 		return nil, err
 	}
 
 	return body, nil
 }
 
-// checkAPIError checks for common API error responses.
-func (c *Client) checkAPIError(body []byte) error {
+// checkAPIErrorForKey checks for common API error responses and adjusts the counter for the specific key.
+func (c *Client) checkAPIErrorForKey(body []byte, keyIdx int) error {
 	// Check for rate limit error
 	if strings.Contains(string(body), "Thank you for using Alpha Vantage") {
 		// Decrement counter since this request didn't count
 		c.mu.Lock()
-		if c.dailyCounter > 0 {
-			c.dailyCounter--
+		if keyIdx < len(c.keyCounters) && c.keyCounters[keyIdx] > 0 {
+			c.keyCounters[keyIdx]--
 		}
 		c.mu.Unlock()
 		return ErrRateLimitExceeded{}
@@ -260,11 +348,22 @@ func (c *Client) checkAPIError(body []byte) error {
 			return fmt.Errorf("API error: %s", errorResp.ErrorMessage)
 		}
 		if strings.Contains(errorResp.Note, "API call frequency") {
+			// Decrement counter since this request was rate limited
+			c.mu.Lock()
+			if keyIdx < len(c.keyCounters) && c.keyCounters[keyIdx] > 0 {
+				c.keyCounters[keyIdx]--
+			}
+			c.mu.Unlock()
 			return ErrRateLimitExceeded{}
 		}
 	}
 
 	return nil
+}
+
+// checkAPIError checks for common API error responses (backward compatibility).
+func (c *Client) checkAPIError(body []byte) error {
+	return c.checkAPIErrorForKey(body, 0)
 }
 
 // nextMidnightUTC returns the next midnight in UTC.

@@ -790,12 +790,12 @@ export function SettingsModal() {
                   description="GitHub personal access token for auto-deployment artifact downloads (requires repo and actions:read scopes)"
                 />
                 <Divider />
-                <PasswordInput
-                  label="Alpha Vantage API Key"
+                <TextInput
+                  label="Alpha Vantage API Keys"
                   value={getSetting('alphavantage_api_key', '') || ''}
                   onChange={(e) => handleUpdateSetting('alphavantage_api_key', e.target.value)}
-                  placeholder="Enter your Alpha Vantage API key"
-                  description="Free API key from alphavantage.co (25 requests/day)"
+                  placeholder="key1,key2,key3"
+                  description="Free API keys from alphavantage.co (25 requests/day each). Add multiple comma-separated keys to increase limits."
                 />
                 <PasswordInput
                   label="OpenFIGI API Key (Optional)"

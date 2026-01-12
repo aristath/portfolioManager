@@ -9,13 +9,165 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestNewClient tests client creation.
+// TestNewClient tests client creation with a single key.
 func TestNewClient(t *testing.T) {
 	client := NewClient("test-key", zerolog.Nop())
 
 	assert.NotNil(t, client)
-	assert.Equal(t, "test-key", client.apiKey)
+	require.Len(t, client.apiKeys, 1)
+	assert.Equal(t, "test-key", client.apiKeys[0])
 	assert.Equal(t, 25, client.GetRemainingRequests())
+}
+
+// TestNewClient_MultipleKeys tests client creation with multiple comma-separated keys.
+func TestNewClient_MultipleKeys(t *testing.T) {
+	client := NewClient("key1,key2,key3", zerolog.Nop())
+
+	assert.NotNil(t, client)
+	require.Len(t, client.apiKeys, 3)
+	assert.Equal(t, "key1", client.apiKeys[0])
+	assert.Equal(t, "key2", client.apiKeys[1])
+	assert.Equal(t, "key3", client.apiKeys[2])
+	// 3 keys * 25 requests = 75 total
+	assert.Equal(t, 75, client.GetRemainingRequests())
+}
+
+// TestNewClient_WhitespaceHandling tests that whitespace is trimmed from keys.
+func TestNewClient_WhitespaceHandling(t *testing.T) {
+	client := NewClient(" key1 , key2 , key3 ", zerolog.Nop())
+
+	require.Len(t, client.apiKeys, 3)
+	assert.Equal(t, "key1", client.apiKeys[0])
+	assert.Equal(t, "key2", client.apiKeys[1])
+	assert.Equal(t, "key3", client.apiKeys[2])
+}
+
+// TestNewClient_EmptyKeysFiltered tests that empty keys are filtered out.
+func TestNewClient_EmptyKeysFiltered(t *testing.T) {
+	client := NewClient("key1,,key2,  ,key3", zerolog.Nop())
+
+	require.Len(t, client.apiKeys, 3)
+	assert.Equal(t, "key1", client.apiKeys[0])
+	assert.Equal(t, "key2", client.apiKeys[1])
+	assert.Equal(t, "key3", client.apiKeys[2])
+}
+
+// TestNewClient_EmptyString tests client creation with empty string.
+func TestNewClient_EmptyString(t *testing.T) {
+	client := NewClient("", zerolog.Nop())
+
+	assert.NotNil(t, client)
+	assert.Empty(t, client.apiKeys)
+	assert.Equal(t, 0, client.GetRemainingRequests())
+}
+
+// TestKeyRotation_RoundRobin tests that keys rotate in round-robin order.
+func TestKeyRotation_RoundRobin(t *testing.T) {
+	client := NewClient("key1,key2,key3", zerolog.Nop())
+
+	// Get 6 key indices - should cycle through 0, 1, 2, 0, 1, 2
+	indices := make([]int, 6)
+	for i := 0; i < 6; i++ {
+		indices[i] = client.getNextKeyIndex()
+	}
+
+	assert.Equal(t, []int{0, 1, 2, 0, 1, 2}, indices)
+}
+
+// TestRateLimiting_MultipleKeys tests per-key rate limiting.
+func TestRateLimiting_MultipleKeys(t *testing.T) {
+	client := NewClient("key1,key2", zerolog.Nop())
+
+	// Total capacity: 2 keys * 25 = 50
+	assert.Equal(t, 50, client.GetRemainingRequests())
+
+	// Use 25 requests (exhausts key 0, since checkRateLimit uses round-robin internally)
+	for i := 0; i < 25; i++ {
+		err := client.checkRateLimit()
+		require.NoError(t, err)
+	}
+
+	// Should have 25 remaining (key 1)
+	assert.Equal(t, 25, client.GetRemainingRequests())
+
+	// Use 25 more requests (exhausts key 1)
+	for i := 0; i < 25; i++ {
+		err := client.checkRateLimit()
+		require.NoError(t, err)
+	}
+
+	// All keys exhausted
+	assert.Equal(t, 0, client.GetRemainingRequests())
+
+	// 51st request should fail
+	err := client.checkRateLimit()
+	assert.Error(t, err)
+	assert.IsType(t, ErrRateLimitExceeded{}, err)
+}
+
+// TestGetRemainingRequests_MultipleKeys tests total remaining calculation.
+func TestGetRemainingRequests_MultipleKeys(t *testing.T) {
+	client := NewClient("key1,key2,key3", zerolog.Nop())
+
+	// Total: 75 (3 * 25)
+	assert.Equal(t, 75, client.GetRemainingRequests())
+
+	// Manually set counters to simulate usage
+	client.mu.Lock()
+	client.keyCounters[0] = 10 // key1: 15 remaining
+	client.keyCounters[1] = 20 // key2: 5 remaining
+	client.keyCounters[2] = 5  // key3: 20 remaining
+	client.mu.Unlock()
+
+	// Total remaining: 15 + 5 + 20 = 40
+	assert.Equal(t, 40, client.GetRemainingRequests())
+}
+
+// TestKeyRotation_Concurrent tests thread safety of key rotation.
+func TestKeyRotation_Concurrent(t *testing.T) {
+	client := NewClient("key1,key2,key3", zerolog.Nop())
+
+	const numGoroutines = 100
+	results := make(chan int, numGoroutines)
+
+	// Run concurrent goroutines
+	for i := 0; i < numGoroutines; i++ {
+		go func() {
+			idx := client.getNextKeyIndex()
+			results <- idx
+		}()
+	}
+
+	// Collect results
+	keyUsage := make(map[int]int)
+	for i := 0; i < numGoroutines; i++ {
+		idx := <-results
+		keyUsage[idx]++
+		// Verify index is valid
+		assert.True(t, idx >= 0 && idx < 3, "key index out of range: %d", idx)
+	}
+
+	// All 3 keys should be used (roughly equally, but not required)
+	assert.Len(t, keyUsage, 3, "all 3 keys should be used")
+}
+
+// TestResetDailyCounter_MultipleKeys tests that reset clears all key counters.
+func TestResetDailyCounter_MultipleKeys(t *testing.T) {
+	client := NewClient("key1,key2", zerolog.Nop())
+
+	// Use some requests on each key
+	for i := 0; i < 20; i++ {
+		_ = client.checkRateLimit()
+	}
+
+	// Verify some capacity used
+	assert.Less(t, client.GetRemainingRequests(), 50)
+
+	// Reset
+	client.ResetDailyCounter()
+
+	// Should be back to full capacity
+	assert.Equal(t, 50, client.GetRemainingRequests())
 }
 
 // TestRateLimiting tests the rate limiting functionality.
