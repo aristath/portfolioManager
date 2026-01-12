@@ -3,6 +3,7 @@ package display
 import (
 	"sync"
 
+	"github.com/aristath/sentinel/internal/mcu"
 	"github.com/rs/zerolog"
 )
 
@@ -58,6 +59,7 @@ type StateManager struct {
 	led3Blink   LED3BlinkState
 	led4State   LED4State
 	mu          sync.RWMutex
+	mcuClient   *mcu.Client // Optional MCU client for direct hardware control
 }
 
 // NewStateManager creates a new display state manager
@@ -69,6 +71,17 @@ func NewStateManager(log zerolog.Logger) *StateManager {
 		led3Blink:   LED3BlinkState{IsBlinking: false},
 		led4State:   LED4State{Mode: LEDModeSolid},
 		log:         log.With().Str("component", "display_state_manager").Logger(),
+	}
+}
+
+// SetMCUClient sets the MCU client for direct hardware control.
+// This is called after the client is created in the DI container.
+func (sm *StateManager) SetMCUClient(client *mcu.Client) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sm.mcuClient = client
+	if client != nil {
+		sm.log.Info().Msg("MCU client attached to display state manager")
 	}
 }
 
@@ -86,6 +99,13 @@ func (sm *StateManager) SetText(text string) {
 			Str("old_text", oldText).
 			Str("new_text", text).
 			Msg("Display text updated")
+
+		// Push to MCU if available
+		if sm.mcuClient != nil {
+			if err := sm.mcuClient.ScrollText(text, 50); err != nil {
+				sm.log.Warn().Err(err).Msg("Failed to push text to MCU")
+			}
+		}
 	}
 }
 
@@ -115,6 +135,13 @@ func (sm *StateManager) SetLED3(r, g, b int) {
 		Int("g", sm.led3.G).
 		Int("b", sm.led3.B).
 		Msg("LED3 color updated (solid)")
+
+	// Push to MCU if available
+	if sm.mcuClient != nil {
+		if err := sm.mcuClient.SetRGB3(sm.led3.R, sm.led3.G, sm.led3.B); err != nil {
+			sm.log.Warn().Err(err).Msg("Failed to push LED3 to MCU")
+		}
+	}
 }
 
 // SetLED3Color is an alias for SetLED3
@@ -146,6 +173,13 @@ func (sm *StateManager) SetLED3Blink(r, g, b int, intervalMs int) {
 		Int("b", sm.led3.B).
 		Int("interval_ms", intervalMs).
 		Msg("LED3 blink mode enabled")
+
+	// Push to MCU if available
+	if sm.mcuClient != nil {
+		if err := sm.mcuClient.SetBlink3(color.R, color.G, color.B, intervalMs); err != nil {
+			sm.log.Warn().Err(err).Msg("Failed to push LED3 blink to MCU")
+		}
+	}
 }
 
 // UpdateLED3BlinkState updates LED3 blink state (called periodically to track ON/OFF)
@@ -195,6 +229,13 @@ func (sm *StateManager) SetLED4(r, g, b int) {
 		Int("g", sm.led4.G).
 		Int("b", sm.led4.B).
 		Msg("LED4 color updated (solid)")
+
+	// Push to MCU if available
+	if sm.mcuClient != nil {
+		if err := sm.mcuClient.SetRGB4(sm.led4.R, sm.led4.G, sm.led4.B); err != nil {
+			sm.log.Warn().Err(err).Msg("Failed to push LED4 to MCU")
+		}
+	}
 }
 
 // SetLED4Color is an alias for SetLED4
@@ -224,6 +265,13 @@ func (sm *StateManager) SetLED4Blink(r, g, b int, intervalMs int) {
 		Int("b", sm.led4.B).
 		Int("interval_ms", intervalMs).
 		Msg("LED4 blink mode enabled")
+
+	// Push to MCU if available
+	if sm.mcuClient != nil {
+		if err := sm.mcuClient.SetBlink4(sm.led4.R, sm.led4.G, sm.led4.B, intervalMs); err != nil {
+			sm.log.Warn().Err(err).Msg("Failed to push LED4 blink to MCU")
+		}
+	}
 }
 
 // SetLED4Alternating enables alternating color mode for LED4
@@ -231,10 +279,13 @@ func (sm *StateManager) SetLED4Alternating(r1, g1, b1, r2, g2, b2 int, intervalM
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
+	color1 := LEDColor{R: clamp(r1, 0, 255), G: clamp(g1, 0, 255), B: clamp(b1, 0, 255)}
+	color2 := LEDColor{R: clamp(r2, 0, 255), G: clamp(g2, 0, 255), B: clamp(b2, 0, 255)}
+
 	sm.led4State = LED4State{
 		Mode:       LEDModeAlternating,
-		AltColor1:  LEDColor{R: clamp(r1, 0, 255), G: clamp(g1, 0, 255), B: clamp(b1, 0, 255)},
-		AltColor2:  LEDColor{R: clamp(r2, 0, 255), G: clamp(g2, 0, 255), B: clamp(b2, 0, 255)},
+		AltColor1:  color1,
+		AltColor2:  color2,
 		IntervalMs: intervalMs,
 	}
 
@@ -243,6 +294,13 @@ func (sm *StateManager) SetLED4Alternating(r1, g1, b1, r2, g2, b2 int, intervalM
 		Int("r2", r2).Int("g2", g2).Int("b2", b2).
 		Int("interval_ms", intervalMs).
 		Msg("LED4 alternating mode enabled")
+
+	// Push to MCU if available
+	if sm.mcuClient != nil {
+		if err := sm.mcuClient.SetBlink4Alternating(color1.R, color1.G, color1.B, color2.R, color2.G, color2.B, intervalMs); err != nil {
+			sm.log.Warn().Err(err).Msg("Failed to push LED4 alternating to MCU")
+		}
+	}
 }
 
 // SetLED4Coordinated enables coordinated mode for LED4 (alternates with LED3)
@@ -269,6 +327,13 @@ func (sm *StateManager) SetLED4Coordinated(r, g, b int, intervalMs int, led3Phas
 		Int("interval_ms", intervalMs).
 		Bool("led3_phase", led3Phase).
 		Msg("LED4 coordinated mode enabled")
+
+	// Push to MCU if available
+	if sm.mcuClient != nil {
+		if err := sm.mcuClient.SetBlink4Coordinated(sm.led4.R, sm.led4.G, sm.led4.B, intervalMs, led3Phase); err != nil {
+			sm.log.Warn().Err(err).Msg("Failed to push LED4 coordinated to MCU")
+		}
+	}
 }
 
 // GetLED4 gets RGB LED 4 color

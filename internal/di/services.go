@@ -19,6 +19,7 @@ import (
 	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/events"
 	"github.com/aristath/sentinel/internal/market_regime"
+	"github.com/aristath/sentinel/internal/mcu"
 	"github.com/aristath/sentinel/internal/modules/adaptation"
 	"github.com/aristath/sentinel/internal/modules/allocation"
 	"github.com/aristath/sentinel/internal/modules/analytics"
@@ -117,6 +118,25 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	// Symbol mapper for converting symbols between providers
 	container.SymbolMapper = symbols.NewMapper()
 	log.Info().Msg("Symbol mapper initialized")
+
+	// MCU client for Arduino display (optional - only if socket exists)
+	mcuClient, err := mcu.NewClient(mcu.DefaultSocketPath, log)
+	if err != nil {
+		if err == mcu.ErrSocketNotFound {
+			log.Info().Msg("MCU client not initialized - not running on Arduino hardware")
+		} else {
+			log.Warn().Err(err).Msg("MCU client initialization failed")
+		}
+		// MCU client is optional - continue without it
+	} else {
+		container.MCUClient = mcuClient
+		log.Info().Msg("MCU client initialized")
+
+		// Wire MCU client to display manager for direct hardware control
+		if displayManager != nil {
+			displayManager.SetMCUClient(mcuClient)
+		}
+	}
 
 	// Data source router for configurable provider priorities
 	// Create settings adapter for DataSourceRouter

@@ -13,6 +13,7 @@ import (
 	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/events"
 	"github.com/aristath/sentinel/internal/market_regime"
+	"github.com/aristath/sentinel/internal/mcu"
 	"github.com/aristath/sentinel/internal/modules/adaptation"
 	"github.com/aristath/sentinel/internal/modules/allocation"
 	"github.com/aristath/sentinel/internal/modules/analytics"
@@ -63,6 +64,7 @@ type Container struct {
 	OpenFIGIClient        *openfigi.Client
 	ExchangeRateAPIClient *exchangerate.Client
 	MarketStatusWS        *tradernet.MarketStatusWebSocket
+	MCUClient             *mcu.Client // Arduino MCU client (nil if not on Arduino hardware)
 
 	// Repositories
 	PositionRepo       *portfolio.PositionRepository

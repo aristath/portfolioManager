@@ -46,7 +46,6 @@ type Manager struct {
 	// Components
 	lock                   *DeploymentLock
 	binaryDeployer         *BinaryDeployer
-	displayAppDeployer     *DisplayAppDeployer
 	serviceManager         *ServiceManager
 	dockerManager          *DockerManager
 	sketchDeployer         *SketchDeployer
@@ -138,17 +137,14 @@ func NewManager(config *DeploymentConfig, version string, log zerolog.Logger) *M
 		Msg("GitHub artifact deployment enabled (REQUIRED - no on-device building)")
 
 	return &Manager{
-		config:         config,
-		log:            log.With().Str("component", "deployment").Logger(),
-		statusFile:     filepath.Join(config.DeployDir, "deployment_status.json"),
-		version:        version,
-		gitCommit:      getEnv("GIT_COMMIT", "unknown"),
-		gitBranch:      config.GitBranch,
-		lock:           lock,
-		binaryDeployer: binaryDeployer,
-		displayAppDeployer: NewDisplayAppDeployer(
-			&logAdapter{log: log.With().Str("component", "display-app").Logger()},
-		),
+		config:                 config,
+		log:                    log.With().Str("component", "deployment").Logger(),
+		statusFile:             filepath.Join(config.DeployDir, "deployment_status.json"),
+		version:                version,
+		gitCommit:              getEnv("GIT_COMMIT", "unknown"),
+		gitBranch:              config.GitBranch,
+		lock:                   lock,
+		binaryDeployer:         binaryDeployer,
 		serviceManager:         serviceManager,
 		dockerManager:          dockerManager,
 		sketchDeployer:         sketchDeployer,
@@ -205,14 +201,9 @@ func (m *Manager) Deploy() (*DeploymentResult, error) {
 		return result, nil
 	}
 
-	// Deploy Go binary (only artifact needed - frontend, display app, sketch are embedded)
+	// Deploy Go binary (only artifact needed - frontend and sketch are embedded)
+	// Note: Python display app has been removed - MCU communication is now direct via Go
 	deploymentErrors := m.deployServices(result, artifactRunID)
-
-	// Extract and deploy embedded display app files
-	if err := m.displayAppDeployer.DeployDisplayApp(); err != nil {
-		m.log.Error().Err(err).Msg("Failed to deploy display app")
-		deploymentErrors["display-app"] = err
-	}
 
 	// Extract and deploy embedded sketch files to ArduinoApps directory
 	// The Arduino App Framework will automatically rebuild and upload on app restart
@@ -228,11 +219,11 @@ func (m *Manager) Deploy() (*DeploymentResult, error) {
 		}
 	}
 
-	// Restart the display app to trigger automatic sketch rebuild/upload by Arduino App Framework
+	// Compile and upload sketch to MCU if sketch files were deployed
 	if sketchDeployed {
-		m.log.Info().Msg("Restarting display app to trigger sketch rebuild/upload")
-		if err := m.restartDisplayApp(); err != nil {
-			m.log.Warn().Err(err).Msg("Failed to restart display app (sketch files deployed, manual restart may be needed)")
+		m.log.Info().Msg("Compiling and uploading sketch to MCU")
+		if err := m.uploadSketch(); err != nil {
+			m.log.Warn().Err(err).Msg("Failed to upload sketch (sketch files deployed, manual upload may be needed)")
 		}
 	}
 
@@ -338,11 +329,7 @@ func (m *Manager) HardUpdate() (*DeploymentResult, error) {
 
 	wg.Wait()
 
-	// Extract and deploy embedded display app files (always)
-	if err := m.displayAppDeployer.DeployDisplayApp(); err != nil {
-		m.log.Error().Err(err).Msg("Failed to deploy display app")
-		deploymentErrors["display-app"] = err
-	}
+	// Note: Python display app has been removed - MCU communication is now direct via Go
 
 	// Extract and deploy embedded sketch files (always, non-fatal)
 	sketchPaths := []string{"display/sketch/sketch.ino"}
@@ -357,11 +344,11 @@ func (m *Manager) HardUpdate() (*DeploymentResult, error) {
 		}
 	}
 
-	// Restart the display app to trigger automatic sketch rebuild/upload by Arduino App Framework
+	// Compile and upload sketch to MCU if sketch files were deployed
 	if sketchDeployed {
-		m.log.Info().Msg("Restarting display app to trigger sketch rebuild/upload")
-		if err := m.restartDisplayApp(); err != nil {
-			m.log.Warn().Err(err).Msg("Failed to restart display app (sketch files deployed, manual restart may be needed)")
+		m.log.Info().Msg("Compiling and uploading sketch to MCU")
+		if err := m.uploadSketch(); err != nil {
+			m.log.Warn().Err(err).Msg("Failed to upload sketch (sketch files deployed, manual upload may be needed)")
 		}
 	}
 
@@ -759,47 +746,46 @@ func (e *logEventAdapter) Msg(msg string) {
 	e.event.Msg(msg)
 }
 
-// restartDisplayApp restarts the Arduino display app using arduino-app-cli
-// This triggers the Arduino App Framework to automatically rebuild and upload the sketch
-// Matches old behavior: stop app, wait 2s, then restart (or start if restart fails)
-func (m *Manager) restartDisplayApp() error {
-	// Stop the app first to ensure clean rebuild (matching old auto-deploy.sh behavior)
-	m.log.Debug().Msg("Stopping display app for clean rebuild")
-	stopCmd := exec.Command("arduino-app-cli", "app", "stop", "user:trader-display")
-	var stopStdout, stopStderr strings.Builder
-	stopCmd.Stdout = &stopStdout
-	stopCmd.Stderr = &stopStderr
-	// Ignore stop errors - app may not be running
-	_ = stopCmd.Run()
+// uploadSketch compiles and uploads the Arduino sketch using arduino-cli
+// This is called after sketch files are deployed to trigger the MCU update
+func (m *Manager) uploadSketch() error {
+	sketchDir := "/home/arduino/ArduinoApps/sentinel-display/sketch"
 
-	// Wait 2 seconds for app to fully stop (matching old behavior)
-	m.log.Debug().Msg("Waiting 2 seconds for app to fully stop")
-	time.Sleep(2 * time.Second)
+	m.log.Info().Str("sketch_dir", sketchDir).Msg("Compiling and uploading Arduino sketch")
 
-	// Try restart first
-	m.log.Debug().Msg("Restarting display app to trigger sketch rebuild")
-	cmd := exec.Command("arduino-app-cli", "app", "restart", "user:trader-display")
-	var stdout, stderr strings.Builder
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	// Compile the sketch
+	m.log.Debug().Msg("Compiling sketch with arduino-cli")
+	compileCmd := exec.Command("arduino-cli", "compile",
+		"--fqbn", "arduino:zephyr:unoq",
+		sketchDir,
+	)
+	var compileStdout, compileStderr strings.Builder
+	compileCmd.Stdout = &compileStdout
+	compileCmd.Stderr = &compileStderr
 
-	err := cmd.Run()
-	if err != nil {
-		// If restart fails, try start instead (app may not be running)
-		output := stdout.String() + stderr.String()
-		m.log.Debug().Str("output", output).Msg("Restart failed, trying start instead")
+	if err := compileCmd.Run(); err != nil {
+		output := compileStdout.String() + compileStderr.String()
+		return fmt.Errorf("failed to compile sketch: %w\nOutput: %s", err, output)
+	}
+	m.log.Debug().Msg("Sketch compiled successfully")
 
-		cmd = exec.Command("arduino-app-cli", "app", "start", "user:trader-display")
-		cmd.Stdout = &stdout
-		cmd.Stderr = &stderr
+	// Upload the sketch (using network port - the Arduino Uno Q uses OTA upload)
+	m.log.Debug().Msg("Uploading sketch to MCU via arduino-cli")
+	uploadCmd := exec.Command("arduino-cli", "upload",
+		"--fqbn", "arduino:zephyr:unoq",
+		"--port", "192.168.1.11", // Arduino Uno Q network port
+		sketchDir,
+	)
+	var uploadStdout, uploadStderr strings.Builder
+	uploadCmd.Stdout = &uploadStdout
+	uploadCmd.Stderr = &uploadStderr
 
-		if err := cmd.Run(); err != nil {
-			output := stdout.String() + stderr.String()
-			return fmt.Errorf("failed to restart/start display app: %w\nOutput: %s", err, output)
-		}
+	if err := uploadCmd.Run(); err != nil {
+		output := uploadStdout.String() + uploadStderr.String()
+		return fmt.Errorf("failed to upload sketch: %w\nOutput: %s", err, output)
 	}
 
-	m.log.Info().Msg("Display app restarted - sketch rebuild/upload triggered by Arduino App Framework")
+	m.log.Info().Msg("Sketch compiled and uploaded successfully")
 	return nil
 }
 

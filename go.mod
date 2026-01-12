@@ -19,6 +19,7 @@ require (
 	github.com/rs/zerolog v1.31.0
 	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/stretchr/testify v1.11.1
+	github.com/vmihailenco/msgpack/v5 v5.4.1
 	github.com/wnjoon/go-yfinance v1.0.0
 	gonum.org/v1/gonum v0.16.0
 	modernc.org/sqlite v1.28.0
@@ -61,6 +62,7 @@ require (
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
+	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	golang.org/x/crypto v0.28.0 // indirect
 	golang.org/x/mod v0.21.0 // indirect

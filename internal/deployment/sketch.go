@@ -27,7 +27,7 @@ func NewSketchDeployer(log Logger) *SketchDeployer {
 // sketchPath is the relative path within display/sketch (e.g., "display/sketch/sketch.ino")
 func (d *SketchDeployer) DeploySketch(sketchPath string) error {
 	// Target directory where Arduino App Framework expects sketch files
-	targetDir := "/home/arduino/ArduinoApps/trader-display/sketch"
+	targetDir := "/home/arduino/ArduinoApps/sentinel-display/sketch"
 
 	d.log.Info().
 		Str("sketch", sketchPath).

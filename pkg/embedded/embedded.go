@@ -7,11 +7,12 @@ import (
 
 // Files contains all files embedded in the Go binary:
 // - Frontend files (frontend/dist) - served directly via HTTP
-// - Display app files (display/app) - extracted to disk at deployment time
-// - Display app.yaml (display/app.yaml) - extracted to root of app directory
 // - Sketch files (display/sketch) - extracted to disk, compiled and uploaded
 //
 // Note: Files are copied into pkg/embedded/ during GitHub Actions build
+// Note: Python display app has been removed - MCU communication is now handled
 //
-//go:embed frontend/dist display/app display/app.yaml display/sketch
+//	directly by the Go service via Unix socket to arduino-router
+//
+//go:embed frontend/dist display/sketch
 var Files embed.FS
