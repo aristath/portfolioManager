@@ -345,23 +345,9 @@ func RegisterJobs(container *Container, cfg *config.Config, displayManager *disp
 	container.JobRegistry.Register(queue.JobTypeGetOptimizerWeights, queue.JobToHandler(getOptimizerWeights))
 	instances.GetOptimizerWeights = getOptimizerWeights
 
-	// Build Opportunity Context Job
-	scoresRepoAdapter := scheduler.NewScoresRepositoryAdapter(container.PortfolioDB.Conn(), log)
-	settingsRepoAdapter := scheduler.NewSettingsRepositoryAdapter(container.ConfigDB.Conn(), log)
-	regimeRepoAdapter := scheduler.NewRegimeRepositoryAdapter(container.ConfigDB.Conn())
-	groupingRepoAdapter := scheduler.NewGroupingRepositoryAdapter(container.GroupingRepo)
-	priceConversionServiceAdapterForContext := scheduler.NewPriceConversionServiceAdapter(container.PriceConversionService)
+	// Build Opportunity Context Job - uses unified OpportunityContextBuilder
 	buildOpportunityContext := scheduler.NewBuildOpportunityContextJob(
-		positionRepoAdapter,
-		securityRepoAdapter,
-		allocRepoAdapter,
-		groupingRepoAdapter,
-		container.CashManager,
-		priceClientAdapter,
-		priceConversionServiceAdapterForContext,
-		scoresRepoAdapter,
-		settingsRepoAdapter,
-		regimeRepoAdapter,
+		container.OpportunityContextBuilder,
 	)
 	buildOpportunityContext.SetLogger(log)
 	container.JobRegistry.Register(queue.JobTypeBuildOpportunityContext, queue.JobToHandler(buildOpportunityContext))

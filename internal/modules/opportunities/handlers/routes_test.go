@@ -11,14 +11,12 @@ import (
 
 func TestRegisterRoutes(t *testing.T) {
 	logger := zerolog.New(nil).Level(zerolog.Disabled)
-	db := setupTestDB(t)
-	defer db.Close()
 
 	tagFilter := &mockTagFilter{}
 	securityRepo := &mockSecurityRepo{}
 	service := opportunities.NewService(tagFilter, securityRepo, logger)
 
-	handler := NewHandler(service, nil, nil, nil, nil, nil, db, nil, nil, logger)
+	handler := NewHandler(service, nil, nil, logger)
 
 	router := chi.NewRouter()
 

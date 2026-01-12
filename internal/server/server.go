@@ -992,14 +992,8 @@ func (s *Server) createAdaptationHandler() *adaptationhandlers.Handler {
 func (s *Server) createOpportunitiesHandler() *opportunitieshandlers.Handler {
 	return opportunitieshandlers.NewHandler(
 		s.container.OpportunitiesService,
-		s.container.PositionRepo,
-		s.container.SecurityRepo,
-		s.container.AllocRepo,
-		s.container.CashManager,
 		s.container.PlannerConfigRepo,
-		s.portfolioDB.Conn(),
-		s.container.TradeRepo,
-		s.container.BrokerClient,
+		s.container.OpportunityContextBuilder,
 		s.log,
 	)
 }

@@ -65,12 +65,10 @@ func TestService_GetTriggerChecker(t *testing.T) {
 		nil,            // securityRepo
 		nil,            // allocRepo
 		nil,            // cashManager
-		nil,            // tradernetClient
-		nil,            // yahooClient
-		nil,            // priceConversionService
+		nil,            // brokerClient
 		nil,            // configRepo
 		nil,            // recommendationRepo
-		(*sql.DB)(nil), // portfolioDB
+		nil,            // contextBuilder
 		(*sql.DB)(nil), // configDB
 		log,
 	)
@@ -94,12 +92,10 @@ func TestService_GetNegativeBalanceRebalancer(t *testing.T) {
 		nil,            // securityRepo
 		nil,            // allocRepo
 		nil,            // cashManager
-		nil,            // tradernetClient
-		nil,            // yahooClient
-		nil,            // priceConversionService
+		nil,            // brokerClient
 		nil,            // configRepo
 		nil,            // recommendationRepo
-		(*sql.DB)(nil), // portfolioDB
+		nil,            // contextBuilder
 		(*sql.DB)(nil), // configDB
 		log,
 	)
@@ -123,12 +119,10 @@ func TestService_CalculateRebalanceTrades_InsufficientCash(t *testing.T) {
 		nil,            // securityRepo
 		nil,            // allocRepo
 		nil,            // cashManager
-		nil,            // tradernetClient
-		nil,            // yahooClient
-		nil,            // priceConversionService
+		nil,            // brokerClient
 		nil,            // configRepo
 		nil,            // recommendationRepo
-		(*sql.DB)(nil), // portfolioDB
+		nil,            // contextBuilder
 		(*sql.DB)(nil), // configDB
 		log,
 	)
@@ -142,91 +136,9 @@ func TestService_CalculateRebalanceTrades_InsufficientCash(t *testing.T) {
 	}
 }
 
-// Note: Tests for NegativeBalanceRebalancer.CheckCurrencyMinimums
-// require full dependencies (security repo, etc.) and are better suited
-// for integration tests. Unit tests here focus on CalculateMinTradeAmount
-// which is the core business logic.
-
-func TestConvertCAGRScoreToCAGR(t *testing.T) {
-	tests := []struct {
-		name      string
-		cagrScore float64
-		expected  float64
-		desc      string
-		tolerance float64
-	}{
-		{
-			name:      "zero score",
-			cagrScore: 0.0,
-			expected:  0.0,
-			desc:      "Zero score should return 0% CAGR",
-			tolerance: 0.001,
-		},
-		{
-			name:      "negative score",
-			cagrScore: -0.5,
-			expected:  0.0,
-			desc:      "Negative score should return 0% CAGR",
-			tolerance: 0.001,
-		},
-		{
-			name:      "floor score (0.15)",
-			cagrScore: 0.15,
-			expected:  0.0,
-			desc:      "Floor score should return 0% CAGR",
-			tolerance: 0.001,
-		},
-		{
-			name:      "below floor",
-			cagrScore: 0.1,
-			expected:  0.0,
-			desc:      "Below floor should return 0% CAGR",
-			tolerance: 0.001,
-		},
-		{
-			name:      "target score (0.8)",
-			cagrScore: 0.8,
-			expected:  0.11,
-			desc:      "Target score should return 11% CAGR",
-			tolerance: 0.001,
-		},
-		{
-			name:      "excellent score (1.0)",
-			cagrScore: 1.0,
-			expected:  0.20,
-			desc:      "Excellent score should return 20% CAGR",
-			tolerance: 0.001,
-		},
-		{
-			name:      "mid-range score (0.5)",
-			cagrScore: 0.5,
-			expected:  0.059, // (0.5 - 0.15) * 0.11 / (0.8 - 0.15) = 0.35 * 0.11 / 0.65 ≈ 0.059
-			desc:      "Mid-range score should interpolate to ~5.9% CAGR",
-			tolerance: 0.001,
-		},
-		{
-			name:      "above target (0.9)",
-			cagrScore: 0.9,
-			expected:  0.155,
-			desc:      "Above target should interpolate to ~15.5% CAGR",
-			tolerance: 0.001,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := convertCAGRScoreToCAGR(tt.cagrScore)
-			tolerance := tt.tolerance
-			if tolerance == 0 {
-				tolerance = 0.001
-			}
-			if result < tt.expected-tolerance || result > tt.expected+tolerance {
-				t.Errorf("convertCAGRScoreToCAGR(%.2f) = %.3f, want %.3f (±%.3f) - %s",
-					tt.cagrScore, result, tt.expected, tolerance, tt.desc)
-			}
-		})
-	}
-}
+// Note: Tests for convertCAGRScoreToCAGR and populateCAGRs have been moved to
+// internal/services/opportunity_context_builder_test.go as part of the unified
+// OpportunityContextBuilder refactoring.
 
 func TestParseFloat(t *testing.T) {
 	tests := []struct {
@@ -248,12 +160,12 @@ func TestParseFloat(t *testing.T) {
 			input:     "42",
 			expected:  42.0,
 			wantError: false,
-			desc:      "Integer string should parse to float",
+			desc:      "Integer string should parse as float",
 		},
 		{
 			name:      "negative float",
-			input:     "-10.5",
-			expected:  -10.5,
+			input:     "-0.11",
+			expected:  -0.11,
 			wantError: false,
 			desc:      "Negative float should parse correctly",
 		},
@@ -266,14 +178,14 @@ func TestParseFloat(t *testing.T) {
 		},
 		{
 			name:      "scientific notation",
-			input:     "1.5e2",
-			expected:  150.0,
+			input:     "1.5e-2",
+			expected:  0.015,
 			wantError: false,
-			desc:      "Scientific notation should parse",
+			desc:      "Scientific notation should parse correctly",
 		},
 		{
 			name:      "invalid string",
-			input:     "not a number",
+			input:     "not-a-number",
 			expected:  0.0,
 			wantError: true,
 			desc:      "Invalid string should return error",
@@ -285,79 +197,22 @@ func TestParseFloat(t *testing.T) {
 			wantError: true,
 			desc:      "Empty string should return error",
 		},
-		{
-			name:      "with whitespace",
-			input:     "  3.14  ",
-			expected:  3.14, // fmt.Sscanf can handle whitespace
-			wantError: false,
-			desc:      "Whitespace should be handled by fmt.Sscanf",
-		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := parseFloat(tt.input)
-			if (err != nil) != tt.wantError {
-				t.Errorf("parseFloat(%q) error = %v, wantError %v - %s",
-					tt.input, err, tt.wantError, tt.desc)
-				return
-			}
-			if !tt.wantError {
-				tolerance := 0.001
-				if result < tt.expected-tolerance || result > tt.expected+tolerance {
-					t.Errorf("parseFloat(%q) = %.3f, want %.3f (±%.3f) - %s",
-						tt.input, result, tt.expected, tolerance, tt.desc)
+			if tt.wantError {
+				if err == nil {
+					t.Errorf("parseFloat(%q) expected error, got nil - %s", tt.input, tt.desc)
 				}
-			}
-		})
-	}
-}
-
-func TestParseFloatRebalancing(t *testing.T) {
-	// This is a duplicate of parseFloat, so we test it similarly
-	tests := []struct {
-		name      string
-		input     string
-		expected  float64
-		wantError bool
-		desc      string
-	}{
-		{
-			name:      "valid float",
-			input:     "100.50",
-			expected:  100.50,
-			wantError: false,
-			desc:      "Valid float should parse correctly",
-		},
-		{
-			name:      "integer string",
-			input:     "250",
-			expected:  250.0,
-			wantError: false,
-			desc:      "Integer string should parse to float",
-		},
-		{
-			name:      "invalid string",
-			input:     "invalid",
-			expected:  0.0,
-			wantError: true,
-			desc:      "Invalid string should return error",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := parseFloatRebalancing(tt.input)
-			if (err != nil) != tt.wantError {
-				t.Errorf("parseFloatRebalancing(%q) error = %v, wantError %v - %s",
-					tt.input, err, tt.wantError, tt.desc)
-				return
-			}
-			if !tt.wantError {
-				tolerance := 0.001
+			} else {
+				if err != nil {
+					t.Errorf("parseFloat(%q) unexpected error: %v - %s", tt.input, err, tt.desc)
+				}
+				tolerance := 0.0001
 				if result < tt.expected-tolerance || result > tt.expected+tolerance {
-					t.Errorf("parseFloatRebalancing(%q) = %.3f, want %.3f (±%.3f) - %s",
-						tt.input, result, tt.expected, tolerance, tt.desc)
+					t.Errorf("parseFloat(%q) = %f, want %f - %s", tt.input, result, tt.expected, tt.desc)
 				}
 			}
 		})

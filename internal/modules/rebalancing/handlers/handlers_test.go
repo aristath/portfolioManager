@@ -31,7 +31,16 @@ func setupTestService() *rebalancing.Service {
 	return rebalancing.NewService(
 		triggerChecker,
 		negativeRebalancer,
-		nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		nil, // planningService
+		nil, // positionRepo
+		nil, // securityRepo
+		nil, // allocRepo
+		nil, // cashManager
+		nil, // brokerClient
+		nil, // configRepo
+		nil, // recommendationRepo
+		nil, // contextBuilder
+		nil, // configDB
 		logger,
 	)
 }

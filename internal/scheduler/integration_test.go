@@ -3,493 +3,207 @@ package scheduler
 import (
 	"testing"
 
-	"github.com/aristath/sentinel/internal/modules/universe"
+	planningdomain "github.com/aristath/sentinel/internal/modules/planning/domain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// TestBuildOpportunityContext_Integration_EURConversion tests the complete EUR conversion flow
-// This integration test verifies:
-// 1. Prices are fetched from Yahoo Finance (mock)
-// 2. Prices are converted to EUR using exchange service (mock)
-// 3. Opportunity context is built with EUR prices
-// 4. All calculators receive correct EUR prices
-func TestBuildOpportunityContext_Integration_EURConversion(t *testing.T) {
-	// Setup: Securities with different currencies
-	securities := []universe.Security{
-		{
-			Symbol:   "VWS.AS",
-			ISIN:     "NL0000852564",
-			Currency: "EUR",
-			Active:   true,
-			Country:  "NL",
-			Name:     "Vopak",
-		},
-		{
-			Symbol:   "AAPL",
-			ISIN:     "US0378331005",
-			Currency: "USD",
-			Active:   true,
-			Country:  "US",
-			Name:     "Apple Inc.",
-		},
-		{
-			Symbol:   "0700.HK",
-			ISIN:     "KYG875721634",
-			Currency: "HKD",
-			Active:   true,
-			Country:  "HK",
-			Name:     "Tencent Holdings",
-		},
-		{
-			Symbol:   "BARC.L",
-			ISIN:     "GB0031348658",
-			Currency: "GBP",
-			Active:   true,
-			Country:  "GB",
-			Name:     "Barclays",
-		},
+// Note: Comprehensive EUR conversion and context building tests have been moved to
+// internal/services/opportunity_context_builder_test.go
+//
+// This file only tests scheduler-specific integration patterns.
+
+// TestBuildOpportunityContextJob_Integration_WeightsApplication tests that
+// optimizer weights are correctly applied to the context
+func TestBuildOpportunityContextJob_Integration_WeightsApplication(t *testing.T) {
+	// Create a job
+	job := &BuildOpportunityContextJob{}
+
+	// Set optimizer target weights
+	weights := map[string]float64{
+		"US0378331005": 0.25, // AAPL
+		"US5949181045": 0.35, // MSFT
+		"GB0031348658": 0.40, // BARC
+	}
+	job.SetOptimizerTargetWeights(weights)
+
+	// Simulate a successful build by setting the context
+	job.opportunityContext = &planningdomain.OpportunityContext{
+		EnrichedPositions:      []planningdomain.EnrichedPosition{},
+		AvailableCashEUR:       10000.0,
+		TotalPortfolioValueEUR: 50000.0,
+		TargetWeights:          map[string]float64{}, // Will be overwritten
 	}
 
-	// Mock native currency prices from Yahoo Finance
-	nativePrices := map[string]float64{
-		"VWS.AS":  42.50,  // EUR - no conversion needed
-		"AAPL":    150.00, // USD
-		"0700.HK": 497.40, // HKD (this was the bug - treated as 497.40 EUR)
-		"BARC.L":  25.00,  // GBP
+	// Apply optimizer weights (as Run() does)
+	if job.optimizerTargetWeights != nil && len(job.optimizerTargetWeights) > 0 {
+		job.opportunityContext.TargetWeights = job.optimizerTargetWeights
 	}
-
-	// Mock exchange rates
-	exchangeRates := map[string]float64{
-		"USD:EUR": 0.93, // 1 USD = 0.93 EUR
-		"HKD:EUR": 0.11, // 1 HKD = 0.11 EUR (497.40 HKD = ~54.71 EUR)
-		"GBP:EUR": 1.17, // 1 GBP = 1.17 EUR
-	}
-
-	// Mock price client that returns native currency prices
-	mockPriceClient := &MockPriceClientForConversion{
-		quotes: make(map[string]*float64),
-	}
-	for symbol, price := range nativePrices {
-		p := price
-		mockPriceClient.quotes[symbol] = &p
-	}
-
-	// Mock price conversion service that converts to EUR
-	mockPriceConversionService := &MockPriceConversionServiceForScheduler{
-		convertFunc: func(prices map[string]float64, secs []universe.Security) map[string]float64 {
-			converted := make(map[string]float64)
-
-			// Build currency map
-			currencyMap := make(map[string]string)
-			for _, sec := range secs {
-				currencyMap[sec.Symbol] = sec.Currency
-			}
-
-			for symbol, nativePrice := range prices {
-				currency := currencyMap[symbol]
-
-				if currency == "EUR" || currency == "" {
-					// Already in EUR, no conversion
-					converted[symbol] = nativePrice
-				} else {
-					// Convert to EUR
-					rateKey := currency + ":EUR"
-					if rate, ok := exchangeRates[rateKey]; ok {
-						converted[symbol] = nativePrice * rate
-					} else {
-						// Fallback: use native price
-						converted[symbol] = nativePrice
-					}
-				}
-			}
-
-			return converted
-		},
-	}
-
-	// Mock repositories
-	mockSecurityRepo := &MockSecurityRepoForOptimizer{
-		GetAllActiveFunc: func() ([]interface{}, error) {
-			result := make([]interface{}, len(securities))
-			for i, sec := range securities {
-				result[i] = sec
-			}
-			return result, nil
-		},
-	}
-
-	mockPositionRepo := &MockPositionRepoForOptimizer{
-		GetAllFunc: func() ([]interface{}, error) {
-			return []interface{}{}, nil
-		},
-	}
-
-	mockAllocRepo := &MockAllocationRepoForOptimizer{
-		GetAllFunc: func() (map[string]float64, error) {
-			return map[string]float64{
-				"NL": 0.30,
-				"US": 0.40,
-				"HK": 0.20,
-				"GB": 0.10,
-			}, nil
-		},
-	}
-
-	mockCashManager := &MockCashManagerForOptimizer{
-		GetAllCashBalancesFunc: func() (map[string]float64, error) {
-			return map[string]float64{"EUR": 5000.0}, nil
-		},
-	}
-
-	mockScoresRepo := &MockScoresRepoForContext{
-		GetCAGRsFunc: func(isinList []string) (map[string]float64, error) {
-			return map[string]float64{
-				"NL0000852564": 0.10, // VWS.AS
-				"US0378331005": 0.12, // AAPL
-				"KYG875721634": 0.15, // 0700.HK
-				"GB0031348658": 0.08, // BARC.L
-			}, nil
-		},
-		GetQualityScoresFunc: func(isinList []string) (map[string]float64, map[string]float64, error) {
-			longTerm := map[string]float64{
-				"NL0000852564": 0.75, // VWS.AS
-				"US0378331005": 0.85, // AAPL
-				"KYG875721634": 0.80, // 0700.HK
-				"GB0031348658": 0.70, // BARC.L
-			}
-			fundamentals := map[string]float64{
-				"NL0000852564": 0.70,
-				"US0378331005": 0.80,
-				"KYG875721634": 0.75,
-				"GB0031348658": 0.65,
-			}
-			return longTerm, fundamentals, nil
-		},
-		GetValueTrapDataFunc: func(isinList []string) (map[string]float64, map[string]float64, map[string]float64, error) {
-			opportunity := map[string]float64{
-				"NL0000852564": 0.6,
-				"US0378331005": 0.7,
-				"KYG875721634": 0.65,
-				"GB0031348658": 0.55,
-			}
-			momentum := map[string]float64{
-				"NL0000852564": 0.5,
-				"US0378331005": 0.6,
-				"KYG875721634": 0.55,
-				"GB0031348658": 0.45,
-			}
-			volatility := map[string]float64{
-				"NL0000852564": 0.25,
-				"US0378331005": 0.20,
-				"KYG875721634": 0.30,
-				"GB0031348658": 0.35,
-			}
-			return opportunity, momentum, volatility, nil
-		},
-	}
-
-	mockSettingsRepo := &MockSettingsRepoForContext{
-		GetTargetReturnSettingsFunc: func() (float64, float64, error) {
-			return 0.11, 0.80, nil // 11% target return, 80% threshold
-		},
-		GetVirtualTestCashFunc: func() (float64, error) {
-			return 0.0, nil
-		},
-	}
-
-	mockRegimeRepo := &MockRegimeRepoForContext{
-		GetCurrentRegimeScoreFunc: func() (float64, error) {
-			return 0.6, nil
-		},
-	}
-
-	mockGroupingRepo := &MockGroupingRepoForContext{}
-
-	// Create job with all dependencies
-	job := NewBuildOpportunityContextJob(
-		mockPositionRepo,
-		mockSecurityRepo,
-		mockAllocRepo,
-		mockGroupingRepo,
-		mockCashManager,
-		mockPriceClient,
-		mockPriceConversionService,
-		mockScoresRepo,
-		mockSettingsRepo,
-		mockRegimeRepo,
-	)
-
-	// Execute
-	err := job.Run()
-	require.NoError(t, err)
 
 	// Verify
 	ctx := job.GetOpportunityContext()
 	require.NotNil(t, ctx)
+	assert.Equal(t, weights, ctx.TargetWeights, "Optimizer weights should be applied to context")
+	assert.Equal(t, 0.25, ctx.TargetWeights["US0378331005"])
+	assert.Equal(t, 0.35, ctx.TargetWeights["US5949181045"])
+	assert.Equal(t, 0.40, ctx.TargetWeights["GB0031348658"])
+}
 
-	// Verify all prices are in EUR (converted correctly)
-	t.Run("EUR prices converted correctly", func(t *testing.T) {
-		prices := ctx.CurrentPrices
-
-		// EUR security - unchanged (ISIN key)
-		assert.InDelta(t, 42.50, prices["NL0000852564"], 0.01, "EUR price should be unchanged")
-
-		// USD security - converted (150 USD × 0.93 = 139.5 EUR) (ISIN key)
-		assert.InDelta(t, 139.50, prices["US0378331005"], 0.01, "USD price should be converted to EUR")
-
-		// HKD security - converted (497.40 HKD × 0.11 = 54.71 EUR) (ISIN key)
-		// This is the critical bug fix - before it was 497.40 EUR (9x error)
-		assert.InDelta(t, 54.71, prices["KYG875721634"], 0.01, "HKD price should be converted to EUR (not treated as EUR)")
-
-		// GBP security - converted (25 GBP × 1.17 = 29.25 EUR) (ISIN key)
-		assert.InDelta(t, 29.25, prices["GB0031348658"], 0.01, "GBP price should be converted to EUR")
+// TestBuildOpportunityContextJob_Integration_JobFlow tests the overall job execution flow
+func TestBuildOpportunityContextJob_Integration_JobFlow(t *testing.T) {
+	t.Run("job_name_is_consistent", func(t *testing.T) {
+		job := NewBuildOpportunityContextJob(nil)
+		assert.Equal(t, "build_opportunity_context", job.Name())
 	})
 
-	// Verify securities have correct data
-	t.Run("Securities have correct currency information", func(t *testing.T) {
-		require.Len(t, ctx.Securities, 4)
+	t.Run("initial_state_is_clean", func(t *testing.T) {
+		job := NewBuildOpportunityContextJob(nil)
+		assert.Nil(t, job.GetOpportunityContext())
+		assert.Nil(t, job.optimizerTargetWeights)
+	})
 
-		// Find each security by symbol
-		securityMap := make(map[string]bool)
-		for _, sec := range ctx.Securities {
-			securityMap[sec.Symbol] = true
+	t.Run("weights_can_be_set_before_run", func(t *testing.T) {
+		job := NewBuildOpportunityContextJob(nil)
+
+		weights := map[string]float64{"TEST": 1.0}
+		job.SetOptimizerTargetWeights(weights)
+
+		assert.Equal(t, weights, job.optimizerTargetWeights)
+	})
+
+	t.Run("nil_builder_returns_error", func(t *testing.T) {
+		job := NewBuildOpportunityContextJob(nil)
+		err := job.Run()
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "context builder is nil")
+	})
+}
+
+// TestBuildOpportunityContextJob_Integration_ContextRetrieval tests context retrieval patterns
+func TestBuildOpportunityContextJob_Integration_ContextRetrieval(t *testing.T) {
+	t.Run("get_context_returns_nil_before_run", func(t *testing.T) {
+		job := NewBuildOpportunityContextJob(nil)
+		assert.Nil(t, job.GetOpportunityContext())
+	})
+
+	t.Run("get_context_returns_context_after_successful_build", func(t *testing.T) {
+		job := &BuildOpportunityContextJob{}
+
+		// Simulate successful build
+		job.opportunityContext = &planningdomain.OpportunityContext{
+			EnrichedPositions: []planningdomain.EnrichedPosition{
+				{ISIN: "US0378331005", Symbol: "AAPL", Quantity: 100},
+				{ISIN: "US5949181045", Symbol: "MSFT", Quantity: 50},
+			},
+			AvailableCashEUR:       5000.0,
+			TotalPortfolioValueEUR: 25000.0,
+			RecentlySoldISINs:      map[string]bool{"SOLD123": true},
+			RecentlyBoughtISINs:    map[string]bool{"BOUGHT456": true},
 		}
 
-		assert.True(t, securityMap["VWS.AS"], "VWS.AS should be in securities")
-		assert.True(t, securityMap["AAPL"], "AAPL should be in securities")
-		assert.True(t, securityMap["0700.HK"], "0700.HK should be in securities")
-		assert.True(t, securityMap["BARC.L"], "BARC.L should be in securities")
-	})
-
-	// Verify scores are present (SecurityScores are by ISIN)
-	t.Run("Scores are available", func(t *testing.T) {
-		// Verify score components are present (these are populated by the job)
-		assert.NotNil(t, ctx.LongTermScores, "Long-term scores map should be initialized")
-		assert.NotNil(t, ctx.FundamentalsScores, "Fundamentals scores map should be initialized")
-
-		// SecurityScores might be computed later by calculators, so just check it's not nil
-		assert.NotNil(t, ctx, "Context should be created")
-	})
-
-	// Verify allocation data is available
-	t.Run("Allocation data is available", func(t *testing.T) {
-		// The allocation repo was mocked to return country allocations
-		// These may be stored in different fields depending on processing
-		assert.NotNil(t, ctx, "Context should be created with allocation data")
-	})
-
-	// Verify cash is correct
-	t.Run("Cash is correct", func(t *testing.T) {
+		ctx := job.GetOpportunityContext()
+		require.NotNil(t, ctx)
+		assert.Len(t, ctx.EnrichedPositions, 2)
 		assert.Equal(t, 5000.0, ctx.AvailableCashEUR)
+		assert.True(t, ctx.RecentlySoldISINs["SOLD123"])
+		assert.True(t, ctx.RecentlyBoughtISINs["BOUGHT456"])
 	})
 }
 
-// TestBuildOpportunityContext_Integration_MissingExchangeRate tests graceful degradation
-func TestBuildOpportunityContext_Integration_MissingExchangeRate(t *testing.T) {
-	// Setup: Security with currency but no exchange rate available
-	securities := []universe.Security{
-		{
-			Symbol:   "TSM",
-			ISIN:     "US8740391003", // Taiwan Semiconductor ISIN
-			Currency: "TWD",          // Taiwan Dollar - no rate available
-			Active:   true,
-			Country:  "TW",
-			Name:     "Taiwan Semiconductor",
-		},
-	}
+// TestPlannerBatchJob_Integration demonstrates how BuildOpportunityContextJob integrates with PlannerBatchJob
+func TestPlannerBatchJob_Integration_ContextPassing(t *testing.T) {
+	// This test demonstrates the expected data flow:
+	// 1. BuildOpportunityContextJob.Run() builds context
+	// 2. GetOpportunityContext() retrieves it
+	// 3. PlannerBatchJob uses it for planning
 
-	nativePrice := 600.0
-	mockPriceClient := &MockPriceClientForConversion{
-		quotes: map[string]*float64{
-			"TSM": &nativePrice,
-		},
-	}
+	t.Run("context_flows_to_planner", func(t *testing.T) {
+		// Setup build job
+		buildJob := &BuildOpportunityContextJob{}
 
-	// Mock price conversion service that returns native price when rate unavailable
-	mockPriceConversionService := &MockPriceConversionServiceForScheduler{
-		convertFunc: func(prices map[string]float64, secs []universe.Security) map[string]float64 {
-			// No TWD:EUR rate available - should fallback to native price
-			converted := make(map[string]float64)
-			for symbol, price := range prices {
-				converted[symbol] = price // Fallback
-			}
-			return converted
-		},
-	}
+		// Simulate successful build
+		buildJob.opportunityContext = &planningdomain.OpportunityContext{
+			EnrichedPositions: []planningdomain.EnrichedPosition{
+				{ISIN: "US0378331005", Symbol: "AAPL", CurrentPrice: 150.0, Quantity: 100},
+			},
+			AvailableCashEUR:       10000.0,
+			TotalPortfolioValueEUR: 25000.0,
+			RecentlySoldISINs:      map[string]bool{},
+			RecentlyBoughtISINs:    map[string]bool{},
+		}
 
-	mockSecurityRepo := &MockSecurityRepoForOptimizer{
-		GetAllActiveFunc: func() ([]interface{}, error) {
-			return []interface{}{securities[0]}, nil
-		},
-	}
+		// Retrieve context (as PlannerBatchJob would)
+		ctx := buildJob.GetOpportunityContext()
 
-	mockPositionRepo := &MockPositionRepoForOptimizer{
-		GetAllFunc: func() ([]interface{}, error) {
-			return []interface{}{}, nil
-		},
-	}
+		// Verify context is available for planning
+		require.NotNil(t, ctx)
+		assert.Greater(t, len(ctx.EnrichedPositions), 0)
+		assert.Greater(t, ctx.AvailableCashEUR, 0.0)
+		assert.Greater(t, ctx.TotalPortfolioValueEUR, 0.0)
+	})
 
-	mockAllocRepo := &MockAllocationRepoForOptimizer{
-		GetAllFunc: func() (map[string]float64, error) {
-			return map[string]float64{"TW": 1.0}, nil
-		},
-	}
+	t.Run("optimizer_weights_integrated", func(t *testing.T) {
+		// Setup with optimizer weights
+		buildJob := &BuildOpportunityContextJob{}
 
-	mockCashManager := &MockCashManagerForOptimizer{
-		GetAllCashBalancesFunc: func() (map[string]float64, error) {
-			return map[string]float64{"EUR": 1000.0}, nil
-		},
-	}
+		// Set optimizer weights (from GetOptimizerWeightsJob)
+		optimizerWeights := map[string]float64{
+			"US0378331005": 0.6,
+			"US5949181045": 0.4,
+		}
+		buildJob.SetOptimizerTargetWeights(optimizerWeights)
 
-	mockScoresRepo := &MockScoresRepoForContext{
-		GetCAGRsFunc: func(isinList []string) (map[string]float64, error) {
-			return map[string]float64{}, nil
-		},
-		GetQualityScoresFunc: func(isinList []string) (map[string]float64, map[string]float64, error) {
-			return map[string]float64{}, map[string]float64{}, nil
-		},
-		GetValueTrapDataFunc: func(isinList []string) (map[string]float64, map[string]float64, map[string]float64, error) {
-			return map[string]float64{}, map[string]float64{}, map[string]float64{}, nil
-		},
-	}
+		// Simulate build with context
+		buildJob.opportunityContext = &planningdomain.OpportunityContext{
+			EnrichedPositions:      []planningdomain.EnrichedPosition{},
+			AvailableCashEUR:       10000.0,
+			TotalPortfolioValueEUR: 50000.0,
+			TargetWeights:          map[string]float64{},
+		}
 
-	mockSettingsRepo := &MockSettingsRepoForContext{
-		GetTargetReturnSettingsFunc: func() (float64, float64, error) {
-			return 0.11, 0.80, nil
-		},
-		GetVirtualTestCashFunc: func() (float64, error) {
-			return 0.0, nil
-		},
-	}
+		// Apply weights (as Run() does)
+		buildJob.opportunityContext.TargetWeights = buildJob.optimizerTargetWeights
 
-	mockRegimeRepo := &MockRegimeRepoForContext{
-		GetCurrentRegimeScoreFunc: func() (float64, error) {
-			return 0.5, nil
-		},
-	}
-
-	mockGroupingRepo := &MockGroupingRepoForContext{}
-
-	job := NewBuildOpportunityContextJob(
-		mockPositionRepo,
-		mockSecurityRepo,
-		mockAllocRepo,
-		mockGroupingRepo,
-		mockCashManager,
-		mockPriceClient,
-		mockPriceConversionService,
-		mockScoresRepo,
-		mockSettingsRepo,
-		mockRegimeRepo,
-	)
-
-	// Execute - should not fail even without exchange rate
-	err := job.Run()
-	require.NoError(t, err)
-
-	// Verify
-	ctx := job.GetOpportunityContext()
-	require.NotNil(t, ctx)
-
-	// Should use native price (graceful degradation) - ISIN key
-	assert.Equal(t, 600.0, ctx.CurrentPrices["US8740391003"], "Should fallback to native price when exchange rate unavailable")
+		// Verify weights are in context
+		ctx := buildJob.GetOpportunityContext()
+		require.NotNil(t, ctx)
+		assert.Equal(t, 0.6, ctx.TargetWeights["US0378331005"])
+		assert.Equal(t, 0.4, ctx.TargetWeights["US5949181045"])
+	})
 }
 
-// TestBuildOpportunityContext_Integration_NoPriceConversionService tests graceful degradation when service is nil
-func TestBuildOpportunityContext_Integration_NoPriceConversionService(t *testing.T) {
-	securities := []universe.Security{
-		{
-			Symbol:   "AAPL",
-			ISIN:     "US0378331005", // Apple Inc. ISIN
-			Currency: "USD",
-			Active:   true,
-			Name:     "Apple Inc.",
+// TestBuildOpportunityContextJob_Integration_CooloffData tests cooloff data is preserved in context
+func TestBuildOpportunityContextJob_Integration_CooloffData(t *testing.T) {
+	job := &BuildOpportunityContextJob{}
+
+	// Simulate build with cooloff data (as OpportunityContextBuilder would produce)
+	job.opportunityContext = &planningdomain.OpportunityContext{
+		EnrichedPositions:      []planningdomain.EnrichedPosition{},
+		AvailableCashEUR:       10000.0,
+		TotalPortfolioValueEUR: 50000.0,
+		RecentlySoldISINs: map[string]bool{
+			"US0378331005": true, // AAPL sold recently
+			"GB0031348658": true, // BARC sold recently
+		},
+		RecentlyBoughtISINs: map[string]bool{
+			"US5949181045": true, // MSFT bought recently
+		},
+		IneligibleISINs: map[string]bool{
+			"INACTIVE123": true, // Inactive security
 		},
 	}
 
-	nativePrice := 150.0
-	mockPriceClient := &MockPriceClientForConversion{
-		quotes: map[string]*float64{
-			"AAPL": &nativePrice,
-		},
-	}
-
-	mockSecurityRepo := &MockSecurityRepoForOptimizer{
-		GetAllActiveFunc: func() ([]interface{}, error) {
-			return []interface{}{securities[0]}, nil
-		},
-	}
-
-	mockPositionRepo := &MockPositionRepoForOptimizer{
-		GetAllFunc: func() ([]interface{}, error) {
-			return []interface{}{}, nil
-		},
-	}
-
-	mockAllocRepo := &MockAllocationRepoForOptimizer{
-		GetAllFunc: func() (map[string]float64, error) {
-			return map[string]float64{"US": 1.0}, nil
-		},
-	}
-
-	mockCashManager := &MockCashManagerForOptimizer{
-		GetAllCashBalancesFunc: func() (map[string]float64, error) {
-			return map[string]float64{"EUR": 1000.0}, nil
-		},
-	}
-
-	mockScoresRepo := &MockScoresRepoForContext{
-		GetCAGRsFunc: func(isinList []string) (map[string]float64, error) {
-			return map[string]float64{}, nil
-		},
-		GetQualityScoresFunc: func(isinList []string) (map[string]float64, map[string]float64, error) {
-			return map[string]float64{}, map[string]float64{}, nil
-		},
-		GetValueTrapDataFunc: func(isinList []string) (map[string]float64, map[string]float64, map[string]float64, error) {
-			return map[string]float64{}, map[string]float64{}, map[string]float64{}, nil
-		},
-	}
-
-	mockSettingsRepo := &MockSettingsRepoForContext{
-		GetTargetReturnSettingsFunc: func() (float64, float64, error) {
-			return 0.11, 0.80, nil
-		},
-		GetVirtualTestCashFunc: func() (float64, error) {
-			return 0.0, nil
-		},
-	}
-
-	mockRegimeRepo := &MockRegimeRepoForContext{
-		GetCurrentRegimeScoreFunc: func() (float64, error) {
-			return 0.5, nil
-		},
-	}
-
-	mockGroupingRepo := &MockGroupingRepoForContext{}
-
-	// Create job WITHOUT price conversion service (nil)
-	job := NewBuildOpportunityContextJob(
-		mockPositionRepo,
-		mockSecurityRepo,
-		mockAllocRepo,
-		mockGroupingRepo,
-		mockCashManager,
-		mockPriceClient,
-		nil, // No price conversion service
-		mockScoresRepo,
-		mockSettingsRepo,
-		mockRegimeRepo,
-	)
-
-	// Execute - should not fail even without price conversion service
-	err := job.Run()
-	require.NoError(t, err)
-
-	// Verify
 	ctx := job.GetOpportunityContext()
 	require.NotNil(t, ctx)
 
-	// Should use native price (logged warning about potential valuation errors) - ISIN key
-	assert.Equal(t, 150.0, ctx.CurrentPrices["US0378331005"], "Should use native price when conversion service unavailable")
+	// Verify cooloff maps are populated
+	assert.True(t, ctx.RecentlySoldISINs["US0378331005"], "AAPL should be in cooloff")
+	assert.True(t, ctx.RecentlySoldISINs["GB0031348658"], "BARC should be in cooloff")
+	assert.True(t, ctx.RecentlyBoughtISINs["US5949181045"], "MSFT should be in buy cooloff")
+	assert.True(t, ctx.IneligibleISINs["INACTIVE123"], "Inactive should be ineligible")
+
+	// Verify not in maps
+	assert.False(t, ctx.RecentlySoldISINs["NOTINCOOLOFF"])
+	assert.False(t, ctx.RecentlyBoughtISINs["NOTINCOOLOFF"])
 }

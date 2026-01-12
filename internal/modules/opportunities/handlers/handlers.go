@@ -2,68 +2,52 @@
 package handlers
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
 
-	"github.com/aristath/sentinel/internal/domain"
-	"github.com/aristath/sentinel/internal/modules/allocation"
 	"github.com/aristath/sentinel/internal/modules/opportunities"
 	planningdomain "github.com/aristath/sentinel/internal/modules/planning/domain"
 	planningrepo "github.com/aristath/sentinel/internal/modules/planning/repository"
-	"github.com/aristath/sentinel/internal/modules/portfolio"
-	"github.com/aristath/sentinel/internal/modules/trading"
-	"github.com/aristath/sentinel/internal/modules/universe"
+	"github.com/aristath/sentinel/internal/services"
 	"github.com/rs/zerolog"
 )
 
 // Handler handles opportunities HTTP requests
 type Handler struct {
-	service      *opportunities.Service
-	positionRepo *portfolio.PositionRepository
-	securityRepo *universe.SecurityRepository
-	allocRepo    *allocation.Repository
-	cashManager  domain.CashManager
-	configRepo   *planningrepo.ConfigRepository
-	portfolioDB  *sql.DB
-	tradeRepo    trading.TradeRepositoryInterface // For recently traded ISINs
-	brokerClient domain.BrokerClient              // For pending orders
-	log          zerolog.Logger
+	service        *opportunities.Service
+	configRepo     *planningrepo.ConfigRepository
+	contextBuilder *services.OpportunityContextBuilder
+	log            zerolog.Logger
 }
 
 // NewHandler creates a new opportunities handler
 func NewHandler(
 	service *opportunities.Service,
-	positionRepo *portfolio.PositionRepository,
-	securityRepo *universe.SecurityRepository,
-	allocRepo *allocation.Repository,
-	cashManager domain.CashManager,
 	configRepo *planningrepo.ConfigRepository,
-	portfolioDB *sql.DB,
-	tradeRepo trading.TradeRepositoryInterface,
-	brokerClient domain.BrokerClient,
+	contextBuilder *services.OpportunityContextBuilder,
 	log zerolog.Logger,
 ) *Handler {
 	return &Handler{
-		service:      service,
-		positionRepo: positionRepo,
-		securityRepo: securityRepo,
-		allocRepo:    allocRepo,
-		cashManager:  cashManager,
-		configRepo:   configRepo,
-		portfolioDB:  portfolioDB,
-		tradeRepo:    tradeRepo,
-		brokerClient: brokerClient,
-		log:          log.With().Str("handler", "opportunities").Logger(),
+		service:        service,
+		configRepo:     configRepo,
+		contextBuilder: contextBuilder,
+		log:            log.With().Str("handler", "opportunities").Logger(),
 	}
 }
 
 // HandleGetAll handles GET /api/opportunities/all
 func (h *Handler) HandleGetAll(w http.ResponseWriter, r *http.Request) {
-	// Build opportunity context from current state
-	ctx, err := h.buildOpportunityContext()
+	// Check for nil contextBuilder
+	if h.contextBuilder == nil {
+		h.log.Error().Msg("Context builder not configured")
+		http.Error(w, "Context builder not configured", http.StatusInternalServerError)
+		return
+	}
+
+	// Build opportunity context using unified builder
+	ctx, err := h.contextBuilder.Build()
 	if err != nil {
 		h.log.Error().Err(err).Msg("Failed to build opportunity context")
 		http.Error(w, "Failed to build opportunity context", http.StatusInternalServerError)
@@ -125,8 +109,15 @@ func (h *Handler) HandleGetAll(w http.ResponseWriter, r *http.Request) {
 
 // handleCategoryOpportunities is a helper for category-specific endpoints
 func (h *Handler) handleCategoryOpportunities(w http.ResponseWriter, r *http.Request, category planningdomain.OpportunityCategory) {
-	// Build opportunity context from current state
-	ctx, err := h.buildOpportunityContext()
+	// Check for nil contextBuilder
+	if h.contextBuilder == nil {
+		h.log.Error().Msg("Context builder not configured")
+		http.Error(w, "Context builder not configured", http.StatusInternalServerError)
+		return
+	}
+
+	// Build opportunity context using unified builder
+	ctx, err := h.contextBuilder.Build()
 	if err != nil {
 		h.log.Error().Err(err).Msg("Failed to build opportunity context")
 		http.Error(w, "Failed to build opportunity context", http.StatusInternalServerError)
@@ -243,229 +234,6 @@ func (h *Handler) HandleGetRegistry(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.writeJSON(w, http.StatusOK, response)
-}
-
-// buildOpportunityContext builds opportunity context from current portfolio state
-func (h *Handler) buildOpportunityContext() (*planningdomain.OpportunityContext, error) {
-	// Check for nil dependencies
-	if h.positionRepo == nil {
-		return nil, fmt.Errorf("position repository not initialized")
-	}
-	if h.securityRepo == nil {
-		return nil, fmt.Errorf("security repository not initialized")
-	}
-	if h.allocRepo == nil {
-		return nil, fmt.Errorf("allocation repository not initialized")
-	}
-
-	// Get positions
-	positions, err := h.positionRepo.GetAll()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get positions: %w", err)
-	}
-
-	// Get securities
-	securities, err := h.securityRepo.GetAllActive()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get securities: %w", err)
-	}
-
-	// Get allocations
-	allocations, err := h.allocRepo.GetAll()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get allocations: %w", err)
-	}
-
-	// Get cash balances
-	cashBalances := make(map[string]float64)
-	if h.cashManager != nil {
-		balances, err := h.cashManager.GetAllCashBalances()
-		if err != nil {
-			h.log.Warn().Err(err).Msg("Failed to get cash balances")
-		} else {
-			cashBalances = balances
-		}
-	}
-
-	// Convert securities to domain format and build symbol-to-ISIN lookup
-	domainSecurities := make([]domain.Security, 0, len(securities))
-	stocksByISIN := make(map[string]domain.Security)
-	symbolToISIN := make(map[string]string) // For pending order ISIN lookup
-	for _, sec := range securities {
-		domainSec := domain.Security{
-			Symbol:   sec.Symbol,
-			ISIN:     sec.ISIN,
-			Active:   sec.Active,
-			Country:  sec.Country,
-			Currency: domain.Currency(sec.Currency),
-			Name:     sec.Name,
-		}
-		domainSecurities = append(domainSecurities, domainSec)
-		if sec.ISIN != "" {
-			stocksByISIN[sec.ISIN] = domainSec
-			if sec.Symbol != "" {
-				symbolToISIN[sec.Symbol] = sec.ISIN
-			}
-		}
-	}
-
-	// Enrich positions with security data and calculate portfolio value
-	enrichedPositions := make([]planningdomain.EnrichedPosition, 0)
-	totalValue := 0.0
-	for _, pos := range positions {
-		if pos.ISIN == "" {
-			continue
-		}
-
-		// Get security from universe for trading constraints
-		universeSec, err := h.securityRepo.GetByISIN(pos.ISIN)
-		if err != nil {
-			h.log.Warn().Err(err).Str("isin", pos.ISIN).Msg("Failed to get security from universe")
-			continue
-		}
-
-		security, ok := stocksByISIN[pos.ISIN]
-		if !ok {
-			continue
-		}
-
-		marketValueEUR := pos.Quantity * pos.CurrentPrice
-		totalValue += marketValueEUR
-
-		enriched := planningdomain.EnrichedPosition{
-			ISIN:           pos.ISIN,
-			Symbol:         pos.Symbol,
-			Quantity:       pos.Quantity,
-			Currency:       pos.Currency,
-			AverageCost:    pos.AvgPrice,
-			MarketValueEUR: marketValueEUR,
-			CurrentPrice:   pos.CurrentPrice,
-			SecurityName:   security.Name,
-			Country:        security.Country,
-			Active:         security.Active,
-			AllowBuy:       universeSec.AllowBuy,
-			AllowSell:      universeSec.AllowSell,
-			MinLot:         universeSec.MinLot,
-		}
-		enrichedPositions = append(enrichedPositions, enriched)
-	}
-
-	// Add cash to total value
-	for _, balance := range cashBalances {
-		totalValue += balance
-	}
-
-	// Calculate WeightInPortfolio for each position
-	if totalValue > 0 {
-		for i := range enrichedPositions {
-			pos := &enrichedPositions[i]
-			positionValue := pos.CurrentPrice * pos.Quantity
-			if positionValue > 0 {
-				pos.WeightInPortfolio = positionValue / totalValue
-			}
-		}
-	}
-
-	// Get available cash in EUR
-	availableCashEUR := cashBalances["EUR"]
-
-	// Build current prices map from positions (keyed by ISIN)
-	currentPrices := make(map[string]float64)
-	for _, pos := range positions {
-		if pos.ISIN != "" && pos.CurrentPrice > 0 {
-			currentPrices[pos.ISIN] = pos.CurrentPrice
-		}
-	}
-
-	// Initialize cooloff maps
-	recentlySoldISINs := make(map[string]bool)
-	recentlyBoughtISINs := make(map[string]bool)
-
-	// Get cooloff days from planner config (default to 180 if not available)
-	cooloffDays := 180
-	if h.configRepo != nil {
-		config, err := h.configRepo.GetDefaultConfig()
-		if err == nil && config.SellCooldownDays > 0 {
-			cooloffDays = config.SellCooldownDays
-		}
-	}
-
-	// Populate recently traded ISINs from trade repository
-	if h.tradeRepo != nil {
-		// Get recently sold ISINs
-		soldISINs, err := h.tradeRepo.GetRecentlySoldISINs(cooloffDays)
-		if err != nil {
-			h.log.Warn().Err(err).Int("days", cooloffDays).Msg("Failed to get recently sold ISINs")
-		} else {
-			for isin := range soldISINs {
-				recentlySoldISINs[isin] = true
-			}
-			h.log.Debug().Int("count", len(soldISINs)).Int("days", cooloffDays).Msg("Loaded recently sold ISINs for cooloff")
-		}
-
-		// Get recently bought ISINs
-		boughtISINs, err := h.tradeRepo.GetRecentlyBoughtISINs(cooloffDays)
-		if err != nil {
-			h.log.Warn().Err(err).Int("days", cooloffDays).Msg("Failed to get recently bought ISINs")
-		} else {
-			for isin := range boughtISINs {
-				recentlyBoughtISINs[isin] = true
-			}
-			h.log.Debug().Int("count", len(boughtISINs)).Int("days", cooloffDays).Msg("Loaded recently bought ISINs for cooloff")
-		}
-	}
-
-	// Add pending orders to cooloff maps (assume they will complete successfully)
-	if h.brokerClient != nil && h.brokerClient.IsConnected() {
-		pendingOrders, err := h.brokerClient.GetPendingOrders()
-		if err != nil {
-			h.log.Warn().Err(err).Msg("Failed to get pending orders for cooloff")
-		} else {
-			for _, order := range pendingOrders {
-				// Look up ISIN from symbol
-				isin, ok := symbolToISIN[order.Symbol]
-				if !ok {
-					h.log.Debug().Str("symbol", order.Symbol).Msg("Could not find ISIN for pending order symbol")
-					continue
-				}
-
-				// Add to appropriate cooloff map based on side
-				if order.Side == "BUY" {
-					recentlyBoughtISINs[isin] = true
-					h.log.Debug().Str("symbol", order.Symbol).Str("isin", isin).Msg("Added pending BUY order to cooloff")
-				} else if order.Side == "SELL" {
-					recentlySoldISINs[isin] = true
-					h.log.Debug().Str("symbol", order.Symbol).Str("isin", isin).Msg("Added pending SELL order to cooloff")
-				}
-			}
-			if len(pendingOrders) > 0 {
-				h.log.Info().Int("pending_orders", len(pendingOrders)).Msg("Added pending orders to cooloff maps")
-			}
-		}
-	}
-
-	// Build opportunity context with all required fields
-	ctx := &planningdomain.OpportunityContext{
-		EnrichedPositions:      enrichedPositions,
-		Securities:             domainSecurities,
-		TotalPortfolioValueEUR: totalValue,
-		StocksByISIN:           stocksByISIN,
-		CurrentPrices:          currentPrices,
-		AvailableCashEUR:       availableCashEUR,
-		CountryAllocations:     allocations, // These are allocation targets
-		// Populate cooloff maps from trade history and pending orders
-		IneligibleISINs:     make(map[string]bool),
-		RecentlySoldISINs:   recentlySoldISINs,
-		RecentlyBoughtISINs: recentlyBoughtISINs,
-		// Default transaction costs (will be overridden by ApplyConfig)
-		TransactionCostFixed:   2.0,
-		TransactionCostPercent: 0.002,
-		// Default to true (will be overridden by ApplyConfig)
-		AllowBuy:  true,
-		AllowSell: true,
-	}
-
-	return ctx, nil
 }
 
 // loadPlannerConfig loads planner configuration

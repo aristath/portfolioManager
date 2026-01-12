@@ -143,6 +143,7 @@ type Container struct {
 	R2BackupService           *reliability.R2BackupService
 	RestoreService            *reliability.RestoreService
 	QuantumCalculator         *quantum.QuantumProbabilityCalculator
+	OpportunityContextBuilder *services.OpportunityContextBuilder
 
 	// Handlers (will be populated in handlers.go)
 	// Note: Handlers are created per-route, so we don't store them in container

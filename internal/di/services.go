@@ -2,7 +2,9 @@
 package di
 
 import (
+	"database/sql"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -30,6 +32,7 @@ import (
 	planningevaluation "github.com/aristath/sentinel/internal/modules/planning/evaluation"
 	planninghash "github.com/aristath/sentinel/internal/modules/planning/hash"
 	planningplanner "github.com/aristath/sentinel/internal/modules/planning/planner"
+	planningrepo "github.com/aristath/sentinel/internal/modules/planning/repository"
 	planningstatemonitor "github.com/aristath/sentinel/internal/modules/planning/state_monitor"
 	"github.com/aristath/sentinel/internal/modules/portfolio"
 	"github.com/aristath/sentinel/internal/modules/quantum"
@@ -488,6 +491,24 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	)
 	log.Info().Msg("State monitor initialized (not started yet)")
 
+	// Opportunity Context Builder - unified context building for opportunities, planning, and rebalancing
+	container.OpportunityContextBuilder = services.NewOpportunityContextBuilder(
+		&ocbPositionRepoAdapter{repo: container.PositionRepo},
+		&ocbSecurityRepoAdapter{repo: container.SecurityRepo},
+		&ocbAllocationRepoAdapter{repo: container.AllocRepo},
+		&ocbGroupingRepoAdapter{repo: container.GroupingRepo, allocRepo: container.AllocRepo},
+		&ocbTradeRepoAdapter{repo: container.TradeRepo},
+		&ocbScoresRepoAdapter{db: container.PortfolioDB.Conn()},
+		&ocbSettingsRepoAdapter{repo: container.SettingsRepo, configRepo: container.PlannerConfigRepo},
+		&ocbRegimeRepoAdapter{adapter: container.RegimeScoreProvider},
+		&ocbCashManagerAdapter{manager: container.CashManager},
+		&ocbPriceClientAdapter{client: container.YahooClient},
+		container.PriceConversionService,
+		&ocbBrokerClientAdapter{client: container.BrokerClient},
+		log,
+	)
+	log.Info().Msg("Opportunity context builder initialized")
+
 	// ==========================================
 	// STEP 9: Initialize Optimization Services
 	// ==========================================
@@ -585,11 +606,9 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		container.AllocRepo,
 		cashManager,
 		container.BrokerClient,
-		container.YahooClient,
-		container.PriceConversionService,
 		container.PlannerConfigRepo,
 		container.RecommendationRepo,
-		container.PortfolioDB.Conn(),
+		container.OpportunityContextBuilder,
 		container.ConfigDB.Conn(),
 		log,
 	)
@@ -1064,4 +1083,383 @@ func (a *metadataFetcherAdapter) GetSecurityMetadata(tradernetSymbol string, yah
 		Currency:    metadata.Currency,
 		ProductType: metadata.ProductType,
 	}, string(source), nil
+}
+
+// ==========================================
+// Adapters for OpportunityContextBuilder
+// ==========================================
+
+// ocbPositionRepoAdapter adapts portfolio.PositionRepository to services.PositionRepository
+type ocbPositionRepoAdapter struct {
+	repo *portfolio.PositionRepository
+}
+
+func (a *ocbPositionRepoAdapter) GetAll() ([]portfolio.Position, error) {
+	return a.repo.GetAll()
+}
+
+// ocbSecurityRepoAdapter adapts universe.SecurityRepository to services.SecurityRepository
+type ocbSecurityRepoAdapter struct {
+	repo *universe.SecurityRepository
+}
+
+func (a *ocbSecurityRepoAdapter) GetAllActive() ([]universe.Security, error) {
+	return a.repo.GetAllActive()
+}
+
+func (a *ocbSecurityRepoAdapter) GetByISIN(isin string) (*universe.Security, error) {
+	return a.repo.GetByISIN(isin)
+}
+
+func (a *ocbSecurityRepoAdapter) GetBySymbol(symbol string) (*universe.Security, error) {
+	return a.repo.GetBySymbol(symbol)
+}
+
+// ocbAllocationRepoAdapter adapts allocation.Repository to services.AllocationRepository
+type ocbAllocationRepoAdapter struct {
+	repo *allocation.Repository
+}
+
+func (a *ocbAllocationRepoAdapter) GetAll() (map[string]float64, error) {
+	return a.repo.GetAll()
+}
+
+// ocbGroupingRepoAdapter adapts allocation.GroupingRepository to services.GroupingRepository
+type ocbGroupingRepoAdapter struct {
+	repo      *allocation.GroupingRepository
+	allocRepo *allocation.Repository
+}
+
+func (a *ocbGroupingRepoAdapter) GetCountryGroups() (map[string][]string, error) {
+	return a.repo.GetCountryGroups()
+}
+
+func (a *ocbGroupingRepoAdapter) GetIndustryGroups() (map[string][]string, error) {
+	return a.repo.GetIndustryGroups()
+}
+
+func (a *ocbGroupingRepoAdapter) GetGroupWeights(groupType string) (map[string]float64, error) {
+	// Get weights from allocation repository (targets)
+	if a.allocRepo == nil {
+		return make(map[string]float64), nil
+	}
+	return a.allocRepo.GetAll()
+}
+
+// ocbTradeRepoAdapter adapts trading.TradeRepository to services.TradeRepository
+type ocbTradeRepoAdapter struct {
+	repo *trading.TradeRepository
+}
+
+func (a *ocbTradeRepoAdapter) GetRecentlySoldISINs(days int) (map[string]bool, error) {
+	return a.repo.GetRecentlySoldISINs(days)
+}
+
+func (a *ocbTradeRepoAdapter) GetRecentlyBoughtISINs(days int) (map[string]bool, error) {
+	return a.repo.GetRecentlyBoughtISINs(days)
+}
+
+// ocbScoresRepoAdapter adapts database to services.ScoresRepository
+// Uses direct database queries like the scheduler adapters
+type ocbScoresRepoAdapter struct {
+	db *sql.DB // portfolio.db - scores table
+}
+
+func (a *ocbScoresRepoAdapter) GetTotalScores(isinList []string) (map[string]float64, error) {
+	totalScores := make(map[string]float64)
+	if len(isinList) == 0 {
+		return totalScores, nil
+	}
+
+	placeholders := strings.Repeat("?,", len(isinList))
+	placeholders = placeholders[:len(placeholders)-1]
+	query := fmt.Sprintf(`SELECT isin, total_score FROM scores WHERE isin IN (%s) AND total_score IS NOT NULL`, placeholders)
+
+	args := make([]interface{}, len(isinList))
+	for i, isin := range isinList {
+		args[i] = isin
+	}
+
+	rows, err := a.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var isin string
+		var totalScore sql.NullFloat64
+		if err := rows.Scan(&isin, &totalScore); err != nil {
+			continue
+		}
+		if totalScore.Valid && totalScore.Float64 > 0 {
+			totalScores[isin] = totalScore.Float64
+		}
+	}
+	return totalScores, nil
+}
+
+func (a *ocbScoresRepoAdapter) GetCAGRs(isinList []string) (map[string]float64, error) {
+	cagrs := make(map[string]float64)
+	if len(isinList) == 0 {
+		return cagrs, nil
+	}
+
+	query := `SELECT isin, cagr_score FROM scores WHERE cagr_score IS NOT NULL AND cagr_score > 0`
+	rows, err := a.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	isinSet := make(map[string]bool)
+	for _, isin := range isinList {
+		isinSet[isin] = true
+	}
+
+	for rows.Next() {
+		var isin string
+		var cagrScore sql.NullFloat64
+		if err := rows.Scan(&isin, &cagrScore); err != nil {
+			continue
+		}
+		if !isinSet[isin] {
+			continue
+		}
+		if cagrScore.Valid && cagrScore.Float64 > 0 {
+			// Convert CAGR score (0-100) to CAGR value (e.g., 0.11 for 11%)
+			cagrValue := (cagrScore.Float64 / 100.0) * 0.30 // Assuming max 30% CAGR
+			if cagrValue > 0 {
+				cagrs[isin] = cagrValue
+			}
+		}
+	}
+	return cagrs, nil
+}
+
+func (a *ocbScoresRepoAdapter) GetQualityScores(isinList []string) (map[string]float64, map[string]float64, error) {
+	longTermScores := make(map[string]float64)
+	fundamentalsScores := make(map[string]float64)
+	if len(isinList) == 0 {
+		return longTermScores, fundamentalsScores, nil
+	}
+
+	query := `SELECT isin, cagr_score, fundamental_score FROM scores WHERE isin != '' AND isin IS NOT NULL`
+	rows, err := a.db.Query(query)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+
+	isinSet := make(map[string]bool)
+	for _, isin := range isinList {
+		isinSet[isin] = true
+	}
+
+	for rows.Next() {
+		var isin string
+		var cagrScore, fundamentalScore sql.NullFloat64
+		if err := rows.Scan(&isin, &cagrScore, &fundamentalScore); err != nil {
+			continue
+		}
+		if !isinSet[isin] {
+			continue
+		}
+		if cagrScore.Valid {
+			normalized := math.Max(0.0, math.Min(1.0, cagrScore.Float64/100.0))
+			longTermScores[isin] = normalized
+		}
+		if fundamentalScore.Valid {
+			normalized := math.Max(0.0, math.Min(1.0, fundamentalScore.Float64/100.0))
+			fundamentalsScores[isin] = normalized
+		}
+	}
+	return longTermScores, fundamentalsScores, nil
+}
+
+func (a *ocbScoresRepoAdapter) GetValueTrapData(isinList []string) (map[string]float64, map[string]float64, map[string]float64, error) {
+	opportunityScores := make(map[string]float64)
+	momentumScores := make(map[string]float64)
+	volatility := make(map[string]float64)
+	if len(isinList) == 0 {
+		return opportunityScores, momentumScores, volatility, nil
+	}
+
+	placeholders := strings.Repeat("?,", len(isinList))
+	placeholders = placeholders[:len(placeholders)-1]
+	query := fmt.Sprintf(`SELECT isin, opportunity_score, volatility, drawdown_score FROM scores WHERE isin IN (%s)`, placeholders)
+
+	args := make([]interface{}, len(isinList))
+	for i, isin := range isinList {
+		args[i] = isin
+	}
+
+	rows, err := a.db.Query(query, args...)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var isin string
+		var opportunityScore, vol, drawdownScore sql.NullFloat64
+		if err := rows.Scan(&isin, &opportunityScore, &vol, &drawdownScore); err != nil {
+			continue
+		}
+		if opportunityScore.Valid {
+			normalized := math.Max(0.0, math.Min(1.0, opportunityScore.Float64/100.0))
+			opportunityScores[isin] = normalized
+		}
+		if vol.Valid && vol.Float64 > 0 {
+			volatility[isin] = vol.Float64
+		}
+		if drawdownScore.Valid {
+			rawDrawdown := math.Max(-1.0, math.Min(0.0, drawdownScore.Float64/100.0))
+			momentum := 1.0 + rawDrawdown
+			momentum = (momentum * 2.0) - 1.0
+			momentum = math.Max(-1.0, math.Min(1.0, momentum))
+			momentumScores[isin] = momentum
+		}
+	}
+	return opportunityScores, momentumScores, volatility, nil
+}
+
+func (a *ocbScoresRepoAdapter) GetRiskMetrics(isinList []string) (map[string]float64, map[string]float64, error) {
+	sharpe := make(map[string]float64)
+	maxDrawdown := make(map[string]float64)
+	if len(isinList) == 0 {
+		return sharpe, maxDrawdown, nil
+	}
+
+	placeholders := strings.Repeat("?,", len(isinList))
+	placeholders = placeholders[:len(placeholders)-1]
+	query := fmt.Sprintf(`SELECT isin, sharpe_score, drawdown_score FROM scores WHERE isin IN (%s)`, placeholders)
+
+	args := make([]interface{}, len(isinList))
+	for i, isin := range isinList {
+		args[i] = isin
+	}
+
+	rows, err := a.db.Query(query, args...)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var isin string
+		var sharpeScore, drawdownScore sql.NullFloat64
+		if err := rows.Scan(&isin, &sharpeScore, &drawdownScore); err != nil {
+			continue
+		}
+		if sharpeScore.Valid {
+			// Sharpe score (0-100) to ratio (e.g., 1.5)
+			sharpe[isin] = (sharpeScore.Float64 / 100.0) * 3.0 // Max 3.0 Sharpe
+		}
+		if drawdownScore.Valid {
+			// Drawdown score to max drawdown (negative percentage)
+			maxDrawdown[isin] = -(100.0 - drawdownScore.Float64) / 100.0
+		}
+	}
+	return sharpe, maxDrawdown, nil
+}
+
+// ocbSettingsRepoAdapter adapts settings.Repository to services.SettingsRepository
+type ocbSettingsRepoAdapter struct {
+	repo       *settings.Repository
+	configRepo *planningrepo.ConfigRepository
+}
+
+func (a *ocbSettingsRepoAdapter) GetTargetReturnSettings() (float64, float64, error) {
+	// Get from planner config if available
+	if a.configRepo != nil {
+		config, err := a.configRepo.GetDefaultConfig()
+		if err == nil && config != nil {
+			return config.OptimizerTargetReturn, 0.80, nil // OptimizerTargetReturn is the target return setting
+		}
+	}
+	return 0.11, 0.80, nil // Defaults: 11% target return, 80% threshold
+}
+
+func (a *ocbSettingsRepoAdapter) GetCooloffDays() (int, error) {
+	if a.configRepo != nil {
+		config, err := a.configRepo.GetDefaultConfig()
+		if err == nil && config != nil && config.SellCooldownDays > 0 {
+			return config.SellCooldownDays, nil
+		}
+	}
+	return 180, nil // Default
+}
+
+func (a *ocbSettingsRepoAdapter) GetVirtualTestCash() (float64, error) {
+	if a.repo == nil {
+		return 0, nil
+	}
+	// Check if research mode is enabled
+	val, err := a.repo.Get("research_mode")
+	if err != nil || val == nil || *val != "true" {
+		return 0, nil
+	}
+	// Get virtual test cash amount
+	cashStr, err := a.repo.Get("virtual_test_cash")
+	if err != nil || cashStr == nil {
+		return 0, nil
+	}
+	var cash float64
+	if _, err := fmt.Sscanf(*cashStr, "%f", &cash); err != nil {
+		return 0, nil
+	}
+	return cash, nil
+}
+
+// ocbRegimeRepoAdapter adapts market_regime.RegimeScoreProviderAdapter to services.RegimeRepository
+type ocbRegimeRepoAdapter struct {
+	adapter *market_regime.RegimeScoreProviderAdapter
+}
+
+func (a *ocbRegimeRepoAdapter) GetCurrentRegimeScore() (float64, error) {
+	if a.adapter == nil {
+		return 0.0, nil
+	}
+	return a.adapter.GetCurrentRegimeScore()
+}
+
+// ocbCashManagerAdapter adapts domain.CashManager to services.CashManager
+type ocbCashManagerAdapter struct {
+	manager domain.CashManager
+}
+
+func (a *ocbCashManagerAdapter) GetAllCashBalances() (map[string]float64, error) {
+	return a.manager.GetAllCashBalances()
+}
+
+// ocbPriceClientAdapter adapts yahoo.NativeClient to services.PriceClient
+type ocbPriceClientAdapter struct {
+	client *yahoo.NativeClient
+}
+
+func (a *ocbPriceClientAdapter) GetBatchQuotes(symbolMap map[string]*string) (map[string]*float64, error) {
+	if a.client == nil {
+		return nil, fmt.Errorf("yahoo client not available")
+	}
+	return a.client.GetBatchQuotes(symbolMap)
+}
+
+// ocbBrokerClientAdapter adapts domain.BrokerClient to services.BrokerClient (for OCB)
+type ocbBrokerClientAdapter struct {
+	client domain.BrokerClient
+}
+
+func (a *ocbBrokerClientAdapter) IsConnected() bool {
+	if a.client == nil {
+		return false
+	}
+	return a.client.IsConnected()
+}
+
+func (a *ocbBrokerClientAdapter) GetPendingOrders() ([]domain.BrokerPendingOrder, error) {
+	if a.client == nil {
+		return nil, fmt.Errorf("broker client not available")
+	}
+	return a.client.GetPendingOrders()
 }
