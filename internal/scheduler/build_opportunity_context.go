@@ -66,7 +66,7 @@ func (j *BuildOpportunityContextJob) Run() error {
 	}
 
 	// Apply optimizer target weights if available
-	if j.optimizerTargetWeights != nil && len(j.optimizerTargetWeights) > 0 {
+	if len(j.optimizerTargetWeights) > 0 {
 		ctx.TargetWeights = j.optimizerTargetWeights
 		j.log.Debug().Int("count", len(j.optimizerTargetWeights)).Msg("Applied optimizer target weights")
 	}

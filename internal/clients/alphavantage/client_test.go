@@ -12,14 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// newTestClient creates a client with a test server.
-func newTestClient(t *testing.T, handler http.HandlerFunc) (*Client, *httptest.Server) {
-	server := httptest.NewServer(handler)
-	client := NewClient("test-api-key", zerolog.Nop())
-	// Override the base URL - we'll use a custom doRequest for testing
-	return client, server
-}
-
 // TestNewClient tests client creation.
 func TestNewClient(t *testing.T) {
 	client := NewClient("test-key", zerolog.Nop())
@@ -723,9 +715,3 @@ func TestInterfaceImplementation(t *testing.T) {
 	var _ ClientInterface = (*Client)(nil)
 }
 
-// mockResponse creates a JSON response for testing.
-func mockResponse(t *testing.T, data interface{}) []byte {
-	b, err := json.Marshal(data)
-	require.NoError(t, err)
-	return b
-}

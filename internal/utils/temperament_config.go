@@ -1880,12 +1880,10 @@ func GetAdjustedValue(mapping TemperamentMapping, riskTolerance, aggression, pat
 
 	// Determine progression based on Inverse flag
 	progression := mapping.Progression
-	if mapping.Inverse {
-		// For inverse relationships, we use the reverse progression
-		// but we also want value=0 to give Max and value=1 to give Min
-		// The existing GetTemperamentValue handles reverse progressions
-		// by swapping the output endpoints
-	}
+	// Note: For inverse relationships, we use the reverse progression
+	// but we also want value=0 to give Max and value=1 to give Min
+	// The existing GetTemperamentValue handles reverse progressions
+	// by swapping the output endpoints
 
 	// Use the existing GetTemperamentValue function
 	params := TemperamentParams{

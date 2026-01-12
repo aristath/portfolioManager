@@ -410,6 +410,7 @@ func TestIndicatorDataStructure(t *testing.T) {
 
 	assert.Equal(t, "IBM", data.Symbol)
 	assert.Equal(t, "daily", data.Interval)
+	assert.Equal(t, "daily", data.Interval)
 	assert.Len(t, data.Values, 1)
 }
 
@@ -429,6 +430,7 @@ func TestMACDDataStructure(t *testing.T) {
 	}
 
 	assert.Equal(t, "IBM", data.Symbol)
+	assert.Equal(t, "daily", data.Interval)
 	assert.Len(t, data.Values, 1)
 	assert.Equal(t, 1.5, data.Values[0].MACD)
 }
@@ -449,6 +451,7 @@ func TestBollingerDataStructure(t *testing.T) {
 	}
 
 	assert.Equal(t, "IBM", data.Symbol)
+	assert.Equal(t, "daily", data.Interval)
 	assert.Len(t, data.Values, 1)
 	assert.Equal(t, 190.5, data.Values[0].UpperBand)
 }

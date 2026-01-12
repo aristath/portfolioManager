@@ -292,5 +292,11 @@ func TestMappingResult_Fields(t *testing.T) {
 	assert.Equal(t, "AAPL", result.Ticker)
 	assert.Equal(t, "US", result.ExchCode)
 	assert.Equal(t, "APPLE INC", result.Name)
+	assert.Equal(t, "Equity", result.MarketSector)
+	assert.Equal(t, "BBG000B9XRY4", result.CompositeFIGI)
+	assert.Equal(t, "BBG001S5N8V8", result.ShareClassFIGI)
+	assert.Equal(t, "EQ0010169500001000", result.UniqueID)
+	assert.Equal(t, "Common Stock", result.SecurityType2)
+	assert.Equal(t, "Equity", result.MarketSectorDes)
 	assert.Equal(t, "Common Stock", result.SecurityType)
 }

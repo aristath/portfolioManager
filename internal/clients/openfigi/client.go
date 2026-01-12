@@ -18,8 +18,7 @@ import (
 const (
 	defaultBaseURL = "https://api.openfigi.com/v3"
 	// Rate limits: 25 requests/minute without API key, 25,000 with key
-	rateLimitWithoutKey = 25
-	rateLimitWithKey    = 25000
+	// (Actual rate limiting handled in the client implementation)
 )
 
 // MappingRequest represents a request to the OpenFIGI mapping API.

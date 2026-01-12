@@ -36,7 +36,7 @@ func TestBuildOpportunityContextJob_Integration_WeightsApplication(t *testing.T)
 	}
 
 	// Apply optimizer weights (as Run() does)
-	if job.optimizerTargetWeights != nil && len(job.optimizerTargetWeights) > 0 {
+	if len(job.optimizerTargetWeights) > 0 {
 		job.opportunityContext.TargetWeights = job.optimizerTargetWeights
 	}
 

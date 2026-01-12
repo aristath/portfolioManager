@@ -384,7 +384,7 @@ func (s *SecuritySetupService) AddSecurityByIdentifier(
 	}
 
 	var country, fullExchangeName, industry *string
-	var productType ProductType = ProductTypeUnknown
+	var productType = ProductTypeUnknown
 
 	// Use MetadataFetcher if available, otherwise fall back to Yahoo client directly
 	if s.metadataFetcher != nil {

@@ -332,7 +332,7 @@ func parseGlobalQuote(body []byte) (*GlobalQuote, error) {
 		return nil, err
 	}
 
-	if response.GlobalQuote == nil || len(response.GlobalQuote) == 0 {
+	if len(response.GlobalQuote) == 0 {
 		return nil, fmt.Errorf("no quote data in response")
 	}
 

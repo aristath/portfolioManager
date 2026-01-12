@@ -41,7 +41,7 @@ type TagSettingsService interface {
 	GetAdjustedVolatilityParams() VolatilityParams
 }
 
-// Threshold types for temperament-aware configuration (mirrors settings types)
+// ValueThresholds defines threshold types for temperament-aware configuration (mirrors settings types).
 type ValueThresholds struct {
 	ValueOpportunityDiscountPct float64
 	DeepValueDiscountPct        float64

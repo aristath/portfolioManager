@@ -165,10 +165,8 @@ func createTestDataFetcher(broker *MockBrokerClient, yahooMock *MockYahooClientD
 	})
 
 	// Override priorities if provided
-	if priorities != nil {
-		for dataType, sources := range priorities {
-			router.priorities[dataType] = sources
-		}
+	for dataType, sources := range priorities {
+		router.priorities[dataType] = sources
 	}
 
 	// Create symbol mapper
