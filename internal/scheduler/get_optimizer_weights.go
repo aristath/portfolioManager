@@ -133,7 +133,7 @@ func (j *GetOptimizerWeightsJob) Run() error {
 		return fmt.Errorf("failed to get allocations: %w", err)
 	}
 
-	// Step 7: Extract country and industry targets
+	// Step 7: Extract country and industry targets (raw - normalization happens in constraints)
 	countryTargets := make(map[string]float64)
 	industryTargets := make(map[string]float64)
 	for key, value := range allocations {

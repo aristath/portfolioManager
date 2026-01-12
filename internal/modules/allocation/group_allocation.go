@@ -88,18 +88,22 @@ func aggregateByGroupMulti(
 	return groupValues
 }
 
-// buildGroupAllocations creates GroupAllocation structs from group values and targets
+// buildGroupAllocations creates GroupAllocation structs from group values and targets.
+// groupTargets are raw weights that get normalized internally for deviation calculations.
 func buildGroupAllocations(
 	groupValues map[string]float64,
 	groupTargets map[string]float64,
 	totalValue float64,
 ) []GroupAllocation {
+	// Normalize targets for deviation calculations
+	normalizedTargets := NormalizeWeights(groupTargets)
+
 	// Collect all group names (from both values and targets)
 	groupNames := make(map[string]bool)
 	for name := range groupValues {
 		groupNames[name] = true
 	}
-	for name := range groupTargets {
+	for name := range normalizedTargets {
 		groupNames[name] = true
 	}
 
@@ -107,7 +111,7 @@ func buildGroupAllocations(
 	var allocations []GroupAllocation
 	for groupName := range groupNames {
 		currentValue := groupValues[groupName]
-		targetPct := groupTargets[groupName]
+		targetPct := normalizedTargets[groupName]
 
 		var currentPct float64
 		if totalValue > 0 {

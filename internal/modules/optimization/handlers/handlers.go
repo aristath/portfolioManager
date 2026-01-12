@@ -2,10 +2,6 @@
 package handlers
 
 import (
-	"github.com/aristath/sentinel/internal/modules/optimization"
-)
-
-import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -17,6 +13,7 @@ import (
 	"github.com/aristath/sentinel/internal/clients/yahoo"
 	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/modules/dividends"
+	"github.com/aristath/sentinel/internal/modules/optimization"
 	planningrepo "github.com/aristath/sentinel/internal/modules/planning/repository"
 	"github.com/aristath/sentinel/internal/services"
 	"github.com/rs/zerolog"
@@ -191,7 +188,7 @@ func (h *Handler) HandleRun(w http.ResponseWriter, r *http.Request) {
 		dividendBonuses = make(map[string]float64)
 	}
 
-	// 9. Build portfolio state
+	// 9. Build portfolio state (raw targets - normalization happens in constraints)
 	state := optimization.PortfolioState{
 		Securities:      securities,
 		Positions:       positions,

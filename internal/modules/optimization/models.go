@@ -49,15 +49,21 @@ type ConstraintsSummary struct {
 // Input types
 
 // PortfolioState represents the current state of the portfolio for optimization.
+// All map keys use ISIN as the identifier (not Symbol).
 type PortfolioState struct {
-	Securities      []Security
-	Positions       map[string]Position
-	PortfolioValue  float64
-	CurrentPrices   map[string]float64
-	CashBalance     float64
-	CountryTargets  map[string]float64
+	Securities     []Security
+	Positions      map[string]Position // ISIN -> Position
+	PortfolioValue float64
+	CurrentPrices  map[string]float64 // ISIN -> price in EUR
+	CashBalance    float64
+	// CountryTargets holds RAW allocation weights as configured by user.
+	// These are NOT normalized - normalization happens in buildSectorConstraints().
+	// Example: {EU: 0.8, US: 0.8, Asia: 0.4} - arbitrary numbers, not percentages.
+	CountryTargets map[string]float64
+	// IndustryTargets holds RAW allocation weights as configured by user.
+	// These are NOT normalized - normalization happens in buildSectorConstraints().
 	IndustryTargets map[string]float64
-	DividendBonuses map[string]float64
+	DividendBonuses map[string]float64 // ISIN -> bonus amount
 }
 
 // Security represents a security for optimization.

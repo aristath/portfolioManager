@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/aristath/sentinel/internal/modules/allocation"
 	"github.com/rs/zerolog"
 )
 
@@ -222,11 +223,16 @@ func (cm *ConstraintsManager) calculateWeightBounds(
 
 // buildSectorConstraints builds country and industry sector constraints.
 // Uses ISIN keys in SectorMapper.
+// countryTargets and industryTargets are raw weights that get normalized internally.
 func (cm *ConstraintsManager) buildSectorConstraints(
 	securities []Security,
 	countryTargets map[string]float64,
 	industryTargets map[string]float64,
 ) ([]SectorConstraint, []SectorConstraint) {
+	// Normalize targets for constraint building
+	normalizedCountryTargets := allocation.NormalizeWeights(countryTargets)
+	normalizedIndustryTargets := allocation.NormalizeWeights(industryTargets)
+
 	// Group securities by country (use ISINs)
 	countryGroups := make(map[string][]string)
 	for _, security := range securities {
@@ -258,7 +264,7 @@ func (cm *ConstraintsManager) buildSectorConstraints(
 	// Build country constraints
 	countryConstraints := make([]SectorConstraint, 0)
 	for country, isins := range countryGroups { // Renamed from symbols
-		target := countryTargets[country]
+		target := normalizedCountryTargets[country]
 		if target > 0 {
 			// Calculate tolerance-based bounds
 			toleranceUpper := math.Min(1.0, target+cm.geoTolerance)
@@ -308,7 +314,7 @@ func (cm *ConstraintsManager) buildSectorConstraints(
 	// Count industries with targets
 	numIndustryConstraints := 0
 	for industry := range industryGroups {
-		if industryTargets[industry] > 0 {
+		if normalizedIndustryTargets[industry] > 0 {
 			numIndustryConstraints++
 		}
 	}
@@ -328,7 +334,7 @@ func (cm *ConstraintsManager) buildSectorConstraints(
 
 	industryConstraints := make([]SectorConstraint, 0)
 	for industry, isins := range industryGroups { // Renamed from symbols
-		target := industryTargets[industry]
+		target := normalizedIndustryTargets[industry]
 		if target > 0 {
 			// Calculate tolerance-based bounds
 			toleranceUpper := math.Min(1.0, target+cm.indTolerance)

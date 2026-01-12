@@ -101,64 +101,36 @@ func (r *Repository) GetByType(targetType string) ([]AllocationTarget, error) {
 	return targets, nil
 }
 
-// GetCountryGroupTargets returns country group allocation targets
-// Faithful translation of Python: async def get_country_group_targets(self) -> Dict[str, float]
+// GetCountryGroupTargets returns country group allocation targets as raw weights.
+// The returned weights are NOT normalized - call NormalizeWeights() when needed for calculations.
 func (r *Repository) GetCountryGroupTargets() (map[string]float64, error) {
 	targets, err := r.GetByType("country_group")
 	if err != nil {
 		return nil, err
 	}
 
-	rawWeights := make(map[string]float64)
+	result := make(map[string]float64)
 	for _, t := range targets {
-		rawWeights[t.Name] = t.TargetPct
+		result[t.Name] = t.TargetPct
 	}
 
-	// Normalize weights to sum to 1.0 (100%)
-	totalWeight := 0.0
-	for _, weight := range rawWeights {
-		totalWeight += weight
-	}
-
-	if totalWeight > 0 {
-		result := make(map[string]float64)
-		for name, weight := range rawWeights {
-			result[name] = weight / totalWeight
-		}
-		return result, nil
-	}
-
-	return rawWeights, nil
+	return result, nil
 }
 
-// GetIndustryGroupTargets returns industry group allocation targets
-// Faithful translation of Python: async def get_industry_group_targets(self) -> Dict[str, float]
+// GetIndustryGroupTargets returns industry group allocation targets as raw weights.
+// The returned weights are NOT normalized - call NormalizeWeights() when needed for calculations.
 func (r *Repository) GetIndustryGroupTargets() (map[string]float64, error) {
 	targets, err := r.GetByType("industry_group")
 	if err != nil {
 		return nil, err
 	}
 
-	rawWeights := make(map[string]float64)
+	result := make(map[string]float64)
 	for _, t := range targets {
-		rawWeights[t.Name] = t.TargetPct
+		result[t.Name] = t.TargetPct
 	}
 
-	// Normalize weights to sum to 1.0 (100%)
-	totalWeight := 0.0
-	for _, weight := range rawWeights {
-		totalWeight += weight
-	}
-
-	if totalWeight > 0 {
-		result := make(map[string]float64)
-		for name, weight := range rawWeights {
-			result[name] = weight / totalWeight
-		}
-		return result, nil
-	}
-
-	return rawWeights, nil
+	return result, nil
 }
 
 // Upsert inserts or updates an allocation target
