@@ -4,15 +4,18 @@ package database
 import (
 	"context"
 	"database/sql"
+	"embed"
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
 	_ "modernc.org/sqlite" // Pure Go SQLite driver
 )
+
+//go:embed schemas/*.sql
+var schemaFiles embed.FS
 
 // DatabaseProfile defines different configuration profiles for databases
 type DatabaseProfile string
@@ -101,43 +104,16 @@ func New(cfg Config) (*DB, error) {
 	return db, nil
 }
 
-// findSchemasDirectory locates the schemas directory using the source code location.
-// This is the architecturally correct approach because:
-// 1. Schemas are part of the source code, not the database file
-// 2. Works regardless of where the database file is located (tests, CI, production)
-// 3. Works regardless of working directory
-// 4. Works regardless of executable location
-//
-// It uses runtime.Caller to find the db.go file location, then derives the schemas
-// directory as a sibling directory (internal/database/schemas/).
-func findSchemasDirectory() (string, error) {
-	// Get this function's file path (db.go)
-	// Caller(0) = this function (findSchemasDirectory)
-	_, currentFile, _, ok := runtime.Caller(0)
-	if !ok {
-		return "", fmt.Errorf("failed to get caller information")
-	}
-
-	// Get the absolute path of this source file
-	absFile, err := filepath.Abs(currentFile)
+// getSchemaContent retrieves schema content from embedded files.
+// This ensures schemas are always available regardless of where the binary is deployed.
+func getSchemaContent(schemaFile string) ([]byte, error) {
+	// Schema files are embedded in schemas/ directory
+	path := "schemas/" + schemaFile
+	content, err := schemaFiles.ReadFile(path)
 	if err != nil {
-		return "", fmt.Errorf("failed to get absolute path of source file: %w", err)
+		return nil, fmt.Errorf("failed to read embedded schema file %s: %w", schemaFile, err)
 	}
-
-	// This file is at internal/database/db.go
-	// Schemas are at internal/database/schemas/
-	// So we go from db.go's directory to schemas/
-	dbDir := filepath.Dir(absFile)
-	schemasDir := filepath.Join(dbDir, "schemas")
-
-	// Verify the schemas directory exists
-	if info, err := os.Stat(schemasDir); err != nil {
-		return "", fmt.Errorf("schemas directory not found at %s: %w", schemasDir, err)
-	} else if !info.IsDir() {
-		return "", fmt.Errorf("schemas path exists but is not a directory: %s", schemasDir)
-	}
-
-	return schemasDir, nil
+	return content, nil
 }
 
 // buildConnectionString creates SQLite connection string with profile-specific PRAGMAs
@@ -225,11 +201,12 @@ func (db *DB) Path() string {
 	return db.path
 }
 
-// Migrate applies the database schema from the schemas directory
-// This is the single source of truth for each database's schema
+// Migrate applies the database schema from embedded schema files.
+// This is the single source of truth for each database's schema.
+// Schemas are embedded in the binary, ensuring they're always available.
 func (db *DB) Migrate() error {
 	// Map database names to their schema files
-	schemaFiles := map[string]string{
+	schemaFileMap := map[string]string{
 		"universe":    "universe_schema.sql",
 		"config":      "config_schema.sql",
 		"ledger":      "ledger_schema.sql",
@@ -239,28 +216,16 @@ func (db *DB) Migrate() error {
 		"client_data": "client_data_schema.sql",
 	}
 
-	schemaFile, ok := schemaFiles[db.name]
+	schemaFile, ok := schemaFileMap[db.name]
 	if !ok {
 		// Unknown database name, skip migration
 		return nil
 	}
 
-	// Find schemas directory using source code location
-	// This is architecturally correct: schemas are always relative to the source code,
-	// not the database file location. This works in tests, CI, and production.
-	schemasDir, err := findSchemasDirectory()
+	// Read schema content from embedded files
+	content, err := getSchemaContent(schemaFile)
 	if err != nil {
-		// If we can't find schemas directory, skip migration (tables may already exist)
-		// This allows the system to work even if schemas aren't available
-		return nil
-	}
-
-	// Read and execute the schema file
-	schemaPath := filepath.Join(schemasDir, schemaFile)
-	content, err := os.ReadFile(schemaPath)
-	if err != nil {
-		// Schema file doesn't exist, skip (tables may already exist)
-		return nil
+		return fmt.Errorf("failed to get schema content for %s: %w", db.name, err)
 	}
 
 	// Execute schema within a transaction
