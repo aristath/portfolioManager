@@ -54,6 +54,7 @@ type SettingsRepository interface {
 	GetTargetReturnSettings() (targetReturn, thresholdPct float64, err error)
 	GetCooloffDays() (int, error)
 	GetVirtualTestCash() (float64, error)
+	IsCooloffDisabled() (bool, error) // Returns true if cooloff checks should be skipped (research mode only)
 }
 
 // RegimeRepository provides access to market regime data.

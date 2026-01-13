@@ -1494,6 +1494,27 @@ func (a *ocbSettingsRepoAdapter) GetVirtualTestCash() (float64, error) {
 	return cash, nil
 }
 
+func (a *ocbSettingsRepoAdapter) IsCooloffDisabled() (bool, error) {
+	if a.repo == nil {
+		return false, nil
+	}
+	// Check if research mode is enabled - cooloff can only be disabled in research mode
+	modeVal, err := a.repo.Get("trading_mode")
+	if err != nil || modeVal == nil || *modeVal != "research" {
+		return false, nil
+	}
+	// Check if cooloff checks are disabled
+	val, err := a.repo.Get("disable_cooloff_checks")
+	if err != nil || val == nil {
+		return false, nil
+	}
+	var disabled float64
+	if _, err := fmt.Sscanf(*val, "%f", &disabled); err != nil {
+		return false, nil
+	}
+	return disabled >= 1.0, nil
+}
+
 // ocbRegimeRepoAdapter adapts market_regime.RegimeScoreProviderAdapter to services.RegimeRepository
 type ocbRegimeRepoAdapter struct {
 	adapter *market_regime.RegimeScoreProviderAdapter

@@ -108,6 +108,9 @@ var SettingDefaults = map[string]interface{}{
 	// Virtual test currency (for testing planner in research mode)
 	"virtual_test_cash": 0.0, // TEST currency amount (only visible in research mode)
 
+	// Cooloff bypass (for testing planner in research mode)
+	"disable_cooloff_checks": 0.0, // 1.0 = disable cooloff checks (only effective in research mode)
+
 	// Portfolio Display Mode settings
 	"display_mode":               "STATS", // Display mode: "STATS" (CPU/RAM), "TICKER", or "PORTFOLIO"
 	"display_min_cluster_size":   5.0,     // Minimum pixels per top holding cluster

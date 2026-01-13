@@ -137,13 +137,15 @@ func (m *ocbMockScoresRepository) GetRiskMetrics(isinList []string) (map[string]
 }
 
 type ocbMockSettingsRepository struct {
-	targetReturn    float64
-	thresholdPct    float64
-	cooloffDays     int
-	virtualTestCash float64
-	targetReturnErr error
-	cooloffErr      error
-	virtualCashErr  error
+	targetReturn      float64
+	thresholdPct      float64
+	cooloffDays       int
+	virtualTestCash   float64
+	cooloffDisabled   bool
+	targetReturnErr   error
+	cooloffErr        error
+	virtualCashErr    error
+	cooloffDisableErr error
 }
 
 func (m *ocbMockSettingsRepository) GetTargetReturnSettings() (float64, float64, error) {
@@ -159,6 +161,10 @@ func (m *ocbMockSettingsRepository) GetCooloffDays() (int, error) {
 
 func (m *ocbMockSettingsRepository) GetVirtualTestCash() (float64, error) {
 	return m.virtualTestCash, m.virtualCashErr
+}
+
+func (m *ocbMockSettingsRepository) IsCooloffDisabled() (bool, error) {
+	return m.cooloffDisabled, m.cooloffDisableErr
 }
 
 type ocbMockRegimeRepository struct {

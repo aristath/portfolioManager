@@ -557,6 +557,14 @@ func (b *OpportunityContextBuilder) populateCooloffFromTrades() (map[string]bool
 		return recentlySold, recentlyBought
 	}
 
+	// Check if cooloff is disabled (only works in research mode)
+	if b.settingsRepo != nil {
+		if disabled, err := b.settingsRepo.IsCooloffDisabled(); err == nil && disabled {
+			b.log.Info().Msg("Cooloff checks disabled - skipping trade-based cooloff")
+			return recentlySold, recentlyBought
+		}
+	}
+
 	// Get cooloff days from settings
 	cooloffDays := 180 // Default
 	if b.settingsRepo != nil {
@@ -597,6 +605,14 @@ func (b *OpportunityContextBuilder) addPendingOrdersToCooloff(
 	recentlyBought map[string]bool,
 	symbolToISIN map[string]string,
 ) {
+	// Check if cooloff is disabled (only works in research mode)
+	if b.settingsRepo != nil {
+		if disabled, err := b.settingsRepo.IsCooloffDisabled(); err == nil && disabled {
+			b.log.Info().Msg("Cooloff checks disabled - skipping pending orders cooloff")
+			return
+		}
+	}
+
 	if b.brokerClient == nil || !b.brokerClient.IsConnected() {
 		b.log.Debug().Msg("Broker not connected, skipping pending orders for cooloff")
 		return
