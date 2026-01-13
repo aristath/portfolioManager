@@ -11,7 +11,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// Default display URL (App Lab Web UI Brick - default port 7000)
+// DefaultDisplayURL is the default display URL (App Lab Web UI Brick - default port 7000)
 const DefaultDisplayURL = "http://localhost:7000"
 
 // LEDColor represents RGB color values (0-255)

@@ -1,3 +1,4 @@
+// Package handlers provides HTTP handlers for the planning module.
 package handlers
 
 import (

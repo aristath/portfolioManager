@@ -1,3 +1,4 @@
+// Package planner provides the core planning logic for portfolio recommendations.
 package planner
 
 import (
