@@ -122,3 +122,27 @@ type ConcentrationAlert struct {
 	LimitPct          float64
 	AlertThresholdPct float64
 }
+
+// BrokerSymbolRepositoryInterface defines the contract for broker symbol mapping operations.
+// This interface is defined in the domain layer to avoid circular dependencies between
+// services and universe packages (clean architecture - dependency inversion).
+type BrokerSymbolRepositoryInterface interface {
+	// GetBrokerSymbol returns the broker-specific symbol for a given ISIN and broker name.
+	// Returns error if mapping doesn't exist (fail-fast approach).
+	GetBrokerSymbol(isin, brokerName string) (string, error)
+
+	// SetBrokerSymbol creates or updates a broker symbol mapping.
+	// Replaces existing mapping if present (upsert operation).
+	SetBrokerSymbol(isin, brokerName, symbol string) error
+
+	// GetAllBrokerSymbols returns all broker symbols for a given ISIN.
+	// Returns a map of broker_name -> broker_symbol.
+	GetAllBrokerSymbols(isin string) (map[string]string, error)
+
+	// GetISINByBrokerSymbol performs reverse lookup: finds ISIN by broker symbol.
+	// Returns error if mapping doesn't exist.
+	GetISINByBrokerSymbol(brokerName, brokerSymbol string) (string, error)
+
+	// DeleteBrokerSymbol removes a broker symbol mapping for an ISIN/broker pair.
+	DeleteBrokerSymbol(isin, brokerName string) error
+}

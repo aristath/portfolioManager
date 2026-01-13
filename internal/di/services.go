@@ -128,6 +128,13 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	container.SymbolMapper = symbols.NewMapper()
 	log.Info().Msg("Symbol mapper initialized")
 
+	// Broker symbol mapper for converting ISINs to broker-specific symbols
+	// Note: BrokerSymbolRepo must be initialized in InitializeRepositories first
+	if container.BrokerSymbolRepo != nil {
+		container.BrokerSymbolMapper = services.NewBrokerSymbolMapper(container.BrokerSymbolRepo)
+		log.Info().Msg("Broker symbol mapper initialized")
+	}
+
 	// Configure display service (App Lab HTTP API on localhost:7000)
 	// displayManager can be nil in tests - skip display configuration if nil
 	if displayManager != nil {
