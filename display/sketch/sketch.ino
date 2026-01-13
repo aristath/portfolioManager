@@ -36,6 +36,28 @@ int scrollOffset = 0;
 unsigned long lastScrollTime = 0;
 int scrollSpeed = 80;  // ms per pixel
 
+// Portfolio health animation state
+#define MAX_SECURITIES 20
+
+struct SecurityCluster {
+    char symbol[11];      // Symbol (10 chars + null terminator)
+    uint8_t health;       // Health 0-100
+    float centerX;        // Floating point position (0-12.99)
+    float centerY;        // Floating point position (0-7.99)
+    float velocityX;      // Movement velocity
+    float velocityY;
+    float noiseOffsetX;   // Perlin noise offset
+    float noiseOffsetY;
+    float radius;         // Cluster size
+    bool active;          // Is this cluster active?
+};
+
+SecurityCluster clusters[MAX_SECURITIES];
+uint8_t numActiveClusters = 0;
+bool healthMode = false;
+unsigned long lastHealthFrame = 0;
+uint16_t healthFrameInterval = 16; // ~60 FPS
+
 // 5x7 bitmap font - each character is 5 columns, stored as column bytes (LSB = top row)
 // Only uppercase letters, numbers, and common symbols
 const uint8_t FONT_WIDTH = 5;
@@ -223,8 +245,9 @@ void clearMatrix() {
  * Fills pixels from left-to-right, top-to-bottom
  */
 void setPixelCount(int pixelsOn) {
-    // Stop any scrolling
+    // Stop any scrolling and health mode
     currentText = "";
+    healthMode = false;
     
     pixelsOn = constrain(pixelsOn, 0, MATRIX_ROWS * MATRIX_COLS);
     
@@ -235,6 +258,239 @@ void setPixelCount(int pixelsOn) {
     }
     
     matrix.draw(frame);
+}
+
+// ============================================================================
+// PORTFOLIO HEALTH ANIMATION
+// ============================================================================
+
+/**
+ * Simple hash function for Perlin noise
+ */
+int32_t hash(int32_t x) {
+    x = ((x >> 16) ^ x) * 0x45d9f3b;
+    x = ((x >> 16) ^ x) * 0x45d9f3b;
+    x = (x >> 16) ^ x;
+    return x;
+}
+
+/**
+ * Gradient function for Perlin noise
+ */
+float gradient(int32_t hash, float x) {
+    return (hash & 1) ? x : -x;
+}
+
+/**
+ * Linear interpolation
+ */
+float lerp(float a, float b, float t) {
+    return a + t * (b - a);
+}
+
+/**
+ * Simple 1D Perlin noise implementation
+ * Returns value between -1 and 1
+ */
+float perlinNoise(float x) {
+    int32_t xi = (int32_t)x;
+    float xf = x - xi;
+    
+    // Fade curve (smoothstep)
+    float u = xf * xf * (3.0 - 2.0 * xf);
+    
+    // Hash function for pseudo-random gradients
+    int32_t a = hash(xi);
+    int32_t b = hash(xi + 1);
+    
+    // Interpolate
+    return lerp(gradient(a, xf), gradient(b, xf - 1.0), u);
+}
+
+/**
+ * Parse JSON and initialize clusters
+ * Expected format: {"securities":[{"symbol":"AAPL","health":0.85}, ...]}
+ */
+void parseAndInitClusters(String jsonData) {
+    numActiveClusters = 0;
+    
+    // Simple JSON parsing for Arduino
+    // Find "securities" array
+    int secStart = jsonData.indexOf("\"securities\"");
+    if (secStart == -1) return;
+    
+    int arrayStart = jsonData.indexOf('[', secStart);
+    if (arrayStart == -1) return;
+    
+    int pos = arrayStart + 1;
+    
+    while (numActiveClusters < MAX_SECURITIES) {
+        // Find next object
+        int objStart = jsonData.indexOf('{', pos);
+        if (objStart == -1) break;
+        
+        int objEnd = jsonData.indexOf('}', objStart);
+        if (objEnd == -1) break;
+        
+        String obj = jsonData.substring(objStart, objEnd + 1);
+        
+        // Extract symbol
+        int symStart = obj.indexOf("\"symbol\"");
+        if (symStart != -1) {
+            int symValStart = obj.indexOf('\"', symStart + 8);
+            int symValEnd = obj.indexOf('\"', symValStart + 1);
+            if (symValStart != -1 && symValEnd != -1) {
+                String symbol = obj.substring(symValStart + 1, symValEnd);
+                symbol.toCharArray(clusters[numActiveClusters].symbol, 11);
+            }
+        }
+        
+        // Extract health
+        int healthStart = obj.indexOf("\"health\"");
+        if (healthStart != -1) {
+            int healthValStart = obj.indexOf(':', healthStart);
+            int healthValEnd = obj.indexOf(',', healthValStart);
+            if (healthValEnd == -1) healthValEnd = obj.indexOf('}', healthValStart);
+            
+            if (healthValStart != -1 && healthValEnd != -1) {
+                String healthStr = obj.substring(healthValStart + 1, healthValEnd);
+                healthStr.trim();
+                float healthFloat = healthStr.toFloat();
+                clusters[numActiveClusters].health = (uint8_t)(healthFloat * 100.0);
+            }
+        }
+        
+        // Initialize cluster position and physics
+        clusters[numActiveClusters].centerX = random(0, 130) / 10.0; // 0-13
+        clusters[numActiveClusters].centerY = random(0, 80) / 10.0;  // 0-8
+        clusters[numActiveClusters].velocityX = 0;
+        clusters[numActiveClusters].velocityY = 0;
+        clusters[numActiveClusters].noiseOffsetX = random(0, 1000) / 10.0;
+        clusters[numActiveClusters].noiseOffsetY = random(0, 1000) / 10.0;
+        clusters[numActiveClusters].radius = 2.0 + (clusters[numActiveClusters].health / 100.0) * 1.5;
+        clusters[numActiveClusters].active = true;
+        
+        numActiveClusters++;
+        pos = objEnd + 1;
+    }
+}
+
+/**
+ * Update cluster positions using Perlin noise
+ */
+void updateHealthClusters() {
+    for (uint8_t i = 0; i < numActiveClusters; i++) {
+        if (!clusters[i].active) continue;
+        
+        // Update Perlin noise offsets
+        clusters[i].noiseOffsetX += 0.01;
+        clusters[i].noiseOffsetY += 0.01;
+        
+        // Get noise values (-1 to 1)
+        float noiseX = perlinNoise(clusters[i].noiseOffsetX);
+        float noiseY = perlinNoise(clusters[i].noiseOffsetY);
+        
+        // Update velocity (smoothed)
+        clusters[i].velocityX = clusters[i].velocityX * 0.9 + noiseX * 0.1;
+        clusters[i].velocityY = clusters[i].velocityY * 0.9 + noiseY * 0.1;
+        
+        // Update position
+        clusters[i].centerX += clusters[i].velocityX * 0.05;
+        clusters[i].centerY += clusters[i].velocityY * 0.05;
+        
+        // Soft boundary bounce
+        if (clusters[i].centerX < 0) {
+            clusters[i].centerX = 0;
+            clusters[i].velocityX *= -0.5;
+        }
+        if (clusters[i].centerX > 12) {
+            clusters[i].centerX = 12;
+            clusters[i].velocityX *= -0.5;
+        }
+        if (clusters[i].centerY < 0) {
+            clusters[i].centerY = 0;
+            clusters[i].velocityY *= -0.5;
+        }
+        if (clusters[i].centerY > 7) {
+            clusters[i].centerY = 7;
+            clusters[i].velocityY *= -0.5;
+        }
+    }
+}
+
+/**
+ * Render health frame to LED matrix
+ */
+void renderHealthFrame() {
+    uint8_t frame[MATRIX_ROWS * MATRIX_COLS];
+    
+    // For each pixel, find nearest cluster and calculate brightness
+    for (uint8_t row = 0; row < MATRIX_ROWS; row++) {
+        for (uint8_t col = 0; col < MATRIX_COLS; col++) {
+            float minDist = 999.0;
+            uint8_t nearestCluster = 0;
+            
+            // Find nearest cluster
+            for (uint8_t i = 0; i < numActiveClusters; i++) {
+                if (!clusters[i].active) continue;
+                
+                float dx = col - clusters[i].centerX;
+                float dy = row - clusters[i].centerY;
+                float dist = sqrt(dx*dx + dy*dy);
+                
+                if (dist < minDist) {
+                    minDist = dist;
+                    nearestCluster = i;
+                }
+            }
+            
+            // Calculate brightness based on distance and health
+            uint8_t brightness = 0;
+            if (numActiveClusters > 0 && minDist < clusters[nearestCluster].radius * 2) {
+                // Falloff from center
+                float falloff = 1.0 - (minDist / (clusters[nearestCluster].radius * 2));
+                if (falloff < 0) falloff = 0;
+                
+                // Health-based brightness (health is 0-100)
+                float healthFactor = clusters[nearestCluster].health / 100.0;
+                
+                // Map to 0-7 brightness (3-bit grayscale)
+                brightness = (uint8_t)(falloff * healthFactor * 7.0);
+            }
+            
+            frame[row * MATRIX_COLS + col] = brightness;
+        }
+    }
+    
+    matrix.draw(frame);
+}
+
+/**
+ * Set portfolio health data - Bridge function
+ * Receives JSON with securities and health scores
+ */
+void setPortfolioHealth(String jsonData) {
+    // Stop text scrolling
+    currentText = "";
+    
+    // Parse JSON and initialize clusters
+    parseAndInitClusters(jsonData);
+    
+    // Enable health mode
+    healthMode = true;
+    lastHealthFrame = millis();
+    
+    // Render initial frame
+    renderHealthFrame();
+}
+
+/**
+ * Stop health mode and return to text mode
+ */
+void stopHealthMode() {
+    healthMode = false;
+    numActiveClusters = 0;
+    matrix.clear();
 }
 
 void setup() {
@@ -271,11 +527,13 @@ void setup() {
     Bridge.provide("setRGB4", setRGB4);
     Bridge.provide("clearMatrix", clearMatrix);
     Bridge.provide("setPixelCount", setPixelCount);
+    Bridge.provide("setPortfolioHealth", setPortfolioHealth);
+    Bridge.provide("stopHealthMode", stopHealthMode);
 }
 
 void loop() {
     // Handle text scrolling
-    if (currentText.length() > 0) {
+    if (currentText.length() > 0 && !healthMode) {
         unsigned long now = millis();
         if (now - lastScrollTime >= (unsigned long)scrollSpeed) {
             lastScrollTime = now;
@@ -293,6 +551,16 @@ void loop() {
             }
             
             renderFrame();
+        }
+    }
+    
+    // Handle health animation
+    if (healthMode && numActiveClusters > 0) {
+        unsigned long now = millis();
+        if (now - lastHealthFrame >= healthFrameInterval) {
+            lastHealthFrame = now;
+            updateHealthClusters();
+            renderHealthFrame();
         }
     }
     

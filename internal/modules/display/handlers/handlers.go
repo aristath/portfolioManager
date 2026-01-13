@@ -14,15 +14,27 @@ import (
 
 // Handlers provides HTTP handlers for display module
 type Handlers struct {
-	stateManager *display.StateManager
-	log          zerolog.Logger
+	stateManager  *display.StateManager
+	modeManager   *display.ModeManager
+	healthCalc    *display.HealthCalculator
+	healthUpdater *display.HealthUpdater
+	log           zerolog.Logger
 }
 
 // NewHandlers creates a new display handlers instance
-func NewHandlers(stateManager *display.StateManager, log zerolog.Logger) *Handlers {
+func NewHandlers(
+	stateManager *display.StateManager,
+	modeManager *display.ModeManager,
+	healthCalc *display.HealthCalculator,
+	healthUpdater *display.HealthUpdater,
+	log zerolog.Logger,
+) *Handlers {
 	return &Handlers{
-		stateManager: stateManager,
-		log:          log.With().Str("module", "display_handlers").Logger(),
+		stateManager:  stateManager,
+		modeManager:   modeManager,
+		healthCalc:    healthCalc,
+		healthUpdater: healthUpdater,
+		log:           log.With().Str("module", "display_handlers").Logger(),
 	}
 }
 
@@ -89,6 +101,67 @@ func (h *Handlers) HandleSetLED4(w http.ResponseWriter, r *http.Request) {
 	h.stateManager.SetLED4(req.R, req.G, req.B)
 
 	h.writeJSON(w, map[string]string{"status": "ok"})
+}
+
+// SetModeRequest represents the request to set display mode
+type SetModeRequest struct {
+	Mode string `json:"mode"`
+}
+
+// HandleGetMode handles GET /api/display/mode
+// Returns current display mode
+func (h *Handlers) HandleGetMode(w http.ResponseWriter, r *http.Request) {
+	mode := h.modeManager.GetMode()
+	h.writeJSON(w, map[string]string{"mode": string(mode)})
+}
+
+// HandleSetMode handles POST /api/display/mode
+// Sets the display mode (TEXT, HEALTH, STATS)
+func (h *Handlers) HandleSetMode(w http.ResponseWriter, r *http.Request) {
+	var req SetModeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.log.Error().Err(err).Msg("Failed to decode set mode request")
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	mode := display.DisplayMode(req.Mode)
+
+	// Validate mode
+	if mode != display.ModeText && mode != display.ModeHealth && mode != display.ModeStats {
+		h.log.Warn().Str("mode", req.Mode).Msg("Invalid display mode")
+		http.Error(w, "Invalid mode. Must be TEXT, HEALTH, or STATS", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.modeManager.SetMode(mode); err != nil {
+		h.log.Error().Err(err).Str("mode", req.Mode).Msg("Failed to set display mode")
+		http.Error(w, "Failed to set mode", http.StatusInternalServerError)
+		return
+	}
+
+	h.log.Info().Str("mode", req.Mode).Msg("Display mode changed")
+	h.writeJSON(w, map[string]string{"status": "ok", "mode": req.Mode})
+}
+
+// HandleGetPortfolioHealth handles GET /api/display/portfolio-health/preview
+// Returns current portfolio health scores (for debugging)
+func (h *Handlers) HandleGetPortfolioHealth(w http.ResponseWriter, r *http.Request) {
+	healthData, err := h.healthCalc.CalculateAllHealth()
+	if err != nil {
+		h.log.Error().Err(err).Msg("Failed to calculate portfolio health")
+		http.Error(w, "Failed to calculate health", http.StatusInternalServerError)
+		return
+	}
+
+	h.writeJSON(w, healthData)
+}
+
+// HandleTriggerHealthUpdate handles POST /api/display/portfolio-health/trigger
+// Manually triggers a health update (for testing)
+func (h *Handlers) HandleTriggerHealthUpdate(w http.ResponseWriter, r *http.Request) {
+	h.healthUpdater.TriggerUpdate()
+	h.writeJSON(w, map[string]string{"status": "ok", "message": "Health update triggered"})
 }
 
 // writeJSON writes a JSON response

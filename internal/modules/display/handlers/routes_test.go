@@ -15,9 +15,12 @@ import (
 func TestRegisterRoutes(t *testing.T) {
 	// Create mock dependencies
 	stateManager := &display.StateManager{}
+	modeManager := &display.ModeManager{}
+	healthCalc := &display.HealthCalculator{}
+	healthUpdater := &display.HealthUpdater{}
 
 	// Create handler - we're only testing that RegisterRoutes works, not handler execution
-	handler := NewHandlers(stateManager, zerolog.Nop())
+	handler := NewHandlers(stateManager, modeManager, healthCalc, healthUpdater, zerolog.Nop())
 
 	// Create router and register routes - this should not panic
 	router := chi.NewRouter()
@@ -72,8 +75,11 @@ func TestRegisterRoutes(t *testing.T) {
 func TestRegisterRoutes_RoutePrefix(t *testing.T) {
 	// Verify that routes are registered under /display prefix
 	stateManager := &display.StateManager{}
+	modeManager := &display.ModeManager{}
+	healthCalc := &display.HealthCalculator{}
+	healthUpdater := &display.HealthUpdater{}
 
-	handler := NewHandlers(stateManager, zerolog.Nop())
+	handler := NewHandlers(stateManager, modeManager, healthCalc, healthUpdater, zerolog.Nop())
 
 	router := chi.NewRouter()
 	handler.RegisterRoutes(router)

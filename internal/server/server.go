@@ -495,7 +495,13 @@ func (s *Server) setupRoutes() {
 		// Display module (MIGRATED TO GO!)
 		// Display manager is passed in via server config, not container
 		// (it's initialized before container in main.go)
-		displayHandler := displayhandlers.NewHandlers(s.displayManager, s.log)
+		displayHandler := displayhandlers.NewHandlers(
+			s.displayManager,
+			s.container.ModeManager,
+			s.container.HealthCalculator,
+			s.container.HealthUpdater,
+			s.log,
+		)
 		displayHandler.RegisterRoutes(r)
 
 		// Scoring module (MIGRATED TO GO!)

@@ -57,6 +57,18 @@ var SettingDefaults = map[string]interface{}{
 	"ticker_show_amounts": 1.0,   // Show amounts for actions
 	"ticker_max_actions":  3.0,   // Max recommendations to show (buy + sell)
 
+	// Portfolio health display settings (for HEALTH mode)
+	"display_health_update_interval":    1800.0, // Seconds between health updates (30 min)
+	"display_health_max_securities":     20.0,   // Max securities to display
+	"display_health_score_weight":       0.4,    // Weight for security score in health calculation
+	"display_health_performance_weight": 0.4,    // Weight for performance vs target in health
+	"display_health_volatility_weight":  0.2,    // Weight for volatility in health (inverted)
+	"display_health_min_brightness":     100.0,  // Minimum LED brightness for health mode
+	"display_health_max_brightness":     180.0,  // Maximum LED brightness for health mode
+	"display_health_cluster_radius":     2.5,    // Cluster size in pixels
+	"display_health_animation_fps":      60.0,   // Animation frame rate (handled by MCU)
+	"display_health_drift_speed":        0.5,    // Cluster movement speed multiplier
+
 	// Job scheduling intervals
 	"job_sync_cycle_minutes":  15.0, // Unified sync cycle interval
 	"job_maintenance_hour":    3.0,  // Daily maintenance hour (0-23)

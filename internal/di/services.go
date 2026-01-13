@@ -688,6 +688,48 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	)
 	log.Info().Msg("Ticker content service initialized")
 
+	// Health calculator (calculates portfolio health scores)
+	container.HealthCalculator = display.NewHealthCalculator(
+		container.UniverseDB.Conn(),
+		container.PortfolioDB.Conn(),
+		container.HistoryDB.Conn(),
+		container.ConfigDB.Conn(),
+		log,
+	)
+	log.Info().Msg("Health calculator initialized")
+
+	// Health updater (periodically sends health scores to display)
+	displayURL := "http://localhost:7000"
+	if envURL := os.Getenv("DISPLAY_URL"); envURL != "" {
+		displayURL = envURL
+	}
+	updateInterval := 30 * time.Minute // Default 30 minutes
+	if intervalSetting, err := container.SettingsRepo.Get("display_health_update_interval"); err == nil && intervalSetting != nil {
+		// Parse string to float
+		var intervalFloat float64
+		if _, err := fmt.Sscanf(*intervalSetting, "%f", &intervalFloat); err == nil {
+			updateInterval = time.Duration(intervalFloat) * time.Second
+		}
+	}
+	container.HealthUpdater = display.NewHealthUpdater(
+		container.HealthCalculator,
+		displayURL,
+		updateInterval,
+		log,
+	)
+	log.Info().Dur("interval", updateInterval).Msg("Health updater initialized")
+
+	// Mode manager (switches between display modes)
+	if displayManager != nil {
+		container.ModeManager = display.NewModeManager(
+			displayManager,
+			container.HealthUpdater,
+			container.TickerContentService,
+			log,
+		)
+		log.Info().Msg("Display mode manager initialized")
+	}
+
 	// ==========================================
 	// STEP 12: Initialize Adaptive Market Services
 	// ==========================================

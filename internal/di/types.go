@@ -17,6 +17,7 @@ import (
 	"github.com/aristath/sentinel/internal/modules/allocation"
 	"github.com/aristath/sentinel/internal/modules/analytics"
 	"github.com/aristath/sentinel/internal/modules/cash_flows"
+	"github.com/aristath/sentinel/internal/modules/display"
 	"github.com/aristath/sentinel/internal/modules/dividends"
 	"github.com/aristath/sentinel/internal/modules/market_hours"
 	"github.com/aristath/sentinel/internal/modules/opportunities"
@@ -103,6 +104,9 @@ type Container struct {
 	EventBus                  *events.Bus
 	EventManager              *events.Manager
 	TickerContentService      *ticker.TickerContentService
+	HealthCalculator          *display.HealthCalculator
+	HealthUpdater             *display.HealthUpdater
+	ModeManager               *display.ModeManager
 	QueueManager              *queue.Manager
 	WorkerPool                *queue.WorkerPool
 	TimeScheduler             *queue.Scheduler

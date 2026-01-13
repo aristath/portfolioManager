@@ -12,6 +12,7 @@ Endpoints:
 - POST /led4 - Set RGB LED 4 color (processing indicator)
 - POST /clear - Clear the LED matrix
 - POST /pixels - Set pixel count (for system stats mode)
+- POST /portfolio-health - Set portfolio health data (MCU handles animation)
 - GET /health - Health check endpoint
 """
 
@@ -66,6 +67,21 @@ async def handle_set_pixels(request: Request):
     return {"status": "ok", "count": count}
 
 
+async def handle_set_portfolio_health(request: Request):
+    """Update portfolio health scores for securities."""
+    data = await request.json()
+    
+    # Convert to JSON string for Arduino
+    import json
+    json_str = json.dumps(data)
+    
+    # Send to MCU via Bridge
+    Bridge.call("setPortfolioHealth", json_str)
+    
+    securities = data.get("securities", [])
+    return {"status": "ok", "count": len(securities)}
+
+
 def handle_health():
     """Health check endpoint."""
     return {"status": "healthy", "service": "sentinel-display"}
@@ -77,6 +93,7 @@ ui.expose_api("POST", "/led3", handle_set_led3)
 ui.expose_api("POST", "/led4", handle_set_led4)
 ui.expose_api("POST", "/clear", handle_clear_matrix)
 ui.expose_api("POST", "/pixels", handle_set_pixels)
+ui.expose_api("POST", "/portfolio-health", handle_set_portfolio_health)
 ui.expose_api("GET", "/health", handle_health)
 
 
