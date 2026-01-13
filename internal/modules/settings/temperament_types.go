@@ -110,10 +110,36 @@ type RiskManagementParams struct {
 
 // QualityGateParams holds adjusted quality gate thresholds
 type QualityGateParams struct {
-	FundamentalsThreshold float64 // Minimum fundamentals score
-	LongTermThreshold     float64 // Minimum long-term score
-	ExceptionalThreshold  float64 // Threshold for exceptional quality
+	FundamentalsThreshold float64 // Minimum fundamentals score (Path 1)
+	LongTermThreshold     float64 // Minimum long-term score (Path 1)
+	ExceptionalThreshold  float64 // Threshold for exceptional quality (Path 2)
 	AbsoluteMinCAGR       float64 // Absolute minimum CAGR requirement
+	// Path 2: Exceptional Excellence
+	ExceptionalExcellenceThreshold float64 // Threshold for exceptional excellence (Path 2)
+	// Path 3: Quality Value Play
+	QualityValueFundamentalsMin float64 // Minimum fundamentals for quality value (Path 3)
+	QualityValueOpportunityMin  float64 // Minimum opportunity score for quality value (Path 3)
+	QualityValueLongTermMin     float64 // Minimum long-term score for quality value (Path 3)
+	// Path 4: Dividend Income Play
+	DividendIncomeFundamentalsMin float64 // Minimum fundamentals for dividend income (Path 4)
+	DividendIncomeScoreMin        float64 // Minimum dividend score for dividend income (Path 4)
+	DividendIncomeYieldMin        float64 // Minimum dividend yield for dividend income (Path 4)
+	// Path 5: Risk-Adjusted Excellence
+	RiskAdjustedLongTermThreshold float64 // Minimum long-term for risk-adjusted (Path 5)
+	RiskAdjustedSharpeThreshold   float64 // Minimum Sharpe ratio for risk-adjusted (Path 5)
+	RiskAdjustedSortinoThreshold  float64 // Minimum Sortino ratio for risk-adjusted (Path 5)
+	RiskAdjustedVolatilityMax     float64 // Maximum volatility for risk-adjusted (Path 5)
+	// Path 6: Composite Minimum
+	CompositeFundamentalsWeight float64 // Weight for fundamentals in composite (Path 6)
+	CompositeLongTermWeight     float64 // Weight for long-term in composite (Path 6)
+	CompositeScoreMin           float64 // Minimum composite score (Path 6)
+	CompositeFundamentalsFloor  float64 // Minimum fundamentals floor (Path 6)
+	// Path 7: Growth Opportunity
+	GrowthOpportunityCAGRMin         float64 // Minimum CAGR for growth opportunity (Path 7)
+	GrowthOpportunityFundamentalsMin float64 // Minimum fundamentals for growth opportunity (Path 7)
+	GrowthOpportunityVolatilityMax   float64 // Maximum volatility for growth opportunity (Path 7)
+	// High Score Tag
+	HighScoreThreshold float64 // Threshold for high score tag
 }
 
 // ============================================================================
@@ -213,14 +239,15 @@ type ValueThresholds struct {
 
 // QualityThresholds holds quality-related tag thresholds
 type QualityThresholds struct {
-	HighQualityFundamentals     float64 // Fundamentals score for high quality
-	HighQualityLongTerm         float64 // Long-term score for high quality
-	StableFundamentals          float64 // Fundamentals score for stable
-	StableVolatilityMax         float64 // Maximum volatility for stable
-	StableConsistency           float64 // Consistency score for stable
-	ConsistentGrowerConsistency float64 // Consistency for consistent grower
-	ConsistentGrowerCAGR        float64 // Minimum CAGR for consistent grower
-	StrongFundamentalsThreshold float64 // Threshold for strong fundamentals
+	HighQualityFundamentals        float64 // Fundamentals score for high quality
+	HighQualityLongTerm            float64 // Long-term score for high quality
+	StableFundamentals             float64 // Fundamentals score for stable
+	StableVolatilityMax            float64 // Maximum volatility for stable
+	StableConsistency              float64 // Consistency score for stable
+	ConsistentGrowerConsistency    float64 // Consistency for consistent grower
+	ConsistentGrowerCAGR           float64 // Minimum CAGR for consistent grower
+	StrongFundamentalsThreshold    float64 // Threshold for strong fundamentals
+	ValueOpportunityScoreThreshold float64 // Score threshold for value-opportunity tag
 }
 
 // TechnicalThresholds holds technical indicator thresholds
@@ -285,6 +312,7 @@ type BubbleTrapThresholds struct {
 	QuantumBubbleWarningProb    float64 // Warning probability for quantum bubble
 	QuantumTrapHighProb         float64 // High probability for quantum trap
 	QuantumTrapWarningProb      float64 // Warning probability for quantum trap
+	GrowthTagCAGRThreshold      float64 // CAGR threshold for growth tag
 }
 
 // TotalReturnThresholds holds total return classification thresholds
@@ -298,12 +326,13 @@ type TotalReturnThresholds struct {
 
 // RegimeThresholds holds regime-specific tag thresholds
 type RegimeThresholds struct {
-	BearSafeVolatility       float64 // Volatility threshold for bear-safe
-	BearSafeFundamentals     float64 // Fundamentals threshold for bear-safe
-	BearSafeDrawdown         float64 // Drawdown threshold for bear-safe
-	BullGrowthCAGR           float64 // CAGR threshold for bull growth
-	BullGrowthFundamentals   float64 // Fundamentals threshold for bull growth
-	RegimeVolatileVolatility float64 // Volatility threshold for regime volatile
+	BearSafeVolatility        float64 // Volatility threshold for bear-safe
+	BearSafeFundamentals      float64 // Fundamentals threshold for bear-safe
+	BearSafeDrawdown          float64 // Drawdown threshold for bear-safe
+	BullGrowthCAGR            float64 // CAGR threshold for bull growth
+	BullGrowthFundamentals    float64 // Fundamentals threshold for bull growth
+	RegimeVolatileVolatility  float64 // Volatility threshold for regime volatile
+	SidewaysValueFundamentals float64 // Fundamentals threshold for sideways-value
 }
 
 // ============================================================================

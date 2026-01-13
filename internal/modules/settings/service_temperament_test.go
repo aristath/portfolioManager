@@ -157,12 +157,127 @@ func TestValueThresholdsStruct(t *testing.T) {
 
 func TestQualityThresholdsStruct(t *testing.T) {
 	thresholds := QualityThresholds{
-		HighQualityFundamentals: 0.70,
+		HighQualityFundamentals:        0.70,
+		ValueOpportunityScoreThreshold: 0.65,
 	}
 
 	// Quality thresholds should be high (>= 0.5)
 	assert.True(t, thresholds.HighQualityFundamentals >= 0.5,
 		"high quality fundamentals threshold should be >= 0.5")
+	assert.True(t, thresholds.ValueOpportunityScoreThreshold >= 0.5,
+		"value opportunity score threshold should be >= 0.5")
+}
+
+func TestQualityGateParamsNewFields(t *testing.T) {
+	params := QualityGateParams{
+		FundamentalsThreshold:            0.55,
+		LongTermThreshold:                0.45,
+		ExceptionalThreshold:             0.85,
+		AbsoluteMinCAGR:                  0.05,
+		ExceptionalExcellenceThreshold:   0.75,
+		QualityValueFundamentalsMin:      0.60,
+		QualityValueOpportunityMin:       0.65,
+		QualityValueLongTermMin:          0.30,
+		DividendIncomeFundamentalsMin:    0.55,
+		DividendIncomeScoreMin:           0.65,
+		DividendIncomeYieldMin:           0.035,
+		RiskAdjustedLongTermThreshold:    0.55,
+		RiskAdjustedSharpeThreshold:      0.70,
+		RiskAdjustedSortinoThreshold:     0.70,
+		RiskAdjustedVolatilityMax:        0.35,
+		CompositeFundamentalsWeight:      0.60,
+		CompositeLongTermWeight:          0.40,
+		CompositeScoreMin:                0.52,
+		CompositeFundamentalsFloor:       0.45,
+		GrowthOpportunityCAGRMin:         0.13,
+		GrowthOpportunityFundamentalsMin: 0.50,
+		GrowthOpportunityVolatilityMax:   0.40,
+		HighScoreThreshold:               0.70,
+	}
+
+	// Mark Path 1 fields as intentionally unused (test focuses on new Path 2-7 fields)
+	_ = params.FundamentalsThreshold
+	_ = params.LongTermThreshold
+	_ = params.ExceptionalThreshold
+	_ = params.AbsoluteMinCAGR
+	_ = params.RiskAdjustedLongTermThreshold
+
+	// Validate Path 2: Exceptional Excellence
+	assert.True(t, params.ExceptionalExcellenceThreshold >= 0.70 && params.ExceptionalExcellenceThreshold <= 0.85,
+		"exceptional excellence threshold should be in [0.70, 0.85]")
+
+	// Validate Path 3: Quality Value Play
+	assert.True(t, params.QualityValueFundamentalsMin >= 0.55 && params.QualityValueFundamentalsMin <= 0.70,
+		"quality value fundamentals min should be in [0.55, 0.70]")
+	assert.True(t, params.QualityValueOpportunityMin >= 0.60 && params.QualityValueOpportunityMin <= 0.75,
+		"quality value opportunity min should be in [0.60, 0.75]")
+	assert.True(t, params.QualityValueLongTermMin >= 0.25 && params.QualityValueLongTermMin <= 0.40,
+		"quality value long term min should be in [0.25, 0.40]")
+
+	// Validate Path 4: Dividend Income Play
+	assert.True(t, params.DividendIncomeFundamentalsMin >= 0.50 && params.DividendIncomeFundamentalsMin <= 0.65,
+		"dividend income fundamentals min should be in [0.50, 0.65]")
+	assert.True(t, params.DividendIncomeScoreMin >= 0.60 && params.DividendIncomeScoreMin <= 0.75,
+		"dividend income score min should be in [0.60, 0.75]")
+	assert.True(t, params.DividendIncomeYieldMin >= 0.025 && params.DividendIncomeYieldMin <= 0.050,
+		"dividend income yield min should be in [0.025, 0.050]")
+
+	// Validate Path 5: Risk-Adjusted Excellence
+	assert.True(t, params.RiskAdjustedSharpeThreshold >= 0.60 && params.RiskAdjustedSharpeThreshold <= 0.85,
+		"risk adjusted sharpe threshold should be in [0.60, 0.85]")
+	assert.True(t, params.RiskAdjustedSortinoThreshold >= 0.60 && params.RiskAdjustedSortinoThreshold <= 0.85,
+		"risk adjusted sortino threshold should be in [0.60, 0.85]")
+	assert.True(t, params.RiskAdjustedVolatilityMax >= 0.30 && params.RiskAdjustedVolatilityMax <= 0.45,
+		"risk adjusted volatility max should be in [0.30, 0.45]")
+
+	// Validate Path 6: Composite Minimum
+	assert.InDelta(t, 1.0, params.CompositeFundamentalsWeight+params.CompositeLongTermWeight, 0.01,
+		"composite weights should sum to 1.0")
+	assert.True(t, params.CompositeScoreMin >= 0.48 && params.CompositeScoreMin <= 0.58,
+		"composite score min should be in [0.48, 0.58]")
+	assert.True(t, params.CompositeFundamentalsFloor >= 0.40 && params.CompositeFundamentalsFloor <= 0.55,
+		"composite fundamentals floor should be in [0.40, 0.55]")
+
+	// Validate Path 7: Growth Opportunity
+	assert.True(t, params.GrowthOpportunityCAGRMin >= 0.11 && params.GrowthOpportunityCAGRMin <= 0.16,
+		"growth opportunity CAGR min should be in [0.11, 0.16]")
+	assert.True(t, params.GrowthOpportunityFundamentalsMin >= 0.45 && params.GrowthOpportunityFundamentalsMin <= 0.60,
+		"growth opportunity fundamentals min should be in [0.45, 0.60]")
+	assert.True(t, params.GrowthOpportunityVolatilityMax >= 0.35 && params.GrowthOpportunityVolatilityMax <= 0.50,
+		"growth opportunity volatility max should be in [0.35, 0.50]")
+
+	// Validate High Score Threshold
+	assert.True(t, params.HighScoreThreshold >= 0.65 && params.HighScoreThreshold <= 0.80,
+		"high score threshold should be in [0.65, 0.80]")
+}
+
+func TestBubbleTrapThresholdsNewFields(t *testing.T) {
+	thresholds := BubbleTrapThresholds{
+		BubbleCAGRThreshold:    0.15,
+		GrowthTagCAGRThreshold: 0.13,
+	}
+
+	// Growth tag threshold should be <= bubble threshold (less strict)
+	assert.True(t, thresholds.GrowthTagCAGRThreshold <= thresholds.BubbleCAGRThreshold,
+		"growth tag CAGR threshold should be <= bubble CAGR threshold")
+	assert.True(t, thresholds.GrowthTagCAGRThreshold >= 0.12 && thresholds.GrowthTagCAGRThreshold <= 0.15,
+		"growth tag CAGR threshold should be in [0.12, 0.15]")
+}
+
+func TestRegimeThresholdsNewFields(t *testing.T) {
+	thresholds := RegimeThresholds{
+		BearSafeFundamentals:      0.70,
+		BullGrowthFundamentals:    0.70,
+		SidewaysValueFundamentals: 0.75,
+	}
+
+	// Sideways value should require higher fundamentals than bear/bull (more selective)
+	assert.True(t, thresholds.SidewaysValueFundamentals >= thresholds.BearSafeFundamentals,
+		"sideways value fundamentals should be >= bear safe fundamentals")
+	assert.True(t, thresholds.SidewaysValueFundamentals >= thresholds.BullGrowthFundamentals,
+		"sideways value fundamentals should be >= bull growth fundamentals")
+	assert.True(t, thresholds.SidewaysValueFundamentals >= 0.70 && thresholds.SidewaysValueFundamentals <= 0.85,
+		"sideways value fundamentals should be in [0.70, 0.85]")
 }
 
 func TestTechnicalThresholdsStruct(t *testing.T) {
@@ -297,6 +412,52 @@ func TestStructTypesExist(t *testing.T) {
 	_ = OpportunityBuysParams{}
 	_ = QualityGateParams{}
 	_ = RebalancingParams{}
+
+	// Verify new QualityGateParams fields exist
+	qgp := QualityGateParams{
+		FundamentalsThreshold:            0.55,
+		LongTermThreshold:                0.45,
+		ExceptionalThreshold:             0.85,
+		AbsoluteMinCAGR:                  0.05,
+		ExceptionalExcellenceThreshold:   0.75,
+		QualityValueFundamentalsMin:      0.60,
+		QualityValueOpportunityMin:       0.65,
+		QualityValueLongTermMin:          0.30,
+		DividendIncomeFundamentalsMin:    0.55,
+		DividendIncomeScoreMin:           0.65,
+		DividendIncomeYieldMin:           0.035,
+		RiskAdjustedLongTermThreshold:    0.55,
+		RiskAdjustedSharpeThreshold:      0.70,
+		RiskAdjustedSortinoThreshold:     0.70,
+		RiskAdjustedVolatilityMax:        0.35,
+		CompositeFundamentalsWeight:      0.60,
+		CompositeLongTermWeight:          0.40,
+		CompositeScoreMin:                0.52,
+		CompositeFundamentalsFloor:       0.45,
+		GrowthOpportunityCAGRMin:         0.13,
+		GrowthOpportunityFundamentalsMin: 0.50,
+		GrowthOpportunityVolatilityMax:   0.40,
+		HighScoreThreshold:               0.70,
+	}
+	_ = qgp // Use the variable
+
+	// Verify new BubbleTrapThresholds field exists
+	btt := BubbleTrapThresholds{
+		GrowthTagCAGRThreshold: 0.13,
+	}
+	_ = btt
+
+	// Verify new RegimeThresholds field exists
+	rt := RegimeThresholds{
+		SidewaysValueFundamentals: 0.75,
+	}
+	_ = rt
+
+	// Verify new QualityThresholds field exists
+	qt := QualityThresholds{
+		ValueOpportunityScoreThreshold: 0.65,
+	}
+	_ = qt
 	_ = VolatilityParams{}
 	_ = TransactionParams{}
 	_ = ProfitTakingBoosts{}

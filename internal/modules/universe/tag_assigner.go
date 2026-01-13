@@ -51,14 +51,15 @@ type ValueThresholds struct {
 }
 
 type QualityThresholds struct {
-	HighQualityFundamentals     float64
-	HighQualityLongTerm         float64
-	StableFundamentals          float64
-	StableVolatilityMax         float64
-	StableConsistency           float64
-	ConsistentGrowerConsistency float64
-	ConsistentGrowerCAGR        float64
-	StrongFundamentalsThreshold float64
+	HighQualityFundamentals        float64
+	HighQualityLongTerm            float64
+	StableFundamentals             float64
+	StableVolatilityMax            float64
+	StableConsistency              float64
+	ConsistentGrowerConsistency    float64
+	ConsistentGrowerCAGR           float64
+	StrongFundamentalsThreshold    float64
+	ValueOpportunityScoreThreshold float64
 }
 
 type TechnicalThresholds struct {
@@ -117,6 +118,7 @@ type BubbleTrapThresholds struct {
 	QuantumBubbleWarningProb    float64
 	QuantumTrapHighProb         float64
 	QuantumTrapWarningProb      float64
+	GrowthTagCAGRThreshold      float64
 }
 
 type TotalReturnThresholds struct {
@@ -128,19 +130,46 @@ type TotalReturnThresholds struct {
 }
 
 type RegimeThresholds struct {
-	BearSafeVolatility       float64
-	BearSafeFundamentals     float64
-	BearSafeDrawdown         float64
-	BullGrowthCAGR           float64
-	BullGrowthFundamentals   float64
-	RegimeVolatileVolatility float64
+	BearSafeVolatility        float64
+	BearSafeFundamentals      float64
+	BearSafeDrawdown          float64
+	BullGrowthCAGR            float64
+	BullGrowthFundamentals    float64
+	RegimeVolatileVolatility  float64
+	SidewaysValueFundamentals float64
 }
 
 type QualityGateParams struct {
-	FundamentalsThreshold float64
-	LongTermThreshold     float64
-	ExceptionalThreshold  float64
-	AbsoluteMinCAGR       float64
+	FundamentalsThreshold float64 // Minimum fundamentals score (Path 1)
+	LongTermThreshold     float64 // Minimum long-term score (Path 1)
+	ExceptionalThreshold  float64 // Threshold for exceptional quality (Path 2)
+	AbsoluteMinCAGR       float64 // Absolute minimum CAGR requirement
+	// Path 2: Exceptional Excellence
+	ExceptionalExcellenceThreshold float64
+	// Path 3: Quality Value Play
+	QualityValueFundamentalsMin float64
+	QualityValueOpportunityMin  float64
+	QualityValueLongTermMin     float64
+	// Path 4: Dividend Income Play
+	DividendIncomeFundamentalsMin float64
+	DividendIncomeScoreMin        float64
+	DividendIncomeYieldMin        float64
+	// Path 5: Risk-Adjusted Excellence
+	RiskAdjustedLongTermThreshold float64
+	RiskAdjustedSharpeThreshold   float64
+	RiskAdjustedSortinoThreshold  float64
+	RiskAdjustedVolatilityMax     float64
+	// Path 6: Composite Minimum
+	CompositeFundamentalsWeight float64
+	CompositeLongTermWeight     float64
+	CompositeScoreMin           float64
+	CompositeFundamentalsFloor  float64
+	// Path 7: Growth Opportunity
+	GrowthOpportunityCAGRMin         float64
+	GrowthOpportunityFundamentalsMin float64
+	GrowthOpportunityVolatilityMax   float64
+	// High Score Tag
+	HighScoreThreshold float64
 }
 
 type VolatilityParams struct {
@@ -205,14 +234,15 @@ func (ta *TagAssigner) getQualityThresholds() QualityThresholds {
 		return ta.settingsService.GetAdjustedQualityThresholds()
 	}
 	return QualityThresholds{
-		HighQualityFundamentals:     0.70,
-		HighQualityLongTerm:         0.70,
-		StableFundamentals:          0.75,
-		StableVolatilityMax:         0.25,
-		StableConsistency:           0.75,
-		ConsistentGrowerConsistency: 0.75,
-		ConsistentGrowerCAGR:        0.09,
-		StrongFundamentalsThreshold: 0.75,
+		HighQualityFundamentals:        0.70,
+		HighQualityLongTerm:            0.70,
+		StableFundamentals:             0.75,
+		StableVolatilityMax:            0.25,
+		StableConsistency:              0.75,
+		ConsistentGrowerConsistency:    0.75,
+		ConsistentGrowerCAGR:           0.09,
+		StrongFundamentalsThreshold:    0.75,
+		ValueOpportunityScoreThreshold: 0.65,
 	}
 }
 
@@ -295,10 +325,29 @@ func (ta *TagAssigner) getQualityGateParams() QualityGateParams {
 		return ta.settingsService.GetAdjustedQualityGateParams()
 	}
 	return QualityGateParams{
-		FundamentalsThreshold: 0.55,
-		LongTermThreshold:     0.45,
-		ExceptionalThreshold:  0.85,
-		AbsoluteMinCAGR:       0.05,
+		FundamentalsThreshold:            0.55,
+		LongTermThreshold:                0.45,
+		ExceptionalThreshold:             0.85,
+		AbsoluteMinCAGR:                  0.05,
+		ExceptionalExcellenceThreshold:   0.75,
+		QualityValueFundamentalsMin:      0.60,
+		QualityValueOpportunityMin:       0.65,
+		QualityValueLongTermMin:          0.30,
+		DividendIncomeFundamentalsMin:    0.55,
+		DividendIncomeScoreMin:           0.65,
+		DividendIncomeYieldMin:           0.035,
+		RiskAdjustedLongTermThreshold:    0.55,
+		RiskAdjustedSharpeThreshold:      0.70,
+		RiskAdjustedSortinoThreshold:     0.70,
+		RiskAdjustedVolatilityMax:        0.35,
+		CompositeFundamentalsWeight:      0.60,
+		CompositeLongTermWeight:          0.40,
+		CompositeScoreMin:                0.52,
+		CompositeFundamentalsFloor:       0.45,
+		GrowthOpportunityCAGRMin:         0.13,
+		GrowthOpportunityFundamentalsMin: 0.50,
+		GrowthOpportunityVolatilityMax:   0.40,
+		HighScoreThreshold:               0.70,
 	}
 }
 
@@ -312,6 +361,58 @@ func (ta *TagAssigner) getVolatilityParams() VolatilityParams {
 		HighThreshold:         0.40,
 		MaxAcceptable:         0.50,
 		MaxAcceptableDrawdown: 30.0,
+	}
+}
+
+// getBubbleTrapThresholds returns temperament-adjusted bubble and value trap thresholds, with fallback defaults.
+func (ta *TagAssigner) getBubbleTrapThresholds() BubbleTrapThresholds {
+	if ta.settingsService != nil {
+		return ta.settingsService.GetAdjustedBubbleTrapThresholds()
+	}
+	return BubbleTrapThresholds{
+		BubbleCAGRThreshold:         0.15,
+		BubbleSharpeThreshold:       0.50,
+		BubbleVolatilityThreshold:   0.40,
+		BubbleFundamentalsThreshold: 0.55,
+		ValueTrapFundamentals:       0.55,
+		ValueTrapLongTerm:           0.45,
+		ValueTrapMomentum:           -0.05,
+		ValueTrapVolatility:         0.35,
+		QuantumBubbleHighProb:       0.70,
+		QuantumBubbleWarningProb:    0.50,
+		QuantumTrapHighProb:         0.70,
+		QuantumTrapWarningProb:      0.50,
+		GrowthTagCAGRThreshold:      0.13,
+	}
+}
+
+// getRegimeThresholds returns temperament-adjusted regime thresholds, with fallback defaults.
+func (ta *TagAssigner) getRegimeThresholds() RegimeThresholds {
+	if ta.settingsService != nil {
+		return ta.settingsService.GetAdjustedRegimeThresholds()
+	}
+	return RegimeThresholds{
+		BearSafeVolatility:        0.20,
+		BearSafeFundamentals:      0.70,
+		BearSafeDrawdown:          20.0,
+		BullGrowthCAGR:            0.12,
+		BullGrowthFundamentals:    0.70,
+		RegimeVolatileVolatility:  0.30,
+		SidewaysValueFundamentals: 0.75,
+	}
+}
+
+// getTotalReturnThresholds returns temperament-adjusted total return thresholds, with fallback defaults.
+func (ta *TagAssigner) getTotalReturnThresholds() TotalReturnThresholds {
+	if ta.settingsService != nil {
+		return ta.settingsService.GetAdjustedTotalReturnThresholds()
+	}
+	return TotalReturnThresholds{
+		ExcellentTotalReturn:     0.18,
+		HighTotalReturn:          0.15,
+		ModerateTotalReturn:      0.12,
+		DividendTotalReturnYield: 0.08,
+		DividendTotalReturnCAGR:  0.05,
 	}
 }
 
@@ -358,6 +459,9 @@ func (ta *TagAssigner) AssignTagsForSecurity(input AssignTagsInput) ([]string, e
 	riskProfileThresh := ta.getRiskProfileThresholds()
 	volatilityParams := ta.getVolatilityParams()
 	qualityGateParams := ta.getQualityGateParams()
+	bubbleTrapThresh := ta.getBubbleTrapThresholds()
+	regimeThresh := ta.getRegimeThresholds()
+	totalReturnThresh := ta.getTotalReturnThresholds()
 
 	// Extract scores for easier access
 	opportunityScore := getScore(input.GroupScores, "opportunity")
@@ -444,7 +548,7 @@ func (ta *TagAssigner) AssignTagsForSecurity(input AssignTagsInput) ([]string, e
 	// === OPPORTUNITY TAGS ===
 
 	// Value Opportunities (using temperament-adjusted thresholds)
-	if opportunityScore > 0.65 && (below52wHighPct > valueThresh.ValueOpportunityDiscountPct || peVsMarket < valueThresh.UndervaluedPEThreshold) {
+	if opportunityScore > qualityThresh.ValueOpportunityScoreThreshold && (below52wHighPct > valueThresh.ValueOpportunityDiscountPct || peVsMarket < valueThresh.UndervaluedPEThreshold) {
 		tags = append(tags, "value-opportunity")
 	}
 
@@ -510,7 +614,7 @@ func (ta *TagAssigner) AssignTagsForSecurity(input AssignTagsInput) ([]string, e
 	}
 
 	// Score-Based Opportunities
-	if totalScore > 0.7 {
+	if totalScore > qualityGateParams.HighScoreThreshold {
 		tags = append(tags, "high-score")
 	}
 
@@ -603,7 +707,7 @@ func (ta *TagAssigner) AssignTagsForSecurity(input AssignTagsInput) ([]string, e
 	}
 
 	// Growth Profile
-	if cagrRaw > 0.15 && fundamentalsScore > qualityThresh.HighQualityFundamentals {
+	if cagrRaw > bubbleTrapThresh.GrowthTagCAGRThreshold && fundamentalsScore > qualityThresh.HighQualityFundamentals {
 		tags = append(tags, "growth")
 	}
 
@@ -611,7 +715,7 @@ func (ta *TagAssigner) AssignTagsForSecurity(input AssignTagsInput) ([]string, e
 		tags = append(tags, "value")
 	}
 
-	if dividendYield > divThresh.HighDividendYield && dividendScore > 0.65 {
+	if dividendYield > divThresh.HighDividendYield && dividendScore > divThresh.DividendOpportunityScore {
 		tags = append(tags, "dividend-focused")
 	}
 
@@ -656,37 +760,37 @@ func (ta *TagAssigner) AssignTagsForSecurity(input AssignTagsInput) ([]string, e
 	}
 
 	// Path 2: Exceptional Excellence
-	if !passes && evaluatePath2ExceptionalExcellence(fundamentalsScore, longTermScore) {
+	if !passes && evaluatePath2ExceptionalExcellence(fundamentalsScore, longTermScore, qualityGateParams.ExceptionalExcellenceThreshold) {
 		passes = true
 		passedPath = "exceptional_excellence"
 	}
 
 	// Path 3: Quality Value Play
-	if !passes && evaluatePath3QualityValuePlay(fundamentalsScore, opportunityScore, longTermScore) {
+	if !passes && evaluatePath3QualityValuePlay(fundamentalsScore, opportunityScore, longTermScore, qualityGateParams.QualityValueFundamentalsMin, qualityGateParams.QualityValueOpportunityMin, qualityGateParams.QualityValueLongTermMin) {
 		passes = true
 		passedPath = "quality_value"
 	}
 
 	// Path 4: Dividend Income Play
-	if !passes && evaluatePath4DividendIncomePlay(fundamentalsScore, dividendScore, dividendYield) {
+	if !passes && evaluatePath4DividendIncomePlay(fundamentalsScore, dividendScore, dividendYield, qualityGateParams.DividendIncomeFundamentalsMin, qualityGateParams.DividendIncomeScoreMin, qualityGateParams.DividendIncomeYieldMin) {
 		passes = true
 		passedPath = "dividend_income"
 	}
 
 	// Path 5: Risk-Adjusted Excellence
-	if !passes && evaluatePath5RiskAdjustedExcellence(longTermScore, sharpeRaw, sortinoRatioRaw, volatility) {
+	if !passes && evaluatePath5RiskAdjustedExcellence(longTermScore, sharpeRaw, sortinoRatioRaw, volatility, qualityGateParams.RiskAdjustedLongTermThreshold, qualityGateParams.RiskAdjustedSharpeThreshold, qualityGateParams.RiskAdjustedSortinoThreshold, qualityGateParams.RiskAdjustedVolatilityMax) {
 		passes = true
 		passedPath = "risk_adjusted"
 	}
 
 	// Path 6: Composite Minimum
-	if !passes && evaluatePath6CompositeMinimum(fundamentalsScore, longTermScore) {
+	if !passes && evaluatePath6CompositeMinimum(fundamentalsScore, longTermScore, qualityGateParams.CompositeFundamentalsWeight, qualityGateParams.CompositeLongTermWeight, qualityGateParams.CompositeScoreMin, qualityGateParams.CompositeFundamentalsFloor) {
 		passes = true
 		passedPath = "composite"
 	}
 
 	// Path 7: Growth Opportunity
-	if !passes && evaluatePath7GrowthOpportunity(cagrRaw, fundamentalsScore, volatility) {
+	if !passes && evaluatePath7GrowthOpportunity(cagrRaw, fundamentalsScore, volatility, qualityGateParams.GrowthOpportunityCAGRMin, qualityGateParams.GrowthOpportunityFundamentalsMin, qualityGateParams.GrowthOpportunityVolatilityMax) {
 		passes = true
 		passedPath = "growth"
 	}
@@ -733,12 +837,12 @@ func (ta *TagAssigner) AssignTagsForSecurity(input AssignTagsInput) ([]string, e
 	// Bubble risk: High CAGR with poor risk metrics
 	// Only use raw values for accurate risk assessment - no fallback approximations
 	isBubble := false
-	if cagrRaw > 0.15 { // 15% for 11% target (1.36x target, relaxed from 1.5x)
+	if cagrRaw > bubbleTrapThresh.BubbleCAGRThreshold {
 		// Check risk metrics - require raw Sortino for accurate assessment
 		// If sortino_raw is not available (0), we can't accurately assess bubble risk
-		hasPoorRisk := sharpeRatio < 0.5 || volatility > 0.40 || fundamentalsScore < 0.55
+		hasPoorRisk := sharpeRatio < bubbleTrapThresh.BubbleSharpeThreshold || volatility > bubbleTrapThresh.BubbleVolatilityThreshold || fundamentalsScore < bubbleTrapThresh.BubbleFundamentalsThreshold
 		if sortinoRatioRaw > 0 {
-			hasPoorRisk = hasPoorRisk || sortinoRatioRaw < 0.5
+			hasPoorRisk = hasPoorRisk || sortinoRatioRaw < bubbleTrapThresh.BubbleSharpeThreshold
 		}
 		// Only flag as bubble if we have sufficient risk data
 		if hasPoorRisk && (sortinoRatioRaw > 0 || sharpeRatio > 0) {
@@ -748,9 +852,9 @@ func (ta *TagAssigner) AssignTagsForSecurity(input AssignTagsInput) ([]string, e
 		if isBubble {
 			tags = append(tags, "bubble-risk")
 		} else {
-			// High CAGR (15%+) with good risk metrics = quality-high-cagr
+			// High CAGR with good risk metrics = quality-high-cagr
 			// Require both Sharpe and Sortino for quality-high-cagr tag
-			if sharpeRatio >= 0.5 && sortinoRatioRaw >= 0.5 && volatility <= 0.40 && fundamentalsScore >= 0.55 {
+			if sharpeRatio >= bubbleTrapThresh.BubbleSharpeThreshold && sortinoRatioRaw >= bubbleTrapThresh.BubbleSharpeThreshold && volatility <= bubbleTrapThresh.BubbleVolatilityThreshold && fundamentalsScore >= bubbleTrapThresh.BubbleFundamentalsThreshold {
 				tags = append(tags, "quality-high-cagr")
 			}
 		}
@@ -796,8 +900,8 @@ func (ta *TagAssigner) AssignTagsForSecurity(input AssignTagsInput) ([]string, e
 
 	// Value trap: Cheap but declining
 	isValueTrap := false
-	if peVsMarket < -0.20 {
-		if fundamentalsScore < 0.55 || longTermScore < 0.45 || momentumScore < -0.05 || volatility > 0.35 {
+	if peVsMarket < valueThresh.UndervaluedPEThreshold {
+		if fundamentalsScore < bubbleTrapThresh.ValueTrapFundamentals || longTermScore < bubbleTrapThresh.ValueTrapLongTerm || momentumScore < bubbleTrapThresh.ValueTrapMomentum || volatility > bubbleTrapThresh.ValueTrapVolatility {
 			isValueTrap = true
 		}
 
@@ -809,7 +913,7 @@ func (ta *TagAssigner) AssignTagsForSecurity(input AssignTagsInput) ([]string, e
 	// === QUANTUM VALUE TRAP DETECTION (Ensemble with Classical) ===
 
 	// Calculate quantum value trap probability (only if cheap)
-	if peVsMarket < -0.20 {
+	if peVsMarket < valueThresh.UndervaluedPEThreshold {
 		quantumTrapProb := ta.quantumCalculator.CalculateValueTrapProbability(
 			peVsMarket,
 			fundamentalsScore,
@@ -839,28 +943,28 @@ func (ta *TagAssigner) AssignTagsForSecurity(input AssignTagsInput) ([]string, e
 	// Calculate total return using raw CAGR and dividend yield (both in decimal format: 0.15 = 15%)
 	totalReturn := cagrRaw + dividendYield
 
-	if totalReturn >= 0.18 {
+	if totalReturn >= totalReturnThresh.ExcellentTotalReturn {
 		tags = append(tags, "excellent-total-return")
-	} else if totalReturn >= 0.15 {
+	} else if totalReturn >= totalReturnThresh.HighTotalReturn {
 		tags = append(tags, "high-total-return")
-	} else if totalReturn >= 0.12 {
+	} else if totalReturn >= totalReturnThresh.ModerateTotalReturn {
 		tags = append(tags, "moderate-total-return")
 	}
 
-	// Dividend total return (5% growth + 8% dividend example)
-	if dividendYield >= 0.08 && cagrRaw >= 0.05 {
+	// Dividend total return
+	if dividendYield >= totalReturnThresh.DividendTotalReturnYield && cagrRaw >= totalReturnThresh.DividendTotalReturnCAGR {
 		tags = append(tags, "dividend-total-return")
 	}
 
 	// === NEW: REGIME-SPECIFIC TAGS ===
 
 	// Bear market safe
-	if volatility < 0.20 && fundamentalsScore > 0.70 && maxDrawdown < 20.0 {
+	if volatility < regimeThresh.BearSafeVolatility && fundamentalsScore > regimeThresh.BearSafeFundamentals && maxDrawdown < regimeThresh.BearSafeDrawdown {
 		tags = append(tags, "regime-bear-safe")
 	}
 
 	// Bull market growth
-	if cagrRaw > 0.12 && fundamentalsScore > 0.7 && momentumScore > 0 {
+	if cagrRaw > regimeThresh.BullGrowthCAGR && fundamentalsScore > regimeThresh.BullGrowthFundamentals && momentumScore > 0 {
 		tags = append(tags, "regime-bull-growth")
 	}
 
@@ -873,12 +977,12 @@ func (ta *TagAssigner) AssignTagsForSecurity(input AssignTagsInput) ([]string, e
 			break
 		}
 	}
-	if hasValueOpportunityForRegime && fundamentalsScore > 0.75 {
+	if hasValueOpportunityForRegime && fundamentalsScore > regimeThresh.SidewaysValueFundamentals {
 		tags = append(tags, "regime-sideways-value")
 	}
 
 	// Regime volatile
-	if volatility > 0.30 || volatilitySpike {
+	if volatility > regimeThresh.RegimeVolatileVolatility || volatilitySpike {
 		tags = append(tags, "regime-volatile")
 	}
 
@@ -896,7 +1000,8 @@ func (ta *TagAssigner) AssignTagsForSecurity(input AssignTagsInput) ([]string, e
 	}
 
 	// Calculate absolute minimum CAGR threshold
-	absoluteMinCAGR := math.Max(0.06, targetReturn*0.50)
+	// Use configurable AbsoluteMinCAGR but ensure it's at least 50% of target return
+	absoluteMinCAGR := math.Max(qualityGateParams.AbsoluteMinCAGR, targetReturn*0.50)
 
 	// Get raw CAGR value (from sub-scores "cagr_raw", in decimal: e.g., 0.15 = 15%)
 	// Note: cagr_raw is already extracted at the top of the function
@@ -1005,49 +1110,58 @@ func evaluatePath1Balanced(fundamentals, longTerm, fundamentalsThreshold, longTe
 
 // evaluatePath2ExceptionalExcellence checks for exceptional performance in either dimension.
 // Path 2: Exceptional Excellence
-// Condition: fundamentals >= 0.75 OR longTerm >= 0.75
+// Condition: fundamentals >= threshold OR longTerm >= threshold
 // Allows one-dimensional excellence to compensate for weakness in other dimension.
-func evaluatePath2ExceptionalExcellence(fundamentals, longTerm float64) bool {
-	return fundamentals >= 0.75 || longTerm >= 0.75
+func evaluatePath2ExceptionalExcellence(fundamentals, longTerm, exceptionalThreshold float64) bool {
+	return fundamentals >= exceptionalThreshold || longTerm >= exceptionalThreshold
 }
 
 // evaluatePath3QualityValuePlay checks quality value play path.
 // Path 3: Quality Value Play
-// Condition: fundamentals >= 0.60 AND opportunity >= 0.65 AND longTerm >= 0.30
+// Condition: fundamentals >= fundamentalsMin AND opportunity >= opportunityMin AND longTerm >= longTermMin
 // Identifies high-quality undervalued securities with temporary weakness.
-func evaluatePath3QualityValuePlay(fundamentals, opportunity, longTerm float64) bool {
-	return fundamentals >= 0.60 && opportunity >= 0.65 && longTerm >= 0.30
+func evaluatePath3QualityValuePlay(fundamentals, opportunity, longTerm, fundamentalsMin, opportunityMin, longTermMin float64) bool {
+	return fundamentals >= fundamentalsMin && opportunity >= opportunityMin && longTerm >= longTermMin
 }
 
 // evaluatePath4DividendIncomePlay checks dividend income play path.
 // Path 4: Dividend Income Play
-// Condition: fundamentals >= 0.55 AND dividendScore >= 0.65 AND dividendYield >= 0.035
-// Identifies solid dividend payers for retirement income strategy.
-func evaluatePath4DividendIncomePlay(fundamentals, dividendScore, dividendYield float64) bool {
-	return fundamentals >= 0.55 && dividendScore >= 0.65 && dividendYield >= 0.035
+// Condition: fundamentals >= fundamentalsMin AND dividendScore >= scoreMin AND dividendYield >= yieldMin
+// Identifies solid dividend payers for income strategy.
+func evaluatePath4DividendIncomePlay(fundamentals, dividendScore, dividendYield, fundamentalsMin, scoreMin, yieldMin float64) bool {
+	return fundamentals >= fundamentalsMin && dividendScore >= scoreMin && dividendYield >= yieldMin
 }
 
 // evaluatePath5RiskAdjustedExcellence checks risk-adjusted excellence path.
 // Path 5: Risk-Adjusted Excellence
-// Condition: longTerm >= 0.55 AND (sharpe >= 0.9 OR sortino >= 0.9) AND volatility <= 0.35
+// Condition: longTerm >= longTermThreshold AND (sharpe >= sharpeThreshold OR sortino >= sortinoThreshold) AND volatility <= volatilityMax
 // Identifies securities with excellent risk-adjusted returns.
-func evaluatePath5RiskAdjustedExcellence(longTerm, sharpe, sortino, volatility float64) bool {
-	return longTerm >= 0.55 && (sharpe >= 0.9 || sortino >= 0.9) && volatility <= 0.35
+func evaluatePath5RiskAdjustedExcellence(longTerm, sharpe, sortino, volatility, longTermThreshold, sharpeThreshold, sortinoThreshold, volatilityMax float64) bool {
+	return longTerm >= longTermThreshold && (sharpe >= sharpeThreshold || sortino >= sortinoThreshold) && volatility <= volatilityMax
 }
 
 // evaluatePath6CompositeMinimum checks composite minimum path.
 // Path 6: Composite Minimum
-// Condition: (0.6 * fundamentals + 0.4 * longTerm) >= 0.52 AND fundamentals >= 0.45
+// Condition: (fundamentalsWeight * fundamentals + longTermWeight * longTerm) >= scoreMin AND fundamentals >= fundamentalsFloor
 // Allows trade-offs between dimensions with minimum fundamentals floor.
-func evaluatePath6CompositeMinimum(fundamentals, longTerm float64) bool {
-	compositeScore := 0.6*fundamentals + 0.4*longTerm
-	return compositeScore >= 0.52 && fundamentals >= 0.45
+// Weights are normalized to sum to 1.0 to ensure consistent composite score calculation.
+func evaluatePath6CompositeMinimum(fundamentals, longTerm, fundamentalsWeight, longTermWeight, scoreMin, fundamentalsFloor float64) bool {
+	// Normalize weights to sum to 1.0 (safety check - weights should already sum to 1.0 if temperament is "fixed")
+	weightSum := fundamentalsWeight + longTermWeight
+	if weightSum <= 0 {
+		// Invalid weights - fail the path evaluation
+		return false
+	}
+	fundamentalsWeight = fundamentalsWeight / weightSum
+	longTermWeight = longTermWeight / weightSum
+	compositeScore := fundamentalsWeight*fundamentals + longTermWeight*longTerm
+	return compositeScore >= scoreMin && fundamentals >= fundamentalsFloor
 }
 
 // evaluatePath7GrowthOpportunity checks growth opportunity path.
 // Path 7: Growth Opportunity
-// Condition: cagrRaw >= 0.13 AND fundamentals >= 0.50 AND volatility <= 0.40
-// Identifies growth securities meeting 15-20 year retirement fund targets.
-func evaluatePath7GrowthOpportunity(cagrRaw, fundamentals, volatility float64) bool {
-	return cagrRaw >= 0.13 && fundamentals >= 0.50 && volatility <= 0.40
+// Condition: cagrRaw >= cagrMin AND fundamentals >= fundamentalsMin AND volatility <= volatilityMax
+// Identifies growth securities meeting investment strategy targets.
+func evaluatePath7GrowthOpportunity(cagrRaw, fundamentals, volatility, cagrMin, fundamentalsMin, volatilityMax float64) bool {
+	return cagrRaw >= cagrMin && fundamentals >= fundamentalsMin && volatility <= volatilityMax
 }

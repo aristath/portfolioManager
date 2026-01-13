@@ -1604,7 +1604,7 @@ var temperamentMappings = map[string]TemperamentMapping{
 	},
 
 	// ==================================================================================
-	// Category 24: TAG ASSIGNER - REGIME SPECIFIC (6 params)
+	// Category 24: TAG ASSIGNER - REGIME SPECIFIC (7 params)
 	// ==================================================================================
 	"tag_bear_safe_volatility": {
 		Parameter:   "tag_bear_safe_volatility",
@@ -1670,7 +1670,262 @@ var temperamentMappings = map[string]TemperamentMapping{
 		Base:        0.30,
 		Progression: "linear",
 		AbsoluteMin: 0.15,
+		AbsoluteMax: 0.50,
+	},
+	"tag_sideways_value_fundamentals": {
+		Parameter:   "tag_sideways_value_fundamentals",
+		Temperament: "aggression",
+		Inverse:     true, // Conservative = higher bar
+		Min:         0.70,
+		Max:         0.85,
+		Base:        0.75,
+		Progression: "linear-reverse",
+		AbsoluteMin: 0.50,
+		AbsoluteMax: 0.95,
+	},
+
+	// ==================================================================================
+	// Category 25: TAG ASSIGNER - QUALITY GATE PATHS (19 params)
+	// ==================================================================================
+	// Path 2: Exceptional Excellence
+	"tag_quality_exceptional_excellence_threshold": {
+		Parameter:   "tag_quality_exceptional_excellence_threshold",
+		Temperament: "aggression",
+		Inverse:     true, // Conservative = higher bar
+		Min:         0.70,
+		Max:         0.85,
+		Base:        0.75,
+		Progression: "linear-reverse",
+		AbsoluteMin: 0.60,
+		AbsoluteMax: 0.95,
+	},
+	// Path 3: Quality Value Play
+	"tag_quality_value_fundamentals_min": {
+		Parameter:   "tag_quality_value_fundamentals_min",
+		Temperament: "aggression",
+		Inverse:     true, // Conservative = higher bar
+		Min:         0.55,
+		Max:         0.70,
+		Base:        0.60,
+		Progression: "linear-reverse",
+		AbsoluteMin: 0.40,
+		AbsoluteMax: 0.85,
+	},
+	"tag_quality_value_opportunity_min": {
+		Parameter:   "tag_quality_value_opportunity_min",
+		Temperament: "aggression",
+		Inverse:     true, // Conservative = higher bar
+		Min:         0.60,
+		Max:         0.75,
+		Base:        0.65,
+		Progression: "linear-reverse",
+		AbsoluteMin: 0.50,
+		AbsoluteMax: 0.85,
+	},
+	"tag_quality_value_long_term_min": {
+		Parameter:   "tag_quality_value_long_term_min",
+		Temperament: "aggression",
+		Inverse:     true, // Conservative = higher bar
+		Min:         0.25,
+		Max:         0.40,
+		Base:        0.30,
+		Progression: "linear-reverse",
+		AbsoluteMin: 0.15,
+		AbsoluteMax: 0.55,
+	},
+	// Path 4: Dividend Income Play
+	"tag_dividend_income_fundamentals_min": {
+		Parameter:   "tag_dividend_income_fundamentals_min",
+		Temperament: "aggression",
+		Inverse:     true, // Conservative = higher bar
+		Min:         0.50,
+		Max:         0.65,
+		Base:        0.55,
+		Progression: "linear-reverse",
+		AbsoluteMin: 0.40,
+		AbsoluteMax: 0.75,
+	},
+	"tag_dividend_income_score_min": {
+		Parameter:   "tag_dividend_income_score_min",
+		Temperament: "aggression",
+		Inverse:     true, // Conservative = higher bar
+		Min:         0.60,
+		Max:         0.75,
+		Base:        0.65,
+		Progression: "linear-reverse",
+		AbsoluteMin: 0.50,
+		AbsoluteMax: 0.85,
+	},
+	"tag_dividend_income_yield_min": {
+		Parameter:   "tag_dividend_income_yield_min",
+		Temperament: "patience",
+		Inverse:     false, // Patient = higher yield bar
+		Min:         0.025,
+		Max:         0.050,
+		Base:        0.035,
+		Progression: "linear",
+		AbsoluteMin: 0.015,
+		AbsoluteMax: 0.080,
+	},
+	// Path 5: Risk-Adjusted Excellence
+	"tag_risk_adjusted_sharpe_threshold": {
+		Parameter:   "tag_risk_adjusted_sharpe_threshold",
+		Temperament: "risk_tolerance",
+		Inverse:     true, // Lower risk = higher bar
+		Min:         0.60,
+		Max:         0.85,
+		Base:        0.70,
+		Progression: "linear-reverse",
+		AbsoluteMin: 0.50,
+		AbsoluteMax: 1.0,
+	},
+	"tag_risk_adjusted_sortino_threshold": {
+		Parameter:   "tag_risk_adjusted_sortino_threshold",
+		Temperament: "risk_tolerance",
+		Inverse:     true, // Lower risk = higher bar
+		Min:         0.60,
+		Max:         0.85,
+		Base:        0.70,
+		Progression: "linear-reverse",
+		AbsoluteMin: 0.50,
+		AbsoluteMax: 1.0,
+	},
+	"tag_risk_adjusted_long_term_threshold": {
+		Parameter:   "tag_risk_adjusted_long_term_threshold",
+		Temperament: "aggression",
+		Inverse:     true, // Conservative = higher bar
+		Min:         0.50,
+		Max:         0.65,
+		Base:        0.55,
+		Progression: "linear-reverse",
+		AbsoluteMin: 0.40,
+		AbsoluteMax: 0.75,
+	},
+	"tag_risk_adjusted_volatility_max": {
+		Parameter:   "tag_risk_adjusted_volatility_max",
+		Temperament: "risk_tolerance",
+		Inverse:     false, // Higher risk = accept more volatility
+		Min:         0.30,
+		Max:         0.45,
+		Base:        0.35,
+		Progression: "linear",
+		AbsoluteMin: 0.20,
 		AbsoluteMax: 0.60,
+	},
+	// Path 6: Composite Minimum
+	"tag_composite_fundamentals_weight": {
+		Parameter:   "tag_composite_fundamentals_weight",
+		Temperament: "fixed", // Fixed weights - sum to 1.0
+		Inverse:     false,
+		Min:         0.55,
+		Max:         0.65,
+		Base:        0.60,
+		Progression: "linear",
+		AbsoluteMin: 0.50,
+		AbsoluteMax: 0.70,
+	},
+	"tag_composite_long_term_weight": {
+		Parameter:   "tag_composite_long_term_weight",
+		Temperament: "fixed", // Fixed weights - sum to 1.0
+		Inverse:     false,
+		Min:         0.35,
+		Max:         0.45,
+		Base:        0.40,
+		Progression: "linear",
+		AbsoluteMin: 0.30,
+		AbsoluteMax: 0.50,
+	},
+	"tag_composite_score_min": {
+		Parameter:   "tag_composite_score_min",
+		Temperament: "aggression",
+		Inverse:     true, // Conservative = higher bar
+		Min:         0.48,
+		Max:         0.58,
+		Base:        0.52,
+		Progression: "linear-reverse",
+		AbsoluteMin: 0.40,
+		AbsoluteMax: 0.65,
+	},
+	"tag_composite_fundamentals_floor": {
+		Parameter:   "tag_composite_fundamentals_floor",
+		Temperament: "aggression",
+		Inverse:     true, // Conservative = higher bar
+		Min:         0.40,
+		Max:         0.55,
+		Base:        0.45,
+		Progression: "linear-reverse",
+		AbsoluteMin: 0.30,
+		AbsoluteMax: 0.65,
+	},
+	// Path 7: Growth Opportunity
+	"tag_growth_opportunity_cagr_min": {
+		Parameter:   "tag_growth_opportunity_cagr_min",
+		Temperament: "aggression",
+		Inverse:     true, // Conservative = higher bar
+		Min:         0.11,
+		Max:         0.16,
+		Base:        0.13,
+		Progression: "linear-reverse",
+		AbsoluteMin: 0.08,
+		AbsoluteMax: 0.20,
+	},
+	"tag_growth_opportunity_fundamentals_min": {
+		Parameter:   "tag_growth_opportunity_fundamentals_min",
+		Temperament: "aggression",
+		Inverse:     true, // Conservative = higher bar
+		Min:         0.45,
+		Max:         0.60,
+		Base:        0.50,
+		Progression: "linear-reverse",
+		AbsoluteMin: 0.35,
+		AbsoluteMax: 0.70,
+	},
+	"tag_growth_opportunity_volatility_max": {
+		Parameter:   "tag_growth_opportunity_volatility_max",
+		Temperament: "risk_tolerance",
+		Inverse:     false, // Higher risk = accept more volatility
+		Min:         0.35,
+		Max:         0.50,
+		Base:        0.40,
+		Progression: "linear",
+		AbsoluteMin: 0.25,
+		AbsoluteMax: 0.60,
+	},
+	// High Score Tag
+	"tag_high_score_threshold": {
+		Parameter:   "tag_high_score_threshold",
+		Temperament: "aggression",
+		Inverse:     true, // Conservative = higher bar
+		Min:         0.65,
+		Max:         0.80,
+		Base:        0.70,
+		Progression: "linear-reverse",
+		AbsoluteMin: 0.55,
+		AbsoluteMax: 0.90,
+	},
+	// Value Opportunity Score
+	"tag_value_opportunity_score_threshold": {
+		Parameter:   "tag_value_opportunity_score_threshold",
+		Temperament: "aggression",
+		Inverse:     true, // Conservative = higher bar
+		Min:         0.60,
+		Max:         0.75,
+		Base:        0.65,
+		Progression: "linear-reverse",
+		AbsoluteMin: 0.50,
+		AbsoluteMax: 0.85,
+	},
+	// Growth Tag
+	"tag_growth_tag_cagr_threshold": {
+		Parameter:   "tag_growth_tag_cagr_threshold",
+		Temperament: "aggression",
+		Inverse:     true, // Conservative = higher bar
+		Min:         0.12,
+		Max:         0.15,
+		Base:        0.13,
+		Progression: "linear-reverse",
+		AbsoluteMin: 0.10,
+		AbsoluteMax: 0.20,
 	},
 
 	// ==================================================================================

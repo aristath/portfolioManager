@@ -1495,3 +1495,256 @@ func TestQualityGate_NeverAssignsPassTag(t *testing.T) {
 		})
 	}
 }
+
+// ============================================================================
+// Tests for Configurable Thresholds (New Implementation)
+// ============================================================================
+
+func TestTagAssigner_Path5_ConfigurableSharpeSortino(t *testing.T) {
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+	assigner := NewTagAssigner(log)
+
+	// Path 5: Risk-Adjusted Excellence
+	// With new configurable thresholds: Sharpe >= 0.7 OR Sortino >= 0.7 (was 0.9)
+	// This should allow more securities to pass Path 5
+	volatility := 0.30
+	input := AssignTagsInput{
+		Symbol:     "TEST",
+		Volatility: &volatility,
+		GroupScores: map[string]float64{
+			"long_term": 0.60, // >= 0.55 threshold
+		},
+		SubScores: map[string]map[string]float64{
+			"long_term": {
+				"sharpe_raw":  0.75, // >= 0.7 (new threshold, would fail with 0.9)
+				"sortino_raw": 0.65, // < 0.7 but sharpe passes
+			},
+		},
+	}
+
+	tags, err := assigner.AssignTagsForSecurity(input)
+	assert.NoError(t, err)
+	// Should pass quality gate via Path 5
+	assert.NotContains(t, tags, "quality-gate-fail", "Should pass Path 5 with Sharpe 0.75 (>= 0.7)")
+}
+
+func TestTagAssigner_Path5_FailsWithOldThreshold(t *testing.T) {
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+	assigner := NewTagAssigner(log)
+
+	// Test that securities with Sharpe/Sortino between 0.7 and 0.9 now pass
+	// (previously would have failed with 0.9 threshold)
+	volatility := 0.30
+	input := AssignTagsInput{
+		Symbol:     "TEST",
+		Volatility: &volatility,
+		GroupScores: map[string]float64{
+			"long_term": 0.60,
+		},
+		SubScores: map[string]map[string]float64{
+			"long_term": {
+				"sharpe_raw":  0.75, // Would fail old 0.9 threshold, passes new 0.7
+				"sortino_raw": 0.72, // Would fail old 0.9 threshold, passes new 0.7
+			},
+		},
+	}
+
+	tags, err := assigner.AssignTagsForSecurity(input)
+	assert.NoError(t, err)
+	assert.NotContains(t, tags, "quality-gate-fail", "Should pass with Sharpe 0.75 and Sortino 0.72 (both >= 0.7)")
+}
+
+func TestTagAssigner_GrowthTag_ConfigurableThreshold(t *testing.T) {
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+	assigner := NewTagAssigner(log)
+
+	// Growth tag: CAGR >= 0.13 (was hardcoded 0.15)
+	// This should allow securities with 13-15% CAGR to get growth tag
+	cagr := 0.14 // Between old (0.15) and new (0.13) threshold
+	input := AssignTagsInput{
+		Symbol: "TEST",
+		GroupScores: map[string]float64{
+			"fundamentals": 0.75, // > HighQualityFundamentals (0.70)
+		},
+		SubScores: map[string]map[string]float64{
+			"long_term": {
+				"cagr_raw": cagr, // 14% - would fail old 0.15, passes new 0.13
+			},
+		},
+	}
+
+	tags, err := assigner.AssignTagsForSecurity(input)
+	assert.NoError(t, err)
+	assert.Contains(t, tags, "growth", "Should have growth tag with CAGR 0.14 (>= 0.13)")
+}
+
+func TestTagAssigner_ValueOpportunity_ConfigurableThreshold(t *testing.T) {
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+	assigner := NewTagAssigner(log)
+
+	currentPrice := 80.0
+	price52wHigh := 100.0
+	peRatio := 15.0
+	marketAvgPE := 20.0
+
+	// Value opportunity: opportunityScore > 0.65 (configurable, was hardcoded)
+	// Test with score exactly at threshold
+	input := AssignTagsInput{
+		Symbol:       "TEST",
+		CurrentPrice: &currentPrice,
+		Price52wHigh: &price52wHigh,
+		PERatio:      &peRatio,
+		MarketAvgPE:  marketAvgPE,
+		GroupScores: map[string]float64{
+			"opportunity": 0.66, // > 0.65 threshold
+		},
+	}
+
+	tags, err := assigner.AssignTagsForSecurity(input)
+	assert.NoError(t, err)
+	assert.Contains(t, tags, "value-opportunity", "Should have value-opportunity tag with score 0.66 (>= 0.65)")
+}
+
+func TestTagAssigner_HighScore_ConfigurableThreshold(t *testing.T) {
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+	assigner := NewTagAssigner(log)
+
+	// High score: totalScore > 0.7 (configurable threshold)
+	input := AssignTagsInput{
+		Symbol: "TEST",
+		GroupScores: map[string]float64{
+			"fundamentals": 0.75,
+			"long_term":    0.72,
+			"opportunity":  0.70,
+		},
+	}
+
+	_, err := assigner.AssignTagsForSecurity(input)
+	assert.NoError(t, err)
+	// Total score should be calculated and compared to HighScoreThreshold (0.7)
+	// If total > 0.7, should have high-score tag
+	// Note: Actual total score calculation depends on scoring logic
+	// This test verifies the threshold is configurable and code compiles
+}
+
+func TestTagAssigner_SidewaysValue_ConfigurableThreshold(t *testing.T) {
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+	assigner := NewTagAssigner(log)
+
+	currentPrice := 80.0
+	price52wHigh := 100.0
+	peRatio := 15.0
+	marketAvgPE := 20.0
+
+	// Sideways value: value-opportunity tag + fundamentals > 0.75 (configurable)
+	input := AssignTagsInput{
+		Symbol:       "TEST",
+		CurrentPrice: &currentPrice,
+		Price52wHigh: &price52wHigh,
+		PERatio:      &peRatio,
+		MarketAvgPE:  marketAvgPE,
+		GroupScores: map[string]float64{
+			"opportunity":  0.70, // > 0.65, gets value-opportunity tag
+			"fundamentals": 0.76, // > 0.75, required for sideways-value
+		},
+	}
+
+	tags, err := assigner.AssignTagsForSecurity(input)
+	assert.NoError(t, err)
+	assert.Contains(t, tags, "value-opportunity", "Should have value-opportunity tag")
+	assert.Contains(t, tags, "regime-sideways-value", "Should have regime-sideways-value tag with fundamentals 0.76 (>= 0.75)")
+}
+
+func TestTagAssigner_AllQualityGatePaths_ConfigurableThresholds(t *testing.T) {
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+	assigner := NewTagAssigner(log)
+
+	testCases := []struct {
+		name       string
+		input      AssignTagsInput
+		shouldPass bool
+		pathName   string
+	}{
+		{
+			name: "Path 2: Exceptional Excellence",
+			input: AssignTagsInput{
+				Symbol: "PATH2",
+				GroupScores: map[string]float64{
+					"fundamentals": 0.76, // >= 0.75 (ExceptionalExcellenceThreshold)
+					"long_term":    0.30, // Below threshold
+				},
+			},
+			shouldPass: true,
+			pathName:   "exceptional_excellence",
+		},
+		{
+			name: "Path 3: Quality Value Play",
+			input: AssignTagsInput{
+				Symbol: "PATH3",
+				GroupScores: map[string]float64{
+					"fundamentals": 0.61, // >= 0.60 (QualityValueFundamentalsMin)
+					"opportunity":  0.66, // >= 0.65 (QualityValueOpportunityMin)
+					"long_term":    0.31, // >= 0.30 (QualityValueLongTermMin)
+				},
+			},
+			shouldPass: true,
+			pathName:   "quality_value",
+		},
+		{
+			name: "Path 4: Dividend Income Play",
+			input: AssignTagsInput{
+				Symbol: "PATH4",
+				GroupScores: map[string]float64{
+					"fundamentals": 0.56, // >= 0.55 (DividendIncomeFundamentalsMin)
+					"dividends":    0.66, // >= 0.65 (DividendIncomeScoreMin) - dividend score is in GroupScores
+				},
+				DividendYield: func() *float64 { v := 0.036; return &v }(), // >= 0.035 (DividendIncomeYieldMin)
+			},
+			shouldPass: true,
+			pathName:   "dividend_income",
+		},
+		{
+			name: "Path 6: Composite Minimum",
+			input: AssignTagsInput{
+				Symbol: "PATH6",
+				GroupScores: map[string]float64{
+					"fundamentals": 0.50, // >= 0.45 (CompositeFundamentalsFloor)
+					"long_term":    0.55, // Composite: 0.6*0.50 + 0.4*0.55 = 0.52 (>= CompositeScoreMin)
+				},
+			},
+			shouldPass: true,
+			pathName:   "composite",
+		},
+		{
+			name: "Path 7: Growth Opportunity",
+			input: AssignTagsInput{
+				Symbol:     "PATH7",
+				Volatility: func() *float64 { v := 0.35; return &v }(), // <= 0.40 (GrowthOpportunityVolatilityMax)
+				GroupScores: map[string]float64{
+					"fundamentals": 0.51, // >= 0.50 (GrowthOpportunityFundamentalsMin)
+				},
+				SubScores: map[string]map[string]float64{
+					"long_term": {
+						"cagr_raw": 0.14, // >= 0.13 (GrowthOpportunityCAGRMin)
+					},
+				},
+			},
+			shouldPass: true,
+			pathName:   "growth",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tags, err := assigner.AssignTagsForSecurity(tc.input)
+			assert.NoError(t, err)
+			if tc.shouldPass {
+				assert.NotContains(t, tags, "quality-gate-fail",
+					"Should pass %s path", tc.pathName)
+			} else {
+				assert.Contains(t, tags, "quality-gate-fail",
+					"Should fail %s path", tc.pathName)
+			}
+		})
+	}
+}

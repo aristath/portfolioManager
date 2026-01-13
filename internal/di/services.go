@@ -954,14 +954,15 @@ func (a *tagSettingsAdapter) GetAdjustedValueThresholds() universe.ValueThreshol
 func (a *tagSettingsAdapter) GetAdjustedQualityThresholds() universe.QualityThresholds {
 	params := a.service.GetAdjustedQualityThresholds()
 	return universe.QualityThresholds{
-		HighQualityFundamentals:     params.HighQualityFundamentals,
-		HighQualityLongTerm:         params.HighQualityLongTerm,
-		StableFundamentals:          params.StableFundamentals,
-		StableVolatilityMax:         params.StableVolatilityMax,
-		StableConsistency:           params.StableConsistency,
-		ConsistentGrowerConsistency: params.ConsistentGrowerConsistency,
-		ConsistentGrowerCAGR:        params.ConsistentGrowerCAGR,
-		StrongFundamentalsThreshold: params.StrongFundamentalsThreshold,
+		HighQualityFundamentals:        params.HighQualityFundamentals,
+		HighQualityLongTerm:            params.HighQualityLongTerm,
+		StableFundamentals:             params.StableFundamentals,
+		StableVolatilityMax:            params.StableVolatilityMax,
+		StableConsistency:              params.StableConsistency,
+		ConsistentGrowerConsistency:    params.ConsistentGrowerConsistency,
+		ConsistentGrowerCAGR:           params.ConsistentGrowerCAGR,
+		StrongFundamentalsThreshold:    params.StrongFundamentalsThreshold,
+		ValueOpportunityScoreThreshold: params.ValueOpportunityScoreThreshold,
 	}
 }
 
@@ -1038,6 +1039,7 @@ func (a *tagSettingsAdapter) GetAdjustedBubbleTrapThresholds() universe.BubbleTr
 		QuantumBubbleWarningProb:    params.QuantumBubbleWarningProb,
 		QuantumTrapHighProb:         params.QuantumTrapHighProb,
 		QuantumTrapWarningProb:      params.QuantumTrapWarningProb,
+		GrowthTagCAGRThreshold:      params.GrowthTagCAGRThreshold,
 	}
 }
 
@@ -1055,22 +1057,42 @@ func (a *tagSettingsAdapter) GetAdjustedTotalReturnThresholds() universe.TotalRe
 func (a *tagSettingsAdapter) GetAdjustedRegimeThresholds() universe.RegimeThresholds {
 	params := a.service.GetAdjustedRegimeThresholds()
 	return universe.RegimeThresholds{
-		BearSafeVolatility:       params.BearSafeVolatility,
-		BearSafeFundamentals:     params.BearSafeFundamentals,
-		BearSafeDrawdown:         params.BearSafeDrawdown,
-		BullGrowthCAGR:           params.BullGrowthCAGR,
-		BullGrowthFundamentals:   params.BullGrowthFundamentals,
-		RegimeVolatileVolatility: params.RegimeVolatileVolatility,
+		BearSafeVolatility:        params.BearSafeVolatility,
+		BearSafeFundamentals:      params.BearSafeFundamentals,
+		BearSafeDrawdown:          params.BearSafeDrawdown,
+		BullGrowthCAGR:            params.BullGrowthCAGR,
+		BullGrowthFundamentals:    params.BullGrowthFundamentals,
+		RegimeVolatileVolatility:  params.RegimeVolatileVolatility,
+		SidewaysValueFundamentals: params.SidewaysValueFundamentals,
 	}
 }
 
 func (a *tagSettingsAdapter) GetAdjustedQualityGateParams() universe.QualityGateParams {
 	params := a.service.GetAdjustedQualityGateParams()
 	return universe.QualityGateParams{
-		FundamentalsThreshold: params.FundamentalsThreshold,
-		LongTermThreshold:     params.LongTermThreshold,
-		ExceptionalThreshold:  params.ExceptionalThreshold,
-		AbsoluteMinCAGR:       params.AbsoluteMinCAGR,
+		FundamentalsThreshold:            params.FundamentalsThreshold,
+		LongTermThreshold:                params.LongTermThreshold,
+		ExceptionalThreshold:             params.ExceptionalThreshold,
+		AbsoluteMinCAGR:                  params.AbsoluteMinCAGR,
+		ExceptionalExcellenceThreshold:   params.ExceptionalExcellenceThreshold,
+		QualityValueFundamentalsMin:      params.QualityValueFundamentalsMin,
+		QualityValueOpportunityMin:       params.QualityValueOpportunityMin,
+		QualityValueLongTermMin:          params.QualityValueLongTermMin,
+		DividendIncomeFundamentalsMin:    params.DividendIncomeFundamentalsMin,
+		DividendIncomeScoreMin:           params.DividendIncomeScoreMin,
+		DividendIncomeYieldMin:           params.DividendIncomeYieldMin,
+		RiskAdjustedLongTermThreshold:    params.RiskAdjustedLongTermThreshold,
+		RiskAdjustedSharpeThreshold:      params.RiskAdjustedSharpeThreshold,
+		RiskAdjustedSortinoThreshold:     params.RiskAdjustedSortinoThreshold,
+		RiskAdjustedVolatilityMax:        params.RiskAdjustedVolatilityMax,
+		CompositeFundamentalsWeight:      params.CompositeFundamentalsWeight,
+		CompositeLongTermWeight:          params.CompositeLongTermWeight,
+		CompositeScoreMin:                params.CompositeScoreMin,
+		CompositeFundamentalsFloor:       params.CompositeFundamentalsFloor,
+		GrowthOpportunityCAGRMin:         params.GrowthOpportunityCAGRMin,
+		GrowthOpportunityFundamentalsMin: params.GrowthOpportunityFundamentalsMin,
+		GrowthOpportunityVolatilityMax:   params.GrowthOpportunityVolatilityMax,
+		HighScoreThreshold:               params.HighScoreThreshold,
 	}
 }
 

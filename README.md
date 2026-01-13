@@ -1,14 +1,14 @@
 # Sentinel
 
-**Autonomous portfolio management system for retirement fund management**
+**Autonomous portfolio management system for investment strategy**
 
-Sentinel is a production-ready autonomous trading system that manages a real retirement fund. It runs on an Arduino Uno Q, handling monthly deposits, automatic trading, dividend reinvestment, and portfolio management with zero human intervention.
+Sentinel is a production-ready autonomous trading system designed for investment strategy management. It runs on an Arduino Uno Q, handling monthly deposits, automatic trading, dividend reinvestment, and portfolio management with zero human intervention. The system is versatile and can be configured for different investment goals (retirement-focused, opportunity-focused, or balanced) via temperament sliders.
 
 **This manages real money. Every line of code matters. Every decision has consequences.**
 
 ## Overview
 
-Sentinel is an autonomous retirement fund management system that combines modern portfolio theory with adaptive market strategies. The system operates on a **slow-growth, long-term philosophy** (2-3 trades per week), prioritizing quality, diversification, and risk-adjusted returns over speculative gains.
+Sentinel is an autonomous investment strategy management system that combines modern portfolio theory with adaptive market strategies. The system operates on a **balanced investment philosophy** (2-3 trades per week), prioritizing quality, diversification, and risk-adjusted returns over speculative gains. Default settings are balanced for investment strategy (safe but not too cautious, somewhat aggressive but not careless). Users can adjust temperament sliders to shift toward retirement-focused (more conservative) or hunter/opportunity-focused (more aggressive) strategies.
 
 ### Economic Theories & Models
 
@@ -1013,6 +1013,353 @@ LOG_LEVEL=info  # debug, info, warn, error
 ```
 
 **Note:** API credentials should be configured via the Settings UI (Credentials tab) or Settings API, not via environment variables.
+
+---
+
+## Temperament System
+
+The Temperament System is a core configuration mechanism that allows fine-tuning of investment behavior through three sliders. All tag assignment thresholds, quality gates, risk parameters, and trading behavior are dynamically adjusted based on these temperament values.
+
+### Overview
+
+The system uses three temperament sliders, each ranging from 0.0 to 1.0, with a default of 0.5 (balanced):
+
+1. **`risk_tolerance`** (0.0 = conservative/risk-averse, 0.5 = balanced, 1.0 = risk-taking)
+2. **`temperament_aggression`** (0.0 = passive, 0.5 = balanced, 1.0 = aggressive)
+3. **`temperament_patience`** (0.0 = impatient, 0.5 = balanced, 1.0 = patient)
+
+**Default Philosophy**: All sliders default to 0.5, representing balanced defaults for investment strategy (safe but not too cautious, somewhat aggressive but not careless). These defaults are versatile and suitable for general investment strategy management.
+
+**Use Cases**:
+- **Retirement-focused**: Lower `risk_tolerance` (0.2-0.3), lower `temperament_aggression` (0.2-0.3), higher `temperament_patience` (0.7-0.8)
+- **Hunter/opportunity-focused**: Higher `risk_tolerance` (0.7-0.8), higher `temperament_aggression` (0.7-0.8), lower `temperament_patience` (0.2-0.3)
+- **Balanced (default)**: All sliders at 0.5 - balanced for investment strategy
+
+### How It Works
+
+Each parameter in the system has a temperament mapping that defines:
+- **Which slider controls it**: `risk_tolerance`, `aggression`, `patience`, or `fixed` (independent)
+- **Min value**: Value when slider favors lower (0.0 for risk_tolerance/aggression, accounting for inverse)
+- **Max value**: Value when slider favors higher (1.0 for risk_tolerance/aggression, accounting for inverse)
+- **Base value**: Default value at balanced (0.5) - this is the balanced default for investment strategy
+- **Progression curve**: How the value changes across the slider range (linear, exponential, logarithmic, sigmoid)
+- **Inverse flag**: Whether higher slider = lower parameter value (and vice versa)
+- **Absolute bounds**: Hard min/max limits that can never be violated
+
+### Progression Curves Explained
+
+The progression curve determines how parameter values change as the slider moves from 0.0 to 1.0:
+
+- **`linear`**: Direct proportional adjustment (0.0 → Min, 0.5 → Base, 1.0 → Max)
+- **`linear-reverse`**: Inverse proportional (0.0 → Max, 0.5 → Base, 1.0 → Min)
+- **`exponential`**: Accelerating change (slow at 0.0, fast at 1.0) - good for thresholds that should change dramatically at extremes
+- **`exponential-reverse`**: Decelerating change (fast at 0.0, slow at 1.0)
+- **`logarithmic`**: Decelerating change (fast at 0.0, slow at 1.0) - similar to exponential-reverse but different curve
+- **`logarithmic-reverse`**: Accelerating change (slow at 0.0, fast at 1.0)
+- **`sigmoid`**: S-curve (slow at extremes, fast in middle) - smooth transitions, good for parameters that should change gradually
+- **`sigmoid-reverse`**: Inverse S-curve (fast at extremes, slow in middle)
+
+### risk_tolerance Slider
+
+**Range**: 0.0 (conservative/risk-averse) to 1.0 (risk-taking)
+**Default**: 0.5 (balanced)
+
+**What It Controls**: Volatility acceptance, drawdown tolerance, position concentration, quality floors, bubble detection sensitivity, risk-adjusted return thresholds
+
+**Key Parameters Controlled**:
+
+- **Bubble Detection**:
+  - `tag_bubble_cagr_threshold`: CAGR threshold for bubble detection
+    - Min: 0.12 (when risk_tolerance = 0.0, conservative - flags earlier)
+    - Max: 0.20 (when risk_tolerance = 1.0, risk-taking - flags later)
+    - Base: 0.15 (when risk_tolerance = 0.5, balanced)
+    - Curve: linear-reverse
+    - Inverse: true (lower risk = flag earlier)
+    - Absolute bounds: 0.08 - 0.30
+
+  - `tag_bubble_sharpe_threshold`: Sharpe ratio threshold for bubble detection
+    - Min: 0.35 (when risk_tolerance = 0.0, conservative - lower bar)
+    - Max: 0.70 (when risk_tolerance = 1.0, risk-taking - higher bar)
+    - Base: 0.50 (when risk_tolerance = 0.5, balanced)
+    - Curve: linear
+    - Inverse: false (higher risk = accept lower Sharpe)
+    - Absolute bounds: 0.20 - 1.0
+
+- **Risk-Adjusted Excellence (Path 5)**:
+  - `tag_risk_adjusted_sharpe_threshold`: Minimum Sharpe ratio for risk-adjusted path
+    - Min: 0.60 (when risk_tolerance = 0.0, conservative - higher bar)
+    - Max: 0.85 (when risk_tolerance = 1.0, risk-taking - lower bar)
+    - Base: 0.70 (when risk_tolerance = 0.5, balanced)
+    - Curve: linear-reverse
+    - Inverse: true (lower risk = higher bar)
+    - Absolute bounds: 0.50 - 1.0
+
+  - `tag_risk_adjusted_sortino_threshold`: Minimum Sortino ratio for risk-adjusted path
+    - Min: 0.60 (when risk_tolerance = 0.0, conservative - higher bar)
+    - Max: 0.85 (when risk_tolerance = 1.0, risk-taking - lower bar)
+    - Base: 0.70 (when risk_tolerance = 0.5, balanced)
+    - Curve: linear-reverse
+    - Inverse: true (lower risk = higher bar)
+    - Absolute bounds: 0.50 - 1.0
+
+  - `tag_risk_adjusted_volatility_max`: Maximum volatility for risk-adjusted path
+    - Min: 0.30 (when risk_tolerance = 0.0, conservative - lower max)
+    - Max: 0.45 (when risk_tolerance = 1.0, risk-taking - higher max)
+    - Base: 0.35 (when risk_tolerance = 0.5, balanced)
+    - Curve: linear
+    - Inverse: false (higher risk = accept more volatility)
+    - Absolute bounds: 0.20 - 0.60
+
+- **Regime-Specific Tags**:
+  - `tag_bear_safe_volatility`: Maximum volatility for bear-safe tag
+    - Min: 0.15 (when risk_tolerance = 0.0, conservative)
+    - Max: 0.30 (when risk_tolerance = 1.0, risk-taking)
+    - Base: 0.20 (when risk_tolerance = 0.5, balanced)
+    - Curve: linear
+    - Inverse: false
+    - Absolute bounds: 0.10 - 0.40
+
+  - `tag_regime_volatile_volatility`: Volatility threshold for regime-volatile tag
+    - Min: 0.25 (when risk_tolerance = 0.0, conservative)
+    - Max: 0.40 (when risk_tolerance = 1.0, risk-taking)
+    - Base: 0.30 (when risk_tolerance = 0.5, balanced)
+    - Curve: linear
+    - Inverse: false
+    - Absolute bounds: 0.15 - 0.50
+
+- **Growth Opportunity (Path 7)**:
+  - `tag_growth_opportunity_volatility_max`: Maximum volatility for growth opportunity path
+    - Min: 0.35 (when risk_tolerance = 0.0, conservative)
+    - Max: 0.50 (when risk_tolerance = 1.0, risk-taking)
+    - Base: 0.40 (when risk_tolerance = 0.5, balanced)
+    - Curve: linear
+    - Inverse: false
+    - Absolute bounds: 0.25 - 0.60
+
+### temperament_aggression Slider
+
+**Range**: 0.0 (passive) to 1.0 (aggressive)
+**Default**: 0.5 (balanced)
+
+**What It Controls**: Quality gate thresholds, growth requirements, opportunity acceptance, value thresholds, dividend requirements
+
+**Key Parameters Controlled**:
+
+- **Quality Gate Paths**:
+  - `tag_quality_exceptional_excellence_threshold`: Threshold for exceptional excellence (Path 2)
+    - Min: 0.70 (when aggression = 0.0, passive - lower bar)
+    - Max: 0.85 (when aggression = 1.0, aggressive - higher bar)
+    - Base: 0.75 (when aggression = 0.5, balanced)
+    - Curve: linear-reverse
+    - Inverse: true (conservative = higher bar)
+    - Absolute bounds: 0.60 - 0.95
+
+  - `tag_quality_value_fundamentals_min`: Minimum fundamentals for quality value play (Path 3)
+    - Min: 0.55 (when aggression = 0.0, passive - lower bar)
+    - Max: 0.70 (when aggression = 1.0, aggressive - higher bar)
+    - Base: 0.60 (when aggression = 0.5, balanced)
+    - Curve: linear-reverse
+    - Inverse: true (conservative = higher bar)
+    - Absolute bounds: 0.40 - 0.85
+
+  - `tag_quality_value_opportunity_min`: Minimum opportunity score for quality value play (Path 3)
+    - Min: 0.60 (when aggression = 0.0, passive - lower bar)
+    - Max: 0.75 (when aggression = 1.0, aggressive - higher bar)
+    - Base: 0.65 (when aggression = 0.5, balanced)
+    - Curve: linear-reverse
+    - Inverse: true (conservative = higher bar)
+    - Absolute bounds: 0.50 - 0.85
+
+  - `tag_quality_value_long_term_min`: Minimum long-term score for quality value play (Path 3)
+    - Min: 0.25 (when aggression = 0.0, passive - lower bar)
+    - Max: 0.40 (when aggression = 1.0, aggressive - higher bar)
+    - Base: 0.30 (when aggression = 0.5, balanced)
+    - Curve: linear-reverse
+    - Inverse: true (conservative = higher bar)
+    - Absolute bounds: 0.15 - 0.55
+
+  - `tag_dividend_income_fundamentals_min`: Minimum fundamentals for dividend income play (Path 4)
+    - Min: 0.50 (when aggression = 0.0, passive - lower bar)
+    - Max: 0.65 (when aggression = 1.0, aggressive - higher bar)
+    - Base: 0.55 (when aggression = 0.5, balanced)
+    - Curve: linear-reverse
+    - Inverse: true (conservative = higher bar)
+    - Absolute bounds: 0.40 - 0.75
+
+  - `tag_dividend_income_score_min`: Minimum dividend score for dividend income play (Path 4)
+    - Min: 0.60 (when aggression = 0.0, passive - lower bar)
+    - Max: 0.75 (when aggression = 1.0, aggressive - higher bar)
+    - Base: 0.65 (when aggression = 0.5, balanced)
+    - Curve: linear-reverse
+    - Inverse: true (conservative = higher bar)
+    - Absolute bounds: 0.50 - 0.85
+
+  - `tag_risk_adjusted_long_term_threshold`: Minimum long-term score for risk-adjusted path (Path 5)
+    - Min: 0.50 (when aggression = 0.0, passive - lower bar)
+    - Max: 0.65 (when aggression = 1.0, aggressive - higher bar)
+    - Base: 0.55 (when aggression = 0.5, balanced)
+    - Curve: linear-reverse
+    - Inverse: true (conservative = higher bar)
+    - Absolute bounds: 0.40 - 0.75
+
+  - `tag_composite_score_min`: Minimum composite score for composite minimum path (Path 6)
+    - Min: 0.48 (when aggression = 0.0, passive - lower bar)
+    - Max: 0.58 (when aggression = 1.0, aggressive - higher bar)
+    - Base: 0.52 (when aggression = 0.5, balanced)
+    - Curve: linear-reverse
+    - Inverse: true (conservative = higher bar)
+    - Absolute bounds: 0.40 - 0.65
+
+  - `tag_composite_fundamentals_floor`: Minimum fundamentals floor for composite path (Path 6)
+    - Min: 0.40 (when aggression = 0.0, passive - lower bar)
+    - Max: 0.55 (when aggression = 1.0, aggressive - higher bar)
+    - Base: 0.45 (when aggression = 0.5, balanced)
+    - Curve: linear-reverse
+    - Inverse: true (conservative = higher bar)
+    - Absolute bounds: 0.30 - 0.65
+
+  - `tag_growth_opportunity_cagr_min`: Minimum CAGR for growth opportunity path (Path 7)
+    - Min: 0.11 (when aggression = 0.0, passive - lower bar)
+    - Max: 0.16 (when aggression = 1.0, aggressive - higher bar)
+    - Base: 0.13 (when aggression = 0.5, balanced)
+    - Curve: linear-reverse
+    - Inverse: true (conservative = higher bar)
+    - Absolute bounds: 0.08 - 0.20
+
+  - `tag_growth_opportunity_fundamentals_min`: Minimum fundamentals for growth opportunity path (Path 7)
+    - Min: 0.45 (when aggression = 0.0, passive - lower bar)
+    - Max: 0.60 (when aggression = 1.0, aggressive - higher bar)
+    - Base: 0.50 (when aggression = 0.5, balanced)
+    - Curve: linear-reverse
+    - Inverse: true (conservative = higher bar)
+    - Absolute bounds: 0.35 - 0.70
+
+- **Growth Tag**:
+  - `tag_growth_tag_cagr_threshold`: CAGR threshold for growth tag
+    - Min: 0.12 (when aggression = 0.0, passive - lower bar)
+    - Max: 0.15 (when aggression = 1.0, aggressive - higher bar)
+    - Base: 0.13 (when aggression = 0.5, balanced)
+    - Curve: linear-reverse
+    - Inverse: true (conservative = higher bar)
+    - Absolute bounds: 0.10 - 0.20
+
+- **High Score Tag**:
+  - `tag_high_score_threshold`: Threshold for high score tag
+    - Min: 0.65 (when aggression = 0.0, passive - lower bar)
+    - Max: 0.80 (when aggression = 1.0, aggressive - higher bar)
+    - Base: 0.70 (when aggression = 0.5, balanced)
+    - Curve: linear-reverse
+    - Inverse: true (conservative = higher bar)
+    - Absolute bounds: 0.55 - 0.90
+
+- **Value Opportunity Score**:
+  - `tag_value_opportunity_score_threshold`: Score threshold for value-opportunity tag
+    - Min: 0.60 (when aggression = 0.0, passive - lower bar)
+    - Max: 0.75 (when aggression = 1.0, aggressive - higher bar)
+    - Base: 0.65 (when aggression = 0.5, balanced)
+    - Curve: linear-reverse
+    - Inverse: true (conservative = higher bar)
+    - Absolute bounds: 0.50 - 0.85
+
+- **Regime-Specific Tags**:
+  - `tag_bear_safe_fundamentals`: Fundamentals threshold for bear-safe tag
+    - Min: 0.60 (when aggression = 0.0, passive - lower bar)
+    - Max: 0.80 (when aggression = 1.0, aggressive - higher bar)
+    - Base: 0.70 (when aggression = 0.5, balanced)
+    - Curve: linear-reverse
+    - Inverse: true (conservative = higher bar)
+    - Absolute bounds: 0.30 - 0.90
+
+  - `tag_bull_growth_cagr`: CAGR threshold for bull-growth tag
+    - Min: 0.09 (when aggression = 0.0, passive - lower bar)
+    - Max: 0.16 (when aggression = 1.0, aggressive - higher bar)
+    - Base: 0.12 (when aggression = 0.5, balanced)
+    - Curve: linear
+    - Inverse: false (aggressive = lower bar)
+    - Absolute bounds: 0.05 - 0.25
+
+  - `tag_bull_growth_fundamentals`: Fundamentals threshold for bull-growth tag
+    - Min: 0.60 (when aggression = 0.0, passive - lower bar)
+    - Max: 0.80 (when aggression = 1.0, aggressive - higher bar)
+    - Base: 0.70 (when aggression = 0.5, balanced)
+    - Curve: linear-reverse
+    - Inverse: true (conservative = higher bar)
+    - Absolute bounds: 0.30 - 0.90
+
+  - `tag_sideways_value_fundamentals`: Fundamentals threshold for sideways-value tag
+    - Min: 0.70 (when aggression = 0.0, passive - lower bar)
+    - Max: 0.85 (when aggression = 1.0, aggressive - higher bar)
+    - Base: 0.75 (when aggression = 0.5, balanced)
+    - Curve: linear-reverse
+    - Inverse: true (conservative = higher bar)
+    - Absolute bounds: 0.50 - 0.95
+
+- **Total Return Tags**:
+  - `tag_excellent_total_return`: Threshold for excellent total return tag
+    - Min: 0.15 (when aggression = 0.0, passive - lower bar)
+    - Max: 0.22 (when aggression = 1.0, aggressive - higher bar)
+    - Base: 0.18 (when aggression = 0.5, balanced)
+    - Curve: linear-reverse
+    - Inverse: true (conservative = higher bar)
+    - Absolute bounds: 0.10 - 0.30
+
+  - `tag_high_total_return`: Threshold for high total return tag
+    - Min: 0.12 (when aggression = 0.0, passive - lower bar)
+    - Max: 0.18 (when aggression = 1.0, aggressive - higher bar)
+    - Base: 0.15 (when aggression = 0.5, balanced)
+    - Curve: linear-reverse
+    - Inverse: true (conservative = higher bar)
+    - Absolute bounds: 0.08 - 0.25
+
+  - `tag_moderate_total_return`: Threshold for moderate total return tag
+    - Min: 0.09 (when aggression = 0.0, passive - lower bar)
+    - Max: 0.15 (when aggression = 1.0, aggressive - higher bar)
+    - Base: 0.12 (when aggression = 0.5, balanced)
+    - Curve: linear-reverse
+    - Inverse: true (conservative = higher bar)
+    - Absolute bounds: 0.05 - 0.20
+
+### temperament_patience Slider
+
+**Range**: 0.0 (impatient) to 1.0 (patient)
+**Default**: 0.5 (balanced)
+
+**What It Controls**: Dividend requirements, profit-taking thresholds, holding periods, yield expectations
+
+**Key Parameters Controlled**:
+
+- **Dividend Income Play (Path 4)**:
+  - `tag_dividend_income_yield_min`: Minimum dividend yield for dividend income path
+    - Min: 0.025 (when patience = 0.0, impatient - lower bar)
+    - Max: 0.050 (when patience = 1.0, patient - higher bar)
+    - Base: 0.035 (when patience = 0.5, balanced)
+    - Curve: linear
+    - Inverse: false (patient = higher yield bar)
+    - Absolute bounds: 0.015 - 0.080
+
+- **Total Return Tags**:
+  - `tag_dividend_total_return_yield`: Yield threshold for dividend total return tag
+    - Min: 0.05 (when patience = 0.0, impatient - lower bar)
+    - Max: 0.10 (when patience = 1.0, patient - higher bar)
+    - Base: 0.08 (when patience = 0.5, balanced)
+    - Curve: linear
+    - Inverse: false (patient = higher yield bar)
+    - Absolute bounds: 0.02 - 0.15
+
+### Tag Assignment Thresholds
+
+All tag assignment thresholds are now configurable via the temperament system. This includes:
+
+- **Quality Gate Paths**: All 7 paths have configurable thresholds (fundamentals, long-term, opportunity, dividend, risk-adjusted, composite, growth)
+- **Bubble Detection**: CAGR threshold, Sharpe/Sortino thresholds, volatility thresholds, fundamentals thresholds
+- **Value Trap Detection**: Fundamentals, long-term, momentum, volatility thresholds
+- **Total Return Tags**: Excellent, high, moderate, and dividend total return thresholds
+- **Regime-Specific Tags**: Bear-safe, bull-growth, sideways-value, regime-volatile thresholds
+- **Growth Tag**: CAGR threshold for growth classification
+- **High Score Tag**: Threshold for high score classification
+- **Value Opportunity**: Score threshold for value-opportunity tag
+
+All thresholds adjust dynamically based on temperament slider values, allowing the system to adapt from conservative retirement-focused strategies to aggressive opportunity-hunting strategies while maintaining quality safeguards.
 
 ---
 

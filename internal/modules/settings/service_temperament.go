@@ -150,6 +150,32 @@ func (s *Service) GetAdjustedQualityGateParams() QualityGateParams {
 		LongTermThreshold:     s.getAdjustedParam("quality_long_term_threshold"),
 		ExceptionalThreshold:  s.getAdjustedParam("quality_exceptional_threshold"),
 		AbsoluteMinCAGR:       s.getAdjustedParam("quality_absolute_min_cagr"),
+		// Path 2: Exceptional Excellence
+		ExceptionalExcellenceThreshold: s.getAdjustedParam("tag_quality_exceptional_excellence_threshold"),
+		// Path 3: Quality Value Play
+		QualityValueFundamentalsMin: s.getAdjustedParam("tag_quality_value_fundamentals_min"),
+		QualityValueOpportunityMin:  s.getAdjustedParam("tag_quality_value_opportunity_min"),
+		QualityValueLongTermMin:     s.getAdjustedParam("tag_quality_value_long_term_min"),
+		// Path 4: Dividend Income Play
+		DividendIncomeFundamentalsMin: s.getAdjustedParam("tag_dividend_income_fundamentals_min"),
+		DividendIncomeScoreMin:        s.getAdjustedParam("tag_dividend_income_score_min"),
+		DividendIncomeYieldMin:        s.getAdjustedParam("tag_dividend_income_yield_min"),
+		// Path 5: Risk-Adjusted Excellence
+		RiskAdjustedLongTermThreshold: s.getAdjustedParam("tag_risk_adjusted_long_term_threshold"),
+		RiskAdjustedSharpeThreshold:   s.getAdjustedParam("tag_risk_adjusted_sharpe_threshold"),
+		RiskAdjustedSortinoThreshold:  s.getAdjustedParam("tag_risk_adjusted_sortino_threshold"),
+		RiskAdjustedVolatilityMax:     s.getAdjustedParam("tag_risk_adjusted_volatility_max"),
+		// Path 6: Composite Minimum
+		CompositeFundamentalsWeight: s.getAdjustedParam("tag_composite_fundamentals_weight"),
+		CompositeLongTermWeight:     s.getAdjustedParam("tag_composite_long_term_weight"),
+		CompositeScoreMin:           s.getAdjustedParam("tag_composite_score_min"),
+		CompositeFundamentalsFloor:  s.getAdjustedParam("tag_composite_fundamentals_floor"),
+		// Path 7: Growth Opportunity
+		GrowthOpportunityCAGRMin:         s.getAdjustedParam("tag_growth_opportunity_cagr_min"),
+		GrowthOpportunityFundamentalsMin: s.getAdjustedParam("tag_growth_opportunity_fundamentals_min"),
+		GrowthOpportunityVolatilityMax:   s.getAdjustedParam("tag_growth_opportunity_volatility_max"),
+		// High Score Tag
+		HighScoreThreshold: s.getAdjustedParam("tag_high_score_threshold"),
 	}
 }
 
@@ -283,14 +309,15 @@ func (s *Service) GetAdjustedValueThresholds() ValueThresholds {
 // GetAdjustedQualityThresholds returns quality-related tag thresholds adjusted by temperament
 func (s *Service) GetAdjustedQualityThresholds() QualityThresholds {
 	return QualityThresholds{
-		HighQualityFundamentals:     s.getAdjustedParam("tag_high_quality_fundamentals"),
-		HighQualityLongTerm:         s.getAdjustedParam("tag_high_quality_long_term"),
-		StableFundamentals:          s.getAdjustedParam("tag_stable_fundamentals"),
-		StableVolatilityMax:         s.getAdjustedParam("tag_stable_volatility_max"),
-		StableConsistency:           s.getAdjustedParam("tag_stable_consistency"),
-		ConsistentGrowerConsistency: s.getAdjustedParam("tag_consistent_grower_consistency"),
-		ConsistentGrowerCAGR:        s.getAdjustedParam("tag_consistent_grower_cagr"),
-		StrongFundamentalsThreshold: s.getAdjustedParam("tag_strong_fundamentals_threshold"),
+		HighQualityFundamentals:        s.getAdjustedParam("tag_high_quality_fundamentals"),
+		HighQualityLongTerm:            s.getAdjustedParam("tag_high_quality_long_term"),
+		StableFundamentals:             s.getAdjustedParam("tag_stable_fundamentals"),
+		StableVolatilityMax:            s.getAdjustedParam("tag_stable_volatility_max"),
+		StableConsistency:              s.getAdjustedParam("tag_stable_consistency"),
+		ConsistentGrowerConsistency:    s.getAdjustedParam("tag_consistent_grower_consistency"),
+		ConsistentGrowerCAGR:           s.getAdjustedParam("tag_consistent_grower_cagr"),
+		StrongFundamentalsThreshold:    s.getAdjustedParam("tag_strong_fundamentals_threshold"),
+		ValueOpportunityScoreThreshold: s.getAdjustedParam("tag_value_opportunity_score_threshold"),
 	}
 }
 
@@ -391,6 +418,7 @@ func (s *Service) GetAdjustedBubbleTrapThresholds() BubbleTrapThresholds {
 		QuantumBubbleWarningProb:    s.getAdjustedParam("tag_quantum_bubble_warning_prob"),
 		QuantumTrapHighProb:         s.getAdjustedParam("tag_quantum_trap_high_prob"),
 		QuantumTrapWarningProb:      s.getAdjustedParam("tag_quantum_trap_warning_prob"),
+		GrowthTagCAGRThreshold:      s.getAdjustedParam("tag_growth_tag_cagr_threshold"),
 	}
 }
 
@@ -416,12 +444,13 @@ func (s *Service) GetAdjustedTotalReturnThresholds() TotalReturnThresholds {
 // GetAdjustedRegimeThresholds returns regime-specific tag thresholds adjusted by temperament
 func (s *Service) GetAdjustedRegimeThresholds() RegimeThresholds {
 	return RegimeThresholds{
-		BearSafeVolatility:       s.getAdjustedParam("tag_bear_safe_volatility"),
-		BearSafeFundamentals:     s.getAdjustedParam("tag_bear_safe_fundamentals"),
-		BearSafeDrawdown:         s.getAdjustedParam("tag_bear_safe_drawdown"),
-		BullGrowthCAGR:           s.getAdjustedParam("tag_bull_growth_cagr"),
-		BullGrowthFundamentals:   s.getAdjustedParam("tag_bull_growth_fundamentals"),
-		RegimeVolatileVolatility: s.getAdjustedParam("tag_regime_volatile_volatility"),
+		BearSafeVolatility:        s.getAdjustedParam("tag_bear_safe_volatility"),
+		BearSafeFundamentals:      s.getAdjustedParam("tag_bear_safe_fundamentals"),
+		BearSafeDrawdown:          s.getAdjustedParam("tag_bear_safe_drawdown"),
+		BullGrowthCAGR:            s.getAdjustedParam("tag_bull_growth_cagr"),
+		BullGrowthFundamentals:    s.getAdjustedParam("tag_bull_growth_fundamentals"),
+		RegimeVolatileVolatility:  s.getAdjustedParam("tag_regime_volatile_volatility"),
+		SidewaysValueFundamentals: s.getAdjustedParam("tag_sideways_value_fundamentals"),
 	}
 }
 
