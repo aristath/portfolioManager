@@ -40,7 +40,7 @@ func NewAppLabDeployer(log Logger) *AppLabDeployer {
 }
 
 // DeployApp deploys the full Arduino App Lab application
-// This includes app.yaml, app/main.py, and the sketch directory
+// This includes app.yaml, python/main.py, and the sketch directory
 func (d *AppLabDeployer) DeployApp() error {
 	d.log.Info().
 		Str("target", AppDir).
@@ -63,7 +63,7 @@ func (d *AppLabDeployer) DeployApp() error {
 	}
 
 	// Verify required files exist
-	requiredFiles := []string{"app.yaml", "app/main.py", "sketch/sketch.ino", "sketch/sketch.yaml"}
+	requiredFiles := []string{"app.yaml", "python/main.py", "sketch/sketch.ino", "sketch/sketch.yaml"}
 	for _, file := range requiredFiles {
 		filePath := filepath.Join(AppDir, file)
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
