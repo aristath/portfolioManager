@@ -87,19 +87,22 @@ void setPixelCount(int pixelsOn) {
 
 /**
  * Draw raw bitmap data to the matrix
- * Accepts a vector of bytes representing the 8x13 matrix state
+ * Expects 104 bytes (8 rows x 13 cols) in row-major order
+ * Each byte is brightness level 0-7 (3-bit grayscale)
+ * 0 = off, 7 = full brightness
  */
 void drawMatrix(std::vector<uint8_t> data) {
-    if (data.empty()) {
+    if (data.size() != MATRIX_ROWS * MATRIX_COLS) {
         return;
     }
+    // Use matrix.draw() as per official Uno Q documentation
     matrix.draw(data.data());
 }
 
 void setup() {
     // Initialize LED matrix
     matrix.begin();
-    matrix.setGrayscaleBits(8);  // Support brightness levels
+    matrix.setGrayscaleBits(3);  // 3-bit grayscale (0-7 brightness levels)
     matrix.clear();
     
     // Initialize RGB LED 3 pins (sync indicator)
