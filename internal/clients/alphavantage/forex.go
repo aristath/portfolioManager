@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+
+	"github.com/aristath/sentinel/internal/clientdata"
 )
 
 // =============================================================================
@@ -11,16 +13,26 @@ import (
 // =============================================================================
 
 // GetExchangeRate returns real-time exchange rate between two currencies.
+// Forex data uses currency pair as cache key (not ISIN).
 func (c *Client) GetExchangeRate(fromCurrency, toCurrency string) (*ExchangeRate, error) {
+	// Use currency pair as cache key (e.g., "EUR:USD")
+	cacheKey := fromCurrency + ":" + toCurrency
+
+	// Check cache (using exchangerate table)
+	table := "exchangerate"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var rate ExchangeRate
+			if err := json.Unmarshal(data, &rate); err == nil {
+				return &rate, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	params := map[string]string{
 		"from_currency": fromCurrency,
 		"to_currency":   toCurrency,
-	}
-
-	cacheKey := buildCacheKey("CURRENCY_EXCHANGE_RATE", params)
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.(*ExchangeRate), nil
 	}
 
 	body, err := c.doRequest("CURRENCY_EXCHANGE_RATE", params)
@@ -33,7 +45,13 @@ func (c *Client) GetExchangeRate(fromCurrency, toCurrency string) (*ExchangeRate
 		return nil, fmt.Errorf("failed to parse exchange rate: %w", err)
 	}
 
-	c.setCache(cacheKey, rate, c.cacheTTL.ExchangeRates)
+	// Store in cache
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, rate, clientdata.TTLExchangeRate); err != nil {
+			c.log.Warn().Err(err).Str("pair", cacheKey).Msg("Failed to cache exchange rate")
+		}
+	}
+
 	return rate, nil
 }
 
@@ -44,16 +62,25 @@ func (c *Client) GetFXDaily(fromCurrency, toCurrency string, full bool) ([]FXPri
 		outputSize = "full"
 	}
 
+	// Use currency pair + function + outputsize as cache key
+	cacheKey := fromCurrency + ":" + toCurrency + ":FX_DAILY:" + outputSize
+
+	// Check cache (using exchangerate table)
+	table := "exchangerate"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var prices []FXPrice
+			if err := json.Unmarshal(data, &prices); err == nil {
+				return prices, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	params := map[string]string{
 		"from_symbol": fromCurrency,
 		"to_symbol":   toCurrency,
 		"outputsize":  outputSize,
-	}
-
-	cacheKey := buildCacheKey("FX_DAILY", params)
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.([]FXPrice), nil
 	}
 
 	body, err := c.doRequest("FX_DAILY", params)
@@ -66,21 +93,36 @@ func (c *Client) GetFXDaily(fromCurrency, toCurrency string, full bool) ([]FXPri
 		return nil, fmt.Errorf("failed to parse FX daily: %w", err)
 	}
 
-	c.setCache(cacheKey, prices, c.cacheTTL.ExchangeRates)
+	// Store in cache
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, prices, clientdata.TTLExchangeRate); err != nil {
+			c.log.Warn().Err(err).Str("pair", fromCurrency+":"+toCurrency).Msg("Failed to cache FX daily")
+		}
+	}
+
 	return prices, nil
 }
 
 // GetFXWeekly returns weekly forex data for a currency pair.
 func (c *Client) GetFXWeekly(fromCurrency, toCurrency string) ([]FXPrice, error) {
+	// Use currency pair + function as cache key
+	cacheKey := fromCurrency + ":" + toCurrency + ":FX_WEEKLY"
+
+	// Check cache
+	table := "exchangerate"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var prices []FXPrice
+			if err := json.Unmarshal(data, &prices); err == nil {
+				return prices, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	params := map[string]string{
 		"from_symbol": fromCurrency,
 		"to_symbol":   toCurrency,
-	}
-
-	cacheKey := buildCacheKey("FX_WEEKLY", params)
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.([]FXPrice), nil
 	}
 
 	body, err := c.doRequest("FX_WEEKLY", params)
@@ -93,21 +135,36 @@ func (c *Client) GetFXWeekly(fromCurrency, toCurrency string) ([]FXPrice, error)
 		return nil, fmt.Errorf("failed to parse FX weekly: %w", err)
 	}
 
-	c.setCache(cacheKey, prices, c.cacheTTL.ExchangeRates)
+	// Store in cache
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, prices, clientdata.TTLExchangeRate); err != nil {
+			c.log.Warn().Err(err).Str("pair", fromCurrency+":"+toCurrency).Msg("Failed to cache FX weekly")
+		}
+	}
+
 	return prices, nil
 }
 
 // GetFXMonthly returns monthly forex data for a currency pair.
 func (c *Client) GetFXMonthly(fromCurrency, toCurrency string) ([]FXPrice, error) {
+	// Use currency pair + function as cache key
+	cacheKey := fromCurrency + ":" + toCurrency + ":FX_MONTHLY"
+
+	// Check cache
+	table := "exchangerate"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var prices []FXPrice
+			if err := json.Unmarshal(data, &prices); err == nil {
+				return prices, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	params := map[string]string{
 		"from_symbol": fromCurrency,
 		"to_symbol":   toCurrency,
-	}
-
-	cacheKey := buildCacheKey("FX_MONTHLY", params)
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.([]FXPrice), nil
 	}
 
 	body, err := c.doRequest("FX_MONTHLY", params)
@@ -120,7 +177,13 @@ func (c *Client) GetFXMonthly(fromCurrency, toCurrency string) ([]FXPrice, error
 		return nil, fmt.Errorf("failed to parse FX monthly: %w", err)
 	}
 
-	c.setCache(cacheKey, prices, c.cacheTTL.ExchangeRates)
+	// Store in cache
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, prices, clientdata.TTLExchangeRate); err != nil {
+			c.log.Warn().Err(err).Str("pair", fromCurrency+":"+toCurrency).Msg("Failed to cache FX monthly")
+		}
+	}
+
 	return prices, nil
 }
 

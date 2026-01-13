@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
+
+	"github.com/aristath/sentinel/internal/clientdata"
 )
 
 // =============================================================================
@@ -13,18 +16,44 @@ import (
 
 // GetIndicator fetches any technical indicator with custom parameters.
 func (c *Client) GetIndicator(function, symbol, interval string, params map[string]string) (*IndicatorData, error) {
+	// Resolve symbol to ISIN
+	isin, err := c.resolveISIN(symbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve ISIN for symbol %s: %w", symbol, err)
+	}
+
+	// Build composite cache key: isin:function:interval:params
+	var keyParts []string
+	keyParts = append(keyParts, isin, function, interval)
+	// Sort params for consistent cache keys
+	paramKeys := make([]string, 0, len(params))
+	for k := range params {
+		paramKeys = append(paramKeys, k)
+	}
+	sort.Strings(paramKeys)
+	for _, k := range paramKeys {
+		keyParts = append(keyParts, k+"="+params[k])
+	}
+	cacheKey := strings.Join(keyParts, ":")
+
+	// Check cache (using current_prices table for technical indicators)
+	table := "current_prices"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var indicatorData IndicatorData
+			if err := json.Unmarshal(data, &indicatorData); err == nil {
+				return &indicatorData, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	allParams := map[string]string{
 		"symbol":   symbol,
 		"interval": interval,
 	}
 	for k, v := range params {
 		allParams[k] = v
-	}
-
-	cacheKey := buildCacheKey(function, allParams)
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.(*IndicatorData), nil
 	}
 
 	body, err := c.doRequest(function, allParams)
@@ -40,7 +69,15 @@ func (c *Client) GetIndicator(function, symbol, interval string, params map[stri
 	data.Symbol = symbol
 	data.Interval = interval
 
-	c.setCache(cacheKey, data, c.cacheTTL.TechnicalIndicators)
+	// Store in cache (using 1 hour TTL for technical indicators - need to add constant)
+	// For now using TTLCurrentPrice, but should have a TTLTechnicalIndicator constant
+	if c.cacheRepo != nil {
+		ttl := clientdata.TTLCurrentPrice // Technical indicators change frequently (10 minutes)
+		if err := c.cacheRepo.Store(table, cacheKey, data, ttl); err != nil {
+			c.log.Warn().Err(err).Str("isin", isin).Str("function", function).Msg("Failed to cache technical indicator")
+		}
+	}
+
 	return data, nil
 }
 
@@ -131,16 +168,31 @@ func (c *Client) GetRSI(symbol, interval string, period int, seriesType string) 
 
 // GetMACD returns Moving Average Convergence Divergence values.
 func (c *Client) GetMACD(symbol, interval string, seriesType string) (*MACDData, error) {
+	// Resolve symbol to ISIN
+	isin, err := c.resolveISIN(symbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve ISIN for symbol %s: %w", symbol, err)
+	}
+
+	// Build cache key
+	cacheKey := isin + ":MACD:" + interval + ":series_type=" + seriesType
+
+	// Check cache
+	table := "current_prices"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var macdData MACDData
+			if err := json.Unmarshal(data, &macdData); err == nil {
+				return &macdData, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	params := map[string]string{
 		"symbol":      symbol,
 		"interval":    interval,
 		"series_type": seriesType,
-	}
-
-	cacheKey := buildCacheKey("MACD", params)
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.(*MACDData), nil
 	}
 
 	body, err := c.doRequest("MACD", params)
@@ -156,12 +208,49 @@ func (c *Client) GetMACD(symbol, interval string, seriesType string) (*MACDData,
 	data.Symbol = symbol
 	data.Interval = interval
 
-	c.setCache(cacheKey, data, c.cacheTTL.TechnicalIndicators)
+	// Store in cache
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, data, clientdata.TTLCurrentPrice); err != nil {
+			c.log.Warn().Err(err).Str("isin", isin).Msg("Failed to cache MACD")
+		}
+	}
+
 	return data, nil
 }
 
 // GetMACDEXT returns MACD with controllable MA types.
 func (c *Client) GetMACDEXT(symbol, interval string, seriesType string, params map[string]string) (*MACDData, error) {
+	// Resolve symbol to ISIN
+	isin, err := c.resolveISIN(symbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve ISIN for symbol %s: %w", symbol, err)
+	}
+
+	// Build cache key
+	var keyParts []string
+	keyParts = append(keyParts, isin, "MACDEXT", interval, "series_type="+seriesType)
+	paramKeys := make([]string, 0, len(params))
+	for k := range params {
+		paramKeys = append(paramKeys, k)
+	}
+	sort.Strings(paramKeys)
+	for _, k := range paramKeys {
+		keyParts = append(keyParts, k+"="+params[k])
+	}
+	cacheKey := strings.Join(keyParts, ":")
+
+	// Check cache
+	table := "current_prices"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var macdData MACDData
+			if err := json.Unmarshal(data, &macdData); err == nil {
+				return &macdData, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	allParams := map[string]string{
 		"symbol":      symbol,
 		"interval":    interval,
@@ -169,12 +258,6 @@ func (c *Client) GetMACDEXT(symbol, interval string, seriesType string, params m
 	}
 	for k, v := range params {
 		allParams[k] = v
-	}
-
-	cacheKey := buildCacheKey("MACDEXT", allParams)
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.(*MACDData), nil
 	}
 
 	body, err := c.doRequest("MACDEXT", allParams)
@@ -190,21 +273,41 @@ func (c *Client) GetMACDEXT(symbol, interval string, seriesType string, params m
 	data.Symbol = symbol
 	data.Interval = interval
 
-	c.setCache(cacheKey, data, c.cacheTTL.TechnicalIndicators)
+	// Store in cache
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, data, clientdata.TTLCurrentPrice); err != nil {
+			c.log.Warn().Err(err).Str("isin", isin).Msg("Failed to cache MACDEXT")
+		}
+	}
+
 	return data, nil
 }
 
 // GetSTOCH returns Stochastic Oscillator values.
 func (c *Client) GetSTOCH(symbol, interval string) (*StochData, error) {
+	// Resolve symbol to ISIN
+	isin, err := c.resolveISIN(symbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve ISIN for symbol %s: %w", symbol, err)
+	}
+
+	cacheKey := isin + ":STOCH:" + interval
+
+	// Check cache
+	table := "current_prices"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var stochData StochData
+			if err := json.Unmarshal(data, &stochData); err == nil {
+				return &stochData, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	params := map[string]string{
 		"symbol":   symbol,
 		"interval": interval,
-	}
-
-	cacheKey := buildCacheKey("STOCH", params)
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.(*StochData), nil
 	}
 
 	body, err := c.doRequest("STOCH", params)
@@ -220,21 +323,41 @@ func (c *Client) GetSTOCH(symbol, interval string) (*StochData, error) {
 	data.Symbol = symbol
 	data.Interval = interval
 
-	c.setCache(cacheKey, data, c.cacheTTL.TechnicalIndicators)
+	// Store in cache
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, data, clientdata.TTLCurrentPrice); err != nil {
+			c.log.Warn().Err(err).Str("isin", isin).Msg("Failed to cache STOCH")
+		}
+	}
+
 	return data, nil
 }
 
 // GetSTOCHF returns Fast Stochastic Oscillator values.
 func (c *Client) GetSTOCHF(symbol, interval string) (*StochData, error) {
+	// Resolve symbol to ISIN
+	isin, err := c.resolveISIN(symbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve ISIN for symbol %s: %w", symbol, err)
+	}
+
+	cacheKey := isin + ":STOCHF:" + interval
+
+	// Check cache
+	table := "current_prices"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var stochData StochData
+			if err := json.Unmarshal(data, &stochData); err == nil {
+				return &stochData, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	params := map[string]string{
 		"symbol":   symbol,
 		"interval": interval,
-	}
-
-	cacheKey := buildCacheKey("STOCHF", params)
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.(*StochData), nil
 	}
 
 	body, err := c.doRequest("STOCHF", params)
@@ -250,23 +373,43 @@ func (c *Client) GetSTOCHF(symbol, interval string) (*StochData, error) {
 	data.Symbol = symbol
 	data.Interval = interval
 
-	c.setCache(cacheKey, data, c.cacheTTL.TechnicalIndicators)
+	// Store in cache
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, data, clientdata.TTLCurrentPrice); err != nil {
+			c.log.Warn().Err(err).Str("isin", isin).Msg("Failed to cache STOCHF")
+		}
+	}
+
 	return data, nil
 }
 
 // GetSTOCHRSI returns Stochastic RSI values.
 func (c *Client) GetSTOCHRSI(symbol, interval string, period int, seriesType string) (*StochData, error) {
+	// Resolve symbol to ISIN
+	isin, err := c.resolveISIN(symbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve ISIN for symbol %s: %w", symbol, err)
+	}
+
+	cacheKey := isin + ":STOCHRSI:" + interval + ":period=" + strconv.Itoa(period) + ":series_type=" + seriesType
+
+	// Check cache
+	table := "current_prices"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var stochData StochData
+			if err := json.Unmarshal(data, &stochData); err == nil {
+				return &stochData, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	params := map[string]string{
 		"symbol":      symbol,
 		"interval":    interval,
 		"time_period": strconv.Itoa(period),
 		"series_type": seriesType,
-	}
-
-	cacheKey := buildCacheKey("STOCHRSI", params)
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.(*StochData), nil
 	}
 
 	body, err := c.doRequest("STOCHRSI", params)
@@ -282,7 +425,13 @@ func (c *Client) GetSTOCHRSI(symbol, interval string, period int, seriesType str
 	data.Symbol = symbol
 	data.Interval = interval
 
-	c.setCache(cacheKey, data, c.cacheTTL.TechnicalIndicators)
+	// Store in cache
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, data, clientdata.TTLCurrentPrice); err != nil {
+			c.log.Warn().Err(err).Str("isin", isin).Msg("Failed to cache STOCHRSI")
+		}
+	}
+
 	return data, nil
 }
 
@@ -430,16 +579,30 @@ func (c *Client) GetMINUS_DM(symbol, interval string, period int) (*IndicatorDat
 
 // GetAROON returns Aroon indicator values.
 func (c *Client) GetAROON(symbol, interval string, period int) (*AroonData, error) {
+	// Resolve symbol to ISIN
+	isin, err := c.resolveISIN(symbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve ISIN for symbol %s: %w", symbol, err)
+	}
+
+	cacheKey := isin + ":AROON:" + interval + ":period=" + strconv.Itoa(period)
+
+	// Check cache
+	table := "current_prices"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var aroonData AroonData
+			if err := json.Unmarshal(data, &aroonData); err == nil {
+				return &aroonData, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	params := map[string]string{
 		"symbol":      symbol,
 		"interval":    interval,
 		"time_period": strconv.Itoa(period),
-	}
-
-	cacheKey := buildCacheKey("AROON", params)
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.(*AroonData), nil
 	}
 
 	body, err := c.doRequest("AROON", params)
@@ -455,7 +618,13 @@ func (c *Client) GetAROON(symbol, interval string, period int) (*AroonData, erro
 	data.Symbol = symbol
 	data.Interval = interval
 
-	c.setCache(cacheKey, data, c.cacheTTL.TechnicalIndicators)
+	// Store in cache
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, data, clientdata.TTLCurrentPrice); err != nil {
+			c.log.Warn().Err(err).Str("isin", isin).Msg("Failed to cache AROON")
+		}
+	}
+
 	return data, nil
 }
 
@@ -480,6 +649,26 @@ func (c *Client) GetSAR(symbol, interval string, acceleration, maximum float64) 
 
 // GetBBANDS returns Bollinger Bands values.
 func (c *Client) GetBBANDS(symbol, interval string, period int, seriesType string, nbdevup, nbdevdn float64) (*BollingerData, error) {
+	// Resolve symbol to ISIN
+	isin, err := c.resolveISIN(symbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve ISIN for symbol %s: %w", symbol, err)
+	}
+
+	cacheKey := isin + ":BBANDS:" + interval + ":period=" + strconv.Itoa(period) + ":series_type=" + seriesType + ":nbdevup=" + strconv.FormatFloat(nbdevup, 'f', -1, 64) + ":nbdevdn=" + strconv.FormatFloat(nbdevdn, 'f', -1, 64)
+
+	// Check cache
+	table := "current_prices"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var bbandsData BollingerData
+			if err := json.Unmarshal(data, &bbandsData); err == nil {
+				return &bbandsData, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	params := map[string]string{
 		"symbol":      symbol,
 		"interval":    interval,
@@ -487,12 +676,6 @@ func (c *Client) GetBBANDS(symbol, interval string, period int, seriesType strin
 		"series_type": seriesType,
 		"nbdevup":     strconv.FormatFloat(nbdevup, 'f', -1, 64),
 		"nbdevdn":     strconv.FormatFloat(nbdevdn, 'f', -1, 64),
-	}
-
-	cacheKey := buildCacheKey("BBANDS", params)
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.(*BollingerData), nil
 	}
 
 	body, err := c.doRequest("BBANDS", params)
@@ -508,7 +691,13 @@ func (c *Client) GetBBANDS(symbol, interval string, period int, seriesType strin
 	data.Symbol = symbol
 	data.Interval = interval
 
-	c.setCache(cacheKey, data, c.cacheTTL.TechnicalIndicators)
+	// Store in cache
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, data, clientdata.TTLCurrentPrice); err != nil {
+			c.log.Warn().Err(err).Str("isin", isin).Msg("Failed to cache BBANDS")
+		}
+	}
+
 	return data, nil
 }
 

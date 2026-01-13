@@ -3,7 +3,6 @@ package alphavantage
 import (
 	"testing"
 
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -172,7 +171,7 @@ func TestOptionsParseOptionsChain_EmptyData(t *testing.T) {
 
 // TestClientOptionsMethods verifies all options methods exist.
 func TestClientOptionsMethods(t *testing.T) {
-	client := NewClient("test-key", zerolog.Nop())
+	client := newTestClient("test-key")
 
 	var _ func(string, string) (*OptionsChain, error) = client.GetHistoricalOptions
 }

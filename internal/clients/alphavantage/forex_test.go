@@ -3,7 +3,6 @@ package alphavantage
 import (
 	"testing"
 
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -152,7 +151,7 @@ func TestForexDateSorting(t *testing.T) {
 
 // TestClientForexMethods verifies all forex methods exist.
 func TestClientForexMethods(t *testing.T) {
-	client := NewClient("test-key", zerolog.Nop())
+	client := newTestClient("test-key")
 
 	var _ func(string, string) (*ExchangeRate, error) = client.GetExchangeRate
 	var _ func(string, string, bool) ([]FXPrice, error) = client.GetFXDaily

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/aristath/sentinel/internal/clientdata"
 )
 
 // =============================================================================
@@ -13,20 +15,32 @@ import (
 
 // GetDailyPrices returns daily OHLCV data for a symbol.
 func (c *Client) GetDailyPrices(symbol string, full bool) ([]DailyPrice, error) {
+	// Resolve symbol to ISIN
+	isin, err := c.resolveISIN(symbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve ISIN for symbol %s: %w", symbol, err)
+	}
+
 	outputSize := "compact"
 	if full {
 		outputSize = "full"
 	}
 
-	cacheKey := buildCacheKey("TIME_SERIES_DAILY", map[string]string{
-		"symbol":     symbol,
-		"outputsize": outputSize,
-	})
+	// Use composite key: isin:function:outputsize
+	cacheKey := isin + ":TIME_SERIES_DAILY:" + outputSize
 
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.([]DailyPrice), nil
+	// Check cache (using current_prices table for time series data)
+	table := "current_prices"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var prices []DailyPrice
+			if err := json.Unmarshal(data, &prices); err == nil {
+				return prices, nil
+			}
+		}
 	}
 
+	// Fetch from API
 	body, err := c.doRequest("TIME_SERIES_DAILY", map[string]string{
 		"symbol":     symbol,
 		"outputsize": outputSize,
@@ -40,26 +54,44 @@ func (c *Client) GetDailyPrices(symbol string, full bool) ([]DailyPrice, error) 
 		return nil, fmt.Errorf("failed to parse daily prices: %w", err)
 	}
 
-	c.setCache(cacheKey, prices, c.cacheTTL.PriceData)
+	// Store in cache
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, prices, clientdata.TTLCurrentPrice); err != nil {
+			c.log.Warn().Err(err).Str("isin", isin).Msg("Failed to cache daily prices")
+		}
+	}
+
 	return prices, nil
 }
 
 // GetDailyAdjustedPrices returns daily adjusted OHLCV data including dividends and splits.
 func (c *Client) GetDailyAdjustedPrices(symbol string, full bool) ([]AdjustedPrice, error) {
+	// Resolve symbol to ISIN
+	isin, err := c.resolveISIN(symbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve ISIN for symbol %s: %w", symbol, err)
+	}
+
 	outputSize := "compact"
 	if full {
 		outputSize = "full"
 	}
 
-	cacheKey := buildCacheKey("TIME_SERIES_DAILY_ADJUSTED", map[string]string{
-		"symbol":     symbol,
-		"outputsize": outputSize,
-	})
+	// Use composite key
+	cacheKey := isin + ":TIME_SERIES_DAILY_ADJUSTED:" + outputSize
 
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.([]AdjustedPrice), nil
+	// Check cache
+	table := "current_prices"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var prices []AdjustedPrice
+			if err := json.Unmarshal(data, &prices); err == nil {
+				return prices, nil
+			}
+		}
 	}
 
+	// Fetch from API
 	body, err := c.doRequest("TIME_SERIES_DAILY_ADJUSTED", map[string]string{
 		"symbol":     symbol,
 		"outputsize": outputSize,
@@ -73,16 +105,35 @@ func (c *Client) GetDailyAdjustedPrices(symbol string, full bool) ([]AdjustedPri
 		return nil, fmt.Errorf("failed to parse adjusted daily prices: %w", err)
 	}
 
-	c.setCache(cacheKey, prices, c.cacheTTL.PriceData)
+	// Store in cache
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, prices, clientdata.TTLCurrentPrice); err != nil {
+			c.log.Warn().Err(err).Str("isin", isin).Msg("Failed to cache adjusted daily prices")
+		}
+	}
+
 	return prices, nil
 }
 
 // GetWeeklyPrices returns weekly OHLCV data for a symbol.
 func (c *Client) GetWeeklyPrices(symbol string) ([]DailyPrice, error) {
-	cacheKey := buildCacheKey("TIME_SERIES_WEEKLY", map[string]string{"symbol": symbol})
+	// Resolve symbol to ISIN
+	isin, err := c.resolveISIN(symbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve ISIN for symbol %s: %w", symbol, err)
+	}
 
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.([]DailyPrice), nil
+	cacheKey := isin + ":TIME_SERIES_WEEKLY"
+
+	// Check cache
+	table := "current_prices"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var prices []DailyPrice
+			if err := json.Unmarshal(data, &prices); err == nil {
+				return prices, nil
+			}
+		}
 	}
 
 	body, err := c.doRequest("TIME_SERIES_WEEKLY", map[string]string{"symbol": symbol})
@@ -95,16 +146,35 @@ func (c *Client) GetWeeklyPrices(symbol string) ([]DailyPrice, error) {
 		return nil, fmt.Errorf("failed to parse weekly prices: %w", err)
 	}
 
-	c.setCache(cacheKey, prices, c.cacheTTL.PriceData)
+	// Store in cache
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, prices, clientdata.TTLCurrentPrice); err != nil {
+			c.log.Warn().Err(err).Str("isin", isin).Msg("Failed to cache weekly prices")
+		}
+	}
+
 	return prices, nil
 }
 
 // GetWeeklyAdjustedPrices returns weekly adjusted OHLCV data.
 func (c *Client) GetWeeklyAdjustedPrices(symbol string) ([]AdjustedPrice, error) {
-	cacheKey := buildCacheKey("TIME_SERIES_WEEKLY_ADJUSTED", map[string]string{"symbol": symbol})
+	// Resolve symbol to ISIN
+	isin, err := c.resolveISIN(symbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve ISIN for symbol %s: %w", symbol, err)
+	}
 
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.([]AdjustedPrice), nil
+	cacheKey := isin + ":TIME_SERIES_WEEKLY_ADJUSTED"
+
+	// Check cache
+	table := "current_prices"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var prices []AdjustedPrice
+			if err := json.Unmarshal(data, &prices); err == nil {
+				return prices, nil
+			}
+		}
 	}
 
 	body, err := c.doRequest("TIME_SERIES_WEEKLY_ADJUSTED", map[string]string{"symbol": symbol})
@@ -117,16 +187,35 @@ func (c *Client) GetWeeklyAdjustedPrices(symbol string) ([]AdjustedPrice, error)
 		return nil, fmt.Errorf("failed to parse adjusted weekly prices: %w", err)
 	}
 
-	c.setCache(cacheKey, prices, c.cacheTTL.PriceData)
+	// Store in cache
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, prices, clientdata.TTLCurrentPrice); err != nil {
+			c.log.Warn().Err(err).Str("isin", isin).Msg("Failed to cache adjusted weekly prices")
+		}
+	}
+
 	return prices, nil
 }
 
 // GetMonthlyPrices returns monthly OHLCV data for a symbol.
 func (c *Client) GetMonthlyPrices(symbol string) ([]DailyPrice, error) {
-	cacheKey := buildCacheKey("TIME_SERIES_MONTHLY", map[string]string{"symbol": symbol})
+	// Resolve symbol to ISIN
+	isin, err := c.resolveISIN(symbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve ISIN for symbol %s: %w", symbol, err)
+	}
 
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.([]DailyPrice), nil
+	cacheKey := isin + ":TIME_SERIES_MONTHLY"
+
+	// Check cache
+	table := "current_prices"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var prices []DailyPrice
+			if err := json.Unmarshal(data, &prices); err == nil {
+				return prices, nil
+			}
+		}
 	}
 
 	body, err := c.doRequest("TIME_SERIES_MONTHLY", map[string]string{"symbol": symbol})
@@ -139,16 +228,35 @@ func (c *Client) GetMonthlyPrices(symbol string) ([]DailyPrice, error) {
 		return nil, fmt.Errorf("failed to parse monthly prices: %w", err)
 	}
 
-	c.setCache(cacheKey, prices, c.cacheTTL.PriceData)
+	// Store in cache
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, prices, clientdata.TTLCurrentPrice); err != nil {
+			c.log.Warn().Err(err).Str("isin", isin).Msg("Failed to cache monthly prices")
+		}
+	}
+
 	return prices, nil
 }
 
 // GetMonthlyAdjustedPrices returns monthly adjusted OHLCV data.
 func (c *Client) GetMonthlyAdjustedPrices(symbol string) ([]AdjustedPrice, error) {
-	cacheKey := buildCacheKey("TIME_SERIES_MONTHLY_ADJUSTED", map[string]string{"symbol": symbol})
+	// Resolve symbol to ISIN
+	isin, err := c.resolveISIN(symbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve ISIN for symbol %s: %w", symbol, err)
+	}
 
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.([]AdjustedPrice), nil
+	cacheKey := isin + ":TIME_SERIES_MONTHLY_ADJUSTED"
+
+	// Check cache
+	table := "current_prices"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var prices []AdjustedPrice
+			if err := json.Unmarshal(data, &prices); err == nil {
+				return prices, nil
+			}
+		}
 	}
 
 	body, err := c.doRequest("TIME_SERIES_MONTHLY_ADJUSTED", map[string]string{"symbol": symbol})
@@ -161,18 +269,36 @@ func (c *Client) GetMonthlyAdjustedPrices(symbol string) ([]AdjustedPrice, error
 		return nil, fmt.Errorf("failed to parse adjusted monthly prices: %w", err)
 	}
 
-	c.setCache(cacheKey, prices, c.cacheTTL.PriceData)
+	// Store in cache
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, prices, clientdata.TTLCurrentPrice); err != nil {
+			c.log.Warn().Err(err).Str("isin", isin).Msg("Failed to cache adjusted monthly prices")
+		}
+	}
+
 	return prices, nil
 }
 
 // GetGlobalQuote returns the latest price and volume information for a symbol.
 func (c *Client) GetGlobalQuote(symbol string) (*GlobalQuote, error) {
-	cacheKey := buildCacheKey("GLOBAL_QUOTE", map[string]string{"symbol": symbol})
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.(*GlobalQuote), nil
+	// Resolve symbol to ISIN
+	isin, err := c.resolveISIN(symbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve ISIN for symbol %s: %w", symbol, err)
 	}
 
+	// Check cache (using current_prices table)
+	table := "current_prices"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, isin); err == nil && data != nil {
+			var quote GlobalQuote
+			if err := json.Unmarshal(data, &quote); err == nil {
+				return &quote, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	body, err := c.doRequest("GLOBAL_QUOTE", map[string]string{"symbol": symbol})
 	if err != nil {
 		return nil, err
@@ -183,18 +309,21 @@ func (c *Client) GetGlobalQuote(symbol string) (*GlobalQuote, error) {
 		return nil, fmt.Errorf("failed to parse global quote: %w", err)
 	}
 
-	c.setCache(cacheKey, quote, c.cacheTTL.PriceData)
+	// Store in cache
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, isin, quote, clientdata.TTLCurrentPrice); err != nil {
+			c.log.Warn().Err(err).Str("isin", isin).Msg("Failed to cache global quote")
+		}
+	}
+
 	return quote, nil
 }
 
 // SearchSymbol searches for symbols matching the given keywords.
+// Note: Symbol search doesn't map to a specific security, so we don't cache it.
 func (c *Client) SearchSymbol(keywords string) ([]SymbolMatch, error) {
-	cacheKey := buildCacheKey("SYMBOL_SEARCH", map[string]string{"keywords": keywords})
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.([]SymbolMatch), nil
-	}
-
+	// Symbol search doesn't require ISIN resolution and doesn't fit the ISIN-based cache model
+	// Skip caching for now
 	body, err := c.doRequest("SYMBOL_SEARCH", map[string]string{"keywords": keywords})
 	if err != nil {
 		return nil, err
@@ -205,7 +334,7 @@ func (c *Client) SearchSymbol(keywords string) ([]SymbolMatch, error) {
 		return nil, fmt.Errorf("failed to parse symbol search: %w", err)
 	}
 
-	c.setCache(cacheKey, matches, c.cacheTTL.Fundamentals)
+	// Note: Symbol search results are not cached persistently as they don't map to ISINs
 	return matches, nil
 }
 

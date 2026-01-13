@@ -23,6 +23,7 @@ var AllTables = []string{
 	"yahoo_metadata",
 	"exchangerate",
 	"current_prices",
+	"symbol_to_isin",
 }
 
 // validTables is a set for O(1) table name validation.
@@ -61,6 +62,8 @@ func getKeyColumn(table string) string {
 		return "indicator"
 	case "exchangerate":
 		return "pair"
+	case "symbol_to_isin":
+		return "symbol"
 	default:
 		return "isin"
 	}

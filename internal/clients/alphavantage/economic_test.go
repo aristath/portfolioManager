@@ -3,7 +3,6 @@ package alphavantage
 import (
 	"testing"
 
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -88,7 +87,7 @@ func TestEconomicParseEconomicData_EmptyData(t *testing.T) {
 
 // TestClientEconomicMethods verifies all economic indicator methods exist.
 func TestClientEconomicMethods(t *testing.T) {
-	client := NewClient("test-key", zerolog.Nop())
+	client := newTestClient("test-key")
 
 	var _ func(string, string) (*EconomicIndicator, error) = client.GetEconomicIndicator
 	var _ func(string) (*EconomicIndicator, error) = client.GetRealGDP

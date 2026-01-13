@@ -25,12 +25,14 @@ CREATE TABLE openfigi (isin TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at INT
 CREATE TABLE yahoo_metadata (isin TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at INTEGER NOT NULL);
 CREATE TABLE exchangerate (pair TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at INTEGER NOT NULL);
 CREATE TABLE current_prices (isin TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at INTEGER NOT NULL);
+CREATE TABLE symbol_to_isin (symbol TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at INTEGER NOT NULL);
 
 CREATE INDEX idx_av_overview_expires ON alphavantage_overview(expires_at);
 CREATE INDEX idx_openfigi_expires ON openfigi(expires_at);
 CREATE INDEX idx_yahoo_expires ON yahoo_metadata(expires_at);
 CREATE INDEX idx_exchangerate_expires ON exchangerate(expires_at);
 CREATE INDEX idx_prices_expires ON current_prices(expires_at);
+CREATE INDEX idx_symbol_to_isin_expires ON symbol_to_isin(expires_at);
 `
 
 func setupTestDB(t *testing.T) *sql.DB {

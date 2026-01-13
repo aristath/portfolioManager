@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+
+	"github.com/aristath/sentinel/internal/clientdata"
 )
 
 // =============================================================================
@@ -12,15 +14,30 @@ import (
 
 // GetHistoricalOptions returns historical options chain data.
 func (c *Client) GetHistoricalOptions(symbol, date string) (*OptionsChain, error) {
+	// Resolve symbol to ISIN
+	isin, err := c.resolveISIN(symbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve ISIN for symbol %s: %w", symbol, err)
+	}
+
+	// Use composite key: isin:date
+	cacheKey := isin + ":OPTIONS:" + date
+
+	// Check cache (using current_prices table)
+	table := "current_prices"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var chain OptionsChain
+			if err := json.Unmarshal(data, &chain); err == nil {
+				return &chain, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	params := map[string]string{
 		"symbol": symbol,
 		"date":   date,
-	}
-
-	cacheKey := buildCacheKey("HISTORICAL_OPTIONS", params)
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.(*OptionsChain), nil
 	}
 
 	body, err := c.doRequest("HISTORICAL_OPTIONS", params)
@@ -33,7 +50,13 @@ func (c *Client) GetHistoricalOptions(symbol, date string) (*OptionsChain, error
 		return nil, fmt.Errorf("failed to parse options chain: %w", err)
 	}
 
-	c.setCache(cacheKey, chain, c.cacheTTL.PriceData)
+	// Store in cache
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, chain, clientdata.TTLCurrentPrice); err != nil {
+			c.log.Warn().Err(err).Str("isin", isin).Str("date", date).Msg("Failed to cache options chain")
+		}
+	}
+
 	return chain, nil
 }
 

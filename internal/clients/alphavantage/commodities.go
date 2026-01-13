@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+
+	"github.com/aristath/sentinel/internal/clientdata"
 )
 
 // =============================================================================
@@ -11,15 +13,28 @@ import (
 // =============================================================================
 
 // GetCommodity returns data for a specific commodity.
+// Commodity data uses commodity name + interval as cache key (not ISIN).
 func (c *Client) GetCommodity(commodity, interval string) ([]CommodityPrice, error) {
-	params := map[string]string{
-		"interval": interval,
+	// Use commodity name + interval as cache key
+	cacheKey := "COMMODITY:" + commodity
+	if interval != "" {
+		cacheKey = cacheKey + ":" + interval
 	}
 
-	cacheKey := buildCacheKey(commodity, params)
+	// Check cache (using current_prices table)
+	table := "current_prices"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var prices []CommodityPrice
+			if err := json.Unmarshal(data, &prices); err == nil {
+				return prices, nil
+			}
+		}
+	}
 
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.([]CommodityPrice), nil
+	// Fetch from API
+	params := map[string]string{
+		"interval": interval,
 	}
 
 	body, err := c.doRequest(commodity, params)
@@ -32,7 +47,13 @@ func (c *Client) GetCommodity(commodity, interval string) ([]CommodityPrice, err
 		return nil, fmt.Errorf("failed to parse %s: %w", commodity, err)
 	}
 
-	c.setCache(cacheKey, prices, c.cacheTTL.Commodities)
+	// Store in cache
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, prices, clientdata.TTLCommodity); err != nil {
+			c.log.Warn().Err(err).Str("commodity", commodity).Msg("Failed to cache commodity data")
+		}
+	}
+
 	return prices, nil
 }
 

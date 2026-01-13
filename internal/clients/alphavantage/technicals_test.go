@@ -4,7 +4,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -298,7 +297,7 @@ func TestParseTechnicalIndicator_WithDatetime(t *testing.T) {
 
 // TestClientTechnicalMethods verifies all technical indicator methods exist.
 func TestClientTechnicalMethods(t *testing.T) {
-	client := NewClient("test-key", zerolog.Nop())
+	client := newTestClient("test-key")
 
 	// Moving Averages
 	var _ func(string, string, int, string) (*IndicatorData, error) = client.GetSMA

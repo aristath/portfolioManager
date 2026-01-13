@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+
+	"github.com/aristath/sentinel/internal/clientdata"
 )
 
 // =============================================================================
@@ -11,16 +13,26 @@ import (
 // =============================================================================
 
 // GetCryptoExchangeRate returns real-time exchange rate for a cryptocurrency.
+// Crypto data uses symbol:market as cache key (not ISIN).
 func (c *Client) GetCryptoExchangeRate(fromCurrency, toCurrency string) (*ExchangeRate, error) {
+	// Use crypto pair as cache key
+	cacheKey := "CRYPTO:" + fromCurrency + ":" + toCurrency
+
+	// Check cache (using exchangerate table)
+	table := "exchangerate"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var rate ExchangeRate
+			if err := json.Unmarshal(data, &rate); err == nil {
+				return &rate, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	params := map[string]string{
 		"from_currency": fromCurrency,
 		"to_currency":   toCurrency,
-	}
-
-	cacheKey := buildCacheKey("CURRENCY_EXCHANGE_RATE", params)
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.(*ExchangeRate), nil
 	}
 
 	body, err := c.doRequest("CURRENCY_EXCHANGE_RATE", params)
@@ -33,21 +45,37 @@ func (c *Client) GetCryptoExchangeRate(fromCurrency, toCurrency string) (*Exchan
 		return nil, fmt.Errorf("failed to parse crypto exchange rate: %w", err)
 	}
 
-	c.setCache(cacheKey, rate, c.cacheTTL.ExchangeRates)
+	// Store in cache
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, rate, clientdata.TTLExchangeRate); err != nil {
+			c.log.Warn().Err(err).Str("pair", cacheKey).Msg("Failed to cache crypto exchange rate")
+		}
+	}
+
 	return rate, nil
 }
 
 // GetCryptoDaily returns daily cryptocurrency data.
+// Crypto data uses symbol:market as cache key (not ISIN).
 func (c *Client) GetCryptoDaily(symbol, market string) ([]CryptoPrice, error) {
+	// Use crypto symbol + market + function as cache key
+	cacheKey := "CRYPTO:" + symbol + ":" + market + ":DAILY"
+
+	// Check cache (using current_prices table)
+	table := "current_prices"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var prices []CryptoPrice
+			if err := json.Unmarshal(data, &prices); err == nil {
+				return prices, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	params := map[string]string{
 		"symbol": symbol,
 		"market": market,
-	}
-
-	cacheKey := buildCacheKey("DIGITAL_CURRENCY_DAILY", params)
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.([]CryptoPrice), nil
 	}
 
 	body, err := c.doRequest("DIGITAL_CURRENCY_DAILY", params)
@@ -60,21 +88,35 @@ func (c *Client) GetCryptoDaily(symbol, market string) ([]CryptoPrice, error) {
 		return nil, fmt.Errorf("failed to parse crypto daily: %w", err)
 	}
 
-	c.setCache(cacheKey, prices, c.cacheTTL.PriceData)
+	// Store in cache
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, prices, clientdata.TTLCurrentPrice); err != nil {
+			c.log.Warn().Err(err).Str("symbol", symbol).Msg("Failed to cache crypto daily")
+		}
+	}
+
 	return prices, nil
 }
 
 // GetCryptoWeekly returns weekly cryptocurrency data.
 func (c *Client) GetCryptoWeekly(symbol, market string) ([]CryptoPrice, error) {
+	cacheKey := "CRYPTO:" + symbol + ":" + market + ":WEEKLY"
+
+	// Check cache
+	table := "current_prices"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var prices []CryptoPrice
+			if err := json.Unmarshal(data, &prices); err == nil {
+				return prices, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	params := map[string]string{
 		"symbol": symbol,
 		"market": market,
-	}
-
-	cacheKey := buildCacheKey("DIGITAL_CURRENCY_WEEKLY", params)
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.([]CryptoPrice), nil
 	}
 
 	body, err := c.doRequest("DIGITAL_CURRENCY_WEEKLY", params)
@@ -87,21 +129,35 @@ func (c *Client) GetCryptoWeekly(symbol, market string) ([]CryptoPrice, error) {
 		return nil, fmt.Errorf("failed to parse crypto weekly: %w", err)
 	}
 
-	c.setCache(cacheKey, prices, c.cacheTTL.PriceData)
+	// Store in cache
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, prices, clientdata.TTLCurrentPrice); err != nil {
+			c.log.Warn().Err(err).Str("symbol", symbol).Msg("Failed to cache crypto weekly")
+		}
+	}
+
 	return prices, nil
 }
 
 // GetCryptoMonthly returns monthly cryptocurrency data.
 func (c *Client) GetCryptoMonthly(symbol, market string) ([]CryptoPrice, error) {
+	cacheKey := "CRYPTO:" + symbol + ":" + market + ":MONTHLY"
+
+	// Check cache
+	table := "current_prices"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var prices []CryptoPrice
+			if err := json.Unmarshal(data, &prices); err == nil {
+				return prices, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	params := map[string]string{
 		"symbol": symbol,
 		"market": market,
-	}
-
-	cacheKey := buildCacheKey("DIGITAL_CURRENCY_MONTHLY", params)
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.([]CryptoPrice), nil
 	}
 
 	body, err := c.doRequest("DIGITAL_CURRENCY_MONTHLY", params)
@@ -114,7 +170,13 @@ func (c *Client) GetCryptoMonthly(symbol, market string) ([]CryptoPrice, error) 
 		return nil, fmt.Errorf("failed to parse crypto monthly: %w", err)
 	}
 
-	c.setCache(cacheKey, prices, c.cacheTTL.PriceData)
+	// Store in cache
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, prices, clientdata.TTLCurrentPrice); err != nil {
+			c.log.Warn().Err(err).Str("symbol", symbol).Msg("Failed to cache crypto monthly")
+		}
+	}
+
 	return prices, nil
 }
 

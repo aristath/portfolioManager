@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/aristath/sentinel/internal/clientdata"
 )
 
 // =============================================================================
@@ -13,11 +15,19 @@ import (
 // =============================================================================
 
 // GetTopGainersLosers returns top gainers, losers, and most active stocks.
+// Market-wide data, doesn't require ISIN resolution.
 func (c *Client) GetTopGainersLosers() (*MarketMovers, error) {
-	cacheKey := buildCacheKey("TOP_GAINERS_LOSERS", nil)
+	cacheKey := "TOP_GAINERS_LOSERS"
 
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.(*MarketMovers), nil
+	// Check cache (using current_prices table for market-wide data)
+	table := "current_prices"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var movers MarketMovers
+			if err := json.Unmarshal(data, &movers); err == nil {
+				return &movers, nil
+			}
+		}
 	}
 
 	body, err := c.doRequest("TOP_GAINERS_LOSERS", nil)
@@ -30,23 +40,43 @@ func (c *Client) GetTopGainersLosers() (*MarketMovers, error) {
 		return nil, fmt.Errorf("failed to parse market movers: %w", err)
 	}
 
-	// Cache for 15 minutes as this is real-time data
-	c.setCache(cacheKey, movers, c.cacheTTL.PriceData)
+	// Store in cache (15 minutes TTL for real-time data)
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, movers, clientdata.TTLCurrentPrice); err != nil {
+			c.log.Warn().Err(err).Msg("Failed to cache top gainers/losers")
+		}
+	}
+
 	return movers, nil
 }
 
 // GetEarningsCallTranscript returns the transcript for an earnings call.
 func (c *Client) GetEarningsCallTranscript(symbol string, year, quarter int) (*Transcript, error) {
+	// Resolve symbol to ISIN
+	isin, err := c.resolveISIN(symbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve ISIN for symbol %s: %w", symbol, err)
+	}
+
+	// Use composite key: isin:year:quarter
+	cacheKey := isin + ":EARNINGS_CALL_TRANSCRIPT:" + strconv.Itoa(year) + ":" + strconv.Itoa(quarter)
+
+	// Check cache (using current_prices table)
+	table := "current_prices"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var transcript Transcript
+			if err := json.Unmarshal(data, &transcript); err == nil {
+				return &transcript, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	params := map[string]string{
 		"symbol":  symbol,
 		"year":    strconv.Itoa(year),
 		"quarter": strconv.Itoa(quarter),
-	}
-
-	cacheKey := buildCacheKey("EARNINGS_CALL_TRANSCRIPT", params)
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.(*Transcript), nil
 	}
 
 	body, err := c.doRequest("EARNINGS_CALL_TRANSCRIPT", params)
@@ -59,22 +89,39 @@ func (c *Client) GetEarningsCallTranscript(symbol string, year, quarter int) (*T
 		return nil, fmt.Errorf("failed to parse transcript: %w", err)
 	}
 
-	c.setCache(cacheKey, transcript, c.cacheTTL.Fundamentals)
+	// Store in cache (using 7 days TTL for fundamentals)
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, transcript, clientdata.TTLAVOverview); err != nil {
+			c.log.Warn().Err(err).Str("isin", isin).Msg("Failed to cache earnings call transcript")
+		}
+	}
+
 	return transcript, nil
 }
 
 // GetInsiderTransactions returns insider trading data for a symbol.
 func (c *Client) GetInsiderTransactions(symbol string) ([]InsiderTransaction, error) {
+	// Resolve symbol to ISIN
+	isin, err := c.resolveISIN(symbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve ISIN for symbol %s: %w", symbol, err)
+	}
+
+	// Check cache
+	table := getTableForFunction("INSIDER_TRANSACTIONS")
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, isin); err == nil && data != nil {
+			var transactions []InsiderTransaction
+			if err := json.Unmarshal(data, &transactions); err == nil {
+				return transactions, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	params := map[string]string{
 		"symbol": symbol,
 	}
-
-	cacheKey := buildCacheKey("INSIDER_TRANSACTIONS", params)
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.([]InsiderTransaction), nil
-	}
-
 	body, err := c.doRequest("INSIDER_TRANSACTIONS", params)
 	if err != nil {
 		return nil, err
@@ -85,22 +132,39 @@ func (c *Client) GetInsiderTransactions(symbol string) ([]InsiderTransaction, er
 		return nil, fmt.Errorf("failed to parse insider transactions: %w", err)
 	}
 
-	c.setCache(cacheKey, transactions, c.cacheTTL.Fundamentals)
+	// Store in cache
+	if c.cacheRepo != nil {
+		ttl := getTTLForFunction("INSIDER_TRANSACTIONS")
+		if err := c.cacheRepo.Store(table, isin, transactions, ttl); err != nil {
+			c.log.Warn().Err(err).Str("isin", isin).Msg("Failed to cache insider transactions")
+		}
+	}
+
 	return transactions, nil
 }
 
 // GetAnalyticsFixedWindow returns analytics for a fixed time window.
+// Multi-symbol endpoint - uses composite cache key based on symbols and date range.
 func (c *Client) GetAnalyticsFixedWindow(symbols []string, startDate, endDate string) ([]AnalyticsWindow, error) {
+	// Build cache key from symbols and date range
+	cacheKey := "ANALYTICS_FIXED_WINDOW:" + strings.Join(symbols, ",") + ":" + startDate + ":" + endDate
+
+	// Check cache
+	table := "current_prices"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var analytics []AnalyticsWindow
+			if err := json.Unmarshal(data, &analytics); err == nil {
+				return analytics, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	params := map[string]string{
 		"SYMBOLS":      strings.Join(symbols, ","),
 		"RANGE":        startDate + " " + endDate,
 		"CALCULATIONS": "MEAN,MIN,MAX,STDDEV",
-	}
-
-	cacheKey := buildCacheKey("ANALYTICS_FIXED_WINDOW", params)
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.([]AnalyticsWindow), nil
 	}
 
 	body, err := c.doRequest("ANALYTICS_FIXED_WINDOW", params)
@@ -113,22 +177,38 @@ func (c *Client) GetAnalyticsFixedWindow(symbols []string, startDate, endDate st
 		return nil, fmt.Errorf("failed to parse fixed window analytics: %w", err)
 	}
 
-	c.setCache(cacheKey, analytics, c.cacheTTL.TechnicalIndicators)
+	// Store in cache (1 hour TTL for analytics data)
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, analytics, clientdata.TTLCurrentPrice); err != nil {
+			c.log.Warn().Err(err).Msg("Failed to cache fixed window analytics")
+		}
+	}
+
 	return analytics, nil
 }
 
 // GetAnalyticsSlidingWindow returns analytics for a sliding time window.
+// Multi-symbol endpoint - uses composite cache key based on symbols and window size.
 func (c *Client) GetAnalyticsSlidingWindow(symbols []string, windowSize int) ([]AnalyticsWindow, error) {
+	// Build cache key from symbols and window size
+	cacheKey := "ANALYTICS_SLIDING_WINDOW:" + strings.Join(symbols, ",") + ":window=" + strconv.Itoa(windowSize)
+
+	// Check cache
+	table := "current_prices"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var analytics []AnalyticsWindow
+			if err := json.Unmarshal(data, &analytics); err == nil {
+				return analytics, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	params := map[string]string{
 		"SYMBOLS":      strings.Join(symbols, ","),
 		"WINDOW_SIZE":  strconv.Itoa(windowSize),
 		"CALCULATIONS": "MEAN,MIN,MAX,STDDEV",
-	}
-
-	cacheKey := buildCacheKey("ANALYTICS_SLIDING_WINDOW", params)
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.([]AnalyticsWindow), nil
 	}
 
 	body, err := c.doRequest("ANALYTICS_SLIDING_WINDOW", params)
@@ -141,7 +221,13 @@ func (c *Client) GetAnalyticsSlidingWindow(symbols []string, windowSize int) ([]
 		return nil, fmt.Errorf("failed to parse sliding window analytics: %w", err)
 	}
 
-	c.setCache(cacheKey, analytics, c.cacheTTL.TechnicalIndicators)
+	// Store in cache (1 hour TTL for analytics data)
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, analytics, clientdata.TTLCurrentPrice); err != nil {
+			c.log.Warn().Err(err).Msg("Failed to cache sliding window analytics")
+		}
+	}
+
 	return analytics, nil
 }
 

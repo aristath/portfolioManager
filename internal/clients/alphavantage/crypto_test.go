@@ -3,7 +3,6 @@ package alphavantage
 import (
 	"testing"
 
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -140,7 +139,7 @@ func TestCryptoDateSorting(t *testing.T) {
 
 // TestClientCryptoMethods verifies all crypto methods exist.
 func TestClientCryptoMethods(t *testing.T) {
-	client := NewClient("test-key", zerolog.Nop())
+	client := newTestClient("test-key")
 
 	var _ func(string, string) (*ExchangeRate, error) = client.GetCryptoExchangeRate
 	var _ func(string, string) ([]CryptoPrice, error) = client.GetCryptoDaily

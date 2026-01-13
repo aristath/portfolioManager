@@ -1,11 +1,15 @@
 package alphavantage
 
 import (
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/aristath/sentinel/internal/clientdata"
+	"github.com/aristath/sentinel/internal/clients/openfigi"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -13,7 +17,14 @@ import (
 
 // TestIntegration_ClientCreation verifies client is created with correct defaults.
 func TestIntegration_ClientCreation(t *testing.T) {
-	client := NewClient("test-api-key", zerolog.Nop())
+	db, _ := sql.Open("sqlite3", ":memory:")
+	db.Exec(`
+		CREATE TABLE current_prices (isin TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at INTEGER NOT NULL);
+		CREATE TABLE symbol_to_isin (symbol TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at INTEGER NOT NULL);
+	`)
+	cacheRepo := clientdata.NewRepository(db)
+	openfigiClient := openfigi.NewClient("", cacheRepo, zerolog.Nop())
+	client := NewClient("test-api-key", cacheRepo, openfigiClient, nil, zerolog.Nop())
 
 	assert.NotNil(t, client)
 	assert.Equal(t, 25, client.GetRemainingRequests())
@@ -26,7 +37,10 @@ func TestIntegration_InterfaceCompliance(t *testing.T) {
 
 // TestIntegration_RateLimitingAcrossRequests tests rate limiting persists across calls.
 func TestIntegration_RateLimitingAcrossRequests(t *testing.T) {
-	client := NewClient("test-key", zerolog.Nop())
+	db, _ := sql.Open("sqlite3", ":memory:")
+	cacheRepo := clientdata.NewRepository(db)
+	openfigiClient := openfigi.NewClient("", cacheRepo, zerolog.Nop())
+	client := NewClient("test-key", cacheRepo, openfigiClient, nil, zerolog.Nop())
 
 	// Consume all requests
 	for i := 0; i < 25; i++ {
@@ -44,37 +58,8 @@ func TestIntegration_RateLimitingAcrossRequests(t *testing.T) {
 	assert.Equal(t, 25, client.GetRemainingRequests())
 }
 
-// TestIntegration_CachingFlow tests that caching works across operations.
-func TestIntegration_CachingFlow(t *testing.T) {
-	client := NewClient("test-key", zerolog.Nop())
-
-	// Set cache for multiple data types
-	client.setCache("key1", "value1", client.cacheTTL.Fundamentals)
-	client.setCache("key2", 42, client.cacheTTL.PriceData)
-	client.setCache("key3", []int{1, 2, 3}, client.cacheTTL.TechnicalIndicators)
-
-	// Verify all cached values
-	v1, ok := client.getFromCache("key1")
-	assert.True(t, ok)
-	assert.Equal(t, "value1", v1)
-
-	v2, ok := client.getFromCache("key2")
-	assert.True(t, ok)
-	assert.Equal(t, 42, v2)
-
-	v3, ok := client.getFromCache("key3")
-	assert.True(t, ok)
-	assert.Equal(t, []int{1, 2, 3}, v3)
-
-	// Clear and verify all gone
-	client.ClearCache()
-	_, ok = client.getFromCache("key1")
-	assert.False(t, ok)
-	_, ok = client.getFromCache("key2")
-	assert.False(t, ok)
-	_, ok = client.getFromCache("key3")
-	assert.False(t, ok)
-}
+// Note: TestIntegration_CachingFlow removed - caching now uses persistent repository.
+// Cache functionality is tested in clientdata package.
 
 // TestIntegration_MockedTimeSeriesFlow tests fetching daily prices with mocked server.
 func TestIntegration_MockedTimeSeriesFlow(t *testing.T) {
@@ -105,7 +90,10 @@ func TestIntegration_MockedTimeSeriesFlow(t *testing.T) {
 	defer server.Close()
 
 	// Create client with custom base URL (would need to modify client for this in production)
-	client := NewClient("test-key", zerolog.Nop())
+	db, _ := sql.Open("sqlite3", ":memory:")
+	cacheRepo := clientdata.NewRepository(db)
+	openfigiClient := openfigi.NewClient("", cacheRepo, zerolog.Nop())
+	client := NewClient("test-key", cacheRepo, openfigiClient, nil, zerolog.Nop())
 
 	// Test the parsing directly since we can't easily override base URL
 	jsonData := `{
@@ -343,7 +331,10 @@ func TestIntegration_MockedOptionsFlow(t *testing.T) {
 
 // TestIntegration_ErrorHandling tests various error scenarios.
 func TestIntegration_ErrorHandling(t *testing.T) {
-	client := NewClient("test-key", zerolog.Nop())
+	db, _ := sql.Open("sqlite3", ":memory:")
+	cacheRepo := clientdata.NewRepository(db)
+	openfigiClient := openfigi.NewClient("", cacheRepo, zerolog.Nop())
+	client := NewClient("test-key", cacheRepo, openfigiClient, nil, zerolog.Nop())
 
 	t.Run("RateLimitError", func(t *testing.T) {
 		body := []byte(`{"Note": "Thank you for using Alpha Vantage! Our standard API call frequency is 25 calls per day."}`)
@@ -372,34 +363,8 @@ func TestIntegration_ErrorHandling(t *testing.T) {
 	})
 }
 
-// TestIntegration_CacheKeyConsistency tests cache keys are consistent.
-func TestIntegration_CacheKeyConsistency(t *testing.T) {
-	params := map[string]string{
-		"symbol":   "IBM",
-		"interval": "daily",
-	}
-
-	key1 := buildCacheKey("SMA", params)
-	key2 := buildCacheKey("SMA", params)
-
-	assert.Equal(t, key1, key2)
-
-	// Different params should produce different keys
-	params2 := map[string]string{
-		"symbol":   "AAPL",
-		"interval": "daily",
-	}
-	key3 := buildCacheKey("SMA", params2)
-	assert.NotEqual(t, key1, key3)
-
-	// API key should be excluded
-	params3 := map[string]string{
-		"symbol": "IBM",
-		"apikey": "secret",
-	}
-	key4 := buildCacheKey("SMA", params3)
-	assert.NotContains(t, key4, "secret")
-}
+// Note: TestIntegration_CacheKeyConsistency removed - buildCacheKey function no longer exists.
+// Cache keys now use ISIN-based composite keys managed by repository.
 
 // TestIntegration_ParsingHelpers tests parsing helper functions.
 func TestIntegration_ParsingHelpers(t *testing.T) {
@@ -436,7 +401,10 @@ func TestIntegration_ParsingHelpers(t *testing.T) {
 
 // TestIntegration_AllEndpointCategories tests that all endpoint categories are covered.
 func TestIntegration_AllEndpointCategories(t *testing.T) {
-	client := NewClient("test-key", zerolog.Nop())
+	db, _ := sql.Open("sqlite3", ":memory:")
+	cacheRepo := clientdata.NewRepository(db)
+	openfigiClient := openfigi.NewClient("", cacheRepo, zerolog.Nop())
+	client := NewClient("test-key", cacheRepo, openfigiClient, nil, zerolog.Nop())
 
 	// Verify all method categories exist
 	t.Run("TimeSeries", func(t *testing.T) {
@@ -503,21 +471,12 @@ func TestIntegration_AllEndpointCategories(t *testing.T) {
 
 // BenchmarkIntegration_CacheOperations benchmarks cache performance.
 func BenchmarkIntegration_CacheOperations(b *testing.B) {
-	client := NewClient("test-key", zerolog.Nop())
+	db, _ := sql.Open("sqlite3", ":memory:")
+	cacheRepo := clientdata.NewRepository(db)
+	openfigiClient := openfigi.NewClient("", cacheRepo, zerolog.Nop())
+	_ = NewClient("test-key", cacheRepo, openfigiClient, nil, zerolog.Nop())
 
-	b.Run("SetCache", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			client.setCache("key", "value", client.cacheTTL.Fundamentals)
-		}
-	})
-
-	b.Run("GetCache", func(b *testing.B) {
-		client.setCache("key", "value", client.cacheTTL.Fundamentals)
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			_, _ = client.getFromCache("key")
-		}
-	})
+	// Note: Cache benchmarks removed - caching now uses persistent repository.
 }
 
 // BenchmarkIntegration_Parsing benchmarks parsing performance.

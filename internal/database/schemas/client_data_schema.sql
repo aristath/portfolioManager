@@ -82,6 +82,13 @@ CREATE TABLE IF NOT EXISTS current_prices (
     expires_at INTEGER NOT NULL
 );
 
+-- Symbol to ISIN mapping cache (long TTL - mappings rarely change)
+CREATE TABLE IF NOT EXISTS symbol_to_isin (
+    symbol TEXT PRIMARY KEY,
+    data TEXT NOT NULL,
+    expires_at INTEGER NOT NULL
+);
+
 -- Indexes for expiration queries (cleanup, freshness checks)
 CREATE INDEX IF NOT EXISTS idx_av_overview_expires ON alphavantage_overview(expires_at);
 CREATE INDEX IF NOT EXISTS idx_av_balance_expires ON alphavantage_balance_sheet(expires_at);
@@ -95,3 +102,4 @@ CREATE INDEX IF NOT EXISTS idx_openfigi_expires ON openfigi(expires_at);
 CREATE INDEX IF NOT EXISTS idx_yahoo_expires ON yahoo_metadata(expires_at);
 CREATE INDEX IF NOT EXISTS idx_exchangerate_expires ON exchangerate(expires_at);
 CREATE INDEX IF NOT EXISTS idx_prices_expires ON current_prices(expires_at);
+CREATE INDEX IF NOT EXISTS idx_symbol_to_isin_expires ON symbol_to_isin(expires_at);

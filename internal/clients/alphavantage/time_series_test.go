@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -346,7 +345,7 @@ func TestParseAdjustedTimeSeriesMissingKey(t *testing.T) {
 
 // TestClientMethods tests that client methods exist and have correct signatures.
 func TestClientTimeSeriesMethods(t *testing.T) {
-	client := NewClient("test-key", zerolog.Nop())
+	client := newTestClient("test-key")
 
 	// Verify methods exist (compile-time check through type assertions)
 	var _ func(string, bool) ([]DailyPrice, error) = client.GetDailyPrices

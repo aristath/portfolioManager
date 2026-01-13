@@ -6,13 +6,15 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/aristath/sentinel/internal/clientdata"
+	"github.com/aristath/sentinel/internal/clients/openfigi"
+	"github.com/aristath/sentinel/internal/modules/universe"
 	"github.com/rs/zerolog"
 )
 
@@ -21,55 +23,39 @@ const (
 	freeRequestLimit = 25
 )
 
-// CacheTTL defines cache expiration durations for different data types.
-type CacheTTL struct {
-	Fundamentals        time.Duration
-	TechnicalIndicators time.Duration
-	PriceData           time.Duration
-	EconomicIndicators  time.Duration
-	Commodities         time.Duration
-	ExchangeRates       time.Duration
-}
-
-// DefaultCacheTTL returns the default cache expiration durations.
-func DefaultCacheTTL() CacheTTL {
-	return CacheTTL{
-		Fundamentals:        24 * time.Hour,
-		TechnicalIndicators: 1 * time.Hour,
-		PriceData:           15 * time.Minute,
-		EconomicIndicators:  24 * time.Hour,
-		Commodities:         1 * time.Hour,
-		ExchangeRates:       15 * time.Minute,
-	}
-}
-
-// cacheEntry stores a cached response with expiration.
-type cacheEntry struct {
-	data      interface{}
-	expiresAt time.Time
-}
-
 // Client is the Alpha Vantage API client.
 type Client struct {
 	apiKeys    []string // Multiple API keys for round-robin rotation
 	keyIndex   uint32   // Atomic counter for round-robin key selection
 	httpClient *http.Client
 	log        zerolog.Logger
-	cacheTTL   CacheTTL
 
 	// Rate limiting (per-key)
 	mu           sync.Mutex
 	keyCounters  []int // Daily counter per key
 	counterReset time.Time
 
-	// Response cache
-	cacheMu sync.RWMutex
-	cache   map[string]cacheEntry
+	// Persistent cache
+	cacheRepo *clientdata.Repository
+
+	// Symbol-to-ISIN resolution
+	openfigiClient *openfigi.Client
+	securityRepo   SecurityRepository // Optional: best source for ISIN resolution
+	symbolToISIN   sync.Map           // In-memory cache for symbol-to-ISIN mappings
+}
+
+// SecurityRepository interface for symbol-to-ISIN resolution.
+// This allows the client to use universe.SecurityRepository without direct dependency.
+type SecurityRepository interface {
+	GetBySymbol(symbol string) (*universe.Security, error)
 }
 
 // NewClient creates a new Alpha Vantage client.
 // apiKeysCSV can be a single key or multiple comma-separated keys for round-robin rotation.
-func NewClient(apiKeysCSV string, log zerolog.Logger) *Client {
+// cacheRepo is required for persistent caching.
+// openfigiClient is required (per plan specification).
+// securityRepo is optional but recommended for efficient symbol-to-ISIN resolution.
+func NewClient(apiKeysCSV string, cacheRepo *clientdata.Repository, openfigiClient *openfigi.Client, securityRepo SecurityRepository, log zerolog.Logger) *Client {
 	// Parse comma-separated keys, trim whitespace, filter empty
 	var keys []string
 	for _, k := range strings.Split(apiKeysCSV, ",") {
@@ -84,17 +70,13 @@ func NewClient(apiKeysCSV string, log zerolog.Logger) *Client {
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
-		log:          log.With().Str("component", "alphavantage").Logger(),
-		cacheTTL:     DefaultCacheTTL(),
-		keyCounters:  make([]int, max(len(keys), 1)), // At least 1 slot for empty key case
-		counterReset: nextMidnightUTC(),
-		cache:        make(map[string]cacheEntry),
+		log:            log.With().Str("component", "alphavantage").Logger(),
+		cacheRepo:      cacheRepo,
+		openfigiClient: openfigiClient,
+		securityRepo:   securityRepo,
+		keyCounters:    make([]int, max(len(keys), 1)), // At least 1 slot for empty key case
+		counterReset:   nextMidnightUTC(),
 	}
-}
-
-// SetCacheTTL configures custom cache expiration durations.
-func (c *Client) SetCacheTTL(ttl CacheTTL) {
-	c.cacheTTL = ttl
 }
 
 // GetRemainingRequests returns the total number of remaining API requests for today across all keys.
@@ -204,58 +186,93 @@ func (c *Client) checkRateLimit() error {
 	return ErrRateLimitExceeded{}
 }
 
-// getFromCache retrieves a cached response if it exists and hasn't expired.
-func (c *Client) getFromCache(key string) (interface{}, bool) {
-	c.cacheMu.RLock()
-	defer c.cacheMu.RUnlock()
-
-	entry, exists := c.cache[key]
-	if !exists {
-		return nil, false
+// resolveISIN resolves a symbol to an ISIN.
+// First checks in-memory cache, then persistent cache, then tries to resolve using available sources.
+// Returns error if ISIN cannot be resolved.
+func (c *Client) resolveISIN(symbol string) (string, error) {
+	// Check in-memory cache first (fastest)
+	if isin, ok := c.symbolToISIN.Load(symbol); ok {
+		return isin.(string), nil
 	}
-	if time.Now().After(entry.expiresAt) {
-		return nil, false
-	}
-	return entry.data, true
-}
 
-// setCache stores a response in the cache with the given TTL.
-func (c *Client) setCache(key string, data interface{}, ttl time.Duration) {
-	c.cacheMu.Lock()
-	defer c.cacheMu.Unlock()
-
-	c.cache[key] = cacheEntry{
-		data:      data,
-		expiresAt: time.Now().Add(ttl),
-	}
-}
-
-// ClearCache removes all cached entries.
-func (c *Client) ClearCache() {
-	c.cacheMu.Lock()
-	defer c.cacheMu.Unlock()
-	c.cache = make(map[string]cacheEntry)
-}
-
-// buildCacheKey creates a cache key from function and parameters.
-// Keys are sorted to ensure consistent cache keys across calls.
-func buildCacheKey(function string, params map[string]string) string {
-	var parts []string
-	parts = append(parts, function)
-
-	// Sort keys for consistent cache key generation
-	keys := make([]string, 0, len(params))
-	for k := range params {
-		if k != "apikey" {
-			keys = append(keys, k)
+	// Check persistent cache (survives restarts)
+	if c.cacheRepo != nil {
+		table := "symbol_to_isin"
+		if data, err := c.cacheRepo.GetIfFresh(table, symbol); err == nil && data != nil {
+			var isin string
+			if err := json.Unmarshal(data, &isin); err == nil && isin != "" {
+				// Cache in memory for faster subsequent lookups
+				c.symbolToISIN.Store(symbol, isin)
+				return isin, nil
+			}
 		}
 	}
-	sort.Strings(keys)
 
-	for _, k := range keys {
-		parts = append(parts, k+"="+params[k])
+	// Try SecurityRepository (most direct source - authoritative)
+	if c.securityRepo != nil {
+		security, err := c.securityRepo.GetBySymbol(symbol)
+		if err == nil && security != nil && security.ISIN != "" {
+			isin := security.ISIN
+			// Cache in memory
+			c.symbolToISIN.Store(symbol, isin)
+			// Cache persistently (survives restarts)
+			if c.cacheRepo != nil {
+				if err := c.cacheRepo.Store("symbol_to_isin", symbol, isin, clientdata.TTLSymbolToISIN); err != nil {
+					c.log.Warn().Err(err).Str("symbol", symbol).Msg("Failed to cache symbol-to-ISIN mapping")
+				}
+			}
+			return isin, nil
+		}
 	}
-	return strings.Join(parts, "&")
+
+	// OpenFIGI doesn't directly provide ISIN from ticker lookup
+	// It provides ticker -> FIGI, but not ticker -> ISIN
+	// SecurityRepository is the authoritative source for symbol-to-ISIN mappings
+	return "", fmt.Errorf("failed to resolve ISIN for symbol %s: SecurityRepository required (not found in cache or repository)", symbol)
+}
+
+// getTableForFunction returns the database table name for an Alpha Vantage API function.
+func getTableForFunction(function string) string {
+	switch function {
+	case "OVERVIEW", "INCOME_STATEMENT":
+		return "alphavantage_overview"
+	case "BALANCE_SHEET":
+		return "alphavantage_balance_sheet"
+	case "CASH_FLOW":
+		return "alphavantage_cash_flow"
+	case "EARNINGS":
+		return "alphavantage_earnings"
+	case "DIVIDENDS":
+		return "alphavantage_dividends"
+	case "ETF_PROFILE":
+		return "alphavantage_etf_profile"
+	case "INSIDER_TRANSACTIONS":
+		return "alphavantage_insider"
+	default:
+		return ""
+	}
+}
+
+// getTTLForFunction returns the TTL constant for an Alpha Vantage API function.
+func getTTLForFunction(function string) time.Duration {
+	switch function {
+	case "OVERVIEW", "INCOME_STATEMENT":
+		return clientdata.TTLAVOverview
+	case "BALANCE_SHEET":
+		return clientdata.TTLBalanceSheet
+	case "CASH_FLOW":
+		return clientdata.TTLCashFlow
+	case "EARNINGS":
+		return clientdata.TTLEarnings
+	case "DIVIDENDS":
+		return clientdata.TTLDividends
+	case "ETF_PROFILE":
+		return clientdata.TTLETFProfile
+	case "INSIDER_TRANSACTIONS":
+		return clientdata.TTLInsider
+	default:
+		return clientdata.TTLAVOverview // Default
+	}
 }
 
 // doRequest performs an HTTP request to the Alpha Vantage API.

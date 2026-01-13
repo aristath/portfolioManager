@@ -3,7 +3,6 @@ package alphavantage
 import (
 	"testing"
 
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -89,7 +88,7 @@ func TestCommoditiesParseCommodityData_EmptyData(t *testing.T) {
 
 // TestClientCommodityMethods verifies all commodity methods exist.
 func TestClientCommodityMethods(t *testing.T) {
-	client := NewClient("test-key", zerolog.Nop())
+	client := newTestClient("test-key")
 
 	var _ func(string, string) ([]CommodityPrice, error) = client.GetCommodity
 	var _ func(string) ([]CommodityPrice, error) = client.GetWTI

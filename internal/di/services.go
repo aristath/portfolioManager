@@ -86,23 +86,9 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	container.ExchangeRateAPIClient = exchangerate.NewClient(container.ClientDataRepo, log)
 	log.Info().Msg("ExchangeRateAPI client initialized with persistent cache")
 
-	// Alpha Vantage client (fundamentals, technical indicators, etc.)
-	// Get API key from settings or config
-	avAPIKey := ""
-	if container.SettingsRepo != nil {
-		if key, err := container.SettingsRepo.Get("alphavantage_api_key"); err == nil && key != nil {
-			avAPIKey = *key
-		}
-	}
-	container.AlphaVantageClient = alphavantage.NewClient(avAPIKey, log)
-	if avAPIKey != "" {
-		log.Info().Msg("Alpha Vantage client initialized with API key")
-	} else {
-		log.Info().Msg("Alpha Vantage client initialized (no API key configured)")
-	}
-
 	// OpenFIGI client (ISIN to ticker mapping)
 	// Get API key from settings (optional - increases rate limits)
+	// Must be initialized before Alpha Vantage client (which depends on it)
 	openFIGIKey := ""
 	if container.SettingsRepo != nil {
 		if key, err := container.SettingsRepo.Get("openfigi_api_key"); err == nil && key != nil {
@@ -114,6 +100,28 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		log.Info().Msg("OpenFIGI client initialized with API key and persistent cache (25k requests/min)")
 	} else {
 		log.Info().Msg("OpenFIGI client initialized with persistent cache (25 requests/min without key)")
+	}
+
+	// Alpha Vantage client (fundamentals, technical indicators, etc.)
+	// Get API key from settings or config
+	// Depends on OpenFIGIClient and SecurityRepo for symbol-to-ISIN resolution
+	avAPIKey := ""
+	if container.SettingsRepo != nil {
+		if key, err := container.SettingsRepo.Get("alphavantage_api_key"); err == nil && key != nil {
+			avAPIKey = *key
+		}
+	}
+	container.AlphaVantageClient = alphavantage.NewClient(
+		avAPIKey,
+		container.ClientDataRepo,
+		container.OpenFIGIClient,
+		container.SecurityRepo,
+		log,
+	)
+	if avAPIKey != "" {
+		log.Info().Msg("Alpha Vantage client initialized with API key and persistent cache")
+	} else {
+		log.Info().Msg("Alpha Vantage client initialized with persistent cache (no API key configured)")
 	}
 
 	// Symbol mapper for converting symbols between providers

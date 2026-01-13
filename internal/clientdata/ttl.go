@@ -8,6 +8,7 @@ const (
 	// Very stable data (rarely changes)
 	TTLOpenFIGI         = 30 * 24 * time.Hour // 30 days - ISIN-to-ticker mappings rarely change
 	TTLSecurityMetadata = 30 * 24 * time.Hour // 30 days - Static company info
+	TTLSymbolToISIN     = 30 * 24 * time.Hour // 30 days - Symbol-to-ISIN mappings rarely change
 
 	// Quarterly financial data (updates with filings)
 	TTLBalanceSheet = 45 * 24 * time.Hour // 45 days - Quarterly balance sheets
@@ -27,4 +28,5 @@ const (
 	// Short-lived data (changes frequently)
 	TTLExchangeRate = time.Hour        // 1 hour - Currency exchange rates
 	TTLCurrentPrice = 10 * time.Minute // 10 minutes - Current price cache for batch operations
+	TTLCommodity    = time.Hour        // 1 hour - Commodity prices (WTI, Brent, natural gas, etc.)
 )

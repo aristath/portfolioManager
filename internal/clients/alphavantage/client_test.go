@@ -1,17 +1,44 @@
 package alphavantage
 
 import (
+	"database/sql"
 	"testing"
 	"time"
 
+	"github.com/aristath/sentinel/internal/clientdata"
+	"github.com/aristath/sentinel/internal/clients/openfigi"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+// newTestClient creates a client for testing with in-memory database.
+func newTestClient(apiKeys string) *Client {
+	// Create in-memory database for testing
+	db, _ := sql.Open("sqlite3", ":memory:")
+	// Create schema
+	db.Exec(`
+		CREATE TABLE alphavantage_overview (isin TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at INTEGER NOT NULL);
+		CREATE TABLE alphavantage_balance_sheet (isin TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at INTEGER NOT NULL);
+		CREATE TABLE alphavantage_cash_flow (isin TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at INTEGER NOT NULL);
+		CREATE TABLE alphavantage_earnings (isin TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at INTEGER NOT NULL);
+		CREATE TABLE alphavantage_dividends (isin TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at INTEGER NOT NULL);
+		CREATE TABLE alphavantage_etf_profile (isin TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at INTEGER NOT NULL);
+		CREATE TABLE alphavantage_insider (isin TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at INTEGER NOT NULL);
+		CREATE TABLE alphavantage_economic (indicator TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at INTEGER NOT NULL);
+		CREATE TABLE exchangerate (pair TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at INTEGER NOT NULL);
+		CREATE TABLE current_prices (isin TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at INTEGER NOT NULL);
+		CREATE TABLE symbol_to_isin (symbol TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at INTEGER NOT NULL);
+	`)
+	cacheRepo := clientdata.NewRepository(db)
+	openfigiClient := openfigi.NewClient("", cacheRepo, zerolog.Nop())
+	return NewClient(apiKeys, cacheRepo, openfigiClient, nil, zerolog.Nop())
+}
+
 // TestNewClient tests client creation with a single key.
 func TestNewClient(t *testing.T) {
-	client := NewClient("test-key", zerolog.Nop())
+	client := newTestClient("test-key")
 
 	assert.NotNil(t, client)
 	require.Len(t, client.apiKeys, 1)
@@ -21,7 +48,7 @@ func TestNewClient(t *testing.T) {
 
 // TestNewClient_MultipleKeys tests client creation with multiple comma-separated keys.
 func TestNewClient_MultipleKeys(t *testing.T) {
-	client := NewClient("key1,key2,key3", zerolog.Nop())
+	client := newTestClient("key1,key2,key3")
 
 	assert.NotNil(t, client)
 	require.Len(t, client.apiKeys, 3)
@@ -34,7 +61,7 @@ func TestNewClient_MultipleKeys(t *testing.T) {
 
 // TestNewClient_WhitespaceHandling tests that whitespace is trimmed from keys.
 func TestNewClient_WhitespaceHandling(t *testing.T) {
-	client := NewClient(" key1 , key2 , key3 ", zerolog.Nop())
+	client := newTestClient(" key1 , key2 , key3 ")
 
 	require.Len(t, client.apiKeys, 3)
 	assert.Equal(t, "key1", client.apiKeys[0])
@@ -44,7 +71,7 @@ func TestNewClient_WhitespaceHandling(t *testing.T) {
 
 // TestNewClient_EmptyKeysFiltered tests that empty keys are filtered out.
 func TestNewClient_EmptyKeysFiltered(t *testing.T) {
-	client := NewClient("key1,,key2,  ,key3", zerolog.Nop())
+	client := newTestClient("key1,,key2,  ,key3")
 
 	require.Len(t, client.apiKeys, 3)
 	assert.Equal(t, "key1", client.apiKeys[0])
@@ -54,7 +81,7 @@ func TestNewClient_EmptyKeysFiltered(t *testing.T) {
 
 // TestNewClient_EmptyString tests client creation with empty string.
 func TestNewClient_EmptyString(t *testing.T) {
-	client := NewClient("", zerolog.Nop())
+	client := newTestClient("")
 
 	assert.NotNil(t, client)
 	assert.Empty(t, client.apiKeys)
@@ -63,7 +90,7 @@ func TestNewClient_EmptyString(t *testing.T) {
 
 // TestKeyRotation_RoundRobin tests that keys rotate in round-robin order.
 func TestKeyRotation_RoundRobin(t *testing.T) {
-	client := NewClient("key1,key2,key3", zerolog.Nop())
+	client := newTestClient("key1,key2,key3")
 
 	// Get 6 key indices - should cycle through 0, 1, 2, 0, 1, 2
 	indices := make([]int, 6)
@@ -76,7 +103,7 @@ func TestKeyRotation_RoundRobin(t *testing.T) {
 
 // TestRateLimiting_MultipleKeys tests per-key rate limiting.
 func TestRateLimiting_MultipleKeys(t *testing.T) {
-	client := NewClient("key1,key2", zerolog.Nop())
+	client := newTestClient("key1,key2")
 
 	// Total capacity: 2 keys * 25 = 50
 	assert.Equal(t, 50, client.GetRemainingRequests())
@@ -107,7 +134,7 @@ func TestRateLimiting_MultipleKeys(t *testing.T) {
 
 // TestGetRemainingRequests_MultipleKeys tests total remaining calculation.
 func TestGetRemainingRequests_MultipleKeys(t *testing.T) {
-	client := NewClient("key1,key2,key3", zerolog.Nop())
+	client := newTestClient("key1,key2,key3")
 
 	// Total: 75 (3 * 25)
 	assert.Equal(t, 75, client.GetRemainingRequests())
@@ -125,7 +152,7 @@ func TestGetRemainingRequests_MultipleKeys(t *testing.T) {
 
 // TestKeyRotation_Concurrent tests thread safety of key rotation.
 func TestKeyRotation_Concurrent(t *testing.T) {
-	client := NewClient("key1,key2,key3", zerolog.Nop())
+	client := newTestClient("key1,key2,key3")
 
 	const numGoroutines = 100
 	results := make(chan int, numGoroutines)
@@ -153,7 +180,7 @@ func TestKeyRotation_Concurrent(t *testing.T) {
 
 // TestResetDailyCounter_MultipleKeys tests that reset clears all key counters.
 func TestResetDailyCounter_MultipleKeys(t *testing.T) {
-	client := NewClient("key1,key2", zerolog.Nop())
+	client := newTestClient("key1,key2")
 
 	// Use some requests on each key
 	for i := 0; i < 20; i++ {
@@ -172,7 +199,7 @@ func TestResetDailyCounter_MultipleKeys(t *testing.T) {
 
 // TestRateLimiting tests the rate limiting functionality.
 func TestRateLimiting(t *testing.T) {
-	client := NewClient("test-key", zerolog.Nop())
+	client := newTestClient("test-key")
 
 	// Simulate using all requests
 	for i := 0; i < 25; i++ {
@@ -190,7 +217,7 @@ func TestRateLimiting(t *testing.T) {
 
 // TestResetDailyCounter tests counter reset.
 func TestResetDailyCounter(t *testing.T) {
-	client := NewClient("test-key", zerolog.Nop())
+	client := newTestClient("test-key")
 
 	// Use some requests
 	for i := 0; i < 10; i++ {
@@ -203,92 +230,8 @@ func TestResetDailyCounter(t *testing.T) {
 	assert.Equal(t, 25, client.GetRemainingRequests())
 }
 
-// TestCaching tests the cache functionality.
-func TestCaching(t *testing.T) {
-	client := NewClient("test-key", zerolog.Nop())
-
-	// Set a cache entry
-	testData := "test data"
-	client.setCache("test-key", testData, time.Hour)
-
-	// Retrieve it
-	cached, ok := client.getFromCache("test-key")
-	assert.True(t, ok)
-	assert.Equal(t, testData, cached)
-
-	// Non-existent key
-	_, ok = client.getFromCache("non-existent")
-	assert.False(t, ok)
-}
-
-// TestCacheExpiration tests cache expiration.
-func TestCacheExpiration(t *testing.T) {
-	client := NewClient("test-key", zerolog.Nop())
-
-	// Set with very short TTL
-	client.setCache("test-key", "test data", time.Millisecond)
-
-	// Wait for expiration
-	time.Sleep(5 * time.Millisecond)
-
-	// Should be expired
-	_, ok := client.getFromCache("test-key")
-	assert.False(t, ok)
-}
-
-// TestClearCache tests cache clearing.
-func TestClearCache(t *testing.T) {
-	client := NewClient("test-key", zerolog.Nop())
-
-	client.setCache("key1", "data1", time.Hour)
-	client.setCache("key2", "data2", time.Hour)
-
-	client.ClearCache()
-
-	_, ok1 := client.getFromCache("key1")
-	_, ok2 := client.getFromCache("key2")
-	assert.False(t, ok1)
-	assert.False(t, ok2)
-}
-
-// TestBuildCacheKey tests cache key generation.
-func TestBuildCacheKey(t *testing.T) {
-	tests := []struct {
-		name     string
-		function string
-		params   map[string]string
-	}{
-		{
-			name:     "Simple function",
-			function: "OVERVIEW",
-			params:   map[string]string{"symbol": "IBM"},
-		},
-		{
-			name:     "Multiple params",
-			function: "TIME_SERIES_DAILY",
-			params: map[string]string{
-				"symbol":     "AAPL",
-				"outputsize": "full",
-			},
-		},
-		{
-			name:     "With apikey excluded",
-			function: "SMA",
-			params: map[string]string{
-				"symbol": "MSFT",
-				"apikey": "secret", // Should be excluded
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			key := buildCacheKey(tt.function, tt.params)
-			assert.Contains(t, key, tt.function)
-			assert.NotContains(t, key, "apikey=")
-		})
-	}
-}
+// Note: Cache-related tests (TestCaching, TestCacheExpiration, TestClearCache, TestBuildCacheKey)
+// have been removed. Caching now uses persistent repository which is tested in clientdata package.
 
 // TestParseFloat64 tests float parsing.
 func TestParseFloat64(t *testing.T) {
@@ -745,40 +688,12 @@ func TestErrorTypes(t *testing.T) {
 	})
 }
 
-// TestSetCacheTTL tests custom cache TTL configuration.
-func TestSetCacheTTL(t *testing.T) {
-	client := NewClient("test-key", zerolog.Nop())
-
-	customTTL := CacheTTL{
-		Fundamentals:        48 * time.Hour,
-		TechnicalIndicators: 2 * time.Hour,
-		PriceData:           30 * time.Minute,
-		EconomicIndicators:  48 * time.Hour,
-		Commodities:         2 * time.Hour,
-		ExchangeRates:       30 * time.Minute,
-	}
-
-	client.SetCacheTTL(customTTL)
-
-	assert.Equal(t, 48*time.Hour, client.cacheTTL.Fundamentals)
-	assert.Equal(t, 2*time.Hour, client.cacheTTL.TechnicalIndicators)
-}
-
-// TestDefaultCacheTTL tests default TTL values.
-func TestDefaultCacheTTL(t *testing.T) {
-	ttl := DefaultCacheTTL()
-
-	assert.Equal(t, 24*time.Hour, ttl.Fundamentals)
-	assert.Equal(t, 1*time.Hour, ttl.TechnicalIndicators)
-	assert.Equal(t, 15*time.Minute, ttl.PriceData)
-	assert.Equal(t, 24*time.Hour, ttl.EconomicIndicators)
-	assert.Equal(t, 1*time.Hour, ttl.Commodities)
-	assert.Equal(t, 15*time.Minute, ttl.ExchangeRates)
-}
+// Note: TestSetCacheTTL and TestDefaultCacheTTL removed - CacheTTL struct no longer exists.
+// TTL constants are now in clientdata package.
 
 // TestAPIErrorDetection tests detection of API error responses.
 func TestAPIErrorDetection(t *testing.T) {
-	client := NewClient("test-key", zerolog.Nop())
+	client := newTestClient("test-key")
 
 	tests := []struct {
 		name        string
@@ -840,24 +755,7 @@ func BenchmarkParseFloat64(b *testing.B) {
 	}
 }
 
-// BenchmarkCacheOperations benchmarks cache read/write.
-func BenchmarkCacheOperations(b *testing.B) {
-	client := NewClient("test-key", zerolog.Nop())
-
-	b.Run("Set", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			client.setCache("key", "value", time.Hour)
-		}
-	})
-
-	b.Run("Get", func(b *testing.B) {
-		client.setCache("key", "value", time.Hour)
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			_, _ = client.getFromCache("key")
-		}
-	})
-}
+// Note: BenchmarkCacheOperations removed - caching now uses persistent repository.
 
 // TestInterfaceImplementation verifies Client implements ClientInterface.
 func TestInterfaceImplementation(t *testing.T) {

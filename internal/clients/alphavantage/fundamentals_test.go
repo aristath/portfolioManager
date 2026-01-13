@@ -3,7 +3,6 @@ package alphavantage
 import (
 	"testing"
 
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -415,7 +414,7 @@ func TestFundamentalsParseErrors(t *testing.T) {
 
 // TestClientFundamentalsMethods verifies all fundamental methods exist.
 func TestClientFundamentalsMethods(t *testing.T) {
-	client := NewClient("test-key", zerolog.Nop())
+	client := newTestClient("test-key")
 
 	var _ func(string) (*CompanyOverview, error) = client.GetCompanyOverview
 	var _ func(string) (*Earnings, error) = client.GetEarnings

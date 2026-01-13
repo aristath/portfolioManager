@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/aristath/sentinel/internal/clientdata"
 )
 
 // =============================================================================
@@ -14,12 +16,24 @@ import (
 
 // GetCompanyOverview returns comprehensive company information and financial metrics.
 func (c *Client) GetCompanyOverview(symbol string) (*CompanyOverview, error) {
-	cacheKey := buildCacheKey("OVERVIEW", map[string]string{"symbol": symbol})
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.(*CompanyOverview), nil
+	// Resolve symbol to ISIN
+	isin, err := c.resolveISIN(symbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve ISIN for symbol %s: %w", symbol, err)
 	}
 
+	// Check cache
+	table := getTableForFunction("OVERVIEW")
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, isin); err == nil && data != nil {
+			var overview CompanyOverview
+			if err := json.Unmarshal(data, &overview); err == nil {
+				return &overview, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	body, err := c.doRequest("OVERVIEW", map[string]string{"symbol": symbol})
 	if err != nil {
 		return nil, err
@@ -30,18 +44,37 @@ func (c *Client) GetCompanyOverview(symbol string) (*CompanyOverview, error) {
 		return nil, fmt.Errorf("failed to parse company overview: %w", err)
 	}
 
-	c.setCache(cacheKey, overview, c.cacheTTL.Fundamentals)
+	// Store in cache
+	if c.cacheRepo != nil {
+		ttl := getTTLForFunction("OVERVIEW")
+		if err := c.cacheRepo.Store(table, isin, overview, ttl); err != nil {
+			c.log.Warn().Err(err).Str("isin", isin).Msg("Failed to cache company overview")
+		}
+	}
+
 	return overview, nil
 }
 
 // GetEarnings returns annual and quarterly earnings data.
 func (c *Client) GetEarnings(symbol string) (*Earnings, error) {
-	cacheKey := buildCacheKey("EARNINGS", map[string]string{"symbol": symbol})
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.(*Earnings), nil
+	// Resolve symbol to ISIN
+	isin, err := c.resolveISIN(symbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve ISIN for symbol %s: %w", symbol, err)
 	}
 
+	// Check cache
+	table := getTableForFunction("EARNINGS")
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, isin); err == nil && data != nil {
+			var earnings Earnings
+			if err := json.Unmarshal(data, &earnings); err == nil {
+				return &earnings, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	body, err := c.doRequest("EARNINGS", map[string]string{"symbol": symbol})
 	if err != nil {
 		return nil, err
@@ -52,18 +85,37 @@ func (c *Client) GetEarnings(symbol string) (*Earnings, error) {
 		return nil, fmt.Errorf("failed to parse earnings: %w", err)
 	}
 
-	c.setCache(cacheKey, earnings, c.cacheTTL.Fundamentals)
+	// Store in cache
+	if c.cacheRepo != nil {
+		ttl := getTTLForFunction("EARNINGS")
+		if err := c.cacheRepo.Store(table, isin, earnings, ttl); err != nil {
+			c.log.Warn().Err(err).Str("isin", isin).Msg("Failed to cache earnings")
+		}
+	}
+
 	return earnings, nil
 }
 
 // GetIncomeStatement returns annual and quarterly income statements.
 func (c *Client) GetIncomeStatement(symbol string) (*IncomeStatement, error) {
-	cacheKey := buildCacheKey("INCOME_STATEMENT", map[string]string{"symbol": symbol})
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.(*IncomeStatement), nil
+	// Resolve symbol to ISIN
+	isin, err := c.resolveISIN(symbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve ISIN for symbol %s: %w", symbol, err)
 	}
 
+	// Check cache (uses overview table per mapping)
+	table := getTableForFunction("INCOME_STATEMENT")
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, isin); err == nil && data != nil {
+			var stmt IncomeStatement
+			if err := json.Unmarshal(data, &stmt); err == nil {
+				return &stmt, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	body, err := c.doRequest("INCOME_STATEMENT", map[string]string{"symbol": symbol})
 	if err != nil {
 		return nil, err
@@ -74,18 +126,37 @@ func (c *Client) GetIncomeStatement(symbol string) (*IncomeStatement, error) {
 		return nil, fmt.Errorf("failed to parse income statement: %w", err)
 	}
 
-	c.setCache(cacheKey, stmt, c.cacheTTL.Fundamentals)
+	// Store in cache
+	if c.cacheRepo != nil {
+		ttl := getTTLForFunction("INCOME_STATEMENT")
+		if err := c.cacheRepo.Store(table, isin, stmt, ttl); err != nil {
+			c.log.Warn().Err(err).Str("isin", isin).Msg("Failed to cache income statement")
+		}
+	}
+
 	return stmt, nil
 }
 
 // GetBalanceSheet returns annual and quarterly balance sheets.
 func (c *Client) GetBalanceSheet(symbol string) (*BalanceSheet, error) {
-	cacheKey := buildCacheKey("BALANCE_SHEET", map[string]string{"symbol": symbol})
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.(*BalanceSheet), nil
+	// Resolve symbol to ISIN
+	isin, err := c.resolveISIN(symbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve ISIN for symbol %s: %w", symbol, err)
 	}
 
+	// Check cache
+	table := getTableForFunction("BALANCE_SHEET")
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, isin); err == nil && data != nil {
+			var sheet BalanceSheet
+			if err := json.Unmarshal(data, &sheet); err == nil {
+				return &sheet, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	body, err := c.doRequest("BALANCE_SHEET", map[string]string{"symbol": symbol})
 	if err != nil {
 		return nil, err
@@ -96,18 +167,37 @@ func (c *Client) GetBalanceSheet(symbol string) (*BalanceSheet, error) {
 		return nil, fmt.Errorf("failed to parse balance sheet: %w", err)
 	}
 
-	c.setCache(cacheKey, sheet, c.cacheTTL.Fundamentals)
+	// Store in cache
+	if c.cacheRepo != nil {
+		ttl := getTTLForFunction("BALANCE_SHEET")
+		if err := c.cacheRepo.Store(table, isin, sheet, ttl); err != nil {
+			c.log.Warn().Err(err).Str("isin", isin).Msg("Failed to cache balance sheet")
+		}
+	}
+
 	return sheet, nil
 }
 
 // GetCashFlow returns annual and quarterly cash flow statements.
 func (c *Client) GetCashFlow(symbol string) (*CashFlow, error) {
-	cacheKey := buildCacheKey("CASH_FLOW", map[string]string{"symbol": symbol})
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.(*CashFlow), nil
+	// Resolve symbol to ISIN
+	isin, err := c.resolveISIN(symbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve ISIN for symbol %s: %w", symbol, err)
 	}
 
+	// Check cache
+	table := getTableForFunction("CASH_FLOW")
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, isin); err == nil && data != nil {
+			var cf CashFlow
+			if err := json.Unmarshal(data, &cf); err == nil {
+				return &cf, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	body, err := c.doRequest("CASH_FLOW", map[string]string{"symbol": symbol})
 	if err != nil {
 		return nil, err
@@ -118,18 +208,37 @@ func (c *Client) GetCashFlow(symbol string) (*CashFlow, error) {
 		return nil, fmt.Errorf("failed to parse cash flow: %w", err)
 	}
 
-	c.setCache(cacheKey, cf, c.cacheTTL.Fundamentals)
+	// Store in cache
+	if c.cacheRepo != nil {
+		ttl := getTTLForFunction("CASH_FLOW")
+		if err := c.cacheRepo.Store(table, isin, cf, ttl); err != nil {
+			c.log.Warn().Err(err).Str("isin", isin).Msg("Failed to cache cash flow")
+		}
+	}
+
 	return cf, nil
 }
 
 // GetDividends returns historical dividend data.
 func (c *Client) GetDividends(symbol string) ([]DividendRecord, error) {
-	cacheKey := buildCacheKey("DIVIDENDS", map[string]string{"symbol": symbol})
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.([]DividendRecord), nil
+	// Resolve symbol to ISIN
+	isin, err := c.resolveISIN(symbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve ISIN for symbol %s: %w", symbol, err)
 	}
 
+	// Check cache
+	table := getTableForFunction("DIVIDENDS")
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, isin); err == nil && data != nil {
+			var dividends []DividendRecord
+			if err := json.Unmarshal(data, &dividends); err == nil {
+				return dividends, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	body, err := c.doRequest("DIVIDENDS", map[string]string{"symbol": symbol})
 	if err != nil {
 		return nil, err
@@ -140,16 +249,36 @@ func (c *Client) GetDividends(symbol string) ([]DividendRecord, error) {
 		return nil, fmt.Errorf("failed to parse dividends: %w", err)
 	}
 
-	c.setCache(cacheKey, dividends, c.cacheTTL.Fundamentals)
+	// Store in cache
+	if c.cacheRepo != nil {
+		ttl := getTTLForFunction("DIVIDENDS")
+		if err := c.cacheRepo.Store(table, isin, dividends, ttl); err != nil {
+			c.log.Warn().Err(err).Str("isin", isin).Msg("Failed to cache dividends")
+		}
+	}
+
 	return dividends, nil
 }
 
 // GetSplits returns historical stock split data.
 func (c *Client) GetSplits(symbol string) ([]SplitRecord, error) {
-	cacheKey := buildCacheKey("SPLITS", map[string]string{"symbol": symbol})
+	// Resolve symbol to ISIN
+	isin, err := c.resolveISIN(symbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve ISIN for symbol %s: %w", symbol, err)
+	}
 
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.([]SplitRecord), nil
+	cacheKey := isin + ":SPLITS"
+
+	// Check cache (using current_prices table)
+	table := "current_prices"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var splits []SplitRecord
+			if err := json.Unmarshal(data, &splits); err == nil {
+				return splits, nil
+			}
+		}
 	}
 
 	body, err := c.doRequest("SPLITS", map[string]string{"symbol": symbol})
@@ -162,18 +291,36 @@ func (c *Client) GetSplits(symbol string) ([]SplitRecord, error) {
 		return nil, fmt.Errorf("failed to parse splits: %w", err)
 	}
 
-	c.setCache(cacheKey, splits, c.cacheTTL.Fundamentals)
+	// Store in cache
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, splits, clientdata.TTLAVOverview); err != nil {
+			c.log.Warn().Err(err).Str("isin", isin).Msg("Failed to cache splits")
+		}
+	}
+
 	return splits, nil
 }
 
 // GetETFProfile returns ETF-specific information.
 func (c *Client) GetETFProfile(symbol string) (*ETFProfile, error) {
-	cacheKey := buildCacheKey("ETF_PROFILE", map[string]string{"symbol": symbol})
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.(*ETFProfile), nil
+	// Resolve symbol to ISIN
+	isin, err := c.resolveISIN(symbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve ISIN for symbol %s: %w", symbol, err)
 	}
 
+	// Check cache
+	table := getTableForFunction("ETF_PROFILE")
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, isin); err == nil && data != nil {
+			var profile ETFProfile
+			if err := json.Unmarshal(data, &profile); err == nil {
+				return &profile, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	body, err := c.doRequest("ETF_PROFILE", map[string]string{"symbol": symbol})
 	if err != nil {
 		return nil, err
@@ -184,16 +331,36 @@ func (c *Client) GetETFProfile(symbol string) (*ETFProfile, error) {
 		return nil, fmt.Errorf("failed to parse ETF profile: %w", err)
 	}
 
-	c.setCache(cacheKey, profile, c.cacheTTL.Fundamentals)
+	// Store in cache
+	if c.cacheRepo != nil {
+		ttl := getTTLForFunction("ETF_PROFILE")
+		if err := c.cacheRepo.Store(table, isin, profile, ttl); err != nil {
+			c.log.Warn().Err(err).Str("isin", isin).Msg("Failed to cache ETF profile")
+		}
+	}
+
 	return profile, nil
 }
 
 // GetETFHoldings returns the holdings of an ETF.
 func (c *Client) GetETFHoldings(symbol string) ([]ETFHolding, error) {
-	cacheKey := buildCacheKey("ETF_HOLDINGS", map[string]string{"symbol": symbol})
+	// Resolve symbol to ISIN
+	isin, err := c.resolveISIN(symbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve ISIN for symbol %s: %w", symbol, err)
+	}
 
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.([]ETFHolding), nil
+	cacheKey := isin + ":ETF_HOLDINGS"
+
+	// Check cache (using current_prices table)
+	table := "current_prices"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var holdings []ETFHolding
+			if err := json.Unmarshal(data, &holdings); err == nil {
+				return holdings, nil
+			}
+		}
 	}
 
 	body, err := c.doRequest("ETF_HOLDINGS", map[string]string{"symbol": symbol})
@@ -206,16 +373,35 @@ func (c *Client) GetETFHoldings(symbol string) ([]ETFHolding, error) {
 		return nil, fmt.Errorf("failed to parse ETF holdings: %w", err)
 	}
 
-	c.setCache(cacheKey, holdings, c.cacheTTL.Fundamentals)
+	// Store in cache
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, holdings, clientdata.TTLETFProfile); err != nil {
+			c.log.Warn().Err(err).Str("isin", isin).Msg("Failed to cache ETF holdings")
+		}
+	}
+
 	return holdings, nil
 }
 
 // GetSharesOutstanding returns historical shares outstanding data.
 func (c *Client) GetSharesOutstanding(symbol string) ([]SharesOutstandingRecord, error) {
-	cacheKey := buildCacheKey("SHARES_OUTSTANDING", map[string]string{"symbol": symbol})
+	// Resolve symbol to ISIN
+	isin, err := c.resolveISIN(symbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve ISIN for symbol %s: %w", symbol, err)
+	}
 
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.([]SharesOutstandingRecord), nil
+	cacheKey := isin + ":SHARES_OUTSTANDING"
+
+	// Check cache (using current_prices table)
+	table := "current_prices"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var shares []SharesOutstandingRecord
+			if err := json.Unmarshal(data, &shares); err == nil {
+				return shares, nil
+			}
+		}
 	}
 
 	body, err := c.doRequest("SHARES_OUTSTANDING", map[string]string{"symbol": symbol})
@@ -228,21 +414,39 @@ func (c *Client) GetSharesOutstanding(symbol string) ([]SharesOutstandingRecord,
 		return nil, fmt.Errorf("failed to parse shares outstanding: %w", err)
 	}
 
-	c.setCache(cacheKey, shares, c.cacheTTL.Fundamentals)
+	// Store in cache
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, shares, clientdata.TTLAVOverview); err != nil {
+			c.log.Warn().Err(err).Str("isin", isin).Msg("Failed to cache shares outstanding")
+		}
+	}
+
 	return shares, nil
 }
 
 // GetListingStatus returns listing status for securities.
+// Market-wide data, doesn't require ISIN resolution.
 func (c *Client) GetListingStatus(status string) ([]ListingStatus, error) {
+	cacheKey := "LISTING_STATUS"
+	if status != "" {
+		cacheKey = cacheKey + ":" + status
+	}
+
+	// Check cache (using current_prices table for market-wide data)
+	table := "current_prices"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var listings []ListingStatus
+			if err := json.Unmarshal(data, &listings); err == nil {
+				return listings, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	params := map[string]string{}
 	if status != "" {
 		params["state"] = status
-	}
-
-	cacheKey := buildCacheKey("LISTING_STATUS", params)
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.([]ListingStatus), nil
 	}
 
 	body, err := c.doRequest("LISTING_STATUS", params)
@@ -255,21 +459,39 @@ func (c *Client) GetListingStatus(status string) ([]ListingStatus, error) {
 		return nil, fmt.Errorf("failed to parse listing status: %w", err)
 	}
 
-	c.setCache(cacheKey, listings, c.cacheTTL.Fundamentals)
+	// Store in cache
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, listings, clientdata.TTLAVOverview); err != nil {
+			c.log.Warn().Err(err).Msg("Failed to cache listing status")
+		}
+	}
+
 	return listings, nil
 }
 
 // GetEarningsCalendar returns upcoming earnings announcements.
+// Market-wide data, doesn't require ISIN resolution.
 func (c *Client) GetEarningsCalendar(horizon string) ([]EarningsEvent, error) {
+	cacheKey := "EARNINGS_CALENDAR"
+	if horizon != "" {
+		cacheKey = cacheKey + ":" + horizon
+	}
+
+	// Check cache
+	table := "current_prices"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var events []EarningsEvent
+			if err := json.Unmarshal(data, &events); err == nil {
+				return events, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	params := map[string]string{}
 	if horizon != "" {
 		params["horizon"] = horizon
-	}
-
-	cacheKey := buildCacheKey("EARNINGS_CALENDAR", params)
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.([]EarningsEvent), nil
 	}
 
 	body, err := c.doRequest("EARNINGS_CALENDAR", params)
@@ -282,16 +504,30 @@ func (c *Client) GetEarningsCalendar(horizon string) ([]EarningsEvent, error) {
 		return nil, fmt.Errorf("failed to parse earnings calendar: %w", err)
 	}
 
-	c.setCache(cacheKey, events, c.cacheTTL.Fundamentals)
+	// Store in cache
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, events, clientdata.TTLAVOverview); err != nil {
+			c.log.Warn().Err(err).Msg("Failed to cache earnings calendar")
+		}
+	}
+
 	return events, nil
 }
 
 // GetIPOCalendar returns upcoming IPO events.
+// Market-wide data, doesn't require ISIN resolution.
 func (c *Client) GetIPOCalendar() ([]IPOEvent, error) {
-	cacheKey := buildCacheKey("IPO_CALENDAR", nil)
+	cacheKey := "IPO_CALENDAR"
 
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.([]IPOEvent), nil
+	// Check cache
+	table := "current_prices"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var events []IPOEvent
+			if err := json.Unmarshal(data, &events); err == nil {
+				return events, nil
+			}
+		}
 	}
 
 	body, err := c.doRequest("IPO_CALENDAR", nil)
@@ -304,7 +540,13 @@ func (c *Client) GetIPOCalendar() ([]IPOEvent, error) {
 		return nil, fmt.Errorf("failed to parse IPO calendar: %w", err)
 	}
 
-	c.setCache(cacheKey, events, c.cacheTTL.Fundamentals)
+	// Store in cache
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, events, clientdata.TTLAVOverview); err != nil {
+			c.log.Warn().Err(err).Msg("Failed to cache IPO calendar")
+		}
+	}
+
 	return events, nil
 }
 

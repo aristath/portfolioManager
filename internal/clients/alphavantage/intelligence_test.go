@@ -3,7 +3,6 @@ package alphavantage
 import (
 	"testing"
 
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -211,7 +210,7 @@ func TestIntelligenceParseMarketMovers_Empty(t *testing.T) {
 
 // TestClientIntelligenceMethods verifies all intelligence methods exist.
 func TestClientIntelligenceMethods(t *testing.T) {
-	client := NewClient("test-key", zerolog.Nop())
+	client := newTestClient("test-key")
 
 	var _ func() (*MarketMovers, error) = client.GetTopGainersLosers
 	var _ func(string, int, int) (*Transcript, error) = client.GetEarningsCallTranscript

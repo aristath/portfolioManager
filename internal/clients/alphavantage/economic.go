@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+
+	"github.com/aristath/sentinel/internal/clientdata"
 )
 
 // =============================================================================
@@ -12,15 +14,27 @@ import (
 
 // GetEconomicIndicator returns data for a specific economic indicator.
 func (c *Client) GetEconomicIndicator(indicator, interval string) (*EconomicIndicator, error) {
+	// Economic indicators use indicator name as cache key (not ISIN)
+	cacheKey := indicator
+	if interval != "" {
+		cacheKey = indicator + ":" + interval
+	}
+
+	// Check cache
+	table := "alphavantage_economic"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var indicatorData EconomicIndicator
+			if err := json.Unmarshal(data, &indicatorData); err == nil {
+				return &indicatorData, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	params := map[string]string{}
 	if interval != "" {
 		params["interval"] = interval
-	}
-
-	cacheKey := buildCacheKey(indicator, params)
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.(*EconomicIndicator), nil
 	}
 
 	body, err := c.doRequest(indicator, params)
@@ -33,7 +47,13 @@ func (c *Client) GetEconomicIndicator(indicator, interval string) (*EconomicIndi
 		return nil, fmt.Errorf("failed to parse %s: %w", indicator, err)
 	}
 
-	c.setCache(cacheKey, data, c.cacheTTL.EconomicIndicators)
+	// Store in cache
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, data, clientdata.TTLEconomic); err != nil {
+			c.log.Warn().Err(err).Str("indicator", cacheKey).Msg("Failed to cache economic indicator")
+		}
+	}
+
 	return data, nil
 }
 
@@ -49,18 +69,33 @@ func (c *Client) GetRealGDPPerCapita() (*EconomicIndicator, error) {
 
 // GetTreasuryYield returns treasury yield data.
 func (c *Client) GetTreasuryYield(interval, maturity string) (*EconomicIndicator, error) {
+	// Treasury yield uses indicator name + maturity as cache key
+	cacheKey := "TREASURY_YIELD"
+	if maturity != "" {
+		cacheKey = "TREASURY_YIELD:" + maturity
+	}
+	if interval != "" {
+		cacheKey = cacheKey + ":" + interval
+	}
+
+	// Check cache
+	table := "alphavantage_economic"
+	if c.cacheRepo != nil {
+		if data, err := c.cacheRepo.GetIfFresh(table, cacheKey); err == nil && data != nil {
+			var indicatorData EconomicIndicator
+			if err := json.Unmarshal(data, &indicatorData); err == nil {
+				return &indicatorData, nil
+			}
+		}
+	}
+
+	// Fetch from API
 	params := map[string]string{}
 	if interval != "" {
 		params["interval"] = interval
 	}
 	if maturity != "" {
 		params["maturity"] = maturity
-	}
-
-	cacheKey := buildCacheKey("TREASURY_YIELD", params)
-
-	if cached, ok := c.getFromCache(cacheKey); ok {
-		return cached.(*EconomicIndicator), nil
 	}
 
 	body, err := c.doRequest("TREASURY_YIELD", params)
@@ -73,7 +108,13 @@ func (c *Client) GetTreasuryYield(interval, maturity string) (*EconomicIndicator
 		return nil, fmt.Errorf("failed to parse treasury yield: %w", err)
 	}
 
-	c.setCache(cacheKey, data, c.cacheTTL.EconomicIndicators)
+	// Store in cache
+	if c.cacheRepo != nil {
+		if err := c.cacheRepo.Store(table, cacheKey, data, clientdata.TTLEconomic); err != nil {
+			c.log.Warn().Err(err).Str("indicator", cacheKey).Msg("Failed to cache treasury yield")
+		}
+	}
+
 	return data, nil
 }
 
