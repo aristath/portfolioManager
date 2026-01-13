@@ -225,9 +225,9 @@ curl -X PUT http://localhost:8001/api/settings/tradernet_api_secret \
   -d '{"value": "your_api_secret"}'
 ```
 
-**Legacy: .env file (deprecated)**
+**Infrastructure Settings**
 
-The `.env` file is no longer required. If you need to set infrastructure settings (ports, service URLs), you can create a `.env` file, but API credentials should be configured via the Settings UI.
+If you need to set infrastructure settings (ports, service URLs), you can create a `.env` file. API credentials should be configured via the Settings UI.
 
 #### 4. Run Main Application
 
@@ -309,19 +309,15 @@ See [docs/api/README.md](docs/api/README.md) for the complete API documentation 
 
 The system runs scheduled background jobs for autonomous operation. All jobs are split into individual, single-responsibility units for maximum modularity and testability.
 
-### Composite Jobs (Legacy - Use Individual Jobs Instead)
+### Composite Jobs
 
 **sync_cycle** (Every 30 minutes) - Composite job that runs all sync operations
-- **Note**: Prefer using individual sync jobs for granular control
 
 **planner_batch** (Event-driven) - Composite job that runs full planning pipeline
-- **Note**: Prefer using individual planning jobs for granular control
 
 **dividend_reinvestment** (Daily at 10:00 AM) - Composite job that runs full dividend pipeline
-- **Note**: Prefer using individual dividend jobs for granular control
 
 **health_check** (Daily at 4:00 AM) - Composite job that runs all health checks
-- **Note**: Prefer using individual health check jobs for granular control
 
 ### Individual Sync Jobs
 
@@ -584,7 +580,6 @@ sentinel/
 │   ├── modules/                # Business modules
 │   │   ├── allocation/         # Allocation management
 │   │   ├── cash_flows/         # Cash flow processing
-│   │   ├── cash_utils/         # Cash utility functions
 │   │   ├── charts/              # Chart data & visualization
 │   │   ├── cleanup/            # Data cleanup jobs
 │   │   ├── display/            # LED display management
@@ -911,7 +906,7 @@ PUT /api/settings/tradernet_api_secret
 }
 ```
 
-**Note:** Credentials stored in the settings database take precedence over environment variables. The `.env` file is no longer required for credentials (see Legacy Configuration below).
+**Note:** Credentials stored in the settings database take precedence over environment variables.
 
 ### Settings API
 
@@ -943,11 +938,9 @@ POST /api/settings/{key}
 | drip_enabled | true | Auto-reinvest dividends ≥3% yield |
 | emergency_rebalancing_enabled | true | Auto-rebalance on negative cash |
 
-### Legacy Configuration (.env file - Deprecated)
+### Infrastructure Configuration (.env file)
 
-**Note:** The `.env` file is **deprecated** for API credentials. Use the Settings UI (Credentials tab) or Settings API instead. The `.env` file is still supported for backwards compatibility but will show a deprecation warning.
-
-**Main Application (.env) - Legacy:**
+Infrastructure settings (service URLs, ports, etc.) can be configured via environment variables as they are deployment-specific and not user-facing.
 
 ```bash
 # Data directory (contains all 7 databases)
@@ -955,17 +948,12 @@ POST /api/settings/{key}
 # Always resolved to absolute path
 TRADER_DATA_DIR=/path/to/data
 
-
-# Tradernet API (DEPRECATED - use Settings UI instead)
-TRADERNET_API_KEY=your_api_key
-TRADERNET_API_SECRET=your_api_secret
-
 # Server
 GO_PORT=8001
 LOG_LEVEL=info  # debug, info, warn, error
 ```
 
-**Infrastructure settings** (service URLs, ports, etc.) may still be configured via environment variables as they are deployment-specific and not user-facing.
+**Note:** API credentials should be configured via the Settings UI (Credentials tab) or Settings API, not via environment variables.
 
 ---
 

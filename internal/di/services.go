@@ -784,9 +784,8 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		"config":    container.ConfigDB,
 		"ledger":    container.LedgerDB,
 		"portfolio": container.PortfolioDB,
-		// "agents": removed - sequences/evaluations now in-memory
-		"history": container.HistoryDB,
-		"cache":   container.CacheDB,
+		"history":   container.HistoryDB,
+		"cache":     container.CacheDB,
 	}
 
 	// Initialize health services for each database
@@ -796,7 +795,6 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	container.HealthServices["config"] = reliability.NewDatabaseHealthService(container.ConfigDB, "config", dataDir+"/config.db", log)
 	container.HealthServices["ledger"] = reliability.NewDatabaseHealthService(container.LedgerDB, "ledger", dataDir+"/ledger.db", log)
 	container.HealthServices["portfolio"] = reliability.NewDatabaseHealthService(container.PortfolioDB, "portfolio", dataDir+"/portfolio.db", log)
-	// container.HealthServices["agents"] removed - sequences/evaluations now in-memory
 	container.HealthServices["history"] = reliability.NewDatabaseHealthService(container.HistoryDB, "history", dataDir+"/history.db", log)
 	container.HealthServices["cache"] = reliability.NewDatabaseHealthService(container.CacheDB, "cache", dataDir+"/cache.db", log)
 

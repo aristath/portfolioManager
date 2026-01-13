@@ -27,8 +27,7 @@ func NewConfigRepository(db *database.DB, log zerolog.Logger) *ConfigRepository 
 	}
 }
 
-// ConfigRecord represents a configuration record (for backward compatibility).
-// Note: This is simplified - we only have one config now.
+// ConfigRecord represents a configuration record.
 type ConfigRecord struct {
 	ID          int64
 	Name        string
@@ -44,8 +43,6 @@ func (r *ConfigRepository) GetDefaultConfig() (*domain.PlannerConfiguration, err
 }
 
 // GetSettings retrieves the planner settings (single config exists).
-// NOTE: Pattern, generator, and eligibility/recently_traded filter columns removed in 2026-01.
-// These are now handled by ExhaustiveGenerator with constraints.Enforcer during generation.
 func (r *ConfigRepository) getSettings() (*domain.PlannerConfiguration, error) {
 	var cfg domain.PlannerConfiguration
 
@@ -109,7 +106,6 @@ func (r *ConfigRepository) getSettings() (*domain.PlannerConfiguration, error) {
 }
 
 // UpdateSettings updates the planner settings (single config exists).
-// NOTE: Pattern, generator, and eligibility/recently_traded filter columns removed in 2026-01.
 func (r *ConfigRepository) updateSettings(cfg *domain.PlannerConfiguration) error {
 	now := time.Now().Unix()
 
@@ -177,8 +173,6 @@ func (r *ConfigRepository) updateSettings(cfg *domain.PlannerConfiguration) erro
 	return nil
 }
 
-// Backward compatibility methods (simplified implementations)
-
 // GetConfig retrieves a configuration by ID (always returns the single config).
 func (r *ConfigRepository) GetConfig(id int64) (*domain.PlannerConfiguration, error) {
 	return r.getSettings()
@@ -209,7 +203,6 @@ func (r *ConfigRepository) CreateConfig(
 	if err := r.updateSettings(cfg); err != nil {
 		return 0, err
 	}
-	// Return dummy ID (1) for backward compatibility
 	return 1, nil
 }
 
@@ -220,7 +213,6 @@ func (r *ConfigRepository) ListConfigs() ([]ConfigRecord, error) {
 		return nil, err
 	}
 
-	// Return as single record for backward compatibility
 	record := ConfigRecord{
 		ID:          1,
 		Name:        cfg.Name,
@@ -252,8 +244,7 @@ func (r *ConfigRepository) GetConfigHistory(configID int64, limit int) ([]Config
 	return []ConfigHistoryRecord{}, nil
 }
 
-// ConfigHistoryRecord represents a configuration history entry (for backward compatibility).
-// Note: History is removed in simplified version.
+// ConfigHistoryRecord represents a configuration history entry.
 type ConfigHistoryRecord struct {
 	ID         int64
 	ConfigID   int64

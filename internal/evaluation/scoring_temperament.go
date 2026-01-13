@@ -146,9 +146,6 @@ func SharpeScore(weightedSharpe float64, params settings.ScoringParams) float64 
 	return 0.0
 }
 
-// NOTE: WindfallScore has been removed as part of the pure end-state scoring refactor.
-// Windfall was an action-based metric that no longer applies to the new scoring philosophy.
-
 // DeviationScore converts average deviation to a score using temperament scale.
 func DeviationScore(avgDeviation float64, params settings.ScoringParams) float64 {
 	if avgDeviation >= params.DeviationScale {

@@ -223,7 +223,7 @@ type SystemStatusResponse struct {
 	Status           string  `json:"status"`             // "healthy" or "unhealthy"
 	CashBalanceEUR   float64 `json:"cash_balance_eur"`   // EUR-only cash balance
 	CashBalanceTotal float64 `json:"cash_balance_total"` // Total cash in EUR (all currencies converted)
-	CashBalance      float64 `json:"cash_balance"`       // Backward compatibility: alias for cash_balance_total
+	CashBalance      float64 `json:"cash_balance"`       // Alias for cash_balance_total
 	SecurityCount    int     `json:"security_count"`
 	PositionCount    int     `json:"position_count"`   // All positions (including cash)
 	ActivePositions  int     `json:"active_positions"` // Non-cash positions only
@@ -308,7 +308,7 @@ type MarketsStatusResponse struct {
 	LastUpdated string                          `json:"last_updated"`
 }
 
-// MarketInfo represents status of a single market (legacy, kept for backward compatibility)
+// MarketInfo represents status of a single market
 type MarketInfo struct {
 	Exchange string `json:"exchange"` // "NASDAQ", "NYSE", "LSE", etc.
 	IsOpen   bool   `json:"is_open"`
@@ -1222,7 +1222,7 @@ func (h *SystemHandlers) HandleSyncPortfolio(w http.ResponseWriter, r *http.Requ
 
 // HandleSyncDailyPipeline triggers daily pipeline (securities data sync)
 // POST /api/system/sync/daily-pipeline
-// This is an alias for /sync/securities-data for backwards compatibility
+	// This is an alias for /sync/securities-data
 func (h *SystemHandlers) HandleSyncDailyPipeline(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

@@ -18,7 +18,7 @@ type AppLabDeployer struct {
 	log Logger
 }
 
-// SketchDeployer is an alias for AppLabDeployer (backwards compatibility)
+// SketchDeployer is an alias for AppLabDeployer
 type SketchDeployer = AppLabDeployer
 
 // AppName is the name of the display app
@@ -27,7 +27,7 @@ const AppName = "sentinel-display"
 // AppDir is the directory where the app is deployed
 const AppDir = "/home/arduino/ArduinoApps/" + AppName
 
-// NewSketchDeployer creates a new App Lab deployer (backwards compatible name)
+// NewSketchDeployer creates a new App Lab deployer
 func NewSketchDeployer(log Logger) *AppLabDeployer {
 	return NewAppLabDeployer(log)
 }
@@ -182,9 +182,8 @@ func (d *AppLabDeployer) IsAppRunning() bool {
 	return err == nil
 }
 
-// DeploySketch is kept for backwards compatibility but now deploys the full app
+// DeploySketch deploys the full app
 func (d *AppLabDeployer) DeploySketch(sketchPath string) error {
-	// For backwards compatibility, just deploy the full app
 	return d.DeployApp()
 }
 

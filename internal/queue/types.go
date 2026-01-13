@@ -6,7 +6,6 @@ import "time"
 type JobType string
 
 const (
-	// Original composite jobs (kept for backward compatibility)
 	JobTypePlannerBatch       JobType = "planner_batch"
 	JobTypeEventBasedTrading  JobType = "event_based_trading"
 	JobTypeTagUpdate          JobType = "tag_update"

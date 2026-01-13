@@ -114,7 +114,6 @@ type EvaluationContext struct {
 	CurrentPrices map[string]float64  `json:"current_prices"` // ISIN -> current price (EUR)
 	StocksByISIN  map[string]Security `json:"stocks_by_isin"` // ISIN -> Security (computed)
 
-	// Deprecated: kept for backward compatibility during transition
 	StocksBySymbol map[string]Security `json:"stocks_by_symbol,omitempty"` // symbol -> Security (use StocksByISIN)
 
 	// Configuration
@@ -126,7 +125,7 @@ type EvaluationContext struct {
 	PriceAdjustments map[string]float64 `json:"price_adjustments,omitempty"` // ISIN -> multiplier (e.g., 1.05 for +5%)
 
 	// Optional: Temperament-adjusted scoring configuration
-	// If nil, default hardcoded values will be used for backward compatibility
+	// If nil, default hardcoded values will be used
 	ScoringConfig *ScoringConfig `json:"scoring_config,omitempty"`
 }
 

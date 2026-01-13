@@ -63,8 +63,7 @@ func TestPlanner_SelectBestSequence_Logic(t *testing.T) {
 	// 2. Planner selects the first sequence (highest score)
 	// 3. Planner does NOT loop through sequences looking for "valid" ones
 	//
-	// Since we removed the loop and just take bestSequences[0], this behavior
-	// is guaranteed by the implementation itself.
+	// This behavior is guaranteed by the implementation itself.
 	t.Skip("Conceptual test - behavior guaranteed by implementation")
 }
 
@@ -78,7 +77,7 @@ func TestPlanner_NoConstraintFiltering(t *testing.T) {
 	// - Output: Plan with N steps (1:1 mapping)
 	// - No actions should be filtered during conversion
 	//
-	// This is guaranteed by the implementation since we removed EnforceConstraints.
+	// This is guaranteed by the implementation.
 	t.Skip("Conceptual test - behavior guaranteed by implementation")
 }
 
@@ -96,6 +95,6 @@ func TestPlanner_NoConstraintFiltering(t *testing.T) {
 // - All actions in best sequence executed
 //
 // For now, the behavior is verified by:
-// 1. Code review (removed loop, removed filtering)
+// 1. Code review
 // 2. Manual testing on Arduino
 // 3. Log inspection

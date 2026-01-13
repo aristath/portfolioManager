@@ -303,7 +303,7 @@ GOOS=linux GOARCH=arm64 go build -o sentinel-arm64 ./cmd/server
 - **Logging**: zerolog (structured, high-performance)
 - **Frontend**: React + Vite
 - **Git Hooks**: Lefthook (fast, no stashing, single binary)
-- **Configuration**: godotenv (deprecated for credentials, use Settings UI)
+- **Configuration**: godotenv (for infrastructure settings)
 
 ## Important Notes
 
@@ -312,7 +312,7 @@ The codebase has documented violations in the README.md Architecture section. Be
 
 ### Settings Management
 - API credentials should be configured via Settings UI (Credentials tab) or Settings API
-- `.env` file is deprecated for credentials (still supported for infrastructure settings)
+- Infrastructure settings can be configured via `.env` file
 - Settings are stored in `config.db` and take precedence over environment variables
 
 ### Planning Evaluation

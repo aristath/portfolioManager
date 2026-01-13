@@ -679,7 +679,7 @@ func (s *TradeExecutionService) validatePriceAndCalculateLimit(rec TradeRecommen
 	s.log.Debug().
 		Str("symbol", rec.Symbol).
 		Msg("Order book analysis disabled or unavailable - using Tradernet with Yahoo sanity check")
-	return s.calculateLegacyLimit(rec, buffer)
+	return s.calculateLimit(rec, buffer)
 }
 
 // getBuffer extracts buffer from settings (existing logic)
@@ -695,8 +695,8 @@ func (s *TradeExecutionService) getBuffer() float64 {
 	return buffer
 }
 
-// calculateLegacyLimit uses Tradernet as primary source with Yahoo as sanity check
-func (s *TradeExecutionService) calculateLegacyLimit(rec TradeRecommendation, buffer float64) (float64, error) {
+// calculateLimit uses Tradernet as primary source with Yahoo as sanity check
+func (s *TradeExecutionService) calculateLimit(rec TradeRecommendation, buffer float64) (float64, error) {
 	// Check if broker client is available (primary source)
 	if s.brokerClient == nil {
 		return 0, fmt.Errorf("broker client unavailable and order book disabled")

@@ -145,12 +145,11 @@ func (r OpportunitiesResultByCategory) AllCandidates() []ActionCandidate {
 	return all
 }
 
-// ToOpportunitiesByCategory converts to the legacy format (candidates only).
-// This maintains backward compatibility with existing code.
+// ToOpportunitiesByCategory converts to opportunities by category (candidates only).
 func (r OpportunitiesResultByCategory) ToOpportunitiesByCategory() OpportunitiesByCategory {
-	legacy := make(OpportunitiesByCategory)
+	opportunities := make(OpportunitiesByCategory)
 	for category, result := range r {
-		legacy[category] = result.Candidates
+		opportunities[category] = result.Candidates
 	}
-	return legacy
+	return opportunities
 }

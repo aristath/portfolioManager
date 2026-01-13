@@ -292,8 +292,6 @@ func (v *Validator) ValidateParams(moduleName string, params map[string]interfac
 }
 
 // getRequiredParams returns required parameters for each module type.
-// NOTE: Pattern and generator entries kept for backwards compatibility with
-// any code that calls ValidateParams, but these modules no longer exist.
 func getRequiredParams(moduleName string) map[string]string {
 	// Define required parameters per module (paramName -> paramType)
 	paramMap := map[string]map[string]string{
@@ -331,7 +329,6 @@ func getRequiredParams(moduleName string) map[string]string {
 			"diversity_threshold": "threshold",
 		},
 
-		// Legacy entries for backwards compatibility (no longer used)
 		"combinatorial": {
 			"max_combinations": "count",
 		},

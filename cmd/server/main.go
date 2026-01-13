@@ -130,17 +130,6 @@ func main() {
 			Msg("Deployment manager initialized and job registered")
 	}
 
-	// Warn if credentials are loaded from .env (deprecated)
-	if cfg.TradernetAPIKey != "" || cfg.TradernetAPISecret != "" {
-		// Check if credentials came from env vars (not settings DB)
-		apiKeyFromDB, _ := container.SettingsRepo.Get("tradernet_api_key")
-		apiSecretFromDB, _ := container.SettingsRepo.Get("tradernet_api_secret")
-		usingEnvVars := (apiKeyFromDB == nil || *apiKeyFromDB == "") && cfg.TradernetAPIKey != "" ||
-			(apiSecretFromDB == nil || *apiSecretFromDB == "") && cfg.TradernetAPISecret != ""
-		if usingEnvVars {
-			log.Warn().Msg("Tradernet credentials loaded from .env file - this is deprecated. Please configure credentials via Settings UI (Credentials tab) or API. The .env file will no longer be required in future versions.")
-		}
-	}
 
 	// Create deployment handlers if deployment is enabled
 	var deploymentHandlers *server.DeploymentHandlers

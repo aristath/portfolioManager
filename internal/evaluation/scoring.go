@@ -665,11 +665,10 @@ func CalculateTransactionCostEnhanced(
 }
 
 // =============================================================================
-// DIVERSIFICATION SCORE (for backwards compatibility)
+// DIVERSIFICATION SCORE
 // =============================================================================
 
 // CalculateDiversificationScore calculates diversification score for a portfolio.
-// This is kept for backwards compatibility with existing code.
 func CalculateDiversificationScore(ctx models.PortfolioContext) float64 {
 	totalValue := ctx.TotalValue
 	if totalValue <= 0 {

@@ -399,10 +399,6 @@ func TestGetRegimeAdaptiveWeights_BearMarket(t *testing.T) {
 	assert.Greater(t, weights["risk"], WeightRiskAdjustedMetrics, "Risk should increase in bear")
 }
 
-// NOTE: TestCalculateWindfallScore and TestCalculateActionPriorityScore have been removed
-// as part of the pure end-state scoring refactor. These functions scored based on
-// action characteristics, which is no longer part of the scoring philosophy.
-
 // TestSum tests the sum helper function
 func TestSum(t *testing.T) {
 	tests := []struct {

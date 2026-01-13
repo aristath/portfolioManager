@@ -11,7 +11,7 @@ import (
 )
 
 // =============================================================================
-// CONSTANTS - Re-exported from core evaluation for backwards compatibility
+// CONSTANTS - Re-exported from core evaluation
 // =============================================================================
 
 const (
@@ -21,7 +21,6 @@ const (
 	WeightRiskAdjustedMetrics      = coreevaluation.WeightRiskAdjustedMetrics
 	WeightEndStateImprovement      = coreevaluation.WeightEndStateImprovement
 
-	// Legacy constants for backwards compatibility
 	GeoWeight             = 0.40
 	IndustryWeight        = 0.30
 	QualityWeight         = 0.30
@@ -264,7 +263,7 @@ func sum(values []float64) float64 {
 // Note: CheckSequenceFeasibility and SimulateSequence are defined in simulation.go
 
 // =============================================================================
-// BACKWARD COMPATIBILITY - Expose internal scoring functions for tests
+// Expose internal scoring functions for tests
 // =============================================================================
 
 // calculateOptimizerAlignment is exposed for testing
@@ -340,8 +339,4 @@ func calculateRiskAdjustedScore(ctx PortfolioContext) float64 {
 	}
 	return 0.0
 }
-
-// NOTE: calculateWindfallScore and calculateActionPriorityScore have been removed
-// as part of the pure end-state scoring refactor. These functions scored based on
-// action characteristics, which is no longer part of the scoring philosophy.
 // The new scoring is purely based on portfolio end state quality.

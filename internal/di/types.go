@@ -163,7 +163,6 @@ type Container struct {
 
 // JobInstances holds references to all registered jobs for manual triggering
 type JobInstances struct {
-	// Original composite jobs (kept for backward compatibility)
 	HealthCheck       scheduler.Job
 	SyncCycle         scheduler.Job
 	DividendReinvest  scheduler.Job

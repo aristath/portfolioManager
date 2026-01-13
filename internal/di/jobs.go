@@ -127,8 +127,7 @@ func RegisterJobs(container *Container, cfg *config.Config, displayManager *disp
 		"config":    container.ConfigDB,
 		"ledger":    container.LedgerDB,
 		"portfolio": container.PortfolioDB,
-		// "agents": removed - sequences/evaluations now in-memory
-		"history":     container.HistoryDB,
+		"history":   container.HistoryDB,
 		"cache":       container.CacheDB,
 		"client_data": container.ClientDataDB,
 	}

@@ -57,14 +57,7 @@ import (
 	"github.com/aristath/sentinel/pkg/embedded"
 )
 
-// Reference legacy helpers to avoid unused-lint errors (kept for documentation only).
-// They are not called at runtime.
-var (
-	_ = (*Server)._setupSystemRoutes_OLD
-	_ = (*Server).setupSymbolicRegressionRoutes
-)
-
-// Config holds server configuration - NEW 7-database architecture
+// Config holds server configuration
 type Config struct {
 	Log                zerolog.Logger
 	UniverseDB         *database.DB
@@ -301,7 +294,7 @@ func (s *Server) setupRoutes() {
 		eventsStreamHandler := NewEventsStreamHandler(s.container.EventBus, s.cfg.DataDir, s.log)
 		r.Get("/events/stream", eventsStreamHandler.ServeHTTP)
 
-		// System monitoring and operations (MIGRATED TO GO!)
+		// System monitoring and operations
 		// Use server's system handlers instance
 		systemHandlers := s.systemHandlers
 
@@ -411,7 +404,7 @@ func (s *Server) setupRoutes() {
 			})
 		})
 
-		// Allocation module (MIGRATED TO GO!)
+		// Allocation module
 		allocRepo := s.container.AllocRepo
 		groupingRepo := s.container.GroupingRepo
 		alertService := s.container.ConcentrationAlertService
@@ -420,7 +413,7 @@ func (s *Server) setupRoutes() {
 		allocationHandler := allocationhandlers.NewHandler(allocRepo, groupingRepo, alertService, portfolioSummaryAdapter, s.container.EventManager, s.log)
 		allocationHandler.RegisterRoutes(r)
 
-		// Portfolio module (MIGRATED TO GO!)
+		// Portfolio module
 		portfolioPositionRepo := s.container.PositionRepo
 		portfolioTradernetClient := s.container.BrokerClient
 		portfolioCurrencyExchangeService := s.container.CurrencyExchangeService
@@ -429,7 +422,7 @@ func (s *Server) setupRoutes() {
 		portfolioHandler := portfoliohandlers.NewHandler(portfolioPositionRepo, portfolioService, portfolioTradernetClient, portfolioCurrencyExchangeService, portfolioCashManager, s.configDB.Conn(), s.log)
 		portfolioHandler.RegisterRoutes(r)
 
-		// Universe module (MIGRATED TO GO!)
+		// Universe module
 		universeSecurityRepo := s.container.SecurityRepo
 		universeScoreRepo := s.container.ScoreRepo
 		universePositionRepo := s.container.PositionRepo
@@ -460,7 +453,7 @@ func (s *Server) setupRoutes() {
 		universeSyncService.SetScoreCalculator(universeHandler)
 		universeHandler.RegisterRoutes(r)
 
-		// Trading module (MIGRATED TO GO!)
+		// Trading module
 		tradingTradeRepo := s.container.TradeRepo
 		tradingSecurityRepo := s.container.SecurityRepo
 		tradingSecurityFetcher := &securityFetcherAdapter{repo: tradingSecurityRepo}
@@ -487,12 +480,12 @@ func (s *Server) setupRoutes() {
 		)
 		tradingHandler.RegisterRoutes(r)
 
-		// Dividends module (MIGRATED TO GO!)
+		// Dividends module
 		dividendRepo := s.container.DividendRepo
 		dividendHandler := dividendhandlers.NewDividendHandlers(dividendRepo, s.log)
 		dividendHandler.RegisterRoutes(r)
 
-		// Display module (MIGRATED TO GO!)
+		// Display module
 		// Display manager is passed in via server config, not container
 		// (it's initialized before container in main.go)
 		displayHandler := displayhandlers.NewHandlers(
@@ -504,11 +497,11 @@ func (s *Server) setupRoutes() {
 		)
 		displayHandler.RegisterRoutes(r)
 
-		// Scoring module (MIGRATED TO GO!)
+		// Scoring module
 		scoringHandler := scoringhandlers.NewHandlers(s.log)
 		scoringHandler.RegisterRoutes(r)
 
-		// Optimization module (MIGRATED TO GO!)
+		// Optimization module
 		optimizationYahooClient := s.container.YahooClient
 		optimizationTradernetClient := s.container.BrokerClient
 		optimizationDividendRepo := s.container.DividendRepo
@@ -529,7 +522,7 @@ func (s *Server) setupRoutes() {
 		)
 		optimizationHandler.RegisterRoutes(r)
 
-		// Cash-flows module (MIGRATED TO GO!)
+		// Cash-flows module
 		cashFlowsRepo := s.container.CashFlowsRepo
 		cashFlowsDepositProcessor := s.container.DepositProcessor
 		cashFlowsTradernetClient := s.container.BrokerClient
@@ -548,7 +541,7 @@ func (s *Server) setupRoutes() {
 		)
 		cashFlowsHandler.RegisterRoutes(r)
 
-		// Planning module (MIGRATED TO GO!)
+		// Planning module
 		planningService := s.container.PlanningService
 		planningConfigRepo := s.container.PlannerConfigRepo
 		planningPlannerRepo := s.container.PlannerRepo // Use in-memory planner repo from container
@@ -568,7 +561,7 @@ func (s *Server) setupRoutes() {
 		)
 		planningHandler.RegisterRoutes(r)
 
-		// Charts module (MIGRATED TO GO!)
+		// Charts module
 		chartsSecurityRepo := s.container.SecurityRepo
 		chartsService := charts.NewService(
 			s.historyDB.Conn(),
@@ -579,12 +572,12 @@ func (s *Server) setupRoutes() {
 		chartsHandler := chartshandlers.NewHandler(chartsService, s.log)
 		chartsHandler.RegisterRoutes(r)
 
-		// Deployment module (MIGRATED TO GO!)
+		// Deployment module
 		if s.deploymentHandlers != nil {
 			s.deploymentHandlers.RegisterRoutes(r)
 		}
 
-		// Settings module (MIGRATED TO GO!)
+		// Settings module
 		settingsService := s.container.SettingsService
 		settingsHandler := settingshandlers.NewHandler(settingsService, s.container.EventManager, s.log)
 		settingsHandler.RegisterRoutes(r)
@@ -602,7 +595,7 @@ func (s *Server) setupRoutes() {
 			})
 		}
 
-		// Symbolic Regression module (MIGRATED TO GO!)
+		// Symbolic Regression module
 		// Analytics module (Factor Exposure, etc.)
 		analyticsHandler := analyticshandlers.NewHandler(
 			s.container.FactorExposureTracker,
@@ -656,8 +649,8 @@ func (s *Server) setupRoutes() {
 		quantumHandler.RegisterRoutes(r)
 	})
 
-	// Evaluation module routes (MIGRATED TO GO!)
-	// Mounted directly under /api/v1 for Python client compatibility
+	// Evaluation module routes
+	// Mounted directly under /api/v1
 	numWorkers := runtime.NumCPU()
 	if numWorkers < 2 {
 		numWorkers = 2
@@ -713,114 +706,6 @@ func (s *Server) setupRoutes() {
 			}
 		})
 	}
-}
-
-// REMOVED: setupSystemRoutes - routes are now inlined in setupRoutes
-// This function is kept for reference but is no longer called
-func (s *Server) _setupSystemRoutes_OLD(r chi.Router) {
-	// Use server's system handlers instance
-	systemHandlers := s.systemHandlers
-
-	// Initialize log handlers
-	logHandlers := NewLogHandlers(s.log)
-
-	// Use services from container (single source of truth)
-	securityRepo := s.container.SecurityRepo
-	scoreRepo := s.container.ScoreRepo
-	positionRepo := s.container.PositionRepo
-	yahooClient := s.container.YahooClient
-	securityScorer := s.container.SecurityScorer
-	historyDB := s.container.HistoryDBClient
-	setupService1 := s.container.SetupService
-	syncService1 := s.container.SyncService
-	currencyExchangeService1 := s.container.CurrencyExchangeService
-
-	universeHandlers := universehandlers.NewUniverseHandlers(
-		securityRepo,
-		scoreRepo,
-		s.portfolioDB.Conn(),
-		positionRepo,
-		securityScorer,
-		yahooClient,
-		historyDB,
-		setupService1,
-		syncService1,
-		currencyExchangeService1,
-		s.container.EventManager,
-		s.log,
-	)
-
-	// Wire score calculator
-	setupService1.SetScoreCalculator(universeHandlers)
-	syncService1.SetScoreCalculator(universeHandlers)
-
-	// System routes (complete Phase 1 implementation)
-	r.Route("/system", func(r chi.Router) {
-		// Status and monitoring
-		r.Get("/status", systemHandlers.HandleSystemStatus)
-		r.Get("/led/display", systemHandlers.HandleLEDDisplay)
-		r.Get("/tradernet", systemHandlers.HandleTradernetStatus)
-		r.Get("/pending-orders", systemHandlers.HandlePendingOrders)
-		r.Get("/jobs", systemHandlers.HandleJobsStatus)
-		r.Get("/markets", systemHandlers.HandleMarketsStatus)
-		r.Get("/database/stats", systemHandlers.HandleDatabaseStats)
-		r.Get("/disk", systemHandlers.HandleDiskUsage)
-
-		// Log access
-		r.Get("/logs/list", logHandlers.HandleListLogs)
-		r.Get("/logs", logHandlers.HandleGetLogs)
-		r.Get("/logs/errors", logHandlers.HandleGetErrors)
-
-		// Sync operation triggers
-		r.Route("/sync", func(r chi.Router) {
-			r.Post("/prices", universeHandlers.HandleSyncPrices)
-			r.Post("/historical", universeHandlers.HandleSyncHistorical)
-			r.Post("/rebuild-universe", universeHandlers.HandleRebuildUniverse)
-			r.Post("/securities-data", universeHandlers.HandleSyncSecuritiesData)
-			r.Post("/portfolio", systemHandlers.HandleSyncPortfolio)
-			r.Post("/daily-pipeline", systemHandlers.HandleSyncDailyPipeline)
-			r.Post("/recommendations", systemHandlers.HandleSyncRecommendations)
-		})
-
-		// Job triggers (manual operation triggers)
-		r.Route("/jobs", func(r chi.Router) {
-			// Original composite jobs
-			r.Post("/health-check", systemHandlers.HandleTriggerHealthCheck)
-			r.Post("/sync-cycle", systemHandlers.HandleTriggerSyncCycle)
-			r.Post("/dividend-reinvestment", systemHandlers.HandleTriggerDividendReinvestment)
-			r.Post("/planner-batch", systemHandlers.HandleTriggerPlannerBatch)
-			r.Post("/event-based-trading", systemHandlers.HandleTriggerEventBasedTrading)
-			r.Post("/tag-update", systemHandlers.HandleTriggerTagUpdate)
-
-			// Individual sync jobs
-			r.Post("/sync-trades", systemHandlers.HandleTriggerSyncTrades)
-			r.Post("/sync-cash-flows", systemHandlers.HandleTriggerSyncCashFlows)
-			r.Post("/sync-portfolio", systemHandlers.HandleTriggerSyncPortfolio)
-			r.Post("/sync-prices", systemHandlers.HandleTriggerSyncPrices)
-			r.Post("/check-negative-balances", systemHandlers.HandleTriggerCheckNegativeBalances)
-			r.Post("/update-display-ticker", systemHandlers.HandleTriggerUpdateDisplayTicker)
-
-			// Individual planning jobs
-			r.Post("/generate-portfolio-hash", systemHandlers.HandleTriggerGeneratePortfolioHash)
-			r.Post("/get-optimizer-weights", systemHandlers.HandleTriggerGetOptimizerWeights)
-			r.Post("/build-opportunity-context", systemHandlers.HandleTriggerBuildOpportunityContext)
-			r.Post("/create-trade-plan", systemHandlers.HandleTriggerCreateTradePlan)
-			r.Post("/store-recommendations", systemHandlers.HandleTriggerStoreRecommendations)
-
-			// Individual dividend jobs
-			r.Post("/get-unreinvested-dividends", systemHandlers.HandleTriggerGetUnreinvestedDividends)
-			r.Post("/group-dividends-by-symbol", systemHandlers.HandleTriggerGroupDividendsBySymbol)
-			r.Post("/check-dividend-yields", systemHandlers.HandleTriggerCheckDividendYields)
-			r.Post("/create-dividend-recommendations", systemHandlers.HandleTriggerCreateDividendRecommendations)
-			r.Post("/set-pending-bonuses", systemHandlers.HandleTriggerSetPendingBonuses)
-			r.Post("/execute-dividend-trades", systemHandlers.HandleTriggerExecuteDividendTrades)
-
-			// Individual health check jobs
-			r.Post("/check-core-databases", systemHandlers.HandleTriggerCheckCoreDatabases)
-			r.Post("/check-history-databases", systemHandlers.HandleTriggerCheckHistoryDatabases)
-			r.Post("/check-wal-checkpoints", systemHandlers.HandleTriggerCheckWALCheckpoints)
-		})
-	})
 }
 
 // securityFetcherAdapter adapts universe.SecurityRepository to trading.SecurityFetcher interface

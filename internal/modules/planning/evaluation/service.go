@@ -76,8 +76,6 @@ func (s *Service) buildScoringConfig() *models.ScoringConfig {
 }
 
 // hashSequence generates a deterministic MD5 hash for a sequence
-// Matches legacy Python implementation: (symbol, side, quantity) tuples, order-dependent
-// Based on legacy/app/modules/planning/domain/calculations/utils.py:43-60
 func hashSequence(actions []domain.ActionCandidate) string {
 	type tuple struct {
 		Symbol   string `json:"symbol"`
@@ -438,7 +436,7 @@ func (s *Service) BatchEvaluateWithOptions(ctx context.Context, sequences []doma
 	return s.BatchEvaluate(ctx, sequences, portfolioHash, nil, opportunityCtx, progressCallback)
 }
 
-// HealthCheck is no longer needed (no external service) but kept for interface compatibility.
+// HealthCheck always returns healthy since the service is in-process.
 func (s *Service) HealthCheck(ctx context.Context) error {
 	// Always healthy - it's in-process
 	s.log.Debug().Msg("Evaluation service health check (in-process, always healthy)")

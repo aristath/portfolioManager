@@ -20,14 +20,14 @@ func TestPlannerConfigDefaultsMaximumComplexity(t *testing.T) {
 		"MaxOpportunitiesPerCategory should be hardcoded to 10 for maximum opportunities")
 }
 
-// TestPlannerConfigNoLegacyNameDescription verifies Name and Description
-// are kept for backwards compatibility but not required for operation
-func TestPlannerConfigNoLegacyNameDescription(t *testing.T) {
+// TestPlannerConfigNoNameDescription verifies Name and Description
+// are not required for operation
+func TestPlannerConfigNoNameDescription(t *testing.T) {
 	config := NewDefaultConfiguration()
 
 	// Config should be usable without relying on Name/Description
 	assert.True(t, config.EnableBatchGeneration,
-		"Config should work without legacy Name/Description fields")
+		"Config should work without Name/Description fields")
 	assert.True(t, config.EnableTagFiltering,
 		"Tag filtering should be enabled by default")
 }

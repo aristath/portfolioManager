@@ -158,9 +158,8 @@ func TestValidator_Validate_NoCalculatorsEnabled(t *testing.T) {
 	assert.Contains(t, err.Error(), "at least one opportunity calculator must be enabled")
 }
 
-// NOTE: TestValidator_Validate_NoPatternsEnabled, TestValidator_Validate_NoGeneratorsEnabled,
-// and TestValidator_Validate_NoFiltersEnabled removed - patterns/generators are no longer
-// validated as they've been replaced by ExhaustiveGenerator, and filters are optional.
+// NOTE: Patterns and generators are no longer validated as they've been replaced
+// by ExhaustiveGenerator, and filters are optional.
 
 func TestValidator_Validate_NoBuyOrSellAllowed(t *testing.T) {
 	validator := NewValidator()

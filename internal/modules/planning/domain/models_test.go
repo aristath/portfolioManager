@@ -176,8 +176,8 @@ func TestOpportunitiesResultByCategory(t *testing.T) {
 			},
 		}
 
-		legacy := result.ToOpportunitiesByCategory()
-		assert.Len(t, legacy[OpportunityCategoryOpportunityBuys], 1)
-		assert.Equal(t, "AAPL", legacy[OpportunityCategoryOpportunityBuys][0].Symbol)
+		opportunities := result.ToOpportunitiesByCategory()
+		assert.Len(t, opportunities[OpportunityCategoryOpportunityBuys], 1)
+		assert.Equal(t, "AAPL", opportunities[OpportunityCategoryOpportunityBuys][0].Symbol)
 	})
 }

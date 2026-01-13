@@ -25,7 +25,6 @@ CREATE INDEX IF NOT EXISTS idx_allocation_type ON allocation_targets(type);
 
 -- Planner settings: Direct storage of planner configuration
 -- Single row table (only one config exists)
--- NOTE: Pattern, generator, and eligibility/recently_traded filter fields removed in 2026-01
 -- These are now handled by the ExhaustiveGenerator with constraints.Enforcer during generation
 CREATE TABLE IF NOT EXISTS planner_settings (
     -- Primary key (constant value - only one row exists)
