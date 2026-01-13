@@ -11,7 +11,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-func setupTestDBForBrokerSymbols(t *testing.T) *sql.DB {
+func setupTestDBForClientSymbols(t *testing.T) *sql.DB {
 	db, err := sql.Open("sqlite3", ":memory:")
 	require.NoError(t, err)
 
@@ -27,24 +27,24 @@ func setupTestDBForBrokerSymbols(t *testing.T) *sql.DB {
 	`)
 	require.NoError(t, err)
 
-	// Create broker_symbols table
+	// Create client_symbols table
 	_, err = db.Exec(`
-		CREATE TABLE broker_symbols (
+		CREATE TABLE client_symbols (
 			isin TEXT NOT NULL,
-			broker_name TEXT NOT NULL,
-			broker_symbol TEXT NOT NULL,
-			PRIMARY KEY (isin, broker_name),
+			client_name TEXT NOT NULL,
+			client_symbol TEXT NOT NULL,
+			PRIMARY KEY (isin, client_name),
 			FOREIGN KEY (isin) REFERENCES securities(isin) ON DELETE CASCADE
 		)
 	`)
 	require.NoError(t, err)
 
 	// Create indexes
-	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_broker_symbols_isin ON broker_symbols(isin)`)
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_client_symbols_isin ON client_symbols(isin)`)
 	require.NoError(t, err)
-	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_broker_symbols_broker ON broker_symbols(broker_name)`)
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_client_symbols_client ON client_symbols(client_name)`)
 	require.NoError(t, err)
-	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_broker_symbols_symbol ON broker_symbols(broker_symbol)`)
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_client_symbols_symbol ON client_symbols(client_symbol)`)
 	require.NoError(t, err)
 
 	// Insert a test security for foreign key constraint
@@ -57,37 +57,37 @@ func setupTestDBForBrokerSymbols(t *testing.T) *sql.DB {
 	return db
 }
 
-func TestGetBrokerSymbol_Success(t *testing.T) {
-	db := setupTestDBForBrokerSymbols(t)
+func TestGetClientSymbol_Success(t *testing.T) {
+	db := setupTestDBForClientSymbols(t)
 	defer db.Close()
 
 	log := zerolog.New(nil).Level(zerolog.Disabled)
-	repo := NewBrokerSymbolRepository(db, log)
+	repo := NewClientSymbolRepository(db, log)
 
 	// Insert test data
 	_, err := db.Exec(`
-		INSERT INTO broker_symbols (isin, broker_name, broker_symbol)
+		INSERT INTO client_symbols (isin, client_name, client_symbol)
 		VALUES ('US0378331005', 'tradernet', 'AAPL.US')
 	`)
 	require.NoError(t, err)
 
 	// Execute
-	symbol, err := repo.GetBrokerSymbol("US0378331005", "tradernet")
+	symbol, err := repo.GetClientSymbol("US0378331005", "tradernet")
 
 	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, "AAPL.US", symbol)
 }
 
-func TestGetBrokerSymbol_NotFound(t *testing.T) {
-	db := setupTestDBForBrokerSymbols(t)
+func TestGetClientSymbol_NotFound(t *testing.T) {
+	db := setupTestDBForClientSymbols(t)
 	defer db.Close()
 
 	log := zerolog.New(nil).Level(zerolog.Disabled)
-	repo := NewBrokerSymbolRepository(db, log)
+	repo := NewClientSymbolRepository(db, log)
 
 	// Execute
-	symbol, err := repo.GetBrokerSymbol("US0378331005", "tradernet")
+	symbol, err := repo.GetClientSymbol("US0378331005", "tradernet")
 
 	// Assert
 	require.Error(t, err)
@@ -95,57 +95,57 @@ func TestGetBrokerSymbol_NotFound(t *testing.T) {
 	assert.Contains(t, err.Error(), "not found")
 }
 
-func TestSetBrokerSymbol_Create(t *testing.T) {
-	db := setupTestDBForBrokerSymbols(t)
+func TestSetClientSymbol_Create(t *testing.T) {
+	db := setupTestDBForClientSymbols(t)
 	defer db.Close()
 
 	log := zerolog.New(nil).Level(zerolog.Disabled)
-	repo := NewBrokerSymbolRepository(db, log)
+	repo := NewClientSymbolRepository(db, log)
 
 	// Execute
-	err := repo.SetBrokerSymbol("US0378331005", "tradernet", "AAPL.US")
+	err := repo.SetClientSymbol("US0378331005", "tradernet", "AAPL.US")
 	require.NoError(t, err)
 
 	// Verify
-	symbol, err := repo.GetBrokerSymbol("US0378331005", "tradernet")
+	symbol, err := repo.GetClientSymbol("US0378331005", "tradernet")
 	require.NoError(t, err)
 	assert.Equal(t, "AAPL.US", symbol)
 }
 
-func TestSetBrokerSymbol_Update(t *testing.T) {
-	db := setupTestDBForBrokerSymbols(t)
+func TestSetClientSymbol_Update(t *testing.T) {
+	db := setupTestDBForClientSymbols(t)
 	defer db.Close()
 
 	log := zerolog.New(nil).Level(zerolog.Disabled)
-	repo := NewBrokerSymbolRepository(db, log)
+	repo := NewClientSymbolRepository(db, log)
 
 	// Insert initial mapping
 	_, err := db.Exec(`
-		INSERT INTO broker_symbols (isin, broker_name, broker_symbol)
+		INSERT INTO client_symbols (isin, client_name, client_symbol)
 		VALUES ('US0378331005', 'tradernet', 'AAPL.US')
 	`)
 	require.NoError(t, err)
 
 	// Execute - update existing
-	err = repo.SetBrokerSymbol("US0378331005", "tradernet", "AAPL")
+	err = repo.SetClientSymbol("US0378331005", "tradernet", "AAPL")
 	require.NoError(t, err)
 
 	// Verify update
-	symbol, err := repo.GetBrokerSymbol("US0378331005", "tradernet")
+	symbol, err := repo.GetClientSymbol("US0378331005", "tradernet")
 	require.NoError(t, err)
 	assert.Equal(t, "AAPL", symbol)
 }
 
-func TestGetAllBrokerSymbols(t *testing.T) {
-	db := setupTestDBForBrokerSymbols(t)
+func TestGetAllClientSymbols(t *testing.T) {
+	db := setupTestDBForClientSymbols(t)
 	defer db.Close()
 
 	log := zerolog.New(nil).Level(zerolog.Disabled)
-	repo := NewBrokerSymbolRepository(db, log)
+	repo := NewClientSymbolRepository(db, log)
 
-	// Insert multiple broker symbols for same ISIN
+	// Insert multiple client symbols for same ISIN
 	_, err := db.Exec(`
-		INSERT INTO broker_symbols (isin, broker_name, broker_symbol)
+		INSERT INTO client_symbols (isin, client_name, client_symbol)
 		VALUES
 			('US0378331005', 'tradernet', 'AAPL.US'),
 			('US0378331005', 'ibkr', 'AAPL')
@@ -153,7 +153,7 @@ func TestGetAllBrokerSymbols(t *testing.T) {
 	require.NoError(t, err)
 
 	// Execute
-	symbols, err := repo.GetAllBrokerSymbols("US0378331005")
+	symbols, err := repo.GetAllClientSymbols("US0378331005")
 
 	// Assert
 	require.NoError(t, err)
@@ -162,52 +162,52 @@ func TestGetAllBrokerSymbols(t *testing.T) {
 	assert.Equal(t, "AAPL", symbols["ibkr"])
 }
 
-func TestGetAllBrokerSymbols_Empty(t *testing.T) {
-	db := setupTestDBForBrokerSymbols(t)
+func TestGetAllClientSymbols_Empty(t *testing.T) {
+	db := setupTestDBForClientSymbols(t)
 	defer db.Close()
 
 	log := zerolog.New(nil).Level(zerolog.Disabled)
-	repo := NewBrokerSymbolRepository(db, log)
+	repo := NewClientSymbolRepository(db, log)
 
 	// Execute
-	symbols, err := repo.GetAllBrokerSymbols("US0378331005")
+	symbols, err := repo.GetAllClientSymbols("US0378331005")
 
 	// Assert
 	require.NoError(t, err)
 	assert.Empty(t, symbols)
 }
 
-func TestGetISINByBrokerSymbol(t *testing.T) {
-	db := setupTestDBForBrokerSymbols(t)
+func TestGetISINByClientSymbol(t *testing.T) {
+	db := setupTestDBForClientSymbols(t)
 	defer db.Close()
 
 	log := zerolog.New(nil).Level(zerolog.Disabled)
-	repo := NewBrokerSymbolRepository(db, log)
+	repo := NewClientSymbolRepository(db, log)
 
 	// Insert test data
 	_, err := db.Exec(`
-		INSERT INTO broker_symbols (isin, broker_name, broker_symbol)
+		INSERT INTO client_symbols (isin, client_name, client_symbol)
 		VALUES ('US0378331005', 'tradernet', 'AAPL.US')
 	`)
 	require.NoError(t, err)
 
 	// Execute
-	isin, err := repo.GetISINByBrokerSymbol("tradernet", "AAPL.US")
+	isin, err := repo.GetISINByClientSymbol("tradernet", "AAPL.US")
 
 	// Assert
 	require.NoError(t, err)
 	assert.Equal(t, "US0378331005", isin)
 }
 
-func TestGetISINByBrokerSymbol_NotFound(t *testing.T) {
-	db := setupTestDBForBrokerSymbols(t)
+func TestGetISINByClientSymbol_NotFound(t *testing.T) {
+	db := setupTestDBForClientSymbols(t)
 	defer db.Close()
 
 	log := zerolog.New(nil).Level(zerolog.Disabled)
-	repo := NewBrokerSymbolRepository(db, log)
+	repo := NewClientSymbolRepository(db, log)
 
 	// Execute
-	isin, err := repo.GetISINByBrokerSymbol("tradernet", "AAPL.US")
+	isin, err := repo.GetISINByClientSymbol("tradernet", "AAPL.US")
 
 	// Assert
 	require.Error(t, err)
@@ -215,39 +215,39 @@ func TestGetISINByBrokerSymbol_NotFound(t *testing.T) {
 	assert.Contains(t, err.Error(), "not found")
 }
 
-func TestDeleteBrokerSymbol(t *testing.T) {
-	db := setupTestDBForBrokerSymbols(t)
+func TestDeleteClientSymbol(t *testing.T) {
+	db := setupTestDBForClientSymbols(t)
 	defer db.Close()
 
 	log := zerolog.New(nil).Level(zerolog.Disabled)
-	repo := NewBrokerSymbolRepository(db, log)
+	repo := NewClientSymbolRepository(db, log)
 
 	// Insert test data
 	_, err := db.Exec(`
-		INSERT INTO broker_symbols (isin, broker_name, broker_symbol)
+		INSERT INTO client_symbols (isin, client_name, client_symbol)
 		VALUES ('US0378331005', 'tradernet', 'AAPL.US')
 	`)
 	require.NoError(t, err)
 
 	// Execute
-	err = repo.DeleteBrokerSymbol("US0378331005", "tradernet")
+	err = repo.DeleteClientSymbol("US0378331005", "tradernet")
 	require.NoError(t, err)
 
 	// Verify deletion
-	_, err = repo.GetBrokerSymbol("US0378331005", "tradernet")
+	_, err = repo.GetClientSymbol("US0378331005", "tradernet")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
 
-func TestDeleteBrokerSymbol_NotFound(t *testing.T) {
-	db := setupTestDBForBrokerSymbols(t)
+func TestDeleteClientSymbol_NotFound(t *testing.T) {
+	db := setupTestDBForClientSymbols(t)
 	defer db.Close()
 
 	log := zerolog.New(nil).Level(zerolog.Disabled)
-	repo := NewBrokerSymbolRepository(db, log)
+	repo := NewClientSymbolRepository(db, log)
 
 	// Execute - delete non-existent mapping
-	err := repo.DeleteBrokerSymbol("US0378331005", "tradernet")
+	err := repo.DeleteClientSymbol("US0378331005", "tradernet")
 
 	// Assert - should not error (idempotent operation)
 	require.NoError(t, err)

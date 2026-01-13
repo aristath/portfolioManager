@@ -36,8 +36,8 @@ func InitializeRepositories(container *Container, log zerolog.Logger) error {
 		log,
 	)
 
-	// Broker symbol repository (needs universeDB)
-	container.BrokerSymbolRepo = universe.NewBrokerSymbolRepository(
+	// Client symbol repository (needs universeDB)
+	container.ClientSymbolRepo = universe.NewClientSymbolRepository(
 		container.UniverseDB.Conn(),
 		log,
 	)

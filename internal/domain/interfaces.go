@@ -123,26 +123,27 @@ type ConcentrationAlert struct {
 	AlertThresholdPct float64
 }
 
-// BrokerSymbolRepositoryInterface defines the contract for broker symbol mapping operations.
+// ClientSymbolRepositoryInterface defines the contract for client symbol mapping operations.
 // This interface is defined in the domain layer to avoid circular dependencies between
 // services and universe packages (clean architecture - dependency inversion).
-type BrokerSymbolRepositoryInterface interface {
-	// GetBrokerSymbol returns the broker-specific symbol for a given ISIN and broker name.
+// Used for mapping ISINs to client-specific symbols (brokers, data providers, etc.).
+type ClientSymbolRepositoryInterface interface {
+	// GetClientSymbol returns the client-specific symbol for a given ISIN and client name.
 	// Returns error if mapping doesn't exist (fail-fast approach).
-	GetBrokerSymbol(isin, brokerName string) (string, error)
+	GetClientSymbol(isin, clientName string) (string, error)
 
-	// SetBrokerSymbol creates or updates a broker symbol mapping.
+	// SetClientSymbol creates or updates a client symbol mapping.
 	// Replaces existing mapping if present (upsert operation).
-	SetBrokerSymbol(isin, brokerName, symbol string) error
+	SetClientSymbol(isin, clientName, symbol string) error
 
-	// GetAllBrokerSymbols returns all broker symbols for a given ISIN.
-	// Returns a map of broker_name -> broker_symbol.
-	GetAllBrokerSymbols(isin string) (map[string]string, error)
+	// GetAllClientSymbols returns all client symbols for a given ISIN.
+	// Returns a map of client_name -> client_symbol.
+	GetAllClientSymbols(isin string) (map[string]string, error)
 
-	// GetISINByBrokerSymbol performs reverse lookup: finds ISIN by broker symbol.
+	// GetISINByClientSymbol performs reverse lookup: finds ISIN by client symbol.
 	// Returns error if mapping doesn't exist.
-	GetISINByBrokerSymbol(brokerName, brokerSymbol string) (string, error)
+	GetISINByClientSymbol(clientName, clientSymbol string) (string, error)
 
-	// DeleteBrokerSymbol removes a broker symbol mapping for an ISIN/broker pair.
-	DeleteBrokerSymbol(isin, brokerName string) error
+	// DeleteClientSymbol removes a client symbol mapping for an ISIN/client pair.
+	DeleteClientSymbol(isin, clientName string) error
 }

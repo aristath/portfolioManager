@@ -116,15 +116,16 @@ INSERT OR IGNORE INTO tags (id, name, created_at, updated_at) VALUES
     ('regime-sideways-value', 'Sideways Value', (strftime('%s', 'now')), (strftime('%s', 'now'))),
     ('regime-volatile', 'Regime Volatile', (strftime('%s', 'now')), (strftime('%s', 'now')));
 
--- Broker symbols table: maps ISINs to broker-specific symbol formats
-CREATE TABLE IF NOT EXISTS broker_symbols (
+-- Client symbols table: maps ISINs to client-specific symbol formats
+-- Used for brokers (tradernet, ibkr, schwab) and data providers (yahoo, alphavantage, etc.)
+CREATE TABLE IF NOT EXISTS client_symbols (
     isin TEXT NOT NULL,
-    broker_name TEXT NOT NULL,  -- e.g., 'tradernet', 'ibkr', 'schwab'
-    broker_symbol TEXT NOT NULL,  -- The broker-specific symbol format
-    PRIMARY KEY (isin, broker_name),
+    client_name TEXT NOT NULL,  -- e.g., 'tradernet', 'ibkr', 'yahoo', 'alphavantage'
+    client_symbol TEXT NOT NULL,  -- The client-specific symbol format
+    PRIMARY KEY (isin, client_name),
     FOREIGN KEY (isin) REFERENCES securities(isin) ON DELETE CASCADE
 ) STRICT;
 
-CREATE INDEX IF NOT EXISTS idx_broker_symbols_isin ON broker_symbols(isin);
-CREATE INDEX IF NOT EXISTS idx_broker_symbols_broker ON broker_symbols(broker_name);
-CREATE INDEX IF NOT EXISTS idx_broker_symbols_symbol ON broker_symbols(broker_symbol);
+CREATE INDEX IF NOT EXISTS idx_client_symbols_isin ON client_symbols(isin);
+CREATE INDEX IF NOT EXISTS idx_client_symbols_client ON client_symbols(client_name);
+CREATE INDEX IF NOT EXISTS idx_client_symbols_symbol ON client_symbols(client_symbol);

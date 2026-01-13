@@ -128,11 +128,12 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	container.SymbolMapper = symbols.NewMapper()
 	log.Info().Msg("Symbol mapper initialized")
 
-	// Broker symbol mapper for converting ISINs to broker-specific symbols
-	// Note: BrokerSymbolRepo must be initialized in InitializeRepositories first
-	if container.BrokerSymbolRepo != nil {
-		container.BrokerSymbolMapper = services.NewBrokerSymbolMapper(container.BrokerSymbolRepo)
-		log.Info().Msg("Broker symbol mapper initialized")
+	// Client symbol mapper for converting ISINs to client-specific symbols
+	// Used for brokers (tradernet, ibkr, schwab) and data providers (yahoo, alphavantage, etc.)
+	// Note: ClientSymbolRepo must be initialized in InitializeRepositories first
+	if container.ClientSymbolRepo != nil {
+		container.ClientSymbolMapper = services.NewClientSymbolMapper(container.ClientSymbolRepo)
+		log.Info().Msg("Client symbol mapper initialized")
 	}
 
 	// Configure display service (App Lab HTTP API on localhost:7000)

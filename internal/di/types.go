@@ -67,7 +67,7 @@ type Container struct {
 	// Repositories
 	PositionRepo        *portfolio.PositionRepository
 	SecurityRepo        *universe.SecurityRepository
-	BrokerSymbolRepo    *universe.BrokerSymbolRepository
+	ClientSymbolRepo    *universe.ClientSymbolRepository
 	ScoreRepo           *universe.ScoreRepository
 	DividendRepo        *dividends.DividendRepository
 	CashRepo            *cash_flows.CashRepository
@@ -86,7 +86,7 @@ type Container struct {
 	// Services
 	DataSourceRouter          *services.DataSourceRouter
 	SymbolMapper              *symbols.Mapper
-	BrokerSymbolMapper        *services.BrokerSymbolMapper
+	ClientSymbolMapper        *services.ClientSymbolMapper
 	DataFetcherService        *services.DataFetcherService
 	CurrencyExchangeService   *services.CurrencyExchangeService
 	ExchangeRateCacheService  *services.ExchangeRateCacheService
