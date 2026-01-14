@@ -274,16 +274,11 @@ func (j *GetOptimizerWeightsJob) fetchCurrentPrices(securities []universe.Securi
 		return prices
 	}
 
-	// Build symbol map (tradernet_symbol -> yahoo_symbol override) for price API
+	// Build symbol map for price API
+	// Note: Yahoo symbol override removed - Tradernet is now the only data source
 	symbolMap := make(map[string]*string)
 	for _, security := range securities {
-		var yahooSymbolPtr *string
-		if security.YahooSymbol != "" {
-			// Create new string to avoid range variable issues
-			yahooSymbol := security.YahooSymbol
-			yahooSymbolPtr = &yahooSymbol
-		}
-		symbolMap[security.Symbol] = yahooSymbolPtr
+		symbolMap[security.Symbol] = nil // No override needed
 	}
 
 	// Fetch batch quotes (returns prices in native currencies) - external API uses Symbol

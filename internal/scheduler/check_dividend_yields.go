@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"github.com/aristath/sentinel/internal/modules/dividends"
 	"github.com/aristath/sentinel/internal/modules/scoring"
 	"github.com/rs/zerolog"
 )
@@ -18,7 +19,7 @@ type CheckDividendYieldsJob struct {
 	JobBase
 	log              zerolog.Logger
 	securityRepo     SecurityRepositoryForDividendsInterface
-	yahooClient      YahooClientForDividendsInterface
+	yieldCalculator  *dividends.DividendYieldCalculator
 	symbols          []string
 	yieldResults     map[string]DividendYieldResult
 	highYieldSymbols map[string]SymbolDividendInfoForGroup
@@ -29,12 +30,12 @@ type CheckDividendYieldsJob struct {
 // NewCheckDividendYieldsJob creates a new CheckDividendYieldsJob
 func NewCheckDividendYieldsJob(
 	securityRepo SecurityRepositoryForDividendsInterface,
-	yahooClient YahooClientForDividendsInterface,
+	yieldCalculator *dividends.DividendYieldCalculator,
 ) *CheckDividendYieldsJob {
 	return &CheckDividendYieldsJob{
 		log:              zerolog.Nop(),
 		securityRepo:     securityRepo,
-		yahooClient:      yahooClient,
+		yieldCalculator:  yieldCalculator,
 		yieldResults:     make(map[string]DividendYieldResult),
 		highYieldSymbols: make(map[string]SymbolDividendInfoForGroup),
 		lowYieldSymbols:  make(map[string]SymbolDividendInfoForGroup),
@@ -131,11 +132,11 @@ func (j *CheckDividendYieldsJob) Run() error {
 // getDividendYield gets the dividend yield for a symbol
 // Returns -1.0 if not available
 func (j *CheckDividendYieldsJob) getDividendYield(symbol string) float64 {
-	if j.securityRepo == nil || j.yahooClient == nil {
+	if j.securityRepo == nil || j.yieldCalculator == nil {
 		return -1.0
 	}
 
-	// Get the security to find the Yahoo symbol
+	// Get the security to find the ISIN
 	security, err := j.securityRepo.GetBySymbol(symbol)
 	if err != nil || security == nil {
 		j.log.Debug().
@@ -144,24 +145,26 @@ func (j *CheckDividendYieldsJob) getDividendYield(symbol string) float64 {
 		return -1.0
 	}
 
-	yahooSymbol := security.YahooSymbol
-	if yahooSymbol == "" {
-		yahooSymbol = symbol
-	}
-
-	// Get fundamentals from Yahoo Finance
-	fundamentals, err := j.yahooClient.GetFundamentalData(yahooSymbol, nil)
-	if err != nil || fundamentals == nil {
+	if security.ISIN == "" {
 		j.log.Debug().
 			Str("symbol", symbol).
-			Str("yahoo_symbol", yahooSymbol).
-			Msg("Failed to get fundamentals from Yahoo")
+			Msg("Security has no ISIN, cannot get dividend yield")
 		return -1.0
 	}
 
-	// DividendYield in Yahoo is already a fraction (e.g., 0.03 for 3%)
-	if fundamentals.DividendYield != nil && *fundamentals.DividendYield > 0 {
-		return *fundamentals.DividendYield
+	// Get dividend yield from internal calculator
+	yieldResult, err := j.yieldCalculator.CalculateYield(security.ISIN)
+	if err != nil || yieldResult == nil {
+		j.log.Debug().
+			Str("symbol", symbol).
+			Str("isin", security.ISIN).
+			Msg("Failed to calculate dividend yield")
+		return -1.0
+	}
+
+	// CurrentYield is already a fraction (e.g., 0.03 for 3%)
+	if yieldResult.CurrentYield > 0 {
+		return yieldResult.CurrentYield
 	}
 
 	return -1.0

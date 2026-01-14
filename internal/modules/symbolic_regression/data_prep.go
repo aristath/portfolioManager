@@ -213,25 +213,26 @@ func (dp *DataPrep) extractInputs(isin string, date time.Time) (*TrainingInputs,
 	}
 
 	// Extract scores (use most recent score before or at date)
-	var totalScore, longTerm, fundamentals, dividends, opportunity, shortTerm, technicals, opinion, diversification sql.NullFloat64
+	// Note: stability_score column now stores stability score (internal price-based calculation)
+	// analyst_score is no longer used (external analyst data removed)
+	var totalScore, longTerm, stability, dividends, opportunity, shortTerm, technicals, diversification sql.NullFloat64
 	err := dp.portfolioDB.QueryRow(`
 		SELECT
 			total_score,
 			cagr_score,
-			fundamental_score,
+			stability_score,
 			dividend_bonus,
 			opportunity_score,
 			drawdown_score,
 			technical_score,
-			analyst_score,
 			allocation_fit_score
 		FROM scores
 		WHERE isin = ? AND last_updated <= ?
 		ORDER BY last_updated DESC
 		LIMIT 1
 	`, isin, date.Format("2006-01-02")).Scan(
-		&totalScore, &longTerm, &fundamentals, &dividends, &opportunity,
-		&shortTerm, &technicals, &opinion, &diversification,
+		&totalScore, &longTerm, &stability, &dividends, &opportunity,
+		&shortTerm, &technicals, &diversification,
 	)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, fmt.Errorf("failed to query scores: %w", err)
@@ -243,8 +244,8 @@ func (dp *DataPrep) extractInputs(isin string, date time.Time) (*TrainingInputs,
 	if longTerm.Valid {
 		inputs.LongTermScore = longTerm.Float64
 	}
-	if fundamentals.Valid {
-		inputs.FundamentalsScore = fundamentals.Float64
+	if stability.Valid {
+		inputs.StabilityScore = stability.Float64
 	}
 	if dividends.Valid {
 		inputs.DividendsScore = dividends.Float64
@@ -257,9 +258,6 @@ func (dp *DataPrep) extractInputs(isin string, date time.Time) (*TrainingInputs,
 	}
 	if technicals.Valid {
 		inputs.TechnicalsScore = technicals.Float64
-	}
-	if opinion.Valid {
-		inputs.OpinionScore = opinion.Float64
 	}
 	if diversification.Valid {
 		inputs.DiversificationScore = diversification.Float64
@@ -332,8 +330,8 @@ func (dp *DataPrep) extractInputs(isin string, date time.Time) (*TrainingInputs,
 	if inputs.LongTermScore == 0 && !longTerm.Valid {
 		inputs.LongTermScore = 0.5
 	}
-	if inputs.FundamentalsScore == 0 && !fundamentals.Valid {
-		inputs.FundamentalsScore = 0.5
+	if inputs.StabilityScore == 0 && !stability.Valid {
+		inputs.StabilityScore = 0.5
 	}
 
 	return inputs, nil

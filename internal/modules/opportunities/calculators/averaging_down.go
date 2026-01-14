@@ -237,13 +237,13 @@ func (c *AveragingDownCalculator) Calculate(
 			// For averaging down, we're less strict on quality (already in position)
 			// Only skip if quality is very poor
 			if qualityCheck.QualityGateReason == "quality_gate_fail" {
-				fundamentalsScore := GetScoreFromContext(ctx, isin, ctx.FundamentalsScores)
-				if fundamentalsScore > 0 && fundamentalsScore < 0.4 {
+				stabilityScore := GetScoreFromContext(ctx, isin, ctx.StabilityScores)
+				if stabilityScore > 0 && stabilityScore < 0.4 {
 					c.log.Debug().
 						Str("symbol", symbol).
-						Float64("fundamentals_score", fundamentalsScore).
+						Float64("stability_score", stabilityScore).
 						Msg("Skipping - extremely poor quality (score-based check)")
-					exclusions.Add(isin, symbol, securityName, fmt.Sprintf("extremely poor fundamentals score %.2f (score-based)", fundamentalsScore))
+					exclusions.Add(isin, symbol, securityName, fmt.Sprintf("extremely poor stability score %.2f (score-based)", stabilityScore))
 					continue
 				}
 			}

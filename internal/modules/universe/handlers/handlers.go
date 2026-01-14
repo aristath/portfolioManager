@@ -15,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aristath/sentinel/internal/clients/yahoo"
 	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/events"
 	"github.com/aristath/sentinel/internal/modules/portfolio"
@@ -124,7 +123,6 @@ type UniverseHandlers struct {
 	securityRepo            *universe.SecurityRepository
 	scoreRepo               *universe.ScoreRepository
 	securityScorer          *scorers.SecurityScorer
-	yahooClient             yahoo.FullClientInterface
 	historyDB               *universe.HistoryDB
 	setupService            *universe.SecuritySetupService
 	syncService             *universe.SyncService
@@ -139,7 +137,6 @@ func NewUniverseHandlers(
 	portfolioDB *sql.DB,
 	positionRepo *portfolio.PositionRepository,
 	securityScorer *scorers.SecurityScorer,
-	yahooClient yahoo.FullClientInterface,
 	historyDB *universe.HistoryDB,
 	setupService *universe.SecuritySetupService,
 	syncService *universe.SyncService,
@@ -153,7 +150,6 @@ func NewUniverseHandlers(
 		portfolioDB:             portfolioDB,
 		positionRepo:            positionRepo,
 		securityScorer:          securityScorer,
-		yahooClient:             yahooClient,
 		historyDB:               historyDB,
 		setupService:            setupService,
 		syncService:             syncService,
@@ -220,12 +216,11 @@ func (h *UniverseHandlers) HandleGetStocks(w http.ResponseWriter, r *http.Reques
 	// Convert to response format (map[string]interface{} to match Python's dict response)
 	response := make([]map[string]interface{}, 0, len(securitiesData))
 	for _, sec := range securitiesData {
+		// Client-specific symbols now stored in client_symbols table, not here
 		stockDict := map[string]interface{}{
 			"symbol":               sec.Symbol,
 			"name":                 sec.Name,
 			"isin":                 sec.ISIN,
-			"yahoo_symbol":         sec.YahooSymbol,
-			"alphavantage_symbol":  sec.AlphaVantageSymbol,
 			"product_type":         sec.ProductType,
 			"country":              sec.Country,
 			"fullExchangeName":     sec.FullExchangeName,
@@ -272,8 +267,8 @@ func (h *UniverseHandlers) HandleGetStocks(w http.ResponseWriter, r *http.Reques
 		if sec.TechnicalScore != nil {
 			stockDict["technical_score"] = *sec.TechnicalScore
 		}
-		if sec.FundamentalScore != nil {
-			stockDict["fundamental_score"] = *sec.FundamentalScore
+		if sec.StabilityScore != nil {
+			stockDict["stability_score"] = *sec.StabilityScore
 		}
 
 		// Add position fields (only if not nil)
@@ -345,12 +340,10 @@ func (h *UniverseHandlers) HandleGetStock(w http.ResponseWriter, r *http.Request
 		score = nil
 	}
 
-	// Build response
+	// Build response (client symbols available via /api/securities/{isin}/client-symbols)
 	result := map[string]interface{}{
 		"symbol":               security.Symbol,
 		"isin":                 security.ISIN,
-		"yahoo_symbol":         security.YahooSymbol,
-		"alphavantage_symbol":  security.AlphaVantageSymbol,
 		"name":                 security.Name,
 		"product_type":         security.ProductType,
 		"industry":             security.Industry,
@@ -378,7 +371,7 @@ func (h *UniverseHandlers) HandleGetStock(w http.ResponseWriter, r *http.Request
 		result["history_years"] = score.HistoryYears
 		result["volatility"] = score.Volatility
 		result["technical_score"] = score.TechnicalScore
-		result["fundamental_score"] = score.FundamentalScore
+		result["stability_score"] = score.StabilityScore
 
 		if score.CalculatedAt != nil {
 			result["calculated_at"] = score.CalculatedAt.Format("2006-01-02T15:04:05Z07:00")
@@ -397,15 +390,15 @@ func (h *UniverseHandlers) HandleGetStock(w http.ResponseWriter, r *http.Request
 
 // SecurityCreateRequest represents the request to create a security
 // After migration 030: ISIN is required (PRIMARY KEY)
+// Client symbols (for brokers, data providers) stored in client_symbols table
 type SecurityCreateRequest struct {
-	Symbol      string   `json:"symbol"`
-	Name        string   `json:"name"`
-	YahooSymbol string   `json:"yahoo_symbol"`
-	ISIN        string   `json:"isin"` // Required: PRIMARY KEY after migration 030
-	MinLot      int      `json:"min_lot"`
-	AllowBuy    bool     `json:"allow_buy"`
-	AllowSell   bool     `json:"allow_sell"`
-	Tags        []string `json:"tags,omitempty"` // Ignored - tags are internal only
+	Symbol    string   `json:"symbol"`
+	Name      string   `json:"name"`
+	ISIN      string   `json:"isin"` // Required: PRIMARY KEY after migration 030
+	MinLot    int      `json:"min_lot"`
+	AllowBuy  bool     `json:"allow_buy"`
+	AllowSell bool     `json:"allow_sell"`
+	Tags      []string `json:"tags,omitempty"` // Ignored - tags are internal only
 }
 
 // HandleCreateStock creates a new security in the universe
@@ -453,10 +446,10 @@ func (h *UniverseHandlers) HandleCreateStock(w http.ResponseWriter, r *http.Requ
 		Msg("Creating security")
 
 	// Call SecuritySetupService (ISIN is now required)
+	// Client symbols are now stored in client_symbols table, not on security
 	security, err := h.setupService.CreateSecurity(
 		req.Symbol,
 		req.Name,
-		req.YahooSymbol,
 		req.ISIN,
 		req.MinLot,
 		req.AllowBuy,
@@ -573,24 +566,11 @@ func (h *UniverseHandlers) HandleRefreshAllScores(w http.ResponseWriter, r *http
 	var scores []map[string]interface{}
 
 	for _, security := range securities {
-		// Update industry if missing
-		if security.Industry == "" {
-			// Use security's stored symbols for API call
-			yahooSymPtr := &security.YahooSymbol
-			if security.YahooSymbol == "" {
-				yahooSymPtr = nil
-			}
-			if industry, err := h.yahooClient.GetSecurityIndustry(security.Symbol, yahooSymPtr); err == nil && industry != nil {
-				// Update using ISIN (primary identifier)
-				if security.ISIN != "" {
-					_ = h.securityRepo.Update(security.ISIN, map[string]interface{}{"industry": *industry})
-					h.log.Info().Str("symbol", security.Symbol).Str("isin", security.ISIN).Str("industry", *industry).Msg("Updated missing industry")
-				}
-			}
-		}
+		// Note: Industry is now populated from Tradernet metadata during security setup
+		// If missing, it will be updated during the next sync cycle
 
-		// Calculate score
-		score, err := h.calculateAndSaveScore(security.ISIN, security.YahooSymbol, security.Country, security.Industry)
+		// Calculate score (client symbols no longer needed for scoring)
+		score, err := h.calculateAndSaveScore(security.ISIN, security.Country, security.Industry)
 		if err != nil {
 			h.log.Warn().Err(err).Str("symbol", security.Symbol).Msg("Failed to calculate score")
 			continue
@@ -698,8 +678,8 @@ func (h *UniverseHandlers) HandleRefreshStockScore(w http.ResponseWriter, r *htt
 
 	symbol := security.Symbol
 
-	// Calculate and save score
-	score, err := h.calculateAndSaveScore(security.ISIN, security.YahooSymbol, security.Country, security.Industry)
+	// Calculate and save score (client symbols no longer needed for scoring)
+	score, err := h.calculateAndSaveScore(security.ISIN, security.Country, security.Industry)
 	if err != nil {
 		h.log.Error().Err(err).Str("symbol", symbol).Msg("Failed to calculate score")
 		http.Error(w, "Failed to calculate score", http.StatusInternalServerError)
@@ -803,17 +783,17 @@ func (h *UniverseHandlers) HandleUpdateStock(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Recalculate score (using ISIN internally)
-	score, err := h.calculateAndSaveScore(updatedSecurity.ISIN, updatedSecurity.YahooSymbol, updatedSecurity.Country, updatedSecurity.Industry)
+	// Recalculate score (client symbols no longer needed for scoring)
+	score, err := h.calculateAndSaveScore(updatedSecurity.ISIN, updatedSecurity.Country, updatedSecurity.Industry)
 	if err != nil {
 		h.log.Warn().Err(err).Str("isin", updatedSecurity.ISIN).Str("symbol", updatedSecurity.Symbol).Msg("Failed to recalculate score after update")
 		// Continue without score rather than failing the update
 	}
 
+	// Client symbols available via /api/securities/{isin}/client-symbols
 	response := map[string]interface{}{
 		"symbol":              updatedSecurity.Symbol,
 		"isin":                updatedSecurity.ISIN,
-		"yahoo_symbol":        updatedSecurity.YahooSymbol,
 		"name":                updatedSecurity.Name,
 		"product_type":        updatedSecurity.ProductType,
 		"industry":            updatedSecurity.Industry,
@@ -886,7 +866,8 @@ func (h *UniverseHandlers) HandleDeleteStock(w http.ResponseWriter, r *http.Requ
 // CalculateAndSaveScore is the public interface implementation for ScoreCalculator
 // Wraps the private calculateAndSaveScore method
 // After migration: accepts symbol but looks up ISIN internally
-func (h *UniverseHandlers) CalculateAndSaveScore(symbol string, yahooSymbol string, country string, industry string) error {
+// Client symbols are no longer needed for scoring - all data comes from internal sources
+func (h *UniverseHandlers) CalculateAndSaveScore(symbol string, country string, industry string) error {
 	// Lookup ISIN from symbol
 	security, err := h.securityRepo.GetBySymbol(symbol)
 	if err != nil {
@@ -895,16 +876,15 @@ func (h *UniverseHandlers) CalculateAndSaveScore(symbol string, yahooSymbol stri
 	if security == nil || security.ISIN == "" {
 		return fmt.Errorf("security not found or missing ISIN: %s", symbol)
 	}
-	_, err = h.calculateAndSaveScore(security.ISIN, yahooSymbol, country, industry)
+	_, err = h.calculateAndSaveScore(security.ISIN, country, industry)
 	return err
 }
 
 // calculateAndSaveScore calculates and saves security score
-// Faithful translation from Python: app/modules/scoring/services/scoring_service.py -> calculate_and_save_score
-// calculateAndSaveScore calculates and saves a security score
+// All price data comes from internal history.db - no external API calls needed
 // After migration: accepts ISIN as primary identifier (first parameter)
-func (h *UniverseHandlers) calculateAndSaveScore(isin string, yahooSymbol string, country string, industry string) (*universe.SecurityScore, error) {
-	// Get security by ISIN to extract symbol (needed for Yahoo API calls)
+func (h *UniverseHandlers) calculateAndSaveScore(isin string, country string, industry string) (*universe.SecurityScore, error) {
+	// Get security by ISIN to extract symbol
 	security, err := h.securityRepo.GetByISIN(isin)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get security: %w", err)
@@ -912,7 +892,7 @@ func (h *UniverseHandlers) calculateAndSaveScore(isin string, yahooSymbol string
 	if security == nil {
 		return nil, fmt.Errorf("security not found: %s", isin)
 	}
-	symbol := security.Symbol // Get symbol for Yahoo API calls
+	symbol := security.Symbol
 
 	// Fetch price data from history database using ISIN
 	dailyPrices, err := h.historyDB.GetDailyPrices(isin, 400)
@@ -933,17 +913,8 @@ func (h *UniverseHandlers) calculateAndSaveScore(isin string, yahooSymbol string
 		return nil, fmt.Errorf("insufficient monthly data: %d months (need at least 6)", len(monthlyPrices))
 	}
 
-	// Fetch fundamentals from Yahoo Finance
-	var yahooSymPtr *string
-	if yahooSymbol != "" {
-		yahooSymPtr = &yahooSymbol
-	}
-
-	fundamentalsData, err := h.yahooClient.GetFundamentalData(symbol, yahooSymPtr)
-	if err != nil {
-		h.log.Warn().Err(err).Str("symbol", symbol).Msg("Failed to get fundamental data, continuing without it")
-		// Continue without fundamentals - scoring can work with just price data
-	}
+	// Note: Stability is now calculated from price data via StabilityScorer
+	// No external data fetching required
 
 	// Convert data formats for scoring service
 	// Extract close prices from daily data
@@ -971,17 +942,6 @@ func (h *UniverseHandlers) calculateAndSaveScore(isin string, yahooSymbol string
 		ProductType:   security.ProductType, // Pass product type for product-type-aware scoring
 		DailyPrices:   closePrices,
 		MonthlyPrices: monthlyPricesConverted,
-	}
-
-	// Add fundamentals if available
-	if fundamentalsData != nil {
-		scoringInput.PERatio = fundamentalsData.PERatio
-		scoringInput.ForwardPE = fundamentalsData.ForwardPE
-		scoringInput.DividendYield = fundamentalsData.DividendYield
-		scoringInput.FiveYearAvgDivYield = fundamentalsData.FiveYearAvgDividendYield
-		scoringInput.ProfitMargin = fundamentalsData.ProfitMargin
-		scoringInput.DebtToEquity = fundamentalsData.DebtToEquity
-		scoringInput.CurrentRatio = fundamentalsData.CurrentRatio
 	}
 
 	// Add country and industry for allocation fit scoring

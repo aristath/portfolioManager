@@ -276,9 +276,9 @@ func DefaultCalculatorBoosts() CalculatorBoosts {
 		NeutralValueBoost:     1.08,
 		NeutralDividendBoost:  1.10,
 		// Quality boosts
-		StrongFundamentalsBoost: 1.12,
-		ConsistentGrowerBoost:   1.10,
-		StableBoost:             1.08,
+		HighStabilityBoost:    1.12,
+		ConsistentGrowerBoost: 1.10,
+		StableBoost:           1.08,
 		// Dividend boosts
 		DividendTotalReturnBoost: 1.12,
 		// Performance boosts (sell)
@@ -294,7 +294,7 @@ func DefaultCalculatorBoosts() CalculatorBoosts {
 // Implements intelligent prioritization based on 14 tags across 5 categories:
 // - Risk Profile (3 tags): low-risk, medium-risk, high-risk
 // - Classification (3 tags): growth, value, dividend-focused (regime-aware if securityRepo provided)
-// - Quality (3 tags): strong-fundamentals, consistent-grower, stable
+// - Quality (3 tags): high-stability, consistent-grower, stable
 // - Dividend (1 tag): dividend-total-return
 // - Performance (4 tags): meets-target-return, unsustainable-gains, stagnant, underperforming
 // Optional securityRepo parameter enables regime-aware classification boosts.
@@ -381,8 +381,8 @@ func ApplyTagBasedPriorityBoostsWithConfig(
 	}
 
 	// Quality Boosts (applicable to all buy calculators)
-	if contains(securityTags, "strong-fundamentals") {
-		multiplier *= b.StrongFundamentalsBoost
+	if contains(securityTags, "high-stability") {
+		multiplier *= b.HighStabilityBoost
 	}
 	if contains(securityTags, "consistent-grower") {
 		multiplier *= b.ConsistentGrowerBoost

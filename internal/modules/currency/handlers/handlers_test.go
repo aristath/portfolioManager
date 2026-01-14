@@ -20,7 +20,7 @@ func setupTestServices() (*services.CurrencyExchangeService, *services.ExchangeR
 	// Create minimal services for testing (nil dependencies)
 	var brokerClient domain.BrokerClient
 	currencyExchangeService := services.NewCurrencyExchangeService(brokerClient, logger)
-	exchangeRateCacheService := services.NewExchangeRateCacheService(nil, currencyExchangeService, nil, nil, nil, logger)
+	exchangeRateCacheService := services.NewExchangeRateCacheService(currencyExchangeService, nil, nil, logger)
 	return currencyExchangeService, exchangeRateCacheService
 }
 

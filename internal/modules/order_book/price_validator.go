@@ -1,12 +1,12 @@
 package order_book
 
-// PriceValidator provides price validation from external sources
+// PriceValidator provides price validation from secondary sources
 // This abstraction allows the order book module to validate prices without
-// depending on specific price providers (Yahoo, Alpha Vantage, Polygon.io, etc.)
+// depending on specific price providers.
 //
 // The interface follows Dependency Inversion Principle:
 // - High-level module (order_book) defines the interface it needs
-// - Low-level modules (Yahoo adapter) implement the interface
+// - Low-level modules (price adapters) implement the interface
 // - Dependencies point inward (infrastructure → business logic)
 type PriceValidator interface {
 	// GetValidationPrice fetches a validation price for the given symbol

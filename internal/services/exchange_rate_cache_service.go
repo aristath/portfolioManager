@@ -4,9 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/aristath/sentinel/internal/clients/alphavantage"
-	"github.com/aristath/sentinel/internal/clients/exchangerate"
-	"github.com/aristath/sentinel/internal/clients/yahoo"
 	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/modules/universe"
 	"github.com/rs/zerolog"
@@ -19,11 +16,11 @@ type SettingsServiceInterface interface {
 }
 
 // ExchangeRateCacheService provides cached exchange rates with fallback
+// Uses two-tier fallback:
+// 1. Tradernet API (getCrossRatesForDate)
+// 2. Cached rates from history.db
 type ExchangeRateCacheService struct {
-	exchangeRateAPIClient   *exchangerate.Client                    // ExchangeRate API (primary)
 	currencyExchangeService domain.CurrencyExchangeServiceInterface // Tradernet
-	alphaVantageClient      *alphavantage.Client                    // Alpha Vantage (additional fallback)
-	yahooClient             yahoo.FullClientInterface               // Yahoo fallback
 	historyDB               *universe.HistoryDB                     // Cache storage
 	settingsService         SettingsServiceInterface                // Staleness config
 	log                     zerolog.Logger
@@ -31,56 +28,29 @@ type ExchangeRateCacheService struct {
 
 // NewExchangeRateCacheService creates a new exchange rate cache service
 func NewExchangeRateCacheService(
-	exchangeRateAPIClient *exchangerate.Client,
 	currencyExchangeService domain.CurrencyExchangeServiceInterface,
-	yahooClient yahoo.FullClientInterface,
 	historyDB *universe.HistoryDB,
 	settingsService SettingsServiceInterface,
 	log zerolog.Logger,
 ) *ExchangeRateCacheService {
 	return &ExchangeRateCacheService{
-		exchangeRateAPIClient:   exchangeRateAPIClient,
 		currencyExchangeService: currencyExchangeService,
-		yahooClient:             yahooClient,
 		historyDB:               historyDB,
 		settingsService:         settingsService,
 		log:                     log.With().Str("service", "exchange_rate_cache").Logger(),
 	}
 }
 
-// SetAlphaVantageClient sets the Alpha Vantage client for additional exchange rate fallback
-func (s *ExchangeRateCacheService) SetAlphaVantageClient(client *alphavantage.Client) {
-	s.alphaVantageClient = client
-}
-
-// GetRate returns exchange rate with 6-tier fallback:
-// 1. Try exchangerate-api.com (primary - fast, free, no auth)
-// 2. Try Tradernet (fallback - uses broker's FX instruments)
-// 3. Try Alpha Vantage (fallback - requires API key for higher limits)
-// 4. Try Yahoo Finance (fallback)
-// 5. Try cached rate from DB
-// 6. Use hardcoded fallback rates
+// GetRate returns exchange rate with 3-tier fallback:
+// 1. Try Tradernet (primary - uses broker's FX instruments)
+// 2. Try cached rate from DB
+// 3. Use hardcoded fallback rates
 func (s *ExchangeRateCacheService) GetRate(fromCurrency, toCurrency string) (float64, error) {
 	if fromCurrency == toCurrency {
 		return 1.0, nil
 	}
 
-	// Tier 1: Try exchangerate-api.com (NEW PRIMARY)
-	if s.exchangeRateAPIClient != nil {
-		rate, err := s.exchangeRateAPIClient.GetRate(fromCurrency, toCurrency)
-		if err == nil && rate > 0 {
-			s.log.Debug().
-				Str("from", fromCurrency).
-				Str("to", toCurrency).
-				Float64("rate", rate).
-				Str("source", "exchangerate-api").
-				Msg("Got rate from ExchangeRate API")
-			return rate, nil
-		}
-		s.log.Warn().Err(err).Msg("ExchangeRateAPI fetch failed, trying Tradernet")
-	}
-
-	// Tier 2: Try Tradernet (was Tier 1)
+	// Tier 1: Try Tradernet
 	if s.currencyExchangeService != nil {
 		rate, err := s.currencyExchangeService.GetRate(fromCurrency, toCurrency)
 		if err == nil && rate > 0 {
@@ -90,42 +60,20 @@ func (s *ExchangeRateCacheService) GetRate(fromCurrency, toCurrency string) (flo
 				Float64("rate", rate).
 				Str("source", "tradernet").
 				Msg("Got rate from Tradernet")
+
+			// Cache the fresh rate
+			if s.historyDB != nil {
+				if err := s.historyDB.UpsertExchangeRate(fromCurrency, toCurrency, rate); err != nil {
+					s.log.Warn().Err(err).Msg("Failed to cache rate")
+				}
+			}
+
 			return rate, nil
 		}
-		s.log.Warn().Err(err).Msg("Tradernet rate fetch failed, trying Alpha Vantage")
+		s.log.Warn().Err(err).Msg("Tradernet rate fetch failed, trying cache")
 	}
 
-	// Tier 3: Try Alpha Vantage (newly added)
-	if s.alphaVantageClient != nil {
-		avRate, err := s.alphaVantageClient.GetExchangeRate(fromCurrency, toCurrency)
-		if err == nil && avRate != nil && avRate.ExchangeRate > 0 {
-			s.log.Debug().
-				Str("from", fromCurrency).
-				Str("to", toCurrency).
-				Float64("rate", avRate.ExchangeRate).
-				Str("source", "alphavantage").
-				Msg("Got rate from Alpha Vantage")
-			return avRate.ExchangeRate, nil
-		}
-		s.log.Warn().Err(err).Msg("Alpha Vantage rate fetch failed, trying Yahoo")
-	}
-
-	// Tier 4: Try Yahoo Finance
-	if s.yahooClient != nil {
-		rate, err := s.yahooClient.GetExchangeRate(fromCurrency, toCurrency)
-		if err == nil && rate > 0 {
-			s.log.Debug().
-				Str("from", fromCurrency).
-				Str("to", toCurrency).
-				Float64("rate", rate).
-				Str("source", "yahoo").
-				Msg("Got rate from Yahoo Finance")
-			return rate, nil
-		}
-		s.log.Warn().Err(err).Msg("Yahoo rate fetch failed, trying cache")
-	}
-
-	// Tier 5: Try cached rate from DB
+	// Tier 2: Try cached rate from DB
 	rate, err := s.GetCachedRate(fromCurrency, toCurrency)
 	if err == nil && rate > 0 {
 		s.log.Warn().
@@ -133,11 +81,11 @@ func (s *ExchangeRateCacheService) GetRate(fromCurrency, toCurrency string) (flo
 			Str("to", toCurrency).
 			Float64("rate", rate).
 			Str("source", "cache").
-			Msg("Using cached rate (APIs failed)")
+			Msg("Using cached rate (API failed)")
 		return rate, nil
 	}
 
-	// Tier 6: Hardcoded fallback (last resort)
+	// Tier 3: Hardcoded fallback (last resort)
 	rate = s.getHardcodedRate(fromCurrency, toCurrency)
 	if rate > 0 {
 		s.log.Warn().
@@ -155,6 +103,10 @@ func (s *ExchangeRateCacheService) GetRate(fromCurrency, toCurrency string) (flo
 // GetCachedRate fetches rate from database only
 // Checks staleness and logs warning if rate is old
 func (s *ExchangeRateCacheService) GetCachedRate(fromCurrency, toCurrency string) (float64, error) {
+	if s.historyDB == nil {
+		return 0, fmt.Errorf("history DB not available")
+	}
+
 	er, err := s.historyDB.GetLatestExchangeRate(fromCurrency, toCurrency)
 	if err != nil {
 		return 0, err
@@ -211,22 +163,12 @@ func (s *ExchangeRateCacheService) SyncRates() error {
 				continue
 			}
 
-			// Store in database
-			if err := s.historyDB.UpsertExchangeRate(from, to, rate); err != nil {
-				s.log.Error().
-					Err(err).
-					Str("from", from).
-					Str("to", to).
-					Msg("Failed to cache rate")
-				errorCount++
-				continue
-			}
-
+			// GetRate already caches the rate in DB
 			s.log.Debug().
 				Str("from", from).
 				Str("to", to).
 				Float64("rate", rate).
-				Msg("Cached exchange rate")
+				Msg("Synced exchange rate")
 
 			successCount++
 		}
@@ -245,28 +187,55 @@ func (s *ExchangeRateCacheService) SyncRates() error {
 }
 
 // getHardcodedRate returns hardcoded fallback rates
-// Based on existing fallback rates in the codebase
+// These are approximate rates for emergency fallback only
 func (s *ExchangeRateCacheService) getHardcodedRate(fromCurrency, toCurrency string) float64 {
-	// Hardcoded EUR conversion rates (from existing codebase)
+	// Hardcoded EUR conversion rates
 	if fromCurrency == "EUR" {
 		switch toCurrency {
 		case "USD":
-			return 1.0 / 0.9 // ~1.11 (EUR→USD)
+			return 1.10 // ~EUR→USD
 		case "GBP":
-			return 1.0 / 1.2 // ~0.83 (EUR→GBP)
+			return 0.85 // ~EUR→GBP
 		case "HKD":
-			return 1.0 / 0.11 // ~9.09 (EUR→HKD)
+			return 8.50 // ~EUR→HKD
 		}
 	}
 	if toCurrency == "EUR" {
 		switch fromCurrency {
 		case "USD":
-			return 0.9 // USD→EUR
+			return 0.91 // USD→EUR
 		case "GBP":
-			return 1.2 // GBP→EUR
+			return 1.18 // GBP→EUR
 		case "HKD":
-			return 0.11 // HKD→EUR
+			return 0.12 // HKD→EUR
 		}
 	}
+
+	// Cross rates via EUR
+	if fromCurrency == "USD" {
+		switch toCurrency {
+		case "GBP":
+			return 0.77 // USD→GBP
+		case "HKD":
+			return 7.80 // USD→HKD
+		}
+	}
+	if fromCurrency == "GBP" {
+		switch toCurrency {
+		case "USD":
+			return 1.30 // GBP→USD
+		case "HKD":
+			return 10.00 // GBP→HKD
+		}
+	}
+	if fromCurrency == "HKD" {
+		switch toCurrency {
+		case "USD":
+			return 0.13 // HKD→USD
+		case "GBP":
+			return 0.10 // HKD→GBP
+		}
+	}
+
 	return 0
 }

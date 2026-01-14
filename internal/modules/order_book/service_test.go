@@ -1,9 +1,9 @@
 package order_book
 
 import (
+	"fmt"
 	"testing"
 
-	"github.com/aristath/sentinel/internal/clients/yahoo"
 	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/modules/settings"
 	internalTesting "github.com/aristath/sentinel/internal/testing"
@@ -21,79 +21,32 @@ func createTestSettingsService(t *testing.T) *settings.Service {
 	return settings.NewService(settingsRepo, zerolog.Nop())
 }
 
-// mockYahooClient is a simple mock for testing
-type mockYahooClient struct {
+// mockPriceValidator is a simple mock implementing PriceValidator interface
+type mockPriceValidator struct {
 	prices map[string]*float64
 }
 
-func newMockYahooClient() *mockYahooClient {
-	return &mockYahooClient{
+func newMockPriceValidator() *mockPriceValidator {
+	return &mockPriceValidator{
 		prices: make(map[string]*float64),
 	}
 }
 
-func (m *mockYahooClient) SetPrice(symbol string, price *float64) {
+func (m *mockPriceValidator) SetPrice(symbol string, price *float64) {
 	m.prices[symbol] = price
 }
 
-func (m *mockYahooClient) GetCurrentPrice(symbol string, yahooSymbol *string, maxRetries int) (*float64, error) {
-	var key string
-	if yahooSymbol != nil {
-		key = *yahooSymbol
-	} else {
-		key = symbol
-	}
-	if price, exists := m.prices[key]; exists {
+func (m *mockPriceValidator) GetValidationPrice(symbol string) (*float64, error) {
+	if price, exists := m.prices[symbol]; exists {
 		return price, nil
 	}
-	return nil, nil
-}
-
-// Implement all required methods for yahoo.FullClientInterface
-func (m *mockYahooClient) GetBatchQuotes(symbolMap map[string]*string) (map[string]*float64, error) {
-	return nil, nil
-}
-
-func (m *mockYahooClient) GetExchangeRate(fromCurrency, toCurrency string) (float64, error) {
-	return 0, nil
-}
-
-func (m *mockYahooClient) GetHistoricalPrices(symbol string, yahooSymbolOverride *string, period string) ([]yahoo.HistoricalPrice, error) {
-	return nil, nil
-}
-
-func (m *mockYahooClient) GetFundamentalData(symbol string, yahooSymbolOverride *string) (*yahoo.FundamentalData, error) {
-	return nil, nil
-}
-
-func (m *mockYahooClient) GetAnalystData(symbol string, yahooSymbol *string) (*yahoo.AnalystData, error) {
-	return nil, nil
-}
-
-func (m *mockYahooClient) GetSecurityIndustry(symbol string, yahooSymbolOverride *string) (*string, error) {
-	return nil, nil
-}
-
-func (m *mockYahooClient) GetSecurityCountryAndExchange(symbol string, yahooSymbolOverride *string) (*string, *string, error) {
-	return nil, nil, nil
-}
-
-func (m *mockYahooClient) GetQuoteName(symbol string, yahooSymbolOverride *string) (*string, error) {
-	return nil, nil
-}
-
-func (m *mockYahooClient) GetQuoteType(symbol string, yahooSymbolOverride *string) (string, error) {
-	return "", nil
-}
-
-func (m *mockYahooClient) LookupTickerFromISIN(isin string) (string, error) {
-	return "", nil
+	return nil, fmt.Errorf("price not found for %s", symbol)
 }
 
 // TestValidateLiquidity_SufficientLiquidity tests liquidity validation with sufficient liquidity
 func TestValidateLiquidity_SufficientLiquidity(t *testing.T) {
 	broker := internalTesting.NewMockBrokerClient()
-	yahoo := newMockYahooClient()
+	priceValidator := newMockPriceValidator()
 	settingsService := createTestSettingsService(t)
 
 	// Set defaults
@@ -113,8 +66,6 @@ func TestValidateLiquidity_SufficientLiquidity(t *testing.T) {
 		Timestamp: "2024-01-01T00:00:00Z",
 	})
 
-	// Wrap Yahoo client in validator (follows DIP)
-	priceValidator := NewYahooPriceValidator(yahoo, zerolog.Nop())
 	service := NewService(broker, priceValidator, settingsService, zerolog.Nop())
 
 	// Test BUY side - need 100 shares, have 1000 available (10x > 2x required)
@@ -133,7 +84,7 @@ func TestValidateLiquidity_SufficientLiquidity(t *testing.T) {
 // TestValidateLiquidity_InsufficientLiquidity tests liquidity validation with insufficient liquidity
 func TestValidateLiquidity_InsufficientLiquidity(t *testing.T) {
 	broker := internalTesting.NewMockBrokerClient()
-	yahoo := newMockYahooClient()
+	priceValidator := newMockPriceValidator()
 	settingsService := createTestSettingsService(t)
 
 	// Set defaults
@@ -152,8 +103,6 @@ func TestValidateLiquidity_InsufficientLiquidity(t *testing.T) {
 		Timestamp: "2024-01-01T00:00:00Z",
 	})
 
-	// Wrap Yahoo client in validator (follows DIP)
-	priceValidator := NewYahooPriceValidator(yahoo, zerolog.Nop())
 	service := NewService(broker, priceValidator, settingsService, zerolog.Nop())
 
 	// Test BUY side - need 100 shares, only 50 available (0.5x < 2x required)
@@ -169,13 +118,13 @@ func TestValidateLiquidity_InsufficientLiquidity(t *testing.T) {
 	}
 }
 
-// TestCalculateOptimalLimit_BuyWithCheaperOrderBook tests BUY when order book is cheaper than Yahoo
+// TestCalculateOptimalLimit_BuyWithCheaperOrderBook tests BUY when order book is cheaper than validation price
 func TestCalculateOptimalLimit_BuyWithCheaperOrderBook(t *testing.T) {
 	orderBookPrice := 90.0
-	yahooPrice := 100.0
+	testPrice := 100.0
 
 	broker := internalTesting.NewMockBrokerClient()
-	yahoo := newMockYahooClient()
+	priceValidator := newMockPriceValidator()
 	settingsService := createTestSettingsService(t)
 
 	// Set defaults
@@ -192,10 +141,8 @@ func TestCalculateOptimalLimit_BuyWithCheaperOrderBook(t *testing.T) {
 		Timestamp: "2024-01-01T00:00:00Z",
 	})
 
-	yahoo.SetPrice("AAPL", &yahooPrice)
+	priceValidator.SetPrice("AAPL.US", &testPrice)
 
-	// Wrap Yahoo client in validator (follows DIP)
-	priceValidator := NewYahooPriceValidator(yahoo, zerolog.Nop())
 	service := NewService(broker, priceValidator, settingsService, zerolog.Nop())
 
 	// BUY at cheaper price should be ALLOWED (10% cheaper is good!)
@@ -216,10 +163,10 @@ func TestCalculateOptimalLimit_BuyWithCheaperOrderBook(t *testing.T) {
 // TestCalculateOptimalLimit_BuyWithExpensiveOrderBook tests BUY when order book is significantly more expensive (API bug)
 func TestCalculateOptimalLimit_BuyWithExpensiveOrderBook(t *testing.T) {
 	orderBookPrice := 1000.0
-	yahooPrice := 100.0
+	testPrice := 100.0
 
 	broker := internalTesting.NewMockBrokerClient()
-	yahoo := newMockYahooClient()
+	priceValidator := newMockPriceValidator()
 	settingsService := createTestSettingsService(t)
 
 	// Set defaults
@@ -236,10 +183,8 @@ func TestCalculateOptimalLimit_BuyWithExpensiveOrderBook(t *testing.T) {
 		Timestamp: "2024-01-01T00:00:00Z",
 	})
 
-	yahoo.SetPrice("AAPL", &yahooPrice)
+	priceValidator.SetPrice("AAPL.US", &testPrice)
 
-	// Wrap Yahoo client in validator (follows DIP)
-	priceValidator := NewYahooPriceValidator(yahoo, zerolog.Nop())
 	service := NewService(broker, priceValidator, settingsService, zerolog.Nop())
 
 	// BUY at 10x price should be BLOCKED (overpaying)
@@ -249,13 +194,13 @@ func TestCalculateOptimalLimit_BuyWithExpensiveOrderBook(t *testing.T) {
 	}
 }
 
-// TestCalculateOptimalLimit_SellWithHigherOrderBook tests SELL when order book is higher than Yahoo
+// TestCalculateOptimalLimit_SellWithHigherOrderBook tests SELL when order book is higher than validation price
 func TestCalculateOptimalLimit_SellWithHigherOrderBook(t *testing.T) {
 	orderBookPrice := 110.0
-	yahooPrice := 100.0
+	testPrice := 100.0
 
 	broker := internalTesting.NewMockBrokerClient()
-	yahoo := newMockYahooClient()
+	priceValidator := newMockPriceValidator()
 	settingsService := createTestSettingsService(t)
 
 	// Set defaults
@@ -272,10 +217,8 @@ func TestCalculateOptimalLimit_SellWithHigherOrderBook(t *testing.T) {
 		Timestamp: "2024-01-01T00:00:00Z",
 	})
 
-	yahoo.SetPrice("AAPL", &yahooPrice)
+	priceValidator.SetPrice("AAPL.US", &testPrice)
 
-	// Wrap Yahoo client in validator (follows DIP)
-	priceValidator := NewYahooPriceValidator(yahoo, zerolog.Nop())
 	service := NewService(broker, priceValidator, settingsService, zerolog.Nop())
 
 	// SELL at higher price should be ALLOWED (10% higher is good!)
@@ -296,10 +239,10 @@ func TestCalculateOptimalLimit_SellWithHigherOrderBook(t *testing.T) {
 // TestCalculateOptimalLimit_SellWithLowOrderBook tests SELL when order book is significantly lower (API bug)
 func TestCalculateOptimalLimit_SellWithLowOrderBook(t *testing.T) {
 	orderBookPrice := 10.0
-	yahooPrice := 100.0
+	testPrice := 100.0
 
 	broker := internalTesting.NewMockBrokerClient()
-	yahoo := newMockYahooClient()
+	priceValidator := newMockPriceValidator()
 	settingsService := createTestSettingsService(t)
 
 	// Set defaults
@@ -316,10 +259,8 @@ func TestCalculateOptimalLimit_SellWithLowOrderBook(t *testing.T) {
 		Timestamp: "2024-01-01T00:00:00Z",
 	})
 
-	yahoo.SetPrice("AAPL", &yahooPrice)
+	priceValidator.SetPrice("AAPL.US", &testPrice)
 
-	// Wrap Yahoo client in validator (follows DIP)
-	priceValidator := NewYahooPriceValidator(yahoo, zerolog.Nop())
 	service := NewService(broker, priceValidator, settingsService, zerolog.Nop())
 
 	// SELL at 90% discount should be BLOCKED (underselling)
@@ -344,15 +285,13 @@ func TestIsEnabled(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			broker := internalTesting.NewMockBrokerClient()
-			yahoo := newMockYahooClient()
+			priceValidator := newMockPriceValidator()
 			settingsService := createTestSettingsService(t)
 
 			if tt.setting != nil {
 				settingsService.Set("enable_order_book_analysis", tt.setting)
 			}
 
-			// Wrap Yahoo client in validator (follows DIP)
-			priceValidator := NewYahooPriceValidator(yahoo, zerolog.Nop())
 			service := NewService(broker, priceValidator, settingsService, zerolog.Nop())
 			result := service.IsEnabled()
 

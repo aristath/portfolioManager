@@ -503,6 +503,48 @@ func transformSecurityInfo(sdkResult interface{}) ([]SecurityInfo, error) {
 			}
 		}
 
+		// Country: "issuer_country_code" or "country"
+		if countryVal, exists := itemMap["issuer_country_code"]; exists && countryVal != nil {
+			if countryStr, ok := countryVal.(string); ok && countryStr != "" {
+				sec.Country = &countryStr
+			}
+		}
+		if sec.Country == nil {
+			if countryVal, exists := itemMap["country"]; exists && countryVal != nil {
+				if countryStr, ok := countryVal.(string); ok && countryStr != "" {
+					sec.Country = &countryStr
+				}
+			}
+		}
+
+		// Sector: "sector_code" or "sector"
+		if sectorVal, exists := itemMap["sector_code"]; exists && sectorVal != nil {
+			if sectorStr, ok := sectorVal.(string); ok && sectorStr != "" {
+				sec.Sector = &sectorStr
+			}
+		}
+		if sec.Sector == nil {
+			if sectorVal, exists := itemMap["sector"]; exists && sectorVal != nil {
+				if sectorStr, ok := sectorVal.(string); ok && sectorStr != "" {
+					sec.Sector = &sectorStr
+				}
+			}
+		}
+
+		// Exchange name: "codesub_nm" or "exchange_name"
+		if exNameVal, exists := itemMap["codesub_nm"]; exists && exNameVal != nil {
+			if exNameStr, ok := exNameVal.(string); ok && exNameStr != "" {
+				sec.ExchangeName = &exNameStr
+			}
+		}
+		if sec.ExchangeName == nil {
+			if exNameVal, exists := itemMap["exchange_name"]; exists && exNameVal != nil {
+				if exNameStr, ok := exNameVal.(string); ok && exNameStr != "" {
+					sec.ExchangeName = &exNameStr
+				}
+			}
+		}
+
 		securities = append(securities, sec)
 	}
 

@@ -94,7 +94,7 @@ func InitializeDatabases(cfg *config.Config, log zerolog.Logger) (*Container, er
 	}
 	container.CacheDB = cacheDB
 
-	// 7. client_data.db - External API response cache (Alpha Vantage, Yahoo, OpenFIGI, ExchangeRate)
+	// 7. client_data.db - Client-specific symbol mappings and cached data (Tradernet)
 	clientDataDB, err := database.New(database.Config{
 		Path:    cfg.DataDir + "/client_data.db",
 		Profile: database.ProfileCache, // Maximum speed for cache data

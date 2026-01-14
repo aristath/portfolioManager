@@ -1,3 +1,6 @@
+//go:build integration
+// +build integration
+
 package market_regime_test
 
 import (
@@ -73,14 +76,14 @@ func TestInitializeMarketIndices_EndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 3, indexCount, "Should create 3 market indices")
 
-	// Verify 2: Yahoo symbols set in securities table
+	// Verify 2: Client symbols set in client_symbols table
 	var mappingCount int
 	err = container.UniverseDB.QueryRow(`
-		SELECT COUNT(*) FROM securities
-		WHERE product_type = 'INDEX' AND yahoo_symbol IS NOT NULL
+		SELECT COUNT(*) FROM client_symbols
+		WHERE client_name = 'yahoo' AND isin LIKE 'INDEX-%'
 	`).Scan(&mappingCount)
 	require.NoError(t, err)
-	assert.Equal(t, 3, mappingCount, "Should set Yahoo symbols for all 3 indices")
+	assert.Equal(t, 3, mappingCount, "Should set client symbols for all 3 indices")
 
 	// Verify 3: Historical data populated (at least some data for each index)
 	rows, err := container.HistoryDB.Query(`

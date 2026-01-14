@@ -6,7 +6,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/aristath/sentinel/internal/clients/yahoo"
+	"github.com/aristath/sentinel/internal/modules/dividends"
 	"github.com/aristath/sentinel/internal/modules/portfolio"
 	"github.com/aristath/sentinel/internal/modules/universe"
 	"github.com/aristath/sentinel/pkg/formulas"
@@ -17,39 +17,39 @@ import (
 // Runs at 3:00 AM daily to update tags based on current conditions
 type TagUpdateJob struct {
 	JobBase
-	log          zerolog.Logger
-	securityRepo *universe.SecurityRepository
-	scoreRepo    *universe.ScoreRepository
-	tagAssigner  *universe.TagAssigner
-	yahooClient  yahoo.FullClientInterface
-	historyDB    *universe.HistoryDB
-	portfolioDB  *sql.DB
-	positionRepo *portfolio.PositionRepository
+	log             zerolog.Logger
+	securityRepo    *universe.SecurityRepository
+	scoreRepo       *universe.ScoreRepository
+	tagAssigner     *universe.TagAssigner
+	yieldCalculator *dividends.DividendYieldCalculator
+	historyDB       *universe.HistoryDB
+	portfolioDB     *sql.DB
+	positionRepo    *portfolio.PositionRepository
 }
 
 // TagUpdateConfig holds configuration for tag update job
 type TagUpdateConfig struct {
-	Log          zerolog.Logger
-	SecurityRepo *universe.SecurityRepository
-	ScoreRepo    *universe.ScoreRepository
-	TagAssigner  *universe.TagAssigner
-	YahooClient  yahoo.FullClientInterface
-	HistoryDB    *universe.HistoryDB
-	PortfolioDB  *sql.DB
-	PositionRepo *portfolio.PositionRepository
+	Log             zerolog.Logger
+	SecurityRepo    *universe.SecurityRepository
+	ScoreRepo       *universe.ScoreRepository
+	TagAssigner     *universe.TagAssigner
+	YieldCalculator *dividends.DividendYieldCalculator
+	HistoryDB       *universe.HistoryDB
+	PortfolioDB     *sql.DB
+	PositionRepo    *portfolio.PositionRepository
 }
 
 // NewTagUpdateJob creates a new tag update job
 func NewTagUpdateJob(cfg TagUpdateConfig) *TagUpdateJob {
 	return &TagUpdateJob{
-		log:          cfg.Log.With().Str("job", "tag_update").Logger(),
-		securityRepo: cfg.SecurityRepo,
-		scoreRepo:    cfg.ScoreRepo,
-		tagAssigner:  cfg.TagAssigner,
-		yahooClient:  cfg.YahooClient,
-		historyDB:    cfg.HistoryDB,
-		portfolioDB:  cfg.PortfolioDB,
-		positionRepo: cfg.PositionRepo,
+		log:             cfg.Log.With().Str("job", "tag_update").Logger(),
+		securityRepo:    cfg.SecurityRepo,
+		scoreRepo:       cfg.ScoreRepo,
+		tagAssigner:     cfg.TagAssigner,
+		yieldCalculator: cfg.YieldCalculator,
+		historyDB:       cfg.HistoryDB,
+		portfolioDB:     cfg.PortfolioDB,
+		positionRepo:    cfg.PositionRepo,
 	}
 }
 
@@ -153,12 +153,12 @@ func (j *TagUpdateJob) updateTagsForSecurity(security universe.Security) error {
 	if score != nil {
 		// Map available scores to group scores
 		groupScores["opportunity"] = score.OpportunityScore
-		groupScores["fundamentals"] = score.FundamentalScore
-		// QualityScore is average of (long_term + fundamentals) / 2
-		// Derive long_term from QualityScore and FundamentalScore: long_term = 2 * QualityScore - fundamentals
+		groupScores["stability"] = score.StabilityScore
+		// QualityScore is average of (long_term + stability) / 2
+		// Derive long_term from QualityScore and StabilityScore: long_term = 2 * QualityScore - stability
 		// Use QualityScore as fallback if calculation would give invalid result
-		if score.FundamentalScore > 0 && score.QualityScore > 0 {
-			derivedLongTerm := 2*score.QualityScore - score.FundamentalScore
+		if score.StabilityScore > 0 && score.QualityScore > 0 {
+			derivedLongTerm := 2*score.QualityScore - score.StabilityScore
 			if derivedLongTerm > 0 && derivedLongTerm <= 1.0 {
 				groupScores["long_term"] = derivedLongTerm
 			} else {
@@ -168,14 +168,14 @@ func (j *TagUpdateJob) updateTagsForSecurity(security universe.Security) error {
 				groupScores["long_term"] = score.QualityScore
 			}
 		} else {
-			// Fallback: use QualityScore if fundamentals not available
+			// Fallback: use QualityScore if stability not available
 			groupScores["long_term"] = score.QualityScore
 		}
 		groupScores["technicals"] = score.TechnicalScore
 		groupScores["dividends"] = score.DividendBonus // Approximate
 
 		// Map sub-scores
-		subScores["fundamentals"] = map[string]float64{
+		subScores["stability"] = map[string]float64{
 			"consistency": score.ConsistencyScore,
 		}
 		subScores["long_term"] = map[string]float64{
@@ -305,23 +305,20 @@ func (j *TagUpdateJob) updateTagsForSecurity(security universe.Security) error {
 		}
 	}
 
-	// Get fundamentals from Yahoo (for P/E ratio, dividend yield)
-	var peRatio *float64
+	// Get dividend yield from internal calculator (no external data source needed)
 	var dividendYield *float64
 	var fiveYearAvgDivYield *float64
-	if j.yahooClient != nil {
-		var yahooSymPtr *string
-		if security.YahooSymbol != "" {
-			yahooSymPtr = &security.YahooSymbol
-		}
-		fundamentals, err := j.yahooClient.GetFundamentalData(security.Symbol, yahooSymPtr)
-		if err == nil && fundamentals != nil {
-			peRatio = fundamentals.PERatio
-			dividendYield = fundamentals.DividendYield
-			fiveYearAvgDivYield = fundamentals.FiveYearAvgDividendYield
+	if j.yieldCalculator != nil && security.ISIN != "" {
+		yieldResult, err := j.yieldCalculator.CalculateYield(security.ISIN)
+		if err == nil && yieldResult != nil {
+			if yieldResult.CurrentYield > 0 {
+				dividendYield = &yieldResult.CurrentYield
+			}
+			if yieldResult.FiveYearAvgYield > 0 {
+				fiveYearAvgDivYield = &yieldResult.FiveYearAvgYield
+			}
 		}
 	}
-
 	// Get position data (for portfolio risk tags)
 	var positionWeight *float64
 	var targetWeight *float64
@@ -406,8 +403,6 @@ func (j *TagUpdateJob) updateTagsForSecurity(security universe.Security) error {
 		SubScores:                subScores,
 		Volatility:               volatility,
 		DailyPrices:              closePrices,
-		PERatio:                  peRatio,
-		MarketAvgPE:              20.0, // Default market average P/E
 		DividendYield:            dividendYield,
 		FiveYearAvgDivYield:      fiveYearAvgDivYield,
 		CurrentPrice:             currentPrice,

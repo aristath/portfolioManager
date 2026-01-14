@@ -6,7 +6,6 @@ import (
 	"math"
 	"strings"
 
-	"github.com/aristath/sentinel/internal/clients/yahoo"
 	"github.com/aristath/sentinel/internal/modules/allocation"
 	"github.com/aristath/sentinel/internal/modules/dividends"
 	"github.com/aristath/sentinel/internal/modules/optimization"
@@ -94,17 +93,42 @@ func (a *GroupingRepositoryAdapter) GetIndustryGroups() (map[string][]string, er
 	return a.repo.GetIndustryGroups()
 }
 
-// PriceClientAdapter adapts yahoo.FullClientInterface to PriceClientInterface
+// PriceClientAdapter adapts broker client to PriceClientInterface
+// Uses broker API for batch price quotes
 type PriceClientAdapter struct {
-	client yahoo.FullClientInterface
+	brokerClient BrokerClientForPrices
 }
 
-func NewPriceClientAdapter(client yahoo.FullClientInterface) *PriceClientAdapter {
-	return &PriceClientAdapter{client: client}
+// BrokerClientForPrices defines the interface for broker price operations
+type BrokerClientForPrices interface {
+	GetBatchQuotes(symbolMap map[string]*string) (map[string]*float64, error)
+}
+
+func NewPriceClientAdapter(client BrokerClientForPrices) *PriceClientAdapter {
+	return &PriceClientAdapter{brokerClient: client}
 }
 
 func (a *PriceClientAdapter) GetBatchQuotes(symbolMap map[string]*string) (map[string]*float64, error) {
-	return a.client.GetBatchQuotes(symbolMap)
+	return a.brokerClient.GetBatchQuotes(symbolMap)
+}
+
+// CurrentPriceProviderAdapter adapts broker client to CurrentPriceProviderInterface
+// Used by dividend recommendation jobs to get current prices
+type CurrentPriceProviderAdapter struct {
+	brokerClient BrokerClientForCurrentPrice
+}
+
+// BrokerClientForCurrentPrice defines the interface for getting single current prices
+type BrokerClientForCurrentPrice interface {
+	GetCurrentPrice(symbol string) (*float64, error)
+}
+
+func NewCurrentPriceProviderAdapter(client BrokerClientForCurrentPrice) *CurrentPriceProviderAdapter {
+	return &CurrentPriceProviderAdapter{brokerClient: client}
+}
+
+func (a *CurrentPriceProviderAdapter) GetCurrentPrice(symbol string) (*float64, error) {
+	return a.brokerClient.GetCurrentPrice(symbol)
 }
 
 // OptimizerServiceAdapter adapts *optimization.OptimizerService to OptimizerServiceInterface
@@ -194,12 +218,12 @@ func (a *ScoresRepositoryAdapter) GetCAGRs(isinList []string) (map[string]float6
 
 func (a *ScoresRepositoryAdapter) GetQualityScores(isinList []string) (map[string]float64, map[string]float64, error) {
 	longTermScores := make(map[string]float64)
-	fundamentalsScores := make(map[string]float64)
+	stabilityScores := make(map[string]float64)
 	if len(isinList) == 0 {
-		return longTermScores, fundamentalsScores, nil
+		return longTermScores, stabilityScores, nil
 	}
 
-	query := `SELECT isin, cagr_score, fundamental_score FROM scores WHERE isin != '' AND isin IS NOT NULL`
+	query := `SELECT isin, cagr_score, stability_score FROM scores WHERE isin != '' AND isin IS NOT NULL`
 	rows, err := a.db.Query(query)
 	if err != nil {
 		return nil, nil, err
@@ -213,8 +237,8 @@ func (a *ScoresRepositoryAdapter) GetQualityScores(isinList []string) (map[strin
 
 	for rows.Next() {
 		var isin string
-		var cagrScore, fundamentalScore sql.NullFloat64
-		if err := rows.Scan(&isin, &cagrScore, &fundamentalScore); err != nil {
+		var cagrScore, stabilityScore sql.NullFloat64
+		if err := rows.Scan(&isin, &cagrScore, &stabilityScore); err != nil {
 			continue
 		}
 		if !isinSet[isin] {
@@ -224,12 +248,12 @@ func (a *ScoresRepositoryAdapter) GetQualityScores(isinList []string) (map[strin
 			normalized := math.Max(0.0, math.Min(1.0, cagrScore.Float64))
 			longTermScores[isin] = normalized
 		}
-		if fundamentalScore.Valid {
-			normalized := math.Max(0.0, math.Min(1.0, fundamentalScore.Float64))
-			fundamentalsScores[isin] = normalized
+		if stabilityScore.Valid {
+			normalized := math.Max(0.0, math.Min(1.0, stabilityScore.Float64))
+			stabilityScores[isin] = normalized
 		}
 	}
-	return longTermScores, fundamentalsScores, nil
+	return longTermScores, stabilityScores, nil
 }
 
 func (a *ScoresRepositoryAdapter) GetValueTrapData(isinList []string) (map[string]float64, map[string]float64, map[string]float64, error) {
@@ -647,36 +671,16 @@ func (a *SecurityRepositoryForDividendsAdapter) GetBySymbol(symbol string) (*Sec
 		return nil, err
 	}
 	return &SecurityForDividends{
-		Symbol:      security.Symbol,
-		YahooSymbol: security.YahooSymbol,
-		Name:        security.Name,
-		Currency:    security.Currency,
-		MinLot:      security.MinLot,
+		ISIN:     security.ISIN,
+		Symbol:   security.Symbol,
+		Name:     security.Name,
+		Currency: security.Currency,
+		MinLot:   security.MinLot,
 	}, nil
 }
 
-// YahooClientForDividendsAdapter adapts yahoo.FullClientInterface to YahooClientForDividendsInterface
-type YahooClientForDividendsAdapter struct {
-	client yahoo.FullClientInterface
-}
-
-func NewYahooClientForDividendsAdapter(client yahoo.FullClientInterface) *YahooClientForDividendsAdapter {
-	return &YahooClientForDividendsAdapter{client: client}
-}
-
-func (a *YahooClientForDividendsAdapter) GetCurrentPrice(symbol string, yahooSymbolOverride *string, maxRetries int) (*float64, error) {
-	return a.client.GetCurrentPrice(symbol, yahooSymbolOverride, maxRetries)
-}
-
-func (a *YahooClientForDividendsAdapter) GetFundamentalData(symbol string, yahooSymbolOverride *string) (*FundamentalDataForDividends, error) {
-	fundamentals, err := a.client.GetFundamentalData(symbol, yahooSymbolOverride)
-	if err != nil || fundamentals == nil {
-		return nil, err
-	}
-	return &FundamentalDataForDividends{
-		DividendYield: fundamentals.DividendYield,
-	}, nil
-}
+// NOTE: YahooClientForDividendsAdapter has been removed.
+// Dividend yields are now calculated internally using DividendYieldCalculator.
 
 // TradeExecutionServiceAdapter adapts *services.TradeExecutionService to TradeExecutionServiceInterface
 type TradeExecutionServiceAdapter struct {

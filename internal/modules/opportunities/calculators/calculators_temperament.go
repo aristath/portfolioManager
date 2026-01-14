@@ -96,7 +96,7 @@ type CalculatorBoosts struct {
 	NeutralDividendBoost  float64 // Boost for dividends in neutral market (default: 1.10)
 
 	// Quality boosts
-	StrongFundamentalsBoost  float64 // Boost for strong fundamentals (default: 1.12)
+	HighStabilityBoost  float64 // Boost for high stability (default: 1.12)
 	ConsistentGrowerBoost    float64 // Boost for consistent grower (default: 1.10)
 	StableBoost              float64 // Boost for stable (default: 1.08)
 	DividendTotalReturnBoost float64 // Boost for dividend total return (default: 1.12)
@@ -193,7 +193,7 @@ func NewCalculatorConfig(settingsService *settings.Service) CalculatorConfig {
 			NeutralDividendBoost:  1.10, // Hardcoded for now
 
 			// Quality boosts
-			StrongFundamentalsBoost:  regimeBoosts.StrongFundamentals,
+			HighStabilityBoost:  regimeBoosts.HighStability,
 			ConsistentGrowerBoost:    1.10,
 			StableBoost:              1.08,
 			DividendTotalReturnBoost: 1.12,
@@ -281,7 +281,7 @@ func NewDefaultCalculatorConfig() CalculatorConfig {
 			NeutralDividendBoost:  1.10, // Line 235, 247
 
 			// Quality boosts (base.go ApplyTagBasedPriorityBoosts)
-			StrongFundamentalsBoost:  1.12, // Line 253
+			HighStabilityBoost:  1.12, // Line 253
 			ConsistentGrowerBoost:    1.10, // Line 256
 			StableBoost:              1.08, // Line 259
 			DividendTotalReturnBoost: 1.12, // Line 264

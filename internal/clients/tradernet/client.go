@@ -227,6 +227,9 @@ type SecurityInfo struct {
 	Currency     *string `json:"currency"`
 	Market       *string `json:"market"`
 	ExchangeCode *string `json:"exchange_code"`
+	Country      *string `json:"country"`       // Issuer country code (issuer_country_code)
+	Sector       *string `json:"sector"`        // Sector code (sector_code)
+	ExchangeName *string `json:"exchange_name"` // Full exchange name (codesub_nm)
 }
 
 // FindSymbolResponse is the response for FindSymbol

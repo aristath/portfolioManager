@@ -33,17 +33,17 @@ func (m *MockCashManager) UpdateCashPosition(currency string, balance float64) e
 	return args.Error(0)
 }
 
-// Mock Currency Exchange Service
-type MockCurrencyExchangeService struct {
+// MockExchangeServiceForFailsafe is a mock for CurrencyExchangeServiceInterface with testify mock
+type MockExchangeServiceForFailsafe struct {
 	mock.Mock
 }
 
-func (m *MockCurrencyExchangeService) GetRate(from, to string) (float64, error) {
+func (m *MockExchangeServiceForFailsafe) GetRate(from, to string) (float64, error) {
 	args := m.Called(from, to)
 	return args.Get(0).(float64), args.Error(1)
 }
 
-func (m *MockCurrencyExchangeService) EnsureBalance(currency string, minAmount float64, sourceCurrency string) (bool, error) {
+func (m *MockExchangeServiceForFailsafe) EnsureBalance(currency string, minAmount float64, sourceCurrency string) (bool, error) {
 	// Not needed for failsafe tests
 	return true, nil
 }
@@ -187,7 +187,7 @@ func TestCalculateCommission_EURCurrency(t *testing.T) {
 }
 
 func TestCalculateCommission_USDCurrency(t *testing.T) {
-	mockExchangeService := new(MockCurrencyExchangeService)
+	mockExchangeService := new(MockExchangeServiceForFailsafe)
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 
 	service := &TradeExecutionService{
@@ -210,7 +210,7 @@ func TestCalculateCommission_USDCurrency(t *testing.T) {
 }
 
 func TestCalculateCommission_FallbackOnExchangeError(t *testing.T) {
-	mockExchangeService := new(MockCurrencyExchangeService)
+	mockExchangeService := new(MockExchangeServiceForFailsafe)
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 
 	service := &TradeExecutionService{

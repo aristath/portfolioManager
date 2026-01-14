@@ -1,104 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Modal, Tabs, Text, Button, NumberInput, Switch, Group, Stack, Paper, Divider, Alert, TextInput, PasswordInput, Select, Badge, ActionIcon, Tooltip } from '@mantine/core';
-import { IconArrowUp, IconArrowDown, IconCheck, IconAlertCircle } from '@tabler/icons-react';
+import { Modal, Tabs, Text, Button, NumberInput, Switch, Group, Stack, Paper, Divider, Alert, TextInput, PasswordInput, Select, Badge, Tooltip } from '@mantine/core';
+import { IconCheck } from '@tabler/icons-react';
 import { useAppStore } from '../../stores/appStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { api } from '../../api/client';
 import { useNotifications } from '../../hooks/useNotifications';
 import { R2BackupModal } from './R2BackupModal';
-
-// Provider display names and configuration status indicators
-const PROVIDER_INFO = {
-  alphavantage: { name: 'Alpha Vantage', requiresKey: true, keyName: 'alphavantage_api_key' },
-  yahoo: { name: 'Yahoo Finance', requiresKey: false },
-  tradernet: { name: 'Tradernet', requiresKey: true, keyName: 'tradernet_api_key' },
-  exchangerate: { name: 'ExchangeRate API', requiresKey: false },
-  openfigi: { name: 'OpenFIGI', requiresKey: false, optionalKey: 'openfigi_api_key' },
-};
-
-// DataSourcePrioritySection component for managing provider priorities
-function DataSourcePrioritySection({ title, description, settingKey, getSetting, handleUpdateSetting }) {
-  // Parse the JSON array from settings
-  const rawValue = getSetting(settingKey, '[]');
-  let providers = [];
-  try {
-    providers = typeof rawValue === 'string' ? JSON.parse(rawValue) : rawValue;
-    if (!Array.isArray(providers)) providers = [];
-  } catch {
-    providers = [];
-  }
-
-  const moveUp = (index) => {
-    if (index === 0) return;
-    const newProviders = [...providers];
-    [newProviders[index - 1], newProviders[index]] = [newProviders[index], newProviders[index - 1]];
-    handleUpdateSetting(settingKey, JSON.stringify(newProviders));
-  };
-
-  const moveDown = (index) => {
-    if (index === providers.length - 1) return;
-    const newProviders = [...providers];
-    [newProviders[index], newProviders[index + 1]] = [newProviders[index + 1], newProviders[index]];
-    handleUpdateSetting(settingKey, JSON.stringify(newProviders));
-  };
-
-  const isConfigured = (provider) => {
-    const info = PROVIDER_INFO[provider];
-    if (!info) return true;
-    if (!info.requiresKey) return true;
-    // Check if the required API key is set
-    const keyValue = getSetting(info.keyName, '');
-    return keyValue && keyValue.length > 0;
-  };
-
-  return (
-    <Paper p="md" withBorder>
-      <Text size="sm" fw={500} mb="xs" tt="uppercase">{title}</Text>
-      <Text size="xs" c="dimmed" mb="md">{description}</Text>
-      <Stack gap="xs">
-        {providers.map((provider, index) => {
-          const info = PROVIDER_INFO[provider] || { name: provider };
-          const configured = isConfigured(provider);
-          return (
-            <Group key={provider} justify="space-between" p="xs" style={{ backgroundColor: 'var(--mantine-color-dark-6)', borderRadius: 4 }}>
-              <Group gap="xs">
-                <Badge size="sm" variant="filled" color="gray">{index + 1}</Badge>
-                <Text size="sm">{info.name}</Text>
-                {configured ? (
-                  <Tooltip label="Configured">
-                    <IconCheck size={14} color="var(--mantine-color-green-5)" />
-                  </Tooltip>
-                ) : (
-                  <Tooltip label="API key not configured">
-                    <IconAlertCircle size={14} color="var(--mantine-color-yellow-5)" />
-                  </Tooltip>
-                )}
-              </Group>
-              <Group gap="xs">
-                <ActionIcon
-                  variant="subtle"
-                  size="sm"
-                  onClick={() => moveUp(index)}
-                  disabled={index === 0}
-                >
-                  <IconArrowUp size={14} />
-                </ActionIcon>
-                <ActionIcon
-                  variant="subtle"
-                  size="sm"
-                  onClick={() => moveDown(index)}
-                  disabled={index === providers.length - 1}
-                >
-                  <IconArrowDown size={14} />
-                </ActionIcon>
-              </Group>
-            </Group>
-          );
-        })}
-      </Stack>
-    </Paper>
-  );
-}
 
 export function SettingsModal() {
   const { showSettingsModal, closeSettingsModal } = useAppStore();
@@ -322,8 +229,8 @@ export function SettingsModal() {
                 </Group>
                 <Alert color="blue" variant="light" styles={{message: {fontSize: '12px'}}}>
                   <Text size="xs">
-                    <strong>Example:</strong> If Yahoo shows €30 and buffer is 5%, buy limit is €31.50.
-                    If Tradernet real price is €600 (error), order won&apos;t fill. Money safe!
+                    <strong>Example:</strong> If current price is €30 and buffer is 5%, buy limit is €31.50.
+                    Protects against order book price discrepancies.
                   </Text>
                 </Alert>
               </Stack>
@@ -349,20 +256,6 @@ export function SettingsModal() {
                     />
                     <Text size="sm" c="dimmed">%</Text>
                   </Group>
-                </Group>
-                <Group justify="space-between">
-                  <div>
-                    <Text size="sm">Market Avg P/E</Text>
-                    <Text size="xs" c="dimmed">Baseline for valuation</Text>
-                  </div>
-                  <NumberInput
-                    value={getSetting('market_avg_pe', 22)}
-                    onChange={(val) => handleUpdateSetting('market_avg_pe', val)}
-                    min={0}
-                    step={0.1}
-                    w={80}
-                    size="sm"
-                  />
                 </Group>
               </Stack>
             </Paper>
@@ -831,21 +724,6 @@ export function SettingsModal() {
                   description="GitHub personal access token for auto-deployment artifact downloads (requires repo and actions:read scopes)"
                 />
                 <Divider />
-                <TextInput
-                  label="Alpha Vantage API Keys"
-                  value={getSetting('alphavantage_api_key', '') || ''}
-                  onChange={(e) => handleUpdateSetting('alphavantage_api_key', e.target.value)}
-                  placeholder="key1,key2,key3"
-                  description="Free API keys from alphavantage.co (25 requests/day each). Add multiple comma-separated keys to increase limits."
-                />
-                <PasswordInput
-                  label="OpenFIGI API Key (Optional)"
-                  value={getSetting('openfigi_api_key', '') || ''}
-                  onChange={(e) => handleUpdateSetting('openfigi_api_key', e.target.value)}
-                  placeholder="Enter your OpenFIGI API key"
-                  description="Optional - increases rate limits from 25/min to 25,000/min for ISIN lookups"
-                />
-                <Divider />
                 <Alert color="blue" size="sm">
                   <Text size="xs">
                     Credentials are stored in the settings database and take precedence over environment variables.
@@ -859,68 +737,56 @@ export function SettingsModal() {
 
         <Tabs.Panel value="datasources" p="md">
           <Stack gap="md">
-            <Alert color="blue" size="sm" mb="md">
+            <Alert color="green" size="sm" mb="md">
               <Text size="xs">
-                Configure the priority order for data sources. The system will try providers in order,
-                falling back to the next one if the primary fails. Drag providers to reorder them.
+                <strong>Tradernet is the sole data source.</strong> All market data, prices, and metadata
+                are fetched exclusively from your Tradernet broker account. No external data providers are required.
               </Text>
             </Alert>
 
-            <DataSourcePrioritySection
-              title="Fundamentals"
-              description="P/E ratio, margins, company overview data"
-              settingKey="datasource_fundamentals"
-              getSetting={getSetting}
-              handleUpdateSetting={handleUpdateSetting}
-            />
+            <Paper p="md" withBorder>
+              <Text size="sm" fw={500} mb="xs" tt="uppercase">Data Sources</Text>
+              <Stack gap="sm">
+                <Group justify="space-between" p="xs" style={{ backgroundColor: 'var(--mantine-color-dark-6)', borderRadius: 4 }}>
+                  <Group gap="xs">
+                    <Badge size="sm" variant="filled" color="green">Active</Badge>
+                    <Text size="sm">Tradernet</Text>
+                    <Tooltip label="Primary data source">
+                      <IconCheck size={14} color="var(--mantine-color-green-5)" />
+                    </Tooltip>
+                  </Group>
+                </Group>
+              </Stack>
+            </Paper>
 
-            <DataSourcePrioritySection
-              title="Current Prices"
-              description="Real-time and delayed quotes"
-              settingKey="datasource_current_prices"
-              getSetting={getSetting}
-              handleUpdateSetting={handleUpdateSetting}
-            />
-
-            <DataSourcePrioritySection
-              title="Historical Prices"
-              description="OHLCV time series data"
-              settingKey="datasource_historical"
-              getSetting={getSetting}
-              handleUpdateSetting={handleUpdateSetting}
-            />
-
-            <DataSourcePrioritySection
-              title="Technical Indicators"
-              description="RSI, SMA, MACD, Bollinger Bands, etc."
-              settingKey="datasource_technicals"
-              getSetting={getSetting}
-              handleUpdateSetting={handleUpdateSetting}
-            />
-
-            <DataSourcePrioritySection
-              title="Exchange Rates"
-              description="Currency conversion rates"
-              settingKey="datasource_exchange_rates"
-              getSetting={getSetting}
-              handleUpdateSetting={handleUpdateSetting}
-            />
-
-            <DataSourcePrioritySection
-              title="ISIN Lookup"
-              description="ISIN to ticker symbol resolution"
-              settingKey="datasource_isin_lookup"
-              getSetting={getSetting}
-              handleUpdateSetting={handleUpdateSetting}
-            />
-
-            <DataSourcePrioritySection
-              title="Company Metadata"
-              description="Industry, sector, country, exchange info"
-              settingKey="datasource_company_metadata"
-              getSetting={getSetting}
-              handleUpdateSetting={handleUpdateSetting}
-            />
+            <Paper p="md" withBorder>
+              <Text size="sm" fw={500} mb="xs" tt="uppercase">Available Data</Text>
+              <Text size="xs" c="dimmed" mb="md">
+                Tradernet provides the following data for portfolio management:
+              </Text>
+              <Stack gap="xs">
+                <Group gap="xs">
+                  <IconCheck size={14} color="var(--mantine-color-green-5)" />
+                  <Text size="sm">Historical OHLCV prices</Text>
+                </Group>
+                <Group gap="xs">
+                  <IconCheck size={14} color="var(--mantine-color-green-5)" />
+                  <Text size="sm">Current/real-time quotes</Text>
+                </Group>
+                <Group gap="xs">
+                  <IconCheck size={14} color="var(--mantine-color-green-5)" />
+                  <Text size="sm">Exchange rates</Text>
+                </Group>
+                <Group gap="xs">
+                  <IconCheck size={14} color="var(--mantine-color-green-5)" />
+                  <Text size="sm">Dividend history</Text>
+                </Group>
+                <Group gap="xs">
+                  <IconCheck size={14} color="var(--mantine-color-green-5)" />
+                  <Text size="sm">Company metadata (country, sector)</Text>
+                </Group>
+              </Stack>
+            </Paper>
           </Stack>
         </Tabs.Panel>
       </Tabs>

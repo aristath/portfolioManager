@@ -8,7 +8,7 @@ import (
 // Models cheap securities in superposition between "value" and "trap" states
 func (q *QuantumProbabilityCalculator) CalculateValueTrapProbability(
 	peVsMarket float64,
-	fundamentalsScore float64,
+	stabilityScore float64,
 	longTermScore float64,
 	momentumScore float64,
 	volatility float64,
@@ -26,19 +26,19 @@ func (q *QuantumProbabilityCalculator) CalculateValueTrapProbability(
 
 	// Step 1: Calculate Energy Levels
 	// Value energy: negative = stable value opportunity
-	valueEnergyRaw := -q.energyScale * (fundamentalsScore + longTermScore + (1.0 - normVol))
+	valueEnergyRaw := -q.energyScale * (stabilityScore + longTermScore + (1.0 - normVol))
 	valueEnergy := q.CalculateEnergyLevel(valueEnergyRaw)
 
 	// Trap energy: positive = declining value trap
-	trapEnergyRaw := q.energyScale * (cheapness - fundamentalsScore - longTermScore - normMomentum - normVol)
+	trapEnergyRaw := q.energyScale * (cheapness - stabilityScore - longTermScore - normMomentum - normVol)
 	trapEnergy := q.CalculateEnergyLevel(trapEnergyRaw)
 
 	// Step 2: Calculate Probability Amplitudes
-	// Value state: cheap with good fundamentals and momentum
-	pValue := cheapness * fundamentalsScore * longTermScore * (1.0 + normMomentum) * (1.0 - normVol)
+	// Value state: cheap with high stability and momentum
+	pValue := cheapness * stabilityScore * longTermScore * (1.0 + normMomentum) * (1.0 - normVol)
 
-	// Trap state: cheap but declining (poor fundamentals, negative momentum, high volatility)
-	pTrap := cheapness * (1.0 - fundamentalsScore) * (1.0 - longTermScore) * (1.0 - normMomentum) * normVol
+	// Trap state: cheap but declining (poor stability, negative momentum, high volatility)
+	pTrap := cheapness * (1.0 - stabilityScore) * (1.0 - longTermScore) * (1.0 - normMomentum) * normVol
 
 	// Normalize probabilities
 	pValue, pTrap = q.NormalizeState(pValue, pTrap)
@@ -64,7 +64,7 @@ func (q *QuantumProbabilityCalculator) CalculateValueTrapProbability(
 // CalculateValueTrapState calculates complete quantum value trap state
 func (q *QuantumProbabilityCalculator) CalculateValueTrapState(
 	peVsMarket float64,
-	fundamentalsScore float64,
+	stabilityScore float64,
 	longTermScore float64,
 	momentumScore float64,
 	volatility float64,
@@ -90,14 +90,14 @@ func (q *QuantumProbabilityCalculator) CalculateValueTrapState(
 	cheapness := math.Min(1.0, math.Abs(peVsMarket)/0.50)
 
 	// Calculate energy levels
-	valueEnergyRaw := -q.energyScale * (fundamentalsScore + longTermScore + (1.0 - normVol))
+	valueEnergyRaw := -q.energyScale * (stabilityScore + longTermScore + (1.0 - normVol))
 	valueEnergy := q.CalculateEnergyLevel(valueEnergyRaw)
-	trapEnergyRaw := q.energyScale * (cheapness - fundamentalsScore - longTermScore - normMomentum - normVol)
+	trapEnergyRaw := q.energyScale * (cheapness - stabilityScore - longTermScore - normMomentum - normVol)
 	trapEnergy := q.CalculateEnergyLevel(trapEnergyRaw)
 
 	// Calculate probabilities
-	pValue := cheapness * fundamentalsScore * longTermScore * (1.0 + normMomentum) * (1.0 - normVol)
-	pTrap := cheapness * (1.0 - fundamentalsScore) * (1.0 - longTermScore) * (1.0 - normMomentum) * normVol
+	pValue := cheapness * stabilityScore * longTermScore * (1.0 + normMomentum) * (1.0 - normVol)
+	pTrap := cheapness * (1.0 - stabilityScore) * (1.0 - longTermScore) * (1.0 - normMomentum) * normVol
 	pValue, pTrap = q.NormalizeState(pValue, pTrap)
 
 	// Calculate amplitudes

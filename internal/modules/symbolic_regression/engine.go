@@ -612,12 +612,11 @@ func pearsonCorrelation(x, y []float64) float64 {
 func getVariableMap(inputs TrainingInputs) map[string]float64 {
 	return map[string]float64{
 		"long_term":       inputs.LongTermScore,
-		"fundamentals":    inputs.FundamentalsScore,
+		"stability":       inputs.StabilityScore,
 		"dividends":       inputs.DividendsScore,
 		"opportunity":     inputs.OpportunityScore,
 		"short_term":      inputs.ShortTermScore,
 		"technicals":      inputs.TechnicalsScore,
-		"opinion":         inputs.OpinionScore,
 		"diversification": inputs.DiversificationScore,
 		"total_score":     inputs.TotalScore,
 		"cagr":            inputs.CAGR,

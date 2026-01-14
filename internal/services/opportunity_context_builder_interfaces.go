@@ -44,7 +44,7 @@ type TradeRepository interface {
 type ScoresRepository interface {
 	GetTotalScores(isinList []string) (map[string]float64, error)
 	GetCAGRs(isinList []string) (map[string]float64, error)
-	GetQualityScores(isinList []string) (longTermScores, fundamentalsScores map[string]float64, err error)
+	GetQualityScores(isinList []string) (longTermScores, stabilityScores map[string]float64, err error)
 	GetValueTrapData(isinList []string) (opportunityScores, momentumScores, volatility map[string]float64, err error)
 	GetRiskMetrics(isinList []string) (sharpe, maxDrawdown map[string]float64, err error)
 }

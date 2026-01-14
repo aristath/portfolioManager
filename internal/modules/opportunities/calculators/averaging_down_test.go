@@ -174,7 +174,7 @@ func TestAveragingDownCalculator_WithoutTagFiltering_ProcessesAllPositions(t *te
 		IneligibleISINs:     map[string]bool{},
 		RecentlyBoughtISINs: map[string]bool{},
 		AllowBuy:            true,
-		FundamentalsScores:  map[string]float64{"TEST.US": 0.7, "OTHER.US": 0.7},
+		StabilityScores:     map[string]float64{"US1234567890": 0.7, "US0987654321": 0.7},
 	}
 
 	config := planningdomain.NewDefaultConfiguration()

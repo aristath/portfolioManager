@@ -12,24 +12,12 @@ import (
 )
 
 // testSchema creates all tables needed for testing
+// Note: Only Tradernet-related tables remain after removing external data clients
 const testSchema = `
-CREATE TABLE alphavantage_overview (isin TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at INTEGER NOT NULL);
-CREATE TABLE alphavantage_balance_sheet (isin TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at INTEGER NOT NULL);
-CREATE TABLE alphavantage_cash_flow (isin TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at INTEGER NOT NULL);
-CREATE TABLE alphavantage_earnings (isin TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at INTEGER NOT NULL);
-CREATE TABLE alphavantage_dividends (isin TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at INTEGER NOT NULL);
-CREATE TABLE alphavantage_etf_profile (isin TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at INTEGER NOT NULL);
-CREATE TABLE alphavantage_insider (isin TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at INTEGER NOT NULL);
-CREATE TABLE alphavantage_economic (indicator TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at INTEGER NOT NULL);
-CREATE TABLE openfigi (isin TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at INTEGER NOT NULL);
-CREATE TABLE yahoo_metadata (isin TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at INTEGER NOT NULL);
 CREATE TABLE exchangerate (pair TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at INTEGER NOT NULL);
 CREATE TABLE current_prices (isin TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at INTEGER NOT NULL);
 CREATE TABLE symbol_to_isin (symbol TEXT PRIMARY KEY, data TEXT NOT NULL, expires_at INTEGER NOT NULL);
 
-CREATE INDEX idx_av_overview_expires ON alphavantage_overview(expires_at);
-CREATE INDEX idx_openfigi_expires ON openfigi(expires_at);
-CREATE INDEX idx_yahoo_expires ON yahoo_metadata(expires_at);
 CREATE INDEX idx_exchangerate_expires ON exchangerate(expires_at);
 CREATE INDEX idx_prices_expires ON current_prices(expires_at);
 CREATE INDEX idx_symbol_to_isin_expires ON symbol_to_isin(expires_at);
@@ -61,26 +49,26 @@ func TestStore(t *testing.T) {
 
 	// Test storing a simple struct
 	data := map[string]interface{}{
-		"name":   "Test Company",
-		"symbol": "TEST",
-		"price":  123.45,
+		"rate":     1.0856,
+		"source":   "tradernet",
+		"currency": "EUR:USD",
 	}
 
-	err := repo.Store("alphavantage_overview", "US0000000001", data, 7*24*time.Hour)
+	err := repo.Store("exchangerate", "EUR:USD", data, 7*24*time.Hour)
 	require.NoError(t, err)
 
 	// Verify data was stored
 	var storedData string
 	var expiresAt int64
-	err = db.QueryRow("SELECT data, expires_at FROM alphavantage_overview WHERE isin = ?", "US0000000001").Scan(&storedData, &expiresAt)
+	err = db.QueryRow("SELECT data, expires_at FROM exchangerate WHERE pair = ?", "EUR:USD").Scan(&storedData, &expiresAt)
 	require.NoError(t, err)
 
 	// Verify JSON was stored correctly
 	var parsed map[string]interface{}
 	err = json.Unmarshal([]byte(storedData), &parsed)
 	require.NoError(t, err)
-	assert.Equal(t, "Test Company", parsed["name"])
-	assert.Equal(t, "TEST", parsed["symbol"])
+	assert.Equal(t, 1.0856, parsed["rate"])
+	assert.Equal(t, "tradernet", parsed["source"])
 
 	// Verify expiration is roughly 7 days from now
 	expectedExpires := time.Now().Add(7 * 24 * time.Hour).Unix()
@@ -95,22 +83,22 @@ func TestStoreUpsert(t *testing.T) {
 
 	// Store initial data
 	data1 := map[string]string{"version": "1"}
-	err := repo.Store("alphavantage_overview", "US0000000001", data1, time.Hour)
+	err := repo.Store("exchangerate", "EUR:USD", data1, time.Hour)
 	require.NoError(t, err)
 
 	// Store updated data with same key
 	data2 := map[string]string{"version": "2"}
-	err = repo.Store("alphavantage_overview", "US0000000001", data2, time.Hour)
+	err = repo.Store("exchangerate", "EUR:USD", data2, time.Hour)
 	require.NoError(t, err)
 
 	// Verify only one row exists with updated data
 	var count int
-	err = db.QueryRow("SELECT COUNT(*) FROM alphavantage_overview WHERE isin = ?", "US0000000001").Scan(&count)
+	err = db.QueryRow("SELECT COUNT(*) FROM exchangerate WHERE pair = ?", "EUR:USD").Scan(&count)
 	require.NoError(t, err)
 	assert.Equal(t, 1, count)
 
 	// Verify data was updated
-	result, err := repo.GetIfFresh("alphavantage_overview", "US0000000001")
+	result, err := repo.GetIfFresh("exchangerate", "EUR:USD")
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -128,11 +116,11 @@ func TestGetIfFresh_Fresh(t *testing.T) {
 
 	// Store data with 1 hour TTL (fresh)
 	data := map[string]string{"status": "fresh"}
-	err := repo.Store("openfigi", "US0000000001", data, time.Hour)
+	err := repo.Store("current_prices", "US0000000001", data, time.Hour)
 	require.NoError(t, err)
 
 	// Should return data
-	result, err := repo.GetIfFresh("openfigi", "US0000000001")
+	result, err := repo.GetIfFresh("current_prices", "US0000000001")
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -151,7 +139,7 @@ func TestGetIfFresh_Expired(t *testing.T) {
 	// Insert expired data directly (expired 1 hour ago)
 	expiredAt := time.Now().Add(-time.Hour).Unix()
 	_, err := db.Exec(
-		"INSERT INTO openfigi (isin, data, expires_at) VALUES (?, ?, ?)",
+		"INSERT INTO current_prices (isin, data, expires_at) VALUES (?, ?, ?)",
 		"US0000000001",
 		`{"status":"expired"}`,
 		expiredAt,
@@ -159,7 +147,7 @@ func TestGetIfFresh_Expired(t *testing.T) {
 	require.NoError(t, err)
 
 	// Should return nil for expired data
-	result, err := repo.GetIfFresh("openfigi", "US0000000001")
+	result, err := repo.GetIfFresh("current_prices", "US0000000001")
 	require.NoError(t, err)
 	assert.Nil(t, result, "Expected nil for expired data")
 }
@@ -173,7 +161,7 @@ func TestGet_ReturnsStaleData(t *testing.T) {
 	// Insert expired data directly (expired 1 hour ago)
 	expiredAt := time.Now().Add(-time.Hour).Unix()
 	_, err := db.Exec(
-		"INSERT INTO openfigi (isin, data, expires_at) VALUES (?, ?, ?)",
+		"INSERT INTO current_prices (isin, data, expires_at) VALUES (?, ?, ?)",
 		"US0000000001",
 		`{"status":"stale_but_useful"}`,
 		expiredAt,
@@ -181,12 +169,12 @@ func TestGet_ReturnsStaleData(t *testing.T) {
 	require.NoError(t, err)
 
 	// GetIfFresh should return nil
-	result, err := repo.GetIfFresh("openfigi", "US0000000001")
+	result, err := repo.GetIfFresh("current_prices", "US0000000001")
 	require.NoError(t, err)
 	assert.Nil(t, result, "GetIfFresh should return nil for expired data")
 
 	// Get should return the stale data (useful when API fails)
-	result, err = repo.Get("openfigi", "US0000000001")
+	result, err = repo.Get("current_prices", "US0000000001")
 	require.NoError(t, err)
 	require.NotNil(t, result, "Get should return stale data")
 
@@ -203,7 +191,7 @@ func TestGet_NotFound(t *testing.T) {
 	repo := NewRepository(db)
 
 	// Get should return nil for non-existent key
-	result, err := repo.Get("openfigi", "NONEXISTENT")
+	result, err := repo.Get("current_prices", "NONEXISTENT")
 	require.NoError(t, err)
 	assert.Nil(t, result)
 }
@@ -215,7 +203,7 @@ func TestGetIfFresh_NotFound(t *testing.T) {
 	repo := NewRepository(db)
 
 	// Should return nil for non-existent key
-	result, err := repo.GetIfFresh("openfigi", "NONEXISTENT")
+	result, err := repo.GetIfFresh("current_prices", "NONEXISTENT")
 	require.NoError(t, err)
 	assert.Nil(t, result)
 }
@@ -228,20 +216,20 @@ func TestDelete(t *testing.T) {
 
 	// Store data
 	data := map[string]string{"to_delete": "true"}
-	err := repo.Store("yahoo_metadata", "US0000000001", data, time.Hour)
+	err := repo.Store("symbol_to_isin", "AAPL.US", data, time.Hour)
 	require.NoError(t, err)
 
 	// Verify it exists
-	result, err := repo.GetIfFresh("yahoo_metadata", "US0000000001")
+	result, err := repo.GetIfFresh("symbol_to_isin", "AAPL.US")
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
 	// Delete it
-	err = repo.Delete("yahoo_metadata", "US0000000001")
+	err = repo.Delete("symbol_to_isin", "AAPL.US")
 	require.NoError(t, err)
 
 	// Verify it's gone
-	result, err = repo.GetIfFresh("yahoo_metadata", "US0000000001")
+	result, err = repo.GetIfFresh("symbol_to_isin", "AAPL.US")
 	require.NoError(t, err)
 	assert.Nil(t, result)
 }
@@ -253,7 +241,7 @@ func TestDeleteNonExistent(t *testing.T) {
 	repo := NewRepository(db)
 
 	// Deleting non-existent key should not error
-	err := repo.Delete("yahoo_metadata", "NONEXISTENT")
+	err := repo.Delete("symbol_to_isin", "NONEXISTENT")
 	require.NoError(t, err)
 }
 
@@ -315,20 +303,17 @@ func TestDeleteAllExpired(t *testing.T) {
 	freshAt := now.Add(time.Hour).Unix()
 
 	// Insert expired entries in multiple tables
-	_, err := db.Exec("INSERT INTO alphavantage_overview (isin, data, expires_at) VALUES (?, ?, ?)", "US001", `{}`, expiredAt)
+	_, err := db.Exec("INSERT INTO exchangerate (pair, data, expires_at) VALUES (?, ?, ?)", "EUR:USD", `{}`, expiredAt)
 	require.NoError(t, err)
-	_, err = db.Exec("INSERT INTO alphavantage_overview (isin, data, expires_at) VALUES (?, ?, ?)", "US002", `{}`, freshAt)
-	require.NoError(t, err)
-
-	_, err = db.Exec("INSERT INTO openfigi (isin, data, expires_at) VALUES (?, ?, ?)", "US003", `{}`, expiredAt)
-	require.NoError(t, err)
-	_, err = db.Exec("INSERT INTO openfigi (isin, data, expires_at) VALUES (?, ?, ?)", "US004", `{}`, expiredAt)
+	_, err = db.Exec("INSERT INTO exchangerate (pair, data, expires_at) VALUES (?, ?, ?)", "GBP:USD", `{}`, freshAt)
 	require.NoError(t, err)
 
-	_, err = db.Exec("INSERT INTO yahoo_metadata (isin, data, expires_at) VALUES (?, ?, ?)", "US005", `{}`, freshAt)
+	_, err = db.Exec("INSERT INTO current_prices (isin, data, expires_at) VALUES (?, ?, ?)", "US003", `{}`, expiredAt)
+	require.NoError(t, err)
+	_, err = db.Exec("INSERT INTO current_prices (isin, data, expires_at) VALUES (?, ?, ?)", "US004", `{}`, expiredAt)
 	require.NoError(t, err)
 
-	_, err = db.Exec("INSERT INTO exchangerate (pair, data, expires_at) VALUES (?, ?, ?)", "EUR:USD", `{}`, expiredAt)
+	_, err = db.Exec("INSERT INTO symbol_to_isin (symbol, data, expires_at) VALUES (?, ?, ?)", "AAPL.US", `{}`, freshAt)
 	require.NoError(t, err)
 
 	// Delete all expired
@@ -336,24 +321,20 @@ func TestDeleteAllExpired(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify counts
-	assert.Equal(t, int64(1), results["alphavantage_overview"])
-	assert.Equal(t, int64(2), results["openfigi"])
-	assert.Equal(t, int64(0), results["yahoo_metadata"])
 	assert.Equal(t, int64(1), results["exchangerate"])
+	assert.Equal(t, int64(2), results["current_prices"])
+	assert.Equal(t, int64(0), results["symbol_to_isin"])
 
 	// Verify total remaining
 	var count int
-	db.QueryRow("SELECT COUNT(*) FROM alphavantage_overview").Scan(&count)
-	assert.Equal(t, 1, count) // 1 fresh entry
-
-	db.QueryRow("SELECT COUNT(*) FROM openfigi").Scan(&count)
-	assert.Equal(t, 0, count) // All expired
-
-	db.QueryRow("SELECT COUNT(*) FROM yahoo_metadata").Scan(&count)
-	assert.Equal(t, 1, count) // 1 fresh entry
-
 	db.QueryRow("SELECT COUNT(*) FROM exchangerate").Scan(&count)
+	assert.Equal(t, 1, count) // 1 fresh entry
+
+	db.QueryRow("SELECT COUNT(*) FROM current_prices").Scan(&count)
 	assert.Equal(t, 0, count) // All expired
+
+	db.QueryRow("SELECT COUNT(*) FROM symbol_to_isin").Scan(&count)
+	assert.Equal(t, 1, count) // 1 fresh entry
 }
 
 func TestStoreWithDifferentTables(t *testing.T) {
@@ -367,18 +348,9 @@ func TestStoreWithDifferentTables(t *testing.T) {
 		table string
 		key   string
 	}{
-		{"alphavantage_overview", "US0000000001"},
-		{"alphavantage_balance_sheet", "US0000000001"},
-		{"alphavantage_cash_flow", "US0000000001"},
-		{"alphavantage_earnings", "US0000000001"},
-		{"alphavantage_dividends", "US0000000001"},
-		{"alphavantage_etf_profile", "US0000000001"},
-		{"alphavantage_insider", "US0000000001"},
-		{"alphavantage_economic", "GDP"},
-		{"openfigi", "US0000000001"},
-		{"yahoo_metadata", "US0000000001"},
 		{"exchangerate", "EUR:USD"},
 		{"current_prices", "US0000000001"},
+		{"symbol_to_isin", "AAPL.US"},
 	}
 
 	for _, tc := range tables {
@@ -404,27 +376,22 @@ func TestStoreComplexJSON(t *testing.T) {
 
 	repo := NewRepository(db)
 
-	// Test with complex nested structure (like Alpha Vantage response)
+	// Test with complex nested structure
 	data := map[string]interface{}{
-		"Symbol":               "AAPL",
-		"AssetType":            "Common Stock",
-		"Name":                 "Apple Inc",
-		"Description":          "Apple Inc. designs, manufactures...",
-		"MarketCapitalization": 2500000000000,
-		"EBITDA":               125000000000,
-		"PERatio":              28.5,
-		"BookValue":            4.25,
-		"DividendYield":        0.0065,
-		"QuarterlyEarnings": []map[string]interface{}{
-			{"fiscalDateEnding": "2024-03-31", "reportedEPS": "1.52"},
-			{"fiscalDateEnding": "2023-12-31", "reportedEPS": "2.18"},
+		"isin":     "US0378331005",
+		"symbol":   "AAPL.US",
+		"price":    185.50,
+		"currency": "USD",
+		"metadata": map[string]interface{}{
+			"source":    "tradernet",
+			"timestamp": time.Now().Unix(),
 		},
 	}
 
-	err := repo.Store("alphavantage_overview", "US0378331005", data, 7*24*time.Hour)
+	err := repo.Store("current_prices", "US0378331005", data, 7*24*time.Hour)
 	require.NoError(t, err)
 
-	result, err := repo.GetIfFresh("alphavantage_overview", "US0378331005")
+	result, err := repo.GetIfFresh("current_prices", "US0378331005")
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
@@ -432,14 +399,14 @@ func TestStoreComplexJSON(t *testing.T) {
 	err = json.Unmarshal(result, &parsed)
 	require.NoError(t, err)
 
-	assert.Equal(t, "AAPL", parsed["Symbol"])
-	assert.Equal(t, "Apple Inc", parsed["Name"])
-	assert.Equal(t, float64(2500000000000), parsed["MarketCapitalization"])
+	assert.Equal(t, "US0378331005", parsed["isin"])
+	assert.Equal(t, "AAPL.US", parsed["symbol"])
+	assert.Equal(t, float64(185.50), parsed["price"])
 
-	// Verify nested array
-	earnings, ok := parsed["QuarterlyEarnings"].([]interface{})
+	// Verify nested object
+	metadata, ok := parsed["metadata"].(map[string]interface{})
 	require.True(t, ok)
-	assert.Len(t, earnings, 2)
+	assert.Equal(t, "tradernet", metadata["source"])
 }
 
 func TestGetKeyColumn(t *testing.T) {
@@ -448,11 +415,9 @@ func TestGetKeyColumn(t *testing.T) {
 		table    string
 		expected string
 	}{
-		{"alphavantage_overview", "isin"},
-		{"alphavantage_economic", "indicator"},
-		{"openfigi", "isin"},
 		{"exchangerate", "pair"},
 		{"current_prices", "isin"},
+		{"symbol_to_isin", "symbol"},
 	}
 
 	for _, tc := range tests {
@@ -471,7 +436,7 @@ func TestInvalidTableName(t *testing.T) {
 
 	// All methods should reject invalid table names
 	t.Run("Store", func(t *testing.T) {
-		err := repo.Store("invalid_table; DROP TABLE openfigi;--", "key", map[string]string{}, time.Hour)
+		err := repo.Store("invalid_table; DROP TABLE current_prices;--", "key", map[string]string{}, time.Hour)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid table name")
 	})

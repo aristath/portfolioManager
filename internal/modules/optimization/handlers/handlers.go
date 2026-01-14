@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aristath/sentinel/internal/clients/yahoo"
 	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/modules/dividends"
 	"github.com/aristath/sentinel/internal/modules/optimization"
@@ -30,7 +29,6 @@ type OptimizationCache struct {
 type Handler struct {
 	service                 *optimization.OptimizerService
 	db                      *sql.DB
-	yahooClient             yahoo.FullClientInterface
 	brokerClient            domain.BrokerClient
 	currencyExchangeService domain.CurrencyExchangeServiceInterface
 	dividendRepo            *dividends.DividendRepository
@@ -48,7 +46,6 @@ type Handler struct {
 func NewHandler(
 	service *optimization.OptimizerService,
 	db *sql.DB,
-	yahooClient yahoo.FullClientInterface,
 	brokerClient domain.BrokerClient,
 	currencyExchangeService *services.CurrencyExchangeService,
 	dividendRepo *dividends.DividendRepository,
@@ -59,7 +56,6 @@ func NewHandler(
 	return &Handler{
 		service:                 service,
 		db:                      db,
-		yahooClient:             yahooClient,
 		brokerClient:            brokerClient,
 		currencyExchangeService: currencyExchangeService,
 		dividendRepo:            dividendRepo,

@@ -21,8 +21,6 @@ func setupTestDBWithISINPrimaryKey(t *testing.T) *sql.DB {
 		CREATE TABLE securities (
 			isin TEXT PRIMARY KEY,
 			symbol TEXT NOT NULL,
-			yahoo_symbol TEXT,
-			alphavantage_symbol TEXT,
 			name TEXT NOT NULL,
 			product_type TEXT,
 			industry TEXT,

@@ -6,7 +6,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/aristath/sentinel/internal/clients/yahoo"
 	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/modules/dividends"
 	"github.com/aristath/sentinel/internal/modules/optimization"
@@ -22,7 +21,6 @@ func TestRegisterRoutes(t *testing.T) {
 	// Create mock dependencies
 	service := &optimization.OptimizerService{}
 	var db *sql.DB = nil
-	var yahooClient yahoo.FullClientInterface = nil
 	tradernetClient := testingpkg.NewMockBrokerClient()
 	currencyExchangeService := &services.CurrencyExchangeService{}
 	dividendRepo := &dividends.DividendRepository{}
@@ -32,7 +30,6 @@ func TestRegisterRoutes(t *testing.T) {
 	handler := NewHandler(
 		service,
 		db,
-		yahooClient,
 		tradernetClient,
 		currencyExchangeService,
 		dividendRepo,
@@ -93,7 +90,6 @@ func TestRegisterRoutes_RoutePrefix(t *testing.T) {
 	// Verify that routes are registered under /optimizer prefix
 	service := &optimization.OptimizerService{}
 	var db *sql.DB = nil
-	var yahooClient yahoo.FullClientInterface = nil
 	tradernetClient := testingpkg.NewMockBrokerClient()
 	currencyExchangeService := &services.CurrencyExchangeService{}
 	dividendRepo := &dividends.DividendRepository{}
@@ -102,7 +98,6 @@ func TestRegisterRoutes_RoutePrefix(t *testing.T) {
 	handler := NewHandler(
 		service,
 		db,
-		yahooClient,
 		tradernetClient,
 		currencyExchangeService,
 		dividendRepo,

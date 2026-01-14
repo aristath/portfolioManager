@@ -43,13 +43,13 @@ func TestCleanupJobRun(t *testing.T) {
 	freshAt := now.Add(time.Hour).Unix()
 
 	// Insert expired and fresh entries across multiple tables
-	insertExpiredAndFresh(t, db, "alphavantage_overview", "isin", expiredAt, freshAt)
-	insertExpiredAndFresh(t, db, "openfigi", "isin", expiredAt, freshAt)
 	insertExpiredAndFresh(t, db, "exchangerate", "pair", expiredAt, freshAt)
+	insertExpiredAndFresh(t, db, "current_prices", "isin", expiredAt, freshAt)
+	insertExpiredAndFresh(t, db, "symbol_to_isin", "symbol", expiredAt, freshAt)
 
 	// Count before cleanup
 	var countBefore int
-	db.QueryRow("SELECT (SELECT COUNT(*) FROM alphavantage_overview) + (SELECT COUNT(*) FROM openfigi) + (SELECT COUNT(*) FROM exchangerate)").Scan(&countBefore)
+	db.QueryRow("SELECT (SELECT COUNT(*) FROM exchangerate) + (SELECT COUNT(*) FROM current_prices) + (SELECT COUNT(*) FROM symbol_to_isin)").Scan(&countBefore)
 	assert.Equal(t, 6, countBefore) // 2 per table (1 expired + 1 fresh)
 
 	// Run cleanup
@@ -58,7 +58,7 @@ func TestCleanupJobRun(t *testing.T) {
 
 	// Count after cleanup - should only have fresh entries
 	var countAfter int
-	db.QueryRow("SELECT (SELECT COUNT(*) FROM alphavantage_overview) + (SELECT COUNT(*) FROM openfigi) + (SELECT COUNT(*) FROM exchangerate)").Scan(&countAfter)
+	db.QueryRow("SELECT (SELECT COUNT(*) FROM exchangerate) + (SELECT COUNT(*) FROM current_prices) + (SELECT COUNT(*) FROM symbol_to_isin)").Scan(&countAfter)
 	assert.Equal(t, 3, countAfter) // 1 fresh per table
 }
 
@@ -84,11 +84,11 @@ func TestCleanupJobRunAllExpired(t *testing.T) {
 	expiredAt := time.Now().Add(-time.Hour).Unix()
 
 	// Insert only expired entries
-	_, err := db.Exec("INSERT INTO alphavantage_overview (isin, data, expires_at) VALUES (?, ?, ?)", "US001", `{}`, expiredAt)
+	_, err := db.Exec("INSERT INTO exchangerate (pair, data, expires_at) VALUES (?, ?, ?)", "EUR:USD", `{}`, expiredAt)
 	require.NoError(t, err)
-	_, err = db.Exec("INSERT INTO alphavantage_overview (isin, data, expires_at) VALUES (?, ?, ?)", "US002", `{}`, expiredAt)
+	_, err = db.Exec("INSERT INTO exchangerate (pair, data, expires_at) VALUES (?, ?, ?)", "GBP:USD", `{}`, expiredAt)
 	require.NoError(t, err)
-	_, err = db.Exec("INSERT INTO openfigi (isin, data, expires_at) VALUES (?, ?, ?)", "US003", `{}`, expiredAt)
+	_, err = db.Exec("INSERT INTO current_prices (isin, data, expires_at) VALUES (?, ?, ?)", "US003", `{}`, expiredAt)
 	require.NoError(t, err)
 
 	// Run cleanup
@@ -97,9 +97,9 @@ func TestCleanupJobRunAllExpired(t *testing.T) {
 
 	// Verify all entries removed
 	var count int
-	db.QueryRow("SELECT COUNT(*) FROM alphavantage_overview").Scan(&count)
+	db.QueryRow("SELECT COUNT(*) FROM exchangerate").Scan(&count)
 	assert.Equal(t, 0, count)
-	db.QueryRow("SELECT COUNT(*) FROM openfigi").Scan(&count)
+	db.QueryRow("SELECT COUNT(*) FROM current_prices").Scan(&count)
 	assert.Equal(t, 0, count)
 }
 
@@ -113,11 +113,11 @@ func TestCleanupJobRunAllFresh(t *testing.T) {
 	freshAt := time.Now().Add(time.Hour).Unix()
 
 	// Insert only fresh entries
-	_, err := db.Exec("INSERT INTO alphavantage_overview (isin, data, expires_at) VALUES (?, ?, ?)", "US001", `{}`, freshAt)
+	_, err := db.Exec("INSERT INTO exchangerate (pair, data, expires_at) VALUES (?, ?, ?)", "EUR:USD", `{}`, freshAt)
 	require.NoError(t, err)
-	_, err = db.Exec("INSERT INTO alphavantage_overview (isin, data, expires_at) VALUES (?, ?, ?)", "US002", `{}`, freshAt)
+	_, err = db.Exec("INSERT INTO exchangerate (pair, data, expires_at) VALUES (?, ?, ?)", "GBP:USD", `{}`, freshAt)
 	require.NoError(t, err)
-	_, err = db.Exec("INSERT INTO openfigi (isin, data, expires_at) VALUES (?, ?, ?)", "US003", `{}`, freshAt)
+	_, err = db.Exec("INSERT INTO current_prices (isin, data, expires_at) VALUES (?, ?, ?)", "US003", `{}`, freshAt)
 	require.NoError(t, err)
 
 	// Run cleanup
@@ -126,9 +126,9 @@ func TestCleanupJobRunAllFresh(t *testing.T) {
 
 	// Verify no entries removed
 	var count int
-	db.QueryRow("SELECT COUNT(*) FROM alphavantage_overview").Scan(&count)
+	db.QueryRow("SELECT COUNT(*) FROM exchangerate").Scan(&count)
 	assert.Equal(t, 2, count)
-	db.QueryRow("SELECT COUNT(*) FROM openfigi").Scan(&count)
+	db.QueryRow("SELECT COUNT(*) FROM current_prices").Scan(&count)
 	assert.Equal(t, 1, count)
 }
 
@@ -149,10 +149,14 @@ func insertExpiredAndFresh(t *testing.T, db *sql.DB, table, keyCol string, expir
 	t.Helper()
 
 	var key1, key2 string
-	if keyCol == "pair" {
-		key1 = "EUR:USD"
-		key2 = "GBP:USD"
-	} else {
+	switch keyCol {
+	case "pair":
+		key1 = "EUR:USD_" + table
+		key2 = "GBP:USD_" + table
+	case "symbol":
+		key1 = "AAPL.US_" + table
+		key2 = "MSFT.US_" + table
+	default:
 		key1 = "US_EXPIRED_" + table
 		key2 = "US_FRESH_" + table
 	}

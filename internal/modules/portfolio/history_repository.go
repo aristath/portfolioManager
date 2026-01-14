@@ -95,8 +95,8 @@ func (r *HistoryRepository) GetDailyRange(startDate, endDate string) ([]DailyPri
 			price.Volume = volume.Int64
 		}
 
-		// Source is not stored in consolidated schema, default to yahoo
-		price.Source = "yahoo"
+		// Source is not stored in consolidated schema, default to tradernet
+		price.Source = "tradernet"
 
 		prices = append(prices, price)
 	}

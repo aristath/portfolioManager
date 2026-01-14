@@ -9,12 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aristath/sentinel/internal/clients/alphavantage"
-	"github.com/aristath/sentinel/internal/clients/exchangerate"
-	"github.com/aristath/sentinel/internal/clients/openfigi"
-	"github.com/aristath/sentinel/internal/clients/symbols"
 	"github.com/aristath/sentinel/internal/clients/tradernet"
-	"github.com/aristath/sentinel/internal/clients/yahoo"
 	"github.com/aristath/sentinel/internal/config"
 	"github.com/aristath/sentinel/internal/database"
 	"github.com/aristath/sentinel/internal/domain"
@@ -25,6 +20,7 @@ import (
 	"github.com/aristath/sentinel/internal/modules/analytics"
 	"github.com/aristath/sentinel/internal/modules/cash_flows"
 	"github.com/aristath/sentinel/internal/modules/display"
+	"github.com/aristath/sentinel/internal/modules/dividends"
 	"github.com/aristath/sentinel/internal/modules/market_hours"
 	"github.com/aristath/sentinel/internal/modules/opportunities"
 	"github.com/aristath/sentinel/internal/modules/optimization"
@@ -74,62 +70,12 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	// STEP 1: Initialize Clients
 	// ==========================================
 
-	// Broker client (Tradernet adapter)
+	// Broker client (Tradernet adapter) - single external data source
 	container.BrokerClient = tradernet.NewTradernetBrokerAdapter(cfg.TradernetAPIKey, cfg.TradernetAPISecret, log)
 	log.Info().Msg("Broker client initialized (Tradernet adapter)")
 
-	// Yahoo Finance client (native Go implementation)
-	container.YahooClient = yahoo.NewNativeClient(log)
-	log.Info().Msg("Using native Go Yahoo Finance client")
-
-	// ExchangeRate API client (exchangerate-api.com)
-	container.ExchangeRateAPIClient = exchangerate.NewClient(container.ClientDataRepo, log)
-	log.Info().Msg("ExchangeRateAPI client initialized with persistent cache")
-
-	// OpenFIGI client (ISIN to ticker mapping)
-	// Get API key from settings (optional - increases rate limits)
-	// Must be initialized before Alpha Vantage client (which depends on it)
-	openFIGIKey := ""
-	if container.SettingsRepo != nil {
-		if key, err := container.SettingsRepo.Get("openfigi_api_key"); err == nil && key != nil {
-			openFIGIKey = *key
-		}
-	}
-	container.OpenFIGIClient = openfigi.NewClient(openFIGIKey, container.ClientDataRepo, log)
-	if openFIGIKey != "" {
-		log.Info().Msg("OpenFIGI client initialized with API key and persistent cache (25k requests/min)")
-	} else {
-		log.Info().Msg("OpenFIGI client initialized with persistent cache (25 requests/min without key)")
-	}
-
-	// Alpha Vantage client (fundamentals, technical indicators, etc.)
-	// Get API key from settings or config
-	// Depends on OpenFIGIClient and SecurityRepo for symbol-to-ISIN resolution
-	avAPIKey := ""
-	if container.SettingsRepo != nil {
-		if key, err := container.SettingsRepo.Get("alphavantage_api_key"); err == nil && key != nil {
-			avAPIKey = *key
-		}
-	}
-	container.AlphaVantageClient = alphavantage.NewClient(
-		avAPIKey,
-		container.ClientDataRepo,
-		container.OpenFIGIClient,
-		container.SecurityRepo,
-		log,
-	)
-	if avAPIKey != "" {
-		log.Info().Msg("Alpha Vantage client initialized with API key and persistent cache")
-	} else {
-		log.Info().Msg("Alpha Vantage client initialized with persistent cache (no API key configured)")
-	}
-
-	// Symbol mapper for converting symbols between providers
-	container.SymbolMapper = symbols.NewMapper()
-	log.Info().Msg("Symbol mapper initialized")
-
 	// Client symbol mapper for converting ISINs to client-specific symbols
-	// Used for brokers (tradernet, ibkr, schwab) and data providers (yahoo, alphavantage, etc.)
+	// Used for brokers (tradernet, ibkr, schwab)
 	// Note: ClientSymbolRepo must be initialized in InitializeRepositories first
 	if container.ClientSymbolRepo != nil {
 		container.ClientSymbolMapper = services.NewClientSymbolMapper(container.ClientSymbolRepo)
@@ -174,32 +120,6 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		log.Debug().Msg("Display manager not provided - skipping display configuration")
 	}
 
-	// Data source router for configurable provider priorities
-	// Create settings adapter for DataSourceRouter
-	settingsAdapter := &dataSourceSettingsAdapter{repo: container.SettingsRepo}
-	clientsConfig := &services.DataSourceClients{
-		AlphaVantageAPIKey: avAPIKey,
-		OpenFIGIAPIKey:     openFIGIKey,
-	}
-	container.DataSourceRouter = services.NewDataSourceRouter(settingsAdapter, clientsConfig)
-	container.DataSourceRouter.SetLogger(log)
-	log.Info().Msg("Data source router initialized")
-
-	// Subscribe to SETTINGS_CHANGED events to refresh data source priorities dynamically
-	// Note: EventBus is initialized later, so we defer the subscription
-	dataSourceRouter := container.DataSourceRouter // Capture for closure
-
-	// Data fetcher service - provides unified data fetching with configurable priorities
-	container.DataFetcherService = services.NewDataFetcherService(
-		container.DataSourceRouter,
-		container.SymbolMapper,
-		&brokerClientAdapter{client: container.BrokerClient},
-		&yahooClientAdapter{client: container.YahooClient},
-		container.AlphaVantageClient,
-		log,
-	)
-	log.Info().Msg("Data fetcher service initialized")
-
 	// ==========================================
 	// STEP 2: Initialize Basic Services
 	// ==========================================
@@ -220,17 +140,6 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	// Event system (new bus-based architecture)
 	container.EventBus = events.NewBus(log)
 	container.EventManager = events.NewManager(container.EventBus, log)
-
-	// Subscribe DataSourceRouter to settings changes for dynamic priority refresh
-	container.EventBus.Subscribe(events.SettingsChanged, func(e *events.Event) {
-		// Check if this is a data source priority change
-		if key, ok := e.Data["key"].(string); ok {
-			if strings.HasPrefix(key, "datasource_") {
-				log.Debug().Str("key", key).Msg("Refreshing data source priorities due to settings change")
-				dataSourceRouter.RefreshPriorities()
-			}
-		}
-	})
 
 	// Market status WebSocket client
 	container.MarketStatusWS = tradernet.NewMarketStatusWebSocket(
@@ -264,29 +173,22 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 
 	// Order Book service (validates liquidity and calculates optimal limit prices)
 	// Uses bid-ask midpoint pricing strategy for optimal execution
-	// PriceValidator abstracts the validation source (Yahoo Finance in this case)
-	priceValidator := order_book.NewYahooPriceValidator(
-		container.YahooClient,
-		log.With().Str("component", "yahoo_price_validator").Logger(),
-	)
+	// NoOp price validator - price validation disabled (single data source Tradernet)
+	noOpPriceValidator := &noOpPriceValidator{}
 	container.OrderBookService = order_book.NewService(
 		container.BrokerClient,
-		priceValidator,
+		noOpPriceValidator,
 		container.SettingsService,
 		log.With().Str("service", "order_book").Logger(),
 	)
 
-	// Exchange rate cache service (wraps ExchangeRateAPI + CurrencyExchangeService + Alpha Vantage + Yahoo fallback)
+	// Exchange rate cache service (Tradernet + DB cache)
 	container.ExchangeRateCacheService = services.NewExchangeRateCacheService(
-		container.ExchangeRateAPIClient,   // Primary source (exchangerate-api.com)
-		container.CurrencyExchangeService, // Tradernet (secondary)
-		container.YahooClient,
-		container.HistoryDBClient,
+		container.CurrencyExchangeService, // Tradernet (primary)
+		container.HistoryDBClient,         // DB cache (secondary)
 		container.SettingsService,
 		log,
 	)
-	// Wire Alpha Vantage as additional exchange rate fallback
-	container.ExchangeRateCacheService.SetAlphaVantageClient(container.AlphaVantageClient)
 
 	// Price conversion service (converts native currency prices to EUR)
 	container.PriceConversionService = services.NewPriceConversionService(
@@ -337,7 +239,6 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		container.SettingsService,
 		container.PlannerConfigRepo,
 		container.OrderBookService,
-		container.YahooClient,
 		container.HistoryDB.Conn(),
 		container.SecurityRepo,
 		container.MarketHoursService,  // Market hours validation
@@ -362,11 +263,6 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		log,
 	)
 
-	// Wire DataFetcherService for multi-source historical price fetching
-	container.HistoricalSyncService.SetDataFetcher(&historicalDataFetcherAdapter{
-		fetcher: container.DataFetcherService,
-	})
-
 	// Symbol resolver
 	container.SymbolResolver = universe.NewSymbolResolver(
 		container.BrokerClient,
@@ -379,20 +275,11 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		container.SymbolResolver,
 		container.SecurityRepo,
 		container.BrokerClient,
-		container.YahooClient,
 		container.HistoricalSyncService,
 		container.EventManager,
 		nil, // scoreCalculator - will be set later
 		log,
 	)
-
-	// Wire OpenFIGI client for ISIN lookup fallback
-	container.SetupService.SetOpenFIGIClient(container.OpenFIGIClient)
-
-	// Wire DataFetcherService for multi-source metadata fetching
-	container.SetupService.SetMetadataFetcher(&metadataFetcherAdapter{
-		fetcher: container.DataFetcherService,
-	})
 
 	// Create adapter for SecuritySetupService to match portfolio.SecuritySetupServiceInterface
 	setupServiceAdapter := &securitySetupServiceAdapter{service: container.SetupService}
@@ -425,6 +312,15 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	// Dividend creator
 	container.DividendCreator = cash_flows.NewDividendCreator(container.DividendService, log)
 
+	// Dividend yield calculator (uses ledger.db dividend transactions for yield calculation)
+	// Adapter for PositionRepo to implement PositionValueProvider interface
+	positionValueAdapter := &positionValueProviderAdapter{positionRepo: container.PositionRepo}
+	container.DividendYieldCalculator = dividends.NewDividendYieldCalculator(
+		container.DividendRepo, // DividendRepository already implements DividendRepositoryInterface
+		positionValueAdapter,
+		log,
+	)
+
 	// Deposit processor (uses CashManager)
 	container.DepositProcessor = cash_flows.NewDepositProcessor(cashManager, log)
 
@@ -449,18 +345,11 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	// STEP 8: Initialize Remaining Universe Services
 	// ==========================================
 
-	// Price validator (Tradernet primary, Yahoo sanity check)
-	// Create Yahoo price adapter to satisfy PriceValidator's interface
-	yahooPriceAdapter := services.NewYahooPriceAdapter(container.YahooClient)
-	priceValidatorService := services.NewPriceValidator(yahooPriceAdapter, log)
-
 	// Sync service (scoreCalculator will be set later)
 	container.SyncService = universe.NewSyncService(
 		container.SecurityRepo,
 		container.HistoricalSyncService,
-		container.YahooClient,
-		priceValidatorService, // PriceValidator for Tradernet-primary price sync
-		nil,                   // scoreCalculator - will be set later
+		nil, // scoreCalculator - will be set later
 		container.BrokerClient,
 		container.SetupService,
 		container.PortfolioDB.Conn(),
@@ -582,7 +471,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		&ocbSettingsRepoAdapter{repo: container.SettingsRepo, configRepo: container.PlannerConfigRepo},
 		&ocbRegimeRepoAdapter{adapter: container.RegimeScoreProvider},
 		&ocbCashManagerAdapter{manager: container.CashManager},
-		&ocbPriceClientAdapter{client: container.YahooClient},
+		&brokerPriceClientAdapter{client: container.BrokerClient},
 		container.PriceConversionService,
 		&ocbBrokerClientAdapter{client: container.BrokerClient},
 		&ocbDismissedFilterRepoAdapter{repo: container.DismissedFilterRepo},
@@ -601,7 +490,6 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	container.ReturnsCalc = optimization.NewReturnsCalculator(
 		container.PortfolioDB.Conn(),
 		container.UniverseDB.Conn(),
-		container.YahooClient,
 		log,
 	)
 
@@ -759,6 +647,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		container.UniverseDB.Conn(),
 		container.HistoryDB.Conn(),
 		container.BrokerClient,
+		container.ClientSymbolRepo,
 		log,
 	)
 
@@ -929,7 +818,7 @@ type qualityGatesAdapter struct {
 
 func (a *qualityGatesAdapter) CalculateAdaptiveQualityGates(regimeScore float64) universe.QualityGateThresholdsProvider {
 	thresholds := a.service.CalculateAdaptiveQualityGates(regimeScore)
-	return thresholds // *adaptation.QualityGateThresholds implements the interface via GetFundamentals/GetLongTerm
+	return thresholds // *adaptation.QualityGateThresholds implements the interface via GetStability/GetLongTerm
 }
 
 // kellySettingsAdapter adapts settings.Service to optimization.KellySettingsService
@@ -966,7 +855,6 @@ func (a *tagSettingsAdapter) GetAdjustedValueThresholds() universe.ValueThreshol
 		ValueOpportunityDiscountPct: params.ValueOpportunityDiscountPct,
 		DeepValueDiscountPct:        params.DeepValueDiscountPct,
 		DeepValueExtremePct:         params.DeepValueExtremePct,
-		UndervaluedPEThreshold:      params.UndervaluedPEThreshold,
 		Below52wHighThreshold:       params.Below52wHighThreshold,
 	}
 }
@@ -974,14 +862,14 @@ func (a *tagSettingsAdapter) GetAdjustedValueThresholds() universe.ValueThreshol
 func (a *tagSettingsAdapter) GetAdjustedQualityThresholds() universe.QualityThresholds {
 	params := a.service.GetAdjustedQualityThresholds()
 	return universe.QualityThresholds{
-		HighQualityFundamentals:        params.HighQualityFundamentals,
+		HighQualityStability:           params.HighQualityStability,
 		HighQualityLongTerm:            params.HighQualityLongTerm,
-		StableFundamentals:             params.StableFundamentals,
+		StableStability:                params.StableStability,
 		StableVolatilityMax:            params.StableVolatilityMax,
 		StableConsistency:              params.StableConsistency,
 		ConsistentGrowerConsistency:    params.ConsistentGrowerConsistency,
 		ConsistentGrowerCAGR:           params.ConsistentGrowerCAGR,
-		StrongFundamentalsThreshold:    params.StrongFundamentalsThreshold,
+		HighStabilityThreshold:         params.HighStabilityThreshold,
 		ValueOpportunityScoreThreshold: params.ValueOpportunityScoreThreshold,
 	}
 }
@@ -992,7 +880,7 @@ func (a *tagSettingsAdapter) GetAdjustedTechnicalThresholds() universe.Technical
 		RSIOversold:               params.RSIOversold,
 		RSIOverbought:             params.RSIOverbought,
 		RecoveryMomentumThreshold: params.RecoveryMomentumThreshold,
-		RecoveryFundamentalsMin:   params.RecoveryFundamentalsMin,
+		RecoveryStabilityMin:      params.RecoveryStabilityMin,
 		RecoveryDiscountMin:       params.RecoveryDiscountMin,
 	}
 }
@@ -1010,8 +898,6 @@ func (a *tagSettingsAdapter) GetAdjustedDividendThresholds() universe.DividendTh
 func (a *tagSettingsAdapter) GetAdjustedDangerThresholds() universe.DangerThresholds {
 	params := a.service.GetAdjustedDangerThresholds()
 	return universe.DangerThresholds{
-		OvervaluedPEThreshold:    params.OvervaluedPEThreshold,
-		OvervaluedNearHighPct:    params.OvervaluedNearHighPct,
 		UnsustainableGainsReturn: params.UnsustainableGainsReturn,
 		ValuationStretchEMA:      params.ValuationStretchEMA,
 		UnderperformingDays:      params.UnderperformingDays,
@@ -1033,33 +919,33 @@ func (a *tagSettingsAdapter) GetAdjustedPortfolioRiskThresholds() universe.Portf
 func (a *tagSettingsAdapter) GetAdjustedRiskProfileThresholds() universe.RiskProfileThresholds {
 	params := a.service.GetAdjustedRiskProfileThresholds()
 	return universe.RiskProfileThresholds{
-		LowRiskVolatilityMax:          params.LowRiskVolatilityMax,
-		LowRiskFundamentalsMin:        params.LowRiskFundamentalsMin,
-		LowRiskDrawdownMax:            params.LowRiskDrawdownMax,
-		MediumRiskVolatilityMin:       params.MediumRiskVolatilityMin,
-		MediumRiskVolatilityMax:       params.MediumRiskVolatilityMax,
-		MediumRiskFundamentalsMin:     params.MediumRiskFundamentalsMin,
-		HighRiskVolatilityThreshold:   params.HighRiskVolatilityThreshold,
-		HighRiskFundamentalsThreshold: params.HighRiskFundamentalsThreshold,
+		LowRiskVolatilityMax:        params.LowRiskVolatilityMax,
+		LowRiskStabilityMin:         params.LowRiskStabilityMin,
+		LowRiskDrawdownMax:          params.LowRiskDrawdownMax,
+		MediumRiskVolatilityMin:     params.MediumRiskVolatilityMin,
+		MediumRiskVolatilityMax:     params.MediumRiskVolatilityMax,
+		MediumRiskStabilityMin:      params.MediumRiskStabilityMin,
+		HighRiskVolatilityThreshold: params.HighRiskVolatilityThreshold,
+		HighRiskStabilityThreshold:  params.HighRiskStabilityThreshold,
 	}
 }
 
 func (a *tagSettingsAdapter) GetAdjustedBubbleTrapThresholds() universe.BubbleTrapThresholds {
 	params := a.service.GetAdjustedBubbleTrapThresholds()
 	return universe.BubbleTrapThresholds{
-		BubbleCAGRThreshold:         params.BubbleCAGRThreshold,
-		BubbleSharpeThreshold:       params.BubbleSharpeThreshold,
-		BubbleVolatilityThreshold:   params.BubbleVolatilityThreshold,
-		BubbleFundamentalsThreshold: params.BubbleFundamentalsThreshold,
-		ValueTrapFundamentals:       params.ValueTrapFundamentals,
-		ValueTrapLongTerm:           params.ValueTrapLongTerm,
-		ValueTrapMomentum:           params.ValueTrapMomentum,
-		ValueTrapVolatility:         params.ValueTrapVolatility,
-		QuantumBubbleHighProb:       params.QuantumBubbleHighProb,
-		QuantumBubbleWarningProb:    params.QuantumBubbleWarningProb,
-		QuantumTrapHighProb:         params.QuantumTrapHighProb,
-		QuantumTrapWarningProb:      params.QuantumTrapWarningProb,
-		GrowthTagCAGRThreshold:      params.GrowthTagCAGRThreshold,
+		BubbleCAGRThreshold:       params.BubbleCAGRThreshold,
+		BubbleSharpeThreshold:     params.BubbleSharpeThreshold,
+		BubbleVolatilityThreshold: params.BubbleVolatilityThreshold,
+		BubbleStabilityThreshold:  params.BubbleStabilityThreshold,
+		ValueTrapStability:        params.ValueTrapStability,
+		ValueTrapLongTerm:         params.ValueTrapLongTerm,
+		ValueTrapMomentum:         params.ValueTrapMomentum,
+		ValueTrapVolatility:       params.ValueTrapVolatility,
+		QuantumBubbleHighProb:     params.QuantumBubbleHighProb,
+		QuantumBubbleWarningProb:  params.QuantumBubbleWarningProb,
+		QuantumTrapHighProb:       params.QuantumTrapHighProb,
+		QuantumTrapWarningProb:    params.QuantumTrapWarningProb,
+		GrowthTagCAGRThreshold:    params.GrowthTagCAGRThreshold,
 	}
 }
 
@@ -1077,42 +963,42 @@ func (a *tagSettingsAdapter) GetAdjustedTotalReturnThresholds() universe.TotalRe
 func (a *tagSettingsAdapter) GetAdjustedRegimeThresholds() universe.RegimeThresholds {
 	params := a.service.GetAdjustedRegimeThresholds()
 	return universe.RegimeThresholds{
-		BearSafeVolatility:        params.BearSafeVolatility,
-		BearSafeFundamentals:      params.BearSafeFundamentals,
-		BearSafeDrawdown:          params.BearSafeDrawdown,
-		BullGrowthCAGR:            params.BullGrowthCAGR,
-		BullGrowthFundamentals:    params.BullGrowthFundamentals,
-		RegimeVolatileVolatility:  params.RegimeVolatileVolatility,
-		SidewaysValueFundamentals: params.SidewaysValueFundamentals,
+		BearSafeVolatility:       params.BearSafeVolatility,
+		BearSafeStability:        params.BearSafeStability,
+		BearSafeDrawdown:         params.BearSafeDrawdown,
+		BullGrowthCAGR:           params.BullGrowthCAGR,
+		BullGrowthStability:      params.BullGrowthStability,
+		RegimeVolatileVolatility: params.RegimeVolatileVolatility,
+		SidewaysValueStability:   params.SidewaysValueStability,
 	}
 }
 
 func (a *tagSettingsAdapter) GetAdjustedQualityGateParams() universe.QualityGateParams {
 	params := a.service.GetAdjustedQualityGateParams()
 	return universe.QualityGateParams{
-		FundamentalsThreshold:            params.FundamentalsThreshold,
-		LongTermThreshold:                params.LongTermThreshold,
-		ExceptionalThreshold:             params.ExceptionalThreshold,
-		AbsoluteMinCAGR:                  params.AbsoluteMinCAGR,
-		ExceptionalExcellenceThreshold:   params.ExceptionalExcellenceThreshold,
-		QualityValueFundamentalsMin:      params.QualityValueFundamentalsMin,
-		QualityValueOpportunityMin:       params.QualityValueOpportunityMin,
-		QualityValueLongTermMin:          params.QualityValueLongTermMin,
-		DividendIncomeFundamentalsMin:    params.DividendIncomeFundamentalsMin,
-		DividendIncomeScoreMin:           params.DividendIncomeScoreMin,
-		DividendIncomeYieldMin:           params.DividendIncomeYieldMin,
-		RiskAdjustedLongTermThreshold:    params.RiskAdjustedLongTermThreshold,
-		RiskAdjustedSharpeThreshold:      params.RiskAdjustedSharpeThreshold,
-		RiskAdjustedSortinoThreshold:     params.RiskAdjustedSortinoThreshold,
-		RiskAdjustedVolatilityMax:        params.RiskAdjustedVolatilityMax,
-		CompositeFundamentalsWeight:      params.CompositeFundamentalsWeight,
-		CompositeLongTermWeight:          params.CompositeLongTermWeight,
-		CompositeScoreMin:                params.CompositeScoreMin,
-		CompositeFundamentalsFloor:       params.CompositeFundamentalsFloor,
-		GrowthOpportunityCAGRMin:         params.GrowthOpportunityCAGRMin,
-		GrowthOpportunityFundamentalsMin: params.GrowthOpportunityFundamentalsMin,
-		GrowthOpportunityVolatilityMax:   params.GrowthOpportunityVolatilityMax,
-		HighScoreThreshold:               params.HighScoreThreshold,
+		StabilityThreshold:             params.StabilityThreshold,
+		LongTermThreshold:              params.LongTermThreshold,
+		ExceptionalThreshold:           params.ExceptionalThreshold,
+		AbsoluteMinCAGR:                params.AbsoluteMinCAGR,
+		ExceptionalExcellenceThreshold: params.ExceptionalExcellenceThreshold,
+		QualityValueStabilityMin:       params.QualityValueStabilityMin,
+		QualityValueOpportunityMin:     params.QualityValueOpportunityMin,
+		QualityValueLongTermMin:        params.QualityValueLongTermMin,
+		DividendIncomeStabilityMin:     params.DividendIncomeStabilityMin,
+		DividendIncomeScoreMin:         params.DividendIncomeScoreMin,
+		DividendIncomeYieldMin:         params.DividendIncomeYieldMin,
+		RiskAdjustedLongTermThreshold:  params.RiskAdjustedLongTermThreshold,
+		RiskAdjustedSharpeThreshold:    params.RiskAdjustedSharpeThreshold,
+		RiskAdjustedSortinoThreshold:   params.RiskAdjustedSortinoThreshold,
+		RiskAdjustedVolatilityMax:      params.RiskAdjustedVolatilityMax,
+		CompositeStabilityWeight:       params.CompositeStabilityWeight,
+		CompositeLongTermWeight:        params.CompositeLongTermWeight,
+		CompositeScoreMin:              params.CompositeScoreMin,
+		CompositeStabilityFloor:        params.CompositeStabilityFloor,
+		GrowthOpportunityCAGRMin:       params.GrowthOpportunityCAGRMin,
+		GrowthOpportunityStabilityMin:  params.GrowthOpportunityStabilityMin,
+		GrowthOpportunityVolatilityMax: params.GrowthOpportunityVolatilityMax,
+		HighScoreThreshold:             params.HighScoreThreshold,
 	}
 }
 
@@ -1162,111 +1048,6 @@ func (a *brokerClientAdapter) IsConnected() bool {
 		return false
 	}
 	return a.client.IsConnected()
-}
-
-// yahooClientAdapter adapts yahoo.NativeClient to services.DataFetcherYahooClient
-type yahooClientAdapter struct {
-	client *yahoo.NativeClient
-}
-
-func (a *yahooClientAdapter) GetHistoricalPrices(symbol string, yahooSymbolOverride *string, period string) ([]yahoo.HistoricalPrice, error) {
-	if a.client == nil {
-		return nil, fmt.Errorf("yahoo client not available")
-	}
-	return a.client.GetHistoricalPrices(symbol, yahooSymbolOverride, period)
-}
-
-func (a *yahooClientAdapter) GetSecurityCountryAndExchange(symbol string, yahooSymbolOverride *string) (*string, *string, error) {
-	if a.client == nil {
-		return nil, nil, fmt.Errorf("yahoo client not available")
-	}
-	return a.client.GetSecurityCountryAndExchange(symbol, yahooSymbolOverride)
-}
-
-func (a *yahooClientAdapter) GetSecurityIndustry(symbol string, yahooSymbolOverride *string) (*string, error) {
-	if a.client == nil {
-		return nil, fmt.Errorf("yahoo client not available")
-	}
-	return a.client.GetSecurityIndustry(symbol, yahooSymbolOverride)
-}
-
-func (a *yahooClientAdapter) GetQuoteName(symbol string, yahooSymbolOverride *string) (*string, error) {
-	if a.client == nil {
-		return nil, fmt.Errorf("yahoo client not available")
-	}
-	return a.client.GetQuoteName(symbol, yahooSymbolOverride)
-}
-
-func (a *yahooClientAdapter) GetQuoteType(symbol string, yahooSymbolOverride *string) (string, error) {
-	if a.client == nil {
-		return "", fmt.Errorf("yahoo client not available")
-	}
-	return a.client.GetQuoteType(symbol, yahooSymbolOverride)
-}
-
-func (a *yahooClientAdapter) GetBatchQuotes(symbolMap map[string]*string) (map[string]*float64, error) {
-	if a.client == nil {
-		return nil, fmt.Errorf("yahoo client not available")
-	}
-	return a.client.GetBatchQuotes(symbolMap)
-}
-
-// historicalDataFetcherAdapter adapts services.DataFetcherService to universe.HistoricalDataFetcher
-type historicalDataFetcherAdapter struct {
-	fetcher *services.DataFetcherService
-}
-
-func (a *historicalDataFetcherAdapter) GetHistoricalPrices(tradernetSymbol string, yahooSymbol string, years int) ([]universe.HistoricalPriceData, string, error) {
-	if a.fetcher == nil {
-		return nil, "", fmt.Errorf("data fetcher service not available")
-	}
-
-	prices, source, err := a.fetcher.GetHistoricalPrices(tradernetSymbol, yahooSymbol, years)
-	if err != nil {
-		return nil, "", err
-	}
-
-	// Convert services.HistoricalPrice to universe.HistoricalPriceData
-	result := make([]universe.HistoricalPriceData, len(prices))
-	for i, p := range prices {
-		result[i] = universe.HistoricalPriceData{
-			Date:   p.Date,
-			Open:   p.Open,
-			High:   p.High,
-			Low:    p.Low,
-			Close:  p.Close,
-			Volume: p.Volume,
-		}
-	}
-
-	return result, string(source), nil
-}
-
-// metadataFetcherAdapter adapts services.DataFetcherService to universe.MetadataFetcher
-type metadataFetcherAdapter struct {
-	fetcher *services.DataFetcherService
-}
-
-func (a *metadataFetcherAdapter) GetSecurityMetadata(tradernetSymbol string, yahooSymbol string) (*universe.SecurityMetadataResult, string, error) {
-	if a.fetcher == nil {
-		return nil, "", fmt.Errorf("data fetcher service not available")
-	}
-
-	metadata, source, err := a.fetcher.GetSecurityMetadata(tradernetSymbol, yahooSymbol)
-	if err != nil {
-		return nil, "", err
-	}
-
-	// Convert services.SecurityMetadata to universe.SecurityMetadataResult
-	return &universe.SecurityMetadataResult{
-		Name:        metadata.Name,
-		Country:     metadata.Country,
-		Exchange:    metadata.Exchange,
-		Industry:    metadata.Industry,
-		Sector:      metadata.Sector,
-		Currency:    metadata.Currency,
-		ProductType: metadata.ProductType,
-	}, string(source), nil
 }
 
 // ==========================================
@@ -1423,12 +1204,12 @@ func (a *ocbScoresRepoAdapter) GetCAGRs(isinList []string) (map[string]float64, 
 
 func (a *ocbScoresRepoAdapter) GetQualityScores(isinList []string) (map[string]float64, map[string]float64, error) {
 	longTermScores := make(map[string]float64)
-	fundamentalsScores := make(map[string]float64)
+	stabilityScores := make(map[string]float64)
 	if len(isinList) == 0 {
-		return longTermScores, fundamentalsScores, nil
+		return longTermScores, stabilityScores, nil
 	}
 
-	query := `SELECT isin, cagr_score, fundamental_score FROM scores WHERE isin != '' AND isin IS NOT NULL`
+	query := `SELECT isin, cagr_score, stability_score FROM scores WHERE isin != '' AND isin IS NOT NULL`
 	rows, err := a.db.Query(query)
 	if err != nil {
 		return nil, nil, err
@@ -1442,8 +1223,8 @@ func (a *ocbScoresRepoAdapter) GetQualityScores(isinList []string) (map[string]f
 
 	for rows.Next() {
 		var isin string
-		var cagrScore, fundamentalScore sql.NullFloat64
-		if err := rows.Scan(&isin, &cagrScore, &fundamentalScore); err != nil {
+		var cagrScore, stabilityScore sql.NullFloat64
+		if err := rows.Scan(&isin, &cagrScore, &stabilityScore); err != nil {
 			continue
 		}
 		if !isinSet[isin] {
@@ -1453,12 +1234,12 @@ func (a *ocbScoresRepoAdapter) GetQualityScores(isinList []string) (map[string]f
 			normalized := math.Max(0.0, math.Min(1.0, cagrScore.Float64/100.0))
 			longTermScores[isin] = normalized
 		}
-		if fundamentalScore.Valid {
-			normalized := math.Max(0.0, math.Min(1.0, fundamentalScore.Float64/100.0))
-			fundamentalsScores[isin] = normalized
+		if stabilityScore.Valid {
+			normalized := math.Max(0.0, math.Min(1.0, stabilityScore.Float64/100.0))
+			stabilityScores[isin] = normalized
 		}
 	}
-	return longTermScores, fundamentalsScores, nil
+	return longTermScores, stabilityScores, nil
 }
 
 func (a *ocbScoresRepoAdapter) GetValueTrapData(isinList []string) (map[string]float64, map[string]float64, map[string]float64, error) {
@@ -1638,18 +1419,6 @@ func (a *ocbCashManagerAdapter) GetAllCashBalances() (map[string]float64, error)
 	return a.manager.GetAllCashBalances()
 }
 
-// ocbPriceClientAdapter adapts yahoo.NativeClient to services.PriceClient
-type ocbPriceClientAdapter struct {
-	client *yahoo.NativeClient
-}
-
-func (a *ocbPriceClientAdapter) GetBatchQuotes(symbolMap map[string]*string) (map[string]*float64, error) {
-	if a.client == nil {
-		return nil, fmt.Errorf("yahoo client not available")
-	}
-	return a.client.GetBatchQuotes(symbolMap)
-}
-
 // ocbBrokerClientAdapter adapts domain.BrokerClient to services.BrokerClient (for OCB)
 type ocbBrokerClientAdapter struct {
 	client domain.BrokerClient
@@ -1679,4 +1448,76 @@ func (a *ocbDismissedFilterRepoAdapter) GetAll() (map[string]map[string][]string
 		return make(map[string]map[string][]string), nil
 	}
 	return a.repo.GetAll()
+}
+
+// positionValueProviderAdapter adapts PositionRepository to dividends.PositionValueProvider
+type positionValueProviderAdapter struct {
+	positionRepo *portfolio.PositionRepository
+}
+
+func (a *positionValueProviderAdapter) GetMarketValueByISIN(isin string) (float64, error) {
+	if a.positionRepo == nil {
+		return 0, fmt.Errorf("position repository not available")
+	}
+	position, err := a.positionRepo.GetByISIN(isin)
+	if err != nil {
+		return 0, err
+	}
+	if position == nil {
+		return 0, fmt.Errorf("position not found for ISIN: %s", isin)
+	}
+	return position.MarketValueEUR, nil
+}
+
+// dividendRepoForYieldAdapter adapts DividendRepository to dividends.DividendRepositoryInterface
+type dividendRepoForYieldAdapter struct {
+	repo *dividends.DividendRepository
+}
+
+func (a *dividendRepoForYieldAdapter) GetByISIN(isin string) ([]dividends.DividendRecord, error) {
+	if a.repo == nil {
+		return nil, fmt.Errorf("dividend repository not available")
+	}
+	return a.repo.GetByISIN(isin)
+}
+
+// noOpPriceValidator is a no-op price validator that always returns an error
+// Used when external price validation is disabled (single data source mode)
+type noOpPriceValidator struct{}
+
+func (v *noOpPriceValidator) GetValidationPrice(symbol string) (*float64, error) {
+	return nil, fmt.Errorf("external price validation disabled")
+}
+
+// brokerPriceClientAdapter adapts domain.BrokerClient to services.PriceClient for OCB
+type brokerPriceClientAdapter struct {
+	client domain.BrokerClient
+}
+
+func (a *brokerPriceClientAdapter) GetBatchQuotes(symbolMap map[string]*string) (map[string]*float64, error) {
+	if a.client == nil {
+		return nil, fmt.Errorf("broker client not available")
+	}
+	// Extract symbols from map
+	symbols := make([]string, 0, len(symbolMap))
+	for symbol := range symbolMap {
+		symbols = append(symbols, symbol)
+	}
+
+	// Get quotes from broker
+	quotes, err := a.client.GetQuotes(symbols)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get broker quotes: %w", err)
+	}
+
+	// Convert to price map
+	prices := make(map[string]*float64)
+	for symbol, quote := range quotes {
+		if quote != nil && quote.Price > 0 {
+			price := quote.Price
+			prices[symbol] = &price
+		}
+	}
+
+	return prices, nil
 }

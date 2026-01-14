@@ -13,7 +13,7 @@ func (q *QuantumProbabilityCalculator) CalculateBubbleProbability(
 	sharpe float64,
 	sortino float64,
 	volatility float64,
-	fundamentalsScore float64,
+	stabilityScore float64,
 	regimeScore float64,
 	kurtosis *float64,
 ) float64 {
@@ -25,7 +25,7 @@ func (q *QuantumProbabilityCalculator) CalculateBubbleProbability(
 
 	// Step 1: Calculate Energy Levels (discrete, quantized)
 	// Value energy: negative = stable state
-	valueEnergyRaw := -q.energyScale * (fundamentalsScore + (1.0 - normVol) + normSortino*0.5)
+	valueEnergyRaw := -q.energyScale * (stabilityScore + (1.0 - normVol) + normSortino*0.5)
 	valueEnergy := q.CalculateEnergyLevel(valueEnergyRaw)
 
 	// Bubble energy: positive = unstable state
@@ -33,8 +33,8 @@ func (q *QuantumProbabilityCalculator) CalculateBubbleProbability(
 	bubbleEnergy := q.CalculateEnergyLevel(bubbleEnergyRaw)
 
 	// Step 2: Calculate Probability Amplitudes (normalized)
-	// Value state: strong fundamentals, reasonable returns
-	pValue := fundamentalsScore * (1.0 - normVol) * (1.0 + normSortino*0.5)
+	// Value state: high stability, reasonable returns
+	pValue := stabilityScore * (1.0 - normVol) * (1.0 + normSortino*0.5)
 	// Bubble state: high returns with poor risk metrics
 	pBubble := normCAGR * (1.0 - normSharpe) * normVol
 
@@ -69,7 +69,7 @@ func (q *QuantumProbabilityCalculator) CalculateBubbleState(
 	sharpe float64,
 	sortino float64,
 	volatility float64,
-	fundamentalsScore float64,
+	stabilityScore float64,
 	regimeScore float64,
 	kurtosis *float64,
 ) QuantumBubbleState {
@@ -80,13 +80,13 @@ func (q *QuantumProbabilityCalculator) CalculateBubbleState(
 	normVol := math.Min(1.0, volatility/0.50)
 
 	// Calculate energy levels
-	valueEnergyRaw := -q.energyScale * (fundamentalsScore + (1.0 - normVol) + normSortino*0.5)
+	valueEnergyRaw := -q.energyScale * (stabilityScore + (1.0 - normVol) + normSortino*0.5)
 	valueEnergy := q.CalculateEnergyLevel(valueEnergyRaw)
 	bubbleEnergyRaw := q.energyScale * (normCAGR - (1.0 - normSharpe) - normVol)
 	bubbleEnergy := q.CalculateEnergyLevel(bubbleEnergyRaw)
 
 	// Calculate probabilities
-	pValue := fundamentalsScore * (1.0 - normVol) * (1.0 + normSortino*0.5)
+	pValue := stabilityScore * (1.0 - normVol) * (1.0 + normSortino*0.5)
 	pBubble := normCAGR * (1.0 - normSharpe) * normVol
 	pValue, pBubble = q.NormalizeState(pValue, pBubble)
 

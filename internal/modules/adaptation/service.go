@@ -9,13 +9,13 @@ import (
 
 // QualityGateThresholds represents adaptive quality gate thresholds
 type QualityGateThresholds struct {
-	Fundamentals float64 // Fundamentals score threshold
-	LongTerm     float64 // Long-term score threshold
+	Stability float64 // Stability score threshold
+	LongTerm  float64 // Long-term score threshold
 }
 
-// GetFundamentals returns the fundamentals threshold
-func (q *QualityGateThresholds) GetFundamentals() float64 {
-	return q.Fundamentals
+// GetStability returns the stability threshold
+func (q *QualityGateThresholds) GetStability() float64 {
+	return q.Stability
 }
 
 // GetLongTerm returns the long-term threshold
@@ -77,37 +77,32 @@ func (s *AdaptiveMarketService) CalculateAdaptiveWeights(regimeScore float64) ma
 	score := math.Max(-1.0, math.Min(1.0, regimeScore))
 
 	// Define base weights for extreme cases
+	// Note: Opinion and diversification removed - stability replaces fundamentals
 	neutralWeights := map[string]float64{
-		"long_term":       0.25,
-		"fundamentals":    0.20,
-		"dividends":       0.18,
-		"opportunity":     0.12,
-		"short_term":      0.08,
-		"technicals":      0.07,
-		"opinion":         0.05,
-		"diversification": 0.05,
+		"long_term":   0.30,
+		"stability":   0.20,
+		"dividends":   0.18,
+		"opportunity": 0.15,
+		"short_term":  0.10,
+		"technicals":  0.07,
 	}
 
 	bullWeights := map[string]float64{
-		"long_term":       0.30, // Higher in bull
-		"fundamentals":    0.15, // Lower in bull
-		"dividends":       0.15, // Lower in bull
-		"opportunity":     0.18, // Higher in bull
-		"short_term":      0.08,
-		"technicals":      0.07,
-		"opinion":         0.05,
-		"diversification": 0.02,
+		"long_term":   0.35, // Higher in bull
+		"stability":   0.15, // Lower in bull
+		"dividends":   0.15, // Lower in bull
+		"opportunity": 0.20, // Higher in bull
+		"short_term":  0.10,
+		"technicals":  0.05,
 	}
 
 	bearWeights := map[string]float64{
-		"long_term":       0.20, // Lower in bear
-		"fundamentals":    0.30, // Higher in bear
-		"dividends":       0.25, // Higher in bear
-		"opportunity":     0.08, // Lower in bear
-		"short_term":      0.05,
-		"technicals":      0.05,
-		"opinion":         0.04,
-		"diversification": 0.03,
+		"long_term":   0.25, // Lower in bear
+		"stability":   0.30, // Higher in bear
+		"dividends":   0.25, // Higher in bear
+		"opportunity": 0.08, // Lower in bear
+		"short_term":  0.05,
+		"technicals":  0.07,
 	}
 
 	// Linear interpolation
@@ -165,30 +160,30 @@ func (s *AdaptiveMarketService) CalculateAdaptiveQualityGates(regimeScore float6
 	score := math.Max(-1.0, math.Min(1.0, regimeScore))
 
 	// Base thresholds
-	neutralFundamentals := 0.60
+	neutralStability := 0.60
 	neutralLongTerm := 0.50
 
-	bullFundamentals := 0.55
+	bullStability := 0.55
 	bullLongTerm := 0.45
 
-	bearFundamentals := 0.65
+	bearStability := 0.65
 	bearLongTerm := 0.55
 
-	var fundamentals, longTerm float64
+	var stability, longTerm float64
 
 	if score >= 0 {
 		// Interpolate between neutral and bull (lower thresholds)
-		fundamentals = neutralFundamentals - (neutralFundamentals-bullFundamentals)*score
+		stability = neutralStability - (neutralStability-bullStability)*score
 		longTerm = neutralLongTerm - (neutralLongTerm-bullLongTerm)*score
 	} else {
 		// Interpolate between neutral and bear (higher thresholds)
 		absScore := math.Abs(score)
-		fundamentals = neutralFundamentals + (bearFundamentals-neutralFundamentals)*absScore
+		stability = neutralStability + (bearStability-neutralStability)*absScore
 		longTerm = neutralLongTerm + (bearLongTerm-neutralLongTerm)*absScore
 	}
 
 	return &QualityGateThresholds{
-		Fundamentals: math.Max(0.0, math.Min(1.0, fundamentals)),
-		LongTerm:     math.Max(0.0, math.Min(1.0, longTerm)),
+		Stability: math.Max(0.0, math.Min(1.0, stability)),
+		LongTerm:  math.Max(0.0, math.Min(1.0, longTerm)),
 	}
 }

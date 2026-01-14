@@ -163,16 +163,16 @@ func TestFullAdaptationFlow(t *testing.T) {
 	// Verify adaptive weights are calculated
 	assert.NotEmpty(t, adaptiveWeights)
 	assert.Contains(t, adaptiveWeights, "long_term")
-	assert.Contains(t, adaptiveWeights, "fundamentals")
-	// In bull market, long_term should be higher, fundamentals lower
+	assert.Contains(t, adaptiveWeights, "stability")
+	// In bull market, long_term should be higher, stability lower
 	assert.Greater(t, adaptiveWeights["long_term"], 0.25, "Bull market should increase long_term weight")
-	assert.Less(t, adaptiveWeights["fundamentals"], 0.20, "Bull market should decrease fundamentals weight")
+	assert.Less(t, adaptiveWeights["stability"], 0.20, "Bull market should decrease stability weight")
 
 	// Verify adaptive blend (bull should favor MV more)
 	assert.Less(t, adaptiveBlend, 0.5, "Bull market should favor MV (lower blend)")
 
 	// Verify adaptive quality gates (bull should have lower thresholds)
-	assert.Less(t, adaptiveGates.GetFundamentals(), 0.60, "Bull market should have lower fundamentals threshold")
+	assert.Less(t, adaptiveGates.GetStability(), 0.60, "Bull market should have lower stability threshold")
 	assert.Less(t, adaptiveGates.GetLongTerm(), 0.50, "Bull market should have lower long_term threshold")
 
 	// Step 6: Store adaptive parameters
@@ -199,7 +199,7 @@ func TestFullAdaptationFlow(t *testing.T) {
 	require.NoError(t, err)
 
 	gatesJSON, err := json.Marshal(map[string]float64{
-		"fundamentals": adaptiveGates.GetFundamentals(),
+		"stability": adaptiveGates.GetStability(),
 		"long_term":    adaptiveGates.GetLongTerm(),
 	})
 	require.NoError(t, err)
@@ -268,12 +268,12 @@ func TestAdaptationWithScoringIntegration(t *testing.T) {
 	assert.NotNil(t, securityScorer, "SecurityScorer should be created")
 
 	// Verify that adaptive weights are calculated correctly for bull market
-	// In bull market (0.5), long_term should be > 0.25 (neutral), fundamentals should be < 0.20
+	// In bull market (0.5), long_term should be > 0.25 (neutral), stability should be < 0.20
 	assert.Greater(t, adaptiveWeights["long_term"], 0.25, "Bull market should increase long_term weight")
-	assert.Less(t, adaptiveWeights["fundamentals"], 0.20, "Bull market should decrease fundamentals weight")
+	assert.Less(t, adaptiveWeights["stability"], 0.20, "Bull market should decrease stability weight")
 
 	// Verify all expected weight keys exist
-	expectedKeys := []string{"long_term", "fundamentals", "dividends", "opportunity", "short_term", "technicals", "opinion", "diversification"}
+	expectedKeys := []string{"long_term", "stability", "dividends", "opportunity", "short_term", "technicals", "opinion", "diversification"}
 	for _, key := range expectedKeys {
 		assert.Contains(t, adaptiveWeights, key, "Adaptive weights should contain %s", key)
 	}
@@ -316,7 +316,7 @@ func TestAdaptationWithTagAssignerIntegration(t *testing.T) {
 	expectedGates := adaptiveService.CalculateAdaptiveQualityGates(float64(currentScore))
 
 	// In bear market, thresholds should be higher (stricter)
-	assert.Greater(t, expectedGates.GetFundamentals(), 0.60, "Bear market should have higher fundamentals threshold")
+	assert.Greater(t, expectedGates.GetStability(), 0.60, "Bear market should have higher stability threshold")
 	assert.Greater(t, expectedGates.GetLongTerm(), 0.50, "Bear market should have higher long_term threshold")
 }
 
@@ -474,7 +474,7 @@ func TestAdaptiveParametersPersistence(t *testing.T) {
 
 	// Store gates
 	gatesJSON, _ := json.Marshal(map[string]float64{
-		"fundamentals": gates.GetFundamentals(),
+		"stability": gates.GetStability(),
 		"long_term":    gates.GetLongTerm(),
 	})
 	_, err = configDB.Exec(

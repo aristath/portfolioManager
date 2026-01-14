@@ -185,6 +185,9 @@ func transformSecurityInfoToDomain(tnSecurities []SecurityInfo) []domain.BrokerS
 			Currency:     tn.Currency,
 			Market:       tn.Market,
 			ExchangeCode: tn.ExchangeCode,
+			Country:      tn.Country,
+			Sector:       tn.Sector,
+			ExchangeName: tn.ExchangeName,
 		}
 	}
 	return result

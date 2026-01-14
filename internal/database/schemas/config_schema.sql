@@ -102,7 +102,7 @@ CREATE TABLE IF NOT EXISTS adaptive_performance_history (
     recorded_at INTEGER NOT NULL,        -- Unix timestamp (seconds since epoch)
     regime_score REAL NOT NULL,          -- Regime score when recorded (-1.0 to +1.0)
     portfolio_return REAL NOT NULL,      -- Portfolio return for this period
-    component_performance TEXT NOT NULL, -- JSON: {"long_term": 0.12, "fundamentals": 0.08, ...}
+    component_performance TEXT NOT NULL, -- JSON: {"long_term": 0.12, "stability": 0.08, ...}
     created_at INTEGER DEFAULT (strftime('%s', 'now'))  -- Unix timestamp (seconds since epoch)
 ) STRICT;
 

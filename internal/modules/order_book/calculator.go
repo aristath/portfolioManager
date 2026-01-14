@@ -24,8 +24,8 @@ func (s *Service) calculateOptimalLimitPrice(symbol, side string, buffer float64
 		return 0, err
 	}
 
-	// 3. Cross-validate with Yahoo (if available) - ASYMMETRIC validation
-	if err := s.validatePriceAgainstYahoo(symbol, side, midpoint); err != nil {
+	// 3. Cross-validate with secondary price source (if available) - ASYMMETRIC validation
+	if err := s.validatePriceAgainstSecondarySource(symbol, side, midpoint); err != nil {
 		// BLOCKS if midpoint would cause bad trade
 		return 0, err
 	}
@@ -82,18 +82,18 @@ func (s *Service) calculateMidpoint(quote *domain.BrokerOrderBook) (float64, err
 	return midpoint, nil
 }
 
-// validatePriceAgainstYahoo checks if midpoint price is reasonable
+// validatePriceAgainstSecondarySource checks if midpoint price is reasonable
 // Uses ASYMMETRIC validation: only blocks when midpoint would cause bad trades
 // Implements "BUY CHEAP, SELL HIGH" principle
-func (s *Service) validatePriceAgainstYahoo(symbol, side string, midpointPrice float64) error {
-	// Try to fetch Yahoo price
-	yahooPrice, err := s.fetchYahooPrice(symbol)
+func (s *Service) validatePriceAgainstSecondarySource(symbol, side string, midpointPrice float64) error {
+	// Try to fetch secondary price source for validation
+	validationPrice, err := s.fetchValidationPrice(symbol)
 	if err != nil {
-		// Yahoo unavailable - proceed with midpoint only
+		// Validation source unavailable - proceed with midpoint only
 		s.log.Warn().
 			Str("symbol", symbol).
 			Err(err).
-			Msg("Yahoo unavailable - using midpoint without validation")
+			Msg("Validation price unavailable - using midpoint without validation")
 		return nil
 	}
 
@@ -106,22 +106,22 @@ func (s *Service) validatePriceAgainstYahoo(symbol, side string, midpointPrice f
 	var reason string
 
 	if side == "BUY" {
-		// BUY CHEAP: Block if midpoint is significantly HIGHER than Yahoo (overpaying)
-		// Allow if midpoint is LOWER than Yahoo (buying cheap is good!)
-		maxAllowedPrice := yahooPrice * (1.0 + threshold)
+		// BUY CHEAP: Block if midpoint is significantly HIGHER than validation price (overpaying)
+		// Allow if midpoint is LOWER than validation price (buying cheap is good!)
+		maxAllowedPrice := validationPrice * (1.0 + threshold)
 		if midpointPrice > maxAllowedPrice {
 			shouldBlock = true
-			reason = fmt.Sprintf("overpaying: midpoint %.2f > yahoo %.2f * %.2f = %.2f",
-				midpointPrice, yahooPrice, 1.0+threshold, maxAllowedPrice)
+			reason = fmt.Sprintf("overpaying: midpoint %.2f > validation %.2f * %.2f = %.2f",
+				midpointPrice, validationPrice, 1.0+threshold, maxAllowedPrice)
 		}
 	} else if side == "SELL" {
-		// SELL HIGH: Block if midpoint is significantly LOWER than Yahoo (underselling)
-		// Allow if midpoint is HIGHER than Yahoo (selling high is good!)
-		minAllowedPrice := yahooPrice * (1.0 - threshold)
+		// SELL HIGH: Block if midpoint is significantly LOWER than validation price (underselling)
+		// Allow if midpoint is HIGHER than validation price (selling high is good!)
+		minAllowedPrice := validationPrice * (1.0 - threshold)
 		if midpointPrice < minAllowedPrice {
 			shouldBlock = true
-			reason = fmt.Sprintf("underselling: midpoint %.2f < yahoo %.2f * %.2f = %.2f",
-				midpointPrice, yahooPrice, 1.0-threshold, minAllowedPrice)
+			reason = fmt.Sprintf("underselling: midpoint %.2f < validation %.2f * %.2f = %.2f",
+				midpointPrice, validationPrice, 1.0-threshold, minAllowedPrice)
 		}
 	}
 
@@ -131,7 +131,7 @@ func (s *Service) validatePriceAgainstYahoo(symbol, side string, midpointPrice f
 			Str("symbol", symbol).
 			Str("side", side).
 			Float64("midpoint_price", midpointPrice).
-			Float64("yahoo_price", yahooPrice).
+			Float64("validation_price", validationPrice).
 			Float64("threshold_pct", threshold*100).
 			Str("reason", reason).
 			Msg("Price validation FAILED - BLOCKING trade (API bug suspected)")
@@ -140,21 +140,21 @@ func (s *Service) validatePriceAgainstYahoo(symbol, side string, midpointPrice f
 	}
 
 	// Log validation success
-	discrepancyPct := math.Abs(midpointPrice-yahooPrice) / yahooPrice * 100
+	discrepancyPct := math.Abs(midpointPrice-validationPrice) / validationPrice * 100
 	s.log.Info().
 		Str("symbol", symbol).
 		Str("side", side).
 		Float64("midpoint_price", midpointPrice).
-		Float64("yahoo_price", yahooPrice).
+		Float64("validation_price", validationPrice).
 		Float64("discrepancy_pct", discrepancyPct).
 		Msg("Price validation passed - using midpoint")
 
 	return nil
 }
 
-// fetchYahooPrice gets Yahoo price for validation using PriceValidator interface
-func (s *Service) fetchYahooPrice(symbol string) (float64, error) {
-	// Use PriceValidator interface (decouples from Yahoo-specific implementation)
+// fetchValidationPrice gets price for validation using PriceValidator interface
+func (s *Service) fetchValidationPrice(symbol string) (float64, error) {
+	// Use PriceValidator interface (decouples from specific implementation)
 	price, err := s.priceValidator.GetValidationPrice(symbol)
 	if err != nil {
 		return 0, fmt.Errorf("failed to fetch validation price: %w", err)

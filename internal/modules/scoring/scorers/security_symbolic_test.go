@@ -39,14 +39,14 @@ func TestSecurityScorer_WithDiscoveredFormula(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert discovered scoring formula
-	// Formula: (long_term * 0.3) + (fundamentals * 0.25) + (dividends * 0.2) + ...
+	// Formula: (long_term * 0.3) + (stability * 0.25) + (dividends * 0.2) + ...
 	_, err = db.Exec(`
 		INSERT INTO discovered_formulas (
 			formula_type, security_type, formula_expression, validation_metrics,
 			fitness_score, complexity, discovered_at, is_active
 		) VALUES (
 			'scoring', 'stock',
-			'long_term * 0.3 + fundamentals * 0.25 + dividends * 0.2 + opportunity * 0.12 + short_term * 0.08 + technicals * 0.05',
+			'long_term * 0.3 + stability * 0.25 + dividends * 0.2 + opportunity * 0.12 + short_term * 0.08 + technicals * 0.05',
 			'{"spearman": 0.75, "mae": 0.05}',
 			0.25, 7, '2024-01-01', 1
 		);
@@ -69,8 +69,7 @@ func TestSecurityScorer_WithDiscoveredFormula(t *testing.T) {
 			{YearMonth: "2024-02", AvgAdjClose: 101},
 		},
 		TargetAnnualReturn: 0.11,
-		MarketAvgPE:        20.0,
-	}
+			}
 
 	// Score security
 	result := scorer.ScoreSecurity(input)
@@ -82,7 +81,7 @@ func TestSecurityScorer_WithDiscoveredFormula(t *testing.T) {
 	// Verify group scores exist
 	assert.NotNil(t, result.GroupScores)
 	assert.Contains(t, result.GroupScores, "long_term")
-	assert.Contains(t, result.GroupScores, "fundamentals")
+	assert.Contains(t, result.GroupScores, "stability")
 }
 
 func TestSecurityScorer_FallbackWhenNoFormula(t *testing.T) {
@@ -104,8 +103,7 @@ func TestSecurityScorer_FallbackWhenNoFormula(t *testing.T) {
 			{YearMonth: "2024-01", AvgAdjClose: 100},
 		},
 		TargetAnnualReturn: 0.11,
-		MarketAvgPE:        20.0,
-	}
+			}
 
 	// Should fall back to static weights when no discovered formula exists
 	result := scorer.ScoreSecurity(input)

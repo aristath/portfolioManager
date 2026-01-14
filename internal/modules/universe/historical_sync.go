@@ -10,10 +10,11 @@ import (
 
 // HistoricalDataFetcher defines the interface for fetching historical price data.
 // This interface is implemented by services.DataFetcherService.
+// Only Tradernet is used as the data source (Yahoo removed).
 type HistoricalDataFetcher interface {
-	// GetHistoricalPrices fetches historical prices with automatic fallback between data sources.
+	// GetHistoricalPrices fetches historical prices from Tradernet.
 	// Returns prices, the source that was used, and any error.
-	GetHistoricalPrices(tradernetSymbol string, yahooSymbol string, years int) ([]HistoricalPriceData, string, error)
+	GetHistoricalPrices(tradernetSymbol string, years int) ([]HistoricalPriceData, string, error)
 }
 
 // HistoricalPriceData represents historical price data from any source.
@@ -132,8 +133,8 @@ func (s *HistoricalSyncService) SyncHistoricalPrices(symbol string) error {
 	var source string
 
 	if s.dataFetcher != nil {
-		// Use multi-source fetching with automatic fallback
-		prices, usedSource, err := s.dataFetcher.GetHistoricalPrices(security.Symbol, security.YahooSymbol, years)
+		// Use Tradernet for historical prices (Yahoo removed)
+		prices, usedSource, err := s.dataFetcher.GetHistoricalPrices(security.Symbol, years)
 		if err != nil {
 			return fmt.Errorf("failed to fetch historical prices: %w", err)
 		}

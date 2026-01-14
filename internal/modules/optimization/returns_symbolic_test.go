@@ -30,7 +30,7 @@ func TestReturnsCalculator_WithDiscoveredFormula(t *testing.T) {
 			isin TEXT PRIMARY KEY,
 			total_score REAL NOT NULL,
 			cagr_score REAL,
-			fundamental_score REAL,
+			stability_score REAL,
 			dividend_bonus REAL,
 			last_updated TEXT NOT NULL
 		);
@@ -58,7 +58,7 @@ func TestReturnsCalculator_WithDiscoveredFormula(t *testing.T) {
 		INSERT INTO positions (isin, symbol, quantity, avg_price)
 		VALUES ('US0378331005', 'AAPL', 10.0, 150.0);
 
-		INSERT INTO scores (isin, total_score, cagr_score, fundamental_score, dividend_bonus, last_updated)
+		INSERT INTO scores (isin, total_score, cagr_score, stability_score, dividend_bonus, last_updated)
 		VALUES ('US0378331005', 0.75, 0.80, 0.70, 0.02, '2024-01-01');
 
 		INSERT INTO discovered_formulas (

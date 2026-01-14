@@ -14,16 +14,16 @@ func ConvertToSecurityScore(isin string, symbol string, calculated *scoringdomai
 		groupScores = make(map[string]float64)
 	}
 
-	// Calculate quality score as average of long_term and fundamentals
+	// Calculate quality score as average of long_term and stability
 	qualityScore := 0.0
 	if longTerm, ok := groupScores["long_term"]; ok {
-		if fundamentals, ok2 := groupScores["fundamentals"]; ok2 {
-			qualityScore = (longTerm + fundamentals) / 2
+		if stability, ok2 := groupScores["stability"]; ok2 {
+			qualityScore = (longTerm + stability) / 2
 		} else {
 			qualityScore = longTerm
 		}
-	} else if fundamentals, ok := groupScores["fundamentals"]; ok {
-		qualityScore = fundamentals
+	} else if stability, ok := groupScores["stability"]; ok {
+		qualityScore = stability
 	}
 
 	// Extract sub-scores
@@ -42,12 +42,12 @@ func ConvertToSecurityScore(isin string, symbol string, calculated *scoringdomai
 				sharpeScore = sharpeRaw
 			}
 		}
-		if fundamentalsSubs, ok := subScores["fundamentals"]; ok {
-			if consistency, ok := fundamentalsSubs["consistency"]; ok {
+		if stabilitySubs, ok := subScores["stability"]; ok {
+			if consistency, ok := stabilitySubs["consistency"]; ok {
 				consistencyScore = consistency
 			}
 			// Extract financial strength score
-			if financialStrength, ok := fundamentalsSubs["financial_strength"]; ok {
+			if financialStrength, ok := stabilitySubs["financial_strength"]; ok {
 				financialStrengthScore = financialStrength
 			}
 		}
@@ -103,7 +103,7 @@ func ConvertToSecurityScore(isin string, symbol string, calculated *scoringdomai
 		ConsistencyScore:       consistencyScore,
 		HistoryYears:           historyYears,
 		TechnicalScore:         groupScores["technicals"],
-		FundamentalScore:       groupScores["fundamentals"],
+		StabilityScore:       groupScores["stability"],
 		TotalScore:             calculated.TotalScore,
 		Volatility:             volatility,
 		FinancialStrengthScore: financialStrengthScore,

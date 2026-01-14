@@ -20,8 +20,9 @@ type SecurityRepository struct {
 // securitiesColumns is the list of columns for the securities table
 // Used to avoid SELECT * which can break when schema changes
 // Column order must match the table schema (matches SELECT * order)
-// After migration: isin is PRIMARY KEY, column order is isin, symbol, yahoo_symbol, alphavantage_symbol, ...
-const securitiesColumns = `isin, symbol, yahoo_symbol, alphavantage_symbol, name, product_type, industry, country, fullExchangeName,
+// After migration: isin is PRIMARY KEY
+// Note: yahoo_symbol, alphavantage_symbol columns removed - client symbols now stored in client_symbols table
+const securitiesColumns = `isin, symbol, name, product_type, industry, country, fullExchangeName,
 priority_multiplier, min_lot, active, allow_buy, allow_sell, currency, last_synced,
 min_portfolio_target, max_portfolio_target, created_at, updated_at`
 
@@ -229,13 +230,14 @@ func (r *SecurityRepository) Create(security Security) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	// Note: yahoo_symbol, alphavantage_symbol columns removed - client symbols stored in client_symbols table
 	query := `
 		INSERT INTO securities
-		(isin, symbol, yahoo_symbol, alphavantage_symbol, name, product_type, industry, country, fullExchangeName,
+		(isin, symbol, name, product_type, industry, country, fullExchangeName,
 		 priority_multiplier, min_lot, active, allow_buy, allow_sell,
 		 currency, min_portfolio_target, max_portfolio_target,
 		 created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	// ISIN is required (PRIMARY KEY)
@@ -246,8 +248,6 @@ func (r *SecurityRepository) Create(security Security) error {
 	_, err = tx.Exec(query,
 		strings.ToUpper(strings.TrimSpace(security.ISIN)),
 		security.Symbol,
-		nullString(security.YahooSymbol),
-		nullString(security.AlphaVantageSymbol),
 		security.Name,
 		nullString(security.ProductType),
 		nullString(security.Industry),
@@ -284,15 +284,15 @@ func (r *SecurityRepository) Update(isin string, updates map[string]interface{})
 	}
 
 	// Whitelist of allowed update fields
+	// Note: yahoo_symbol, alphavantage_symbol removed - client symbols stored in client_symbols table
 	allowedFields := map[string]bool{
 		"active": true, "allow_buy": true, "allow_sell": true,
 		"name": true, "product_type": true, "sector": true, "industry": true,
 		"country": true, "fullExchangeName": true, "currency": true,
-		"exchange": true, "market_cap": true, "pe_ratio": true,
-		"dividend_yield": true, "beta": true, "52w_high": true, "52w_low": true,
+		"exchange": true,
 		"min_portfolio_target": true, "max_portfolio_target": true,
 		"isin": true, "min_lot": true, "priority_multiplier": true,
-		"yahoo_symbol": true, "alphavantage_symbol": true, "symbol": true,
+		"symbol":      true,
 		"last_synced": true, // Unix timestamp
 	}
 
@@ -386,8 +386,6 @@ func (r *SecurityRepository) GetWithScores(portfolioDB *sql.DB) ([]SecurityWithS
 			Symbol:             security.Symbol,
 			Name:               security.Name,
 			ISIN:               security.ISIN,
-			YahooSymbol:        security.YahooSymbol,
-			AlphaVantageSymbol: security.AlphaVantageSymbol,
 			ProductType:        security.ProductType,
 			Country:            security.Country,
 			FullExchangeName:   security.FullExchangeName,
@@ -551,7 +549,7 @@ func (r *SecurityRepository) GetWithScores(portfolioDB *sql.DB) ([]SecurityWithS
 			sws.ConsistencyScore = &score.ConsistencyScore
 			sws.HistoryYears = &score.HistoryYears
 			sws.TechnicalScore = &score.TechnicalScore
-			sws.FundamentalScore = &score.FundamentalScore
+			sws.StabilityScore = &score.StabilityScore
 		} else {
 			// Debug: Log when score not found for a security
 			r.log.Debug().
@@ -581,24 +579,23 @@ func (r *SecurityRepository) GetWithScores(portfolioDB *sql.DB) ([]SecurityWithS
 }
 
 // scanSecurity scans a database row into a Security struct
+// Note: yahoo_symbol, alphavantage_symbol columns removed - client symbols stored in client_symbols table
 func (r *SecurityRepository) scanSecurity(rows *sql.Rows) (Security, error) {
 	var security Security
-	var yahooSymbol, alphaVantageSymbol, isin, productType, country, fullExchangeName sql.NullString
+	var isin, productType, country, fullExchangeName sql.NullString
 	var industry, currency sql.NullString
 	var lastSynced sql.NullInt64
 	var minPortfolioTarget, maxPortfolioTarget sql.NullFloat64
 	var active, allowBuy, allowSell sql.NullInt64
 	var createdAt, updatedAt sql.NullInt64
 
-	// Table schema after migration: isin, symbol, yahoo_symbol, alphavantage_symbol, name, product_type, industry, country, fullExchangeName,
+	// Table schema after migration: isin, symbol, name, product_type, industry, country, fullExchangeName,
 	// priority_multiplier, min_lot, active, allow_buy, allow_sell, currency, last_synced,
 	// min_portfolio_target, max_portfolio_target, created_at, updated_at
 	var symbol sql.NullString
 	err := rows.Scan(
 		&isin,                        // isin (PRIMARY KEY)
 		&symbol,                      // symbol
-		&yahooSymbol,                 // yahoo_symbol
-		&alphaVantageSymbol,          // alphavantage_symbol
 		&security.Name,               // name
 		&productType,                 // product_type
 		&industry,                    // industry
@@ -626,12 +623,6 @@ func (r *SecurityRepository) scanSecurity(rows *sql.Rows) (Security, error) {
 	}
 	if symbol.Valid {
 		security.Symbol = symbol.String
-	}
-	if yahooSymbol.Valid {
-		security.YahooSymbol = yahooSymbol.String
-	}
-	if alphaVantageSymbol.Valid {
-		security.AlphaVantageSymbol = alphaVantageSymbol.String
 	}
 	if productType.Valid {
 		security.ProductType = productType.String
@@ -978,7 +969,7 @@ func (r *SecurityRepository) GetByTags(tagIDs []string) ([]Security, error) {
 	placeholders = placeholders[:len(placeholders)-1] // Remove trailing comma
 
 	query := fmt.Sprintf(`
-		SELECT DISTINCT s.isin, s.symbol, s.yahoo_symbol, s.alphavantage_symbol, s.name, s.product_type, s.industry, s.country, s.fullExchangeName,
+		SELECT DISTINCT s.isin, s.symbol, s.name, s.product_type, s.industry, s.country, s.fullExchangeName,
 			s.priority_multiplier, s.min_lot, s.active, s.allow_buy, s.allow_sell, s.currency, s.last_synced,
 			s.min_portfolio_target, s.max_portfolio_target, s.created_at, s.updated_at
 		FROM securities s
@@ -1074,7 +1065,7 @@ func (r *SecurityRepository) GetPositionsByTags(positionSymbols []string, tagIDs
 	tagPlaceholders = tagPlaceholders[:len(tagPlaceholders)-1]
 
 	query := fmt.Sprintf(`
-		SELECT DISTINCT s.isin, s.symbol, s.yahoo_symbol, s.alphavantage_symbol, s.name, s.product_type, s.industry, s.country, s.fullExchangeName,
+		SELECT DISTINCT s.isin, s.symbol, s.name, s.product_type, s.industry, s.country, s.fullExchangeName,
 			s.priority_multiplier, s.min_lot, s.active, s.allow_buy, s.allow_sell, s.currency, s.last_synced,
 			s.min_portfolio_target, s.max_portfolio_target, s.created_at, s.updated_at
 		FROM securities s

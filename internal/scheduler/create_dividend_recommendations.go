@@ -3,6 +3,7 @@ package scheduler
 import (
 	"fmt"
 
+	"github.com/aristath/sentinel/internal/modules/dividends"
 	"github.com/aristath/sentinel/internal/modules/planning/domain"
 	"github.com/rs/zerolog"
 )
@@ -12,7 +13,8 @@ type CreateDividendRecommendationsJob struct {
 	JobBase
 	log              zerolog.Logger
 	securityRepo     SecurityRepositoryForDividendsInterface
-	yahooClient      YahooClientForDividendsInterface
+	priceProvider    CurrentPriceProviderInterface
+	yieldCalculator  *dividends.DividendYieldCalculator
 	highYieldSymbols map[string]SymbolDividendInfoForGroup
 	minTradeSize     float64
 	recommendations  []domain.HolisticStep
@@ -22,13 +24,15 @@ type CreateDividendRecommendationsJob struct {
 // NewCreateDividendRecommendationsJob creates a new CreateDividendRecommendationsJob
 func NewCreateDividendRecommendationsJob(
 	securityRepo SecurityRepositoryForDividendsInterface,
-	yahooClient YahooClientForDividendsInterface,
+	priceProvider CurrentPriceProviderInterface,
+	yieldCalculator *dividends.DividendYieldCalculator,
 	minTradeSize float64,
 ) *CreateDividendRecommendationsJob {
 	return &CreateDividendRecommendationsJob{
 		log:             zerolog.Nop(),
 		securityRepo:    securityRepo,
-		yahooClient:     yahooClient,
+		priceProvider:   priceProvider,
+		yieldCalculator: yieldCalculator,
 		minTradeSize:    minTradeSize,
 		recommendations: make([]domain.HolisticStep, 0),
 		dividendsToMark: make(map[string][]int),
@@ -121,17 +125,11 @@ func (j *CreateDividendRecommendationsJob) createSameSecurityReinvestment(
 		return nil, fmt.Errorf("security %s not found", symbol)
 	}
 
-	// Get current security price from Yahoo Finance
-	yahooSymbol := security.YahooSymbol
-	if yahooSymbol == "" {
-		yahooSymbol = symbol
-	}
-
-	pricePtr, err := j.yahooClient.GetCurrentPrice(yahooSymbol, nil, 3)
+	// Get current security price from broker
+	pricePtr, err := j.priceProvider.GetCurrentPrice(symbol)
 	if err != nil || pricePtr == nil || *pricePtr <= 0 {
 		j.log.Warn().
 			Str("symbol", symbol).
-			Str("yahoo_symbol", yahooSymbol).
 			Msg("Could not get current price, skipping")
 		return nil, fmt.Errorf("invalid price for %s", symbol)
 	}

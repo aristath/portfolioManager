@@ -11,27 +11,14 @@ var SettingDefaults = map[string]interface{}{
 	// Security scoring
 	"min_security_score":   0.5,  // Minimum score for security to be recommended (0-1)
 	"target_annual_return": 0.11, // Optimal CAGR for scoring (11%)
-	"market_avg_pe":        22.0, // Reference P/E for valuation
 
 	// Trading mode
 	"trading_mode": "research", // "live" or "research" - blocks trades in research mode
 
-	// API credentials
+	// API credentials (Tradernet is the sole data source)
 	"tradernet_api_key":    "", // Tradernet API key
 	"tradernet_api_secret": "", // Tradernet API secret
 	"github_token":         "", // GitHub personal access token for deployment artifact downloads
-	"alphavantage_api_key": "", // Alpha Vantage API key (25 requests/day on free tier)
-	"openfigi_api_key":     "", // OpenFIGI API key (optional - increases rate limits)
-
-	// Data Source Priorities (JSON arrays stored as strings)
-	// These define the fallback order for each type of data
-	"datasource_fundamentals":     `["alphavantage","yahoo"]`,                    // Fundamentals (P/E, margins, company overview)
-	"datasource_current_prices":   `["tradernet","alphavantage","yahoo"]`,        // Real-time/delayed quotes
-	"datasource_historical":       `["tradernet","alphavantage","yahoo"]`,        // OHLCV time series
-	"datasource_technicals":       `["alphavantage","yahoo"]`,                    // RSI, SMA, MACD, etc.
-	"datasource_exchange_rates":   `["exchangerate","tradernet","alphavantage"]`, // Currency conversion
-	"datasource_isin_lookup":      `["openfigi","yahoo"]`,                        // ISIN to ticker resolution
-	"datasource_company_metadata": `["alphavantage","yahoo","openfigi"]`,         // Industry, sector, country, etc.
 
 	// Cloudflare R2 Backup settings
 	"r2_account_id":            "",      // Cloudflare R2 account ID
@@ -187,13 +174,13 @@ var SettingDefaults = map[string]interface{}{
 	"security_table_visible_columns": `{"chart":true,"company":true,"country":true,"exchange":true,"sector":true,"tags":true,"value":true,"score":true,"mult":true,"bs":true,"priority":true}`, // JSON string with column visibility preferences
 
 	// Limit Order Protection
-	"limit_order_buffer_percent": 0.05, // 5% buffer for limit orders (buy up to 5% above Yahoo price, sell down to 5% below)
+	"limit_order_buffer_percent": 0.05, // 5% buffer for limit orders (buy up to 5% above market price, sell down to 5% below)
 
 	// Order Book Analysis settings
-	"enable_order_book_analysis":  1.0,  // 1.0 = enabled, 0.0 = disabled (fallback to Yahoo-only)
+	"enable_order_book_analysis":  1.0,  // 1.0 = enabled, 0.0 = disabled (fallback to Tradernet-only)
 	"min_liquidity_multiple":      2.0,  // Required liquidity as multiple of trade size (2.0 = need 2x quantity)
 	"order_book_depth_levels":     5.0,  // Number of order book levels to check for liquidity
-	"price_discrepancy_threshold": 0.50, // Max allowed price difference between order book and Yahoo (0.50 = 50%, asymmetric)
+	"price_discrepancy_threshold": 0.50, // Max allowed price difference between order book and validation source (0.50 = 50%, asymmetric)
 }
 
 // StringSettings defines which settings should be treated as strings rather than floats
@@ -206,15 +193,6 @@ var StringSettings = map[string]bool{
 	"tradernet_api_key":              true,
 	"tradernet_api_secret":           true,
 	"github_token":                   true,
-	"alphavantage_api_key":           true,
-	"openfigi_api_key":               true,
-	"datasource_fundamentals":        true,
-	"datasource_current_prices":      true,
-	"datasource_historical":          true,
-	"datasource_technicals":          true,
-	"datasource_exchange_rates":      true,
-	"datasource_isin_lookup":         true,
-	"datasource_company_metadata":    true,
 	"security_table_visible_columns": true,
 	"r2_account_id":                  true,
 	"r2_access_key_id":               true,
@@ -231,11 +209,11 @@ var SettingDescriptions = map[string]string{
 	"temperament_patience":   "Patience level (0 = impatient, 0.5 = balanced, 1 = patient). Controls hold periods, cooldowns, windfall thresholds, rebalance triggers, and dividend focus.",
 
 	// Trading settings
-	"limit_order_buffer_percent":  "Buffer percentage for limit orders (5% = buy up to 5% above Yahoo price, sell down to 5% below)",
-	"enable_order_book_analysis":  "Enable order book analysis (1.0 = yes, 0.0 = no/Yahoo-only fallback)",
+	"limit_order_buffer_percent":  "Buffer percentage for limit orders (5% = buy up to 5% above market price, sell down to 5% below)",
+	"enable_order_book_analysis":  "Enable order book analysis (1.0 = yes, 0.0 = no/Tradernet-only fallback)",
 	"min_liquidity_multiple":      "Required liquidity as multiple of trade size (2.0 = need 2x quantity available)",
 	"order_book_depth_levels":     "Number of order book levels to check for liquidity (default 5)",
-	"price_discrepancy_threshold": "Max allowed price difference between order book and Yahoo (0.50 = 50%, asymmetric: blocks overpaying on BUY, underselling on SELL)",
+	"price_discrepancy_threshold": "Max allowed price difference between order book and validation source (0.50 = 50%, asymmetric: blocks overpaying on BUY, underselling on SELL)",
 }
 
 // SettingUpdate represents a setting value update request

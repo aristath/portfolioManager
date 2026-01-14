@@ -9,7 +9,7 @@
 -- - sharpe_score: Raw Sharpe ratio (used in long-term scoring, optimization)
 -- - drawdown_score: Raw max drawdown percentage (used in risk assessment, tag assignment)
 -- - dividend_bonus: Dividend bonus value (used in optimization returns calculation)
--- - financial_strength_score: Financial strength component score (used in fundamentals scoring)
+-- - financial_strength_score: Financial strength component score (used in stability scoring)
 -- - rsi: Raw RSI value 0-100 (used in technicals scoring, tag assignment)
 -- - ema_200: Raw 200-day EMA price value (used in technicals scoring, tag assignment)
 -- - below_52w_high_pct: Raw percentage below 52-week high (used in opportunity scoring, tag assignment)

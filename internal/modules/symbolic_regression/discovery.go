@@ -329,10 +329,10 @@ func (ds *DiscoveryService) DiscoverScoringFormula(
 	var discoveredFormulas []*DiscoveredFormula
 
 	// For scoring, we optimize ranking quality (Spearman correlation)
-	// Variables are scoring components
+	// Variables are scoring components (opinion and diversification removed - no external data)
 	variables := []string{
-		"long_term", "fundamentals", "dividends", "opportunity",
-		"short_term", "technicals", "opinion", "diversification",
+		"long_term", "stability", "dividends", "opportunity",
+		"short_term", "technicals",
 	}
 
 	// If regime ranges provided, discover separate formulas for each regime

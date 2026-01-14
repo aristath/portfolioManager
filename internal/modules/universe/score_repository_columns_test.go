@@ -11,7 +11,7 @@ func TestScoresColumns_MatchesSchema(t *testing.T) {
 	// After migration 030, the schema is:
 	// isin, total_score, quality_score, opportunity_score, analyst_score,
 	// allocation_fit_score, volatility, cagr_score, consistency_score,
-	// history_years, technical_score, fundamental_score,
+	// history_years, technical_score, stability_score,
 	// sharpe_score, drawdown_score, dividend_bonus, financial_strength_score,
 	// rsi, ema_200, below_52w_high_pct, last_updated
 
@@ -27,7 +27,7 @@ func TestScoresColumns_MatchesSchema(t *testing.T) {
 		"consistency_score",
 		"history_years",
 		"technical_score",
-		"fundamental_score",
+		"stability_score",
 		"sharpe_score",
 		"drawdown_score",
 		"dividend_bonus",

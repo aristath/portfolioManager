@@ -11,7 +11,7 @@ const SecurityChartComponent = forwardRef(({ isin, symbol, onClose }, ref) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selectedRange, setSelectedRange] = useState('1Y');
-  const [selectedSource, setSelectedSource] = useState('yahoo');
+  const [selectedSource, setSelectedSource] = useState('tradernet');
 
   // Memoize chart data loading function
   const loadChartData = useCallback(async () => {
@@ -147,10 +147,10 @@ const SecurityChartComponent = forwardRef(({ isin, symbol, onClose }, ref) => {
           <Select
             size="xs"
             data={[
-              { value: 'yahoo', label: 'Yahoo Finance' },
+              { value: 'tradernet', label: 'Tradernet' },
             ]}
             value={selectedSource}
-            onChange={(val) => setSelectedSource(val || 'yahoo')}
+            onChange={(val) => setSelectedSource(val || 'tradernet')}
             disabled
             style={{ width: '140px' }}
           />

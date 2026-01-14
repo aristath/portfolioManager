@@ -18,18 +18,12 @@ func TestOpportunityScorer_CalculateWithQualityGate_HighOpportunityHighQuality(t
 	for i := range dailyPrices {
 		dailyPrices[i] = 100.0 - float64(i)*0.1 // Declining price (cheap)
 	}
-	peRatio := 10.0
-	forwardPE := 9.0
-	marketAvgPE := 20.0
-	fundamentalsScore := 0.75 // High quality
-	longTermScore := 0.70     // High quality
+	stabilityScore := 0.75 // High quality
+	longTermScore := 0.70  // High quality
 
 	result := scorer.CalculateWithQualityGate(
 		dailyPrices,
-		&peRatio,
-		&forwardPE,
-		marketAvgPE,
-		&fundamentalsScore,
+		&stabilityScore,
 		&longTermScore,
 		"EQUITY", // Product type for tests
 	)
@@ -47,18 +41,12 @@ func TestOpportunityScorer_CalculateWithQualityGate_HighOpportunityLowQuality(t 
 	for i := range dailyPrices {
 		dailyPrices[i] = 100.0 - float64(i)*0.1 // Declining price (cheap)
 	}
-	peRatio := 8.0 // Very cheap
-	forwardPE := 7.0
-	marketAvgPE := 20.0
-	fundamentalsScore := 0.45 // Low quality (below 0.6 threshold)
-	longTermScore := 0.40     // Low quality (below 0.5 threshold)
+	stabilityScore := 0.45 // Low quality (below 0.6 threshold)
+	longTermScore := 0.40  // Low quality (below 0.5 threshold)
 
 	result := scorer.CalculateWithQualityGate(
 		dailyPrices,
-		&peRatio,
-		&forwardPE,
-		marketAvgPE,
-		&fundamentalsScore,
+		&stabilityScore,
 		&longTermScore,
 		"EQUITY", // Product type for tests
 	)
@@ -78,18 +66,12 @@ func TestOpportunityScorer_CalculateWithQualityGate_ModerateOpportunityLowQualit
 	for i := range dailyPrices {
 		dailyPrices[i] = 100.0 - float64(i)*0.05 // Slightly declining
 	}
-	peRatio := 15.0
-	forwardPE := 14.0
-	marketAvgPE := 20.0
-	fundamentalsScore := 0.50 // Low quality
-	longTermScore := 0.45     // Low quality
+	stabilityScore := 0.50 // Low quality
+	longTermScore := 0.45  // Low quality
 
 	result := scorer.CalculateWithQualityGate(
 		dailyPrices,
-		&peRatio,
-		&forwardPE,
-		marketAvgPE,
-		&fundamentalsScore,
+		&stabilityScore,
 		&longTermScore,
 		"EQUITY", // Product type for tests
 	)
@@ -102,54 +84,42 @@ func TestOpportunityScorer_CalculateWithQualityGate_ModerateOpportunityLowQualit
 	}
 }
 
-func TestOpportunityScorer_CalculateWithQualityGate_LowFundamentalsOnly(t *testing.T) {
+func TestOpportunityScorer_CalculateWithQualityGate_LowStabilityOnly(t *testing.T) {
 	scorer := NewOpportunityScorer()
 
-	// High opportunity but only fundamentals is low (long-term is OK)
+	// High opportunity but only stability is low (long-term is OK)
 	dailyPrices := make([]float64, 300)
 	for i := range dailyPrices {
 		dailyPrices[i] = 100.0 - float64(i)*0.1
 	}
-	peRatio := 8.0
-	forwardPE := 7.0
-	marketAvgPE := 20.0
-	fundamentalsScore := 0.50 // Low (below 0.6)
-	longTermScore := 0.60     // OK (above 0.5)
+	stabilityScore := 0.50 // Low (below 0.6)
+	longTermScore := 0.60  // OK (above 0.5)
 
 	result := scorer.CalculateWithQualityGate(
 		dailyPrices,
-		&peRatio,
-		&forwardPE,
-		marketAvgPE,
-		&fundamentalsScore,
+		&stabilityScore,
 		&longTermScore,
 		"EQUITY", // Product type for tests
 	)
 
 	// Should still have penalty (one metric below threshold is enough)
-	assert.Contains(t, result.Components, "quality_penalty", "Low fundamentals should trigger penalty")
+	assert.Contains(t, result.Components, "quality_penalty", "Low stability should trigger penalty")
 }
 
 func TestOpportunityScorer_CalculateWithQualityGate_LowLongTermOnly(t *testing.T) {
 	scorer := NewOpportunityScorer()
 
-	// High opportunity but only long-term is low (fundamentals is OK)
+	// High opportunity but only long-term is low (stability is OK)
 	dailyPrices := make([]float64, 300)
 	for i := range dailyPrices {
 		dailyPrices[i] = 100.0 - float64(i)*0.1
 	}
-	peRatio := 8.0
-	forwardPE := 7.0
-	marketAvgPE := 20.0
-	fundamentalsScore := 0.65 // OK (above 0.6)
-	longTermScore := 0.40     // Low (below 0.5)
+	stabilityScore := 0.65 // OK (above 0.6)
+	longTermScore := 0.40  // Low (below 0.5)
 
 	result := scorer.CalculateWithQualityGate(
 		dailyPrices,
-		&peRatio,
-		&forwardPE,
-		marketAvgPE,
-		&fundamentalsScore,
+		&stabilityScore,
 		&longTermScore,
 		"EQUITY", // Product type for tests
 	)
@@ -166,16 +136,10 @@ func TestOpportunityScorer_CalculateWithQualityGate_NoQualityData(t *testing.T) 
 	for i := range dailyPrices {
 		dailyPrices[i] = 100.0 - float64(i)*0.1
 	}
-	peRatio := 8.0
-	forwardPE := 7.0
-	marketAvgPE := 20.0
 
 	result := scorer.CalculateWithQualityGate(
 		dailyPrices,
-		&peRatio,
-		&forwardPE,
-		marketAvgPE,
-		nil,      // No fundamentals
+		nil,      // No stability
 		nil,      // No long-term
 		"EQUITY", // Product type for tests
 	)
@@ -187,82 +151,82 @@ func TestOpportunityScorer_CalculateWithQualityGate_NoQualityData(t *testing.T) 
 
 func TestCalculateQualityPenalty_Thresholds(t *testing.T) {
 	testCases := []struct {
-		name              string
-		opportunityScore  float64
-		fundamentalsScore *float64
-		longTermScore     *float64
-		expectedMin       float64
-		expectedMax       float64
-		description       string
+		name             string
+		opportunityScore float64
+		stabilityScore   *float64
+		longTermScore    *float64
+		expectedMin      float64
+		expectedMax      float64
+		description      string
 	}{
 		{
-			name:              "High opportunity, both quality metrics low",
-			opportunityScore:  0.75,
-			fundamentalsScore: floatPtrForOpportunityTest(0.50), // Below 0.6
-			longTermScore:     floatPtrForOpportunityTest(0.40), // Below 0.5
-			expectedMin:       0.25,
-			expectedMax:       0.30,
-			description:       "Should get 30% penalty",
+			name:             "High opportunity, both quality metrics low",
+			opportunityScore: 0.75,
+			stabilityScore:   floatPtrForOpportunityTest(0.50), // Below 0.6
+			longTermScore:    floatPtrForOpportunityTest(0.40), // Below 0.5
+			expectedMin:      0.25,
+			expectedMax:      0.30,
+			description:      "Should get 30% penalty",
 		},
 		{
-			name:              "Moderate opportunity, both quality metrics low",
-			opportunityScore:  0.60,
-			fundamentalsScore: floatPtrForOpportunityTest(0.50),
-			longTermScore:     floatPtrForOpportunityTest(0.40),
-			expectedMin:       0.10,
-			expectedMax:       0.20,
-			description:       "Should get 15% penalty",
+			name:             "Moderate opportunity, both quality metrics low",
+			opportunityScore: 0.60,
+			stabilityScore:   floatPtrForOpportunityTest(0.50),
+			longTermScore:    floatPtrForOpportunityTest(0.40),
+			expectedMin:      0.10,
+			expectedMax:      0.20,
+			description:      "Should get 15% penalty",
 		},
 		{
-			name:              "High opportunity, high quality",
-			opportunityScore:  0.75,
-			fundamentalsScore: floatPtrForOpportunityTest(0.70), // Above 0.6
-			longTermScore:     floatPtrForOpportunityTest(0.60), // Above 0.5
-			expectedMin:       0.0,
-			expectedMax:       0.0,
-			description:       "Should get no penalty",
+			name:             "High opportunity, high quality",
+			opportunityScore: 0.75,
+			stabilityScore:   floatPtrForOpportunityTest(0.70), // Above 0.6
+			longTermScore:    floatPtrForOpportunityTest(0.60), // Above 0.5
+			expectedMin:      0.0,
+			expectedMax:      0.0,
+			description:      "Should get no penalty",
 		},
 		{
-			name:              "Low opportunity, low quality",
-			opportunityScore:  0.40,
-			fundamentalsScore: floatPtrForOpportunityTest(0.50),
-			longTermScore:     floatPtrForOpportunityTest(0.40),
-			expectedMin:       0.0,
-			expectedMax:       0.0,
-			description:       "Low opportunity doesn't need penalty",
+			name:             "Low opportunity, low quality",
+			opportunityScore: 0.40,
+			stabilityScore:   floatPtrForOpportunityTest(0.50),
+			longTermScore:    floatPtrForOpportunityTest(0.40),
+			expectedMin:      0.0,
+			expectedMax:      0.0,
+			description:      "Low opportunity doesn't need penalty",
 		},
 		{
-			name:              "High opportunity, only fundamentals low",
-			opportunityScore:  0.75,
-			fundamentalsScore: floatPtrForOpportunityTest(0.50), // Below 0.6
-			longTermScore:     floatPtrForOpportunityTest(0.60), // Above 0.5
-			expectedMin:       0.25,
-			expectedMax:       0.30,
-			description:       "One metric low should trigger penalty",
+			name:             "High opportunity, only stability low",
+			opportunityScore: 0.75,
+			stabilityScore:   floatPtrForOpportunityTest(0.50), // Below 0.6
+			longTermScore:    floatPtrForOpportunityTest(0.60), // Above 0.5
+			expectedMin:      0.25,
+			expectedMax:      0.30,
+			description:      "One metric low should trigger penalty",
 		},
 		{
-			name:              "High opportunity, only long-term low",
-			opportunityScore:  0.75,
-			fundamentalsScore: floatPtrForOpportunityTest(0.70), // Above 0.6
-			longTermScore:     floatPtrForOpportunityTest(0.40), // Below 0.5
-			expectedMin:       0.25,
-			expectedMax:       0.30,
-			description:       "One metric low should trigger penalty",
+			name:             "High opportunity, only long-term low",
+			opportunityScore: 0.75,
+			stabilityScore:   floatPtrForOpportunityTest(0.70), // Above 0.6
+			longTermScore:    floatPtrForOpportunityTest(0.40), // Below 0.5
+			expectedMin:      0.25,
+			expectedMax:      0.30,
+			description:      "One metric low should trigger penalty",
 		},
 		{
-			name:              "No quality data",
-			opportunityScore:  0.75,
-			fundamentalsScore: nil,
-			longTermScore:     nil,
-			expectedMin:       0.0,
-			expectedMax:       0.0,
-			description:       "No quality data = no penalty",
+			name:             "No quality data",
+			opportunityScore: 0.75,
+			stabilityScore:   nil,
+			longTermScore:    nil,
+			expectedMin:      0.0,
+			expectedMax:      0.0,
+			description:      "No quality data = no penalty",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			penalty := calculateQualityPenalty(tc.opportunityScore, tc.fundamentalsScore, tc.longTermScore)
+			penalty := calculateQualityPenalty(tc.opportunityScore, tc.stabilityScore, tc.longTermScore)
 			assert.GreaterOrEqual(t, penalty, tc.expectedMin, tc.description)
 			assert.LessOrEqual(t, penalty, tc.expectedMax, tc.description)
 		})

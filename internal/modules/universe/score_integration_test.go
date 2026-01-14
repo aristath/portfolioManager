@@ -40,7 +40,7 @@ func TestScoreCalculation_SavesAllRawValues(t *testing.T) {
 			consistency_score REAL,
 			history_years INTEGER,
 			technical_score REAL,
-			fundamental_score REAL,
+			stability_score REAL,
 			sharpe_score REAL,
 			drawdown_score REAL,
 			dividend_bonus REAL,
@@ -77,15 +77,12 @@ func TestScoreCalculation_SavesAllRawValues(t *testing.T) {
 	}
 
 	// Create scoring input
+	// Note: P/E ratio, profit margin, debt-to-equity, current ratio removed - using internal data only
 	scoringInput := scorers.ScoreSecurityInput{
 		Symbol:        "TEST",
 		DailyPrices:   dailyPrices,
 		MonthlyPrices: monthlyPrices,
 		DividendYield: floatPtr(0.065), // 6.5% yield for dividend bonus
-		PERatio:       floatPtr(15.0),
-		ProfitMargin:  floatPtr(0.15),
-		DebtToEquity:  floatPtr(30.0),
-		CurrentRatio:  floatPtr(2.5),
 	}
 
 	// Calculate score

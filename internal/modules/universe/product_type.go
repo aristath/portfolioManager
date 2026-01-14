@@ -19,16 +19,15 @@ const (
 	ProductTypeUnknown ProductType = "UNKNOWN"
 )
 
-// FromYahooQuoteType detects product type from Yahoo Finance quoteType with heuristics
-// Faithful translation from Python: app/domain/value_objects/product_type.py -> from_yahoo_quote_type()
+// FromQuoteType detects product type from a quote type string with heuristics
 //
-// Yahoo Finance provides a quoteType field, but it's not always accurate:
+// Standard quote types:
 // - EQUITY: Regular stocks (reliable)
 // - ETF: Most ETFs (reliable)
 // - MUTUALFUND: Can be UCITS ETFs or actual mutual funds or ETCs
 //
 // We use heuristics on the product name to distinguish ETCs from other MUTUALFUND types.
-func FromYahooQuoteType(quoteType string, productName string) ProductType {
+func FromQuoteType(quoteType string, productName string) ProductType {
 	if quoteType == "" {
 		return ProductTypeUnknown
 	}

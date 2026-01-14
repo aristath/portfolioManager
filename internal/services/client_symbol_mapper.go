@@ -5,7 +5,7 @@ import "github.com/aristath/sentinel/internal/domain"
 
 // ClientSymbolMapper provides client symbol mapping services.
 // Converts between ISINs (internal identifier) and client-specific symbol formats.
-// Used for brokers (tradernet, ibkr, schwab) and data providers (yahoo, alphavantage, etc.).
+// Used for brokers (tradernet, ibkr, schwab) and data providers.
 type ClientSymbolMapper struct {
 	repo domain.ClientSymbolRepositoryInterface
 }

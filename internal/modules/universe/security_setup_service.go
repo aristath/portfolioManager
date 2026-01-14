@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/aristath/sentinel/internal/clients/openfigi"
-	"github.com/aristath/sentinel/internal/clients/yahoo"
 	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/events"
 	"github.com/rs/zerolog"
@@ -13,10 +11,11 @@ import (
 
 // MetadataFetcher defines the interface for fetching security metadata.
 // This interface is implemented by services.DataFetcherService.
+// Only Tradernet is used as the data source (Yahoo removed).
 type MetadataFetcher interface {
-	// GetSecurityMetadata fetches company metadata with automatic fallback between data sources.
+	// GetSecurityMetadata fetches company metadata from Tradernet.
 	// Returns metadata, the source that was used, and any error.
-	GetSecurityMetadata(tradernetSymbol string, yahooSymbol string) (*SecurityMetadataResult, string, error)
+	GetSecurityMetadata(tradernetSymbol string) (*SecurityMetadataResult, string, error)
 }
 
 // SecurityMetadataResult represents metadata from any source.
@@ -36,9 +35,7 @@ type SecuritySetupService struct {
 	symbolResolver  *SymbolResolver
 	securityRepo    *SecurityRepository
 	brokerClient    domain.BrokerClient
-	yahooClient     yahoo.FullClientInterface
-	openFIGIClient  *openfigi.Client // Optional - for ISIN lookup fallback
-	metadataFetcher MetadataFetcher  // Optional - for multi-source metadata with fallback
+	metadataFetcher MetadataFetcher // Optional - for multi-source metadata with fallback
 	historicalSync  *HistoricalSyncService
 	eventManager    *events.Manager
 	scoreCalculator ScoreCalculator // Interface for score calculation
@@ -47,8 +44,9 @@ type SecuritySetupService struct {
 
 // ScoreCalculator interface for calculating and saving security scores
 // Implemented by UniverseHandlers.calculateAndSaveScore
+// Client symbols no longer needed - all data comes from internal sources
 type ScoreCalculator interface {
-	CalculateAndSaveScore(symbol string, yahooSymbol string, country string, industry string) error
+	CalculateAndSaveScore(symbol string, country string, industry string) error
 }
 
 // NewSecuritySetupService creates a new security setup service
@@ -56,7 +54,6 @@ func NewSecuritySetupService(
 	symbolResolver *SymbolResolver,
 	securityRepo *SecurityRepository,
 	brokerClient domain.BrokerClient,
-	yahooClient yahoo.FullClientInterface,
 	historicalSync *HistoricalSyncService,
 	eventManager *events.Manager,
 	scoreCalculator ScoreCalculator,
@@ -66,7 +63,6 @@ func NewSecuritySetupService(
 		symbolResolver:  symbolResolver,
 		securityRepo:    securityRepo,
 		brokerClient:    brokerClient,
-		yahooClient:     yahooClient,
 		historicalSync:  historicalSync,
 		eventManager:    eventManager,
 		scoreCalculator: scoreCalculator,
@@ -79,11 +75,6 @@ func (s *SecuritySetupService) SetScoreCalculator(calculator ScoreCalculator) {
 	s.scoreCalculator = calculator
 }
 
-// SetOpenFIGIClient sets the OpenFIGI client for ISIN lookup fallback
-func (s *SecuritySetupService) SetOpenFIGIClient(client *openfigi.Client) {
-	s.openFIGIClient = client
-}
-
 // SetMetadataFetcher sets the metadata fetcher for multi-source metadata with fallback.
 // When set, the service will use configurable data source priorities for metadata.
 func (s *SecuritySetupService) SetMetadataFetcher(fetcher MetadataFetcher) {
@@ -93,11 +84,10 @@ func (s *SecuritySetupService) SetMetadataFetcher(fetcher MetadataFetcher) {
 // CreateSecurity creates a security with explicit symbol and name
 // DEPRECATED: Use AddSecurityByIdentifier instead, which ensures ISIN is always present
 // This method is kept for backward compatibility but requires ISIN parameter
-// Faithful translation from Python: app/modules/universe/api/securities.py -> create_stock()
 //
 // This method:
 // 1. Validates symbol is unique
-// 2. Auto-detects country, exchange, industry from Yahoo Finance
+// 2. Auto-detects country, exchange, industry from Tradernet metadata
 // 3. Creates the security in the database (requires ISIN)
 // 4. Publishes SecurityAdded event
 // 5. Calculates and saves the initial security score
@@ -109,7 +99,6 @@ func (s *SecuritySetupService) SetMetadataFetcher(fetcher MetadataFetcher) {
 func (s *SecuritySetupService) CreateSecurity(
 	symbol string,
 	name string,
-	yahooSymbol string,
 	isin string, // Required: PRIMARY KEY after migration 030
 	minLot int,
 	allowBuy bool,
@@ -141,36 +130,42 @@ func (s *SecuritySetupService) CreateSecurity(
 		return nil, fmt.Errorf("security already exists: %s", existing.Symbol)
 	}
 
-	// Auto-detect country, exchange, and industry from Yahoo Finance
-	var yahooSymbolPtr *string
-	if yahooSymbol != "" {
-		yahooSymbolPtr = &yahooSymbol
+	// Auto-detect country, exchange, and industry using metadata fetcher (Tradernet only)
+	var country, fullExchangeName, industry *string
+	var productType ProductType
+
+	if s.metadataFetcher != nil {
+		metadata, _, err := s.metadataFetcher.GetSecurityMetadata(symbol)
+		if err == nil && metadata != nil {
+			if metadata.Country != "" {
+				country = &metadata.Country
+			}
+			if metadata.Exchange != "" {
+				fullExchangeName = &metadata.Exchange
+			}
+			if metadata.Industry != "" {
+				industry = &metadata.Industry
+			}
+			if metadata.ProductType != "" {
+				productType = ProductType(metadata.ProductType)
+			}
+		} else {
+			s.log.Warn().Err(err).Str("symbol", symbol).Msg("Failed to get metadata")
+		}
 	}
 
-	country, fullExchangeName, err := s.yahooClient.GetSecurityCountryAndExchange(symbol, yahooSymbolPtr)
-	if err != nil {
-		s.log.Warn().Err(err).Str("symbol", symbol).Msg("Failed to get country/exchange from Yahoo")
-	}
-
-	industry, err := s.yahooClient.GetSecurityIndustry(symbol, yahooSymbolPtr)
-	if err != nil {
-		s.log.Warn().Err(err).Str("symbol", symbol).Msg("Failed to get industry from Yahoo")
-	}
-
-	// Detect product type using Yahoo Finance with heuristics
-	productType, err := s.detectProductType(symbol, yahooSymbolPtr, name)
-	if err != nil {
-		s.log.Warn().Err(err).Str("symbol", symbol).Msg("Failed to detect product type, using UNKNOWN")
-		productType = ProductTypeUnknown
-	}
-
-	// Determine final yahoo symbol
-	finalYahooSymbol := yahooSymbol
-	if finalYahooSymbol == "" {
-		finalYahooSymbol = symbol
+	// Detect product type from symbol pattern if not found
+	if productType == "" {
+		var err error
+		productType, err = s.detectProductType(symbol, name)
+		if err != nil {
+			s.log.Warn().Err(err).Str("symbol", symbol).Msg("Failed to detect product type, using UNKNOWN")
+			productType = ProductTypeUnknown
+		}
 	}
 
 	// Create security (ISIN is required as PRIMARY KEY)
+	// Client symbols (if needed for external data sources) stored in client_symbols table
 	security := Security{
 		ISIN:               isin,
 		Symbol:             symbol,
@@ -178,7 +173,6 @@ func (s *SecuritySetupService) CreateSecurity(
 		ProductType:        string(productType),
 		Country:            stringValue(country),
 		FullExchangeName:   stringValue(fullExchangeName),
-		YahooSymbol:        finalYahooSymbol,
 		Industry:           stringValue(industry),
 		PriorityMultiplier: 1.0,
 		MinLot:             minLot,
@@ -212,7 +206,6 @@ func (s *SecuritySetupService) CreateSecurity(
 	if s.scoreCalculator != nil {
 		err = s.scoreCalculator.CalculateAndSaveScore(
 			security.Symbol,
-			security.YahooSymbol,
 			security.Country,
 			security.Industry,
 		)
@@ -234,12 +227,11 @@ func (s *SecuritySetupService) CreateSecurity(
 }
 
 // AddSecurityByIdentifier adds a security to the universe by symbol or ISIN
-// Faithful translation from Python: app/modules/universe/services/security_setup_service.py -> add_security_by_identifier()
 //
 // This method:
 // 1. Resolves the identifier to get all necessary symbols
 // 2. Fetches data from Tradernet (symbol, name, currency, ISIN)
-// 3. Fetches data from Yahoo Finance (country, exchange, industry)
+// 3. Fetches metadata from Tradernet (country, exchange, industry)
 // 4. Creates the security in the database
 // 5. Publishes SecurityAdded event
 // 6. Fetches historical price data (10 years initial seed)
@@ -341,7 +333,7 @@ func (s *SecuritySetupService) AddSecurityByIdentifier(
 				Msg("ISIN mismatch, using requested ISIN")
 		}
 	} else {
-		// Yahoo format - not supported for adding securities
+		// Generic format - not supported for adding securities
 		return nil, fmt.Errorf(
 			"cannot add security with identifier '%s'. "+
 				"Please provide a Tradernet symbol (e.g., AAPL.US) or ISIN (e.g., US0378331005)",
@@ -374,21 +366,13 @@ func (s *SecuritySetupService) AddSecurityByIdentifier(
 		return nil, fmt.Errorf("ISIN is required but could not be obtained from Tradernet API for symbol: %s. Please ensure the security exists in Tradernet and has an ISIN", tradernetSymbol)
 	}
 
-	// Step 3: Fetch metadata (country, exchange, industry)
-	yahooSymbol := symbolInfo.YahooSymbol
-	if yahooSymbol == "" && *isin != "" {
-		yahooSymbol = *isin
-	}
-	if yahooSymbol == "" {
-		yahooSymbol = tradernetSymbol
-	}
-
+	// Step 3: Fetch metadata (country, exchange, industry) from Tradernet
 	var country, fullExchangeName, industry *string
 	var productType = ProductTypeUnknown
 
-	// Use MetadataFetcher if available, otherwise fall back to Yahoo client directly
+	// Use MetadataFetcher if available (Tradernet only)
 	if s.metadataFetcher != nil {
-		metadata, source, err := s.metadataFetcher.GetSecurityMetadata(tradernetSymbol, yahooSymbol)
+		metadata, source, err := s.metadataFetcher.GetSecurityMetadata(tradernetSymbol)
 		if err != nil {
 			s.log.Warn().Err(err).Str("symbol", tradernetSymbol).Msg("Failed to get metadata from DataFetcherService")
 		} else if metadata != nil {
@@ -406,34 +390,24 @@ func (s *SecuritySetupService) AddSecurityByIdentifier(
 				productType = ProductType(metadata.ProductType)
 			}
 		}
-	} else {
-		// Fallback to direct Yahoo client
-		yahooSymbolPtr := &yahooSymbol
-		country, fullExchangeName, err = s.yahooClient.GetSecurityCountryAndExchange(tradernetSymbol, yahooSymbolPtr)
-		if err != nil {
-			s.log.Warn().Err(err).Str("symbol", tradernetSymbol).Msg("Failed to get country/exchange from Yahoo")
-		}
-
-		industry, err = s.yahooClient.GetSecurityIndustry(tradernetSymbol, yahooSymbolPtr)
-		if err != nil {
-			s.log.Warn().Err(err).Str("symbol", tradernetSymbol).Msg("Failed to get industry from Yahoo")
-		}
 	}
 
-	// Get name - prefer Tradernet name, fallback to Yahoo Finance
+	// Get name - prefer Tradernet name, fall back to metadata fetcher, then symbol
 	name := ""
 	if tradernetName != nil && *tradernetName != "" {
 		name = *tradernetName
 	} else {
-		yahooSymbolPtr := &yahooSymbol
-		yaName, err := s.getSecurityNameFromYahoo(tradernetSymbol, yahooSymbolPtr)
-		if err == nil && yaName != nil {
-			name = *yaName
+		// Try to get name from metadata fetcher
+		metaName, err := s.getSecurityName(tradernetSymbol)
+		if err == nil && metaName != nil {
+			name = *metaName
 		}
 	}
 
+	// If still no name, use the symbol as the name
 	if name == "" {
-		return nil, fmt.Errorf("could not determine security name for: %s", identifier)
+		name = tradernetSymbol
+		s.log.Warn().Str("symbol", tradernetSymbol).Msg("Using symbol as name fallback")
 	}
 
 	// Final ISIN validation (double-check before creating security)
@@ -443,10 +417,9 @@ func (s *SecuritySetupService) AddSecurityByIdentifier(
 		return nil, fmt.Errorf("ISIN is required but missing for security: %s (symbol: %s). Cannot create security without ISIN", name, tradernetSymbol)
 	}
 
-	// Detect product type using Yahoo Finance with heuristics (if not already set by MetadataFetcher)
+	// Detect product type using name heuristics (if not already set by MetadataFetcher)
 	if productType == ProductTypeUnknown {
-		yahooSymbolPtr := &yahooSymbol
-		detectedType, err := s.detectProductType(tradernetSymbol, yahooSymbolPtr, name)
+		detectedType, err := s.detectProductType(tradernetSymbol, name)
 		if err != nil {
 			s.log.Warn().Err(err).Str("symbol", tradernetSymbol).Msg("Failed to detect product type, using UNKNOWN")
 			productType = ProductTypeUnknown
@@ -456,13 +429,13 @@ func (s *SecuritySetupService) AddSecurityByIdentifier(
 	}
 
 	// Step 4: Create security
+	// Client symbols (if needed for external data sources) stored in client_symbols table
 	security := Security{
 		Symbol:             tradernetSymbol,
 		Name:               name,
 		ProductType:        string(productType),
 		Country:            stringValue(country),
 		FullExchangeName:   stringValue(fullExchangeName),
-		YahooSymbol:        yahooSymbol,
 		ISIN:               stringValue(isin),
 		Industry:           stringValue(industry),
 		Currency:           stringValue(currency),
@@ -512,7 +485,6 @@ func (s *SecuritySetupService) AddSecurityByIdentifier(
 	if s.scoreCalculator != nil {
 		err = s.scoreCalculator.CalculateAndSaveScore(
 			security.Symbol,
-			security.YahooSymbol,
 			security.Country,
 			security.Industry,
 		)
@@ -621,47 +593,28 @@ func (s *SecuritySetupService) getTradernetSymbolFromISIN(isin string) (*Tradern
 	}, nil
 }
 
-// getSecurityNameFromYahoo gets security name from Yahoo Finance
-// Faithful translation from Python: SecuritySetupService._get_security_name_from_yahoo()
-func (s *SecuritySetupService) getSecurityNameFromYahoo(symbol string, yahooSymbol *string) (*string, error) {
-	if s.yahooClient == nil {
-		return nil, fmt.Errorf("yahoo client not available")
+// getSecurityName gets security name from metadata fetcher (Tradernet only)
+func (s *SecuritySetupService) getSecurityName(symbol string) (*string, error) {
+	if s.metadataFetcher == nil {
+		return nil, fmt.Errorf("metadata fetcher not available")
 	}
 
-	name, err := s.yahooClient.GetQuoteName(symbol, yahooSymbol)
+	metadata, _, err := s.metadataFetcher.GetSecurityMetadata(symbol)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get quote name from Yahoo: %w", err)
+		return nil, fmt.Errorf("failed to get metadata: %w", err)
 	}
 
-	return name, nil
+	if metadata != nil && metadata.Name != "" {
+		return &metadata.Name, nil
+	}
+
+	return nil, fmt.Errorf("name not found in metadata")
 }
 
-// detectProductType detects product type using Yahoo Finance quoteType
-// Faithful translation from Python: yahoo.get_product_type()
-func (s *SecuritySetupService) detectProductType(symbol string, yahooSymbol *string, name string) (ProductType, error) {
-	if s.yahooClient == nil {
-		// Fallback to name heuristics if Yahoo client not available
-		s.log.Debug().Str("symbol", symbol).Msg("Yahoo client not available, using name heuristics")
-		return s.detectProductTypeFromName(name), nil
-	}
-
-	// Get quoteType from Yahoo Finance
-	quoteType, err := s.yahooClient.GetQuoteType(symbol, yahooSymbol)
-	if err != nil {
-		s.log.Warn().Err(err).Str("symbol", symbol).Msg("Failed to get quote type from Yahoo, using name heuristics")
-		return s.detectProductTypeFromName(name), nil
-	}
-
-	// Get name from Yahoo if not provided (matching Python behavior)
-	yahooName := name
-	if yahooName == "" {
-		if namePtr, err := s.yahooClient.GetQuoteName(symbol, yahooSymbol); err == nil && namePtr != nil {
-			yahooName = *namePtr
-		}
-	}
-
-	// Use FromYahooQuoteType which matches Python's ProductType.from_yahoo_quote_type()
-	return FromYahooQuoteType(quoteType, yahooName), nil
+// detectProductType detects product type using name heuristics
+func (s *SecuritySetupService) detectProductType(symbol string, name string) (ProductType, error) {
+	s.log.Debug().Str("symbol", symbol).Msg("Using name heuristics for product type detection")
+	return s.detectProductTypeFromName(name), nil
 }
 
 // detectProductTypeFromName uses heuristics based on name as fallback
@@ -689,10 +642,9 @@ func (s *SecuritySetupService) detectProductTypeFromName(name string) ProductTyp
 }
 
 // RefreshSecurityData triggers full data refresh for a security
-// Faithful translation from Python: app/modules/universe/api/securities.py -> refresh_security_data()
 //
 // This method:
-// 1. Syncs historical prices from Yahoo Finance
+// 1. Syncs historical prices from Tradernet
 // 2. Recalculates security score
 //
 // This is a full pipeline refresh that bypasses last_synced checks.
@@ -723,7 +675,6 @@ func (s *SecuritySetupService) RefreshSecurityData(symbol string) error {
 	if s.scoreCalculator != nil {
 		err = s.scoreCalculator.CalculateAndSaveScore(
 			security.Symbol,
-			security.YahooSymbol,
 			security.Country,
 			security.Industry,
 		)

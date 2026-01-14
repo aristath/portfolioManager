@@ -137,6 +137,12 @@ type PriceClientInterface interface {
 	GetBatchQuotes(symbolMap map[string]*string) (map[string]*float64, error)
 }
 
+// CurrentPriceProviderInterface provides current prices for individual securities
+// Used by dividend recommendation jobs to get prices without external dependencies
+type CurrentPriceProviderInterface interface {
+	GetCurrentPrice(symbol string) (*float64, error)
+}
+
 // ConfigRepositoryInterface defines the contract for planner configuration repository operations
 // Used by scheduler to enable testing with mocks
 type ConfigRepositoryInterface interface {
@@ -153,7 +159,7 @@ type PlannerConfigRepositoryInterface interface {
 // Used by scheduler to enable testing with mocks
 type ScoresRepositoryInterface interface {
 	GetCAGRs(isinList []string) (map[string]float64, error)                                                 // Returns map keyed by ISIN and symbol
-	GetQualityScores(isinList []string) (map[string]float64, map[string]float64, error)                     // Returns longTermScores, fundamentalsScores
+	GetQualityScores(isinList []string) (map[string]float64, map[string]float64, error)                     // Returns longTermScores, stabilityScores
 	GetValueTrapData(isinList []string) (map[string]float64, map[string]float64, map[string]float64, error) // Returns opportunityScores, momentumScores, volatility
 	GetTotalScores(isinList []string) (map[string]float64, error)                                           // Returns total scores keyed by ISIN
 	GetRiskMetrics(isinList []string) (map[string]float64, map[string]float64, error)                       // Returns sharpe, maxDrawdown keyed by ISIN
@@ -187,26 +193,18 @@ type SecurityRepositoryForDividendsInterface interface {
 }
 
 // SecurityForDividends is a simplified interface for security data
+// Note: YahooSymbol removed - dividend yields now calculated internally
 type SecurityForDividends struct {
-	ISIN        string // Primary identifier for internal operations
-	Symbol      string // For broker API
-	YahooSymbol string // For Yahoo Finance API
-	Name        string
-	Currency    string
-	MinLot      int
+	ISIN     string // Primary identifier for internal operations
+	Symbol   string // For broker API
+	Name     string
+	Currency string
+	MinLot   int
 }
 
-// YahooClientForDividendsInterface defines the contract for Yahoo client operations for dividends
-// Used by scheduler to enable testing with mocks
-type YahooClientForDividendsInterface interface {
-	GetCurrentPrice(symbol string, yahooSymbolOverride *string, maxRetries int) (*float64, error)
-	GetFundamentalData(symbol string, yahooSymbolOverride *string) (*FundamentalDataForDividends, error)
-}
-
-// FundamentalDataForDividends is a simplified interface for fundamental data
-type FundamentalDataForDividends struct {
-	DividendYield *float64
-}
+// NOTE: YahooClientForDividendsInterface has been removed.
+// Dividend yields are now calculated internally using DividendYieldCalculator.
+// The StabilityDataForDividends type is no longer used.
 
 // TradeExecutionServiceInterface defines the contract for trade execution service operations
 // Used by scheduler to enable testing with mocks

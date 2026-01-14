@@ -36,7 +36,7 @@ func NewService(broker domain.BrokerClient, priceValidator PriceValidator, setti
 }
 
 // IsEnabled checks if order book analysis is enabled
-// Returns true if enabled, false if disabled (falls back to Yahoo-only mode)
+// Returns true if enabled, false if disabled (falls back to Tradernet-only mode)
 func (s *Service) IsEnabled() bool {
 	val, err := s.settingsService.Get("enable_order_book_analysis")
 	if err != nil {
@@ -71,7 +71,7 @@ func (s *Service) ValidateLiquidity(symbol, side string, quantity float64) error
 	return s.validateSufficientLiquidity(orderBook, side, quantity)
 }
 
-// CalculateOptimalLimit calculates optimal limit price using bid-ask midpoint + Yahoo validation
+// CalculateOptimalLimit calculates optimal limit price using bid-ask midpoint + price validation
 // Uses asymmetric validation: blocks BAD trades only (overpaying on BUY, underselling on SELL)
 // This method delegates to calculator.go
 func (s *Service) CalculateOptimalLimit(symbol, side string, buffer float64) (float64, error) {

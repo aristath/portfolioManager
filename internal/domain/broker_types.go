@@ -69,6 +69,9 @@ type BrokerSecurityInfo struct {
 	Currency     *string // Trading currency (nullable)
 	Market       *string // Market name (nullable)
 	ExchangeCode *string // Exchange code (nullable)
+	Country      *string // Issuer country code (nullable)
+	Sector       *string // Sector/industry code (nullable)
+	ExchangeName *string // Full exchange name (nullable)
 }
 
 // BrokerCashMovement represents cash withdrawal history (broker-agnostic)

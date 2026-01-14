@@ -27,12 +27,11 @@ func NormalizeFeatures(examples []TrainingExample) []TrainingExample {
 // FeatureMinMax holds min/max values for normalization
 type FeatureMinMax struct {
 	LongTermScore        [2]float64 // [min, max]
-	FundamentalsScore    [2]float64
+	StabilityScore       [2]float64 // Replaces StabilityScore
 	DividendsScore       [2]float64
 	OpportunityScore     [2]float64
 	ShortTermScore       [2]float64
 	TechnicalsScore      [2]float64
-	OpinionScore         [2]float64
 	DiversificationScore [2]float64
 	TotalScore           [2]float64
 	CAGR                 [2]float64
@@ -49,12 +48,11 @@ type FeatureMinMax struct {
 func findMinMax(examples []TrainingExample) FeatureMinMax {
 	mm := FeatureMinMax{
 		LongTermScore:        [2]float64{math.MaxFloat64, -math.MaxFloat64},
-		FundamentalsScore:    [2]float64{math.MaxFloat64, -math.MaxFloat64},
+		StabilityScore:       [2]float64{math.MaxFloat64, -math.MaxFloat64},
 		DividendsScore:       [2]float64{math.MaxFloat64, -math.MaxFloat64},
 		OpportunityScore:     [2]float64{math.MaxFloat64, -math.MaxFloat64},
 		ShortTermScore:       [2]float64{math.MaxFloat64, -math.MaxFloat64},
 		TechnicalsScore:      [2]float64{math.MaxFloat64, -math.MaxFloat64},
-		OpinionScore:         [2]float64{math.MaxFloat64, -math.MaxFloat64},
 		DiversificationScore: [2]float64{math.MaxFloat64, -math.MaxFloat64},
 		TotalScore:           [2]float64{math.MaxFloat64, -math.MaxFloat64},
 		CAGR:                 [2]float64{math.MaxFloat64, -math.MaxFloat64},
@@ -68,12 +66,11 @@ func findMinMax(examples []TrainingExample) FeatureMinMax {
 
 	for _, ex := range examples {
 		updateMinMax(&mm.LongTermScore, ex.Inputs.LongTermScore)
-		updateMinMax(&mm.FundamentalsScore, ex.Inputs.FundamentalsScore)
+		updateMinMax(&mm.StabilityScore, ex.Inputs.StabilityScore)
 		updateMinMax(&mm.DividendsScore, ex.Inputs.DividendsScore)
 		updateMinMax(&mm.OpportunityScore, ex.Inputs.OpportunityScore)
 		updateMinMax(&mm.ShortTermScore, ex.Inputs.ShortTermScore)
 		updateMinMax(&mm.TechnicalsScore, ex.Inputs.TechnicalsScore)
-		updateMinMax(&mm.OpinionScore, ex.Inputs.OpinionScore)
 		updateMinMax(&mm.DiversificationScore, ex.Inputs.DiversificationScore)
 		updateMinMax(&mm.TotalScore, ex.Inputs.TotalScore)
 		updateMinMax(&mm.CAGR, ex.Inputs.CAGR)
@@ -116,12 +113,11 @@ func updateMinMax(minMax *[2]float64, value float64) {
 // setDefaultMinMax sets default min/max for features with no data
 func setDefaultMinMax(mm *FeatureMinMax) {
 	setDefaultIfNeeded(&mm.LongTermScore)
-	setDefaultIfNeeded(&mm.FundamentalsScore)
+	setDefaultIfNeeded(&mm.StabilityScore)
 	setDefaultIfNeeded(&mm.DividendsScore)
 	setDefaultIfNeeded(&mm.OpportunityScore)
 	setDefaultIfNeeded(&mm.ShortTermScore)
 	setDefaultIfNeeded(&mm.TechnicalsScore)
-	setDefaultIfNeeded(&mm.OpinionScore)
 	setDefaultIfNeeded(&mm.DiversificationScore)
 	setDefaultIfNeeded(&mm.TotalScore)
 	setDefaultIfNeeded(&mm.CAGR)
@@ -150,12 +146,11 @@ func normalizeInputs(inputs TrainingInputs, minMax FeatureMinMax) TrainingInputs
 	normalized := inputs
 
 	normalized.LongTermScore = normalizeValue(inputs.LongTermScore, minMax.LongTermScore)
-	normalized.FundamentalsScore = normalizeValue(inputs.FundamentalsScore, minMax.FundamentalsScore)
+	normalized.StabilityScore = normalizeValue(inputs.StabilityScore, minMax.StabilityScore)
 	normalized.DividendsScore = normalizeValue(inputs.DividendsScore, minMax.DividendsScore)
 	normalized.OpportunityScore = normalizeValue(inputs.OpportunityScore, minMax.OpportunityScore)
 	normalized.ShortTermScore = normalizeValue(inputs.ShortTermScore, minMax.ShortTermScore)
 	normalized.TechnicalsScore = normalizeValue(inputs.TechnicalsScore, minMax.TechnicalsScore)
-	normalized.OpinionScore = normalizeValue(inputs.OpinionScore, minMax.OpinionScore)
 	normalized.DiversificationScore = normalizeValue(inputs.DiversificationScore, minMax.DiversificationScore)
 	normalized.TotalScore = normalizeValue(inputs.TotalScore, minMax.TotalScore)
 	normalized.CAGR = normalizeValue(inputs.CAGR, minMax.CAGR)
@@ -185,8 +180,8 @@ func normalizeInputs(inputs TrainingInputs, minMax FeatureMinMax) TrainingInputs
 	if normalized.LongTermScore == 0 && inputs.LongTermScore == 0 {
 		normalized.LongTermScore = 0.5
 	}
-	if normalized.FundamentalsScore == 0 && inputs.FundamentalsScore == 0 {
-		normalized.FundamentalsScore = 0.5
+	if normalized.StabilityScore == 0 && inputs.StabilityScore == 0 {
+		normalized.StabilityScore = 0.5
 	}
 
 	return normalized
@@ -217,16 +212,15 @@ func normalizeValue(value float64, minMax [2]float64) float64 {
 }
 
 // ExtractFeatureNames extracts all available feature names from inputs
+// Note: opinion and diversification removed - no longer part of scoring
 func ExtractFeatureNames(inputs TrainingInputs) []string {
 	features := []string{
 		"long_term",
-		"fundamentals",
+		"stability",
 		"dividends",
 		"opportunity",
 		"short_term",
 		"technicals",
-		"opinion",
-		"diversification",
 		"total_score",
 		"cagr",
 		"dividend_yield",
@@ -256,8 +250,8 @@ func GetFeatureValue(inputs TrainingInputs, featureName string) float64 {
 	switch featureName {
 	case "long_term":
 		return inputs.LongTermScore
-	case "fundamentals":
-		return inputs.FundamentalsScore
+	case "stability":
+		return inputs.StabilityScore
 	case "dividends":
 		return inputs.DividendsScore
 	case "opportunity":
@@ -266,8 +260,6 @@ func GetFeatureValue(inputs TrainingInputs, featureName string) float64 {
 		return inputs.ShortTermScore
 	case "technicals":
 		return inputs.TechnicalsScore
-	case "opinion":
-		return inputs.OpinionScore
 	case "diversification":
 		return inputs.DiversificationScore
 	case "total_score":

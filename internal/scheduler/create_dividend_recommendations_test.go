@@ -7,7 +7,21 @@ import (
 	"github.com/aristath/sentinel/internal/modules/dividends"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
+
+// MockCurrentPriceProvider is a mock for CurrentPriceProviderInterface
+type MockCurrentPriceProvider struct {
+	mock.Mock
+}
+
+func (m *MockCurrentPriceProvider) GetCurrentPrice(symbol string) (*float64, error) {
+	args := m.Called(symbol)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*float64), args.Error(1)
+}
 
 func TestCreateDividendRecommendationsJob_Name(t *testing.T) {
 	job := &CreateDividendRecommendationsJob{
@@ -18,10 +32,10 @@ func TestCreateDividendRecommendationsJob_Name(t *testing.T) {
 
 func TestCreateDividendRecommendationsJob_Run_NoHighYieldSymbols(t *testing.T) {
 	mockSecurityRepo := new(MockSecurityRepoForDividendsYields)
-	mockYahooClient := new(MockYahooClientForDividendsYields)
+	mockPriceProvider := new(MockCurrentPriceProvider)
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 
-	job := NewCreateDividendRecommendationsJob(mockSecurityRepo, mockYahooClient, 200.0)
+	job := NewCreateDividendRecommendationsJob(mockSecurityRepo, mockPriceProvider, nil, 200.0)
 	job.SetLogger(log)
 
 	err := job.Run()
@@ -31,10 +45,10 @@ func TestCreateDividendRecommendationsJob_Run_NoHighYieldSymbols(t *testing.T) {
 
 func TestCreateDividendRecommendationsJob_Run_Success(t *testing.T) {
 	mockSecurityRepo := new(MockSecurityRepoForDividendsYields)
-	mockYahooClient := new(MockYahooClientForDividendsYields)
+	mockPriceProvider := new(MockCurrentPriceProvider)
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 
-	job := NewCreateDividendRecommendationsJob(mockSecurityRepo, mockYahooClient, 200.0)
+	job := NewCreateDividendRecommendationsJob(mockSecurityRepo, mockPriceProvider, nil, 200.0)
 	job.SetLogger(log)
 
 	dividends := []dividends.DividendRecord{
@@ -51,16 +65,16 @@ func TestCreateDividendRecommendationsJob_Run_Success(t *testing.T) {
 	job.SetHighYieldSymbols(highYieldSymbols)
 
 	security := &SecurityForDividends{
-		Symbol:      "AAPL",
-		YahooSymbol: "AAPL",
-		Name:        "Apple Inc.",
-		Currency:    "USD",
-		MinLot:      1,
+		ISIN:     "US0378331005",
+		Symbol:   "AAPL",
+		Name:     "Apple Inc.",
+		Currency: "USD",
+		MinLot:   1,
 	}
 	price := 150.0
 
 	mockSecurityRepo.On("GetBySymbol", "AAPL").Return(security, nil)
-	mockYahooClient.On("GetCurrentPrice", "AAPL", (*string)(nil), 3).Return(&price, nil)
+	mockPriceProvider.On("GetCurrentPrice", "AAPL").Return(&price, nil)
 
 	err := job.Run()
 	assert.NoError(t, err)
@@ -69,15 +83,15 @@ func TestCreateDividendRecommendationsJob_Run_Success(t *testing.T) {
 	assert.Equal(t, "AAPL", rec.Symbol)
 	assert.Equal(t, "BUY", rec.Side)
 	mockSecurityRepo.AssertExpectations(t)
-	mockYahooClient.AssertExpectations(t)
+	mockPriceProvider.AssertExpectations(t)
 }
 
 func TestCreateDividendRecommendationsJob_Run_BelowMinTradeSize(t *testing.T) {
 	mockSecurityRepo := new(MockSecurityRepoForDividendsYields)
-	mockYahooClient := new(MockYahooClientForDividendsYields)
+	mockPriceProvider := new(MockCurrentPriceProvider)
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 
-	job := NewCreateDividendRecommendationsJob(mockSecurityRepo, mockYahooClient, 200.0)
+	job := NewCreateDividendRecommendationsJob(mockSecurityRepo, mockPriceProvider, nil, 200.0)
 	job.SetLogger(log)
 
 	dividends := []dividends.DividendRecord{
@@ -100,10 +114,10 @@ func TestCreateDividendRecommendationsJob_Run_BelowMinTradeSize(t *testing.T) {
 
 func TestCreateDividendRecommendationsJob_Run_SecurityNotFound(t *testing.T) {
 	mockSecurityRepo := new(MockSecurityRepoForDividendsYields)
-	mockYahooClient := new(MockYahooClientForDividendsYields)
+	mockPriceProvider := new(MockCurrentPriceProvider)
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 
-	job := NewCreateDividendRecommendationsJob(mockSecurityRepo, mockYahooClient, 200.0)
+	job := NewCreateDividendRecommendationsJob(mockSecurityRepo, mockPriceProvider, nil, 200.0)
 	job.SetLogger(log)
 
 	dividends := []dividends.DividendRecord{

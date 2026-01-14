@@ -4,7 +4,6 @@ import (
 	"math"
 
 	"github.com/aristath/sentinel/internal/modules/planning/domain"
-	"github.com/aristath/sentinel/internal/modules/quantum"
 )
 
 // QualityCheckResult contains the result of quality checks
@@ -50,15 +49,15 @@ func CheckQualityGates(
 	}
 
 	// Get scores from context (ISIN-based lookups - O(1))
-	fundamentalsScore := GetScoreFromContext(ctx, isin, ctx.FundamentalsScores)
+	stabilityScore := GetScoreFromContext(ctx, isin, ctx.StabilityScores)
 	longTermScore := GetScoreFromContext(ctx, isin, ctx.LongTermScores)
 	cagr := GetScoreFromContext(ctx, isin, ctx.CAGRs)
 
 	// Quality Gate Check (for new positions) - Multi-Path System
 	if isNewPosition {
 		// Default relaxed thresholds for Path 1 (no adaptive support in score-based fallback)
-		fundamentalsThreshold := 0.55 // Relaxed from 0.6
-		longTermThreshold := 0.45     // Relaxed from 0.5
+		stabilityThreshold := 0.55 // Relaxed from 0.6
+		longTermThreshold := 0.45  // Relaxed from 0.5
 
 		// Extract additional scores for multi-path evaluation
 		opportunityScore := GetScoreFromContext(ctx, isin, ctx.OpportunityScores)
@@ -91,32 +90,32 @@ func CheckQualityGates(
 		passedPath := ""
 
 		// Path 1: Balanced (no adaptive in score-based fallback)
-		if fundamentalsScore > 0 && longTermScore > 0 {
-			if evaluatePath1Balanced(fundamentalsScore, longTermScore, fundamentalsThreshold, longTermThreshold) {
+		if stabilityScore > 0 && longTermScore > 0 {
+			if evaluatePath1Balanced(stabilityScore, longTermScore, stabilityThreshold, longTermThreshold) {
 				passes = true
 				passedPath = "balanced"
 			}
 		}
 
 		// Path 2: Exceptional Excellence
-		if !passes && fundamentalsScore > 0 && longTermScore > 0 {
-			if evaluatePath2ExceptionalExcellence(fundamentalsScore, longTermScore) {
+		if !passes && stabilityScore > 0 && longTermScore > 0 {
+			if evaluatePath2ExceptionalExcellence(stabilityScore, longTermScore) {
 				passes = true
 				passedPath = "exceptional_excellence"
 			}
 		}
 
 		// Path 3: Quality Value Play
-		if !passes && fundamentalsScore > 0 && opportunityScore > 0 && longTermScore > 0 {
-			if evaluatePath3QualityValuePlay(fundamentalsScore, opportunityScore, longTermScore) {
+		if !passes && stabilityScore > 0 && opportunityScore > 0 && longTermScore > 0 {
+			if evaluatePath3QualityValuePlay(stabilityScore, opportunityScore, longTermScore) {
 				passes = true
 				passedPath = "quality_value"
 			}
 		}
 
 		// Path 4: Dividend Income Play
-		if !passes && fundamentalsScore > 0 && dividendScore > 0 && dividendYield > 0 {
-			if evaluatePath4DividendIncomePlay(fundamentalsScore, dividendScore, dividendYield) {
+		if !passes && stabilityScore > 0 && dividendScore > 0 && dividendYield > 0 {
+			if evaluatePath4DividendIncomePlay(stabilityScore, dividendScore, dividendYield) {
 				passes = true
 				passedPath = "dividend_income"
 			}
@@ -131,16 +130,16 @@ func CheckQualityGates(
 		}
 
 		// Path 6: Composite Minimum
-		if !passes && fundamentalsScore > 0 && longTermScore > 0 {
-			if evaluatePath6CompositeMinimum(fundamentalsScore, longTermScore) {
+		if !passes && stabilityScore > 0 && longTermScore > 0 {
+			if evaluatePath6CompositeMinimum(stabilityScore, longTermScore) {
 				passes = true
 				passedPath = "composite"
 			}
 		}
 
 		// Path 7: Growth Opportunity
-		if !passes && cagr > 0 && fundamentalsScore > 0 && volatility > 0 {
-			if evaluatePath7GrowthOpportunity(cagr, fundamentalsScore, volatility) {
+		if !passes && cagr > 0 && stabilityScore > 0 && volatility > 0 {
+			if evaluatePath7GrowthOpportunity(cagr, stabilityScore, volatility) {
 				passes = true
 				passedPath = "growth"
 			}
@@ -152,7 +151,7 @@ func CheckQualityGates(
 			result.QualityGateReason = passedPath // Just the path name, cleaner
 		} else {
 			// Check if we have minimum data to evaluate
-			if fundamentalsScore > 0 || longTermScore > 0 || cagr > 0 {
+			if stabilityScore > 0 || longTermScore > 0 || cagr > 0 {
 				result.PassesQualityGate = false
 				result.QualityGateReason = "quality_gate_fail_all_paths"
 			} else {
@@ -163,84 +162,25 @@ func CheckQualityGates(
 		}
 	}
 
-	// Value Trap Detection (Classical + Quantum)
-	// Logic from tag_assigner.go: cheap but declining
-	// Must be cheap first (P/E 20%+ below market), then check declining quality
-	peRatio := GetScoreFromContext(ctx, isin, ctx.PERatios)
-	if peRatio > 0 && ctx.MarketAvgPE > 0 {
-		peVsMarket := (peRatio - ctx.MarketAvgPE) / ctx.MarketAvgPE
+	// Value Trap Detection
+	// Uses opportunity score (based on 52-week high distance) + quality scores
+	// P/E-based detection removed - no external data sources available
+	opportunityScore := GetScoreFromContext(ctx, isin, ctx.OpportunityScores)
 
-		// Must be cheap first (20%+ below market)
-		if peVsMarket < -0.20 {
-			// Get momentum and volatility (optional)
-			momentumScore := GetScoreFromContext(ctx, isin, ctx.MomentumScores)
-			volatility := GetScoreFromContext(ctx, isin, ctx.Volatility)
-
-			// Classical value trap detection
-			// Check declining quality: poor fundamentals OR poor long-term OR negative momentum OR high volatility
-			if fundamentalsScore < 0.55 || longTermScore < 0.45 {
+	// High opportunity (cheap based on 52-week high) but low quality = potential value trap
+	if opportunityScore > 0.7 {
+		if stabilityScore > 0 && longTermScore > 0 {
+			if stabilityScore < 0.55 || longTermScore < 0.45 {
 				result.IsValueTrap = true
-			}
-			// Also check momentum and volatility if available
-			if momentumScore < -0.05 || volatility > 0.35 {
-				result.IsValueTrap = true
-			}
-
-			// Quantum value trap detection (only if regime score is available)
-			// Note: Regime score can legitimately be 0.0 (neutral), so we check if it was populated
-			// by checking if it's within valid range [-1, 1] and not the default uninitialized value
-			// We use a sentinel value check: if RegimeScore is exactly 0.0, we still allow quantum detection
-			// because 0.0 is a valid neutral regime score. The check here is mainly to avoid running
-			// quantum detection when the score hasn't been populated at all.
-			// Since we can't distinguish uninitialized 0.0 from neutral 0.0, we always run quantum detection
-			// if we have the other required data (P/E and market avg P/E are already checked above)
-			if ctx.RegimeScore >= -1.0 && ctx.RegimeScore <= 1.0 {
-				quantumCalc := quantum.NewQuantumProbabilityCalculator()
-				// Use defaults if momentum/volatility not available
-				momentumForQuantum := momentumScore
-				volatilityForQuantum := volatility
-				// momentumForQuantum defaults to 0.0 (neutral) if not available, which is already the case
-				if volatilityForQuantum == 0.0 {
-					volatilityForQuantum = 0.20 // Default moderate volatility
-				}
-
-				result.QuantumValueTrapProb = quantumCalc.CalculateValueTrapProbability(
-					peVsMarket,
-					fundamentalsScore,
-					longTermScore,
-					momentumForQuantum,
-					volatilityForQuantum,
-					ctx.RegimeScore,
-				)
-
-				// Quantum decision logic (matches tag_assigner.go)
-				if result.QuantumValueTrapProb > 0.7 {
-					result.IsQuantumValueTrap = true
-					result.IsEnsembleValueTrap = true
-				} else if result.QuantumValueTrapProb > 0.5 {
-					result.IsQuantumWarning = true
-				}
-			}
-
-			// Ensemble decision: classical OR quantum
-			if result.IsValueTrap || result.IsQuantumValueTrap {
 				result.IsEnsembleValueTrap = true
 			}
-		}
-	} else {
-		// Fallback: If P/E data not available, use opportunity score as proxy
-		// This is less accurate but better than nothing
-		opportunityScore := GetScoreFromContext(ctx, isin, ctx.OpportunityScores)
-		// Don't fall back to total score - it's not a good proxy for opportunity
-		// If opportunity score is not available, skip value trap detection for this security
 
-		if opportunityScore > 0.7 {
-			// High opportunity but low quality = potential value trap
-			if fundamentalsScore > 0 && longTermScore > 0 {
-				if fundamentalsScore < 0.55 || longTermScore < 0.45 {
-					result.IsValueTrap = true
-					result.IsEnsembleValueTrap = true
-				}
+			// Also check momentum and volatility if available
+			momentumScore := GetScoreFromContext(ctx, isin, ctx.MomentumScores)
+			volatility := GetScoreFromContext(ctx, isin, ctx.Volatility)
+			if momentumScore < -0.05 || volatility > 0.35 {
+				result.IsValueTrap = true
+				result.IsEnsembleValueTrap = true
 			}
 		}
 	}
@@ -263,8 +203,8 @@ func CheckQualityGates(
 	// Note: We don't have direct access to Sharpe/Sortino in context, so we use a simplified check
 	// High CAGR with low quality = potential bubble
 	if cagr > 0.15 { // 15% for 11% target (1.36x target, aligned with tag_assigner)
-		if fundamentalsScore > 0 && fundamentalsScore < 0.55 {
-			// High CAGR but poor fundamentals = bubble risk (aligned with tag_assigner.go line 464)
+		if stabilityScore > 0 && stabilityScore < 0.55 {
+			// High CAGR but poor stability = bubble risk (aligned with tag_assigner.go line 464)
 			result.IsBubbleRisk = true
 		}
 	}
@@ -293,23 +233,23 @@ func GetScoreFromContext(ctx *domain.OpportunityContext, isin string, scoreMap m
 // ============================================================================
 
 // evaluatePath1Balanced checks balanced path with adaptive thresholds
-func evaluatePath1Balanced(fundamentals, longTerm, fundamentalsThreshold, longTermThreshold float64) bool {
-	return fundamentals >= fundamentalsThreshold && longTerm >= longTermThreshold
+func evaluatePath1Balanced(stability, longTerm, stabilityThreshold, longTermThreshold float64) bool {
+	return stability >= stabilityThreshold && longTerm >= longTermThreshold
 }
 
 // evaluatePath2ExceptionalExcellence checks for 75%+ in either dimension
-func evaluatePath2ExceptionalExcellence(fundamentals, longTerm float64) bool {
-	return fundamentals >= 0.75 || longTerm >= 0.75
+func evaluatePath2ExceptionalExcellence(stability, longTerm float64) bool {
+	return stability >= 0.75 || longTerm >= 0.75
 }
 
 // evaluatePath3QualityValuePlay checks quality value play path
-func evaluatePath3QualityValuePlay(fundamentals, opportunity, longTerm float64) bool {
-	return fundamentals >= 0.60 && opportunity >= 0.65 && longTerm >= 0.30
+func evaluatePath3QualityValuePlay(stability, opportunity, longTerm float64) bool {
+	return stability >= 0.60 && opportunity >= 0.65 && longTerm >= 0.30
 }
 
 // evaluatePath4DividendIncomePlay checks dividend income play path
-func evaluatePath4DividendIncomePlay(fundamentals, dividendScore, dividendYield float64) bool {
-	return fundamentals >= 0.55 && dividendScore >= 0.65 && dividendYield >= 0.035
+func evaluatePath4DividendIncomePlay(stability, dividendScore, dividendYield float64) bool {
+	return stability >= 0.55 && dividendScore >= 0.65 && dividendYield >= 0.035
 }
 
 // evaluatePath5RiskAdjustedExcellence checks risk-adjusted excellence path
@@ -318,12 +258,12 @@ func evaluatePath5RiskAdjustedExcellence(longTerm, sharpe, sortino, volatility f
 }
 
 // evaluatePath6CompositeMinimum checks composite minimum path
-func evaluatePath6CompositeMinimum(fundamentals, longTerm float64) bool {
-	compositeScore := 0.6*fundamentals + 0.4*longTerm
-	return compositeScore >= 0.52 && fundamentals >= 0.45
+func evaluatePath6CompositeMinimum(stability, longTerm float64) bool {
+	compositeScore := 0.6*stability + 0.4*longTerm
+	return compositeScore >= 0.52 && stability >= 0.45
 }
 
 // evaluatePath7GrowthOpportunity checks growth opportunity path
-func evaluatePath7GrowthOpportunity(cagrRaw, fundamentals, volatility float64) bool {
-	return cagrRaw >= 0.13 && fundamentals >= 0.50 && volatility <= 0.40
+func evaluatePath7GrowthOpportunity(cagrRaw, stability, volatility float64) bool {
+	return cagrRaw >= 0.13 && stability >= 0.50 && volatility <= 0.40
 }

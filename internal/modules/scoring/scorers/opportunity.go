@@ -8,7 +8,7 @@ import (
 )
 
 // OpportunityScorer calculates opportunity (value/dip) score
-// Faithful translation from Python: app/modules/scoring/domain/groups/opportunity.py
+// Scoring is based purely on price distance from 52-week high (P/E ratio removed)
 type OpportunityScorer struct{}
 
 // OpportunityScore represents the result of opportunity scoring
@@ -22,29 +22,23 @@ func NewOpportunityScorer() *OpportunityScorer {
 	return &OpportunityScorer{}
 }
 
-// Calculate calculates the opportunity score from daily prices and fundamentals
+// Calculate calculates the opportunity score from daily prices and stability metrics
 // Components:
-// - Below 52-week High (50%): Distance from peak - dip opportunity
-// - P/E vs Market (50%): Below average = undervalued
+// - Below 52-week High (100%): Distance from peak - dip opportunity
+// P/E ratio component was removed (no longer available without external data)
 func (os *OpportunityScorer) Calculate(
 	dailyPrices []float64,
-	peRatio *float64,
-	forwardPE *float64,
-	marketAvgPE float64,
 ) OpportunityScore {
-	return os.CalculateWithQualityGate(dailyPrices, peRatio, forwardPE, marketAvgPE, nil, nil, "UNKNOWN")
+	return os.CalculateWithQualityGate(dailyPrices, nil, nil, "UNKNOWN")
 }
 
 // CalculateWithQualityGate calculates opportunity score with quality gates to prevent value traps
 // Quality gates ensure we don't buy cheap but declining quality securities.
-// Product-type-aware: ETFs/Mutual Funds have less P/E emphasis (25% vs 50%)
+// Scoring is 100% based on distance from 52-week high (P/E ratio removed).
 //
 // Args:
 //   - dailyPrices: Daily price history
-//   - peRatio: Current P/E ratio
-//   - forwardPE: Forward P/E ratio (optional)
-//   - marketAvgPE: Market average P/E ratio
-//   - fundamentalsScore: Fundamentals score (optional, for quality gate)
+//   - stabilityScore: Stability score (optional, for quality gate)
 //   - longTermScore: Long-term score (optional, for quality gate)
 //   - productType: Product type (EQUITY, ETF, MUTUALFUND, ETC, CASH, UNKNOWN)
 //
@@ -52,10 +46,7 @@ func (os *OpportunityScorer) Calculate(
 //   - OpportunityScore with quality gate applied
 func (os *OpportunityScorer) CalculateWithQualityGate(
 	dailyPrices []float64,
-	peRatio *float64,
-	forwardPE *float64,
-	marketAvgPE float64,
-	fundamentalsScore *float64,
+	stabilityScore *float64,
 	longTermScore *float64,
 	productType string,
 ) OpportunityScore {
@@ -65,7 +56,6 @@ func (os *OpportunityScorer) CalculateWithQualityGate(
 			Score: 0.5,
 			Components: map[string]float64{
 				"below_52w_high":     0.5,
-				"pe_ratio":           0.5,
 				"below_52w_high_raw": 0.0,
 			},
 		}
@@ -73,38 +63,22 @@ func (os *OpportunityScorer) CalculateWithQualityGate(
 
 	currentPrice := dailyPrices[len(dailyPrices)-1]
 
-	// Calculate 52-week high distance score
+	// Calculate 52-week high distance score (100% weight - no P/E component)
 	high52w := formulas.Calculate52WeekHigh(dailyPrices)
 	below52wScore := scoreBelow52WeekHigh(currentPrice, high52w)
 
-	// Calculate P/E ratio score
-	peScore := scorePERatio(peRatio, forwardPE, marketAvgPE)
-
-	// Product-type-aware weights: ETFs/Mutual Funds have less P/E emphasis
-	var peWeight, below52wWeight float64
-	if productType == "ETF" || productType == "MUTUALFUND" {
-		// ETFs & Mutual Funds: 25% P/E, 75% 52W high (P/E less meaningful for diversified products)
-		peWeight = 0.25
-		below52wWeight = 0.75
-	} else {
-		// Stocks and others: 50/50 split (normal)
-		peWeight = 0.50
-		below52wWeight = 0.50
-	}
-
-	// Base combined score with product-type-aware weights
-	baseScore := below52wScore*below52wWeight + peScore*peWeight
+	// Base score is 100% below_52w_high (P/E ratio removed)
+	baseScore := below52wScore
 
 	// Apply quality gate: if opportunity score is high but quality is low, reduce score
 	// This prevents buying value traps (cheap but declining quality)
-	qualityPenalty := calculateQualityPenalty(baseScore, fundamentalsScore, longTermScore)
+	qualityPenalty := calculateQualityPenalty(baseScore, stabilityScore, longTermScore)
 	finalScore := baseScore * (1.0 - qualityPenalty)
 	finalScore = math.Min(1.0, finalScore)
 
 	// Build components map with both scored and raw values
 	components := map[string]float64{
 		"below_52w_high": round3(below52wScore),
-		"pe_ratio":       round3(peScore),
 	}
 
 	// Store quality gate penalty if applied
@@ -131,7 +105,7 @@ func (os *OpportunityScorer) CalculateWithQualityGate(
 // Prevents buying value traps: cheap but declining quality securities.
 //
 // Quality gate thresholds:
-//   - minFundamentalsThreshold: 0.6 (fundamentals must be decent)
+//   - minStabilityThreshold: 0.6 (stability must be decent)
 //   - minLongTermThreshold: 0.5 (long-term must be acceptable)
 //
 // Penalty logic:
@@ -142,24 +116,24 @@ func (os *OpportunityScorer) CalculateWithQualityGate(
 //   - Penalty factor (0.0 to 0.3)
 func calculateQualityPenalty(
 	opportunityScore float64,
-	fundamentalsScore *float64,
+	stabilityScore *float64,
 	longTermScore *float64,
 ) float64 {
 	// If no quality data available, don't penalize (can't detect value trap)
-	if fundamentalsScore == nil && longTermScore == nil {
+	if stabilityScore == nil && longTermScore == nil {
 		return 0.0
 	}
 
 	// Quality gate thresholds
-	minFundamentalsThreshold := 0.6
+	minStabilityThreshold := 0.6
 	minLongTermThreshold := 0.5
 
 	// Check if quality is below thresholds
-	fundamentalsBelowThreshold := fundamentalsScore != nil && *fundamentalsScore < minFundamentalsThreshold
+	stabilityBelowThreshold := stabilityScore != nil && *stabilityScore < minStabilityThreshold
 	longTermBelowThreshold := longTermScore != nil && *longTermScore < minLongTermThreshold
 
 	// If both are below threshold, it's likely a value trap
-	isValueTrap := fundamentalsBelowThreshold || longTermBelowThreshold
+	isValueTrap := stabilityBelowThreshold || longTermBelowThreshold
 
 	if !isValueTrap {
 		return 0.0 // Quality is acceptable, no penalty
@@ -200,34 +174,7 @@ func scoreBelow52WeekHigh(currentPrice float64, high52w *float64) float64 {
 	}
 }
 
-// scorePERatio scores based on P/E vs market average
-// Below average = HIGHER score (cheap)
-func scorePERatio(peRatio, forwardPE *float64, marketAvgPE float64) float64 {
-	if peRatio == nil || *peRatio <= 0 {
-		// Penalty for missing P/E data - unknown = risky
-		return 0.3
-	}
-
-	// Blend current and forward P/E
-	effectivePE := *peRatio
-	if forwardPE != nil && *forwardPE > 0 {
-		effectivePE = (*peRatio + *forwardPE) / 2
-	}
-
-	pctDiff := (effectivePE - marketAvgPE) / marketAvgPE
-
-	if pctDiff >= 0.20 { // 20%+ above average
-		return 0.2 // Expensive
-	} else if pctDiff >= 0 { // 0-20% above
-		return 0.5 - (pctDiff/0.20)*0.3 // 0.5-0.2
-	} else if pctDiff >= -0.10 { // 0-10% below
-		return 0.5 + (math.Abs(pctDiff)/0.10)*0.2 // 0.5-0.7
-	} else if pctDiff >= -0.20 { // 10-20% below
-		return 0.7 + ((math.Abs(pctDiff)-0.10)/0.10)*0.3 // 0.7-1.0
-	} else { // 20%+ below
-		return 1.0
-	}
-}
+// Removed: scorePERatio function (P/E ratio no longer available without external data)
 
 // IsPriceTooHigh checks if price is too close to 52-week high for buying
 // Guardrail to prevent chasing all-time highs

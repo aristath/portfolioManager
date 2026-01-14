@@ -281,26 +281,26 @@ func (c *OpportunityBuysCalculator) Calculate(
 			penalty = math.Min(0.3, shortfallRatio*0.5) // Up to 30% penalty
 
 			// Quality override: Get quality scores for penalty reduction
-			var longTermScore, fundamentalsScore *float64
+			var longTermScore, stabilityScore *float64
 			if ctx.LongTermScores != nil {
 				if lt, ok := ctx.LongTermScores[isin]; ok { // ISIN key ✅
 					longTermScore = &lt
 				}
 			}
-			if ctx.FundamentalsScores != nil {
-				if fund, ok := ctx.FundamentalsScores[isin]; ok { // ISIN key ✅
-					fundamentalsScore = &fund
+			if ctx.StabilityScores != nil {
+				if stab, ok := ctx.StabilityScores[isin]; ok { // ISIN key ✅
+					stabilityScore = &stab
 				}
 			}
 
 			// Calculate quality score for override
 			qualityScore := 0.0
-			if longTermScore != nil && fundamentalsScore != nil {
-				qualityScore = (*longTermScore + *fundamentalsScore) / 2.0
+			if longTermScore != nil && stabilityScore != nil {
+				qualityScore = (*longTermScore + *stabilityScore) / 2.0
 			} else if longTermScore != nil {
 				qualityScore = *longTermScore
-			} else if fundamentalsScore != nil {
-				qualityScore = *fundamentalsScore
+			} else if stabilityScore != nil {
+				qualityScore = *stabilityScore
 			}
 
 			// Apply quality override: Only exceptional quality gets significant reduction

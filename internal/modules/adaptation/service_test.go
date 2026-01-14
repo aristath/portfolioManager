@@ -75,9 +75,9 @@ func TestCalculateAdaptiveWeights(t *testing.T) {
 			name:        "Extreme bull weights",
 			regimeScore: 1.0,
 			expectedWeights: map[string]float64{
-				"long_term":    0.30, // Higher in bull
-				"opportunity":  0.18, // Higher in bull
-				"fundamentals": 0.15, // Lower in bull
+				"long_term":   0.35, // Higher in bull
+				"opportunity": 0.20, // Higher in bull
+				"stability":   0.15, // Lower in bull
 			},
 			description: "Bull market should favor growth",
 		},
@@ -85,9 +85,9 @@ func TestCalculateAdaptiveWeights(t *testing.T) {
 			name:        "Extreme bear weights",
 			regimeScore: -1.0,
 			expectedWeights: map[string]float64{
-				"fundamentals": 0.30, // Higher in bear
-				"dividends":    0.25, // Higher in bear
-				"long_term":    0.20, // Lower in bear
+				"stability": 0.30, // Higher in bear
+				"dividends": 0.25, // Higher in bear
+				"long_term": 0.25, // Lower in bear
 			},
 			description: "Bear market should favor quality",
 		},
@@ -95,9 +95,9 @@ func TestCalculateAdaptiveWeights(t *testing.T) {
 			name:        "Neutral weights",
 			regimeScore: 0.0,
 			expectedWeights: map[string]float64{
-				"long_term":    0.25, // Default
-				"fundamentals": 0.20, // Default
-				"opportunity":  0.12, // Default
+				"long_term":   0.30, // Default
+				"stability":   0.20, // Default
+				"opportunity": 0.15, // Default
 			},
 			description: "Neutral should use default weights",
 		},
@@ -105,7 +105,7 @@ func TestCalculateAdaptiveWeights(t *testing.T) {
 			name:        "Bull-ish weights (0.3)",
 			regimeScore: 0.3,
 			expectedWeights: map[string]float64{
-				"long_term": 0.265, // Interpolated: 0.25 + (0.30-0.25)*0.3
+				"long_term": 0.315, // Interpolated: 0.30 + (0.35-0.30)*0.3
 			},
 			description: "Bull-ish should interpolate between neutral and bull",
 		},
@@ -197,35 +197,35 @@ func TestCalculateAdaptiveQualityGates(t *testing.T) {
 	tests := []struct {
 		name                 string
 		regimeScore          float64
-		expectedFundamentals float64
+		expectedStability float64
 		expectedLongTerm     float64
 		description          string
 	}{
 		{
 			name:                 "Extreme bull - lower thresholds",
 			regimeScore:          1.0,
-			expectedFundamentals: 0.55,
+			expectedStability: 0.55,
 			expectedLongTerm:     0.45,
 			description:          "Bull should allow more growth stocks",
 		},
 		{
 			name:                 "Extreme bear - higher thresholds",
 			regimeScore:          -1.0,
-			expectedFundamentals: 0.65,
+			expectedStability: 0.65,
 			expectedLongTerm:     0.55,
 			description:          "Bear should be stricter",
 		},
 		{
 			name:                 "Neutral - default thresholds",
 			regimeScore:          0.0,
-			expectedFundamentals: 0.60,
+			expectedStability: 0.60,
 			expectedLongTerm:     0.50,
 			description:          "Neutral should use defaults",
 		},
 		{
 			name:                 "Bull-ish - slightly lower",
 			regimeScore:          0.4,
-			expectedFundamentals: 0.58,
+			expectedStability: 0.58,
 			expectedLongTerm:     0.48,
 			description:          "Bull-ish should interpolate",
 		},
@@ -236,9 +236,9 @@ func TestCalculateAdaptiveQualityGates(t *testing.T) {
 			thresholds := service.CalculateAdaptiveQualityGates(tt.regimeScore)
 			require.NotNil(t, thresholds)
 
-			assert.InDelta(t, tt.expectedFundamentals, thresholds.Fundamentals, 0.01,
-				"%s: fundamentals threshold should be %.3f, got %.3f",
-				tt.description, tt.expectedFundamentals, thresholds.Fundamentals)
+			assert.InDelta(t, tt.expectedStability, thresholds.Stability, 0.01,
+				"%s: stability threshold should be %.3f, got %.3f",
+				tt.description, tt.expectedStability, thresholds.Stability)
 
 			assert.InDelta(t, tt.expectedLongTerm, thresholds.LongTerm, 0.01,
 				"%s: long_term threshold should be %.3f, got %.3f",
@@ -255,9 +255,9 @@ func TestFallbackBehavior(t *testing.T) {
 		weights := service.CalculateAdaptiveWeights(0.0) // Neutral should use defaults
 		require.NotNil(t, weights)
 
-		// Should have all expected keys
-		expectedKeys := []string{"long_term", "fundamentals", "opportunity", "dividends",
-			"short_term", "technicals", "opinion", "diversification"}
+		// Should have all expected keys (opinion and diversification removed)
+		expectedKeys := []string{"long_term", "stability", "opportunity", "dividends",
+			"short_term", "technicals"}
 		for _, key := range expectedKeys {
 			assert.Contains(t, weights, key, "Should have %s weight", key)
 		}
@@ -271,7 +271,7 @@ func TestFallbackBehavior(t *testing.T) {
 	t.Run("Returns default thresholds when no adaptive data", func(t *testing.T) {
 		thresholds := service.CalculateAdaptiveQualityGates(0.0) // Neutral
 		require.NotNil(t, thresholds)
-		assert.Equal(t, 0.60, thresholds.Fundamentals, "Should use default fundamentals threshold")
+		assert.Equal(t, 0.60, thresholds.Stability, "Should use default stability threshold")
 		assert.Equal(t, 0.50, thresholds.LongTerm, "Should use default long_term threshold")
 	})
 }

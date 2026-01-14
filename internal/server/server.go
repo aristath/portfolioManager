@@ -305,7 +305,6 @@ func (s *Server) setupRoutes() {
 		securityRepo := s.container.SecurityRepo
 		scoreRepo := s.container.ScoreRepo
 		positionRepo := s.container.PositionRepo
-		yahooClient := s.container.YahooClient
 		securityScorer := s.container.SecurityScorer
 		historyDB := s.container.HistoryDBClient
 		setupService1 := s.container.SetupService
@@ -318,7 +317,6 @@ func (s *Server) setupRoutes() {
 			s.portfolioDB.Conn(),
 			positionRepo,
 			securityScorer,
-			yahooClient,
 			historyDB,
 			setupService1,
 			syncService1,
@@ -426,7 +424,6 @@ func (s *Server) setupRoutes() {
 		universeSecurityRepo := s.container.SecurityRepo
 		universeScoreRepo := s.container.ScoreRepo
 		universePositionRepo := s.container.PositionRepo
-		universeYahooClient := s.container.YahooClient
 		universeSecurityScorer := s.container.SecurityScorer
 		universeHistoryDB := s.container.HistoryDBClient
 		universeSetupService := s.container.SetupService
@@ -438,7 +435,6 @@ func (s *Server) setupRoutes() {
 			s.portfolioDB.Conn(), // Pass portfolioDB for GetWithScores
 			universePositionRepo,
 			universeSecurityScorer,
-			universeYahooClient,
 			universeHistoryDB,
 			universeSetupService,
 			universeSyncService,
@@ -502,7 +498,6 @@ func (s *Server) setupRoutes() {
 		scoringHandler.RegisterRoutes(r)
 
 		// Optimization module
-		optimizationYahooClient := s.container.YahooClient
 		optimizationTradernetClient := s.container.BrokerClient
 		optimizationDividendRepo := s.container.DividendRepo
 		optimizationCurrencyExchangeService := s.container.CurrencyExchangeService
@@ -512,7 +507,6 @@ func (s *Server) setupRoutes() {
 		optimizationHandler := optimizationhandlers.NewHandler(
 			optimizationService,
 			s.configDB.Conn(),
-			optimizationYahooClient,
 			optimizationTradernetClient,
 			optimizationCurrencyExchangeService,
 			optimizationDividendRepo,

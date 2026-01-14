@@ -64,7 +64,7 @@ func TestIsISIN(t *testing.T) {
 			want:       false,
 		},
 		{
-			name:       "Yahoo symbol",
+			name:       "generic symbol",
 			identifier: "AAPL",
 			want:       false,
 		},
@@ -166,12 +166,12 @@ func TestDetectIdentifierType(t *testing.T) {
 			want:       IdentifierTypeTradernet,
 		},
 		{
-			name:       "Yahoo symbol detected",
+			name:       "generic symbol detected",
 			identifier: "AAPL",
-			want:       IdentifierTypeYahoo,
+			want:       IdentifierTypeGeneric,
 		},
 		{
-			name:       "Yahoo with suffix detected",
+			name:       "Tradernet with suffix detected",
 			identifier: "SAP.DE",
 			want:       IdentifierTypeTradernet, // Has .DE suffix
 		},
@@ -185,7 +185,7 @@ func TestDetectIdentifierType(t *testing.T) {
 	}
 }
 
-func TestTradernetToYahoo(t *testing.T) {
+func TestTradernetToBaseSymbol(t *testing.T) {
 	tests := []struct {
 		name            string
 		tradernetSymbol string
@@ -217,7 +217,7 @@ func TestTradernetToYahoo(t *testing.T) {
 			want:            "AAPL",
 		},
 		{
-			name:            "already Yahoo format",
+			name:            "already base format",
 			tradernetSymbol: "AAPL",
 			want:            "AAPL",
 		},
@@ -225,7 +225,7 @@ func TestTradernetToYahoo(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := TradernetToYahoo(tt.tradernetSymbol)
+			got := TradernetToBaseSymbol(tt.tradernetSymbol)
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -251,9 +251,9 @@ func TestSymbolResolverDetectType(t *testing.T) {
 			want:       IdentifierTypeTradernet,
 		},
 		{
-			name:       "Yahoo",
+			name:       "Generic",
 			identifier: "AAPL",
-			want:       IdentifierTypeYahoo,
+			want:       IdentifierTypeGeneric,
 		},
 	}
 
@@ -277,7 +277,6 @@ func TestSymbolResolverResolveISIN(t *testing.T) {
 	assert.Nil(t, info.TradernetSymbol)
 	assert.NotNil(t, info.ISIN)
 	assert.Equal(t, isin, *info.ISIN)
-	assert.Equal(t, isin, info.YahooSymbol) // ISIN used as Yahoo symbol
 }
 
 func TestSymbolResolverResolveTradernetWithoutClient(t *testing.T) {
@@ -291,11 +290,10 @@ func TestSymbolResolverResolveTradernetWithoutClient(t *testing.T) {
 	assert.NotNil(t, info)
 	assert.NotNil(t, info.TradernetSymbol)
 	assert.Equal(t, symbol, *info.TradernetSymbol)
-	assert.Nil(t, info.ISIN)                  // No ISIN without Tradernet client
-	assert.Equal(t, "AAPL", info.YahooSymbol) // Converted to Yahoo format
+	assert.Nil(t, info.ISIN) // No ISIN without Tradernet client
 }
 
-func TestSymbolResolverResolveYahoo(t *testing.T) {
+func TestSymbolResolverResolveGeneric(t *testing.T) {
 	log := zerolog.Nop()
 	resolver := NewSymbolResolver(nil, nil, log)
 
@@ -306,7 +304,6 @@ func TestSymbolResolverResolveYahoo(t *testing.T) {
 	assert.NotNil(t, info)
 	assert.Nil(t, info.TradernetSymbol)
 	assert.Nil(t, info.ISIN)
-	assert.Equal(t, symbol, info.YahooSymbol)
 }
 
 func TestSymbolResolverResolveToISIN(t *testing.T) {
@@ -326,7 +323,7 @@ func TestSymbolResolverResolveToISIN(t *testing.T) {
 			want:       "US0378331005",
 		},
 		{
-			name:       "Yahoo symbol - no ISIN",
+			name:       "generic symbol - no ISIN",
 			identifier: "AAPL",
 			wantISIN:   false,
 		},
@@ -371,7 +368,7 @@ func TestSymbolResolverGetSymbolForDisplay(t *testing.T) {
 			want:         "US0378331005",
 		},
 		{
-			name:         "Yahoo symbol returns itself",
+			name:         "generic symbol returns itself",
 			isinOrSymbol: "AAPL",
 			want:         "AAPL",
 		},
@@ -394,24 +391,24 @@ func TestSymbolInfoHasISIN(t *testing.T) {
 		{
 			name: "has ISIN",
 			info: SymbolInfo{
-				ISIN:        strPtr("US0378331005"),
-				YahooSymbol: "AAPL",
+				ISIN:            strPtr("US0378331005"),
+				TradernetSymbol: strPtr("AAPL.US"),
 			},
 			want: true,
 		},
 		{
 			name: "ISIN is nil",
 			info: SymbolInfo{
-				ISIN:        nil,
-				YahooSymbol: "AAPL",
+				ISIN:            nil,
+				TradernetSymbol: strPtr("AAPL.US"),
 			},
 			want: false,
 		},
 		{
 			name: "ISIN is empty string",
 			info: SymbolInfo{
-				ISIN:        strPtr(""),
-				YahooSymbol: "AAPL",
+				ISIN:            strPtr(""),
+				TradernetSymbol: strPtr("AAPL.US"),
 			},
 			want: false,
 		},
@@ -442,9 +439,9 @@ func TestIdentifierTypeString(t *testing.T) {
 			want:   "Tradernet",
 		},
 		{
-			name:   "Yahoo",
-			idType: IdentifierTypeYahoo,
-			want:   "Yahoo",
+			name:   "Generic",
+			idType: IdentifierTypeGeneric,
+			want:   "Generic",
 		},
 		{
 			name:   "Unknown",

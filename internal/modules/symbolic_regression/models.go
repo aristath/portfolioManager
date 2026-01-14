@@ -19,15 +19,14 @@ type TrainingExample struct {
 
 // TrainingInputs contains all input features for a training example
 type TrainingInputs struct {
-	// Scoring components
+	// Scoring components (internal data only - no external stability or analyst data)
 	LongTermScore        float64
-	FundamentalsScore    float64
+	StabilityScore       float64 // Replaces StabilityScore (calculated from price behavior)
 	DividendsScore       float64
 	OpportunityScore     float64
 	ShortTermScore       float64
 	TechnicalsScore      float64
-	OpinionScore         float64
-	DiversificationScore float64
+	DiversificationScore float64 // Optional: used in planning layer
 	TotalScore           float64
 
 	// Metrics

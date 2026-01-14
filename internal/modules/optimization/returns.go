@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/aristath/sentinel/internal/clients/yahoo"
 	"github.com/aristath/sentinel/internal/modules/symbolic_regression"
 	"github.com/rs/zerolog"
 )
@@ -37,18 +36,16 @@ const (
 type ReturnsCalculator struct {
 	db             *sql.DB // portfolio.db
 	universeDB     *sql.DB // universe.db (for symbol -> ISIN lookup)
-	yahooClient    yahoo.FullClientInterface
 	formulaStorage *symbolic_regression.FormulaStorage
 	log            zerolog.Logger
 }
 
 // NewReturnsCalculator creates a new returns calculator.
-func NewReturnsCalculator(db *sql.DB, universeDB *sql.DB, yahooClient yahoo.FullClientInterface, log zerolog.Logger) *ReturnsCalculator {
+func NewReturnsCalculator(db *sql.DB, universeDB *sql.DB, log zerolog.Logger) *ReturnsCalculator {
 	formulaStorage := symbolic_regression.NewFormulaStorage(db, log)
 	return &ReturnsCalculator{
 		db:             db,
 		universeDB:     universeDB,
-		yahooClient:    yahooClient,
 		formulaStorage: formulaStorage,
 		log:            log.With().Str("component", "returns").Logger(),
 	}
@@ -104,80 +101,13 @@ func (rc *ReturnsCalculator) CalculateExpectedReturns(
 }
 
 // calculateForwardAdjustment calculates forward-looking market indicator adjustment.
-// Combines adjustments from VIX, yield curve, and market P/E.
-// Returns adjustment factor (e.g., -0.05 = reduce by 5%).
+// Returns 0 since external market data sources (VIX, P/E) have been removed.
+// Market regime adjustments are now handled via internal regime score.
 func (rc *ReturnsCalculator) calculateForwardAdjustment() float64 {
-	var totalAdjustment float64
-
-	// 1. VIX adjustment (volatility/fear indicator)
-	vixPrice, err := rc.yahooClient.GetCurrentPrice("^VIX", nil, 2)
-	if err == nil && vixPrice != nil {
-		vix := *vixPrice
-		var vixAdj float64
-
-		if vix >= VIXHigh { // >= 25 (high volatility)
-			// Very high volatility: reduce by up to 10%
-			normalized := math.Min(1.0, (vix-VIXHigh)/20.0)
-			vixAdj = -VIXAdjustmentMax * normalized
-		} else if vix <= VIXLow { // <= 12 (low volatility)
-			// Low volatility: increase by up to 5%
-			normalized := 1.0 - (vix / VIXLow)
-			vixAdj = VIXAdjustmentMax * 0.5 * normalized
-		} else {
-			// Normal range: no adjustment
-			vixAdj = 0.0
-		}
-
-		totalAdjustment += vixAdj
-		rc.log.Debug().
-			Float64("vix", vix).
-			Float64("vix_adjustment", vixAdj).
-			Msg("VIX adjustment calculated")
-	} else {
-		rc.log.Debug().Msg("VIX not available, skipping VIX adjustment")
-	}
-
-	// 2. Market P/E adjustment (valuation indicator)
-	fundamentals, err := rc.yahooClient.GetFundamentalData("^GSPC", nil)
-	if err == nil && fundamentals != nil && fundamentals.PERatio != nil {
-		marketPE := *fundamentals.PERatio
-		var peAdj float64
-
-		if marketPE >= PEExpensive { // >= 25 (expensive market)
-			// Expensive market: reduce by up to 10%
-			normalized := math.Min(1.0, (marketPE-PEExpensive)/(PEExpensive*0.5))
-			peAdj = -PEAdjustmentMax * normalized
-		} else if marketPE <= PECheap { // <= 15 (cheap market)
-			// Cheap market: increase by up to 5%
-			normalized := 1.0 - ((marketPE - PECheap) / (PEFair - PECheap))
-			peAdj = PEAdjustmentMax * 0.5 * normalized
-		} else {
-			// Fair value range: no adjustment
-			peAdj = 0.0
-		}
-
-		totalAdjustment += peAdj
-		rc.log.Debug().
-			Float64("market_pe", marketPE).
-			Float64("pe_adjustment", peAdj).
-			Msg("Market P/E adjustment calculated")
-	} else {
-		rc.log.Debug().Msg("Market P/E not available, skipping P/E adjustment")
-	}
-
-	// 3. Yield curve adjustment (recession signal)
-	// Note: Treasury yields would require an external API (not implemented yet)
-	// When implemented, this would fetch 3M and 10Y yields and calculate slope
-	rc.log.Debug().Msg("Yield curve adjustment not implemented, skipping")
-
-	// Cap total adjustment at ±20%
-	totalAdjustment = math.Max(-0.20, math.Min(0.20, totalAdjustment))
-
-	rc.log.Info().
-		Float64("total_adjustment", totalAdjustment).
-		Msg("Calculated forward-looking market adjustment")
-
-	return totalAdjustment
+	// Forward-looking adjustments disabled - external data sources removed
+	// Market regime scoring now handles risk/return adjustments internally
+	rc.log.Debug().Msg("Forward adjustment disabled (external data sources removed)")
+	return 0.0
 }
 
 // calculateSingle calculates expected return for a single security.
@@ -337,14 +267,14 @@ func (rc *ReturnsCalculator) calculateSingle(
 		penalty := math.Min(0.3, shortfallRatio*0.5) // Up to 30% penalty
 
 		// Quality override: Get quality scores for penalty reduction
-		longTermScore, fundamentalsScore := rc.getQualityScores(isin, symbol)
+		longTermScore, stabilityScore := rc.getQualityScores(isin, symbol)
 		qualityScore := 0.0
-		if longTermScore != nil && fundamentalsScore != nil {
-			qualityScore = (*longTermScore + *fundamentalsScore) / 2.0
+		if longTermScore != nil && stabilityScore != nil {
+			qualityScore = (*longTermScore + *stabilityScore) / 2.0
 		} else if longTermScore != nil {
 			qualityScore = *longTermScore
-		} else if fundamentalsScore != nil {
-			qualityScore = *fundamentalsScore
+		} else if stabilityScore != nil {
+			qualityScore = *stabilityScore
 		}
 
 		// Apply quality override: Only exceptional quality gets significant reduction
@@ -531,8 +461,8 @@ func (rc *ReturnsCalculator) getScore(isin string, symbol string) (float64, erro
 	return score.Float64, nil
 }
 
-// getQualityScores fetches long-term and fundamentals scores for quality override calculation.
-// Uses cagr_score as proxy for long-term and fundamental_score for fundamentals.
+// getQualityScores fetches long-term and stability scores for quality override calculation.
+// Uses cagr_score as proxy for long-term and stability_score for stability.
 // Uses ISIN directly (preferred) or looks up ISIN from symbol if not available.
 func (rc *ReturnsCalculator) getQualityScores(isin string, symbol string) (*float64, *float64) {
 	var queryISIN string
@@ -565,10 +495,10 @@ func (rc *ReturnsCalculator) getQualityScores(isin string, symbol string) (*floa
 	}
 
 	// Query scores directly by ISIN (PRIMARY KEY - fastest)
-	query := `SELECT cagr_score, fundamental_score FROM scores WHERE isin = ? ORDER BY last_updated DESC LIMIT 1`
+	query := `SELECT cagr_score, stability_score FROM scores WHERE isin = ? ORDER BY last_updated DESC LIMIT 1`
 
-	var cagrScore, fundamentalScore sql.NullFloat64
-	err := rc.db.QueryRow(query, queryISIN).Scan(&cagrScore, &fundamentalScore)
+	var cagrScore, stabilityScore sql.NullFloat64
+	err := rc.db.QueryRow(query, queryISIN).Scan(&cagrScore, &stabilityScore)
 	if err != nil {
 		if err != sql.ErrNoRows {
 			rc.log.Debug().
@@ -580,19 +510,19 @@ func (rc *ReturnsCalculator) getQualityScores(isin string, symbol string) (*floa
 		return nil, nil
 	}
 
-	var longTermPtr, fundamentalsPtr *float64
+	var longTermPtr, stabilityPtr *float64
 	if cagrScore.Valid {
 		// Use cagr_score as proxy for long-term (normalize to 0-1 range)
 		// CAGR scores are typically in 0-1 range already, but normalize if needed
 		normalized := math.Max(0.0, math.Min(1.0, cagrScore.Float64))
 		longTermPtr = &normalized
 	}
-	if fundamentalScore.Valid {
-		normalized := math.Max(0.0, math.Min(1.0, fundamentalScore.Float64))
-		fundamentalsPtr = &normalized
+	if stabilityScore.Valid {
+		normalized := math.Max(0.0, math.Min(1.0, stabilityScore.Float64))
+		stabilityPtr = &normalized
 	}
 
-	return longTermPtr, fundamentalsPtr
+	return longTermPtr, stabilityPtr
 }
 
 // calculateStaticExpectedReturn calculates expected return using the static formula

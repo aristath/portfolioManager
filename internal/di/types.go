@@ -3,12 +3,7 @@ package di
 
 import (
 	"github.com/aristath/sentinel/internal/clientdata"
-	"github.com/aristath/sentinel/internal/clients/alphavantage"
-	"github.com/aristath/sentinel/internal/clients/exchangerate"
-	"github.com/aristath/sentinel/internal/clients/openfigi"
-	"github.com/aristath/sentinel/internal/clients/symbols"
 	"github.com/aristath/sentinel/internal/clients/tradernet"
-	"github.com/aristath/sentinel/internal/clients/yahoo"
 	"github.com/aristath/sentinel/internal/database"
 	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/events"
@@ -57,12 +52,8 @@ type Container struct {
 	ClientDataDB *database.DB
 
 	// Clients
-	BrokerClient          domain.BrokerClient
-	YahooClient           *yahoo.NativeClient
-	AlphaVantageClient    *alphavantage.Client
-	OpenFIGIClient        *openfigi.Client
-	ExchangeRateAPIClient *exchangerate.Client
-	MarketStatusWS        *tradernet.MarketStatusWebSocket
+	BrokerClient   domain.BrokerClient
+	MarketStatusWS *tradernet.MarketStatusWebSocket
 
 	// Repositories
 	PositionRepo        *portfolio.PositionRepository
@@ -84,13 +75,11 @@ type Container struct {
 	DismissedFilterRepo *planningrepo.DismissedFilterRepository
 
 	// Services
-	DataSourceRouter          *services.DataSourceRouter
-	SymbolMapper              *symbols.Mapper
 	ClientSymbolMapper        *services.ClientSymbolMapper
-	DataFetcherService        *services.DataFetcherService
 	CurrencyExchangeService   *services.CurrencyExchangeService
 	ExchangeRateCacheService  *services.ExchangeRateCacheService
 	PriceConversionService    *services.PriceConversionService
+	DividendYieldCalculator   *dividends.DividendYieldCalculator
 	CashManager               domain.CashManager // Interface
 	TradeSafetyService        *trading.TradeSafetyService
 	TradingService            *trading.TradingService

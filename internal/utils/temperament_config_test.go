@@ -55,7 +55,7 @@ func TestAllMappingsExist(t *testing.T) {
 		"risk_max_trades_per_week",
 
 		// Category 7: Quality gates (4)
-		"quality_fundamentals_threshold",
+		"quality_stability_threshold",
 		"quality_long_term_threshold",
 		"quality_exceptional_threshold",
 		"quality_absolute_min_cagr",
@@ -110,7 +110,7 @@ func TestAllMappingsExist(t *testing.T) {
 		"boost_growth_bull",
 		"boost_value_bear",
 		"boost_dividend_sideways",
-		"boost_strong_fundamentals",
+		"boost_strong_stability",
 
 		// Category 15: Tag assigner - Value (5)
 		"tag_value_opportunity_discount_pct",
@@ -120,20 +120,20 @@ func TestAllMappingsExist(t *testing.T) {
 		"tag_below_52w_high_threshold",
 
 		// Category 16: Tag assigner - Quality (8)
-		"tag_high_quality_fundamentals",
+		"tag_high_quality_stability",
 		"tag_high_quality_long_term",
-		"tag_stable_fundamentals",
+		"tag_stable_stability",
 		"tag_stable_volatility_max",
 		"tag_stable_consistency",
 		"tag_consistent_grower_consistency",
 		"tag_consistent_grower_cagr",
-		"tag_strong_fundamentals_threshold",
+		"tag_strong_stability_threshold",
 
 		// Category 17: Tag assigner - Technical (5)
 		"tag_rsi_oversold",
 		"tag_rsi_overbought",
 		"tag_recovery_momentum_threshold",
-		"tag_recovery_fundamentals_min",
+		"tag_recovery_stability_min",
 		"tag_recovery_discount_min",
 
 		// Category 18: Tag assigner - Dividend (4)
@@ -159,20 +159,20 @@ func TestAllMappingsExist(t *testing.T) {
 
 		// Category 21: Tag assigner - Risk profile (8)
 		"tag_low_risk_volatility_max",
-		"tag_low_risk_fundamentals_min",
+		"tag_low_risk_stability_min",
 		"tag_low_risk_drawdown_max",
 		"tag_medium_risk_volatility_min",
 		"tag_medium_risk_volatility_max",
-		"tag_medium_risk_fundamentals_min",
+		"tag_medium_risk_stability_min",
 		"tag_high_risk_volatility_threshold",
-		"tag_high_risk_fundamentals_threshold",
+		"tag_high_risk_stability_threshold",
 
 		// Category 22: Tag assigner - Bubble & value trap (12)
 		"tag_bubble_cagr_threshold",
 		"tag_bubble_sharpe_threshold",
 		"tag_bubble_volatility_threshold",
-		"tag_bubble_fundamentals_threshold",
-		"tag_value_trap_fundamentals",
+		"tag_bubble_stability_threshold",
+		"tag_value_trap_stability",
 		"tag_value_trap_long_term",
 		"tag_value_trap_momentum",
 		"tag_value_trap_volatility",
@@ -190,10 +190,10 @@ func TestAllMappingsExist(t *testing.T) {
 
 		// Category 24: Tag assigner - Regime specific (6)
 		"tag_bear_safe_volatility",
-		"tag_bear_safe_fundamentals",
+		"tag_bear_safe_stability",
 		"tag_bear_safe_drawdown",
 		"tag_bull_growth_cagr",
-		"tag_bull_growth_fundamentals",
+		"tag_bull_growth_stability",
 		"tag_regime_volatile_volatility",
 
 		// Category 26: Evaluation scoring (15)
@@ -253,7 +253,7 @@ func TestBoundaryValues(t *testing.T) {
 		{"risk_max_trades_per_day", "aggression", 2, 4, 8, 1},
 
 		// Category 7: Quality gates
-		{"quality_fundamentals_threshold", "aggression", 0.65, 0.55, 0.45, 0.02}, // inverse
+		{"quality_stability_threshold", "aggression", 0.65, 0.55, 0.45, 0.02}, // inverse
 
 		// Category 11: Priority boosts
 		{"boost_windfall_priority", "aggression", 1.2, 1.5, 1.8, 0.05},
@@ -320,7 +320,7 @@ func TestSafetyBoundsEnforced(t *testing.T) {
 		{"kelly_fixed_fractional", 0.15, 0.80},
 		{"risk_max_sell_percentage", 0.05, 0.75},
 		{"quality_absolute_min_cagr", 0.04, 0.10},
-		{"quality_fundamentals_threshold", 0.35, 0.80},
+		{"quality_stability_threshold", 0.35, 0.80},
 	}
 
 	for _, tc := range criticalParams {
@@ -426,7 +426,7 @@ func TestInverseRelationships(t *testing.T) {
 	}{
 		{"evaluation_quality_weight"},       // Aggression inverse
 		{"evaluation_risk_adjusted_weight"}, // Risk inverse
-		{"quality_fundamentals_threshold"},  // Aggression inverse
+		{"quality_stability_threshold"},  // Aggression inverse
 		{"boost_bubble_risk"},               // Risk inverse
 		{"tag_overvalued_pe_threshold"},     // Risk inverse
 	}

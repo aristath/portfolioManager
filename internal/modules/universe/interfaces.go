@@ -3,8 +3,6 @@ package universe
 import (
 	"database/sql"
 	"time"
-
-	"github.com/aristath/sentinel/internal/clients/yahoo"
 )
 
 // ProgressReporter interface for progress reporting (avoids import cycle)
@@ -81,27 +79,6 @@ type SecurityRepositoryInterface interface {
 
 // Compile-time check that SecurityRepository implements SecurityRepositoryInterface
 var _ SecurityRepositoryInterface = (*SecurityRepository)(nil)
-
-// YahooClientInterface defines the contract for Yahoo Finance client operations
-// Used by SyncService to enable testing with mocks
-type YahooClientInterface interface {
-	GetBatchQuotes(symbolMap map[string]*string) (map[string]*float64, error)
-	GetSecurityIndustry(symbol string, yahooSymbolOverride *string) (*string, error)
-	GetSecurityCountryAndExchange(symbol string, yahooSymbolOverride *string) (*string, *string, error)
-}
-
-// YahooHistoricalClientInterface defines the contract for historical price operations
-// Used by HistoricalSyncService to enable testing with mocks
-type YahooHistoricalClientInterface interface {
-	GetHistoricalPrices(symbol string, yahooSymbolOverride *string, period string) ([]yahoo.HistoricalPrice, error)
-}
-
-// YahooFullClientInterface combines all Yahoo Finance client interfaces
-// This is used by services that need both sync and historical operations
-type YahooFullClientInterface interface {
-	YahooClientInterface
-	YahooHistoricalClientInterface
-}
 
 // DBExecutor defines the contract for database execution operations
 // Used by SyncService to enable testing with mocks

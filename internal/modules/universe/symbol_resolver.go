@@ -18,8 +18,8 @@ const (
 	IdentifierTypeISIN IdentifierType = iota
 	// IdentifierTypeTradernet represents a Tradernet symbol (e.g., AAPL.US)
 	IdentifierTypeTradernet
-	// IdentifierTypeYahoo represents a Yahoo Finance symbol
-	IdentifierTypeYahoo
+	// IdentifierTypeGeneric represents a generic symbol (no exchange suffix)
+	IdentifierTypeGeneric
 )
 
 // String returns the string representation of IdentifierType
@@ -29,19 +29,18 @@ func (i IdentifierType) String() string {
 		return "ISIN"
 	case IdentifierTypeTradernet:
 		return "Tradernet"
-	case IdentifierTypeYahoo:
-		return "Yahoo"
+	case IdentifierTypeGeneric:
+		return "Generic"
 	default:
 		return "Unknown"
 	}
 }
 
 // SymbolInfo contains resolved symbol information
-// Faithful translation from Python: app/modules/universe/domain/symbol_resolver.py -> SymbolInfo
+// Note: YahooSymbol removed - Yahoo is no longer used as data source
 type SymbolInfo struct {
 	TradernetSymbol *string // Tradernet symbol (e.g., AAPL.US)
 	ISIN            *string // ISIN (e.g., US0378331005)
-	YahooSymbol     string  // Best identifier for Yahoo (ISIN if available, else converted)
 }
 
 // HasISIN checks if ISIN is available
@@ -90,17 +89,14 @@ func DetectIdentifierType(identifier string) IdentifierType {
 	if IsTradernetFormat(identifier) {
 		return IdentifierTypeTradernet
 	}
-	return IdentifierTypeYahoo
+	return IdentifierTypeGeneric
 }
 
-// TradernetToYahoo converts Tradernet symbol to Yahoo format
-// Faithful translation from Python: app/modules/universe/domain/symbol_resolver.py -> tradernet_to_yahoo()
-//
-// This is the fallback when ISIN is not available.
-// For .US securities, strips the suffix.
+// TradernetToBaseSymbol converts Tradernet symbol to base symbol format
+// For .US securities, strips the suffix (AAPL.US → AAPL).
 // For .GR securities, converts to .AT (Athens).
 // Other suffixes pass through unchanged.
-func TradernetToYahoo(tradernetSymbol string) string {
+func TradernetToBaseSymbol(tradernetSymbol string) string {
 	symbol := strings.ToUpper(tradernetSymbol)
 
 	// US securities: strip .US suffix
@@ -144,17 +140,17 @@ func (r *SymbolResolver) DetectType(identifier string) IdentifierType {
 }
 
 // Resolve resolves any identifier to SymbolInfo
-// Faithful translation from Python: app/modules/universe/domain/symbol_resolver.py -> resolve()
+// Note: Yahoo is no longer used as data source - only Tradernet and ISIN matter
 //
 // For Tradernet symbols:
 // 1. Check if ISIN is cached in database
 // 2. If not, fetch from Tradernet API
-// 3. Return SymbolInfo with ISIN as yahoo_symbol (best for Yahoo lookups)
+// 3. Return SymbolInfo with TradernetSymbol and ISIN
 //
 // For ISIN:
-// 1. Return directly with ISIN as yahoo_symbol
+// 1. Return directly with ISIN
 //
-// For Yahoo format:
+// For generic format:
 // 1. Return as-is (no Tradernet symbol or ISIN known)
 func (r *SymbolResolver) Resolve(identifier string) (*SymbolInfo, error) {
 	identifier = strings.TrimSpace(strings.ToUpper(identifier))
@@ -167,11 +163,10 @@ func (r *SymbolResolver) Resolve(identifier string) (*SymbolInfo, error) {
 
 	switch idType {
 	case IdentifierTypeISIN:
-		// ISIN provided directly - use as yahoo_symbol
+		// ISIN provided directly
 		return &SymbolInfo{
 			TradernetSymbol: nil,
 			ISIN:            &identifier,
-			YahooSymbol:     identifier,
 		}, nil
 
 	case IdentifierTypeTradernet:
@@ -179,37 +174,22 @@ func (r *SymbolResolver) Resolve(identifier string) (*SymbolInfo, error) {
 		isin, err := r.getISINForTradernet(identifier)
 		if err != nil {
 			r.log.Warn().Err(err).Str("symbol", identifier).Msg("Failed to get ISIN for Tradernet symbol")
-			// Fall back to simple conversion
-			yahoo := TradernetToYahoo(identifier)
 			return &SymbolInfo{
 				TradernetSymbol: &identifier,
 				ISIN:            nil,
-				YahooSymbol:     yahoo,
 			}, nil
 		}
 
-		if isin != nil && *isin != "" {
-			return &SymbolInfo{
-				TradernetSymbol: &identifier,
-				ISIN:            isin,
-				YahooSymbol:     *isin, // Use ISIN for Yahoo
-			}, nil
-		}
-
-		// Fall back to simple conversion
-		yahoo := TradernetToYahoo(identifier)
 		return &SymbolInfo{
 			TradernetSymbol: &identifier,
-			ISIN:            nil,
-			YahooSymbol:     yahoo,
+			ISIN:            isin,
 		}, nil
 
-	case IdentifierTypeYahoo:
-		// Yahoo format - return as-is
+	case IdentifierTypeGeneric:
+		// Generic format - no exchange suffix, no known ISIN
 		return &SymbolInfo{
 			TradernetSymbol: nil,
 			ISIN:            nil,
-			YahooSymbol:     identifier,
 		}, nil
 
 	default:

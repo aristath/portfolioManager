@@ -10,17 +10,8 @@ import (
 )
 
 // AllTables lists all tables in client_data.db for cleanup operations.
+// Note: alphavantage_*, yahoo_metadata, and openfigi tables removed - external data sources no longer used.
 var AllTables = []string{
-	"alphavantage_overview",
-	"alphavantage_balance_sheet",
-	"alphavantage_cash_flow",
-	"alphavantage_earnings",
-	"alphavantage_dividends",
-	"alphavantage_etf_profile",
-	"alphavantage_insider",
-	"alphavantage_economic",
-	"openfigi",
-	"yahoo_metadata",
 	"exchangerate",
 	"current_prices",
 	"symbol_to_isin",
@@ -58,8 +49,6 @@ func validateTable(table string) error {
 // Most tables use "isin", but some use different keys.
 func getKeyColumn(table string) string {
 	switch table {
-	case "alphavantage_economic":
-		return "indicator"
 	case "exchangerate":
 		return "pair"
 	case "symbol_to_isin":

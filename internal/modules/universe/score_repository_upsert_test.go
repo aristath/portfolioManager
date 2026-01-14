@@ -36,7 +36,7 @@ func TestUpsert_InsertsAllColumns(t *testing.T) {
 			consistency_score REAL,
 			history_years INTEGER,
 			technical_score REAL,
-			fundamental_score REAL,
+			stability_score REAL,
 			sharpe_score REAL,
 			drawdown_score REAL,
 			dividend_bonus REAL,
@@ -64,7 +64,7 @@ func TestUpsert_InsertsAllColumns(t *testing.T) {
 		ConsistencyScore:       0.10,
 		HistoryYears:           5.0,
 		TechnicalScore:         0.50,
-		FundamentalScore:       0.45,
+		StabilityScore:       0.45,
 		SharpeScore:            1.5,
 		DrawdownScore:          -0.15,
 		DividendBonus:          0.10,
@@ -102,7 +102,7 @@ func TestUpsert_InsertsAllColumns(t *testing.T) {
 	assert.Equal(t, 0.10, result.ConsistencyScore)
 	assert.Equal(t, 5.0, result.HistoryYears)
 	assert.Equal(t, 0.50, result.TechnicalScore)
-	assert.Equal(t, 0.45, result.FundamentalScore)
+	assert.Equal(t, 0.45, result.StabilityScore)
 	assert.Equal(t, 1.5, result.SharpeScore)
 	assert.Equal(t, -0.15, result.DrawdownScore)
 	assert.Equal(t, 0.10, result.DividendBonus)
@@ -137,7 +137,7 @@ func TestUpsert_HandlesZeroValues(t *testing.T) {
 			consistency_score REAL,
 			history_years INTEGER,
 			technical_score REAL,
-			fundamental_score REAL,
+			stability_score REAL,
 			sharpe_score REAL,
 			drawdown_score REAL,
 			dividend_bonus REAL,

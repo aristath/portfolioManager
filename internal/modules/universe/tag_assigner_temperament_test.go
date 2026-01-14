@@ -16,18 +16,16 @@ func TestTagAssignerConfigDefaults(t *testing.T) {
 		"value opportunity discount should be 15%")
 	assert.Equal(t, 0.25, config.Value.DeepValueDiscountPct,
 		"deep value discount should be 25%")
-	assert.Equal(t, -0.20, config.Value.UndervaluedPEThreshold,
-		"undervalued PE threshold should be -20%")
 	assert.Equal(t, 0.10, config.Value.Below52wHighThreshold,
 		"below 52w high threshold should be 10%")
 
 	// Quality thresholds (from plan Category 16)
-	assert.Equal(t, 0.70, config.Quality.HighQualityFundamentals,
-		"high quality fundamentals should be 0.70")
+	assert.Equal(t, 0.70, config.Quality.HighQualityStability,
+		"high quality stability should be 0.70")
 	assert.Equal(t, 0.70, config.Quality.HighQualityLongTerm,
 		"high quality long term should be 0.70")
-	assert.Equal(t, 0.75, config.Quality.StableFundamentals,
-		"stable fundamentals should be 0.75")
+	assert.Equal(t, 0.75, config.Quality.StableStability,
+		"stable stability should be 0.75")
 	assert.Equal(t, 0.25, config.Quality.StableVolatilityMax,
 		"stable volatility max should be 0.25")
 	assert.Equal(t, 0.75, config.Quality.StableConsistency,
@@ -44,8 +42,6 @@ func TestTagAssignerConfigDefaults(t *testing.T) {
 		"high dividend yield should be 4%")
 
 	// Danger thresholds (from plan Category 19)
-	assert.Equal(t, 0.20, config.Danger.OvervaluedPEThreshold,
-		"overvalued PE threshold should be 20%")
 	assert.Equal(t, 0.30, config.Danger.VolatileThreshold,
 		"volatile threshold should be 30%")
 	assert.Equal(t, 0.40, config.Danger.HighVolatilityThreshold,
@@ -101,10 +97,10 @@ func TestTagAssignerThresholdBounds(t *testing.T) {
 		"volatile threshold should be reasonable")
 
 	// Quality thresholds should be in [0, 1]
-	assert.True(t, config.Quality.HighQualityFundamentals >= 0 && config.Quality.HighQualityFundamentals <= 1,
-		"high quality fundamentals should be in [0, 1]")
-	assert.True(t, config.Quality.StableFundamentals >= 0 && config.Quality.StableFundamentals <= 1,
-		"stable fundamentals should be in [0, 1]")
+	assert.True(t, config.Quality.HighQualityStability >= 0 && config.Quality.HighQualityStability <= 1,
+		"high quality stability should be in [0, 1]")
+	assert.True(t, config.Quality.StableStability >= 0 && config.Quality.StableStability <= 1,
+		"stable stability should be in [0, 1]")
 
 	// Yield/return thresholds should be positive percentages
 	assert.True(t, config.Dividend.HighDividendYield > 0 && config.Dividend.HighDividendYield < 0.20,
@@ -119,8 +115,8 @@ func TestTemperamentAffectsTagThresholds(t *testing.T) {
 	config := NewDefaultTagAssignerConfig()
 
 	// These should all reflect base values
-	assert.Equal(t, 0.70, config.Quality.HighQualityFundamentals,
-		"at balanced temperament, high quality fundamentals should be base value 0.70")
+	assert.Equal(t, 0.70, config.Quality.HighQualityStability,
+		"at balanced temperament, high quality stability should be base value 0.70")
 	assert.Equal(t, 30.0, config.Technical.RSIOversold,
 		"at balanced temperament, RSI oversold should be base value 30")
 
@@ -134,8 +130,8 @@ func TestQualityGateThresholds(t *testing.T) {
 	config := NewDefaultTagAssignerConfig()
 
 	// Multi-path quality gate thresholds
-	assert.Equal(t, 0.55, config.QualityGate.FundamentalsThreshold,
-		"fundamentals threshold should be 0.55")
+	assert.Equal(t, 0.55, config.QualityGate.StabilityThreshold,
+		"stability threshold should be 0.55")
 	assert.Equal(t, 0.45, config.QualityGate.LongTermThreshold,
 		"long term threshold should be 0.45")
 	assert.Equal(t, 0.75, config.QualityGate.ExceptionalThreshold,
@@ -153,12 +149,12 @@ func TestBubbleTrapThresholds(t *testing.T) {
 		"bubble Sharpe threshold should be 0.5")
 	assert.Equal(t, 0.40, config.BubbleTrap.BubbleVolatilityThreshold,
 		"bubble volatility threshold should be 40%")
-	assert.Equal(t, 0.55, config.BubbleTrap.BubbleFundamentalsThreshold,
-		"bubble fundamentals threshold should be 0.55")
+	assert.Equal(t, 0.55, config.BubbleTrap.BubbleStabilityThreshold,
+		"bubble stability threshold should be 0.55")
 
 	// Value trap detection
-	assert.Equal(t, 0.55, config.BubbleTrap.ValueTrapFundamentals,
-		"value trap fundamentals should be 0.55")
+	assert.Equal(t, 0.55, config.BubbleTrap.ValueTrapStability,
+		"value trap stability should be 0.55")
 	assert.Equal(t, 0.45, config.BubbleTrap.ValueTrapLongTerm,
 		"value trap long term should be 0.45")
 	assert.Equal(t, -0.05, config.BubbleTrap.ValueTrapMomentum,
@@ -191,8 +187,8 @@ func TestRegimeThresholds(t *testing.T) {
 
 	assert.Equal(t, 0.20, config.Regime.BearSafeVolatility,
 		"bear safe volatility should be 20%")
-	assert.Equal(t, 0.70, config.Regime.BearSafeFundamentals,
-		"bear safe fundamentals should be 0.70")
+	assert.Equal(t, 0.70, config.Regime.BearSafeStability,
+		"bear safe stability should be 0.70")
 	assert.Equal(t, 0.12, config.Regime.BullGrowthCAGR,
 		"bull growth CAGR should be 12%")
 }

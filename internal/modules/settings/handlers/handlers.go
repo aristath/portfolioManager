@@ -261,17 +261,15 @@ func (h *Handler) HandleToggleTradingMode(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(response)
 }
 
-// DataSourceType represents a type of data that can be fetched from multiple sources
+// DataSourceType represents a type of data
+// Note: All data now comes from Tradernet only - external sources have been removed
 type DataSourceType string
 
 // Data source type constants
 const (
-	DataTypeFundamentals    DataSourceType = "fundamentals"
 	DataTypeCurrentPrices   DataSourceType = "current_prices"
 	DataTypeHistorical      DataSourceType = "historical"
-	DataTypeTechnicals      DataSourceType = "technicals"
 	DataTypeExchangeRates   DataSourceType = "exchange_rates"
-	DataTypeISINLookup      DataSourceType = "isin_lookup"
 	DataTypeCompanyMetadata DataSourceType = "company_metadata"
 )
 
@@ -290,58 +288,19 @@ type DataSourcesResponse struct {
 }
 
 // HandleGetDataSources handles GET /api/settings/data-sources
-// Returns structured data source priorities configuration
+// Returns data source configuration - Tradernet is the sole data source
 func (h *Handler) HandleGetDataSources(w http.ResponseWriter, r *http.Request) {
-	// Define data source types with descriptions
-	dataTypes := []struct {
-		Type        DataSourceType
-		Description string
-		SettingKey  string
-		Default     string
-	}{
-		{DataTypeFundamentals, "Financial fundamentals (P/E, margins, company overview)", "datasource_fundamentals", `["alphavantage","yahoo"]`},
-		{DataTypeCurrentPrices, "Real-time and delayed stock quotes", "datasource_current_prices", `["tradernet","alphavantage","yahoo"]`},
-		{DataTypeHistorical, "Historical OHLCV time series data", "datasource_historical", `["tradernet","alphavantage","yahoo"]`},
-		{DataTypeTechnicals, "Technical indicators (RSI, SMA, MACD, etc.)", "datasource_technicals", `["alphavantage","yahoo"]`},
-		{DataTypeExchangeRates, "Currency exchange rates", "datasource_exchange_rates", `["exchangerate","tradernet","alphavantage"]`},
-		{DataTypeISINLookup, "ISIN to ticker symbol resolution", "datasource_isin_lookup", `["openfigi","yahoo"]`},
-		{DataTypeCompanyMetadata, "Company metadata (industry, sector, country)", "datasource_company_metadata", `["alphavantage","yahoo","openfigi"]`},
+	// Tradernet is the sole data source - all data types use it exclusively
+	// External sources (Alpha Vantage, Yahoo, OpenFIGI, ExchangeRate API) have been removed
+	sources := []DataSourceConfig{
+		{DataTypeCurrentPrices, "Real-time and delayed stock quotes", []string{"tradernet"}, ""},
+		{DataTypeHistorical, "Historical OHLCV time series data", []string{"tradernet"}, ""},
+		{DataTypeExchangeRates, "Currency exchange rates", []string{"tradernet"}, ""},
+		{DataTypeCompanyMetadata, "Company metadata (industry, sector, country)", []string{"tradernet"}, ""},
 	}
 
-	sources := make([]DataSourceConfig, 0, len(dataTypes))
-	for _, dt := range dataTypes {
-		// Get current priorities from settings
-		var priorities []string
-		if val, err := h.service.Get(dt.SettingKey); err == nil && val != nil {
-			// Type assert to string since data source settings are stored as JSON strings
-			if strVal, ok := val.(string); ok && strVal != "" {
-				if err := json.Unmarshal([]byte(strVal), &priorities); err != nil {
-					h.log.Warn().Str("key", dt.SettingKey).Err(err).Msg("Failed to parse data source priorities, using default")
-					_ = json.Unmarshal([]byte(dt.Default), &priorities)
-				}
-			} else {
-				_ = json.Unmarshal([]byte(dt.Default), &priorities)
-			}
-		} else {
-			_ = json.Unmarshal([]byte(dt.Default), &priorities)
-		}
-
-		sources = append(sources, DataSourceConfig{
-			Type:        dt.Type,
-			Description: dt.Description,
-			Priorities:  priorities,
-			SettingKey:  dt.SettingKey,
-		})
-	}
-
-	// List of all available data sources
-	availableSources := []string{
-		"alphavantage",
-		"yahoo",
-		"tradernet",
-		"exchangerate",
-		"openfigi",
-	}
+	// Tradernet is the only available data source
+	availableSources := []string{"tradernet"}
 
 	response := DataSourcesResponse{
 		Sources:          sources,
@@ -357,91 +316,14 @@ func (h *Handler) HandleGetDataSources(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleUpdateDataSource handles PUT /api/settings/data-sources/{type}
-// Updates the priority order for a specific data type
+// Data source configuration is no longer editable - Tradernet is the sole data source
 func (h *Handler) HandleUpdateDataSource(w http.ResponseWriter, r *http.Request) {
-	dataType := chi.URLParam(r, "type")
-	if dataType == "" {
-		http.Error(w, "Data type is required", http.StatusBadRequest)
-		return
-	}
-
-	// Map data type to setting key
-	settingKeyMap := map[string]string{
-		"fundamentals":     "datasource_fundamentals",
-		"current_prices":   "datasource_current_prices",
-		"historical":       "datasource_historical",
-		"technicals":       "datasource_technicals",
-		"exchange_rates":   "datasource_exchange_rates",
-		"isin_lookup":      "datasource_isin_lookup",
-		"company_metadata": "datasource_company_metadata",
-	}
-
-	settingKey, ok := settingKeyMap[dataType]
-	if !ok {
-		http.Error(w, "Invalid data type", http.StatusBadRequest)
-		return
-	}
-
-	// Parse request body
-	var request struct {
-		Priorities []string `json:"priorities"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	if len(request.Priorities) == 0 {
-		http.Error(w, "Priorities array cannot be empty", http.StatusBadRequest)
-		return
-	}
-
-	// Validate sources
-	validSources := map[string]bool{
-		"alphavantage": true,
-		"yahoo":        true,
-		"tradernet":    true,
-		"exchangerate": true,
-		"openfigi":     true,
-	}
-	for _, source := range request.Priorities {
-		if !validSources[source] {
-			http.Error(w, "Invalid data source: "+source, http.StatusBadRequest)
-			return
-		}
-	}
-
-	// Convert to JSON string for storage
-	prioritiesJSON, err := json.Marshal(request.Priorities)
-	if err != nil {
-		h.log.Error().Err(err).Msg("Failed to marshal priorities")
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-
-	// Store the setting
-	_, err = h.service.Set(settingKey, string(prioritiesJSON))
-	if err != nil {
-		h.log.Error().Err(err).Str("key", settingKey).Msg("Failed to update data source priority")
-		http.Error(w, "Failed to update setting", http.StatusInternalServerError)
-		return
-	}
-
-	// Emit settings changed event
-	if h.eventManager != nil {
-		h.eventManager.Emit(events.SettingsChanged, "settings", map[string]interface{}{
-			"key":   settingKey,
-			"value": string(prioritiesJSON),
-		})
-	}
-
-	// Return updated configuration
-	response := DataSourceConfig{
-		Type:       DataSourceType(dataType),
-		Priorities: request.Priorities,
-		SettingKey: settingKey,
-	}
-
+	// Tradernet is the sole data source - external sources have been removed
+	// This endpoint is deprecated but returns a helpful message for backwards compatibility
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"message": "Data source configuration is no longer editable. Tradernet is the sole data source.",
+		"source":  "tradernet",
+	})
 }

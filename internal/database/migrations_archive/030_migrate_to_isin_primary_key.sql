@@ -119,7 +119,7 @@ CREATE TABLE scores_new (
     consistency_score REAL,
     history_years INTEGER,
     technical_score REAL,
-    fundamental_score REAL,
+    stability_score REAL,
     last_updated TEXT NOT NULL,
     FOREIGN KEY (isin) REFERENCES securities(isin) ON DELETE CASCADE
 ) STRICT;
@@ -143,7 +143,7 @@ SELECT
     sc.consistency_score,
     sc.history_years,
     sc.technical_score,
-    sc.fundamental_score,
+    sc.stability_score,
     sc.last_updated
 FROM scores sc
 INNER JOIN securities s ON sc.symbol = s.symbol;

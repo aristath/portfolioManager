@@ -6,7 +6,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/aristath/sentinel/internal/clients/yahoo"
 	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/events"
 	"github.com/aristath/sentinel/internal/modules/portfolio"
@@ -25,7 +24,6 @@ func TestRegisterRoutes(t *testing.T) {
 	var portfolioDB *sql.DB = nil
 	var positionRepo *portfolio.PositionRepository = nil
 	securityScorer := &scorers.SecurityScorer{}
-	var yahooClient yahoo.FullClientInterface = nil
 	historyDB := &universe.HistoryDB{}
 	setupService := &universe.SecuritySetupService{}
 	syncService := &universe.SyncService{}
@@ -39,7 +37,6 @@ func TestRegisterRoutes(t *testing.T) {
 		portfolioDB,
 		positionRepo,
 		securityScorer,
-		yahooClient,
 		historyDB,
 		setupService,
 		syncService,
@@ -110,7 +107,6 @@ func TestRegisterRoutes_RoutePrefix(t *testing.T) {
 	var portfolioDB *sql.DB = nil
 	var positionRepo *portfolio.PositionRepository = nil
 	securityScorer := &scorers.SecurityScorer{}
-	var yahooClient yahoo.FullClientInterface = nil
 	historyDB := &universe.HistoryDB{}
 	setupService := &universe.SecuritySetupService{}
 	syncService := &universe.SyncService{}
@@ -123,7 +119,6 @@ func TestRegisterRoutes_RoutePrefix(t *testing.T) {
 		portfolioDB,
 		positionRepo,
 		securityScorer,
-		yahooClient,
 		historyDB,
 		setupService,
 		syncService,

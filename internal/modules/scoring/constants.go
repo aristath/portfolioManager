@@ -53,10 +53,7 @@ const (
 // =============================================================================
 
 const (
-	// Market average P/E for comparison
-	DefaultMarketAvgPE = 22
-
-	// Forward-looking market indicator thresholds
+	// Forward-looking market indicator thresholds (used for regime detection)
 	VIXLow           = 15.0 // Low volatility = optimistic
 	VIXNormal        = 20.0 // Normal volatility
 	VIXHigh          = 30.0 // High volatility = pessimistic
@@ -68,32 +65,19 @@ const (
 	YieldCurveInverted      = -0.01 // Negative = inverted (recession signal)
 	YieldCurveAdjustmentMax = 0.15  // Max ±15% adjustment for yield curve
 
-	// Market P/E thresholds (vs historical average of 22)
-	PECheap         = 18.0 // Below average = cheap market
-	PEFair          = 22.0 // At average = fair value
-	PEExpensive     = 26.0 // Above average = expensive market
-	PEAdjustmentMax = 0.10 // Max ±10% adjustment for P/E
-
-	// 52-week high thresholds
+	// 52-week high thresholds (100% of opportunity scoring - P/E removed)
 	BelowHighExcellent = 0.30 // 30%+ below = 1.0
 	BelowHighGood      = 0.20 // 20-30% below = 0.8-1.0
 	BelowHighOK        = 0.10 // 10-20% below = 0.5-0.8
 
-	// EMA distance thresholds
+	// EMA distance thresholds (used in technicals scoring)
 	EMAVeryBelow = -0.10 // 10%+ below EMA = 1.0
 	EMABelow     = -0.05 // 5-10% below = 0.7-1.0
 	EMAVeryAbove = 0.10  // 10%+ above = 0.2
 
-	// RSI thresholds
+	// RSI thresholds (used in technicals scoring)
 	RSIOversold   = 30 // Below = 1.0 (buy signal)
 	RSIOverbought = 70 // Above = 0.0 (sell signal)
-
-	// Opportunity score component weights (must sum to 1.0)
-	OpportunityWeight52WHigh   = 0.30
-	OpportunityWeightEMA       = 0.25
-	OpportunityWeightPE        = 0.25
-	OpportunityWeightRSI       = 0.10
-	OpportunityWeightBollinger = 0.10
 )
 
 // =============================================================================

@@ -13,8 +13,7 @@ func TestSecuritySetupServiceCreation(t *testing.T) {
 	service := NewSecuritySetupService(
 		nil, // symbolResolver
 		nil, // securityRepo
-		nil, // tradernetClient
-		nil, // yahooClient
+		nil, // brokerClient
 		nil, // historicalSync
 		nil, // eventManager
 		nil, // scoreCalculator
@@ -28,7 +27,6 @@ func TestSecuritySetupService_AddByIdentifier_EmptyIdentifier(t *testing.T) {
 	log := zerolog.Nop()
 
 	service := NewSecuritySetupService(
-		nil,
 		nil,
 		nil,
 		nil,
@@ -53,7 +51,6 @@ func TestSecuritySetupService_AddByIdentifier_WithoutClients(t *testing.T) {
 		nil,
 		nil,
 		nil,
-		nil,
 		log,
 	)
 
@@ -63,7 +60,7 @@ func TestSecuritySetupService_AddByIdentifier_WithoutClients(t *testing.T) {
 	})
 }
 
-func TestProductTypeFromYahooQuoteType(t *testing.T) {
+func TestProductTypeFromQuoteType(t *testing.T) {
 	tests := []struct {
 		name        string
 		quoteType   string
@@ -122,7 +119,7 @@ func TestProductTypeFromYahooQuoteType(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := FromYahooQuoteType(tt.quoteType, tt.productName)
+			got := FromQuoteType(tt.quoteType, tt.productName)
 			assert.Equal(t, tt.want, got)
 		})
 	}

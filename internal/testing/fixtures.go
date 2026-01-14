@@ -18,7 +18,6 @@ func NewSecurityFixtures() []*universe.Security {
 		{
 			ISIN:               "US0378331005",
 			Symbol:             "AAPL",
-			YahooSymbol:        "AAPL",
 			Name:               "Apple Inc.",
 			ProductType:        "EQUITY",
 			Industry:           "Technology",
@@ -35,7 +34,6 @@ func NewSecurityFixtures() []*universe.Security {
 		{
 			ISIN:               "US5949181045",
 			Symbol:             "MSFT",
-			YahooSymbol:        "MSFT",
 			Name:               "Microsoft Corporation",
 			ProductType:        "EQUITY",
 			Industry:           "Technology",
@@ -52,7 +50,6 @@ func NewSecurityFixtures() []*universe.Security {
 		{
 			ISIN:               "US30303M1027",
 			Symbol:             "META",
-			YahooSymbol:        "META",
 			Name:               "Meta Platforms Inc.",
 			ProductType:        "EQUITY",
 			Industry:           "Technology",
@@ -69,7 +66,6 @@ func NewSecurityFixtures() []*universe.Security {
 		{
 			ISIN:               "IE00B52VJ196",
 			Symbol:             "VWCE",
-			YahooSymbol:        "VWCE.DE",
 			Name:               "Vanguard FTSE All-World UCITS ETF",
 			ProductType:        "ETF",
 			Industry:           "Diversified",
@@ -86,7 +82,6 @@ func NewSecurityFixtures() []*universe.Security {
 		{
 			ISIN:               "US0231351067",
 			Symbol:             "AMZN",
-			YahooSymbol:        "AMZN",
 			Name:               "Amazon.com Inc.",
 			ProductType:        "EQUITY",
 			Industry:           "Consumer Cyclical",

@@ -99,12 +99,11 @@ func TestExtractFeatureNames(t *testing.T) {
 			Inputs: TrainingInputs{
 				TotalScore:           0.75,
 				LongTermScore:        0.80,
-				FundamentalsScore:    0.70,
+				StabilityScore:       0.70,
 				DividendsScore:       0.65,
 				OpportunityScore:     0.60,
 				ShortTermScore:       0.55,
 				TechnicalsScore:      0.50,
-				OpinionScore:         0.45,
 				DiversificationScore: 0.40,
 				CAGR:                 0.12,
 				DividendYield:        0.03,
@@ -117,8 +116,8 @@ func TestExtractFeatureNames(t *testing.T) {
 	featureNames := ExtractFeatureNames(examples[0].Inputs)
 
 	expected := []string{
-		"long_term", "fundamentals", "dividends", "opportunity",
-		"short_term", "technicals", "opinion", "diversification",
+		"long_term", "stability", "dividends", "opportunity",
+		"short_term", "technicals",
 		"total_score", "cagr", "dividend_yield", "volatility", "regime",
 	}
 
@@ -129,20 +128,20 @@ func TestExtractFeatureNames(t *testing.T) {
 
 func TestGetFeatureValue(t *testing.T) {
 	inputs := TrainingInputs{
-		LongTermScore:     0.80,
-		FundamentalsScore: 0.70,
-		CAGR:              0.12,
-		Volatility:        0.25,
-		RegimeScore:       0.3,
-		SharpeRatio:       floatPtr(1.5),
-		SortinoRatio:      floatPtr(2.0),
-		RSI:               floatPtr(65.0),
-		MaxDrawdown:       floatPtr(-0.15),
+		LongTermScore:  0.80,
+		StabilityScore: 0.70,
+		CAGR:           0.12,
+		Volatility:     0.25,
+		RegimeScore:    0.3,
+		SharpeRatio:    floatPtr(1.5),
+		SortinoRatio:   floatPtr(2.0),
+		RSI:            floatPtr(65.0),
+		MaxDrawdown:    floatPtr(-0.15),
 	}
 
 	// Test scoring components
 	assert.Equal(t, 0.80, GetFeatureValue(inputs, "long_term"))
-	assert.Equal(t, 0.70, GetFeatureValue(inputs, "fundamentals"))
+	assert.Equal(t, 0.70, GetFeatureValue(inputs, "stability"))
 	assert.Equal(t, 0.0, GetFeatureValue(inputs, "dividends")) // Missing, returns 0
 
 	// Test metrics

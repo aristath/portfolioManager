@@ -438,8 +438,8 @@ var temperamentMappings = map[string]TemperamentMapping{
 	// ==================================================================================
 	// Category 7: QUALITY GATES (4 params)
 	// ==================================================================================
-	"quality_fundamentals_threshold": {
-		Parameter:   "quality_fundamentals_threshold",
+	"quality_stability_threshold": {
+		Parameter:   "quality_stability_threshold",
 		Temperament: "aggression",
 		Inverse:     true, // Conservative = higher bar
 		Min:         0.45,
@@ -917,10 +917,10 @@ var temperamentMappings = map[string]TemperamentMapping{
 		AbsoluteMin: 0.5,
 		AbsoluteMax: 2.0,
 	},
-	"boost_strong_fundamentals": {
-		Parameter:   "boost_strong_fundamentals",
+	"boost_strong_stability": {
+		Parameter:   "boost_strong_stability",
 		Temperament: "risk_tolerance",
-		Inverse:     true, // Lower risk = favor fundamentals
+		Inverse:     true, // Lower risk = favor stability
 		Min:         1.0,
 		Max:         1.25,
 		Base:        1.12,
@@ -991,8 +991,8 @@ var temperamentMappings = map[string]TemperamentMapping{
 	// ==================================================================================
 	// Category 16: TAG ASSIGNER - QUALITY (8 params)
 	// ==================================================================================
-	"tag_high_quality_fundamentals": {
-		Parameter:   "tag_high_quality_fundamentals",
+	"tag_high_quality_stability": {
+		Parameter:   "tag_high_quality_stability",
 		Temperament: "aggression",
 		Inverse:     true, // Conservative = higher bar
 		Min:         0.60,
@@ -1013,8 +1013,8 @@ var temperamentMappings = map[string]TemperamentMapping{
 		AbsoluteMin: 0.30,
 		AbsoluteMax: 0.90,
 	},
-	"tag_stable_fundamentals": {
-		Parameter:   "tag_stable_fundamentals",
+	"tag_stable_stability": {
+		Parameter:   "tag_stable_stability",
 		Temperament: "aggression",
 		Inverse:     true, // Conservative = higher bar
 		Min:         0.65,
@@ -1068,8 +1068,8 @@ var temperamentMappings = map[string]TemperamentMapping{
 		AbsoluteMin: 0.03,
 		AbsoluteMax: 0.20,
 	},
-	"tag_strong_fundamentals_threshold": {
-		Parameter:   "tag_strong_fundamentals_threshold",
+	"tag_strong_stability_threshold": {
+		Parameter:   "tag_strong_stability_threshold",
 		Temperament: "aggression",
 		Inverse:     true, // Conservative = higher bar
 		Min:         0.65,
@@ -1116,10 +1116,10 @@ var temperamentMappings = map[string]TemperamentMapping{
 		AbsoluteMin: -0.20,
 		AbsoluteMax: 0.05,
 	},
-	"tag_recovery_fundamentals_min": {
-		Parameter:   "tag_recovery_fundamentals_min",
+	"tag_recovery_stability_min": {
+		Parameter:   "tag_recovery_stability_min",
 		Temperament: "aggression",
-		Inverse:     true, // Conservative = need better fundamentals
+		Inverse:     true, // Conservative = need better stability
 		Min:         0.55,
 		Max:         0.75,
 		Base:        0.65,
@@ -1330,8 +1330,8 @@ var temperamentMappings = map[string]TemperamentMapping{
 		AbsoluteMin: 0.05,
 		AbsoluteMax: 0.30,
 	},
-	"tag_low_risk_fundamentals_min": {
-		Parameter:   "tag_low_risk_fundamentals_min",
+	"tag_low_risk_stability_min": {
+		Parameter:   "tag_low_risk_stability_min",
 		Temperament: "aggression",
 		Inverse:     true, // Conservative = higher bar
 		Min:         0.60,
@@ -1374,8 +1374,8 @@ var temperamentMappings = map[string]TemperamentMapping{
 		AbsoluteMin: 0.15,
 		AbsoluteMax: 0.60,
 	},
-	"tag_medium_risk_fundamentals_min": {
-		Parameter:   "tag_medium_risk_fundamentals_min",
+	"tag_medium_risk_stability_min": {
+		Parameter:   "tag_medium_risk_stability_min",
 		Temperament: "aggression",
 		Inverse:     true, // Conservative = higher bar
 		Min:         0.45,
@@ -1396,8 +1396,8 @@ var temperamentMappings = map[string]TemperamentMapping{
 		AbsoluteMin: 0.15,
 		AbsoluteMax: 0.60,
 	},
-	"tag_high_risk_fundamentals_threshold": {
-		Parameter:   "tag_high_risk_fundamentals_threshold",
+	"tag_high_risk_stability_threshold": {
+		Parameter:   "tag_high_risk_stability_threshold",
 		Temperament: "aggression",
 		Inverse:     true, // Conservative = higher bar
 		Min:         0.40,
@@ -1444,8 +1444,8 @@ var temperamentMappings = map[string]TemperamentMapping{
 		AbsoluteMin: 0.10,
 		AbsoluteMax: 0.60,
 	},
-	"tag_bubble_fundamentals_threshold": {
-		Parameter:   "tag_bubble_fundamentals_threshold",
+	"tag_bubble_stability_threshold": {
+		Parameter:   "tag_bubble_stability_threshold",
 		Temperament: "aggression",
 		Inverse:     true, // Conservative = higher bar
 		Min:         0.45,
@@ -1455,8 +1455,8 @@ var temperamentMappings = map[string]TemperamentMapping{
 		AbsoluteMin: 0.30,
 		AbsoluteMax: 0.80,
 	},
-	"tag_value_trap_fundamentals": {
-		Parameter:   "tag_value_trap_fundamentals",
+	"tag_value_trap_stability": {
+		Parameter:   "tag_value_trap_stability",
 		Temperament: "aggression",
 		Inverse:     true, // Conservative = higher bar
 		Min:         0.45,
@@ -1617,8 +1617,8 @@ var temperamentMappings = map[string]TemperamentMapping{
 		AbsoluteMin: 0.10,
 		AbsoluteMax: 0.40,
 	},
-	"tag_bear_safe_fundamentals": {
-		Parameter:   "tag_bear_safe_fundamentals",
+	"tag_bear_safe_stability": {
+		Parameter:   "tag_bear_safe_stability",
 		Temperament: "aggression",
 		Inverse:     true, // Conservative = higher bar
 		Min:         0.60,
@@ -1650,8 +1650,8 @@ var temperamentMappings = map[string]TemperamentMapping{
 		AbsoluteMin: 0.05,
 		AbsoluteMax: 0.25,
 	},
-	"tag_bull_growth_fundamentals": {
-		Parameter:   "tag_bull_growth_fundamentals",
+	"tag_bull_growth_stability": {
+		Parameter:   "tag_bull_growth_stability",
 		Temperament: "aggression",
 		Inverse:     true, // Conservative = higher bar
 		Min:         0.60,
@@ -1672,8 +1672,8 @@ var temperamentMappings = map[string]TemperamentMapping{
 		AbsoluteMin: 0.15,
 		AbsoluteMax: 0.50,
 	},
-	"tag_sideways_value_fundamentals": {
-		Parameter:   "tag_sideways_value_fundamentals",
+	"tag_sideways_value_stability": {
+		Parameter:   "tag_sideways_value_stability",
 		Temperament: "aggression",
 		Inverse:     true, // Conservative = higher bar
 		Min:         0.70,
@@ -1700,8 +1700,8 @@ var temperamentMappings = map[string]TemperamentMapping{
 		AbsoluteMax: 0.95,
 	},
 	// Path 3: Quality Value Play
-	"tag_quality_value_fundamentals_min": {
-		Parameter:   "tag_quality_value_fundamentals_min",
+	"tag_quality_value_stability_min": {
+		Parameter:   "tag_quality_value_stability_min",
 		Temperament: "aggression",
 		Inverse:     true, // Conservative = higher bar
 		Min:         0.55,
@@ -1734,8 +1734,8 @@ var temperamentMappings = map[string]TemperamentMapping{
 		AbsoluteMax: 0.55,
 	},
 	// Path 4: Dividend Income Play
-	"tag_dividend_income_fundamentals_min": {
-		Parameter:   "tag_dividend_income_fundamentals_min",
+	"tag_dividend_income_stability_min": {
+		Parameter:   "tag_dividend_income_stability_min",
 		Temperament: "aggression",
 		Inverse:     true, // Conservative = higher bar
 		Min:         0.50,
@@ -1813,8 +1813,8 @@ var temperamentMappings = map[string]TemperamentMapping{
 		AbsoluteMax: 0.60,
 	},
 	// Path 6: Composite Minimum
-	"tag_composite_fundamentals_weight": {
-		Parameter:   "tag_composite_fundamentals_weight",
+	"tag_composite_stability_weight": {
+		Parameter:   "tag_composite_stability_weight",
 		Temperament: "fixed", // Fixed weights - sum to 1.0
 		Inverse:     false,
 		Min:         0.55,
@@ -1846,8 +1846,8 @@ var temperamentMappings = map[string]TemperamentMapping{
 		AbsoluteMin: 0.40,
 		AbsoluteMax: 0.65,
 	},
-	"tag_composite_fundamentals_floor": {
-		Parameter:   "tag_composite_fundamentals_floor",
+	"tag_composite_stability_floor": {
+		Parameter:   "tag_composite_stability_floor",
 		Temperament: "aggression",
 		Inverse:     true, // Conservative = higher bar
 		Min:         0.40,
@@ -1869,8 +1869,8 @@ var temperamentMappings = map[string]TemperamentMapping{
 		AbsoluteMin: 0.08,
 		AbsoluteMax: 0.20,
 	},
-	"tag_growth_opportunity_fundamentals_min": {
-		Parameter:   "tag_growth_opportunity_fundamentals_min",
+	"tag_growth_opportunity_stability_min": {
+		Parameter:   "tag_growth_opportunity_stability_min",
 		Temperament: "aggression",
 		Inverse:     true, // Conservative = higher bar
 		Min:         0.45,

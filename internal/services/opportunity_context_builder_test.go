@@ -107,7 +107,7 @@ type ocbMockScoresRepository struct {
 	totalScores        map[string]float64
 	cagrs              map[string]float64
 	longTermScores     map[string]float64
-	fundamentalsScores map[string]float64
+	stabilityScores map[string]float64
 	opportunityScores  map[string]float64
 	momentumScores     map[string]float64
 	volatility         map[string]float64
@@ -125,7 +125,7 @@ func (m *ocbMockScoresRepository) GetCAGRs(isinList []string) (map[string]float6
 }
 
 func (m *ocbMockScoresRepository) GetQualityScores(isinList []string) (map[string]float64, map[string]float64, error) {
-	return m.longTermScores, m.fundamentalsScores, m.err
+	return m.longTermScores, m.stabilityScores, m.err
 }
 
 func (m *ocbMockScoresRepository) GetValueTrapData(isinList []string) (map[string]float64, map[string]float64, map[string]float64, error) {
@@ -270,7 +270,7 @@ func TestOpportunityContextBuilder_Build_ReturnsCompleteContext(t *testing.T) {
 			totalScores:        map[string]float64{isin: 75.0},
 			cagrs:              map[string]float64{isin: 0.12},
 			longTermScores:     map[string]float64{isin: 80.0},
-			fundamentalsScores: map[string]float64{isin: 70.0},
+			stabilityScores: map[string]float64{isin: 70.0},
 			sharpe:             map[string]float64{isin: 1.5},
 			maxDrawdown:        map[string]float64{isin: -0.20},
 		},

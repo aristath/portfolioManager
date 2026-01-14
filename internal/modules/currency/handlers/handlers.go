@@ -197,28 +197,18 @@ func (h *Handler) HandleGetAvailableCurrencies(w http.ResponseWriter, r *http.Re
 func (h *Handler) HandleGetRateSources(w http.ResponseWriter, r *http.Request) {
 	sources := []map[string]interface{}{
 		{
-			"name":        "exchangerate-api",
-			"priority":    1,
-			"description": "Primary exchange rate API (fast, free, no auth)",
-		},
-		{
 			"name":        "tradernet",
-			"priority":    2,
+			"priority":    1,
 			"description": "Broker FX instruments via Tradernet API",
 		},
 		{
-			"name":        "yahoo",
-			"priority":    3,
-			"description": "Yahoo Finance exchange rates",
-		},
-		{
 			"name":        "cache",
-			"priority":    4,
+			"priority":    2,
 			"description": "Cached rates from history database",
 		},
 		{
 			"name":        "hardcoded",
-			"priority":    5,
+			"priority":    3,
 			"description": "Hardcoded fallback rates",
 		},
 	}
@@ -246,9 +236,9 @@ func (h *Handler) HandleGetRateStaleness(w http.ResponseWriter, r *http.Request)
 			"fetch_strategy":     "real-time with fallback",
 			"refresh_frequency":  "on-demand (every request)",
 			"cache_enabled":      true,
-			"fallback_tiers":     5,
+			"fallback_tiers":     3,
 			"staleness_tracking": "not applicable - rates fetched in real-time",
-			"note":               "Rates are fetched fresh on every request with automatic fallback through 5 tiers: ExchangeRate API → Tradernet → Yahoo Finance → DB Cache → Hardcoded fallbacks",
+			"note":               "Rates are fetched fresh on every request with automatic fallback through 3 tiers: Tradernet → DB Cache → Hardcoded fallbacks",
 		},
 		"metadata": map[string]interface{}{
 			"timestamp": time.Now().Format(time.RFC3339),
@@ -261,11 +251,9 @@ func (h *Handler) HandleGetRateStaleness(w http.ResponseWriter, r *http.Request)
 // HandleGetFallbackChain handles GET /api/currency/rates/fallback-chain
 func (h *Handler) HandleGetFallbackChain(w http.ResponseWriter, r *http.Request) {
 	chain := []map[string]interface{}{
-		{"order": 1, "source": "exchangerate-api", "condition": "always_try_first"},
-		{"order": 2, "source": "tradernet", "condition": "if_exchangerate_api_fails"},
-		{"order": 3, "source": "yahoo", "condition": "if_tradernet_fails"},
-		{"order": 4, "source": "cache", "condition": "if_yahoo_fails"},
-		{"order": 5, "source": "hardcoded", "condition": "if_all_else_fails"},
+		{"order": 1, "source": "tradernet", "condition": "always_try_first"},
+		{"order": 2, "source": "cache", "condition": "if_tradernet_fails"},
+		{"order": 3, "source": "hardcoded", "condition": "if_all_else_fails"},
 	}
 
 	response := map[string]interface{}{

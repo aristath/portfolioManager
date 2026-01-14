@@ -252,7 +252,7 @@ func (h *Handler) getSecurityMetricsForFactorExposure(positions []positionForFac
 
 		// Map available metrics to SecurityMetrics
 		// Note: Some metrics (PE, PB, ROE, etc.) are not in scores table
-		// In production, these would come from a fundamentals table or external API
+		// In production, these would come from a stability table or external API
 		metric := analytics.SecurityMetrics{
 			PE:            0.0, // Not available in scores
 			PB:            0.0, // Not available in scores

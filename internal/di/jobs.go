@@ -9,6 +9,7 @@ import (
 	"github.com/aristath/sentinel/internal/config"
 	"github.com/aristath/sentinel/internal/database"
 	"github.com/aristath/sentinel/internal/deployment"
+	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/modules/cleanup"
 	"github.com/aristath/sentinel/internal/modules/display"
 	"github.com/aristath/sentinel/internal/modules/symbolic_regression"
@@ -69,14 +70,14 @@ func RegisterJobs(container *Container, cfg *config.Config, displayManager *disp
 	// Job 6: Tag Update
 	// ==========================================
 	tagUpdateJob := scheduler.NewTagUpdateJob(scheduler.TagUpdateConfig{
-		Log:          log,
-		SecurityRepo: container.SecurityRepo,
-		ScoreRepo:    container.ScoreRepo,
-		TagAssigner:  container.TagAssigner,
-		YahooClient:  container.YahooClient,
-		HistoryDB:    container.HistoryDBClient,
-		PortfolioDB:  container.PortfolioDB.Conn(),
-		PositionRepo: container.PositionRepo,
+		Log:             log,
+		SecurityRepo:    container.SecurityRepo,
+		ScoreRepo:       container.ScoreRepo,
+		TagAssigner:     container.TagAssigner,
+		YieldCalculator: container.DividendYieldCalculator,
+		HistoryDB:       container.HistoryDBClient,
+		PortfolioDB:     container.PortfolioDB.Conn(),
+		PositionRepo:    container.PositionRepo,
 	})
 	container.JobRegistry.Register(queue.JobTypeTagUpdate, queue.JobToHandler(tagUpdateJob))
 	instances.TagUpdate = tagUpdateJob
@@ -333,7 +334,7 @@ func RegisterJobs(container *Container, cfg *config.Config, displayManager *disp
 	positionRepoAdapter := scheduler.NewPositionRepositoryAdapter(container.PositionRepo)
 	securityRepoAdapter := scheduler.NewSecurityRepositoryAdapter(container.SecurityRepo)
 	allocRepoAdapter := scheduler.NewAllocationRepositoryAdapter(container.AllocRepo)
-	priceClientAdapter := scheduler.NewPriceClientAdapter(container.YahooClient)
+	priceClientAdapter := scheduler.NewPriceClientAdapter(&jobsBrokerPriceAdapter{client: container.BrokerClient})
 	optimizerServiceAdapter := scheduler.NewOptimizerServiceAdapter(container.OptimizerService)
 	priceConversionServiceAdapter := scheduler.NewPriceConversionServiceAdapter(container.PriceConversionService)
 	plannerConfigRepoAdapter := scheduler.NewPlannerConfigRepositoryAdapter(container.PlannerConfigRepo)
@@ -409,17 +410,18 @@ func RegisterJobs(container *Container, cfg *config.Config, displayManager *disp
 
 	// Check Dividend Yields Job
 	securityRepoForDividendsAdapter := scheduler.NewSecurityRepositoryForDividendsAdapter(container.SecurityRepo)
-	yahooClientForDividendsAdapter := scheduler.NewYahooClientForDividendsAdapter(container.YahooClient)
-	checkDividendYields := scheduler.NewCheckDividendYieldsJob(securityRepoForDividendsAdapter, yahooClientForDividendsAdapter)
+	checkDividendYields := scheduler.NewCheckDividendYieldsJob(securityRepoForDividendsAdapter, container.DividendYieldCalculator)
 	checkDividendYields.SetLogger(log)
 	container.JobRegistry.Register(queue.JobTypeCheckDividendYields, queue.JobToHandler(checkDividendYields))
 	instances.CheckDividendYields = checkDividendYields
 
 	// Create Dividend Recommendations Job
 	minTradeSize := 200.0 // Calculate from transaction costs
+	currentPriceProvider := &jobsCurrentPriceProviderAdapter{client: container.BrokerClient}
 	createDividendRecommendations := scheduler.NewCreateDividendRecommendationsJob(
 		securityRepoForDividendsAdapter,
-		yahooClientForDividendsAdapter,
+		currentPriceProvider,
+		container.DividendYieldCalculator,
 		minTradeSize,
 	)
 	createDividendRecommendations.SetLogger(log)
@@ -551,4 +553,65 @@ func RegisterJobs(container *Container, cfg *config.Config, displayManager *disp
 	log.Info().Int("jobs", jobCount).Msg("Jobs registered with queue system")
 
 	return instances, nil
+}
+
+// jobsBrokerPriceAdapter adapts domain.BrokerClient to scheduler.BrokerClientForPrices interface
+type jobsBrokerPriceAdapter struct {
+	client domain.BrokerClient
+}
+
+func (a *jobsBrokerPriceAdapter) GetBatchQuotes(symbolMap map[string]*string) (map[string]*float64, error) {
+	if a.client == nil {
+		return nil, fmt.Errorf("broker client not available")
+	}
+
+	// Extract symbols from map
+	symbols := make([]string, 0, len(symbolMap))
+	for symbol := range symbolMap {
+		symbols = append(symbols, symbol)
+	}
+
+	// Get quotes from broker
+	quotes, err := a.client.GetQuotes(symbols)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get broker quotes: %w", err)
+	}
+
+	// Convert to price map
+	prices := make(map[string]*float64)
+	for symbol, quote := range quotes {
+		if quote != nil && quote.Price > 0 {
+			price := quote.Price
+			prices[symbol] = &price
+		}
+	}
+
+	return prices, nil
+}
+
+// jobsCurrentPriceProviderAdapter adapts domain.BrokerClient to scheduler.CurrentPriceProviderInterface
+type jobsCurrentPriceProviderAdapter struct {
+	client domain.BrokerClient
+}
+
+func (a *jobsCurrentPriceProviderAdapter) GetCurrentPrice(symbol string) (*float64, error) {
+	if a.client == nil {
+		return nil, fmt.Errorf("broker client not available")
+	}
+
+	quotes, err := a.client.GetQuotes([]string{symbol})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get quote for %s: %w", symbol, err)
+	}
+
+	quote, ok := quotes[symbol]
+	if !ok || quote == nil {
+		return nil, fmt.Errorf("no quote found for %s", symbol)
+	}
+
+	if quote.Price <= 0 {
+		return nil, fmt.Errorf("invalid price for %s: %.2f", symbol, quote.Price)
+	}
+
+	return &quote.Price, nil
 }

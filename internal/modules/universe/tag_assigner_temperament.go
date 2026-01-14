@@ -45,8 +45,6 @@ type TagAssignerConfig struct {
 type DangerConfig struct {
 	VolatileThreshold        float64 // Threshold for "volatile" tag
 	HighVolatilityThreshold  float64 // Threshold for "high-volatility" tag
-	OvervaluedPEThreshold    float64 // PE premium for "overvalued" tag
-	OvervaluedNearHighPct    float64 // % near high for "overvalued" tag
 	UnsustainableGainsReturn float64 // Return threshold for "unsustainable-gains"
 	ValuationStretchEMA      float64 // EMA stretch for "valuation-stretch"
 	UnderperformingDays      int     // Days for "underperforming" tag
@@ -57,7 +55,7 @@ type DangerConfig struct {
 
 // QualityGateConfig holds multi-path quality gate thresholds
 type QualityGateConfig struct {
-	FundamentalsThreshold float64 // Path 1: Balanced fundamentals threshold
+	StabilityThreshold float64 // Path 1: Balanced stability threshold
 	LongTermThreshold     float64 // Path 1: Balanced long-term threshold
 	ExceptionalThreshold  float64 // Path 2: Exceptional excellence threshold
 }
@@ -88,8 +86,6 @@ func newDangerConfigFromSettings(settingsService *settings.Service) DangerConfig
 	return DangerConfig{
 		VolatileThreshold:        vol.VolatileThreshold,
 		HighVolatilityThreshold:  vol.HighThreshold,
-		OvervaluedPEThreshold:    danger.OvervaluedPEThreshold,
-		OvervaluedNearHighPct:    danger.OvervaluedNearHighPct,
 		UnsustainableGainsReturn: danger.UnsustainableGainsReturn,
 		ValuationStretchEMA:      danger.ValuationStretchEMA,
 		UnderperformingDays:      danger.UnderperformingDays,
@@ -103,7 +99,7 @@ func newDangerConfigFromSettings(settingsService *settings.Service) DangerConfig
 func newQualityGateConfigFromSettings(settingsService *settings.Service) QualityGateConfig {
 	quality := settingsService.GetAdjustedQualityGateParams()
 	return QualityGateConfig{
-		FundamentalsThreshold: quality.FundamentalsThreshold,
+		StabilityThreshold: quality.StabilityThreshold,
 		LongTermThreshold:     quality.LongTermThreshold,
 		ExceptionalThreshold:  quality.ExceptionalThreshold,
 	}
@@ -114,27 +110,26 @@ func newQualityGateConfigFromSettings(settingsService *settings.Service) Quality
 func NewDefaultTagAssignerConfig() TagAssignerConfig {
 	return TagAssignerConfig{
 		Value: settings.ValueThresholds{
-			ValueOpportunityDiscountPct: 0.15,  // Line 171: below52wHighPct > 15.0
-			DeepValueDiscountPct:        0.25,  // Line 176: below52wHighPct > 25.0
-			DeepValueExtremePct:         0.30,  // Line 176: below52wHighPct > 30.0
-			UndervaluedPEThreshold:      -0.20, // Line 184: peVsMarket < -0.20
-			Below52wHighThreshold:       0.10,  // Line 180: below52wHighPct > 10.0
+			ValueOpportunityDiscountPct: 0.15, // Line 171: below52wHighPct > 15.0
+			DeepValueDiscountPct:        0.25, // Line 176: below52wHighPct > 25.0
+			DeepValueExtremePct:         0.30, // Line 176: below52wHighPct > 30.0
+			Below52wHighThreshold:       0.10, // Line 180: below52wHighPct > 10.0
 		},
 		Quality: settings.QualityThresholds{
-			HighQualityFundamentals:     0.70, // Line 189: fundamentalsScore > 0.7
+			HighQualityStability:     0.70, // Line 189: stabilityScore > 0.7
 			HighQualityLongTerm:         0.70, // Line 189: longTermScore > 0.7
-			StableFundamentals:          0.75, // Line 193: fundamentalsScore > 0.75
+			StableStability:          0.75, // Line 193: stabilityScore > 0.75
 			StableVolatilityMax:         0.25, // Line 193: volatility < 0.25
 			StableConsistency:           0.75, // Line 193: consistencyScore > 0.75
 			ConsistentGrowerConsistency: 0.75, // Line 199: consistencyScore > 0.75
 			ConsistentGrowerCAGR:        0.09, // Line 199: cagrRaw > 0.09
-			StrongFundamentalsThreshold: 0.75, // Line 203: fundamentalsScore > 0.75
+			HighStabilityThreshold: 0.75, // Line 203: stabilityScore > 0.75
 		},
 		Technical: settings.TechnicalThresholds{
 			RSIOversold:               30.0,  // Line 210: *input.RSI < 30
 			RSIOverbought:             70.0,  // Line 269: *input.RSI > 70
 			RecoveryMomentumThreshold: -0.05, // Line 234: momentumScore < 0 (using -0.05 as threshold)
-			RecoveryFundamentalsMin:   0.65,  // Line 234: fundamentalsScore > 0.65
+			RecoveryStabilityMin:   0.65,  // Line 234: stabilityScore > 0.65
 			RecoveryDiscountMin:       0.12,  // Line 234: below52wHighPct > 12.0 (as decimal)
 		},
 		Dividend: settings.DividendThresholds{
@@ -146,8 +141,6 @@ func NewDefaultTagAssignerConfig() TagAssignerConfig {
 		Danger: DangerConfig{
 			VolatileThreshold:        0.30, // Line 248: volatility > 0.30
 			HighVolatilityThreshold:  0.40, // Line 256: volatility > 0.40
-			OvervaluedPEThreshold:    0.20, // Line 261: peVsMarket > 0.20
-			OvervaluedNearHighPct:    0.05, // Line 261: below52wHighPct < 5.0 (inverted)
 			UnsustainableGainsReturn: 0.50, // Line 276: annualizedReturn > 0.50
 			ValuationStretchEMA:      0.30, // Line 280: math.Abs(distanceFromEMA) > 0.30
 			UnderperformingDays:      180,  // Line 285: daysHeld > 180
@@ -163,16 +156,16 @@ func NewDefaultTagAssignerConfig() TagAssignerConfig {
 		},
 		RiskProfile: settings.RiskProfileThresholds{
 			LowRiskVolatilityMax:          0.15, // Line 320: volatility < 0.15
-			LowRiskFundamentalsMin:        0.70, // Line 320: fundamentalsScore > 0.7
+			LowRiskStabilityMin:        0.70, // Line 320: stabilityScore > 0.7
 			LowRiskDrawdownMax:            0.20, // Line 320: maxDrawdown < 20.0
 			MediumRiskVolatilityMin:       0.15, // Line 324: volatility >= 0.15
 			MediumRiskVolatilityMax:       0.30, // Line 324: volatility <= 0.30
-			MediumRiskFundamentalsMin:     0.55, // Line 324: fundamentalsScore > 0.55
+			MediumRiskStabilityMin:     0.55, // Line 324: stabilityScore > 0.55
 			HighRiskVolatilityThreshold:   0.30, // Line 328: volatility > 0.30
-			HighRiskFundamentalsThreshold: 0.50, // Line 328: fundamentalsScore < 0.5
+			HighRiskStabilityThreshold: 0.50, // Line 328: stabilityScore < 0.5
 		},
 		QualityGate: QualityGateConfig{
-			FundamentalsThreshold: 0.55, // Line 348: fundamentalsThreshold := 0.55
+			StabilityThreshold: 0.55, // Line 348: stabilityThreshold := 0.55
 			LongTermThreshold:     0.45, // Line 349: longTermThreshold := 0.45
 			ExceptionalThreshold:  0.75, // Line 736: 0.75 (Path 2)
 		},
@@ -180,8 +173,8 @@ func NewDefaultTagAssignerConfig() TagAssignerConfig {
 			BubbleCAGRThreshold:         0.15,  // Line 461: cagrRaw > 0.15
 			BubbleSharpeThreshold:       0.50,  // Line 464: sharpeRatio < 0.5
 			BubbleVolatilityThreshold:   0.40,  // Line 464: volatility > 0.40
-			BubbleFundamentalsThreshold: 0.55,  // Line 464: fundamentalsScore < 0.55
-			ValueTrapFundamentals:       0.55,  // Line 525: fundamentalsScore < 0.55
+			BubbleStabilityThreshold: 0.55,  // Line 464: stabilityScore < 0.55
+			ValueTrapStability:       0.55,  // Line 525: stabilityScore < 0.55
 			ValueTrapLongTerm:           0.45,  // Line 525: longTermScore < 0.45
 			ValueTrapMomentum:           -0.05, // Line 525: momentumScore < -0.05
 			ValueTrapVolatility:         0.35,  // Line 525: volatility > 0.35
@@ -199,10 +192,10 @@ func NewDefaultTagAssignerConfig() TagAssignerConfig {
 		},
 		Regime: settings.RegimeThresholds{
 			BearSafeVolatility:       0.20, // Line 583: volatility < 0.20
-			BearSafeFundamentals:     0.70, // Line 583: fundamentalsScore > 0.70
+			BearSafeStability:     0.70, // Line 583: stabilityScore > 0.70
 			BearSafeDrawdown:         0.20, // Line 583: maxDrawdown < 20.0
 			BullGrowthCAGR:           0.12, // Line 588: cagrRaw > 0.12
-			BullGrowthFundamentals:   0.70, // Line 588: fundamentalsScore > 0.7
+			BullGrowthStability:   0.70, // Line 588: stabilityScore > 0.7
 			RegimeVolatileVolatility: 0.30, // Line 606: volatility > 0.30
 		},
 	}

@@ -189,7 +189,7 @@ func (h *Handler) HandleGetAdaptiveParameters(w http.ResponseWriter, r *http.Req
 			"weights":      weights,
 			"blend":        blend,
 			"quality_gates": map[string]interface{}{
-				"fundamentals": qualityGates.GetFundamentals(),
+				"stability": qualityGates.GetStability(),
 				"long_term":    qualityGates.GetLongTerm(),
 			},
 		},

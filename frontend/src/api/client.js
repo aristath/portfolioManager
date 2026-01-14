@@ -185,15 +185,6 @@ export const api = {
       'r2_bucket_name',
       'r2_backup_schedule',
       'github_token',
-      'alphavantage_api_key',
-      'openfigi_api_key',
-      'datasource_fundamentals',
-      'datasource_current_prices',
-      'datasource_historical',
-      'datasource_technicals',
-      'datasource_exchange_rates',
-      'datasource_isin_lookup',
-      'datasource_company_metadata',
     ];
     const finalValue = stringSettings.includes(key) ? value : parseFloat(value);
     return fetchJSON(`/api/settings/${key}`, {

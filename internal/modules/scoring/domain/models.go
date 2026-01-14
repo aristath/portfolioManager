@@ -16,7 +16,7 @@ type CalculatedSecurityScore struct {
 
 // PrefetchedSecurityData represents pre-fetched data to avoid duplicate API calls
 type PrefetchedSecurityData struct {
-	Fundamentals  interface{}    `json:"fundamentals"`
+	Stability     interface{}    `json:"stability"` // Price-derived stability metrics (replaces external fundamentals)
 	DailyPrices   []DailyPrice   `json:"daily_prices"`
 	MonthlyPrices []MonthlyPrice `json:"monthly_prices"`
 }

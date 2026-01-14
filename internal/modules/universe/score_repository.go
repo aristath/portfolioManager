@@ -22,7 +22,7 @@ type ScoreRepository struct {
 // Column order must match scanScore() function expectations
 // After migration 030: isin is PRIMARY KEY, column order is isin, total_score, ...
 const scoresColumns = `isin, total_score, quality_score, opportunity_score, analyst_score, allocation_fit_score,
-volatility, cagr_score, consistency_score, history_years, technical_score, fundamental_score,
+volatility, cagr_score, consistency_score, history_years, technical_score, stability_score,
 sharpe_score, drawdown_score, dividend_bonus, financial_strength_score,
 rsi, ema_200, below_52w_high_pct, last_updated`
 
@@ -209,7 +209,7 @@ func (r *ScoreRepository) Upsert(score SecurityScore) error {
 		INSERT OR REPLACE INTO scores
 		(isin, total_score, quality_score, opportunity_score, analyst_score,
 		 allocation_fit_score, volatility, cagr_score, consistency_score,
-		 history_years, technical_score, fundamental_score,
+		 history_years, technical_score, stability_score,
 		 sharpe_score, drawdown_score, dividend_bonus, financial_strength_score,
 		 rsi, ema_200, below_52w_high_pct, last_updated)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -227,7 +227,7 @@ func (r *ScoreRepository) Upsert(score SecurityScore) error {
 		nullFloat64(score.ConsistencyScore),
 		nullInt64(score.HistoryYears),
 		nullFloat64(score.TechnicalScore),
-		nullFloat64(score.FundamentalScore),
+		nullFloat64(score.StabilityScore),
 		nullFloat64(score.SharpeScore),
 		nullFloat64(score.DrawdownScore),
 		nullFloat64(score.DividendBonus),
@@ -304,7 +304,7 @@ func (r *ScoreRepository) DeleteAll() error {
 // scanScore scans a database row into a SecurityScore struct
 // Column order after migration: isin, total_score, quality_score, opportunity_score,
 // analyst_score, allocation_fit_score, volatility, cagr_score, consistency_score, history_years,
-// technical_score, fundamental_score, sharpe_score, drawdown_score, dividend_bonus,
+// technical_score, stability_score, sharpe_score, drawdown_score, dividend_bonus,
 // financial_strength_score, rsi, ema_200, below_52w_high_pct, last_updated
 func (r *ScoreRepository) scanScore(rows *sql.Rows) (SecurityScore, error) {
 	var score SecurityScore
@@ -312,7 +312,7 @@ func (r *ScoreRepository) scanScore(rows *sql.Rows) (SecurityScore, error) {
 	var totalScore, qualityScore, opportunityScore, analystScore, allocationFitScore sql.NullFloat64
 	var volatility, cagrScore, consistencyScore sql.NullFloat64
 	var historyYears sql.NullInt64
-	var technicalScore, fundamentalScore sql.NullFloat64
+	var technicalScore, stabilityScore sql.NullFloat64
 	var sharpeScore, drawdownScore, dividendBonus sql.NullFloat64
 	var financialStrengthScore sql.NullFloat64
 	var rsi, ema200, below52wHighPct sql.NullFloat64
@@ -330,7 +330,7 @@ func (r *ScoreRepository) scanScore(rows *sql.Rows) (SecurityScore, error) {
 		&consistencyScore,
 		&historyYears,
 		&technicalScore,
-		&fundamentalScore,
+		&stabilityScore,
 		&sharpeScore,
 		&drawdownScore,
 		&dividendBonus,
@@ -375,8 +375,8 @@ func (r *ScoreRepository) scanScore(rows *sql.Rows) (SecurityScore, error) {
 	if technicalScore.Valid {
 		score.TechnicalScore = technicalScore.Float64
 	}
-	if fundamentalScore.Valid {
-		score.FundamentalScore = fundamentalScore.Float64
+	if stabilityScore.Valid {
+		score.StabilityScore = stabilityScore.Float64
 	}
 	if sharpeScore.Valid {
 		score.SharpeScore = sharpeScore.Float64

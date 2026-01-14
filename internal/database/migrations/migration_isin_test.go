@@ -59,7 +59,7 @@ func setupPreMigrationDB(t *testing.T) *sql.DB {
 			consistency_score REAL,
 			history_years INTEGER,
 			technical_score REAL,
-			fundamental_score REAL,
+			stability_score REAL,
 			last_updated TEXT NOT NULL
 		)
 	`)

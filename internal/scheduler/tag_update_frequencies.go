@@ -42,7 +42,7 @@ var TagUpdateFrequencies = []TagUpdateFrequency{
 	{
 		TagIDs: []string{
 			// Quality tags
-			"high-quality", "stable", "strong-fundamentals",
+			"high-quality", "stable", "strong-stability",
 			"quality-gate-pass", "quality-gate-fail",
 			"consistent-grower",
 

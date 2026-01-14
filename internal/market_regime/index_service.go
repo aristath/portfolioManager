@@ -8,6 +8,12 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// ClientSymbolSetter interface for setting client symbols
+// Uses an interface to avoid importing universe package (prevents circular dependency)
+type ClientSymbolSetter interface {
+	SetClientSymbol(isin, clientName, symbol string) error
+}
+
 // MarketIndex represents a market index configuration
 type MarketIndex struct {
 	Symbol string  // e.g., "SPX.US"
@@ -19,10 +25,11 @@ type MarketIndex struct {
 
 // MarketIndexService manages market index tracking for regime detection
 type MarketIndexService struct {
-	universeDB *sql.DB
-	historyDB  *sql.DB
-	tradernet  interface{} // Tradernet client (will be properly typed later)
-	log        zerolog.Logger
+	universeDB       *sql.DB
+	historyDB        *sql.DB
+	tradernet        interface{} // Tradernet client (will be properly typed later)
+	clientSymbolRepo ClientSymbolSetter
+	log              zerolog.Logger
 }
 
 // NewMarketIndexService creates a new market index service
@@ -30,13 +37,15 @@ func NewMarketIndexService(
 	universeDB *sql.DB,
 	historyDB *sql.DB,
 	tradernet interface{},
+	clientSymbolRepo ClientSymbolSetter,
 	log zerolog.Logger,
 ) *MarketIndexService {
 	return &MarketIndexService{
-		universeDB: universeDB,
-		historyDB:  historyDB,
-		tradernet:  tradernet,
-		log:        log.With().Str("component", "market_index_service").Logger(),
+		universeDB:       universeDB,
+		historyDB:        historyDB,
+		tradernet:        tradernet,
+		clientSymbolRepo: clientSymbolRepo,
+		log:              log.With().Str("component", "market_index_service").Logger(),
 	}
 }
 
@@ -123,10 +132,7 @@ func (s *MarketIndexService) InitializeMarketIndices(historicalSync HistoricalSy
 		return fmt.Errorf("failed to create market indices: %w", err)
 	}
 
-	// Step 2: Create Yahoo symbol mappings
-	if err := s.ensureYahooMappings(); err != nil {
-		return fmt.Errorf("failed to create Yahoo mappings: %w", err)
-	}
+	// Step 2: Client symbol mappings skipped (external data providers removed)
 
 	// Step 3: Populate historical data for each index
 	indices := s.GetDefaultIndices()
@@ -161,44 +167,10 @@ func (s *MarketIndexService) InitializeMarketIndices(historicalSync HistoricalSy
 	return nil
 }
 
-// ensureYahooMappings creates Yahoo Finance symbol mappings for market indices
-func (s *MarketIndexService) ensureYahooMappings() error {
-	// Map our index ISINs to Yahoo Finance ticker symbols
-	indexMappings := map[string]string{
-		"INDEX-SPX.US":        "^GSPC",  // S&P 500
-		"INDEX-STOXX600.EU":   "^STOXX", // STOXX Europe 600
-		"INDEX-MSCIASIA.ASIA": "^AXJO",  // ASX 200 (Asia proxy)
-	}
-
-	now := time.Now().Unix()
-
-	for isin, yahooSymbol := range indexMappings {
-		// Update the yahoo_symbol column in the securities table
-		result, err := s.universeDB.Exec(`
-			UPDATE securities
-			SET yahoo_symbol = ?, updated_at = ?
-			WHERE isin = ?
-		`, yahooSymbol, now, isin)
-
-		if err != nil {
-			return fmt.Errorf("failed to create mapping for %s: %w", isin, err)
-		}
-
-		// Verify that the update affected a row (index must exist)
-		rowsAffected, err := result.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("failed to check rows affected for %s: %w", isin, err)
-		}
-		if rowsAffected == 0 {
-			return fmt.Errorf("index %s does not exist in securities table", isin)
-		}
-
-		s.log.Debug().
-			Str("isin", isin).
-			Str("yahoo_symbol", yahooSymbol).
-			Msg("Set Yahoo symbol mapping")
-	}
-
+// ensureClientSymbolMappings is a no-op - external data providers have been removed
+// Market index data is now fetched from Tradernet using the index symbols directly
+func (s *MarketIndexService) ensureClientSymbolMappings() error {
+	// No-op: external data provider mappings removed
 	return nil
 }
 

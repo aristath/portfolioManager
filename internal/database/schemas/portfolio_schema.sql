@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS scores (
     consistency_score REAL,
     history_years INTEGER,
     technical_score REAL,
-    fundamental_score REAL,
+    stability_score REAL,
     sharpe_score REAL,
     drawdown_score REAL,
     dividend_bonus REAL,

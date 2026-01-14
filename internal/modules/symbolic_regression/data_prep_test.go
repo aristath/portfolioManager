@@ -37,7 +37,7 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 			consistency_score REAL,
 			history_years INTEGER,
 			technical_score REAL,
-			fundamental_score REAL,
+			stability_score REAL,
 			sharpe_score REAL,
 			drawdown_score REAL,
 			dividend_bonus REAL,
@@ -117,7 +117,7 @@ func TestDataPrep_ExtractTrainingExamples_MinimumHistory(t *testing.T) {
 	trainingDate := baseDate.AddDate(0, 6, 0)
 	trainingDateUnix := time.Date(trainingDate.Year(), trainingDate.Month(), trainingDate.Day(), 0, 0, 0, 0, time.UTC).Unix()
 	_, err := portfolioDB.Exec(
-		"INSERT INTO scores (isin, total_score, cagr_score, fundamental_score, last_updated) VALUES (?, ?, ?, ?, ?)",
+		"INSERT INTO scores (isin, total_score, cagr_score, stability_score, last_updated) VALUES (?, ?, ?, ?, ?)",
 		isin, 0.75, 0.80, 0.70, trainingDateUnix,
 	)
 	require.NoError(t, err)
@@ -264,7 +264,7 @@ func TestDataPrep_ExtractTrainingExamples_TimeWindowed(t *testing.T) {
 	aaplScoreDate, _ := time.Parse("2006-01-02", "2019-12-01")
 	aaplScoreDateUnix := time.Date(aaplScoreDate.Year(), aaplScoreDate.Month(), aaplScoreDate.Day(), 0, 0, 0, 0, time.UTC).Unix()
 	_, err = portfolioDB.Exec(
-		"INSERT INTO scores (isin, total_score, cagr_score, fundamental_score, last_updated) VALUES (?, ?, ?, ?, ?)",
+		"INSERT INTO scores (isin, total_score, cagr_score, stability_score, last_updated) VALUES (?, ?, ?, ?, ?)",
 		aaplISIN, 0.75, 0.80, 0.70, aaplScoreDateUnix,
 	)
 	require.NoError(t, err)
@@ -311,7 +311,7 @@ func TestDataPrep_ExtractTrainingExamples_TimeWindowed(t *testing.T) {
 	newcoScoreDate, _ := time.Parse("2006-01-02", "2022-06-01")
 	newcoScoreDateUnix := time.Date(newcoScoreDate.Year(), newcoScoreDate.Month(), newcoScoreDate.Day(), 0, 0, 0, 0, time.UTC).Unix()
 	_, err = portfolioDB.Exec(
-		"INSERT INTO scores (isin, total_score, cagr_score, fundamental_score, last_updated) VALUES (?, ?, ?, ?, ?)",
+		"INSERT INTO scores (isin, total_score, cagr_score, stability_score, last_updated) VALUES (?, ?, ?, ?, ?)",
 		newcoISIN, 0.70, 0.75, 0.65, newcoScoreDateUnix,
 	)
 	require.NoError(t, err)

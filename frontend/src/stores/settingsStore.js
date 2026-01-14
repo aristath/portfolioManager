@@ -14,11 +14,7 @@ export const DATA_SOURCE_TYPES = {
 
 // Available data sources with descriptions
 export const AVAILABLE_SOURCES = {
-  alphavantage: { name: 'Alpha Vantage', description: 'Financial data provider with fundamentals, technicals, and more' },
-  yahoo: { name: 'Yahoo Finance', description: 'Unofficial Yahoo Finance API for quotes and historical data' },
-  tradernet: { name: 'Tradernet', description: 'Primary broker with real-time quotes and order execution' },
-  exchangerate: { name: 'ExchangeRate API', description: 'Currency exchange rates provider' },
-  openfigi: { name: 'OpenFIGI', description: 'ISIN to ticker symbol mapping service' },
+  tradernet: { name: 'Tradernet', description: 'Primary broker with real-time quotes, historical data, and order execution' },
 };
 
 export const useSettingsStore = create((set, get) => ({

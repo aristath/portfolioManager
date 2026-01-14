@@ -32,14 +32,13 @@ type OpportunityContext struct {
 	// Target return filtering data (for flexible penalty system)
 	CAGRs                    map[string]float64 `json:"cagrs,omitempty"`                       // CAGR by ISIN (for target return filtering)
 	LongTermScores           map[string]float64 `json:"long_term_scores,omitempty"`            // Long-term scores by ISIN (for quality override)
-	FundamentalsScores       map[string]float64 `json:"fundamentals_scores,omitempty"`         // Fundamentals scores by ISIN (for quality override)
+	StabilityScores          map[string]float64 `json:"stability_scores,omitempty"`            // Stability scores by ISIN (for quality override, replaces stability)
 	TargetReturn             float64            `json:"target_return,omitempty"`               // Target annual return (default: 0.11 = 11%)
 	TargetReturnThresholdPct float64            `json:"target_return_threshold_pct,omitempty"` // Threshold percentage (default: 0.80 = 80%)
 
 	// Value trap detection data (for quality checks when tags disabled)
+	// Note: P/E-based value trap detection removed - uses stability + long-term score based detection instead
 	OpportunityScores map[string]float64 `json:"opportunity_scores,omitempty"` // Group score for opportunity (0-1) by ISIN
-	PERatios          map[string]float64 `json:"pe_ratios,omitempty"`          // P/E ratios by ISIN (optional)
-	MarketAvgPE       float64            `json:"market_avg_pe,omitempty"`      // Market average P/E (single value)
 	MomentumScores    map[string]float64 `json:"momentum_scores,omitempty"`    // Momentum scores by ISIN (optional, derived from short-term)
 	Volatility        map[string]float64 `json:"volatility,omitempty"`         // Volatility by ISIN (optional)
 	RegimeScore       float64            `json:"regime_score,omitempty"`       // Current market regime score (single value, -1 to +1)

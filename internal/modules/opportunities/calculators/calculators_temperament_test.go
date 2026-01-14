@@ -229,7 +229,7 @@ func TestApplyTagBasedPriorityBoostsValues(t *testing.T) {
 		{
 			name:           "quality_boosts",
 			calculatorType: "averaging_down",
-			tags:           []string{"strong-fundamentals", "stable"},
+			tags:           []string{"high-stability", "stable"},
 			basePriority:   1.0,
 			expectedMin:    1.15,
 			expectedMax:    1.30,

@@ -464,12 +464,11 @@ func TestGetVariableMap(t *testing.T) {
 
 	inputs := TrainingInputs{
 		LongTermScore:        0.8,
-		FundamentalsScore:    0.7,
+		StabilityScore:       0.7,
 		DividendsScore:       0.6,
 		OpportunityScore:     0.9,
 		ShortTermScore:       0.5,
 		TechnicalsScore:      0.75,
-		OpinionScore:         0.65,
 		DiversificationScore: 0.85,
 		TotalScore:           0.75,
 		CAGR:                 0.12,
@@ -485,12 +484,11 @@ func TestGetVariableMap(t *testing.T) {
 	variables := getVariableMap(inputs)
 
 	assert.Equal(t, 0.8, variables["long_term"])
-	assert.Equal(t, 0.7, variables["fundamentals"])
+	assert.Equal(t, 0.7, variables["stability"])
 	assert.Equal(t, 0.6, variables["dividends"])
 	assert.Equal(t, 0.9, variables["opportunity"])
 	assert.Equal(t, 0.5, variables["short_term"])
 	assert.Equal(t, 0.75, variables["technicals"])
-	assert.Equal(t, 0.65, variables["opinion"])
 	assert.Equal(t, 0.85, variables["diversification"])
 	assert.Equal(t, 0.75, variables["total_score"])
 	assert.Equal(t, 0.12, variables["cagr"])

@@ -9,12 +9,10 @@ import (
 )
 
 // SyncService handles data synchronization for securities
-// Uses Tradernet as primary price source, Yahoo as sanity check via PriceValidator
+// Uses Tradernet as the single source for price data
 type SyncService struct {
 	securityRepo    *SecurityRepository
 	historicalSync  *HistoricalSyncService
-	yahooClient     YahooClientInterface
-	priceValidator  PriceValidatorInterface
 	scoreCalculator ScoreCalculator
 	brokerClient    domain.BrokerClient
 	setupService    *SecuritySetupService
@@ -22,20 +20,10 @@ type SyncService struct {
 	log             zerolog.Logger
 }
 
-// PriceValidatorInterface defines the contract for price validation operations
-// Used by SyncService to validate Tradernet prices against Yahoo sanity check
-type PriceValidatorInterface interface {
-	// ValidatePrice returns the validated price for a symbol
-	// Primary: Tradernet price, Sanity check: If Tradernet > Yahoo * 1.5, use Yahoo instead
-	ValidatePrice(symbol string, yahooSymbol string, tradernetPrice float64) float64
-}
-
 // NewSyncService creates a new sync service
 func NewSyncService(
 	securityRepo *SecurityRepository,
 	historicalSync *HistoricalSyncService,
-	yahooClient YahooClientInterface,
-	priceValidator PriceValidatorInterface,
 	scoreCalculator ScoreCalculator,
 	brokerClient domain.BrokerClient,
 	setupService *SecuritySetupService,
@@ -45,8 +33,6 @@ func NewSyncService(
 	return &SyncService{
 		securityRepo:    securityRepo,
 		historicalSync:  historicalSync,
-		yahooClient:     yahooClient,
-		priceValidator:  priceValidator,
 		scoreCalculator: scoreCalculator,
 		brokerClient:    brokerClient,
 		setupService:    setupService,
@@ -126,9 +112,9 @@ func (s *SyncService) RefreshSingleSecurity(symbol string) error {
 // Faithful translation from Python: app/jobs/securities_data_sync.py -> _process_single_security()
 //
 // Steps:
-// 1. Sync historical prices from Yahoo
-// 2. Detect and update country/exchange from Yahoo Finance
-// 3. Detect and update industry from Yahoo Finance
+// 1. Sync historical prices from Tradernet
+// 2. Detect and update country/exchange (from Tradernet metadata)
+// 3. Detect and update industry (from Tradernet metadata)
 // 4. Refresh security score
 // 5. Update last_synced timestamp
 func (s *SyncService) processSingleSecurity(symbol string) error {
@@ -142,14 +128,14 @@ func (s *SyncService) processSingleSecurity(symbol string) error {
 		}
 	}
 
-	// Step 2: Detect and update country/exchange from Yahoo Finance
+	// Step 2: Detect and update country/exchange
 	err := s.detectAndUpdateCountryAndExchange(symbol)
 	if err != nil {
 		s.log.Warn().Err(err).Str("symbol", symbol).Msg("Failed to update country/exchange")
 		// Continue - not fatal
 	}
 
-	// Step 3: Detect and update industry from Yahoo Finance
+	// Step 3: Detect and update industry
 	err = s.detectAndUpdateIndustry(symbol)
 	if err != nil {
 		s.log.Warn().Err(err).Str("symbol", symbol).Msg("Failed to update industry")
@@ -169,9 +155,10 @@ func (s *SyncService) processSingleSecurity(symbol string) error {
 	}
 
 	if s.scoreCalculator != nil {
+		// ScoreCalculator accepts symbol (looks up ISIN internally)
+		// Client symbols no longer needed - all data comes from internal sources
 		err = s.scoreCalculator.CalculateAndSaveScore(
-			symbol, // ScoreCalculator accepts symbol (looks up ISIN internally)
-			security.YahooSymbol,
+			symbol,
 			security.Country,
 			security.Industry,
 		)
@@ -219,114 +206,17 @@ func (s *SyncService) getSecuritiesNeedingSync() ([]Security, error) {
 	return securitiesNeedingSync, nil
 }
 
-// detectAndUpdateIndustry detects and updates industry from Yahoo Finance
-// Faithful translation from Python: app/jobs/securities_data_sync.py -> _detect_and_update_industry()
-//
-// Only updates if the field is empty/NULL to preserve user-edited values
-// After migration: accepts symbol but uses ISIN internally, uses security's symbols for API calls
+// detectAndUpdateIndustry is a no-op since we removed external data sources
+// Industry is now populated from Tradernet metadata enricher during security setup
 func (s *SyncService) detectAndUpdateIndustry(symbol string) error {
-	security, err := s.securityRepo.GetBySymbol(symbol)
-	if err != nil {
-		return fmt.Errorf("failed to get security: %w", err)
-	}
-	if security == nil {
-		return fmt.Errorf("security not found: %s", symbol)
-	}
-	if security.ISIN == "" {
-		return fmt.Errorf("security missing ISIN: %s", symbol)
-	}
-
-	// Only update if industry is not already set (preserve user-edited values)
-	if security.Industry != "" {
-		s.log.Debug().Str("symbol", symbol).Str("isin", security.ISIN).Msg("Industry already set, skipping Yahoo detection")
-		return nil
-	}
-
-	// Use security's Tradernet symbol and Yahoo symbol for API call
-	tradernetSymbol := security.Symbol
-	yahooSymbolPtr := &security.YahooSymbol
-	if security.YahooSymbol == "" {
-		yahooSymbolPtr = nil
-	}
-
-	// Detect industry from Yahoo Finance (using security's symbols)
-	industry, err := s.yahooClient.GetSecurityIndustry(tradernetSymbol, yahooSymbolPtr)
-	if err != nil {
-		return fmt.Errorf("failed to get industry from Yahoo: %w", err)
-	}
-
-	if industry == nil || *industry == "" {
-		s.log.Debug().Str("symbol", symbol).Str("isin", security.ISIN).Msg("No industry detected from Yahoo Finance")
-		return nil
-	}
-
-	// Update the security's industry in the database (using ISIN)
-	err = s.securityRepo.Update(security.ISIN, map[string]interface{}{
-		"industry": *industry,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to update industry: %w", err)
-	}
-
-	s.log.Info().Str("symbol", symbol).Str("isin", security.ISIN).Str("industry", *industry).Msg("Updated empty industry")
+	s.log.Debug().Str("symbol", symbol).Msg("Industry detection skipped (external data sources removed)")
 	return nil
 }
 
-// detectAndUpdateCountryAndExchange detects and updates country and exchange from Yahoo Finance
-// Faithful translation from Python: app/jobs/securities_data_sync.py -> _detect_and_update_country_and_exchange()
-//
-// Only updates fields that are empty/NULL to preserve user-edited values
-// After migration: accepts symbol but uses ISIN internally
+// detectAndUpdateCountryAndExchange is a no-op since we removed external data sources
+// Country and exchange are now populated from Tradernet metadata enricher during security setup
 func (s *SyncService) detectAndUpdateCountryAndExchange(symbol string) error {
-	security, err := s.securityRepo.GetBySymbol(symbol)
-	if err != nil {
-		return fmt.Errorf("failed to get security: %w", err)
-	}
-	if security == nil {
-		return fmt.Errorf("security not found: %s", symbol)
-	}
-	if security.ISIN == "" {
-		return fmt.Errorf("security missing ISIN: %s", symbol)
-	}
-
-	// Use security's Tradernet symbol and Yahoo symbol for API call
-	tradernetSymbol := security.Symbol
-	yahooSymbolPtr := &security.YahooSymbol
-	if security.YahooSymbol == "" {
-		yahooSymbolPtr = nil
-	}
-
-	// Detect country and exchange from Yahoo Finance (using security's symbols)
-	country, fullExchangeName, err := s.yahooClient.GetSecurityCountryAndExchange(tradernetSymbol, yahooSymbolPtr)
-	if err != nil {
-		return fmt.Errorf("failed to get country/exchange from Yahoo: %w", err)
-	}
-
-	// Only update fields that are empty/NULL (preserve user-edited values)
-	updates := make(map[string]interface{})
-	if country != nil && *country != "" && security.Country == "" {
-		updates["country"] = *country
-	}
-	if fullExchangeName != nil && *fullExchangeName != "" && security.FullExchangeName == "" {
-		updates["fullExchangeName"] = *fullExchangeName
-	}
-
-	if len(updates) == 0 {
-		if country != nil || fullExchangeName != nil {
-			s.log.Debug().Str("symbol", symbol).Msg("Country/exchange already set, skipping Yahoo detection")
-		} else {
-			s.log.Debug().Str("symbol", symbol).Msg("No country/exchange detected from Yahoo Finance")
-		}
-		return nil
-	}
-
-	// Update the security's country and fullExchangeName in the database (using ISIN)
-	err = s.securityRepo.Update(security.ISIN, updates)
-	if err != nil {
-		return fmt.Errorf("failed to update country/exchange: %w", err)
-	}
-
-	s.log.Info().Str("symbol", symbol).Str("isin", security.ISIN).Interface("updates", updates).Msg("Updated empty country/exchange")
+	s.log.Debug().Str("symbol", symbol).Msg("Country/exchange detection skipped (external data sources removed)")
 	return nil
 }
 
@@ -348,13 +238,12 @@ func (s *SyncService) updateLastSynced(isin string) error {
 // SyncAllPrices syncs current prices for all active securities
 // Faithful translation from Python: app/jobs/daily_sync.py -> sync_prices()
 //
-// This gets current quotes from Yahoo Finance and updates position prices.
+// This gets current quotes from Tradernet and updates position prices.
 func (s *SyncService) SyncAllPrices() (int, error) {
 	return s.SyncAllPricesWithReporter(nil)
 }
 
-// SyncAllPricesWithReporter syncs current prices using Tradernet as primary source
-// Uses PriceValidator for sanity check (Yahoo fallback if Tradernet price > 150% of Yahoo)
+// SyncAllPricesWithReporter syncs current prices using Tradernet as the sole source
 func (s *SyncService) SyncAllPricesWithReporter(reporter ProgressReporter) (int, error) {
 	s.log.Info().Msg("Starting price sync for all active securities (Tradernet primary)")
 
@@ -422,11 +311,8 @@ func (s *SyncService) SyncAllPricesWithReporter(reporter ProgressReporter) (int,
 			continue
 		}
 
-		// Validate price using PriceValidator (Tradernet primary, Yahoo sanity check)
+		// Use Tradernet price directly (single data source)
 		validatedPrice := quote.Price
-		if s.priceValidator != nil {
-			validatedPrice = s.priceValidator.ValidatePrice(symbol, security.YahooSymbol, quote.Price)
-		}
 
 		// Update positions table (using ISIN as PRIMARY KEY)
 		result, err := s.db.Exec(`
@@ -561,15 +447,9 @@ func (s *SyncService) RebuildUniverseFromPortfolio() (int, error) {
 			continue
 		}
 
-		yahooSymbol := security.YahooSymbol
-		if yahooSymbol == "" {
-			yahooSymbol = "<none>"
-		}
-
 		s.log.Info().
 			Str("symbol", security.Symbol).
 			Str("isin", security.ISIN).
-			Str("yahoo_symbol", yahooSymbol).
 			Msg("Successfully added security to universe")
 		added++
 	}
@@ -584,8 +464,8 @@ func (s *SyncService) RebuildUniverseFromPortfolio() (int, error) {
 }
 
 // SyncPricesForSymbols syncs prices for a filtered set of symbols
-// Uses Tradernet as primary source, with Yahoo sanity check via PriceValidator
-// The symbolMap parameter (tradernet_symbol -> yahoo_override) is converted to a symbol list for Tradernet
+// Uses Tradernet as the sole source
+// The symbolMap parameter (tradernet_symbol -> optional_override) is converted to a symbol list for Tradernet
 func (s *SyncService) SyncPricesForSymbols(symbolMap map[string]*string) (int, error) {
 	s.log.Info().Int("symbols", len(symbolMap)).Msg("Starting filtered price sync (Tradernet primary)")
 
@@ -643,12 +523,8 @@ func (s *SyncService) SyncPricesForSymbols(symbolMap map[string]*string) (int, e
 			continue
 		}
 
-		// Validate price using PriceValidator (Tradernet primary, Yahoo sanity check)
-		yahooSymbol := symbolToYahoo[symbol]
+		// Use Tradernet price directly (single data source)
 		validatedPrice := quote.Price
-		if s.priceValidator != nil {
-			validatedPrice = s.priceValidator.ValidatePrice(symbol, yahooSymbol, quote.Price)
-		}
 
 		// Update positions table (using ISIN as PRIMARY KEY)
 		result, err := s.db.Exec(`

@@ -28,25 +28,18 @@ func NewHandlers(log zerolog.Logger) *Handlers {
 }
 
 // ScoreRequest represents a request to score a security
+// Note: External data fields (P/E ratio, profit margin, etc.) removed - Sentinel uses internal data only
 type ScoreRequest struct {
-	CurrentRatio          *float64                `json:"current_ratio,omitempty"`
-	FiveYearAvgDivYield   *float64                `json:"five_year_avg_div_yield,omitempty"`
-	MaxDrawdown           *float64                `json:"max_drawdown,omitempty"`
-	SortinoRatio          *float64                `json:"sortino_ratio,omitempty"`
-	UpsidePct             *float64                `json:"upside_pct,omitempty"`
-	PERatio               *float64                `json:"pe_ratio,omitempty"`
-	ForwardPE             *float64                `json:"forward_pe,omitempty"`
-	DividendYield         *float64                `json:"dividend_yield,omitempty"`
-	AnalystRecommendation *float64                `json:"analyst_recommendation,omitempty"`
-	ProfitMargin          *float64                `json:"profit_margin,omitempty"`
-	PayoutRatio           *float64                `json:"payout_ratio,omitempty"`
-	DebtToEquity          *float64                `json:"debt_to_equity,omitempty"`
-	Symbol                string                  `json:"symbol"`
-	ProductType           string                  `json:"product_type,omitempty"` // Product type: EQUITY, ETF, MUTUALFUND, ETC, UNKNOWN
-	DailyPrices           []float64               `json:"daily_prices"`
-	MonthlyPrices         []formulas.MonthlyPrice `json:"monthly_prices"`
-	MarketAvgPE           float64                 `json:"market_avg_pe,omitempty"`
-	TargetAnnualReturn    float64                 `json:"target_annual_return,omitempty"`
+	FiveYearAvgDivYield *float64                `json:"five_year_avg_div_yield,omitempty"`
+	MaxDrawdown         *float64                `json:"max_drawdown,omitempty"`
+	SortinoRatio        *float64                `json:"sortino_ratio,omitempty"`
+	DividendYield       *float64                `json:"dividend_yield,omitempty"`
+	PayoutRatio         *float64                `json:"payout_ratio,omitempty"`
+	Symbol              string                  `json:"symbol"`
+	ProductType         string                  `json:"product_type,omitempty"` // Product type: EQUITY, ETF, MUTUALFUND, ETC, UNKNOWN
+	DailyPrices         []float64               `json:"daily_prices"`
+	MonthlyPrices       []formulas.MonthlyPrice `json:"monthly_prices"`
+	TargetAnnualReturn  float64                 `json:"target_annual_return,omitempty"`
 }
 
 // ScoreResponse represents the response from scoring
@@ -83,24 +76,16 @@ func (h *Handlers) HandleScoreSecurity(w http.ResponseWriter, r *http.Request) {
 	}
 
 	input := scorers.ScoreSecurityInput{
-		Symbol:                req.Symbol,
-		ProductType:           productType,
-		DailyPrices:           req.DailyPrices,
-		MonthlyPrices:         req.MonthlyPrices,
-		TargetAnnualReturn:    req.TargetAnnualReturn,
-		MarketAvgPE:           req.MarketAvgPE,
-		PERatio:               req.PERatio,
-		ForwardPE:             req.ForwardPE,
-		DividendYield:         req.DividendYield,
-		PayoutRatio:           req.PayoutRatio,
-		FiveYearAvgDivYield:   req.FiveYearAvgDivYield,
-		ProfitMargin:          req.ProfitMargin,
-		DebtToEquity:          req.DebtToEquity,
-		CurrentRatio:          req.CurrentRatio,
-		AnalystRecommendation: req.AnalystRecommendation,
-		UpsidePct:             req.UpsidePct,
-		SortinoRatio:          req.SortinoRatio,
-		MaxDrawdown:           req.MaxDrawdown,
+		Symbol:              req.Symbol,
+		ProductType:         productType,
+		DailyPrices:         req.DailyPrices,
+		MonthlyPrices:       req.MonthlyPrices,
+		TargetAnnualReturn:  req.TargetAnnualReturn,
+		DividendYield:       req.DividendYield,
+		PayoutRatio:         req.PayoutRatio,
+		FiveYearAvgDivYield: req.FiveYearAvgDivYield,
+		SortinoRatio:        req.SortinoRatio,
+		MaxDrawdown:         req.MaxDrawdown,
 	}
 
 	// Calculate score
@@ -146,27 +131,15 @@ func (h *Handlers) HandleGetAllScoreComponents(w http.ResponseWriter, r *http.Re
 
 // HandleGetCurrentWeights handles GET /api/scoring/weights/current
 func (h *Handlers) HandleGetCurrentWeights(w http.ResponseWriter, r *http.Request) {
-	// Return current scoring weights (base + adaptive if enabled)
+	// Return current scoring weights from the actual ScoreWeights constant
 	response := map[string]interface{}{
 		"data": map[string]interface{}{
-			"base_weights": map[string]float64{
-				"fundamental": 0.25,
-				"dividend":    0.20,
-				"technical":   0.25,
-				"quality":     0.15,
-				"valuation":   0.15,
-			},
+			"base_weights":     scorers.ScoreWeights,
 			"adaptive_enabled": false,
 			"adaptive_weights": map[string]interface{}{
 				"note": "Adaptive weights adjust based on market regime",
 			},
-			"effective_weights": map[string]float64{
-				"fundamental": 0.25,
-				"dividend":    0.20,
-				"technical":   0.25,
-				"quality":     0.15,
-				"valuation":   0.15,
-			},
+			"effective_weights": scorers.ScoreWeights,
 		},
 		"metadata": map[string]interface{}{
 			"timestamp": time.Now().Format(time.RFC3339),
@@ -192,24 +165,18 @@ func (h *Handlers) HandleGetAdaptiveWeightHistory(w http.ResponseWriter, r *http
 
 // HandleGetActiveFormula handles GET /api/scoring/formulas/active
 func (h *Handlers) HandleGetActiveFormula(w http.ResponseWriter, r *http.Request) {
+	// Return actual scoring components from the ScoreWeights constant
+	components := make([]string, 0, len(scorers.ScoreWeights))
+	for component := range scorers.ScoreWeights {
+		components = append(components, component+"_score")
+	}
+
 	response := map[string]interface{}{
 		"data": map[string]interface{}{
-			"formula": "default",
-			"components": []string{
-				"fundamental_score",
-				"dividend_score",
-				"technical_score",
-				"quality_score",
-				"valuation_score",
-			},
-			"weights": map[string]float64{
-				"fundamental": 0.25,
-				"dividend":    0.20,
-				"technical":   0.25,
-				"quality":     0.15,
-				"valuation":   0.15,
-			},
-			"description": "Default weighted composite score",
+			"formula":     "default",
+			"components":  components,
+			"weights":     scorers.ScoreWeights,
+			"description": "Quality-focused weights for 15-20 year retirement fund strategy",
 			"note":        "Symbolic regression can discover alternative formulas",
 		},
 		"metadata": map[string]interface{}{

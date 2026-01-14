@@ -11,7 +11,7 @@ type FormulaFunction func(inputs TrainingInputs) float64
 
 // ParseFormula parses a formula string into a Node tree
 // Supports: +, -, *, /, sqrt(), log(), exp(), abs(), pow(), max(), min()
-// Variables: cagr, score, regime, long_term, fundamentals, etc.
+// Variables: cagr, score, regime, long_term, stability, etc.
 func ParseFormula(formulaStr string) (*Node, error) {
 	formulaStr = strings.TrimSpace(formulaStr)
 	if formulaStr == "" {

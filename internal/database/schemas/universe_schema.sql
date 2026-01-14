@@ -3,11 +3,11 @@
 -- This schema represents the final state after all migrations
 
 -- Securities table: investment universe (ISIN as PRIMARY KEY)
+-- Note: Legacy columns yahoo_symbol and alphavantage_symbol removed.
+-- Client-specific symbols are now stored in client_symbols table.
 CREATE TABLE IF NOT EXISTS securities (
     isin TEXT PRIMARY KEY,
     symbol TEXT NOT NULL,
-    yahoo_symbol TEXT,
-    alphavantage_symbol TEXT,
     name TEXT NOT NULL,
     product_type TEXT,
     industry TEXT,

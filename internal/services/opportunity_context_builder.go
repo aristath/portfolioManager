@@ -175,7 +175,7 @@ func (b *OpportunityContextBuilder) buildContext(
 	targetReturn, thresholdPct := b.getTargetReturnSettings()
 
 	// Get quality scores
-	longTermScores, fundamentalsScores := b.populateQualityScores(isinList)
+	longTermScores, stabilityScores := b.populateQualityScores(isinList)
 
 	// Get value trap data
 	opportunityScores, momentumScores, volatility := b.populateValueTrapData(isinList)
@@ -216,7 +216,7 @@ func (b *OpportunityContextBuilder) buildContext(
 		CountryToGroup:           countryToGroup,
 		CAGRs:                    cagrs,
 		LongTermScores:           longTermScores,
-		FundamentalsScores:       fundamentalsScores,
+		StabilityScores:          stabilityScores,
 		TargetReturn:             targetReturn,
 		TargetReturnThresholdPct: thresholdPct,
 		OpportunityScores:        opportunityScores,
@@ -488,19 +488,19 @@ func (b *OpportunityContextBuilder) getTargetReturnSettings() (float64, float64)
 	return targetReturn, thresholdPct
 }
 
-// populateQualityScores gets long-term and fundamentals scores.
+// populateQualityScores gets long-term and stability scores.
 func (b *OpportunityContextBuilder) populateQualityScores(isinList []string) (map[string]float64, map[string]float64) {
 	if b.scoresRepo == nil || len(isinList) == 0 {
 		return make(map[string]float64), make(map[string]float64)
 	}
 
-	longTerm, fundamentals, err := b.scoresRepo.GetQualityScores(isinList)
+	longTerm, stability, err := b.scoresRepo.GetQualityScores(isinList)
 	if err != nil {
 		b.log.Warn().Err(err).Msg("Failed to get quality scores")
 		return make(map[string]float64), make(map[string]float64)
 	}
 
-	return longTerm, fundamentals
+	return longTerm, stability
 }
 
 // populateValueTrapData gets value trap detection data.

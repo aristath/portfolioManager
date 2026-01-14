@@ -207,15 +207,14 @@ func BuildStaticExpectedReturnFormula() *Node {
 }
 
 // BuildStaticScoringFormula builds the static scoring formula as a Node
-// Static formula uses weighted sum of all 8 group scores
+// Static formula uses weighted sum of 6 group scores (opinion and diversification removed)
 // Weights match ScoreWeights in security.go:
 //
-//	long_term: 0.25, fundamentals: 0.20, dividends: 0.18, opportunity: 0.12,
-//	short_term: 0.08, technicals: 0.07, opinion: 0.05, diversification: 0.05
+//	long_term: 0.30, stability: 0.20, dividends: 0.18, opportunity: 0.15,
+//	short_term: 0.10, technicals: 0.07
 func BuildStaticScoringFormula() *Node {
-	// Build weighted sum: 0.25*long_term + 0.20*fundamentals + 0.18*dividends +
-	//                     0.12*opportunity + 0.08*short_term + 0.07*technicals +
-	//                     0.05*opinion + 0.05*diversification
+	// Build weighted sum: 0.30*long_term + 0.20*stability + 0.18*dividends +
+	//                     0.15*opportunity + 0.10*short_term + 0.07*technicals
 
 	// Helper to create weight*variable nodes
 	makeWeighted := func(variable string, weight float64) *Node {
@@ -233,13 +232,13 @@ func BuildStaticScoringFormula() *Node {
 		}
 	}
 
-	// Build the sum tree: ((((a+b)+c)+d)+e)+f)+g)+h
+	// Build the sum tree: ((((a+b)+c)+d)+e)+f
 	// Start with the first two terms
 	root := &Node{
 		Type:  NodeTypeOperation,
 		Op:    OpAdd,
-		Left:  makeWeighted("long_term", 0.25),
-		Right: makeWeighted("fundamentals", 0.20),
+		Left:  makeWeighted("long_term", 0.30),
+		Right: makeWeighted("stability", 0.20),
 	}
 
 	// Add remaining terms
@@ -248,11 +247,9 @@ func BuildStaticScoringFormula() *Node {
 		weight   float64
 	}{
 		{"dividends", 0.18},
-		{"opportunity", 0.12},
-		{"short_term", 0.08},
+		{"opportunity", 0.15},
+		{"short_term", 0.10},
 		{"technicals", 0.07},
-		{"opinion", 0.05},
-		{"diversification", 0.05},
 	}
 
 	for _, term := range terms {

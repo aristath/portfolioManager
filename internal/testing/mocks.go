@@ -823,7 +823,6 @@ func (m *MockSecurityRepository) GetWithScores(portfolioDB *sql.DB) ([]universe.
 			FullExchangeName:   sec.FullExchangeName,
 			Currency:           sec.Currency,
 			ProductType:        sec.ProductType,
-			YahooSymbol:        sec.YahooSymbol,
 			PriorityMultiplier: sec.PriorityMultiplier,
 			MaxPortfolioTarget: sec.MaxPortfolioTarget,
 			MinPortfolioTarget: sec.MinPortfolioTarget,

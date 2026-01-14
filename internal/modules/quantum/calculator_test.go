@@ -96,7 +96,7 @@ func TestQuantumProbabilityCalculator_CalculateBubbleProbability(t *testing.T) {
 		sharpe         float64
 		sortino        float64
 		volatility     float64
-		fundamentals   float64
+		stability   float64
 		regimeScore    float64
 		wantRange      [2]float64
 		wantHighBubble bool
@@ -107,7 +107,7 @@ func TestQuantumProbabilityCalculator_CalculateBubbleProbability(t *testing.T) {
 			sharpe:         0.3,  // Poor
 			sortino:        0.3,  // Poor
 			volatility:     0.45, // High
-			fundamentals:   0.5,  // Low
+			stability:   0.5,  // Low
 			regimeScore:    0.0,
 			wantRange:      [2]float64{0.6, 1.0},
 			wantHighBubble: true,
@@ -118,7 +118,7 @@ func TestQuantumProbabilityCalculator_CalculateBubbleProbability(t *testing.T) {
 			sharpe:         1.5,  // Good
 			sortino:        1.5,  // Good
 			volatility:     0.25, // Moderate
-			fundamentals:   0.8,  // High
+			stability:   0.8,  // High
 			regimeScore:    0.0,
 			wantRange:      [2]float64{0.0, 0.5},
 			wantHighBubble: false,
@@ -129,7 +129,7 @@ func TestQuantumProbabilityCalculator_CalculateBubbleProbability(t *testing.T) {
 			sharpe:         0.5,
 			sortino:        0.5,
 			volatility:     0.30,
-			fundamentals:   0.7,
+			stability:   0.7,
 			regimeScore:    0.0,
 			wantRange:      [2]float64{0.0, 0.4},
 			wantHighBubble: false,
@@ -143,7 +143,7 @@ func TestQuantumProbabilityCalculator_CalculateBubbleProbability(t *testing.T) {
 				tt.sharpe,
 				tt.sortino,
 				tt.volatility,
-				tt.fundamentals,
+				tt.stability,
 				tt.regimeScore,
 				nil,
 			)
@@ -166,7 +166,7 @@ func TestQuantumProbabilityCalculator_CalculateValueTrapProbability(t *testing.T
 	tests := []struct {
 		name         string
 		peVsMarket   float64
-		fundamentals float64
+		stability float64
 		longTerm     float64
 		momentum     float64
 		volatility   float64
@@ -175,9 +175,9 @@ func TestQuantumProbabilityCalculator_CalculateValueTrapProbability(t *testing.T
 		wantTrap     bool
 	}{
 		{
-			name:         "Cheap with poor fundamentals (trap)",
+			name:         "Cheap with poor stability (trap)",
 			peVsMarket:   -0.30, // 30% cheaper
-			fundamentals: 0.4,   // Poor
+			stability: 0.4,   // Poor
 			longTerm:     0.3,   // Poor
 			momentum:     -0.1,  // Negative
 			volatility:   0.40,  // High
@@ -186,9 +186,9 @@ func TestQuantumProbabilityCalculator_CalculateValueTrapProbability(t *testing.T
 			wantTrap:     true,
 		},
 		{
-			name:         "Cheap with good fundamentals (value)",
+			name:         "Cheap with good stability (value)",
 			peVsMarket:   -0.25, // 25% cheaper
-			fundamentals: 0.8,   // Good
+			stability: 0.8,   // Good
 			longTerm:     0.8,   // Good
 			momentum:     0.1,   // Positive
 			volatility:   0.20,  // Low
@@ -199,7 +199,7 @@ func TestQuantumProbabilityCalculator_CalculateValueTrapProbability(t *testing.T
 		{
 			name:         "Not cheap (not trap)",
 			peVsMarket:   -0.10, // Only 10% cheaper
-			fundamentals: 0.5,
+			stability: 0.5,
 			longTerm:     0.5,
 			momentum:     0.0,
 			volatility:   0.30,
@@ -213,7 +213,7 @@ func TestQuantumProbabilityCalculator_CalculateValueTrapProbability(t *testing.T
 		t.Run(tt.name, func(t *testing.T) {
 			result := calc.CalculateValueTrapProbability(
 				tt.peVsMarket,
-				tt.fundamentals,
+				tt.stability,
 				tt.longTerm,
 				tt.momentum,
 				tt.volatility,
@@ -285,19 +285,19 @@ func BenchmarkCalculateBubbleProbability(b *testing.B) {
 	sharpe := 0.5
 	sortino := 0.5
 	volatility := 0.35
-	fundamentals := 0.7
+	stability := 0.7
 	regimeScore := 0.0
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		calc.CalculateBubbleProbability(cagr, sharpe, sortino, volatility, fundamentals, regimeScore, nil)
+		calc.CalculateBubbleProbability(cagr, sharpe, sortino, volatility, stability, regimeScore, nil)
 	}
 }
 
 func BenchmarkCalculateValueTrapProbability(b *testing.B) {
 	calc := NewQuantumProbabilityCalculator()
 	peVsMarket := -0.25
-	fundamentals := 0.6
+	stability := 0.6
 	longTerm := 0.6
 	momentum := 0.0
 	volatility := 0.30
@@ -305,7 +305,7 @@ func BenchmarkCalculateValueTrapProbability(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		calc.CalculateValueTrapProbability(peVsMarket, fundamentals, longTerm, momentum, volatility, regimeScore)
+		calc.CalculateValueTrapProbability(peVsMarket, stability, longTerm, momentum, volatility, regimeScore)
 	}
 }
 

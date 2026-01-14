@@ -15,7 +15,7 @@ func TestConvertToSecurityScore_ExtractsRawValues(t *testing.T) {
 		Volatility: floatPtr(0.20),
 		GroupScores: map[string]float64{
 			"long_term":       0.80,
-			"fundamentals":    0.70,
+			"stability":    0.70,
 			"opportunity":     0.65,
 			"technicals":      0.60,
 			"dividends":       0.55,
@@ -32,7 +32,7 @@ func TestConvertToSecurityScore_ExtractsRawValues(t *testing.T) {
 				"drawdown":     0.75,  // scored
 				"drawdown_raw": -0.15, // raw value (negative)
 			},
-			"fundamentals": {
+			"stability": {
 				"financial_strength": 0.90,
 				"consistency":        0.80,
 			},
@@ -68,7 +68,7 @@ func TestConvertToSecurityScore_ExtractsRawValues(t *testing.T) {
 	// Verify other fields are still populated correctly
 	assert.Equal(t, 0.75, score.TotalScore)
 	assert.Equal(t, 0.20, score.Volatility)
-	assert.Equal(t, 0.75, score.QualityScore) // Average of long_term (0.80) and fundamentals (0.70) = 0.75
+	assert.Equal(t, 0.75, score.QualityScore) // Average of long_term (0.80) and stability (0.70) = 0.75
 }
 
 func TestConvertToSecurityScore_HandlesMissingRawValues(t *testing.T) {
@@ -78,7 +78,7 @@ func TestConvertToSecurityScore_HandlesMissingRawValues(t *testing.T) {
 		TotalScore: 0.50,
 		GroupScores: map[string]float64{
 			"long_term":    0.50,
-			"fundamentals": 0.50,
+			"stability": 0.50,
 		},
 		SubScores: map[string]map[string]float64{
 			"long_term": {

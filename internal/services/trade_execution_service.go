@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aristath/sentinel/internal/clients/yahoo"
 	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/events"
 	planningdomain "github.com/aristath/sentinel/internal/modules/planning/domain"
@@ -39,7 +38,7 @@ type TradeRepositoryInterface interface {
 type OrderBookServiceInterface interface {
 	// IsEnabled checks if order book analysis is enabled
 	IsEnabled() bool
-	// CalculateOptimalLimit calculates optimal limit price using order book + Yahoo validation
+	// CalculateOptimalLimit calculates optimal limit price using order book + price validation
 	CalculateOptimalLimit(symbol, side string, buffer float64) (float64, error)
 	// ValidateLiquidity checks if sufficient liquidity exists for the trade
 	ValidateLiquidity(symbol, side string, quantity float64) error
@@ -88,7 +87,6 @@ type TradeExecutionService struct {
 	settingsService     SettingsServiceInterface     // For configuration (fees, price age, etc.)
 	plannerConfigRepo   PlannerConfigRepoInterface   // For transaction costs from planner config
 	orderBookService    OrderBookServiceInterface    // For order book analysis (liquidity validation, optimal limit pricing)
-	yahooClient         yahoo.FullClientInterface    // For fetching fresh prices
 	historyDB           *sql.DB                      // For storing updated prices
 	securityRepo        *universe.SecurityRepository // For ISIN lookup
 	marketHours         MarketHoursChecker           // For market hours validation
@@ -115,7 +113,6 @@ func NewTradeExecutionService(
 	settingsService SettingsServiceInterface,
 	plannerConfigRepo PlannerConfigRepoInterface,
 	orderBookService OrderBookServiceInterface,
-	yahooClient yahoo.FullClientInterface,
 	historyDB *sql.DB,
 	securityRepo *universe.SecurityRepository,
 	marketHours MarketHoursChecker,
@@ -132,7 +129,6 @@ func NewTradeExecutionService(
 		settingsService:     settingsService,
 		plannerConfigRepo:   plannerConfigRepo,
 		orderBookService:    orderBookService,
-		yahooClient:         yahooClient,
 		historyDB:           historyDB,
 		securityRepo:        securityRepo,
 		marketHours:         marketHours,
@@ -595,26 +591,6 @@ func (s *TradeExecutionService) validatePriceFreshness(rec TradeRecommendation) 
 
 	currentPrice := quotes[rec.Symbol].Price
 
-	// Optional: Yahoo sanity check (non-blocking)
-	if s.yahooClient != nil {
-		var yahooSymbolPtr *string
-		if security.YahooSymbol != "" {
-			yahooSymbolPtr = &security.YahooSymbol
-		}
-		yahooPrice, yahooErr := s.yahooClient.GetCurrentPrice(rec.Symbol, yahooSymbolPtr, 1)
-		if yahooErr == nil && yahooPrice != nil && *yahooPrice > 0 {
-			// Sanity check: if Tradernet price is >50% higher than Yahoo, log warning
-			if currentPrice > *yahooPrice*1.5 {
-				s.log.Warn().
-					Str("symbol", rec.Symbol).
-					Float64("tradernet_price", currentPrice).
-					Float64("yahoo_price", *yahooPrice).
-					Msg("Price anomaly detected: Tradernet price >50% higher than Yahoo, using Yahoo price")
-				currentPrice = *yahooPrice
-			}
-		}
-	}
-
 	// Store fresh price in history.db
 	now := time.Now()
 	todayStr := now.Format("2006-01-02")
@@ -675,10 +651,10 @@ func (s *TradeExecutionService) validatePriceAndCalculateLimit(rec TradeRecommen
 		return limitPrice, nil
 	}
 
-	// Fallback to Tradernet-primary (with Yahoo sanity check)
+	// Fallback to Tradernet-only mode
 	s.log.Debug().
 		Str("symbol", rec.Symbol).
-		Msg("Order book analysis disabled or unavailable - using Tradernet with Yahoo sanity check")
+		Msg("Order book analysis disabled or unavailable - using Tradernet only")
 	return s.calculateLimit(rec, buffer)
 }
 
@@ -702,15 +678,6 @@ func (s *TradeExecutionService) calculateLimit(rec TradeRecommendation, buffer f
 		return 0, fmt.Errorf("broker client unavailable and order book disabled")
 	}
 
-	// Get security for Yahoo symbol override
-	var yahooSymbol string
-	if s.securityRepo != nil {
-		security, err := s.securityRepo.GetBySymbol(rec.Symbol)
-		if err == nil && security != nil && security.YahooSymbol != "" {
-			yahooSymbol = security.YahooSymbol
-		}
-	}
-
 	// Fetch current price from Tradernet (primary source)
 	quotes, err := s.brokerClient.GetQuotes([]string{rec.Symbol})
 	if err != nil || quotes[rec.Symbol] == nil {
@@ -724,46 +691,21 @@ func (s *TradeExecutionService) calculateLimit(rec TradeRecommendation, buffer f
 		return 0, fmt.Errorf("invalid Tradernet price for %s: %.2f (must be positive)", rec.Symbol, tradernetPrice)
 	}
 
-	// Use Tradernet price as default
-	validatedPrice := tradernetPrice
-
-	// Optional: Yahoo sanity check (non-blocking)
-	if s.yahooClient != nil {
-		var yahooSymbolPtr *string
-		if yahooSymbol != "" {
-			yahooSymbolPtr = &yahooSymbol
-		}
-		yahooPrice, yahooErr := s.yahooClient.GetCurrentPrice(rec.Symbol, yahooSymbolPtr, 1)
-		if yahooErr == nil && yahooPrice != nil && *yahooPrice > 0 {
-			// Sanity check: if Tradernet price is >50% higher than Yahoo, use Yahoo
-			if tradernetPrice > *yahooPrice*1.5 {
-				s.log.Warn().
-					Str("symbol", rec.Symbol).
-					Float64("tradernet_price", tradernetPrice).
-					Float64("yahoo_price", *yahooPrice).
-					Msg("Price anomaly detected for limit calculation: using Yahoo price")
-				validatedPrice = *yahooPrice
-			}
-		}
-		// If Yahoo unavailable, continue with Tradernet price (non-blocking)
-	}
-
-	// Calculate limit price with buffer
+	// Calculate limit price with buffer using Tradernet price
 	var limitPrice float64
 	if rec.Side == "BUY" {
-		limitPrice = validatedPrice * (1 + buffer)
+		limitPrice = tradernetPrice * (1 + buffer)
 	} else {
-		limitPrice = validatedPrice * (1 - buffer)
+		limitPrice = tradernetPrice * (1 - buffer)
 	}
 
 	s.log.Info().
 		Str("symbol", rec.Symbol).
 		Str("side", rec.Side).
 		Float64("tradernet_price", tradernetPrice).
-		Float64("validated_price", validatedPrice).
 		Float64("limit_price", limitPrice).
 		Float64("buffer_pct", buffer*100).
-		Msg("Calculated limit price from Tradernet (with Yahoo sanity check)")
+		Msg("Calculated limit price from Tradernet")
 
 	return limitPrice, nil
 }

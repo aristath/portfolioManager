@@ -151,7 +151,7 @@ func TestHandleGetAdaptiveWeights(t *testing.T) {
 
 	weights := data["weights"].(map[string]interface{})
 	assert.Contains(t, weights, "long_term")
-	assert.Contains(t, weights, "fundamentals")
+	assert.Contains(t, weights, "stability")
 	assert.Contains(t, weights, "dividends")
 	assert.Contains(t, weights, "opportunity")
 }
@@ -182,7 +182,7 @@ func TestHandleGetAdaptiveParameters(t *testing.T) {
 	assert.Contains(t, data, "quality_gates")
 
 	qualityGates := data["quality_gates"].(map[string]interface{})
-	assert.Contains(t, qualityGates, "fundamentals")
+	assert.Contains(t, qualityGates, "stability")
 	assert.Contains(t, qualityGates, "long_term")
 }
 

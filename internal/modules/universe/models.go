@@ -14,14 +14,13 @@ type Tag struct {
 // Security represents a security in the investment universe
 // After Unix timestamp migration: LastSynced uses Unix timestamp (int64)
 // Converted to string only at JSON boundary for API compatibility
+// Client-specific symbols (for brokers, data providers) stored in client_symbols table
 type Security struct {
 	Currency           string   `json:"currency,omitempty"`
 	Name               string   `json:"name"`
 	ProductType        string   `json:"product_type"`
 	Country            string   `json:"country,omitempty"`
 	FullExchangeName   string   `json:"fullExchangeName,omitempty"`
-	YahooSymbol        string   `json:"yahoo_symbol,omitempty"`
-	AlphaVantageSymbol string   `json:"alphavantage_symbol,omitempty"`
 	ISIN               string   `json:"isin,omitempty"` // Required: PRIMARY KEY after migration 030
 	Industry           string   `json:"industry,omitempty"`
 	Symbol             string   `json:"symbol"`
@@ -77,7 +76,7 @@ type SecurityScore struct {
 	TotalScore             float64    `json:"total_score,omitempty"`
 	SellScore              float64    `json:"sell_score,omitempty"`
 	TechnicalScore         float64    `json:"technical_score,omitempty"`
-	FundamentalScore       float64    `json:"fundamental_score,omitempty"`
+	StabilityScore       float64    `json:"stability_score,omitempty"`
 	HistoryYears           float64    `json:"history_years,omitempty"`
 	Volatility             float64    `json:"volatility,omitempty"`
 	QualityScore           float64    `json:"quality_score,omitempty"`
@@ -85,6 +84,7 @@ type SecurityScore struct {
 
 // SecurityWithScore combines security and score data
 // Used for GET /api/securities endpoint response
+// Client-specific symbols available via /api/securities/{isin}/client-symbols endpoint
 type SecurityWithScore struct {
 	QualityScore       *float64 `json:"quality_score,omitempty"`
 	OpportunityScore   *float64 `json:"opportunity_score,omitempty"`
@@ -99,7 +99,7 @@ type SecurityWithScore struct {
 	PositionQuantity   *float64 `json:"position_quantity,omitempty"`
 	PositionValue      *float64 `json:"position_value,omitempty"`
 	CurrentPrice       *float64 `json:"current_price,omitempty"`
-	FundamentalScore   *float64 `json:"fundamental_score,omitempty"`
+	StabilityScore     *float64 `json:"stability_score,omitempty"`
 	AllocationFitScore *float64 `json:"allocation_fit_score,omitempty"`
 	Name               string   `json:"name"`
 	Symbol             string   `json:"symbol"`
@@ -109,8 +109,6 @@ type SecurityWithScore struct {
 	Country            string   `json:"country,omitempty"`
 	Currency           string   `json:"currency,omitempty"`
 	ProductType        string   `json:"product_type,omitempty"`
-	YahooSymbol        string   `json:"yahoo_symbol,omitempty"`
-	AlphaVantageSymbol string   `json:"alphavantage_symbol,omitempty"`
 	ISIN               string   `json:"isin,omitempty"`
 	PriorityMultiplier float64  `json:"priority_multiplier"`
 	MaxPortfolioTarget float64  `json:"max_portfolio_target,omitempty"`

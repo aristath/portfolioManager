@@ -35,7 +35,7 @@ func TestScanScore_ScansAllColumns(t *testing.T) {
 			consistency_score REAL,
 			history_years INTEGER,
 			technical_score REAL,
-			fundamental_score REAL,
+			stability_score REAL,
 			sharpe_score REAL,
 			drawdown_score REAL,
 			dividend_bonus REAL,
@@ -79,7 +79,7 @@ func TestScanScore_ScansAllColumns(t *testing.T) {
 	assert.Equal(t, 0.10, score.ConsistencyScore)
 	assert.Equal(t, 5.0, score.HistoryYears)
 	assert.Equal(t, 0.50, score.TechnicalScore)
-	assert.Equal(t, 0.45, score.FundamentalScore)
+	assert.Equal(t, 0.45, score.StabilityScore)
 	assert.Equal(t, 1.5, score.SharpeScore)
 	assert.Equal(t, -0.15, score.DrawdownScore)
 	assert.Equal(t, 0.10, score.DividendBonus)
@@ -115,7 +115,7 @@ func TestScanScore_HandlesNullValues(t *testing.T) {
 			consistency_score REAL,
 			history_years INTEGER,
 			technical_score REAL,
-			fundamental_score REAL,
+			stability_score REAL,
 			sharpe_score REAL,
 			drawdown_score REAL,
 			dividend_bonus REAL,

@@ -23,9 +23,8 @@ type SecurityScorer struct {
 	longTerm            *LongTermScorer
 	opportunity         *OpportunityScorer
 	dividend            *DividendScorer
-	fundamentals        *FundamentalsScorer
+	stability           *StabilityScorer // Replaces StabilityScorer (internal data only)
 	shortTerm           *ShortTermScorer
-	opinion             *OpinionScorer
 	diversification     *DiversificationScorer
 	adaptiveService     AdaptiveWeightsProvider               // Optional: adaptive market service
 	regimeScoreProvider RegimeScoreProvider                   // Optional: regime score provider
@@ -35,24 +34,21 @@ type SecurityScorer struct {
 
 // ScoreWeights defines the weight for each scoring group
 // Quality-focused weights for 15-20 year retirement fund strategy
-// Emphasizes quality (long-term + fundamentals = 45%) and dividends (18%)
+// Uses internal data only (no external stability or opinions)
 var ScoreWeights = map[string]float64{
-	"long_term":       0.25, // CAGR, Sortino, Sharpe (↑ from 20%)
-	"fundamentals":    0.20, // Financial strength, Consistency (↑ from 15%)
-	"dividends":       0.18, // Yield, Consistency, Growth (↑ from 12%)
-	"opportunity":     0.12, // 52W high distance, P/E ratio (↓ from 15%)
-	"short_term":      0.08, // Recent momentum, Drawdown (↓ from 10%)
-	"technicals":      0.07, // RSI, Bollinger, EMA (↓ from 10%)
-	"opinion":         0.05, // Analyst recommendations, Price targets (↓ from 10%)
-	"diversification": 0.05, // Geography, Industry, Averaging down (↓ from 8%)
+	"long_term":   0.30, // CAGR, Sortino, Sharpe - core value metric (↑ from 25%)
+	"stability":   0.20, // CAGR consistency, volatility, recovery (replaces stability)
+	"dividends":   0.18, // Yield, Consistency, Growth - unchanged
+	"opportunity": 0.15, // 52W high distance (no P/E, ↑ from 12%)
+	"short_term":  0.10, // Recent momentum, Drawdown (↑ from 8%)
+	"technicals":  0.07, // RSI, Bollinger, EMA - unchanged
 	// Total: 100%
 	//
-	// Rationale:
-	// - Quality focus: Long-term + Fundamentals = 45% (vs 35% before)
-	// - Dividend emphasis: 18% (vs 12%) - accounts for total return (growth + dividend)
-	// - Opportunity reduced: 12% (vs 15%) - use as filter, not primary driver
-	// - Technicals reduced: 7% (vs 10%) - less important for long-term
-	// - Opinion reduced: 5% (vs 10%) - external forecasts less reliable
+	// Changes from previous version:
+	// - "stability" → "stability" (internal calculation from price history)
+	// - "opinion" REMOVED (required external analyst data)
+	// - "diversification" REMOVED (moved to planning layer)
+	// - Redistributed weights: +5% long_term, +3% opportunity, +2% short_term
 }
 
 // NewSecurityScorer creates a new security scorer
@@ -62,10 +58,9 @@ func NewSecurityScorer() *SecurityScorer {
 		longTerm:          NewLongTermScorer(),
 		opportunity:       NewOpportunityScorer(),
 		dividend:          NewDividendScorer(),
-		fundamentals:      NewFundamentalsScorer(),
+		stability:         NewStabilityScorer(),
 		shortTerm:         NewShortTermScorer(),
-		opinion:           NewOpinionScorer(),
-		diversification:   NewDiversificationScorer(),
+		diversification:   NewDiversificationScorer(), // Kept for optional portfolio-aware scoring
 		quantumCalculator: quantum.NewQuantumProbabilityCalculator(),
 	}
 }
@@ -86,28 +81,21 @@ func (ss *SecurityScorer) SetFormulaStorage(storage *symbolic_regression.Formula
 }
 
 // ScoreSecurityInput contains all data needed to score a security
+// Uses only internal data (prices, dividends) - no external stability or analyst data
 type ScoreSecurityInput struct {
-	PayoutRatio           *float64
-	DebtToEquity          *float64
-	PortfolioContext      *domain.PortfolioContext
-	Industry              *string
-	Country               *string
-	ProductType           string // Product type: EQUITY, ETF, MUTUALFUND, ETC, CASH, UNKNOWN
-	SortinoRatio          *float64
-	MaxDrawdown           *float64
-	PERatio               *float64
-	DividendYield         *float64
-	UpsidePct             *float64
-	ProfitMargin          *float64
-	FiveYearAvgDivYield   *float64
-	AnalystRecommendation *float64
-	ForwardPE             *float64
-	CurrentRatio          *float64
-	Symbol                string
-	DailyPrices           []float64
-	MonthlyPrices         []formulas.MonthlyPrice
-	MarketAvgPE           float64
-	TargetAnnualReturn    float64
+	PortfolioContext    *domain.PortfolioContext
+	Industry            *string
+	Country             *string
+	ProductType         string // Product type: EQUITY, ETF, MUTUALFUND, ETC, CASH, UNKNOWN
+	SortinoRatio        *float64
+	MaxDrawdown         *float64
+	DividendYield       *float64 // Internally calculated from ledger.db
+	FiveYearAvgDivYield *float64 // Internally calculated from ledger.db
+	PayoutRatio         *float64 // Optional - estimated from dividend/price if needed
+	Symbol              string
+	DailyPrices         []float64
+	MonthlyPrices       []formulas.MonthlyPrice
+	TargetAnnualReturn  float64
 }
 
 // ScoreSecurityWithDefaults scores a security with default values for missing data
@@ -116,19 +104,17 @@ func (ss *SecurityScorer) ScoreSecurityWithDefaults(input ScoreSecurityInput) *d
 	if input.TargetAnnualReturn == 0 {
 		input.TargetAnnualReturn = scoring.OptimalCAGR
 	}
-	if input.MarketAvgPE == 0 {
-		input.MarketAvgPE = scoring.DefaultMarketAvgPE
-	}
 
 	return ss.ScoreSecurity(input)
 }
 
 // ScoreSecurity calculates complete security score with all groups
+// Uses only internal data (prices, dividends) - no external stability or analyst data
 func (ss *SecurityScorer) ScoreSecurity(input ScoreSecurityInput) *domain.CalculatedSecurityScore {
 	groupScores := make(map[string]float64)
 	subScores := make(map[string]map[string]float64)
 
-	// 1. Long-term Performance (25%) - CAGR, Sortino, Sharpe
+	// 1. Long-term Performance (30%) - CAGR, Sortino, Sharpe
 	longTermScore := ss.longTerm.Calculate(
 		input.MonthlyPrices,
 		input.DailyPrices,
@@ -138,25 +124,17 @@ func (ss *SecurityScorer) ScoreSecurity(input ScoreSecurityInput) *domain.Calcul
 	groupScores["long_term"] = longTermScore.Score
 	subScores["long_term"] = longTermScore.Components
 
-	// 2. Fundamentals (20%) - Financial strength, Consistency
-	fundamentalsScore := ss.fundamentals.Calculate(
-		input.ProfitMargin,
-		input.DebtToEquity,
-		input.CurrentRatio,
-		input.MonthlyPrices,
-	)
-	groupScores["fundamentals"] = fundamentalsScore.Score
-	subScores["fundamentals"] = fundamentalsScore.Components
+	// 2. Stability (20%) - CAGR consistency, volatility, recovery (replaces Stability)
+	stabilityScore := ss.stability.Calculate(input.MonthlyPrices, input.DailyPrices)
+	groupScores["stability"] = stabilityScore.Score
+	subScores["stability"] = stabilityScore.Components
 
-	// 3. Opportunity (12%) - 52W high distance, P/E ratio (with quality gates)
+	// 3. Opportunity (15%) - 52W high distance, quality gates (P/E ratio removed)
 	opportunityScore := ss.opportunity.CalculateWithQualityGate(
 		input.DailyPrices,
-		input.PERatio,
-		input.ForwardPE,
-		input.MarketAvgPE,
-		&fundamentalsScore.Score, // Pass fundamentals score for quality gate
-		&longTermScore.Score,     // Pass long-term score for quality gate
-		input.ProductType,        // Pass product type for product-type-aware opportunity scoring
+		&stabilityScore.Score, // Use stability score for quality gate
+		&longTermScore.Score,  // Pass long-term score for quality gate
+		input.ProductType,     // Pass product type
 	)
 	groupScores["opportunity"] = opportunityScore.Score
 	subScores["opportunity"] = opportunityScore.Components
@@ -176,7 +154,7 @@ func (ss *SecurityScorer) ScoreSecurity(input ScoreSecurityInput) *domain.Calcul
 	groupScores["dividends"] = dividendScore.Score
 	subScores["dividends"] = dividendScore.Components
 
-	// 5. Short-term Performance (8%) - Recent momentum, Drawdown
+	// 5. Short-term Performance (10%) - Recent momentum, Drawdown
 	shortTermScore := ss.shortTerm.Calculate(
 		input.DailyPrices,
 		input.MaxDrawdown,
@@ -189,37 +167,8 @@ func (ss *SecurityScorer) ScoreSecurity(input ScoreSecurityInput) *domain.Calcul
 	groupScores["technicals"] = technicalsScore.Score
 	subScores["technicals"] = technicalsScore.Components
 
-	// 7. Opinion (5%) - Analyst recommendations, Price targets
-	opinionScore := ss.opinion.Calculate(
-		input.AnalystRecommendation,
-		input.UpsidePct,
-	)
-	groupScores["opinion"] = opinionScore.Score
-	subScores["opinion"] = opinionScore.Components
-
-	// 8. Diversification (5%) - DYNAMIC, portfolio-aware
-	if input.PortfolioContext != nil && input.Country != nil {
-		// Need quality and opportunity for averaging down calculation
-		qualityApprox := (groupScores["long_term"] + groupScores["fundamentals"]) / 2
-		diversificationScore := ss.diversification.Calculate(
-			input.Symbol,
-			*input.Country,
-			input.Industry,
-			qualityApprox,
-			groupScores["opportunity"],
-			input.PortfolioContext,
-		)
-		groupScores["diversification"] = diversificationScore.Score
-		subScores["diversification"] = diversificationScore.Components
-	} else {
-		// No portfolio context - return neutral
-		groupScores["diversification"] = 0.5
-		subScores["diversification"] = map[string]float64{
-			"country":   0.5,
-			"industry":  0.5,
-			"averaging": 0.5,
-		}
-	}
+	// Note: Opinion scorer removed (required external analyst data)
+	// Note: Diversification scoring moved to planning layer (not included in base score)
 
 	// Try to use discovered formula first
 	var totalScore float64
@@ -255,12 +204,11 @@ func (ss *SecurityScorer) ScoreSecurity(input ScoreSecurityInput) *domain.Calcul
 				// Build training inputs with group scores
 				inputs := symbolic_regression.TrainingInputs{
 					LongTermScore:        groupScores["long_term"],
-					FundamentalsScore:    groupScores["fundamentals"],
+					StabilityScore:       groupScores["stability"],
 					DividendsScore:       groupScores["dividends"],
 					OpportunityScore:     groupScores["opportunity"],
 					ShortTermScore:       groupScores["short_term"],
 					TechnicalsScore:      groupScores["technicals"],
-					OpinionScore:         groupScores["opinion"],
 					DiversificationScore: groupScores["diversification"],
 				}
 
@@ -381,15 +329,14 @@ func (ss *SecurityScorer) getScoreWeights(productType string) map[string]float64
 	// Treat ETFs and Mutual Funds identically (both are diversified products)
 	if productType == "ETF" || productType == "MUTUALFUND" {
 		// Diversified product weights (ETFs & Mutual Funds)
+		// Uses internal data only - no external stability or analyst data
 		baseWeights := map[string]float64{
-			"long_term":       0.35, // ↑ from 25% (tracking quality matters)
-			"fundamentals":    0.10, // ↓ from 20% (less relevant)
-			"dividends":       0.18, // Same
-			"opportunity":     0.12, // Same
-			"short_term":      0.08, // Same
-			"technicals":      0.07, // Same
-			"opinion":         0.05, // Same
-			"diversification": 0.05, // Same
+			"long_term":   0.35, // ↑ from 30% (tracking quality matters most)
+			"stability":   0.15, // ↓ from 20% (less relevant for diversified products)
+			"dividends":   0.18, // Unchanged
+			"opportunity": 0.12, // Unchanged
+			"short_term":  0.10, // Unchanged
+			"technicals":  0.10, // ↑ from 7% (compensate for removed opinion/diversification)
 		}
 
 		// Apply adaptive weights if available

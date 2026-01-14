@@ -44,8 +44,8 @@ type LongTermPromiseScore struct {
 	Score               float64 `json:"score"`
 }
 
-// StabilityScore represents stability components
-type StabilityScore struct {
+// EndStateStabilityScore represents stability components for end-state analysis
+type EndStateStabilityScore struct {
 	Volatility float64 `json:"volatility"`
 	Drawdown   float64 `json:"drawdown"`
 	Sharpe     float64 `json:"sharpe"`
@@ -356,8 +356,8 @@ func convertSharpeToScore(sharpe float64) float64 {
 //
 // Returns:
 //
-//	StabilityScore with all components
-func (es *EndStateScorer) CalculateStabilityScore(metrics map[string]float64) StabilityScore {
+//	EndStateStabilityScore with all components
+func (es *EndStateScorer) CalculateStabilityScore(metrics map[string]float64) EndStateStabilityScore {
 	// Get volatility and convert to score
 	volatilityScore := 0.5
 	volatilityRaw, hasVol := metrics["VOLATILITY_ANNUAL"]
@@ -383,7 +383,7 @@ func (es *EndStateScorer) CalculateStabilityScore(metrics map[string]float64) St
 		drawdownScore*stabilityWeightDrawdown +
 		sharpeScore*stabilityWeightSharpe
 
-	return StabilityScore{
+	return EndStateStabilityScore{
 		Volatility: round3(volatilityScore),
 		Drawdown:   round3(drawdownScore),
 		Sharpe:     round3(sharpeScore),

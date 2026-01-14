@@ -120,7 +120,7 @@ func (j *AdaptiveMarketJob) Run() error {
 	// Calculate adaptive quality gates
 	adaptiveGates := j.adaptiveService.CalculateAdaptiveQualityGates(float64(currentScore))
 	j.log.Info().
-		Float64("fundamentals_threshold", adaptiveGates.GetFundamentals()).
+		Float64("stability_threshold", adaptiveGates.GetStability()).
 		Float64("long_term_threshold", adaptiveGates.GetLongTerm()).
 		Msg("Calculated adaptive quality gate thresholds")
 
@@ -158,7 +158,7 @@ func (j *AdaptiveMarketJob) Run() error {
 
 		// Store quality gates
 		gatesJSON, err := json.Marshal(map[string]float64{
-			"fundamentals": adaptiveGates.GetFundamentals(),
+			"stability": adaptiveGates.GetStability(),
 			"long_term":    adaptiveGates.GetLongTerm(),
 		})
 		if err == nil {

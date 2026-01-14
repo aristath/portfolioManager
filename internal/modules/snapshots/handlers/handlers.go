@@ -202,7 +202,7 @@ func (h *Handler) HandleGetMarketContext(w http.ResponseWriter, r *http.Request)
 			},
 			"adaptive_blend": blend,
 			"quality_gates": map[string]interface{}{
-				"fundamentals": qualityGates.GetFundamentals(),
+				"stability": qualityGates.GetStability(),
 				"long_term":    qualityGates.GetLongTerm(),
 			},
 		},

@@ -13,15 +13,10 @@ func TestTagAssigner_ValueOpportunity(t *testing.T) {
 
 	currentPrice := 80.0
 	price52wHigh := 100.0
-	peRatio := 15.0
-	marketAvgPE := 20.0
-
 	input := AssignTagsInput{
 		Symbol:       "TEST",
 		CurrentPrice: &currentPrice,
 		Price52wHigh: &price52wHigh,
-		PERatio:      &peRatio,
-		MarketAvgPE:  marketAvgPE,
 		GroupScores: map[string]float64{
 			"opportunity": 0.75,
 		},
@@ -31,7 +26,6 @@ func TestTagAssigner_ValueOpportunity(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Contains(t, tags, "value-opportunity")
 	assert.Contains(t, tags, "below-52w-high")
-	assert.Contains(t, tags, "undervalued-pe")
 }
 
 func TestTagAssigner_HighQuality(t *testing.T) {
@@ -41,7 +35,7 @@ func TestTagAssigner_HighQuality(t *testing.T) {
 	input := AssignTagsInput{
 		Symbol: "TEST",
 		GroupScores: map[string]float64{
-			"fundamentals": 0.85,
+			"stability": 0.85,
 			"long_term":    0.80,
 		},
 	}
@@ -49,7 +43,7 @@ func TestTagAssigner_HighQuality(t *testing.T) {
 	tags, err := assigner.AssignTagsForSecurity(input)
 	assert.NoError(t, err)
 	assert.Contains(t, tags, "high-quality")
-	assert.Contains(t, tags, "strong-fundamentals")
+	assert.Contains(t, tags, "high-stability")
 }
 
 func TestTagAssigner_Stable(t *testing.T) {
@@ -62,10 +56,10 @@ func TestTagAssigner_Stable(t *testing.T) {
 		Symbol:     "TEST",
 		Volatility: &volatility,
 		GroupScores: map[string]float64{
-			"fundamentals": 0.80,
+			"stability": 0.80,
 		},
 		SubScores: map[string]map[string]float64{
-			"fundamentals": {
+			"stability": {
 				"consistency": 0.85,
 			},
 		},
@@ -154,25 +148,20 @@ func TestTagAssigner_MultipleTags(t *testing.T) {
 	price52wHigh := 100.0
 	volatility := 0.12
 	dividendYield := 5.0
-	peRatio := 15.0
-	marketAvgPE := 20.0
-
 	input := AssignTagsInput{
 		Symbol:        "TEST",
 		CurrentPrice:  &currentPrice,
 		Price52wHigh:  &price52wHigh,
 		Volatility:    &volatility,
 		DividendYield: &dividendYield,
-		PERatio:       &peRatio,
-		MarketAvgPE:   marketAvgPE,
 		GroupScores: map[string]float64{
-			"fundamentals": 0.85, // > 0.8 for high-quality
+			"stability": 0.85, // > 0.8 for high-quality
 			"long_term":    0.80, // > 0.75 for high-quality
 			"opportunity":  0.75, // > 0.7 for value-opportunity
 			"dividends":    0.75,
 		},
 		SubScores: map[string]map[string]float64{
-			"fundamentals": {
+			"stability": {
 				"consistency": 0.85,
 			},
 		},
@@ -199,7 +188,7 @@ func TestTagAssigner_NoTags(t *testing.T) {
 	input := AssignTagsInput{
 		Symbol: "TEST",
 		GroupScores: map[string]float64{
-			"fundamentals": 0.50,
+			"stability": 0.50,
 			"long_term":    0.50,
 		},
 	}
@@ -217,7 +206,7 @@ func TestTagAssigner_QualityGatePass(t *testing.T) {
 	input := AssignTagsInput{
 		Symbol: "TEST",
 		GroupScores: map[string]float64{
-			"fundamentals": 0.65, // >= 0.6
+			"stability": 0.65, // >= 0.6
 			"long_term":    0.55, // >= 0.5
 		},
 	}
@@ -232,11 +221,11 @@ func TestTagAssigner_QualityGateFail(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 	assigner := NewTagAssigner(log)
 
-	// Test case 1: Fundamentals too low for relaxed threshold
+	// Test case 1: Stability too low for relaxed threshold
 	input1 := AssignTagsInput{
 		Symbol: "TEST",
 		GroupScores: map[string]float64{
-			"fundamentals": 0.54, // < 0.55 (new relaxed threshold)
+			"stability": 0.54, // < 0.55 (new relaxed threshold)
 			"long_term":    0.44, // < 0.45 (new relaxed threshold)
 		},
 	}
@@ -249,7 +238,7 @@ func TestTagAssigner_QualityGateFail(t *testing.T) {
 	input2 := AssignTagsInput{
 		Symbol: "TEST",
 		GroupScores: map[string]float64{
-			"fundamentals": 0.54, // < 0.55
+			"stability": 0.54, // < 0.55
 			"long_term":    0.44, // < 0.45
 		},
 	}
@@ -265,17 +254,12 @@ func TestTagAssigner_QualityValue(t *testing.T) {
 
 	currentPrice := 80.0
 	price52wHigh := 100.0
-	peRatio := 15.0
-	marketAvgPE := 20.0
-
 	input := AssignTagsInput{
 		Symbol:       "TEST",
 		CurrentPrice: &currentPrice,
 		Price52wHigh: &price52wHigh,
-		PERatio:      &peRatio,
-		MarketAvgPE:  marketAvgPE,
 		GroupScores: map[string]float64{
-			"fundamentals": 0.85, // > 0.8 for high-quality
+			"stability": 0.85, // > 0.8 for high-quality
 			"long_term":    0.80, // > 0.75 for high-quality
 			"opportunity":  0.75, // > 0.7 for value-opportunity
 		},
@@ -300,7 +284,7 @@ func TestTagAssigner_BubbleRisk(t *testing.T) {
 		Symbol:     "TEST",
 		Volatility: &volatility,
 		GroupScores: map[string]float64{
-			"fundamentals": 0.55, // < 0.6
+			"stability": 0.55, // < 0.6
 		},
 		SubScores: map[string]map[string]float64{
 			"long_term": {
@@ -328,7 +312,7 @@ func TestTagAssigner_QualityHighCAGR(t *testing.T) {
 		Symbol:     "TEST",
 		Volatility: &volatility,
 		GroupScores: map[string]float64{
-			"fundamentals": 0.70, // >= 0.6
+			"stability": 0.70, // >= 0.6
 		},
 		SubScores: map[string]map[string]float64{
 			"long_term": {
@@ -345,65 +329,9 @@ func TestTagAssigner_QualityHighCAGR(t *testing.T) {
 	assert.NotContains(t, tags, "bubble-risk")
 }
 
-func TestTagAssigner_ValueTrap(t *testing.T) {
-	log := zerolog.New(nil).Level(zerolog.Disabled)
-	assigner := NewTagAssigner(log)
-
-	peRatio := 12.0
-	marketAvgPE := 20.0
-	volatility := 0.40 // > 0.35
-
-	input := AssignTagsInput{
-		Symbol:      "TEST",
-		PERatio:     &peRatio,
-		MarketAvgPE: marketAvgPE,
-		Volatility:  &volatility,
-		GroupScores: map[string]float64{
-			"fundamentals": 0.55, // < 0.6
-			"long_term":    0.45, // < 0.5
-		},
-		SubScores: map[string]map[string]float64{
-			"short_term": {
-				"momentum": -0.06, // < -0.05
-			},
-		},
-	}
-
-	tags, err := assigner.AssignTagsForSecurity(input)
-	assert.NoError(t, err)
-	assert.Contains(t, tags, "value-trap")
-}
-
-func TestTagAssigner_NotValueTrap(t *testing.T) {
-	log := zerolog.New(nil).Level(zerolog.Disabled)
-	assigner := NewTagAssigner(log)
-
-	peRatio := 12.0
-	marketAvgPE := 20.0
-	volatility := 0.20 // < 0.35
-
-	input := AssignTagsInput{
-		Symbol:      "TEST",
-		PERatio:     &peRatio,
-		MarketAvgPE: marketAvgPE,
-		Volatility:  &volatility,
-		GroupScores: map[string]float64{
-			"fundamentals": 0.70, // >= 0.6
-			"long_term":    0.60, // >= 0.5
-		},
-		SubScores: map[string]map[string]float64{
-			"short_term": {
-				"momentum": 0.05, // >= -0.05
-			},
-		},
-	}
-
-	tags, err := assigner.AssignTagsForSecurity(input)
-	assert.NoError(t, err)
-	// Should have undervalued-pe but NOT value-trap
-	assert.Contains(t, tags, "undervalued-pe")
-	assert.NotContains(t, tags, "value-trap")
-}
+// Removed: TestTagAssigner_ValueTrap and TestTagAssigner_NotValueTrap
+// These tests tested P/E-based value-trap detection which was removed
+// (P/E ratio data is no longer available)
 
 func TestTagAssigner_ExcellentTotalReturn(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
@@ -540,7 +468,7 @@ func TestTagAssigner_RegimeBearSafe(t *testing.T) {
 		Volatility:  &volatility,
 		MaxDrawdown: &maxDrawdown,
 		GroupScores: map[string]float64{
-			"fundamentals": 0.80, // > 0.75
+			"stability": 0.80, // > 0.75
 		},
 	}
 
@@ -558,7 +486,7 @@ func TestTagAssigner_RegimeBullGrowth(t *testing.T) {
 	input := AssignTagsInput{
 		Symbol: "TEST",
 		GroupScores: map[string]float64{
-			"fundamentals": 0.75, // > 0.7
+			"stability": 0.75, // > 0.7
 		},
 		SubScores: map[string]map[string]float64{
 			"long_term": {
@@ -581,18 +509,13 @@ func TestTagAssigner_RegimeSidewaysValue(t *testing.T) {
 
 	currentPrice := 80.0
 	price52wHigh := 100.0
-	peRatio := 15.0
-	marketAvgPE := 20.0
-
 	input := AssignTagsInput{
 		Symbol:       "TEST",
 		CurrentPrice: &currentPrice,
 		Price52wHigh: &price52wHigh,
-		PERatio:      &peRatio,
-		MarketAvgPE:  marketAvgPE,
 		GroupScores: map[string]float64{
 			"opportunity":  0.75, // > 0.7 for value-opportunity
-			"fundamentals": 0.80, // > 0.75
+			"stability": 0.80, // > 0.75
 		},
 	}
 
@@ -645,8 +568,6 @@ func TestTagAssigner_AllEnhancedTags(t *testing.T) {
 	// Create a security that meets criteria for multiple enhanced tags
 	currentPrice := 75.0
 	price52wHigh := 100.0
-	peRatio := 15.0
-	marketAvgPE := 20.0
 	volatility := 0.18
 	historicalVolatility := 0.15
 	dividendYield := 0.10 // 10%
@@ -658,8 +579,6 @@ func TestTagAssigner_AllEnhancedTags(t *testing.T) {
 		Symbol:               "TEST",
 		CurrentPrice:         &currentPrice,
 		Price52wHigh:         &price52wHigh,
-		PERatio:              &peRatio,
-		MarketAvgPE:          marketAvgPE,
 		Volatility:           &volatility,
 		HistoricalVolatility: &historicalVolatility,
 		DividendYield:        &dividendYield,
@@ -667,7 +586,7 @@ func TestTagAssigner_AllEnhancedTags(t *testing.T) {
 		PositionWeight:       &positionWeight,
 		TargetWeight:         &targetWeight,
 		GroupScores: map[string]float64{
-			"fundamentals": 0.85, // > 0.8 for high-quality, > 0.6 for quality-gate-pass
+			"stability": 0.85, // > 0.8 for high-quality, > 0.6 for quality-gate-pass
 			"long_term":    0.80, // > 0.75 for high-quality, > 0.5 for quality-gate-pass
 			"opportunity":  0.75, // > 0.7 for value-opportunity
 		},
@@ -705,12 +624,11 @@ func TestTagAssigner_AllEnhancedTags(t *testing.T) {
 	assert.Contains(t, tags, "dividend-total-return")
 
 	// Verify regime-specific tags
-	assert.Contains(t, tags, "regime-bear-safe")      // volatility < 0.20, fundamentals > 0.75, drawdown < 20%
-	assert.Contains(t, tags, "regime-bull-growth")    // CAGR > 12%, fundamentals > 0.7, momentum > 0
-	assert.Contains(t, tags, "regime-sideways-value") // value-opportunity AND fundamentals > 0.75
+	assert.Contains(t, tags, "regime-bear-safe")      // volatility < 0.20, stability > 0.75, drawdown < 20%
+	assert.Contains(t, tags, "regime-bull-growth")    // CAGR > 12%, stability > 0.7, momentum > 0
+	assert.Contains(t, tags, "regime-sideways-value") // value-opportunity AND stability > 0.75
 
-	// Should NOT have value trap (good fundamentals)
-	assert.NotContains(t, tags, "value-trap")
+	// Should NOT have bubble-risk (good risk metrics)
 	assert.NotContains(t, tags, "bubble-risk")
 
 	t.Logf("Assigned %d tags total", len(tags))
@@ -726,7 +644,7 @@ func TestTagAssigner_QuantumBubbleDetection(t *testing.T) {
 		Symbol:     "TEST",
 		Volatility: &volatility,
 		GroupScores: map[string]float64{
-			"fundamentals": 0.62, // Just above 0.6 threshold
+			"stability": 0.62, // Just above 0.6 threshold
 		},
 		SubScores: map[string]map[string]float64{
 			"long_term": {
@@ -751,47 +669,9 @@ func TestTagAssigner_QuantumBubbleDetection(t *testing.T) {
 	assert.Greater(t, len(tags), 0, "Should produce some tags")
 }
 
-func TestTagAssigner_QuantumValueTrapDetection(t *testing.T) {
-	log := zerolog.New(nil).Level(zerolog.Disabled)
-	assigner := NewTagAssigner(log)
-
-	peRatio := 12.0
-	marketAvgPE := 20.0
-	volatility := 0.30
-
-	input := AssignTagsInput{
-		Symbol:      "TEST",
-		PERatio:     &peRatio,
-		MarketAvgPE: marketAvgPE,
-		Volatility:  &volatility,
-		GroupScores: map[string]float64{
-			"fundamentals": 0.54, // Just below relaxed threshold (0.55)
-			"long_term":    0.44, // Just below relaxed threshold (0.45)
-		},
-		SubScores: map[string]map[string]float64{
-			"short_term": {
-				"momentum": -0.03, // Slightly negative
-			},
-		},
-	}
-
-	tags, err := assigner.AssignTagsForSecurity(input)
-	assert.NoError(t, err)
-
-	// Classical might detect (borderline case)
-	// Quantum should also evaluate
-	hasValueTrapTag := false
-	for _, tag := range tags {
-		if tag == "value-trap" || tag == "quantum-value-trap" || tag == "ensemble-value-trap" {
-			hasValueTrapTag = true
-			break
-		}
-	}
-
-	t.Logf("Value trap detection tags: %v", tags)
-	// At least one detection method should flag this
-	assert.True(t, hasValueTrapTag, "Should detect value trap (classical or quantum)")
-}
+// Removed: TestTagAssigner_QuantumValueTrapDetection
+// This test tested P/E-based quantum value-trap detection which was removed
+// (P/E ratio data is no longer available)
 
 func TestTagAssigner_EnsembleBubbleDetection(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
@@ -803,7 +683,7 @@ func TestTagAssigner_EnsembleBubbleDetection(t *testing.T) {
 		Symbol:     "TEST",
 		Volatility: &volatility,
 		GroupScores: map[string]float64{
-			"fundamentals": 0.55, // < 0.6
+			"stability": 0.55, // < 0.6
 		},
 		SubScores: map[string]map[string]float64{
 			"long_term": {
@@ -835,7 +715,7 @@ func TestQualityGate_Path1_Balanced_Pass(t *testing.T) {
 	input := AssignTagsInput{
 		Symbol: "TEST",
 		GroupScores: map[string]float64{
-			"fundamentals": 0.56, // >= 0.55
+			"stability": 0.56, // >= 0.55
 			"long_term":    0.46, // >= 0.45
 		},
 	}
@@ -853,7 +733,7 @@ func TestQualityGate_Path1_Balanced_Fail(t *testing.T) {
 	input := AssignTagsInput{
 		Symbol: "TEST",
 		GroupScores: map[string]float64{
-			"fundamentals": 0.54, // < 0.55
+			"stability": 0.54, // < 0.55
 			"long_term":    0.46, // >= 0.45
 		},
 	}
@@ -865,14 +745,14 @@ func TestQualityGate_Path1_Balanced_Fail(t *testing.T) {
 
 // Path 2: Exceptional Excellence Tests
 
-func TestQualityGate_Path2_ExceptionalExcellence_FundamentalsPass(t *testing.T) {
+func TestQualityGate_Path2_ExceptionalExcellence_StabilityPass(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 	assigner := NewTagAssigner(log)
 
 	input := AssignTagsInput{
 		Symbol: "TEST",
 		GroupScores: map[string]float64{
-			"fundamentals": 0.76, // >= 0.75
+			"stability": 0.76, // >= 0.75
 			"long_term":    0.30, // Below all other thresholds
 		},
 	}
@@ -890,7 +770,7 @@ func TestQualityGate_Path2_ExceptionalExcellence_LongTermPass(t *testing.T) {
 	input := AssignTagsInput{
 		Symbol: "TEST",
 		GroupScores: map[string]float64{
-			"fundamentals": 0.40, // Below all other thresholds
+			"stability": 0.40, // Below all other thresholds
 			"long_term":    0.76, // >= 0.75
 		},
 	}
@@ -908,7 +788,7 @@ func TestQualityGate_Path2_ExceptionalExcellence_Fail(t *testing.T) {
 	input := AssignTagsInput{
 		Symbol: "TEST",
 		GroupScores: map[string]float64{
-			"fundamentals": 0.74, // < 0.75
+			"stability": 0.74, // < 0.75
 			"long_term":    0.74, // < 0.75
 		},
 	}
@@ -927,7 +807,7 @@ func TestQualityGate_Path3_QualityValuePlay_Pass(t *testing.T) {
 	input := AssignTagsInput{
 		Symbol: "TEST",
 		GroupScores: map[string]float64{
-			"fundamentals": 0.61, // >= 0.60
+			"stability": 0.61, // >= 0.60
 			"opportunity":  0.66, // >= 0.65
 			"long_term":    0.31, // >= 0.30
 		},
@@ -946,7 +826,7 @@ func TestQualityGate_Path3_QualityValuePlay_Fail(t *testing.T) {
 	input := AssignTagsInput{
 		Symbol: "TEST",
 		GroupScores: map[string]float64{
-			"fundamentals": 0.61, // >= 0.60
+			"stability": 0.61, // >= 0.60
 			"opportunity":  0.64, // < 0.65
 			"long_term":    0.31, // >= 0.30
 		},
@@ -969,7 +849,7 @@ func TestQualityGate_Path4_DividendIncomePlay_Pass(t *testing.T) {
 		Symbol:        "TEST",
 		DividendYield: &dividendYield,
 		GroupScores: map[string]float64{
-			"fundamentals": 0.56, // >= 0.55
+			"stability": 0.56, // >= 0.55
 			"dividends":    0.66, // >= 0.65
 		},
 	}
@@ -990,7 +870,7 @@ func TestQualityGate_Path4_DividendIncomePlay_Fail(t *testing.T) {
 		Symbol:        "TEST",
 		DividendYield: &dividendYield,
 		GroupScores: map[string]float64{
-			"fundamentals": 0.56, // >= 0.55
+			"stability": 0.56, // >= 0.55
 			"dividends":    0.66, // >= 0.65
 		},
 	}
@@ -1088,7 +968,7 @@ func TestQualityGate_Path6_CompositeMinimum_Pass(t *testing.T) {
 	input := AssignTagsInput{
 		Symbol: "TEST",
 		GroupScores: map[string]float64{
-			"fundamentals": 0.50, // >= 0.45, composite: 0.6*0.50 + 0.4*0.55 = 0.52
+			"stability": 0.50, // >= 0.45, composite: 0.6*0.50 + 0.4*0.55 = 0.52
 			"long_term":    0.55, //
 		},
 	}
@@ -1106,8 +986,8 @@ func TestQualityGate_Path6_CompositeMinimum_Fail(t *testing.T) {
 	input := AssignTagsInput{
 		Symbol: "TEST",
 		GroupScores: map[string]float64{
-			"fundamentals": 0.44, // < 0.45 (fails fundamentals floor)
-			"long_term":    0.70, // High, but fundamentals floor not met
+			"stability": 0.44, // < 0.45 (fails stability floor)
+			"long_term":    0.70, // High, but stability floor not met
 		},
 	}
 
@@ -1128,7 +1008,7 @@ func TestQualityGate_Path7_GrowthOpportunity_Pass(t *testing.T) {
 		Symbol:     "TEST",
 		Volatility: &volatility,
 		GroupScores: map[string]float64{
-			"fundamentals": 0.51, // >= 0.50
+			"stability": 0.51, // >= 0.50
 		},
 		SubScores: map[string]map[string]float64{
 			"long_term": {
@@ -1153,7 +1033,7 @@ func TestQualityGate_Path7_GrowthOpportunity_Fail(t *testing.T) {
 		Symbol:     "TEST",
 		Volatility: &volatility,
 		GroupScores: map[string]float64{
-			"fundamentals": 0.51, // >= 0.50
+			"stability": 0.51, // >= 0.50
 		},
 		SubScores: map[string]map[string]float64{
 			"long_term": {
@@ -1176,7 +1056,7 @@ func TestQualityGate_Path1_BoundaryExact(t *testing.T) {
 	input := AssignTagsInput{
 		Symbol: "TEST",
 		GroupScores: map[string]float64{
-			"fundamentals": 0.55, // Exactly at threshold
+			"stability": 0.55, // Exactly at threshold
 			"long_term":    0.45, // Exactly at threshold
 		},
 	}
@@ -1194,7 +1074,7 @@ func TestQualityGate_Path2_BoundaryExact(t *testing.T) {
 	input := AssignTagsInput{
 		Symbol: "TEST",
 		GroupScores: map[string]float64{
-			"fundamentals": 0.75, // Exactly at threshold
+			"stability": 0.75, // Exactly at threshold
 			"long_term":    0.10, // Below all others
 		},
 	}
@@ -1212,7 +1092,7 @@ func TestQualityGate_Path3_BoundaryExact(t *testing.T) {
 	input := AssignTagsInput{
 		Symbol: "TEST",
 		GroupScores: map[string]float64{
-			"fundamentals": 0.60, // Exactly at threshold
+			"stability": 0.60, // Exactly at threshold
 			"opportunity":  0.65, // Exactly at threshold
 			"long_term":    0.30, // Exactly at threshold
 		},
@@ -1234,7 +1114,7 @@ func TestQualityGate_Path4_BoundaryExact(t *testing.T) {
 		Symbol:        "TEST",
 		DividendYield: &dividendYield,
 		GroupScores: map[string]float64{
-			"fundamentals": 0.55, // Exactly at threshold
+			"stability": 0.55, // Exactly at threshold
 			"dividends":    0.65, // Exactly at threshold
 		},
 	}
@@ -1277,7 +1157,7 @@ func TestQualityGate_Path6_BoundaryExact(t *testing.T) {
 	input := AssignTagsInput{
 		Symbol: "TEST",
 		GroupScores: map[string]float64{
-			"fundamentals": 0.45, // Exactly at fundamentals floor
+			"stability": 0.45, // Exactly at stability floor
 			"long_term":    0.60, // Composite: 0.6*0.45 + 0.4*0.60 = 0.51 < 0.52
 		},
 	}
@@ -1297,7 +1177,7 @@ func TestQualityGate_Path7_BoundaryExact(t *testing.T) {
 		Symbol:     "TEST",
 		Volatility: &volatility,
 		GroupScores: map[string]float64{
-			"fundamentals": 0.50, // Exactly at threshold
+			"stability": 0.50, // Exactly at threshold
 		},
 		SubScores: map[string]map[string]float64{
 			"long_term": {
@@ -1326,7 +1206,7 @@ func TestQualityGate_PassesMultiplePaths(t *testing.T) {
 		DividendYield: &dividendYield,
 		Volatility:    &volatility,
 		GroupScores: map[string]float64{
-			"fundamentals": 0.76, // Passes Path 1, 2, 4
+			"stability": 0.76, // Passes Path 1, 2, 4
 			"long_term":    0.60, // Passes Path 1, 5
 			"dividends":    0.70, // Passes Path 4
 		},
@@ -1350,7 +1230,7 @@ func TestQualityGate_PassesOnlyOnePath(t *testing.T) {
 	input := AssignTagsInput{
 		Symbol: "TEST",
 		GroupScores: map[string]float64{
-			"fundamentals": 0.76, // Only passes Path 2 (exceptional excellence)
+			"stability": 0.76, // Only passes Path 2 (exceptional excellence)
 			"long_term":    0.20, // Too low for all other paths
 		},
 	}
@@ -1373,7 +1253,7 @@ func TestQualityGate_FailsAllPaths(t *testing.T) {
 		DividendYield: &dividendYield,
 		Volatility:    &volatility,
 		GroupScores: map[string]float64{
-			"fundamentals": 0.40, // Below all thresholds
+			"stability": 0.40, // Below all thresholds
 			"long_term":    0.25, // Below all thresholds
 			"opportunity":  0.50, // Below thresholds
 			"dividends":    0.50, // Below thresholds
@@ -1401,7 +1281,7 @@ func TestQualityGate_MissingDataPartialPaths(t *testing.T) {
 	input := AssignTagsInput{
 		Symbol: "TEST",
 		GroupScores: map[string]float64{
-			"fundamentals": 0.60, // Passes Path 1
+			"stability": 0.60, // Passes Path 1
 			"long_term":    0.50, // Passes Path 1
 			// Missing: opportunity, dividends
 		},
@@ -1459,7 +1339,7 @@ func TestQualityGate_NeverAssignsPassTag(t *testing.T) {
 			input: AssignTagsInput{
 				Symbol: "PASS_ALL",
 				GroupScores: map[string]float64{
-					"fundamentals": 0.80,
+					"stability": 0.80,
 					"long_term":    0.80,
 				},
 			},
@@ -1469,7 +1349,7 @@ func TestQualityGate_NeverAssignsPassTag(t *testing.T) {
 			input: AssignTagsInput{
 				Symbol: "FAIL_ALL",
 				GroupScores: map[string]float64{
-					"fundamentals": 0.40,
+					"stability": 0.40,
 					"long_term":    0.30,
 				},
 			},
@@ -1479,7 +1359,7 @@ func TestQualityGate_NeverAssignsPassTag(t *testing.T) {
 			input: AssignTagsInput{
 				Symbol: "PASS_PATH2",
 				GroupScores: map[string]float64{
-					"fundamentals": 0.76, // >= 0.75
+					"stability": 0.76, // >= 0.75
 					"long_term":    0.30, // Below all other thresholds
 				},
 			},
@@ -1564,7 +1444,7 @@ func TestTagAssigner_GrowthTag_ConfigurableThreshold(t *testing.T) {
 	input := AssignTagsInput{
 		Symbol: "TEST",
 		GroupScores: map[string]float64{
-			"fundamentals": 0.75, // > HighQualityFundamentals (0.70)
+			"stability": 0.75, // > HighQualityStability (0.70)
 		},
 		SubScores: map[string]map[string]float64{
 			"long_term": {
@@ -1584,8 +1464,6 @@ func TestTagAssigner_ValueOpportunity_ConfigurableThreshold(t *testing.T) {
 
 	currentPrice := 80.0
 	price52wHigh := 100.0
-	peRatio := 15.0
-	marketAvgPE := 20.0
 
 	// Value opportunity: opportunityScore > 0.65 (configurable, was hardcoded)
 	// Test with score exactly at threshold
@@ -1593,8 +1471,6 @@ func TestTagAssigner_ValueOpportunity_ConfigurableThreshold(t *testing.T) {
 		Symbol:       "TEST",
 		CurrentPrice: &currentPrice,
 		Price52wHigh: &price52wHigh,
-		PERatio:      &peRatio,
-		MarketAvgPE:  marketAvgPE,
 		GroupScores: map[string]float64{
 			"opportunity": 0.66, // > 0.65 threshold
 		},
@@ -1613,7 +1489,7 @@ func TestTagAssigner_HighScore_ConfigurableThreshold(t *testing.T) {
 	input := AssignTagsInput{
 		Symbol: "TEST",
 		GroupScores: map[string]float64{
-			"fundamentals": 0.75,
+			"stability": 0.75,
 			"long_term":    0.72,
 			"opportunity":  0.70,
 		},
@@ -1633,26 +1509,22 @@ func TestTagAssigner_SidewaysValue_ConfigurableThreshold(t *testing.T) {
 
 	currentPrice := 80.0
 	price52wHigh := 100.0
-	peRatio := 15.0
-	marketAvgPE := 20.0
 
-	// Sideways value: value-opportunity tag + fundamentals > 0.75 (configurable)
+	// Sideways value: value-opportunity tag + stability > 0.75 (configurable)
 	input := AssignTagsInput{
 		Symbol:       "TEST",
 		CurrentPrice: &currentPrice,
 		Price52wHigh: &price52wHigh,
-		PERatio:      &peRatio,
-		MarketAvgPE:  marketAvgPE,
 		GroupScores: map[string]float64{
 			"opportunity":  0.70, // > 0.65, gets value-opportunity tag
-			"fundamentals": 0.76, // > 0.75, required for sideways-value
+			"stability": 0.76, // > 0.75, required for sideways-value
 		},
 	}
 
 	tags, err := assigner.AssignTagsForSecurity(input)
 	assert.NoError(t, err)
 	assert.Contains(t, tags, "value-opportunity", "Should have value-opportunity tag")
-	assert.Contains(t, tags, "regime-sideways-value", "Should have regime-sideways-value tag with fundamentals 0.76 (>= 0.75)")
+	assert.Contains(t, tags, "regime-sideways-value", "Should have regime-sideways-value tag with stability 0.76 (>= 0.75)")
 }
 
 func TestTagAssigner_AllQualityGatePaths_ConfigurableThresholds(t *testing.T) {
@@ -1670,7 +1542,7 @@ func TestTagAssigner_AllQualityGatePaths_ConfigurableThresholds(t *testing.T) {
 			input: AssignTagsInput{
 				Symbol: "PATH2",
 				GroupScores: map[string]float64{
-					"fundamentals": 0.76, // >= 0.75 (ExceptionalExcellenceThreshold)
+					"stability": 0.76, // >= 0.75 (ExceptionalExcellenceThreshold)
 					"long_term":    0.30, // Below threshold
 				},
 			},
@@ -1682,7 +1554,7 @@ func TestTagAssigner_AllQualityGatePaths_ConfigurableThresholds(t *testing.T) {
 			input: AssignTagsInput{
 				Symbol: "PATH3",
 				GroupScores: map[string]float64{
-					"fundamentals": 0.61, // >= 0.60 (QualityValueFundamentalsMin)
+					"stability": 0.61, // >= 0.60 (QualityValueStabilityMin)
 					"opportunity":  0.66, // >= 0.65 (QualityValueOpportunityMin)
 					"long_term":    0.31, // >= 0.30 (QualityValueLongTermMin)
 				},
@@ -1695,7 +1567,7 @@ func TestTagAssigner_AllQualityGatePaths_ConfigurableThresholds(t *testing.T) {
 			input: AssignTagsInput{
 				Symbol: "PATH4",
 				GroupScores: map[string]float64{
-					"fundamentals": 0.56, // >= 0.55 (DividendIncomeFundamentalsMin)
+					"stability": 0.56, // >= 0.55 (DividendIncomeStabilityMin)
 					"dividends":    0.66, // >= 0.65 (DividendIncomeScoreMin) - dividend score is in GroupScores
 				},
 				DividendYield: func() *float64 { v := 0.036; return &v }(), // >= 0.035 (DividendIncomeYieldMin)
@@ -1708,7 +1580,7 @@ func TestTagAssigner_AllQualityGatePaths_ConfigurableThresholds(t *testing.T) {
 			input: AssignTagsInput{
 				Symbol: "PATH6",
 				GroupScores: map[string]float64{
-					"fundamentals": 0.50, // >= 0.45 (CompositeFundamentalsFloor)
+					"stability": 0.50, // >= 0.45 (CompositeStabilityFloor)
 					"long_term":    0.55, // Composite: 0.6*0.50 + 0.4*0.55 = 0.52 (>= CompositeScoreMin)
 				},
 			},
@@ -1721,7 +1593,7 @@ func TestTagAssigner_AllQualityGatePaths_ConfigurableThresholds(t *testing.T) {
 				Symbol:     "PATH7",
 				Volatility: func() *float64 { v := 0.35; return &v }(), // <= 0.40 (GrowthOpportunityVolatilityMax)
 				GroupScores: map[string]float64{
-					"fundamentals": 0.51, // >= 0.50 (GrowthOpportunityFundamentalsMin)
+					"stability": 0.51, // >= 0.50 (GrowthOpportunityStabilityMin)
 				},
 				SubScores: map[string]map[string]float64{
 					"long_term": {
