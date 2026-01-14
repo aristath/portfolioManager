@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Modal, Tabs, Text, Button, TextInput, Textarea, Switch, NumberInput, Slider, Group, Stack, Paper, Alert, Loader, Divider, Tooltip, ActionIcon } from '@mantine/core';
+import { Modal, Tabs, Text, Button, Switch, NumberInput, Slider, Group, Stack, Paper, Alert, Loader, Divider } from '@mantine/core';
 import { IconInfoCircle } from '@tabler/icons-react';
 import { useAppStore } from '../../stores/appStore';
 import { api } from '../../api/client';

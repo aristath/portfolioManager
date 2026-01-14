@@ -120,7 +120,7 @@ export function GroupingManager() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   // Returns array of all groups containing the country
   const getCountryGroups = (country) => {

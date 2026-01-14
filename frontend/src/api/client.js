@@ -95,7 +95,6 @@ export const api = {
   triggerDailyPipeline: () => fetchJSON('/api/system/sync/daily-pipeline', { method: 'POST' }),
   triggerDividendReinvestment: () => fetchJSON('/api/system/jobs/dividend-reinvestment', { method: 'POST' }),
   triggerHealthCheck: () => fetchJSON('/api/system/jobs/health-check', { method: 'POST' }),
-  triggerPlannerBatch: () => fetchJSON('/api/system/jobs/planner-batch', { method: 'POST' }),
   triggerEventBasedTrading: () => fetchJSON('/api/system/jobs/event-based-trading', { method: 'POST' }),
   triggerTagUpdate: () => fetchJSON('/api/system/jobs/tag-update', { method: 'POST' }),
   hardUpdate: () => fetchJSON('/api/system/deployment/hard-update', { method: 'POST' }),

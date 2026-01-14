@@ -13,7 +13,6 @@ export function LogsViewer() {
     showErrorsOnly,
     autoRefresh,
     loading,
-    totalLines,
     fetchLogs,
     setFilterLevel,
     setLineCount,

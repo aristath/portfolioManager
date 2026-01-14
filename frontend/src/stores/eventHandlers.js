@@ -2,7 +2,6 @@ import { useAppStore } from './appStore';
 import { useSecuritiesStore } from './securitiesStore';
 import { usePortfolioStore } from './portfolioStore';
 import { useTradesStore } from './tradesStore';
-import { useLogsStore } from './logsStore';
 import { useSettingsStore } from './settingsStore';
 
 // Store reference to SecurityChart refresh function

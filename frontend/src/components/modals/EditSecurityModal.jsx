@@ -1,15 +1,17 @@
-import { Modal, TextInput, NumberInput, Switch, Button, Group, Stack, Select } from '@mantine/core';
+import { Modal, TextInput, NumberInput, Switch, Button, Group, Stack, Select, Text } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useAppStore } from '../../stores/appStore';
 import { useSecuritiesStore } from '../../stores/securitiesStore';
 import { useState, useEffect } from 'react';
 import { api } from '../../api/client';
+import { AlphaVantageSearchModal } from './AlphaVantageSearchModal';
 
 export function EditSecurityModal() {
   const { showEditSecurityModal, editingSecurity, closeEditSecurityModal } = useAppStore();
   const { fetchSecurities } = useSecuritiesStore();
   const [formData, setFormData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [showAlphaVantageSearchModal, setShowAlphaVantageSearchModal] = useState(false);
 
   useEffect(() => {
     if (editingSecurity) {
@@ -28,6 +30,7 @@ export function EditSecurityModal() {
       const editableFields = [
         'symbol',
         'yahoo_symbol',
+        'alphavantage_symbol',
         'name',
         'country',
         'fullExchangeName',
@@ -67,99 +70,129 @@ export function EditSecurityModal() {
   if (!formData) return null;
 
   return (
-    <Modal
-      opened={showEditSecurityModal}
-      onClose={closeEditSecurityModal}
-      title="Edit Security"
-      size="md"
-    >
-      <Stack gap="md">
-        <TextInput
-          label="Symbol (Tradernet)"
-          value={formData.symbol || ''}
-          onChange={(e) => setFormData({ ...formData, symbol: e.target.value })}
-          description="Tradernet ticker symbol (e.g., ASML.NL, RHM.DE)"
-        />
-        <TextInput
-          label="Yahoo Symbol (override)"
-          value={formData.yahoo_symbol || ''}
-          onChange={(e) => setFormData({ ...formData, yahoo_symbol: e.target.value })}
-          placeholder="Leave empty to use convention"
-          description="e.g., 1810.HK for Xiaomi, 300750.SZ for CATL"
-        />
-        <TextInput
-          label="Name"
-          value={formData.name || ''}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-        />
-        <TextInput
-          label="ISIN"
-          value={formData.isin || ''}
-          disabled
-          description="Unique security identifier (cannot be changed)"
-        />
-        <TextInput
-          label="Country"
-          value={formData.country || ''}
-          onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-          placeholder="e.g., United States, Netherlands, Germany"
-          description="Country where the security is domiciled"
-        />
-        <TextInput
-          label="Exchange"
-          value={formData.fullExchangeName || ''}
-          onChange={(e) => setFormData({ ...formData, fullExchangeName: e.target.value })}
-          placeholder="e.g., NASDAQ, Euronext Amsterdam, XETRA"
-          description="Exchange where the security trades"
-        />
-        <TextInput
-          label="Industry"
-          value={formData.industry || ''}
-          onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
-          placeholder="e.g., Technology, Healthcare, Financial Services"
-          description="Industry classification"
-        />
-        <Select
-          label="Product Type"
-          value={formData.product_type || 'UNKNOWN'}
-          onChange={(value) => setFormData({ ...formData, product_type: value })}
-          data={[
-            { value: 'EQUITY', label: 'EQUITY - Individual stocks/shares' },
-            { value: 'ETF', label: 'ETF - Exchange Traded Funds' },
-            { value: 'MUTUALFUND', label: 'MUTUALFUND - Mutual funds' },
-            { value: 'ETC', label: 'ETC - Exchange Traded Commodities' },
-            { value: 'CASH', label: 'CASH - Cash positions' },
-            { value: 'UNKNOWN', label: 'UNKNOWN - Unknown type' },
-          ]}
-          description="Product type (auto-detected from Yahoo Finance, can be manually overridden)"
-        />
-        <NumberInput
-          label="Min Lot Size"
-          value={formData.min_lot || 1}
-          onChange={(val) => setFormData({ ...formData, min_lot: Number(val) || 1 })}
-          min={1}
-          step={1}
-          description="Minimum shares per trade (e.g., 100 for Japanese securities)"
-        />
-        <Switch
-          label="Allow Buy"
-          checked={formData.allow_buy !== false}
-          onChange={(e) => setFormData({ ...formData, allow_buy: e.currentTarget.checked })}
-        />
-        <Switch
-          label="Allow Sell"
-          checked={formData.allow_sell !== false}
-          onChange={(e) => setFormData({ ...formData, allow_sell: e.currentTarget.checked })}
-        />
-        <Group justify="flex-end">
-          <Button variant="subtle" onClick={closeEditSecurityModal}>
-            Cancel
-          </Button>
-          <Button onClick={handleSave} loading={loading}>
-            Save
-          </Button>
-        </Group>
-      </Stack>
-    </Modal>
+    <>
+      <Modal
+        opened={showEditSecurityModal}
+        onClose={closeEditSecurityModal}
+        title="Edit Security"
+        size="md"
+      >
+        <Stack gap="md">
+          <TextInput
+            label="Symbol (Tradernet)"
+            value={formData.symbol || ''}
+            onChange={(e) => setFormData({ ...formData, symbol: e.target.value })}
+            description="Tradernet ticker symbol (e.g., ASML.NL, RHM.DE)"
+          />
+          <TextInput
+            label="Yahoo Symbol (override)"
+            value={formData.yahoo_symbol || ''}
+            onChange={(e) => setFormData({ ...formData, yahoo_symbol: e.target.value })}
+            placeholder="Leave empty to use convention"
+            description="e.g., 1810.HK for Xiaomi, 300750.SZ for CATL"
+          />
+          <div>
+            <Group gap="xs" mb={5}>
+              <Text size="sm" fw={500} style={{ flex: 1 }}>
+                Alpha Vantage Symbol (override)
+              </Text>
+              <Button
+                onClick={() => setShowAlphaVantageSearchModal(true)}
+                variant="light"
+                size="xs"
+              >
+                Search Alpha Vantage
+              </Button>
+            </Group>
+            <TextInput
+              value={formData.alphavantage_symbol || ''}
+              onChange={(e) => setFormData({ ...formData, alphavantage_symbol: e.target.value })}
+              placeholder="Leave empty to use convention"
+              description="e.g., ASML.AMS, BMW.FRA"
+            />
+          </div>
+          <TextInput
+            label="Name"
+            value={formData.name || ''}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          />
+          <TextInput
+            label="ISIN"
+            value={formData.isin || ''}
+            disabled
+            description="Unique security identifier (cannot be changed)"
+          />
+          <TextInput
+            label="Country"
+            value={formData.country || ''}
+            onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+            placeholder="e.g., United States, Netherlands, Germany"
+            description="Country where the security is domiciled"
+          />
+          <TextInput
+            label="Exchange"
+            value={formData.fullExchangeName || ''}
+            onChange={(e) => setFormData({ ...formData, fullExchangeName: e.target.value })}
+            placeholder="e.g., NASDAQ, Euronext Amsterdam, XETRA"
+            description="Exchange where the security trades"
+          />
+          <TextInput
+            label="Industry"
+            value={formData.industry || ''}
+            onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
+            placeholder="e.g., Technology, Healthcare, Financial Services"
+            description="Industry classification"
+          />
+          <Select
+            label="Product Type"
+            value={formData.product_type || 'UNKNOWN'}
+            onChange={(value) => setFormData({ ...formData, product_type: value })}
+            data={[
+              { value: 'EQUITY', label: 'EQUITY - Individual stocks/shares' },
+              { value: 'ETF', label: 'ETF - Exchange Traded Funds' },
+              { value: 'MUTUALFUND', label: 'MUTUALFUND - Mutual funds' },
+              { value: 'ETC', label: 'ETC - Exchange Traded Commodities' },
+              { value: 'CASH', label: 'CASH - Cash positions' },
+              { value: 'UNKNOWN', label: 'UNKNOWN - Unknown type' },
+            ]}
+            description="Product type (auto-detected from Yahoo Finance, can be manually overridden)"
+          />
+          <NumberInput
+            label="Min Lot Size"
+            value={formData.min_lot || 1}
+            onChange={(val) => setFormData({ ...formData, min_lot: Number(val) || 1 })}
+            min={1}
+            step={1}
+            description="Minimum shares per trade (e.g., 100 for Japanese securities)"
+          />
+          <Switch
+            label="Allow Buy"
+            checked={formData.allow_buy !== false}
+            onChange={(e) => setFormData({ ...formData, allow_buy: e.currentTarget.checked })}
+          />
+          <Switch
+            label="Allow Sell"
+            checked={formData.allow_sell !== false}
+            onChange={(e) => setFormData({ ...formData, allow_sell: e.currentTarget.checked })}
+          />
+          <Group justify="flex-end">
+            <Button variant="subtle" onClick={closeEditSecurityModal}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave} loading={loading}>
+              Save
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+      <AlphaVantageSearchModal
+        opened={showAlphaVantageSearchModal}
+        onClose={() => setShowAlphaVantageSearchModal(false)}
+        onSelectSymbol={(symbol) => {
+          setFormData({ ...formData, alphavantage_symbol: symbol });
+          setShowAlphaVantageSearchModal(false);
+        }}
+      />
+    </>
   );
 }

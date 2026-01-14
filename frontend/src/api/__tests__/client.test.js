@@ -3,6 +3,7 @@ import { api } from '../client';
 
 // Mock fetch globally
 const mockFetch = vi.fn();
+// eslint-disable-next-line no-undef
 global.fetch = mockFetch;
 
 describe('API Client', () => {
