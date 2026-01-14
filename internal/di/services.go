@@ -990,44 +990,6 @@ func (a *tagSettingsAdapter) GetAdjustedVolatilityParams() universe.VolatilityPa
 	}
 }
 
-// dataSourceSettingsAdapter adapts settings.Repository to services.SettingsGetter
-type dataSourceSettingsAdapter struct {
-	repo *settings.Repository
-}
-
-func (a *dataSourceSettingsAdapter) Get(key string) (*string, error) {
-	if a.repo == nil {
-		return nil, nil
-	}
-	return a.repo.Get(key)
-}
-
-// brokerClientAdapter adapts domain.BrokerClient to services.BrokerClientInterface
-type brokerClientAdapter struct {
-	client domain.BrokerClient
-}
-
-func (a *brokerClientAdapter) GetHistoricalPrices(symbol string, from, to int64, interval int) ([]domain.BrokerOHLCV, error) {
-	if a.client == nil {
-		return nil, fmt.Errorf("broker client not available")
-	}
-	return a.client.GetHistoricalPrices(symbol, from, to, interval)
-}
-
-func (a *brokerClientAdapter) GetQuotes(symbols []string) (map[string]*domain.BrokerQuote, error) {
-	if a.client == nil {
-		return nil, fmt.Errorf("broker client not available")
-	}
-	return a.client.GetQuotes(symbols)
-}
-
-func (a *brokerClientAdapter) IsConnected() bool {
-	if a.client == nil {
-		return false
-	}
-	return a.client.IsConnected()
-}
-
 // ==========================================
 // Adapters for OpportunityContextBuilder
 // ==========================================
@@ -1445,18 +1407,6 @@ func (a *positionValueProviderAdapter) GetMarketValueByISIN(isin string) (float6
 		return 0, fmt.Errorf("position not found for ISIN: %s", isin)
 	}
 	return position.MarketValueEUR, nil
-}
-
-// dividendRepoForYieldAdapter adapts DividendRepository to dividends.DividendRepositoryInterface
-type dividendRepoForYieldAdapter struct {
-	repo *dividends.DividendRepository
-}
-
-func (a *dividendRepoForYieldAdapter) GetByISIN(isin string) ([]dividends.DividendRecord, error) {
-	if a.repo == nil {
-		return nil, fmt.Errorf("dividend repository not available")
-	}
-	return a.repo.GetByISIN(isin)
 }
 
 // brokerPriceClientAdapter adapts domain.BrokerClient to services.PriceClient for OCB
