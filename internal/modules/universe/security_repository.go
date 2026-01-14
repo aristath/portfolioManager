@@ -21,7 +21,7 @@ type SecurityRepository struct {
 // Used to avoid SELECT * which can break when schema changes
 // Column order must match the table schema (matches SELECT * order)
 // After migration: isin is PRIMARY KEY
-const securitiesColumns = `isin, symbol, name, product_type, industry, country, fullExchangeName,
+const securitiesColumns = `isin, symbol, name, product_type, industry, geography, fullExchangeName,
 priority_multiplier, min_lot, active, allow_buy, allow_sell, currency, last_synced,
 min_portfolio_target, max_portfolio_target, created_at, updated_at`
 
@@ -231,7 +231,7 @@ func (r *SecurityRepository) Create(security Security) error {
 
 	query := `
 		INSERT INTO securities
-		(isin, symbol, name, product_type, industry, country, fullExchangeName,
+		(isin, symbol, name, product_type, industry, geography, fullExchangeName,
 		 priority_multiplier, min_lot, active, allow_buy, allow_sell,
 		 currency, min_portfolio_target, max_portfolio_target,
 		 created_at, updated_at)
@@ -249,7 +249,7 @@ func (r *SecurityRepository) Create(security Security) error {
 		security.Name,
 		nullString(security.ProductType),
 		nullString(security.Industry),
-		nullString(security.Country),
+		nullString(security.Geography),
 		nullString(security.FullExchangeName),
 		security.PriorityMultiplier,
 		security.MinLot,
@@ -285,7 +285,7 @@ func (r *SecurityRepository) Update(isin string, updates map[string]interface{})
 	allowedFields := map[string]bool{
 		"active": true, "allow_buy": true, "allow_sell": true,
 		"name": true, "product_type": true, "sector": true, "industry": true,
-		"country": true, "fullExchangeName": true, "currency": true,
+		"geography": true, "fullExchangeName": true, "currency": true,
 		"exchange":             true,
 		"min_portfolio_target": true, "max_portfolio_target": true,
 		"isin": true, "min_lot": true, "priority_multiplier": true,
@@ -384,7 +384,7 @@ func (r *SecurityRepository) GetWithScores(portfolioDB *sql.DB) ([]SecurityWithS
 			Name:               security.Name,
 			ISIN:               security.ISIN,
 			ProductType:        security.ProductType,
-			Country:            security.Country,
+			Geography:          security.Geography,
 			FullExchangeName:   security.FullExchangeName,
 			Industry:           security.Industry,
 			PriorityMultiplier: security.PriorityMultiplier,
@@ -578,14 +578,14 @@ func (r *SecurityRepository) GetWithScores(portfolioDB *sql.DB) ([]SecurityWithS
 // scanSecurity scans a database row into a Security struct
 func (r *SecurityRepository) scanSecurity(rows *sql.Rows) (Security, error) {
 	var security Security
-	var isin, productType, country, fullExchangeName sql.NullString
+	var isin, productType, geography, fullExchangeName sql.NullString
 	var industry, currency sql.NullString
 	var lastSynced sql.NullInt64
 	var minPortfolioTarget, maxPortfolioTarget sql.NullFloat64
 	var active, allowBuy, allowSell sql.NullInt64
 	var createdAt, updatedAt sql.NullInt64
 
-	// Table schema after migration: isin, symbol, name, product_type, industry, country, fullExchangeName,
+	// Table schema after migration: isin, symbol, name, product_type, industry, geography, fullExchangeName,
 	// priority_multiplier, min_lot, active, allow_buy, allow_sell, currency, last_synced,
 	// min_portfolio_target, max_portfolio_target, created_at, updated_at
 	var symbol sql.NullString
@@ -595,7 +595,7 @@ func (r *SecurityRepository) scanSecurity(rows *sql.Rows) (Security, error) {
 		&security.Name,               // name
 		&productType,                 // product_type
 		&industry,                    // industry
-		&country,                     // country
+		&geography,                   // geography
 		&fullExchangeName,            // fullExchangeName
 		&security.PriorityMultiplier, // priority_multiplier
 		&security.MinLot,             // min_lot
@@ -623,8 +623,8 @@ func (r *SecurityRepository) scanSecurity(rows *sql.Rows) (Security, error) {
 	if productType.Valid {
 		security.ProductType = productType.String
 	}
-	if country.Valid {
-		security.Country = country.String
+	if geography.Valid {
+		security.Geography = geography.String
 	}
 	if fullExchangeName.Valid {
 		security.FullExchangeName = fullExchangeName.String
@@ -965,7 +965,7 @@ func (r *SecurityRepository) GetByTags(tagIDs []string) ([]Security, error) {
 	placeholders = placeholders[:len(placeholders)-1] // Remove trailing comma
 
 	query := fmt.Sprintf(`
-		SELECT DISTINCT s.isin, s.symbol, s.name, s.product_type, s.industry, s.country, s.fullExchangeName,
+		SELECT DISTINCT s.isin, s.symbol, s.name, s.product_type, s.industry, s.geography, s.fullExchangeName,
 			s.priority_multiplier, s.min_lot, s.active, s.allow_buy, s.allow_sell, s.currency, s.last_synced,
 			s.min_portfolio_target, s.max_portfolio_target, s.created_at, s.updated_at
 		FROM securities s
@@ -1061,7 +1061,7 @@ func (r *SecurityRepository) GetPositionsByTags(positionSymbols []string, tagIDs
 	tagPlaceholders = tagPlaceholders[:len(tagPlaceholders)-1]
 
 	query := fmt.Sprintf(`
-		SELECT DISTINCT s.isin, s.symbol, s.name, s.product_type, s.industry, s.country, s.fullExchangeName,
+		SELECT DISTINCT s.isin, s.symbol, s.name, s.product_type, s.industry, s.geography, s.fullExchangeName,
 			s.priority_multiplier, s.min_lot, s.active, s.allow_buy, s.allow_sell, s.currency, s.last_synced,
 			s.min_portfolio_target, s.max_portfolio_target, s.created_at, s.updated_at
 		FROM securities s

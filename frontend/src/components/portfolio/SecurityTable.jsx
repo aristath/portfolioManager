@@ -53,7 +53,7 @@ export function SecurityTable() {
   }, [fetchSparklines, sparklineTimeframe]);
 
   const filteredSecurities = getFilteredSecurities();
-  const countries = [...new Set(securities.map(s => s.country).filter(Boolean))].sort();
+  const geographies = [...new Set(securities.map(s => s.geography).filter(Boolean))].sort();
   const industries = [...new Set(securities.map(s => s.industry).filter(Boolean))].sort();
 
   const handleSort = (field) => {
@@ -97,7 +97,7 @@ export function SecurityTable() {
     let count = 2; // Symbol and Actions are always visible
     if (visibleColumns.chart) count++;
     if (visibleColumns.company) count++;
-    if (visibleColumns.country) count++;
+    if (visibleColumns.geography) count++;
     if (visibleColumns.exchange) count++;
     if (visibleColumns.sector) count++;
     if (visibleColumns.tags) count++;
@@ -139,10 +139,10 @@ export function SecurityTable() {
                 Company
               </Menu.Item>
               <Menu.Item
-                leftSection={visibleColumns.country ? <IconCheck size={14} /> : <span style={{ width: 14 }} />}
-                onClick={() => toggleColumnVisibility('country')}
+                leftSection={visibleColumns.geography ? <IconCheck size={14} /> : <span style={{ width: 14 }} />}
+                onClick={() => toggleColumnVisibility('geography')}
               >
-                Country
+                Geography
               </Menu.Item>
               <Menu.Item
                 leftSection={visibleColumns.exchange ? <IconCheck size={14} /> : <span style={{ width: 14 }} />}
@@ -210,8 +210,8 @@ export function SecurityTable() {
           size="xs"
         />
         <Select
-          placeholder="All Countries"
-          data={['all', ...countries]}
+          placeholder="All Geographies"
+          data={['all', ...geographies]}
           value={securityFilter}
           onChange={setSecurityFilter}
           size="xs"
@@ -282,14 +282,14 @@ export function SecurityTable() {
                   </Text>
                 </Table.Th>
               )}
-              {visibleColumns.country && (
+              {visibleColumns.geography && (
                 <Table.Th>
                   <Text
                     size="xs"
                     style={{ cursor: 'pointer' }}
-                    onClick={() => handleSort('country')}
+                    onClick={() => handleSort('geography')}
                   >
-                    Country {sortBy === 'country' && (sortDesc ? '▼' : '▲')}
+                    Geography {sortBy === 'geography' && (sortDesc ? '▼' : '▲')}
                   </Text>
                 </Table.Th>
               )}
@@ -413,10 +413,10 @@ export function SecurityTable() {
                       </Text>
                     </Table.Td>
                   )}
-                  {visibleColumns.country && (
+                  {visibleColumns.geography && (
                     <Table.Td>
                       <Text size="sm" c="dimmed" truncate style={{ maxWidth: '96px' }}>
-                        {security.country || '-'}
+                        {security.geography || '-'}
                       </Text>
                     </Table.Td>
                   )}

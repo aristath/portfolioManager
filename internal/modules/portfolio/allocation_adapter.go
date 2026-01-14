@@ -25,10 +25,10 @@ func (a *PortfolioSummaryAdapter) GetPortfolioSummary() (domain.PortfolioSummary
 
 	// Convert portfolio.PortfolioSummary to domain.PortfolioSummary
 	return domain.PortfolioSummary{
-		CountryAllocations:  convertAllocationsToDomain(portfolioSummary.CountryAllocations),
-		IndustryAllocations: convertAllocationsToDomain(portfolioSummary.IndustryAllocations),
-		TotalValue:          portfolioSummary.TotalValue,
-		CashBalance:         portfolioSummary.CashBalance,
+		GeographyAllocations: convertAllocationsToDomain(portfolioSummary.GeographyAllocations),
+		IndustryAllocations:  convertAllocationsToDomain(portfolioSummary.IndustryAllocations),
+		TotalValue:           portfolioSummary.TotalValue,
+		CashBalance:          portfolioSummary.CashBalance,
 	}, nil
 }
 

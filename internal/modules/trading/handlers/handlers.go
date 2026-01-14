@@ -289,11 +289,11 @@ func (h *TradingHandlers) HandleGetAllocation(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Build response matching Python structure
+	// Build response
 	response := map[string]interface{}{
 		"total_value":  summary.TotalValue,
 		"cash_balance": summary.CashBalance,
-		"country":      buildAllocationArray(summary.CountryAllocations),
+		"geography":    buildAllocationArray(summary.GeographyAllocations),
 		"industry":     buildAllocationArray(summary.IndustryAllocations),
 		"alerts":       buildAlertsArray(alerts),
 	}
@@ -371,10 +371,10 @@ func (h *TradingHandlers) HandleGetRecommendations(w http.ResponseWriter, r *htt
 // convertPortfolioSummary converts portfolio.PortfolioSummary to allocation.PortfolioSummary
 func convertPortfolioSummary(src portfolio.PortfolioSummary) allocation.PortfolioSummary {
 	return allocation.PortfolioSummary{
-		CountryAllocations:  convertAllocations(src.CountryAllocations),
-		IndustryAllocations: convertAllocations(src.IndustryAllocations),
-		TotalValue:          src.TotalValue,
-		CashBalance:         src.CashBalance,
+		GeographyAllocations: convertAllocations(src.GeographyAllocations),
+		IndustryAllocations:  convertAllocations(src.IndustryAllocations),
+		TotalValue:           src.TotalValue,
+		CashBalance:          src.CashBalance,
 	}
 }
 

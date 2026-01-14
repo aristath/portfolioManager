@@ -4,7 +4,7 @@ import { api } from '../api/client';
 export const usePortfolioStore = create((set, get) => ({
   // Portfolio data
   allocation: {
-    country: [],
+    geography: [],
     industry: [],
     total_value: 0,
     cash_balance: 0,
@@ -12,11 +12,11 @@ export const usePortfolioStore = create((set, get) => ({
   alerts: [],
   cashBreakdown: [],
 
-  // Countries and industries
-  countries: [],
-  countryTargets: {},
-  editingCountry: false,
-  activeCountries: [],
+  // Geographies and industries
+  geographies: [],
+  geographyTargets: {},
+  editingGeography: false,
+  activeGeographies: [],
 
   industries: [],
   industryTargets: {},
@@ -25,7 +25,7 @@ export const usePortfolioStore = create((set, get) => ({
 
   // Loading states
   loading: {
-    countrySave: false,
+    geographySave: false,
     industrySave: false,
   },
 
@@ -35,7 +35,7 @@ export const usePortfolioStore = create((set, get) => ({
       const data = await api.fetchAllocation();
       set({
         allocation: {
-          country: data.country || [],
+          geography: data.geography || [],
           industry: data.industry || [],
           total_value: data.total_value || 0,
           cash_balance: data.cash_balance || 0,
@@ -59,24 +59,24 @@ export const usePortfolioStore = create((set, get) => ({
   fetchTargets: async () => {
     try {
       const data = await api.fetchTargets();
-      const countries = Object.keys(data.country || {});
+      const geographies = Object.keys(data.geography || {});
       const industries = Object.keys(data.industry || {});
-      const countryTargets = {};
+      const geographyTargets = {};
       const industryTargets = {};
 
-      for (const [name, weight] of Object.entries(data.country || {})) {
-        countryTargets[name] = weight;
+      for (const [name, weight] of Object.entries(data.geography || {})) {
+        geographyTargets[name] = weight;
       }
       for (const [name, weight] of Object.entries(data.industry || {})) {
         industryTargets[name] = weight;
       }
 
       set({
-        countries,
-        countryTargets,
+        geographies,
+        geographyTargets,
         industries,
         industryTargets,
-        activeCountries: countries,
+        activeGeographies: geographies,
         activeIndustries: industries,
       });
     } catch (e) {
@@ -84,27 +84,27 @@ export const usePortfolioStore = create((set, get) => ({
     }
   },
 
-  startEditCountry: () => set({ editingCountry: true }),
-  cancelEditCountry: () => set({ editingCountry: false }),
-  adjustCountrySlider: (name, value) => {
-    const { countryTargets } = get();
-    set({ countryTargets: { ...countryTargets, [name]: value } });
+  startEditGeography: () => set({ editingGeography: true }),
+  cancelEditGeography: () => set({ editingGeography: false }),
+  adjustGeographySlider: (name, value) => {
+    const { geographyTargets } = get();
+    set({ geographyTargets: { ...geographyTargets, [name]: value } });
   },
-  saveCountryTargets: async () => {
-    set({ loading: { ...get().loading, countrySave: true } });
+  saveGeographyTargets: async () => {
+    set({ loading: { ...get().loading, geographySave: true } });
     try {
-      await api.saveCountryTargets(get().countryTargets);
+      await api.saveGeographyTargets(get().geographyTargets);
       await get().fetchTargets();
       await get().fetchAllocation();
-      set({ editingCountry: false });
+      set({ editingGeography: false });
       // Notification will be shown via appStore.showMessage if needed
     } catch (e) {
-      console.error('Failed to save country targets:', e);
+      console.error('Failed to save geography targets:', e);
       throw e; // Re-throw so components can handle it
     } finally {
       // Ensure loading flag is ALWAYS reset, even if state update fails
       try {
-        set({ loading: { ...get().loading, countrySave: false } });
+        set({ loading: { ...get().loading, geographySave: false } });
       } catch (finallyError) {
         console.error('Failed to reset loading state:', finallyError);
       }

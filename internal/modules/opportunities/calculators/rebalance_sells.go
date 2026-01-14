@@ -64,9 +64,9 @@ func (c *RebalanceSellsCalculator) Calculate(
 		return domain.CalculatorResult{PreFiltered: exclusions.Result()}, nil
 	}
 
-	// Check if we have country allocations and weights
-	if ctx.CountryAllocations == nil || ctx.CountryWeights == nil {
-		c.log.Debug().Msg("No country allocation data available")
+	// Check if we have geography allocations and weights
+	if ctx.GeographyAllocations == nil || ctx.GeographyWeights == nil {
+		c.log.Debug().Msg("No geography allocation data available")
 		return domain.CalculatorResult{PreFiltered: exclusions.Result()}, nil
 	}
 
@@ -79,28 +79,28 @@ func (c *RebalanceSellsCalculator) Calculate(
 		Float64("min_overweight_threshold", minOverweightThreshold).
 		Msg("Calculating rebalance sells")
 
-	// Identify overweight countries
-	overweightCountries := make(map[string]float64)
-	for country, currentAllocation := range ctx.CountryAllocations {
-		targetAllocation, ok := ctx.CountryWeights[country]
+	// Identify overweight geographies
+	overweightGeographies := make(map[string]float64)
+	for geo, currentAllocation := range ctx.GeographyAllocations {
+		targetAllocation, ok := ctx.GeographyWeights[geo]
 		if !ok {
 			targetAllocation = 0.0
 		}
 
 		overweight := currentAllocation - targetAllocation
 		if overweight > minOverweightThreshold {
-			overweightCountries[country] = overweight
+			overweightGeographies[geo] = overweight
 			c.log.Debug().
-				Str("country", country).
+				Str("geography", geo).
 				Float64("current", currentAllocation).
 				Float64("target", targetAllocation).
 				Float64("overweight", overweight).
-				Msg("Overweight country identified")
+				Msg("Overweight geography identified")
 		}
 	}
 
-	if len(overweightCountries) == 0 {
-		c.log.Debug().Msg("No overweight countries")
+	if len(overweightGeographies) == 0 {
+		c.log.Debug().Msg("No overweight geographies")
 		return domain.CalculatorResult{PreFiltered: exclusions.Result()}, nil
 	}
 
@@ -133,27 +133,27 @@ func (c *RebalanceSellsCalculator) Calculate(
 			continue
 		}
 
-		// Get country from embedded security metadata
-		country := position.Country
-		if country == "" {
-			exclusions.Add(isin, symbol, securityName, "no country assigned")
+		// Get geography from embedded security metadata
+		geography := position.Geography
+		if geography == "" {
+			exclusions.Add(isin, symbol, securityName, "no geography assigned")
 			continue
 		}
 
-		// Map country to group
-		group := country
-		if ctx.CountryToGroup != nil {
-			if mappedGroup, ok := ctx.CountryToGroup[country]; ok {
-				group = mappedGroup
-			} else {
-				group = "OTHER"
+		// Check if any of the position's geographies are overweight
+		geos := parseGeographies(geography)
+		var overweight float64
+		var matchedGeo string
+		for _, geo := range geos {
+			if ow, ok := overweightGeographies[geo]; ok {
+				if ow > overweight {
+					overweight = ow
+					matchedGeo = geo
+				}
 			}
 		}
-
-		// Check if this group is overweight
-		overweight, ok := overweightCountries[group]
-		if !ok {
-			exclusions.Add(isin, symbol, securityName, fmt.Sprintf("country group %s is not overweight", group))
+		if matchedGeo == "" {
+			exclusions.Add(isin, symbol, securityName, "geography not overweight")
 			continue
 		}
 
@@ -213,7 +213,7 @@ func (c *RebalanceSellsCalculator) Calculate(
 
 		// Build reason
 		reason := fmt.Sprintf("Rebalance: %s overweight by %.1f%%",
-			group, overweight*100)
+			matchedGeo, overweight*100)
 
 		// Build tags
 		tags := []string{"rebalance", "sell", "overweight"}
@@ -242,7 +242,7 @@ func (c *RebalanceSellsCalculator) Calculate(
 
 	c.log.Info().
 		Int("candidates", len(candidates)).
-		Int("overweight_countries", len(overweightCountries)).
+		Int("overweight_countries", len(overweightGeographies)).
 		Int("pre_filtered", len(exclusions.Result())).
 		Msg("Rebalance sell opportunities identified")
 

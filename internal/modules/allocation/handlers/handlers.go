@@ -6,20 +6,16 @@ import (
 	"fmt"
 	"math"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/aristath/sentinel/internal/events"
 	"github.com/aristath/sentinel/internal/modules/allocation"
-	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 )
 
 // Handler handles allocation HTTP requests
-// Faithful translation from Python: app/modules/allocation/api/allocation.py
 type Handler struct {
 	allocRepo                *allocation.Repository
-	groupingRepo             *allocation.GroupingRepository
 	alertService             *allocation.ConcentrationAlertService
 	portfolioSummaryProvider allocation.PortfolioSummaryProvider
 	eventManager             *events.Manager
@@ -29,7 +25,6 @@ type Handler struct {
 // NewHandler creates a new allocation handler
 func NewHandler(
 	allocRepo *allocation.Repository,
-	groupingRepo *allocation.GroupingRepository,
 	alertService *allocation.ConcentrationAlertService,
 	portfolioSummaryProvider allocation.PortfolioSummaryProvider,
 	eventManager *events.Manager,
@@ -37,7 +32,6 @@ func NewHandler(
 ) *Handler {
 	return &Handler{
 		allocRepo:                allocRepo,
-		groupingRepo:             groupingRepo,
 		alertService:             alertService,
 		portfolioSummaryProvider: portfolioSummaryProvider,
 		eventManager:             eventManager,
@@ -45,220 +39,43 @@ func NewHandler(
 	}
 }
 
-// HandleGetTargets returns allocation targets for country and industry groups
-// Returns all groups from grouping tables, with target_pct from allocation_targets if set, otherwise 0.0
+// HandleGetTargets returns allocation targets for geography and industry
 func (h *Handler) HandleGetTargets(w http.ResponseWriter, r *http.Request) {
-	// Get all groups from grouping tables
-	countryGroups, err := h.groupingRepo.GetCountryGroups()
-	if err != nil {
-		h.writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	industryGroups, err := h.groupingRepo.GetIndustryGroups()
-	if err != nil {
-		h.writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
 	// Get allocation targets (may be empty)
-	countryTargets, err := h.allocRepo.GetCountryGroupTargets()
+	geographyTargets, err := h.allocRepo.GetGeographyTargets()
 	if err != nil {
 		h.writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	industryTargets, err := h.allocRepo.GetIndustryGroupTargets()
-	if err != nil {
-		h.writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	// Merge: Use target from allocation_targets if exists, otherwise default to 0.0
-	mergedCountryTargets := make(map[string]float64)
-	for groupName := range countryGroups {
-		if targetPct, exists := countryTargets[groupName]; exists {
-			mergedCountryTargets[groupName] = targetPct
-		} else {
-			mergedCountryTargets[groupName] = 0.0
-		}
-	}
-
-	mergedIndustryTargets := make(map[string]float64)
-	for groupName := range industryGroups {
-		if targetPct, exists := industryTargets[groupName]; exists {
-			mergedIndustryTargets[groupName] = targetPct
-		} else {
-			mergedIndustryTargets[groupName] = 0.0
-		}
-	}
-
-	h.writeJSON(w, http.StatusOK, map[string]interface{}{
-		"country":  mergedCountryTargets,
-		"industry": mergedIndustryTargets,
-	})
-}
-
-// HandleGetCountryGroups returns all country groups
-// Faithful translation of Python: @router.get("/groups/country")
-func (h *Handler) HandleGetCountryGroups(w http.ResponseWriter, r *http.Request) {
-	groups, err := h.groupingRepo.GetCountryGroups()
+	industryTargets, err := h.allocRepo.GetIndustryTargets()
 	if err != nil {
 		h.writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	h.writeJSON(w, http.StatusOK, map[string]interface{}{
-		"groups": groups,
+		"geography": geographyTargets,
+		"industry":  industryTargets,
 	})
 }
 
-// HandleGetIndustryGroups returns all industry groups
-// Faithful translation of Python: @router.get("/groups/industry")
-func (h *Handler) HandleGetIndustryGroups(w http.ResponseWriter, r *http.Request) {
-	groups, err := h.groupingRepo.GetIndustryGroups()
+// HandleGetAvailableGeographies returns list of all available geographies from securities
+func (h *Handler) HandleGetAvailableGeographies(w http.ResponseWriter, r *http.Request) {
+	geographies, err := h.allocRepo.GetAvailableGeographies()
 	if err != nil {
 		h.writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	h.writeJSON(w, http.StatusOK, map[string]interface{}{
-		"groups": groups,
+		"geographies": geographies,
 	})
 }
 
-// HandleUpdateCountryGroup creates or updates a country group
-// Faithful translation of Python: @router.put("/groups/country")
-func (h *Handler) HandleUpdateCountryGroup(w http.ResponseWriter, r *http.Request) {
-	var req allocation.CountryGroup
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.writeError(w, http.StatusBadRequest, "Invalid request body")
-		return
-	}
-
-	// Validate group name
-	if strings.TrimSpace(req.GroupName) == "" {
-		h.writeError(w, http.StatusBadRequest, "Group name is required")
-		return
-	}
-
-	// Filter out empty strings and duplicates (same logic as Python)
-	seen := make(map[string]bool)
-	var countryNames []string
-	for _, country := range req.CountryNames {
-		trimmed := strings.TrimSpace(country)
-		if trimmed != "" && !seen[trimmed] {
-			seen[trimmed] = true
-			countryNames = append(countryNames, trimmed)
-		}
-	}
-
-	groupName := strings.TrimSpace(req.GroupName)
-	if err := h.groupingRepo.SetCountryGroup(groupName, countryNames); err != nil {
-		h.writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	h.writeJSON(w, http.StatusOK, map[string]interface{}{
-		"group_name":    groupName,
-		"country_names": countryNames,
-	})
-}
-
-// HandleUpdateIndustryGroup creates or updates an industry group
-// Faithful translation of Python: @router.put("/groups/industry")
-func (h *Handler) HandleUpdateIndustryGroup(w http.ResponseWriter, r *http.Request) {
-	var req allocation.IndustryGroup
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.writeError(w, http.StatusBadRequest, "Invalid request body")
-		return
-	}
-
-	// Validate group name
-	if strings.TrimSpace(req.GroupName) == "" {
-		h.writeError(w, http.StatusBadRequest, "Group name is required")
-		return
-	}
-
-	// Filter out empty strings and duplicates (same logic as Python)
-	seen := make(map[string]bool)
-	var industryNames []string
-	for _, industry := range req.IndustryNames {
-		trimmed := strings.TrimSpace(industry)
-		if trimmed != "" && !seen[trimmed] {
-			seen[trimmed] = true
-			industryNames = append(industryNames, trimmed)
-		}
-	}
-
-	groupName := strings.TrimSpace(req.GroupName)
-	if err := h.groupingRepo.SetIndustryGroup(groupName, industryNames); err != nil {
-		h.writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	h.writeJSON(w, http.StatusOK, map[string]interface{}{
-		"group_name":     groupName,
-		"industry_names": industryNames,
-	})
-}
-
-// HandleDeleteCountryGroup deletes a country group
-// Faithful translation of Python: @router.delete("/groups/country/{group_name}")
-func (h *Handler) HandleDeleteCountryGroup(w http.ResponseWriter, r *http.Request) {
-	groupName := chi.URLParam(r, "group_name")
-	if groupName == "" {
-		h.writeError(w, http.StatusBadRequest, "Group name is required")
-		return
-	}
-
-	if err := h.groupingRepo.DeleteCountryGroup(groupName); err != nil {
-		h.writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	h.writeJSON(w, http.StatusOK, map[string]interface{}{
-		"deleted": groupName,
-	})
-}
-
-// HandleDeleteIndustryGroup deletes an industry group
-// Faithful translation of Python: @router.delete("/groups/industry/{group_name}")
-func (h *Handler) HandleDeleteIndustryGroup(w http.ResponseWriter, r *http.Request) {
-	groupName := chi.URLParam(r, "group_name")
-	if groupName == "" {
-		h.writeError(w, http.StatusBadRequest, "Group name is required")
-		return
-	}
-
-	if err := h.groupingRepo.DeleteIndustryGroup(groupName); err != nil {
-		h.writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	h.writeJSON(w, http.StatusOK, map[string]interface{}{
-		"deleted": groupName,
-	})
-}
-
-// HandleGetAvailableCountries returns list of all available countries
-// Faithful translation of Python: @router.get("/groups/available/countries")
-func (h *Handler) HandleGetAvailableCountries(w http.ResponseWriter, r *http.Request) {
-	countries, err := h.groupingRepo.GetAvailableCountries()
-	if err != nil {
-		h.writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	h.writeJSON(w, http.StatusOK, map[string]interface{}{
-		"countries": countries,
-	})
-}
-
-// HandleGetAvailableIndustries returns list of all available industries
-// Faithful translation of Python: @router.get("/groups/available/industries")
+// HandleGetAvailableIndustries returns list of all available industries from securities
 func (h *Handler) HandleGetAvailableIndustries(w http.ResponseWriter, r *http.Request) {
-	industries, err := h.groupingRepo.GetAvailableIndustries()
+	industries, err := h.allocRepo.GetAvailableIndustries()
 	if err != nil {
 		h.writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -269,9 +86,8 @@ func (h *Handler) HandleGetAvailableIndustries(w http.ResponseWriter, r *http.Re
 	})
 }
 
-// HandleUpdateCountryGroupTargets updates country group targets
-// Faithful translation of Python: @router.put("/groups/targets/country")
-func (h *Handler) HandleUpdateCountryGroupTargets(w http.ResponseWriter, r *http.Request) {
+// HandleSetGeographyTargets updates geography allocation targets
+func (h *Handler) HandleSetGeographyTargets(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Targets map[string]float64 `json:"targets"`
 	}
@@ -282,65 +98,40 @@ func (h *Handler) HandleUpdateCountryGroupTargets(w http.ResponseWriter, r *http
 	}
 
 	if len(req.Targets) == 0 {
-		h.writeError(w, http.StatusBadRequest, "No weights provided")
+		h.writeError(w, http.StatusBadRequest, "No targets provided")
 		return
 	}
 
-	// Verify groups exist
-	countryGroups, err := h.groupingRepo.GetCountryGroups()
-	if err != nil {
-		h.writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	if len(countryGroups) == 0 {
-		h.writeError(w, http.StatusBadRequest, "No country groups defined. Please create groups first.")
-		return
-	}
-
-	// Store group targets directly (same logic as Python)
-	for groupName, groupWeight := range req.Targets {
-		if groupWeight < 0 || groupWeight > 1 {
-			h.writeError(w, http.StatusBadRequest, fmt.Sprintf("Weight for %s must be between 0 and 1", groupName))
-			return
-		}
-
-		target := allocation.AllocationTarget{
-			Type:      "country_group",
-			Name:      groupName,
-			TargetPct: groupWeight,
-		}
-
-		if err := h.allocRepo.Upsert(target); err != nil {
-			h.writeError(w, http.StatusInternalServerError, err.Error())
+	// Validate weights
+	for name, weight := range req.Targets {
+		if weight < 0 || weight > 1 {
+			h.writeError(w, http.StatusBadRequest, fmt.Sprintf("Weight for %s must be between 0 and 1", name))
 			return
 		}
 	}
 
-	// Return updated group targets
-	resultGroups, err := h.allocRepo.GetCountryGroupTargets()
-	if err != nil {
+	// Store targets
+	if err := h.allocRepo.SetGeographyTargets(req.Targets); err != nil {
 		h.writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	// Only return groups with non-zero targets (same as Python)
-	filteredGroups := make(map[string]float64)
-	for k, v := range resultGroups {
-		if v != 0 {
-			filteredGroups[k] = v
-		}
+	// Emit ALLOCATION_TARGETS_CHANGED event
+	if h.eventManager != nil {
+		h.eventManager.Emit(events.AllocationTargetsChanged, "allocation", map[string]interface{}{
+			"type":  "geography",
+			"count": len(req.Targets),
+		})
 	}
 
 	h.writeJSON(w, http.StatusOK, map[string]interface{}{
-		"weights": filteredGroups,
-		"count":   len(filteredGroups),
+		"weights": req.Targets,
+		"count":   len(req.Targets),
 	})
 }
 
-// HandleUpdateIndustryGroupTargets updates industry group targets
-// Faithful translation of Python: @router.put("/groups/targets/industry")
-func (h *Handler) HandleUpdateIndustryGroupTargets(w http.ResponseWriter, r *http.Request) {
+// HandleSetIndustryTargets updates industry allocation targets
+func (h *Handler) HandleSetIndustryTargets(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Targets map[string]float64 `json:"targets"`
 	}
@@ -351,127 +142,39 @@ func (h *Handler) HandleUpdateIndustryGroupTargets(w http.ResponseWriter, r *htt
 	}
 
 	if len(req.Targets) == 0 {
-		h.writeError(w, http.StatusBadRequest, "No weights provided")
+		h.writeError(w, http.StatusBadRequest, "No targets provided")
 		return
 	}
 
-	// Verify groups exist
-	industryGroups, err := h.groupingRepo.GetIndustryGroups()
-	if err != nil {
-		h.writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	if len(industryGroups) == 0 {
-		h.writeError(w, http.StatusBadRequest, "No industry groups defined. Please create groups first.")
-		return
-	}
-
-	// Store group targets directly (same logic as Python)
-	for groupName, groupWeight := range req.Targets {
-		if groupWeight < 0 || groupWeight > 1 {
-			h.writeError(w, http.StatusBadRequest, fmt.Sprintf("Weight for %s must be between 0 and 1", groupName))
-			return
-		}
-
-		target := allocation.AllocationTarget{
-			Type:      "industry_group",
-			Name:      groupName,
-			TargetPct: groupWeight,
-		}
-
-		if err := h.allocRepo.Upsert(target); err != nil {
-			h.writeError(w, http.StatusInternalServerError, err.Error())
+	// Validate weights
+	for name, weight := range req.Targets {
+		if weight < 0 || weight > 1 {
+			h.writeError(w, http.StatusBadRequest, fmt.Sprintf("Weight for %s must be between 0 and 1", name))
 			return
 		}
 	}
 
-	// Return updated group targets
-	resultGroups, err := h.allocRepo.GetIndustryGroupTargets()
-	if err != nil {
+	// Store targets
+	if err := h.allocRepo.SetIndustryTargets(req.Targets); err != nil {
 		h.writeError(w, http.StatusInternalServerError, err.Error())
 		return
-	}
-
-	// Only return groups with non-zero targets (same as Python)
-	filteredGroups := make(map[string]float64)
-	for k, v := range resultGroups {
-		if v != 0 {
-			filteredGroups[k] = v
-		}
 	}
 
 	// Emit ALLOCATION_TARGETS_CHANGED event
 	if h.eventManager != nil {
 		h.eventManager.Emit(events.AllocationTargetsChanged, "allocation", map[string]interface{}{
 			"type":  "industry",
-			"count": len(filteredGroups),
+			"count": len(req.Targets),
 		})
 	}
 
 	h.writeJSON(w, http.StatusOK, map[string]interface{}{
-		"weights": filteredGroups,
-		"count":   len(filteredGroups),
+		"weights": req.Targets,
+		"count":   len(req.Targets),
 	})
 }
 
-// HandleGetGroupAllocation returns current allocation aggregated by groups
-// Faithful translation of Python: @router.get("/groups/allocation")
-func (h *Handler) HandleGetGroupAllocation(w http.ResponseWriter, r *http.Request) {
-	// Get portfolio summary
-	summary, err := h.portfolioSummaryProvider.GetPortfolioSummary()
-	if err != nil {
-		h.writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	// Get group mappings
-	countryGroups, err := h.groupingRepo.GetCountryGroups()
-	if err != nil {
-		h.writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	industryGroups, err := h.groupingRepo.GetIndustryGroups()
-	if err != nil {
-		h.writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	// Get saved group targets
-	countryTargets, err := h.allocRepo.GetCountryGroupTargets()
-	if err != nil {
-		h.writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	industryTargets, err := h.allocRepo.GetIndustryGroupTargets()
-	if err != nil {
-		h.writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	// Calculate group allocations
-	countryGroupAllocs, industryGroupAllocs := allocation.CalculateGroupAllocation(
-		summary,
-		countryGroups,
-		industryGroups,
-		countryTargets,
-		industryTargets,
-	)
-
-	response := map[string]interface{}{
-		"total_value":  summary.TotalValue,
-		"cash_balance": summary.CashBalance,
-		"country":      countryGroupAllocs,
-		"industry":     industryGroupAllocs,
-	}
-
-	h.writeJSON(w, http.StatusOK, response)
-}
-
 // HandleGetCurrentAllocation returns current allocation vs targets
-// Faithful translation of Python: @router.get("/current")
 func (h *Handler) HandleGetCurrentAllocation(w http.ResponseWriter, r *http.Request) {
 	// Get portfolio summary
 	summary, err := h.portfolioSummaryProvider.GetPortfolioSummary()
@@ -487,11 +190,11 @@ func (h *Handler) HandleGetCurrentAllocation(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Build response matching Python structure
+	// Build response
 	response := map[string]interface{}{
 		"total_value":  summary.TotalValue,
 		"cash_balance": summary.CashBalance,
-		"country":      buildAllocationArray(summary.CountryAllocations),
+		"geography":    buildAllocationArray(summary.GeographyAllocations),
 		"industry":     buildAllocationArray(summary.IndustryAllocations),
 		"alerts":       buildAlertsArray(alerts),
 	}
@@ -500,7 +203,6 @@ func (h *Handler) HandleGetCurrentAllocation(w http.ResponseWriter, r *http.Requ
 }
 
 // HandleGetDeviations returns allocation deviation scores
-// Faithful translation of Python: @router.get("/deviations")
 func (h *Handler) HandleGetDeviations(w http.ResponseWriter, r *http.Request) {
 	// Get portfolio summary
 	summary, err := h.portfolioSummaryProvider.GetPortfolioSummary()
@@ -511,8 +213,8 @@ func (h *Handler) HandleGetDeviations(w http.ResponseWriter, r *http.Request) {
 
 	// Calculate deviations
 	response := map[string]interface{}{
-		"country":  calculateDeviationMap(summary.CountryAllocations),
-		"industry": calculateDeviationMap(summary.IndustryAllocations),
+		"geography": calculateDeviationMap(summary.GeographyAllocations),
+		"industry":  calculateDeviationMap(summary.IndustryAllocations),
 	}
 
 	h.writeJSON(w, http.StatusOK, response)
@@ -583,10 +285,10 @@ func (h *Handler) HandleGetAllocationVsTargets(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Combine country and industry allocations
-	allocations := append(summary.CountryAllocations, summary.IndustryAllocations...)
+	// Combine geography and industry allocations
+	allocations := append(summary.GeographyAllocations, summary.IndustryAllocations...)
 
-	// Build detailed comparison - country allocations
+	// Build detailed comparison - geography allocations first, then industry
 	comparison := make([]map[string]interface{}, 0)
 	var totalDeviation float64
 	var overweightCount int
@@ -606,8 +308,8 @@ func (h *Handler) HandleGetAllocationVsTargets(w http.ResponseWriter, r *http.Re
 		}
 
 		// Determine type based on which list this came from
-		allocType := "country"
-		if len(summary.CountryAllocations) > 0 && len(comparison) >= len(summary.CountryAllocations) {
+		allocType := "geography"
+		if len(summary.GeographyAllocations) > 0 && len(comparison) >= len(summary.GeographyAllocations) {
 			allocType = "industry"
 		}
 
@@ -648,8 +350,8 @@ func (h *Handler) HandleGetRebalanceNeeds(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Combine country and industry allocations
-	allocations := append(summary.CountryAllocations, summary.IndustryAllocations...)
+	// Combine geography and industry allocations
+	allocations := append(summary.GeographyAllocations, summary.IndustryAllocations...)
 
 	// Calculate rebalancing needs
 	rebalanceNeeds := make([]map[string]interface{}, 0)
@@ -673,8 +375,8 @@ func (h *Handler) HandleGetRebalanceNeeds(w http.ResponseWriter, r *http.Request
 			totalRebalanceValue += abs(valueChange)
 
 			// Determine type based on position in combined list
-			allocType := "country"
-			if len(summary.CountryAllocations) > 0 && processed >= len(summary.CountryAllocations) {
+			allocType := "geography"
+			if len(summary.GeographyAllocations) > 0 && processed >= len(summary.GeographyAllocations) {
 				allocType = "industry"
 			}
 
@@ -720,7 +422,7 @@ func (h *Handler) HandleGetGroupContribution(w http.ResponseWriter, r *http.Requ
 	geographicContribution := make(map[string]float64)
 	industryContribution := make(map[string]float64)
 
-	for _, alloc := range summary.CountryAllocations {
+	for _, alloc := range summary.GeographyAllocations {
 		geographicContribution[alloc.Name] = alloc.CurrentPct
 	}
 	for _, alloc := range summary.IndustryAllocations {

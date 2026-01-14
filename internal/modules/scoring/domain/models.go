@@ -64,18 +64,16 @@ type SellScore struct {
 // PortfolioContext represents portfolio context for allocation fit calculations
 type PortfolioContext struct {
 	// Core allocation data
-	CountryWeights     map[string]float64 `json:"country_weights"`
-	IndustryWeights    map[string]float64 `json:"industry_weights"`
-	Positions          map[string]float64 `json:"positions"`
-	SecurityCountries  map[string]string  `json:"security_countries"`
-	SecurityIndustries map[string]string  `json:"security_industries"`
-	SecurityScores     map[string]float64 `json:"security_scores"`
-	SecurityDividends  map[string]float64 `json:"security_dividends"`
-	CountryToGroup     map[string]string  `json:"country_to_group"`
-	IndustryToGroup    map[string]string  `json:"industry_to_group"`
-	PositionAvgPrices  map[string]float64 `json:"position_avg_prices"`
-	CurrentPrices      map[string]float64 `json:"current_prices"`
-	TotalValue         float64            `json:"total_value"`
+	GeographyWeights    map[string]float64 `json:"geography_weights"`
+	IndustryWeights     map[string]float64 `json:"industry_weights"`
+	Positions           map[string]float64 `json:"positions"`
+	SecurityGeographies map[string]string  `json:"security_geographies"` // ISIN -> geography (comma-separated for multiple)
+	SecurityIndustries  map[string]string  `json:"security_industries"`  // ISIN -> industry (comma-separated for multiple)
+	SecurityScores      map[string]float64 `json:"security_scores"`
+	SecurityDividends   map[string]float64 `json:"security_dividends"`
+	PositionAvgPrices   map[string]float64 `json:"position_avg_prices"`
+	CurrentPrices       map[string]float64 `json:"current_prices"`
+	TotalValue          float64            `json:"total_value"`
 
 	// Extended metrics for comprehensive evaluation
 	SecurityCAGRs       map[string]float64 `json:"security_cagrs,omitempty"`        // symbol -> historical CAGR

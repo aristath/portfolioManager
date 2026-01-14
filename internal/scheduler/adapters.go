@@ -76,23 +76,6 @@ func (a *AllocationRepositoryAdapter) GetAll() (map[string]float64, error) {
 	return a.repo.GetAll()
 }
 
-// GroupingRepositoryAdapter adapts *allocation.GroupingRepository to GroupingRepositoryInterface
-type GroupingRepositoryAdapter struct {
-	repo *allocation.GroupingRepository
-}
-
-func NewGroupingRepositoryAdapter(repo *allocation.GroupingRepository) *GroupingRepositoryAdapter {
-	return &GroupingRepositoryAdapter{repo: repo}
-}
-
-func (a *GroupingRepositoryAdapter) GetCountryGroups() (map[string][]string, error) {
-	return a.repo.GetCountryGroups()
-}
-
-func (a *GroupingRepositoryAdapter) GetIndustryGroups() (map[string][]string, error) {
-	return a.repo.GetIndustryGroups()
-}
-
 // PriceClientAdapter adapts broker client to PriceClientInterface
 // Uses broker API for batch price quotes
 type PriceClientAdapter struct {

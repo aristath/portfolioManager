@@ -98,10 +98,10 @@ type ConcentrationAlertProvider interface {
 // Note: This is different from portfolio.PortfolioSummary (which uses AllocationStatus)
 // This version uses PortfolioAllocation for compatibility with allocation package
 type PortfolioSummary struct {
-	CountryAllocations  []PortfolioAllocation
-	IndustryAllocations []PortfolioAllocation
-	TotalValue          float64
-	CashBalance         float64
+	GeographyAllocations []PortfolioAllocation
+	IndustryAllocations  []PortfolioAllocation
+	TotalValue           float64
+	CashBalance          float64
 }
 
 // PortfolioAllocation represents allocation info for display

@@ -42,9 +42,9 @@ func SimulateSequence(
 		}
 
 		security, exists := securitiesByISIN[isin] // ISIN key ✅
-		var country, industry *string
+		var geography, industry *string
 		if exists {
-			country = security.Country
+			geography = security.Geography
 			industry = security.Industry
 		}
 
@@ -65,7 +65,7 @@ func SimulateSequence(
 		// For 5-action sequence: 15 map copies → 8 copies (~50% reduction).
 		newPositions := copyMap(currentContext.Positions)
 		// Start with references - will copy only if BUY action modifies them
-		newGeographies := currentContext.SecurityCountries
+		newGeographies := currentContext.SecurityGeographies
 		newIndustries := currentContext.SecurityIndustries
 		geographiesCopied := false
 		industriesCopied := false
@@ -106,7 +106,7 @@ func SimulateSequence(
 
 			// Copy-on-write: Create copies only for maps we're about to modify.
 			// This avoids unnecessary copies when only one type of metadata exists.
-			if country != nil {
+			if geography != nil {
 				if !geographiesCopied {
 					if newGeographies == nil {
 						newGeographies = make(map[string]string, 1)
@@ -115,7 +115,7 @@ func SimulateSequence(
 					}
 					geographiesCopied = true
 				}
-				newGeographies[isin] = *country // ISIN key ✅
+				newGeographies[isin] = *geography // ISIN key ✅
 			}
 			if industry != nil {
 				if !industriesCopied {
@@ -135,16 +135,14 @@ func SimulateSequence(
 
 		// Create new context with updated positions
 		currentContext = PortfolioContext{
-			CountryWeights:         currentContext.CountryWeights,
+			GeographyWeights:       currentContext.GeographyWeights,
 			IndustryWeights:        currentContext.IndustryWeights,
 			Positions:              newPositions,
 			TotalValue:             currentContext.TotalValue,
-			SecurityCountries:      newGeographies,
+			SecurityGeographies:    newGeographies,
 			SecurityIndustries:     newIndustries,
 			SecurityScores:         currentContext.SecurityScores,
 			SecurityDividends:      currentContext.SecurityDividends,
-			CountryToGroup:         currentContext.CountryToGroup,
-			IndustryToGroup:        currentContext.IndustryToGroup,
 			PositionAvgPrices:      currentContext.PositionAvgPrices,
 			CurrentPrices:          currentContext.CurrentPrices,
 			OptimizerTargetWeights: currentContext.OptimizerTargetWeights, // Preserve optimizer targets

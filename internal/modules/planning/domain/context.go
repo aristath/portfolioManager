@@ -23,11 +23,10 @@ type OpportunityContext struct {
 	StocksByISIN  map[string]domain.Security `json:"stocks_by_isin"` // Key: ISIN (primary lookup)
 
 	// Optional enrichment data
-	SecurityScores     map[string]float64 `json:"security_scores,omitempty"`     // Final scores by ISIN (internal identifier)
-	CountryAllocations map[string]float64 `json:"country_allocations,omitempty"` // Current allocations
-	CountryToGroup     map[string]string  `json:"country_to_group,omitempty"`    // Country groupings
-	CountryWeights     map[string]float64 `json:"country_weights,omitempty"`     // Target weights by country
-	TargetWeights      map[string]float64 `json:"target_weights,omitempty"`      // Optimizer target weights
+	SecurityScores       map[string]float64 `json:"security_scores,omitempty"`       // Final scores by ISIN (internal identifier)
+	GeographyAllocations map[string]float64 `json:"geography_allocations,omitempty"` // Current allocations by geography
+	GeographyWeights     map[string]float64 `json:"geography_weights,omitempty"`     // Target weights by geography
+	TargetWeights        map[string]float64 `json:"target_weights,omitempty"`        // Optimizer target weights
 
 	// Target return filtering data (for flexible penalty system)
 	CAGRs                    map[string]float64 `json:"cagrs,omitempty"`                       // CAGR by ISIN (for target return filtering)

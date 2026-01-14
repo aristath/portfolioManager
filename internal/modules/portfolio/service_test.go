@@ -716,9 +716,9 @@ func TestGetPortfolioSummary_Success(t *testing.T) {
 
 	// Setup test data
 	targets := map[string]float64{
-		"country:USA":            0.60,
-		"country:Germany":        0.30,
-		"country:Japan":          0.10,
+		"geography:USA":          0.60,
+		"geography:Germany":      0.30,
+		"geography:Japan":        0.10,
 		"industry:Technology":    0.40,
 		"industry:Finance":       0.30,
 		"industry:Healthcare":    0.20,
@@ -732,7 +732,7 @@ func TestGetPortfolioSummary_Success(t *testing.T) {
 			AvgPrice:       150.0,
 			CurrentPrice:   160.0,
 			MarketValueEUR: 1600.0,
-			Country:        "USA",
+			Geography:      "USA",
 			Industry:       "Technology",
 		},
 		{
@@ -741,7 +741,7 @@ func TestGetPortfolioSummary_Success(t *testing.T) {
 			AvgPrice:       100.0,
 			CurrentPrice:   110.0,
 			MarketValueEUR: 2200.0,
-			Country:        "Germany",
+			Geography:      "Germany",
 			Industry:       "Technology",
 		},
 		{
@@ -750,7 +750,7 @@ func TestGetPortfolioSummary_Success(t *testing.T) {
 			AvgPrice:       140.0,
 			CurrentPrice:   150.0,
 			MarketValueEUR: 750.0,
-			Country:        "USA",
+			Geography:      "USA",
 			Industry:       "Finance",
 		},
 	}
@@ -769,11 +769,11 @@ func TestGetPortfolioSummary_Success(t *testing.T) {
 	}
 
 	// Test aggregatePositionValues directly (doesn't need DB)
-	countryValues, industryValues, totalValue := service.aggregatePositionValues(positions)
+	geographyValues, industryValues, totalValue := service.aggregatePositionValues(positions)
 
 	// Verify aggregations
-	assert.Equal(t, 2350.0, countryValues["USA"])         // AAPL (1600) + JPM (750)
-	assert.Equal(t, 2200.0, countryValues["Germany"])     // SAP (2200)
+	assert.Equal(t, 2350.0, geographyValues["USA"])       // AAPL (1600) + JPM (750)
+	assert.Equal(t, 2200.0, geographyValues["Germany"])   // SAP (2200)
 	assert.Equal(t, 3800.0, industryValues["Technology"]) // AAPL (1600) + SAP (2200)
 	assert.Equal(t, 750.0, industryValues["Finance"])     // JPM (750)
 	assert.Equal(t, 4550.0, totalValue)
@@ -790,14 +790,14 @@ func TestAggregatePositionValues_MultipleIndustries(t *testing.T) {
 			Quantity:       10,
 			CurrentPrice:   100.0,
 			MarketValueEUR: 1000.0,
-			Country:        "USA",
+			Geography:      "USA",
 			Industry:       "Technology, Manufacturing", // Multiple industries
 		},
 	}
 
-	countryValues, industryValues, totalValue := service.aggregatePositionValues(positions)
+	geographyValues, industryValues, totalValue := service.aggregatePositionValues(positions)
 
-	assert.Equal(t, 1000.0, countryValues["USA"])
+	assert.Equal(t, 1000.0, geographyValues["USA"])
 	assert.Equal(t, 500.0, industryValues["Technology"])    // Split 50/50
 	assert.Equal(t, 500.0, industryValues["Manufacturing"]) // Split 50/50
 	assert.Equal(t, 1000.0, totalValue)
@@ -814,14 +814,14 @@ func TestAggregatePositionValues_EmptyIndustry(t *testing.T) {
 			Quantity:       10,
 			CurrentPrice:   50.0,
 			MarketValueEUR: 500.0,
-			Country:        "USA",
+			Geography:      "USA",
 			Industry:       "", // Empty industry
 		},
 	}
 
-	countryValues, industryValues, totalValue := service.aggregatePositionValues(positions)
+	geographyValues, industryValues, totalValue := service.aggregatePositionValues(positions)
 
-	assert.Equal(t, 500.0, countryValues["USA"])
+	assert.Equal(t, 500.0, geographyValues["USA"])
 	assert.Equal(t, 0, len(industryValues)) // No industries
 	assert.Equal(t, 500.0, totalValue)
 }
@@ -838,7 +838,7 @@ func TestAggregatePositionValues_ZeroMarketValue(t *testing.T) {
 			AvgPrice:       50.0,
 			CurrentPrice:   60.0,
 			MarketValueEUR: 0, // Zero, should fallback to qty * current_price
-			Country:        "USA",
+			Geography:      "USA",
 			Industry:       "Technology",
 		},
 	}
@@ -861,7 +861,7 @@ func TestAggregatePositionValues_ZeroPrices(t *testing.T) {
 			AvgPrice:       50.0,
 			CurrentPrice:   0, // Zero current price, should use avg_price
 			MarketValueEUR: 0,
-			Country:        "USA",
+			Geography:      "USA",
 			Industry:       "Technology",
 		},
 	}
@@ -872,18 +872,18 @@ func TestAggregatePositionValues_ZeroPrices(t *testing.T) {
 	assert.Equal(t, 500.0, totalValue)
 }
 
-// TestBuildCountryAllocations tests country allocation calculation
-func TestBuildCountryAllocations(t *testing.T) {
+// TestBuildGeographyAllocations tests geography allocation calculation
+func TestBuildGeographyAllocations(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 	service := &PortfolioService{log: log}
 
 	targets := map[string]float64{
-		"country:USA":     0.60,
-		"country:Germany": 0.30,
-		"country:Japan":   0.10,
+		"geography:USA":     0.60,
+		"geography:Germany": 0.30,
+		"geography:Japan":   0.10,
 	}
 
-	countryValues := map[string]float64{
+	geographyValues := map[string]float64{
 		"USA":     7000.0,
 		"Germany": 2000.0,
 		"Japan":   1000.0,
@@ -891,14 +891,14 @@ func TestBuildCountryAllocations(t *testing.T) {
 
 	totalValue := 10000.0
 
-	allStockCountries := map[string]bool{
+	allStockGeographies := map[string]bool{
 		"USA":     true,
 		"Germany": true,
 		"Japan":   true,
 		"France":  true, // Has no current value but has stocks
 	}
 
-	allocations := service.buildCountryAllocations(targets, countryValues, totalValue, allStockCountries)
+	allocations := service.buildGeographyAllocations(targets, geographyValues, totalValue, allStockGeographies)
 
 	// Should have 4 allocations (USA, Germany, Japan, France)
 	assert.Equal(t, 4, len(allocations))
@@ -912,7 +912,7 @@ func TestBuildCountryAllocations(t *testing.T) {
 		}
 	}
 
-	assert.Equal(t, "country", usaAlloc.Category)
+	assert.Equal(t, "geography", usaAlloc.Category)
 	assert.Equal(t, "USA", usaAlloc.Name)
 	assert.Equal(t, 0.60, usaAlloc.TargetPct)
 	assert.Equal(t, 0.70, usaAlloc.CurrentPct) // 7000/10000 = 0.70
@@ -991,20 +991,20 @@ func TestBuildAllocations_ZeroTotalValue(t *testing.T) {
 	service := &PortfolioService{log: log}
 
 	targets := map[string]float64{
-		"country:USA": 0.60,
+		"geography:USA": 0.60,
 	}
 
-	countryValues := map[string]float64{
+	geographyValues := map[string]float64{
 		"USA": 0.0,
 	}
 
 	totalValue := 0.0
 
-	allStockCountries := map[string]bool{
+	allStockGeographies := map[string]bool{
 		"USA": true,
 	}
 
-	allocations := service.buildCountryAllocations(targets, countryValues, totalValue, allStockCountries)
+	allocations := service.buildGeographyAllocations(targets, geographyValues, totalValue, allStockGeographies)
 
 	assert.Equal(t, 1, len(allocations))
 	assert.Equal(t, 0.0, allocations[0].CurrentPct) // Should be 0, not NaN or error
@@ -1219,7 +1219,7 @@ func TestGetPortfolioSummary_PositionError(t *testing.T) {
 	mockAllocRepo := new(MockAllocationTargetProvider)
 	mockPositionRepo := new(MockPositionRepository)
 
-	targets := map[string]float64{"country:USA": 0.60}
+	targets := map[string]float64{"geography:USA": 0.60}
 
 	mockAllocRepo.On("GetAll").Return(targets, nil)
 	mockPositionRepo.On("GetWithSecurityInfo").Return(nil, errors.New("database error"))

@@ -264,7 +264,7 @@ func TestNewMockPortfolioSummaryProvider(t *testing.T) {
 	summary, err := mock.GetPortfolioSummary()
 	require.NoError(t, err)
 	assert.Equal(t, 0.0, summary.TotalValue)
-	assert.Equal(t, 0, len(summary.CountryAllocations))
+	assert.Equal(t, 0, len(summary.GeographyAllocations))
 }
 
 // TestNewMockPortfolioSummaryProvider_WithSummary tests mock with configured summary
@@ -273,7 +273,7 @@ func TestNewMockPortfolioSummaryProvider_WithSummary(t *testing.T) {
 	testSummary := domain.PortfolioSummary{
 		TotalValue:  10000.0,
 		CashBalance: 1000.0,
-		CountryAllocations: []domain.PortfolioAllocation{
+		GeographyAllocations: []domain.PortfolioAllocation{
 			{Name: "EU", CurrentPct: 0.40},
 			{Name: "US", CurrentPct: 0.60},
 		},
@@ -284,7 +284,7 @@ func TestNewMockPortfolioSummaryProvider_WithSummary(t *testing.T) {
 	summary, err := mock.GetPortfolioSummary()
 	require.NoError(t, err)
 	assert.Equal(t, 10000.0, summary.TotalValue)
-	assert.Equal(t, 2, len(summary.CountryAllocations))
+	assert.Equal(t, 2, len(summary.GeographyAllocations))
 }
 
 // TestNewMockPlannerRepository tests that NewMockPlannerRepository creates a valid mock

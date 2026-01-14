@@ -77,7 +77,7 @@ func (h *Handler) HandleGetPortfolio(w http.ResponseWriter, r *http.Request) {
 			"last_updated":     lastUpdatedStr,
 			"stock_name":       pos.StockName,
 			"industry":         pos.Industry,
-			"country":          pos.Country,
+			"geography":        pos.Geography,
 			"fullExchangeName": pos.FullExchangeName,
 		})
 	}
@@ -105,20 +105,22 @@ func (h *Handler) HandleGetSummary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Calculate country percentages (hardcoded for EU, ASIA, US like Python)
-	countryDict := make(map[string]float64)
-	for _, alloc := range summary.CountryAllocations {
-		countryDict[alloc.Name] = alloc.CurrentPct
+	// Calculate geography percentages
+	geographyDict := make(map[string]float64)
+	for _, alloc := range summary.GeographyAllocations {
+		geographyDict[alloc.Name] = alloc.CurrentPct
+	}
+
+	// Build geography allocations response dynamically
+	geographyAllocations := make(map[string]interface{})
+	for name, pct := range geographyDict {
+		geographyAllocations[name] = pct * 100
 	}
 
 	h.writeJSON(w, http.StatusOK, map[string]interface{}{
 		"total_value":  summary.TotalValue,
 		"cash_balance": summary.CashBalance,
-		"allocations": map[string]interface{}{
-			"EU":   countryDict["EU"] * 100,
-			"ASIA": countryDict["ASIA"] * 100,
-			"US":   countryDict["US"] * 100,
-		},
+		"allocations":  geographyAllocations,
 	})
 }
 
@@ -463,8 +465,8 @@ func (h *Handler) HandleGetDiversification(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Calculate diversification by country and industry
-	countryWeights := make(map[string]float64)
+	// Calculate diversification by geography and industry
+	geographyWeights := make(map[string]float64)
 	industryWeights := make(map[string]float64)
 	var totalValue float64
 
@@ -475,8 +477,8 @@ func (h *Handler) HandleGetDiversification(w http.ResponseWriter, r *http.Reques
 	for _, pos := range positions {
 		weight := pos.MarketValueEUR / totalValue
 
-		if pos.Country != "" {
-			countryWeights[pos.Country] += weight
+		if pos.Geography != "" {
+			geographyWeights[pos.Geography] += weight
 		}
 		if pos.Industry != "" {
 			industryWeights[pos.Industry] += weight
@@ -484,9 +486,9 @@ func (h *Handler) HandleGetDiversification(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Calculate Herfindahl-Hirschman Index for each dimension
-	var countryHHI float64
-	for _, weight := range countryWeights {
-		countryHHI += weight * weight
+	var geographyHHI float64
+	for _, weight := range geographyWeights {
+		geographyHHI += weight * weight
 	}
 
 	var industryHHI float64
@@ -497,9 +499,9 @@ func (h *Handler) HandleGetDiversification(w http.ResponseWriter, r *http.Reques
 	response := map[string]interface{}{
 		"data": map[string]interface{}{
 			"geographic": map[string]interface{}{
-				"num_countries": len(countryWeights),
-				"hhi":           countryHHI,
-				"weights":       countryWeights,
+				"num_geographies": len(geographyWeights),
+				"hhi":             geographyHHI,
+				"weights":         geographyWeights,
 			},
 			"industry": map[string]interface{}{
 				"num_industries": len(industryWeights),
@@ -527,7 +529,7 @@ func (h *Handler) HandleGetUnrealizedPnLBreakdown(w http.ResponseWriter, r *http
 
 	// Calculate P&L by security
 	securityPnL := make([]map[string]interface{}, 0, len(positions))
-	countryPnL := make(map[string]float64)
+	geographyPnL := make(map[string]float64)
 	industryPnL := make(map[string]float64)
 	var totalPnL float64
 
@@ -543,16 +545,16 @@ func (h *Handler) HandleGetUnrealizedPnLBreakdown(w http.ResponseWriter, r *http
 		totalPnL += pnl
 
 		securityPnL = append(securityPnL, map[string]interface{}{
-			"symbol":   pos.Symbol,
-			"name":     pos.StockName,
-			"pnl":      pnl,
-			"pnl_pct":  pnlPct,
-			"country":  pos.Country,
-			"industry": pos.Industry,
+			"symbol":    pos.Symbol,
+			"name":      pos.StockName,
+			"pnl":       pnl,
+			"pnl_pct":   pnlPct,
+			"geography": pos.Geography,
+			"industry":  pos.Industry,
 		})
 
-		if pos.Country != "" {
-			countryPnL[pos.Country] += pnl
+		if pos.Geography != "" {
+			geographyPnL[pos.Geography] += pnl
 		}
 		if pos.Industry != "" {
 			industryPnL[pos.Industry] += pnl
@@ -561,10 +563,10 @@ func (h *Handler) HandleGetUnrealizedPnLBreakdown(w http.ResponseWriter, r *http
 
 	response := map[string]interface{}{
 		"data": map[string]interface{}{
-			"total_pnl":   totalPnL,
-			"by_security": securityPnL,
-			"by_country":  countryPnL,
-			"by_industry": industryPnL,
+			"total_pnl":    totalPnL,
+			"by_security":  securityPnL,
+			"by_geography": geographyPnL,
+			"by_industry":  industryPnL,
 		},
 		"metadata": map[string]interface{}{
 			"timestamp": time.Now().Format(time.RFC3339),

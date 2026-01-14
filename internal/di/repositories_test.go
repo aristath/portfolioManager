@@ -35,7 +35,6 @@ func TestInitializeRepositories(t *testing.T) {
 	assert.NotNil(t, container.CashFlowsRepo)
 	assert.NotNil(t, container.RecommendationRepo)
 	assert.NotNil(t, container.PlannerConfigRepo)
-	assert.NotNil(t, container.GroupingRepo)
 	assert.NotNil(t, container.HistoryDBClient)
 
 	// Cleanup

@@ -165,10 +165,10 @@ func (h *Handler) HandleRun(w http.ResponseWriter, r *http.Request) {
 	portfolioValue += cashBalance
 
 	// 7. Get allocation targets
-	countryTargets, err := h.getCountryTargets()
+	geographyTargets, err := h.getGeographyTargets()
 	if err != nil {
-		h.log.Warn().Err(err).Msg("Failed to get country targets")
-		countryTargets = make(map[string]float64)
+		h.log.Warn().Err(err).Msg("Failed to get geography targets")
+		geographyTargets = make(map[string]float64)
 	}
 
 	industryTargets, err := h.getIndustryTargets()
@@ -186,14 +186,14 @@ func (h *Handler) HandleRun(w http.ResponseWriter, r *http.Request) {
 
 	// 9. Build portfolio state (raw targets - normalization happens in constraints)
 	state := optimization.PortfolioState{
-		Securities:      securities,
-		Positions:       positions,
-		PortfolioValue:  portfolioValue,
-		CurrentPrices:   currentPrices,
-		CashBalance:     cashBalance,
-		CountryTargets:  countryTargets,
-		IndustryTargets: industryTargets,
-		DividendBonuses: dividendBonuses,
+		Securities:       securities,
+		Positions:        positions,
+		PortfolioValue:   portfolioValue,
+		CurrentPrices:    currentPrices,
+		CashBalance:      cashBalance,
+		GeographyTargets: geographyTargets,
+		IndustryTargets:  industryTargets,
+		DividendBonuses:  dividendBonuses,
 	}
 
 	// 10. Run optimization
@@ -263,7 +263,7 @@ func (h *Handler) getSecurities() ([]optimization.Security, error) {
 			symbol,
 			COALESCE(isin, '') as isin,
 			COALESCE(product_type, 'UNKNOWN') as product_type,
-			COALESCE(country, 'OTHER') as country,
+			COALESCE(geography, 'OTHER') as geography,
 			COALESCE(industry, 'OTHER') as industry,
 			COALESCE(min_portfolio_target, 0.0) as min_portfolio_target,
 			COALESCE(max_portfolio_target, 0.0) as max_portfolio_target,
@@ -291,7 +291,7 @@ func (h *Handler) getSecurities() ([]optimization.Security, error) {
 			&sec.Symbol,
 			&sec.ISIN,
 			&sec.ProductType,
-			&sec.Country,
+			&sec.Geography,
 			&sec.Industry,
 			&sec.MinPortfolioTarget,
 			&sec.MaxPortfolioTarget,
@@ -500,27 +500,27 @@ func (h *Handler) getDividendBonuses() (map[string]float64, error) {
 	return bonuses, nil
 }
 
-func (h *Handler) getCountryTargets() (map[string]float64, error) {
+func (h *Handler) getGeographyTargets() (map[string]float64, error) {
 	query := `
-		SELECT country, target_allocation
+		SELECT name, target_pct
 		FROM allocation_targets
-		WHERE type = 'country'
+		WHERE type = 'geography'
 	`
 
 	rows, err := h.db.Query(query)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query country targets: %w", err)
+		return nil, fmt.Errorf("failed to query geography targets: %w", err)
 	}
 	defer rows.Close()
 
 	targets := make(map[string]float64)
 	for rows.Next() {
-		var country string
+		var geography string
 		var target float64
-		if err := rows.Scan(&country, &target); err != nil {
-			return nil, fmt.Errorf("failed to scan country target: %w", err)
+		if err := rows.Scan(&geography, &target); err != nil {
+			return nil, fmt.Errorf("failed to scan geography target: %w", err)
 		}
-		targets[country] = target
+		targets[geography] = target
 	}
 
 	return targets, rows.Err()
@@ -528,7 +528,7 @@ func (h *Handler) getCountryTargets() (map[string]float64, error) {
 
 func (h *Handler) getIndustryTargets() (map[string]float64, error) {
 	query := `
-		SELECT industry, target_allocation
+		SELECT name, target_pct
 		FROM allocation_targets
 		WHERE type = 'industry'
 	`

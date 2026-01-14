@@ -100,7 +100,7 @@ func TestMetadataEnricher_Enrich_FillsMissingFields(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "Apple Inc.", security.Name)
 	assert.Equal(t, "USD", security.Currency)
-	assert.Equal(t, "US", security.Country)
+	assert.Equal(t, "US", security.Geography)
 	assert.Equal(t, "Technology", security.Industry) // Mapped from TEC
 	assert.Equal(t, "NASDAQ", security.FullExchangeName)
 	assert.Equal(t, "US0378331005", security.ISIN)
@@ -133,7 +133,7 @@ func TestMetadataEnricher_Enrich_PreservesExistingData(t *testing.T) {
 		Symbol:           "AAPL.US",
 		Name:             "Existing Name",
 		Currency:         "EUR",
-		Country:          "DE",
+		Geography:        "DE",
 		Industry:         "Custom Industry",
 		FullExchangeName: "Custom Exchange",
 	}
@@ -144,7 +144,7 @@ func TestMetadataEnricher_Enrich_PreservesExistingData(t *testing.T) {
 	// Existing values should be preserved
 	assert.Equal(t, "Existing Name", security.Name)
 	assert.Equal(t, "EUR", security.Currency)
-	assert.Equal(t, "DE", security.Country)
+	assert.Equal(t, "DE", security.Geography)
 	assert.Equal(t, "Custom Industry", security.Industry)
 	assert.Equal(t, "Custom Exchange", security.FullExchangeName)
 }
@@ -175,7 +175,7 @@ func TestMetadataEnricher_Enrich_PartialData(t *testing.T) {
 	assert.Equal(t, "Apple Inc.", security.Name)
 	// Other fields should remain empty
 	assert.Equal(t, "", security.Currency)
-	assert.Equal(t, "", security.Country)
+	assert.Equal(t, "", security.Geography)
 	assert.Equal(t, "", security.Industry)
 }
 

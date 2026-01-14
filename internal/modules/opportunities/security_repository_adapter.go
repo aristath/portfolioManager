@@ -63,7 +63,7 @@ func convertUniverseToDomain(universeSecurities []universe.Security) []domain.Se
 			Symbol:    sec.Symbol,
 			Name:      sec.Name,
 			ISIN:      sec.ISIN,
-			Country:   sec.Country,
+			Geography: sec.Geography,
 			Currency:  domain.Currency(sec.Currency),
 			Active:    sec.Active,
 			AllowSell: sec.AllowSell,

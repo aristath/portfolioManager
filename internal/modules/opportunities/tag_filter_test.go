@@ -28,7 +28,7 @@ func setupTagFilterTestDB(t *testing.T) *sql.DB {
 			name TEXT NOT NULL,
 			product_type TEXT,
 			industry TEXT,
-			country TEXT,
+			geography TEXT,
 			fullExchangeName TEXT,
 			priority_multiplier REAL DEFAULT 1.0,
 			min_lot INTEGER DEFAULT 1,

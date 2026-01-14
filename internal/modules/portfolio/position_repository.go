@@ -100,7 +100,7 @@ func (r *PositionRepository) GetWithSecurityInfo() ([]PositionWithSecurity, erro
 	// Get securities from universe.db (by ISIN)
 	// Note: Cash securities should not exist in universe.db after migration
 	securityRows, err := r.universeDB.Query(`
-		SELECT isin, symbol, name, country, fullExchangeName, industry, currency, allow_sell
+		SELECT isin, symbol, name, geography, fullExchangeName, industry, currency, allow_sell
 		FROM securities
 		WHERE active = 1
 	`)
@@ -114,7 +114,7 @@ func (r *PositionRepository) GetWithSecurityInfo() ([]PositionWithSecurity, erro
 		ISIN             string
 		Symbol           string
 		Name             string
-		Country          sql.NullString
+		Geography        sql.NullString
 		FullExchangeName sql.NullString
 		Industry         sql.NullString
 		Currency         sql.NullString
@@ -128,7 +128,7 @@ func (r *PositionRepository) GetWithSecurityInfo() ([]PositionWithSecurity, erro
 			&sec.ISIN,
 			&sec.Symbol,
 			&sec.Name,
-			&sec.Country,
+			&sec.Geography,
 			&sec.FullExchangeName,
 			&sec.Industry,
 			&sec.Currency,
@@ -162,8 +162,8 @@ func (r *PositionRepository) GetWithSecurityInfo() ([]PositionWithSecurity, erro
 		if found {
 			merged.StockName = sec.Name
 			merged.AllowSell = sec.AllowSell
-			if sec.Country.Valid {
-				merged.Country = sec.Country.String
+			if sec.Geography.Valid {
+				merged.Geography = sec.Geography.String
 			}
 			if sec.FullExchangeName.Valid {
 				merged.FullExchangeName = sec.FullExchangeName.String

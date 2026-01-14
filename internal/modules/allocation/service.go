@@ -44,17 +44,17 @@ func (s *ConcentrationAlertService) DetectAlerts(summary domain.PortfolioSummary
 		return alerts, nil
 	}
 
-	// Check country allocations
-	for _, countryAlloc := range summary.CountryAllocations {
-		currentPct := countryAlloc.CurrentPct
-		if currentPct >= CountryAlertThreshold {
-			severity := s.calculateSeverity(currentPct, MaxCountryConcentration)
+	// Check geography allocations
+	for _, geoAlloc := range summary.GeographyAllocations {
+		currentPct := geoAlloc.CurrentPct
+		if currentPct >= GeographyAlertThreshold {
+			severity := s.calculateSeverity(currentPct, MaxGeographyConcentration)
 			alerts = append(alerts, domain.ConcentrationAlert{
-				Type:              "country",
-				Name:              countryAlloc.Name,
+				Type:              "geography",
+				Name:              geoAlloc.Name,
 				CurrentPct:        currentPct,
-				LimitPct:          MaxCountryConcentration,
-				AlertThresholdPct: CountryAlertThreshold,
+				LimitPct:          MaxGeographyConcentration,
+				AlertThresholdPct: GeographyAlertThreshold,
 				Severity:          severity,
 			})
 		}

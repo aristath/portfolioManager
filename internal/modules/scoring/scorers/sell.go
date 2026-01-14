@@ -28,10 +28,10 @@ func (ss *SellScorer) CalculateSellScore(
 	allowSell bool,
 	firstBoughtAt *time.Time,
 	lastTransactionAt *time.Time,
-	country string,
+	geography string,
 	industry string,
 	totalPortfolioValue float64,
-	countryAllocations map[string]float64,
+	geographyAllocations map[string]float64,
 	indAllocations map[string]float64,
 	currentVolatility float64,
 	historicalVolatility float64,
@@ -89,9 +89,9 @@ func (ss *SellScorer) CalculateSellScore(
 	portfolioBalanceScore := calculatePortfolioBalanceScore(
 		positionValue,
 		totalPortfolioValue,
-		country,
+		geography,
 		industry,
-		countryAllocations,
+		geographyAllocations,
 		indAllocations,
 	)
 	instabilityScore := calculateInstabilityScore(
@@ -241,9 +241,9 @@ func calculateTimeHeldScore(firstBoughtAt *time.Time, minHoldDays int) float64 {
 func calculatePortfolioBalanceScore(
 	positionValue float64,
 	totalPortfolioValue float64,
-	country string,
+	geography string,
 	industry string,
-	countryAllocations map[string]float64,
+	geographyAllocations map[string]float64,
 	indAllocations map[string]float64,
 ) float64 {
 	if totalPortfolioValue <= 0 {
@@ -252,10 +252,10 @@ func calculatePortfolioBalanceScore(
 
 	score := 0.0
 
-	// Country overweight (50%)
-	countryAlloc := countryAllocations[country]
-	countryScore := math.Min(1.0, countryAlloc/0.5) // Normalize to ~1.0 at 50%
-	score += countryScore * 0.5
+	// Geography overweight (50%)
+	geoAlloc := geographyAllocations[geography]
+	geoScore := math.Min(1.0, geoAlloc/0.5) // Normalize to ~1.0 at 50%
+	score += geoScore * 0.5
 
 	// Industry overweight (30%)
 	indScore := 0.5

@@ -2,7 +2,7 @@ package allocation
 
 import "time"
 
-// AllocationTarget represents target allocation for country_group or industry_group
+// AllocationTarget represents target allocation for geography or industry
 // Faithful translation from Python: app/modules/allocation/domain/models.py
 type AllocationTarget struct {
 	CreatedAt time.Time `json:"created_at"`
@@ -33,26 +33,14 @@ type DeviationInfo struct {
 	Need      float64 `json:"need"`
 }
 
-// CountryGroup represents a country group definition
-type CountryGroup struct {
-	GroupName    string   `json:"group_name"`
-	CountryNames []string `json:"country_names"`
-}
-
-// IndustryGroup represents an industry group definition
-type IndustryGroup struct {
-	GroupName     string   `json:"group_name"`
-	IndustryNames []string `json:"industry_names"`
-}
-
 // Concentration limit constants
 // Faithful translation from Python: app/modules/scoring/domain/constants.py
 const (
-	MaxCountryConcentration  = 0.35 // 35% max per country
-	MaxSectorConcentration   = 0.30 // 30% max per sector
-	MaxPositionConcentration = 0.15 // 15% max per position
+	MaxGeographyConcentration = 0.35 // 35% max per geography
+	MaxSectorConcentration    = 0.30 // 30% max per sector
+	MaxPositionConcentration  = 0.15 // 15% max per position
 
-	CountryAlertThreshold  = 0.28 // Alert at 28% (80% of 35%)
-	SectorAlertThreshold   = 0.24 // Alert at 24% (80% of 30%)
-	PositionAlertThreshold = 0.12 // Alert at 12% (80% of 15%)
+	GeographyAlertThreshold = 0.28 // Alert at 28% (80% of 35%)
+	SectorAlertThreshold    = 0.24 // Alert at 24% (80% of 30%)
+	PositionAlertThreshold  = 0.12 // Alert at 12% (80% of 15%)
 )

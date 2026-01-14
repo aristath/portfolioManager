@@ -55,37 +55,28 @@ func (m *ocbMockSecurityRepository) GetBySymbol(symbol string) (*universe.Securi
 }
 
 type ocbMockAllocationRepository struct {
-	allocations map[string]float64
-	err         error
+	allocations      map[string]float64
+	geographyTargets map[string]float64
+	industryTargets  map[string]float64
+	err              error
 }
 
 func (m *ocbMockAllocationRepository) GetAll() (map[string]float64, error) {
 	return m.allocations, m.err
 }
 
-type ocbMockGroupingRepository struct {
-	countryGroups  map[string][]string
-	industryGroups map[string][]string
-	groupWeights   map[string]map[string]float64
-	err            error
-}
-
-func (m *ocbMockGroupingRepository) GetCountryGroups() (map[string][]string, error) {
-	return m.countryGroups, m.err
-}
-
-func (m *ocbMockGroupingRepository) GetIndustryGroups() (map[string][]string, error) {
-	return m.industryGroups, m.err
-}
-
-func (m *ocbMockGroupingRepository) GetGroupWeights(groupType string) (map[string]float64, error) {
-	if m.groupWeights == nil {
-		return nil, m.err
+func (m *ocbMockAllocationRepository) GetGeographyTargets() (map[string]float64, error) {
+	if m.geographyTargets == nil {
+		return make(map[string]float64), m.err
 	}
-	if weights, ok := m.groupWeights[groupType]; ok {
-		return weights, nil
+	return m.geographyTargets, m.err
+}
+
+func (m *ocbMockAllocationRepository) GetIndustryTargets() (map[string]float64, error) {
+	if m.industryTargets == nil {
+		return make(map[string]float64), m.err
 	}
-	return make(map[string]float64), nil
+	return m.industryTargets, m.err
 }
 
 type ocbMockTradeRepository struct {
@@ -251,17 +242,13 @@ func TestOpportunityContextBuilder_Build_ReturnsCompleteContext(t *testing.T) {
 		},
 		&ocbMockSecurityRepository{
 			securities: []universe.Security{
-				{ISIN: isin, Symbol: symbol, Currency: "USD", Country: "US", Active: true, AllowBuy: true, AllowSell: true},
+				{ISIN: isin, Symbol: symbol, Currency: "USD", Geography: "US", Active: true, AllowBuy: true, AllowSell: true},
 			},
 			byISIN: map[string]*universe.Security{
-				isin: {ISIN: isin, Symbol: symbol, Currency: "USD", Country: "US", Active: true, AllowBuy: true, AllowSell: true},
+				isin: {ISIN: isin, Symbol: symbol, Currency: "USD", Geography: "US", Active: true, AllowBuy: true, AllowSell: true},
 			},
 		},
 		&ocbMockAllocationRepository{allocations: map[string]float64{isin: 0.10}},
-		&ocbMockGroupingRepository{
-			countryGroups: map[string][]string{"North America": {"US"}},
-			groupWeights:  map[string]map[string]float64{"country": {"North America": 0.50}},
-		},
 		&ocbMockTradeRepository{
 			recentlySold:   map[string]bool{},
 			recentlyBought: map[string]bool{},
@@ -298,7 +285,7 @@ func TestOpportunityContextBuilder_Build_ReturnsCompleteContext(t *testing.T) {
 	// Verify maps are populated
 	assert.NotNil(t, ctx.StocksByISIN, "StocksByISIN should not be nil")
 	assert.NotNil(t, ctx.CurrentPrices, "CurrentPrices should not be nil")
-	assert.NotNil(t, ctx.CountryWeights, "CountryWeights should not be nil")
+	assert.NotNil(t, ctx.GeographyWeights, "GeographyWeights should not be nil")
 	assert.NotNil(t, ctx.SecurityScores, "SecurityScores should not be nil")
 
 	// Verify cooloff maps are initialized (even if empty)
@@ -318,7 +305,6 @@ func TestOpportunityContextBuilder_Build_PopulatesCooloffFromTrades(t *testing.T
 		&ocbMockPositionRepository{positions: []portfolio.Position{}},
 		&ocbMockSecurityRepository{securities: []universe.Security{}},
 		&ocbMockAllocationRepository{allocations: map[string]float64{}},
-		&ocbMockGroupingRepository{groupWeights: map[string]map[string]float64{"country": {}}},
 		&ocbMockTradeRepository{
 			recentlySold:   map[string]bool{soldISIN: true},
 			recentlyBought: map[string]bool{boughtISIN: true},
@@ -370,7 +356,6 @@ func TestOpportunityContextBuilder_Build_PopulatesCooloffFromPendingOrders(t *te
 			},
 		},
 		&ocbMockAllocationRepository{allocations: map[string]float64{}},
-		&ocbMockGroupingRepository{groupWeights: map[string]map[string]float64{"country": {}}},
 		&ocbMockTradeRepository{
 			recentlySold:   map[string]bool{},
 			recentlyBought: map[string]bool{},
@@ -423,7 +408,6 @@ func TestOpportunityContextBuilder_Build_MergesCooloffSources(t *testing.T) {
 			},
 		},
 		&ocbMockAllocationRepository{allocations: map[string]float64{}},
-		&ocbMockGroupingRepository{groupWeights: map[string]map[string]float64{"country": {}}},
 		&ocbMockTradeRepository{
 			recentlySold:   map[string]bool{tradeSoldISIN: true},
 			recentlyBought: map[string]bool{},
@@ -454,24 +438,18 @@ func TestOpportunityContextBuilder_Build_MergesCooloffSources(t *testing.T) {
 	assert.True(t, ctx.RecentlySoldISINs[pendingSoldISIN], "Pending order sold ISIN should be in cooloff")
 }
 
-// Test: CountryWeights are populated (critical - this was missing from handler)
-func TestOpportunityContextBuilder_Build_PopulatesCountryWeights(t *testing.T) {
+// Test: GeographyWeights are populated from allocation targets
+func TestOpportunityContextBuilder_Build_PopulatesGeographyWeights(t *testing.T) {
 	log := logger.New(logger.Config{Level: "error", Pretty: false})
 
 	builder := NewOpportunityContextBuilder(
 		&ocbMockPositionRepository{positions: []portfolio.Position{}},
 		&ocbMockSecurityRepository{securities: []universe.Security{}},
-		&ocbMockAllocationRepository{allocations: map[string]float64{}},
-		&ocbMockGroupingRepository{
-			countryGroups: map[string][]string{
-				"North America": {"US", "CA"},
-				"Europe":        {"DE", "FR"},
-			},
-			groupWeights: map[string]map[string]float64{
-				"country": {
-					"North America": 0.60, // Will be normalized
-					"Europe":        0.40, // Will be normalized
-				},
+		&ocbMockAllocationRepository{
+			allocations: map[string]float64{},
+			geographyTargets: map[string]float64{
+				"North America": 0.60,
+				"Europe":        0.40,
 			},
 		},
 		&ocbMockTradeRepository{recentlySold: map[string]bool{}, recentlyBought: map[string]bool{}},
@@ -491,10 +469,10 @@ func TestOpportunityContextBuilder_Build_PopulatesCountryWeights(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, ctx)
 
-	// CountryWeights must be populated (normalized to sum to 1.0)
-	assert.NotNil(t, ctx.CountryWeights, "CountryWeights should not be nil")
-	assert.InDelta(t, 0.60, ctx.CountryWeights["North America"], 0.01, "North America weight should be ~0.60")
-	assert.InDelta(t, 0.40, ctx.CountryWeights["Europe"], 0.01, "Europe weight should be ~0.40")
+	// GeographyWeights must be populated from allocation targets (normalized to sum to 1.0)
+	assert.NotNil(t, ctx.GeographyWeights, "GeographyWeights should not be nil")
+	assert.InDelta(t, 0.60, ctx.GeographyWeights["North America"], 0.01, "North America weight should be ~0.60")
+	assert.InDelta(t, 0.40, ctx.GeographyWeights["Europe"], 0.01, "Europe weight should be ~0.40")
 }
 
 // Test: Security scores are populated
@@ -509,7 +487,6 @@ func TestOpportunityContextBuilder_Build_PopulatesSecurityScores(t *testing.T) {
 			securities: []universe.Security{{ISIN: isin, Symbol: "AAPL"}},
 		},
 		&ocbMockAllocationRepository{allocations: map[string]float64{}},
-		&ocbMockGroupingRepository{groupWeights: map[string]map[string]float64{"country": {}}},
 		&ocbMockTradeRepository{recentlySold: map[string]bool{}, recentlyBought: map[string]bool{}},
 		&ocbMockScoresRepository{
 			totalScores: map[string]float64{isin: 75.0},
@@ -545,7 +522,6 @@ func TestOpportunityContextBuilder_Build_PopulatesRiskMetrics(t *testing.T) {
 			securities: []universe.Security{{ISIN: isin, Symbol: "AAPL"}},
 		},
 		&ocbMockAllocationRepository{allocations: map[string]float64{}},
-		&ocbMockGroupingRepository{groupWeights: map[string]map[string]float64{"country": {}}},
 		&ocbMockTradeRepository{recentlySold: map[string]bool{}, recentlyBought: map[string]bool{}},
 		&ocbMockScoresRepository{
 			sharpe:      map[string]float64{isin: 1.5},
@@ -584,7 +560,6 @@ func TestOpportunityContextBuilder_Build_PopulatesCAGRs(t *testing.T) {
 			securities: []universe.Security{{ISIN: isin, Symbol: "AAPL"}},
 		},
 		&ocbMockAllocationRepository{allocations: map[string]float64{}},
-		&ocbMockGroupingRepository{groupWeights: map[string]map[string]float64{"country": {}}},
 		&ocbMockTradeRepository{recentlySold: map[string]bool{}, recentlyBought: map[string]bool{}},
 		&ocbMockScoresRepository{
 			cagrs: map[string]float64{isin: 0.12},
@@ -634,7 +609,6 @@ func TestOpportunityContextBuilder_Build_ConvertsAllPricesToEUR(t *testing.T) {
 			},
 		},
 		&ocbMockAllocationRepository{allocations: map[string]float64{}},
-		&ocbMockGroupingRepository{groupWeights: map[string]map[string]float64{"country": {}}},
 		&ocbMockTradeRepository{recentlySold: map[string]bool{}, recentlyBought: map[string]bool{}},
 		&ocbMockScoresRepository{},
 		&ocbMockSettingsRepository{},
@@ -673,7 +647,6 @@ func TestOpportunityContextBuilder_Build_UsesConfiguredCooloffDays(t *testing.T)
 		&ocbMockPositionRepository{positions: []portfolio.Position{}},
 		&ocbMockSecurityRepository{securities: []universe.Security{}},
 		&ocbMockAllocationRepository{allocations: map[string]float64{}},
-		&ocbMockGroupingRepository{groupWeights: map[string]map[string]float64{"country": {}}},
 		tradeRepo,
 		&ocbMockScoresRepository{},
 		&ocbMockSettingsRepository{cooloffDays: 90}, // Custom cooloff days
@@ -703,7 +676,6 @@ func TestOpportunityContextBuilder_Build_HandlesEmptyPositions(t *testing.T) {
 		&ocbMockPositionRepository{positions: []portfolio.Position{}}, // Empty
 		&ocbMockSecurityRepository{securities: []universe.Security{}},
 		&ocbMockAllocationRepository{allocations: map[string]float64{}},
-		&ocbMockGroupingRepository{groupWeights: map[string]map[string]float64{"country": {}}},
 		&ocbMockTradeRepository{recentlySold: map[string]bool{}, recentlyBought: map[string]bool{}},
 		&ocbMockScoresRepository{},
 		&ocbMockSettingsRepository{},
@@ -745,7 +717,6 @@ func TestOpportunityContextBuilder_Build_HandlesMissingPrices(t *testing.T) {
 			},
 		},
 		&ocbMockAllocationRepository{allocations: map[string]float64{}},
-		&ocbMockGroupingRepository{groupWeights: map[string]map[string]float64{"country": {}}},
 		&ocbMockTradeRepository{recentlySold: map[string]bool{}, recentlyBought: map[string]bool{}},
 		&ocbMockScoresRepository{},
 		&ocbMockSettingsRepository{},
@@ -773,7 +744,6 @@ func TestOpportunityContextBuilder_Build_HandlesBrokerDisconnected(t *testing.T)
 		&ocbMockPositionRepository{positions: []portfolio.Position{}},
 		&ocbMockSecurityRepository{securities: []universe.Security{}},
 		&ocbMockAllocationRepository{allocations: map[string]float64{}},
-		&ocbMockGroupingRepository{groupWeights: map[string]map[string]float64{"country": {}}},
 		&ocbMockTradeRepository{recentlySold: map[string]bool{}, recentlyBought: map[string]bool{}},
 		&ocbMockScoresRepository{},
 		&ocbMockSettingsRepository{},
@@ -812,7 +782,6 @@ func TestOpportunityContextBuilder_Build_PopulatesValueTrapData(t *testing.T) {
 			securities: []universe.Security{{ISIN: isin, Symbol: "AAPL"}},
 		},
 		&ocbMockAllocationRepository{allocations: map[string]float64{}},
-		&ocbMockGroupingRepository{groupWeights: map[string]map[string]float64{"country": {}}},
 		&ocbMockTradeRepository{recentlySold: map[string]bool{}, recentlyBought: map[string]bool{}},
 		&ocbMockScoresRepository{
 			opportunityScores: map[string]float64{isin: 0.75},
@@ -851,7 +820,6 @@ func TestOpportunityContextBuilder_Build_HandlesPositionRepoError(t *testing.T) 
 		&ocbMockPositionRepository{err: errors.New("database error")},
 		&ocbMockSecurityRepository{securities: []universe.Security{}},
 		&ocbMockAllocationRepository{allocations: map[string]float64{}},
-		&ocbMockGroupingRepository{groupWeights: map[string]map[string]float64{"country": {}}},
 		&ocbMockTradeRepository{recentlySold: map[string]bool{}, recentlyBought: map[string]bool{}},
 		&ocbMockScoresRepository{},
 		&ocbMockSettingsRepository{},
@@ -879,7 +847,6 @@ func TestOpportunityContextBuilder_Build_HandlesSecurityRepoError(t *testing.T) 
 		&ocbMockPositionRepository{positions: []portfolio.Position{}},
 		&ocbMockSecurityRepository{err: errors.New("database error")},
 		&ocbMockAllocationRepository{allocations: map[string]float64{}},
-		&ocbMockGroupingRepository{groupWeights: map[string]map[string]float64{"country": {}}},
 		&ocbMockTradeRepository{recentlySold: map[string]bool{}, recentlyBought: map[string]bool{}},
 		&ocbMockScoresRepository{},
 		&ocbMockSettingsRepository{},
@@ -917,7 +884,6 @@ func TestOpportunityContextBuilder_Build_PopulatesDismissedFilters(t *testing.T)
 		&ocbMockPositionRepository{positions: []portfolio.Position{}},
 		&ocbMockSecurityRepository{securities: []universe.Security{}},
 		&ocbMockAllocationRepository{allocations: map[string]float64{}},
-		&ocbMockGroupingRepository{groupWeights: map[string]map[string]float64{"country": {}}},
 		&ocbMockTradeRepository{recentlySold: map[string]bool{}, recentlyBought: map[string]bool{}},
 		&ocbMockScoresRepository{},
 		&ocbMockSettingsRepository{},
@@ -950,7 +916,6 @@ func TestOpportunityContextBuilder_Build_HandlesNilDismissedFilterRepo(t *testin
 		&ocbMockPositionRepository{positions: []portfolio.Position{}},
 		&ocbMockSecurityRepository{securities: []universe.Security{}},
 		&ocbMockAllocationRepository{allocations: map[string]float64{}},
-		&ocbMockGroupingRepository{groupWeights: map[string]map[string]float64{"country": {}}},
 		&ocbMockTradeRepository{recentlySold: map[string]bool{}, recentlyBought: map[string]bool{}},
 		&ocbMockScoresRepository{},
 		&ocbMockSettingsRepository{},

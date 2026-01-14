@@ -29,7 +29,6 @@ func TestRegisterRoutes(t *testing.T) {
 		name   string
 	}{
 		{"GET", "/analytics/factor-exposures", "GetFactorExposures"},
-		{"GET", "/analytics/factor-exposures/history", "GetFactorExposureHistory"},
 	}
 
 	for _, tc := range testCases {

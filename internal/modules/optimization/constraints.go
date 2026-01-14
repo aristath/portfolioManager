@@ -11,11 +11,11 @@ import (
 
 // Constants (from Python scoring module)
 const (
-	MaxConcentration        = 0.20 // 20% max per security
-	MaxCountryConcentration = 0.40 // 40% max per country
-	MaxSectorConcentration  = 0.30 // 30% max per industry
-	GeoAllocationTolerance  = 0.05 // ±5% from target
-	IndAllocationTolerance  = 0.05 // ±5% from target
+	MaxConcentration          = 0.20 // 20% max per security
+	MaxGeographyConcentration = 0.40 // 40% max per geography
+	MaxSectorConcentration    = 0.30 // 30% max per industry
+	GeoAllocationTolerance    = 0.05 // ±5% from target
+	IndAllocationTolerance    = 0.05 // ±5% from target
 )
 
 // ConstraintsManager translates business rules into optimization constraints.
@@ -47,7 +47,7 @@ func (cm *ConstraintsManager) SetKellySizer(kellySizer *KellyPositionSizer) {
 func (cm *ConstraintsManager) BuildConstraints(
 	securities []Security,
 	positions map[string]Position, // ISIN-keyed ✅
-	countryTargets map[string]float64,
+	geographyTargets map[string]float64,
 	industryTargets map[string]float64,
 	portfolioValue float64,
 	currentPrices map[string]float64, // ISIN-keyed ✅
@@ -69,16 +69,16 @@ func (cm *ConstraintsManager) BuildConstraints(
 	)
 
 	// Build sector constraints (uses ISIN keys)
-	countryCons, industryCons := cm.buildSectorConstraints(securities, countryTargets, industryTargets)
+	geoCons, industryCons := cm.buildSectorConstraints(securities, geographyTargets, industryTargets)
 
 	// Scale constraints if needed
-	countryCons, industryCons = cm.scaleConstraints(countryCons, industryCons)
+	geoCons, industryCons = cm.scaleConstraints(geoCons, industryCons)
 
 	constraints := Constraints{
 		ISINs:             isins,      // ISIN array ✅
 		MinWeights:        minWeights, // ISIN-keyed ✅
 		MaxWeights:        maxWeights, // ISIN-keyed ✅
-		SectorConstraints: append(countryCons, industryCons...),
+		SectorConstraints: append(geoCons, industryCons...),
 	}
 
 	return constraints, nil
@@ -221,31 +221,31 @@ func (cm *ConstraintsManager) calculateWeightBounds(
 	return minWeights, maxWeights, constraintISINs
 }
 
-// buildSectorConstraints builds country and industry sector constraints.
+// buildSectorConstraints builds geography and industry sector constraints.
 // Uses ISIN keys in SectorMapper.
-// countryTargets and industryTargets are raw weights that get normalized internally.
+// geographyTargets and industryTargets are raw weights that get normalized internally.
 func (cm *ConstraintsManager) buildSectorConstraints(
 	securities []Security,
-	countryTargets map[string]float64,
+	geographyTargets map[string]float64,
 	industryTargets map[string]float64,
 ) ([]SectorConstraint, []SectorConstraint) {
 	// Normalize targets for constraint building
-	normalizedCountryTargets := allocation.NormalizeWeights(countryTargets)
+	normalizedGeographyTargets := allocation.NormalizeWeights(geographyTargets)
 	normalizedIndustryTargets := allocation.NormalizeWeights(industryTargets)
 
-	// Group securities by country (use ISINs)
-	countryGroups := make(map[string][]string)
+	// Group securities by geography (use ISINs)
+	geographyGroups := make(map[string][]string)
 	for _, security := range securities {
-		country := security.Country
-		if country == "" {
-			country = "OTHER"
+		geography := security.Geography
+		if geography == "" {
+			geography = "OTHER"
 		}
-		countryGroups[country] = append(countryGroups[country], security.ISIN) // Use ISIN ✅
+		geographyGroups[geography] = append(geographyGroups[geography], security.ISIN) // Use ISIN ✅
 	}
 
 	cm.log.Info().
-		Int("num_country_groups", len(countryGroups)).
-		Msg("Grouped securities by country")
+		Int("num_geography_groups", len(geographyGroups)).
+		Msg("Grouped securities by geography")
 
 	// Group securities by industry (use ISINs)
 	industryGroups := make(map[string][]string)
@@ -261,50 +261,50 @@ func (cm *ConstraintsManager) buildSectorConstraints(
 		Int("num_industry_groups", len(industryGroups)).
 		Msg("Grouped securities by industry")
 
-	// Build country constraints
-	countryConstraints := make([]SectorConstraint, 0)
-	for country, isins := range countryGroups { // Renamed from symbols
-		target := normalizedCountryTargets[country]
+	// Build geography constraints
+	geographyConstraints := make([]SectorConstraint, 0)
+	for geography, isins := range geographyGroups { // Renamed from symbols
+		target := normalizedGeographyTargets[geography]
 		if target > 0 {
 			// Calculate tolerance-based bounds
 			toleranceUpper := math.Min(1.0, target+cm.geoTolerance)
-			// Enforce hard limit: cap at MaxCountryConcentration
-			hardUpper := math.Min(toleranceUpper, MaxCountryConcentration)
+			// Enforce hard limit: cap at MaxGeographyConcentration
+			hardUpper := math.Min(toleranceUpper, MaxGeographyConcentration)
 
 			mapper := make(map[string]string)
 			for _, isin := range isins { // Use ISIN ✅
-				mapper[isin] = country // ISIN → country ✅
+				mapper[isin] = geography // ISIN → geography ✅
 			}
 
-			countryConstraints = append(countryConstraints, SectorConstraint{
+			geographyConstraints = append(geographyConstraints, SectorConstraint{
 				SectorMapper: mapper,
-				SectorLower:  map[string]float64{country: math.Max(0.0, target-cm.geoTolerance)},
-				SectorUpper:  map[string]float64{country: hardUpper},
+				SectorLower:  map[string]float64{geography: math.Max(0.0, target-cm.geoTolerance)},
+				SectorUpper:  map[string]float64{geography: hardUpper},
 			})
 		}
 	}
 
-	// Scale down country constraint upper bounds if they sum to > 100%
-	if len(countryConstraints) > 0 {
-		countryMaxSum := 0.0
-		for _, c := range countryConstraints {
+	// Scale down geography constraint upper bounds if they sum to > 100%
+	if len(geographyConstraints) > 0 {
+		geographyMaxSum := 0.0
+		for _, c := range geographyConstraints {
 			for _, upper := range c.SectorUpper {
-				countryMaxSum += upper
+				geographyMaxSum += upper
 			}
 		}
 
-		if countryMaxSum > 1.0 {
+		if geographyMaxSum > 1.0 {
 			cm.log.Warn().
-				Float64("country_max_sum", countryMaxSum).
-				Msg("Country constraint upper bounds sum > 100% - scaling down proportionally")
+				Float64("geography_max_sum", geographyMaxSum).
+				Msg("Geography constraint upper bounds sum > 100% - scaling down proportionally")
 
-			scaleFactor := 1.0 / countryMaxSum
-			for i := range countryConstraints {
-				for name, upper := range countryConstraints[i].SectorUpper {
+			scaleFactor := 1.0 / geographyMaxSum
+			for i := range geographyConstraints {
+				for name, upper := range geographyConstraints[i].SectorUpper {
 					newUpper := upper * scaleFactor
 					// Ensure upper is still >= lower
-					lower := countryConstraints[i].SectorLower[name]
-					countryConstraints[i].SectorUpper[name] = math.Max(newUpper, lower)
+					lower := geographyConstraints[i].SectorLower[name]
+					geographyConstraints[i].SectorUpper[name] = math.Max(newUpper, lower)
 				}
 			}
 		}
@@ -355,11 +355,11 @@ func (cm *ConstraintsManager) buildSectorConstraints(
 	}
 
 	cm.log.Info().
-		Int("country_constraints", len(countryConstraints)).
+		Int("geography_constraints", len(geographyConstraints)).
 		Int("industry_constraints", len(industryConstraints)).
 		Msg("Built sector constraints")
 
-	return countryConstraints, industryConstraints
+	return geographyConstraints, industryConstraints
 }
 
 // getMaxConcentration returns the maximum concentration limit based on product type
@@ -382,7 +382,7 @@ func (cm *ConstraintsManager) getMaxConcentration(productType string) float64 {
 
 // scaleConstraints scales down minimums if too restrictive.
 func (cm *ConstraintsManager) scaleConstraints(
-	countryConstraints []SectorConstraint,
+	geographyConstraints []SectorConstraint,
 	industryConstraints []SectorConstraint,
 ) ([]SectorConstraint, []SectorConstraint) {
 	// Calculate sums
@@ -393,14 +393,14 @@ func (cm *ConstraintsManager) scaleConstraints(
 		}
 	}
 
-	countryMinSum := 0.0
-	for _, c := range countryConstraints {
+	geographyMinSum := 0.0
+	for _, c := range geographyConstraints {
 		for _, lower := range c.SectorLower {
-			countryMinSum += lower
+			geographyMinSum += lower
 		}
 	}
 
-	totalMinSum := countryMinSum + indMinSum
+	totalMinSum := geographyMinSum + indMinSum
 
 	// Scale down if industry minimums alone exceed 100%
 	if indMinSum > 1.0 {
@@ -417,19 +417,19 @@ func (cm *ConstraintsManager) scaleConstraints(
 			}
 		}
 	} else if totalMinSum > 0.70 {
-		// Scale both country and industry minimums proportionally if combined > 70%
+		// Scale both geography and industry minimums proportionally if combined > 70%
 		cm.log.Warn().
-			Float64("country_min_sum", countryMinSum).
+			Float64("geography_min_sum", geographyMinSum).
 			Float64("ind_min_sum", indMinSum).
 			Float64("total_min_sum", totalMinSum).
 			Msg("Combined minimums > 70% - scaling down both proportionally to 60%")
 
 		scaleFactor := 0.60 / totalMinSum
-		for i := range countryConstraints {
-			for name, lower := range countryConstraints[i].SectorLower {
+		for i := range geographyConstraints {
+			for name, lower := range geographyConstraints[i].SectorLower {
 				newLower := lower * scaleFactor
-				upper := countryConstraints[i].SectorUpper[name]
-				countryConstraints[i].SectorLower[name] = math.Min(newLower, upper)
+				upper := geographyConstraints[i].SectorUpper[name]
+				geographyConstraints[i].SectorLower[name] = math.Min(newLower, upper)
 			}
 		}
 		for i := range industryConstraints {
@@ -441,7 +441,7 @@ func (cm *ConstraintsManager) scaleConstraints(
 		}
 	}
 
-	return countryConstraints, industryConstraints
+	return geographyConstraints, industryConstraints
 }
 
 // GetConstraintSummary generates a summary of constraints for diagnostics.
@@ -465,21 +465,21 @@ func (cm *ConstraintsManager) GetConstraintSummary(
 	}
 
 	// Count sector constraints
-	countryConstraints := 0
+	geographyConstraintCount := 0
 	for _, sc := range constraints.SectorConstraints {
-		// Simple heuristic: if sector name contains common country codes, it's a country constraint
+		// Simple heuristic: if sector name contains common geography codes, it's a geography constraint
 		// Otherwise, it's an industry constraint
 		// In practice, this would be tracked separately
 		if len(sc.SectorMapper) > 0 {
-			countryConstraints++
+			geographyConstraintCount++
 		}
 	}
 
 	return ConstraintsSummary{
 		TotalSecurities:      totalSecurities,
 		SecuritiesWithBounds: securitiesWithBounds,
-		CountryConstraints:   countryConstraints,
-		IndustryConstraints:  len(constraints.SectorConstraints) - countryConstraints,
+		GeographyConstraints: geographyConstraintCount,
+		IndustryConstraints:  len(constraints.SectorConstraints) - geographyConstraintCount,
 		TotalMinWeight:       totalMinWeight,
 		TotalMaxWeight:       totalMaxWeight,
 	}

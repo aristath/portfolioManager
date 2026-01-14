@@ -67,7 +67,6 @@ type Container struct {
 	RecommendationRepo  planning.RecommendationRepositoryInterface // Interface - can be DB or in-memory
 	PlannerConfigRepo   *planningrepo.ConfigRepository
 	PlannerRepo         planningrepo.PlannerRepositoryInterface // Interface - can be DB or in-memory
-	GroupingRepo        *allocation.GroupingRepository
 	HistoryDBClient     *universe.HistoryDB
 	ClientDataRepo      *clientdata.Repository
 	DismissedFilterRepo *planningrepo.DismissedFilterRepository

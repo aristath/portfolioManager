@@ -77,7 +77,7 @@ func TestSecurity_Fields(t *testing.T) {
 		Symbol:      "AAPL.US",
 		Name:        "Apple Inc.",
 		Exchange:    "NASDAQ",
-		Country:     "US",
+		Geography:   "US",
 		Currency:    CurrencyUSD,
 		ISIN:        "US0378331005",
 		ID:          1,
@@ -88,7 +88,7 @@ func TestSecurity_Fields(t *testing.T) {
 	assert.Equal(t, "AAPL.US", security.Symbol)
 	assert.Equal(t, "Apple Inc.", security.Name)
 	assert.Equal(t, "NASDAQ", security.Exchange)
-	assert.Equal(t, "US", security.Country)
+	assert.Equal(t, "US", security.Geography)
 	assert.Equal(t, CurrencyUSD, security.Currency)
 	assert.Equal(t, "US0378331005", security.ISIN)
 	assert.Equal(t, int64(1), security.ID)

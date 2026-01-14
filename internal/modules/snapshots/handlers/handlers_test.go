@@ -109,7 +109,7 @@ func setupTestHandler(t *testing.T) *Handler {
 		isin TEXT PRIMARY KEY,
 		symbol TEXT NOT NULL,
 		name TEXT,
-		country TEXT,
+		geography TEXT,
 		fullExchangeName TEXT,
 		industry TEXT,
 		currency TEXT DEFAULT 'EUR',

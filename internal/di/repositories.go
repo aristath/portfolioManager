@@ -92,12 +92,6 @@ func InitializeRepositories(container *Container, log zerolog.Logger) error {
 	// Planner repository (IN-MEMORY - ephemeral sequences/evaluations/best_results)
 	container.PlannerRepo = planningrepo.NewInMemoryPlannerRepository(log)
 
-	// Grouping repository (needs universeDB)
-	container.GroupingRepo = allocation.NewGroupingRepository(
-		container.UniverseDB.Conn(),
-		log,
-	)
-
 	// History DB client (needs historyDB)
 	container.HistoryDBClient = universe.NewHistoryDB(
 		container.HistoryDB.Conn(),

@@ -24,7 +24,7 @@ type SecuritySetupService struct {
 // ScoreCalculator interface for calculating and saving security scores
 // Implemented by UniverseHandlers.calculateAndSaveScore
 type ScoreCalculator interface {
-	CalculateAndSaveScore(symbol string, country string, industry string) error
+	CalculateAndSaveScore(symbol string, geography string, industry string) error
 }
 
 // NewSecuritySetupService creates a new security setup service
@@ -122,7 +122,7 @@ func (s *SecuritySetupService) CreateSecurity(
 		Symbol:             symbol,
 		Name:               name,
 		ProductType:        string(productType),
-		Country:            stringValue(country),
+		Geography:          stringValue(country), // Map broker country to geography
 		FullExchangeName:   stringValue(fullExchangeName),
 		Industry:           stringValue(industry),
 		PriorityMultiplier: 1.0,
@@ -157,7 +157,7 @@ func (s *SecuritySetupService) CreateSecurity(
 	if s.scoreCalculator != nil {
 		err = s.scoreCalculator.CalculateAndSaveScore(
 			security.Symbol,
-			security.Country,
+			security.Geography,
 			security.Industry,
 		)
 		if err != nil {
@@ -351,7 +351,7 @@ func (s *SecuritySetupService) AddSecurityByIdentifier(
 		Symbol:             tradernetSymbol,
 		Name:               name,
 		ProductType:        string(productType),
-		Country:            stringValue(country),
+		Geography:          stringValue(country),
 		FullExchangeName:   stringValue(fullExchangeName),
 		ISIN:               stringValue(isin),
 		Industry:           stringValue(industry),
@@ -402,7 +402,7 @@ func (s *SecuritySetupService) AddSecurityByIdentifier(
 	if s.scoreCalculator != nil {
 		err = s.scoreCalculator.CalculateAndSaveScore(
 			security.Symbol,
-			security.Country,
+			security.Geography,
 			security.Industry,
 		)
 		if err != nil {
@@ -574,7 +574,7 @@ func (s *SecuritySetupService) RefreshSecurityData(symbol string) error {
 	if s.scoreCalculator != nil {
 		err = s.scoreCalculator.CalculateAndSaveScore(
 			security.Symbol,
-			security.Country,
+			security.Geography,
 			security.Industry,
 		)
 		if err != nil {

@@ -270,7 +270,7 @@ func (os *OptimizerService) Optimize(state PortfolioState, settings Settings) (*
 	constraints, err := os.constraintsMgr.BuildConstraints(
 		activeSecurities,
 		state.Positions,
-		state.CountryTargets,
+		state.GeographyTargets,
 		state.IndustryTargets,
 		state.PortfolioValue,
 		state.CurrentPrices,
@@ -291,7 +291,7 @@ func (os *OptimizerService) Optimize(state PortfolioState, settings Settings) (*
 	constraintsSummary := os.constraintsMgr.GetConstraintSummary(constraints)
 	os.log.Info().
 		Int("securities_with_bounds", constraintsSummary.SecuritiesWithBounds).
-		Int("country_constraints", constraintsSummary.CountryConstraints).
+		Int("geography_constraints", constraintsSummary.GeographyConstraints).
 		Int("industry_constraints", constraintsSummary.IndustryConstraints).
 		Msg("Built constraints")
 

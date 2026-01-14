@@ -29,7 +29,7 @@ export function EditSecurityModal() {
         'symbol',
         'yahoo_symbol',
         'name',
-        'country',
+        'geography',
         'fullExchangeName',
         'industry',
         'product_type',
@@ -99,11 +99,11 @@ export function EditSecurityModal() {
           description="Unique security identifier (cannot be changed)"
         />
         <TextInput
-          label="Country"
-          value={formData.country || ''}
-          onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-          placeholder="e.g., United States, Netherlands, Germany"
-          description="Country where the security is domiciled"
+          label="Geography"
+          value={formData.geography || ''}
+          onChange={(e) => setFormData({ ...formData, geography: e.target.value })}
+          placeholder="e.g., EU, US, ASIA (comma-separated for multiple)"
+          description="Geographic region(s) where the security operates"
         />
         <TextInput
           label="Exchange"

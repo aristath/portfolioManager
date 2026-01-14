@@ -55,7 +55,7 @@ export function AddSecurityModal() {
         />
         <Alert color="blue" variant="light" mb="md">
           <Text size="xs">
-            All data will be automatically fetched: name, country, exchange, industry, currency, ISIN, historical data (10 years), and initial score calculation.
+            All data will be automatically fetched: name, geography, exchange, industry, currency, ISIN, historical data (10 years), and initial score calculation.
           </Text>
         </Alert>
         <Group justify="flex-end">

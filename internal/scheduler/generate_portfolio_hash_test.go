@@ -101,8 +101,8 @@ func TestGeneratePortfolioHashJob_Run_Success(t *testing.T) {
 		{Symbol: "MSFT", Quantity: 5},
 	}
 	securities := []universe.Security{
-		{Symbol: "AAPL", Country: "US", Industry: "Technology"},
-		{Symbol: "MSFT", Country: "US", Industry: "Technology"},
+		{Symbol: "AAPL", Geography: "US", Industry: "Technology"},
+		{Symbol: "MSFT", Geography: "US", Industry: "Technology"},
 	}
 	cashBalances := map[string]float64{
 		"EUR": 1000.0,
@@ -199,7 +199,7 @@ func TestGeneratePortfolioHashJob_Run_HashUnchanged(t *testing.T) {
 		{Symbol: "AAPL", Quantity: 10},
 	}
 	securities := []universe.Security{
-		{Symbol: "AAPL", Country: "US", Industry: "Technology"},
+		{Symbol: "AAPL", Geography: "US", Industry: "Technology"},
 	}
 	cashBalances := map[string]float64{"EUR": 1000.0}
 

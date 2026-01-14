@@ -1,8 +1,7 @@
-import { Grid, Stack, Paper, Text } from '@mantine/core';
-import { CountryRadarCard } from '../components/charts/CountryRadarCard';
+import { Grid, Stack } from '@mantine/core';
+import { GeographyRadarCard } from '../components/charts/GeographyRadarCard';
 import { IndustryRadarCard } from '../components/charts/IndustryRadarCard';
 import { ConcentrationAlerts } from '../components/portfolio/ConcentrationAlerts';
-import { GroupingManager } from '../components/portfolio/GroupingManager';
 
 export function Diversification() {
   return (
@@ -10,19 +9,12 @@ export function Diversification() {
       <ConcentrationAlerts />
       <Grid mt="md">
         <Grid.Col span={{ base: 12, md: 6 }}>
-          <CountryRadarCard />
+          <GeographyRadarCard />
         </Grid.Col>
         <Grid.Col span={{ base: 12, md: 6 }}>
           <IndustryRadarCard />
         </Grid.Col>
       </Grid>
-      <Paper p="md" withBorder mt="md">
-        <Text size="sm" fw={500} mb="xs" tt="uppercase">Custom Grouping</Text>
-        <Text size="xs" c="dimmed" mb="md">
-          Create custom groups for countries and industries to simplify constraints and improve optimizer performance.
-        </Text>
-        <GroupingManager />
-      </Paper>
     </Stack>
   );
 }

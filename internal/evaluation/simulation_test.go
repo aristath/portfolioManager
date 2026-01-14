@@ -12,18 +12,18 @@ func TestSimulateSequence_BuyAction(t *testing.T) {
 	initialCash := 1000.0
 	isin := "US0378331005" // AAPL ISIN
 	portfolioContext := models.PortfolioContext{
-		Positions:       make(map[string]float64),
-		TotalValue:      500.0,
-		CountryWeights:  make(map[string]float64),
-		IndustryWeights: make(map[string]float64),
+		Positions:        make(map[string]float64),
+		TotalValue:       500.0,
+		GeographyWeights: make(map[string]float64),
+		IndustryWeights:  make(map[string]float64),
 	}
 
 	securities := []models.Security{
 		{
-			ISIN:    isin,
-			Symbol:  "AAPL",
-			Name:    "Apple Inc.",
-			Country: stringPtr("United States"),
+			ISIN:      isin,
+			Symbol:    "AAPL",
+			Name:      "Apple Inc.",
+			Geography: stringPtr("United States"),
 		},
 	}
 
@@ -60,18 +60,18 @@ func TestSimulateSequence_AffordableBuy(t *testing.T) {
 	initialCash := 2000.0
 	isin := "US0378331005" // AAPL ISIN
 	portfolioContext := models.PortfolioContext{
-		Positions:       make(map[string]float64),
-		TotalValue:      500.0,
-		CountryWeights:  make(map[string]float64),
-		IndustryWeights: make(map[string]float64),
+		Positions:        make(map[string]float64),
+		TotalValue:       500.0,
+		GeographyWeights: make(map[string]float64),
+		IndustryWeights:  make(map[string]float64),
 	}
 
 	securities := []models.Security{
 		{
-			ISIN:    isin,
-			Symbol:  "AAPL",
-			Name:    "Apple Inc.",
-			Country: stringPtr("United States"),
+			ISIN:      isin,
+			Symbol:    "AAPL",
+			Name:      "Apple Inc.",
+			Geography: stringPtr("United States"),
 		},
 	}
 
@@ -100,7 +100,7 @@ func TestSimulateSequence_AffordableBuy(t *testing.T) {
 	// Assertions
 	assert.Equal(t, 500.0, endCash, "Cash should decrease by buy value")
 	assert.Equal(t, 1500.0, endPortfolio.Positions[isin], "Position should be created with correct value")
-	assert.Equal(t, "United States", endPortfolio.SecurityCountries[isin], "Country should be set")
+	assert.Equal(t, "United States", endPortfolio.SecurityGeographies[isin], "Geography should be set")
 }
 
 func TestSimulateSequence_SellAction(t *testing.T) {
@@ -111,20 +111,20 @@ func TestSimulateSequence_SellAction(t *testing.T) {
 		Positions: map[string]float64{
 			isin: 2000.0, // Existing position worth 2000 EUR (ISIN-keyed)
 		},
-		TotalValue:      3000.0,
-		CountryWeights:  make(map[string]float64),
-		IndustryWeights: make(map[string]float64),
-		SecurityCountries: map[string]string{
+		TotalValue:       3000.0,
+		GeographyWeights: make(map[string]float64),
+		IndustryWeights:  make(map[string]float64),
+		SecurityGeographies: map[string]string{
 			isin: "United States", // ISIN-keyed
 		},
 	}
 
 	securities := []models.Security{
 		{
-			ISIN:    isin,
-			Symbol:  "AAPL",
-			Name:    "Apple Inc.",
-			Country: stringPtr("United States"),
+			ISIN:      isin,
+			Symbol:    "AAPL",
+			Name:      "Apple Inc.",
+			Geography: stringPtr("United States"),
 		},
 	}
 
@@ -163,17 +163,17 @@ func TestSimulateSequence_SellEntirePosition(t *testing.T) {
 		Positions: map[string]float64{
 			isin: 1500.0, // ISIN-keyed
 		},
-		TotalValue:      2500.0,
-		CountryWeights:  make(map[string]float64),
-		IndustryWeights: make(map[string]float64),
+		TotalValue:       2500.0,
+		GeographyWeights: make(map[string]float64),
+		IndustryWeights:  make(map[string]float64),
 	}
 
 	securities := []models.Security{
 		{
-			ISIN:    isin,
-			Symbol:  "AAPL",
-			Name:    "Apple Inc.",
-			Country: stringPtr("United States"),
+			ISIN:      isin,
+			Symbol:    "AAPL",
+			Name:      "Apple Inc.",
+			Geography: stringPtr("United States"),
 		},
 	}
 

@@ -398,33 +398,23 @@ func calculateDiversificationAlignmentScore(ctx models.PortfolioContext) float64
 
 // calculateGeoDiversification calculates geographic diversification score
 func calculateGeoDiversification(ctx models.PortfolioContext, totalValue float64) float64 {
-	if ctx.SecurityCountries == nil || len(ctx.CountryWeights) == 0 {
+	if ctx.SecurityGeographies == nil || len(ctx.GeographyWeights) == 0 {
 		return 0.5
 	}
 
-	countryToGroup := ctx.CountryToGroup
-	if countryToGroup == nil {
-		countryToGroup = make(map[string]string)
-	}
-
-	groupValues := make(map[string]float64)
+	// Aggregate position values by geography (direct, no groups)
+	geographyValues := make(map[string]float64)
 	for isin, value := range ctx.Positions {
-		country, hasCountry := ctx.SecurityCountries[isin]
-		if !hasCountry {
-			country = "OTHER"
+		geography, hasGeography := ctx.SecurityGeographies[isin]
+		if !hasGeography {
+			geography = "OTHER"
 		}
-
-		group, hasGroup := countryToGroup[country]
-		if !hasGroup {
-			group = "OTHER"
-		}
-
-		groupValues[group] += value
+		geographyValues[geography] += value
 	}
 
 	var deviations []float64
-	for group, targetWeight := range ctx.CountryWeights {
-		currentValue := groupValues[group]
+	for geography, targetWeight := range ctx.GeographyWeights {
+		currentValue := geographyValues[geography]
 		currentPct := currentValue / totalValue
 		deviation := math.Abs(currentPct - targetWeight)
 		deviations = append(deviations, deviation)
@@ -444,29 +434,19 @@ func calculateIndustryDiversification(ctx models.PortfolioContext, totalValue fl
 		return 0.5
 	}
 
-	industryToGroup := ctx.IndustryToGroup
-	if industryToGroup == nil {
-		industryToGroup = make(map[string]string)
-	}
-
-	groupValues := make(map[string]float64)
+	// Aggregate position values by industry (direct, no groups)
+	industryValues := make(map[string]float64)
 	for isin, value := range ctx.Positions {
 		industry, hasIndustry := ctx.SecurityIndustries[isin]
 		if !hasIndustry {
 			industry = "OTHER"
 		}
-
-		group, hasGroup := industryToGroup[industry]
-		if !hasGroup {
-			group = "OTHER"
-		}
-
-		groupValues[group] += value
+		industryValues[industry] += value
 	}
 
 	var deviations []float64
-	for group, targetWeight := range ctx.IndustryWeights {
-		currentValue := groupValues[group]
+	for industry, targetWeight := range ctx.IndustryWeights {
+		currentValue := industryValues[industry]
 		currentPct := currentValue / totalValue
 		deviation := math.Abs(currentPct - targetWeight)
 		deviations = append(deviations, deviation)

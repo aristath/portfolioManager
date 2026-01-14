@@ -216,12 +216,12 @@ const (
 	IndAllocationTolerance = 0.15 // +/- 15% from target
 
 	// Hard concentration limits (safety guardrails)
-	MaxCountryConcentration  = 0.35 // 35% max per country
-	MaxSectorConcentration   = 0.30 // 30% max per sector
-	MaxPositionConcentration = 0.15 // 15% max per position
+	MaxGeographyConcentration = 0.35 // 35% max per geography
+	MaxSectorConcentration    = 0.30 // 30% max per sector
+	MaxPositionConcentration  = 0.15 // 15% max per position
 
 	// Alert thresholds (80% of caps)
-	CountryAlertThreshold  = 0.28 // Alert at 28% (80% of 35%)
-	SectorAlertThreshold   = 0.24 // Alert at 24% (80% of 30%)
-	PositionAlertThreshold = 0.12 // Alert at 12% (80% of 15%)
+	GeographyAlertThreshold = 0.28 // Alert at 28% (80% of 35%)
+	SectorAlertThreshold    = 0.24 // Alert at 24% (80% of 30%)
+	PositionAlertThreshold  = 0.12 // Alert at 12% (80% of 15%)
 )

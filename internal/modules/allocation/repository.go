@@ -9,11 +9,11 @@ import (
 )
 
 // Repository handles allocation target database operations
-// Faithful translation from Python: app/modules/allocation/database/allocation_repository.py
-// Database: config.db (allocation_targets table)
+// Database: config.db (allocation_targets table), universe.db (securities table for lookups)
 type Repository struct {
-	db  *sql.DB // config.db
-	log zerolog.Logger
+	db         *sql.DB // config.db
+	universeDB *sql.DB // universe.db (optional, for GetAvailableGeographies/Industries)
+	log        zerolog.Logger
 }
 
 // NewRepository creates a new allocation repository
@@ -23,6 +23,11 @@ func NewRepository(db *sql.DB, log zerolog.Logger) *Repository {
 		db:  db,
 		log: log.With().Str("repo", "allocation").Logger(),
 	}
+}
+
+// SetUniverseDB sets the universe database connection for querying securities
+func (r *Repository) SetUniverseDB(universeDB *sql.DB) {
+	r.universeDB = universeDB
 }
 
 // GetAll returns all allocation targets as map with key 'type:name'
@@ -101,10 +106,10 @@ func (r *Repository) GetByType(targetType string) ([]AllocationTarget, error) {
 	return targets, nil
 }
 
-// GetCountryGroupTargets returns country group allocation targets as raw weights.
+// GetGeographyTargets returns geography allocation targets as raw weights.
 // The returned weights are NOT normalized - call NormalizeWeights() when needed for calculations.
-func (r *Repository) GetCountryGroupTargets() (map[string]float64, error) {
-	targets, err := r.GetByType("country_group")
+func (r *Repository) GetGeographyTargets() (map[string]float64, error) {
+	targets, err := r.GetByType("geography")
 	if err != nil {
 		return nil, err
 	}
@@ -117,10 +122,10 @@ func (r *Repository) GetCountryGroupTargets() (map[string]float64, error) {
 	return result, nil
 }
 
-// GetIndustryGroupTargets returns industry group allocation targets as raw weights.
+// GetIndustryTargets returns industry allocation targets as raw weights.
 // The returned weights are NOT normalized - call NormalizeWeights() when needed for calculations.
-func (r *Repository) GetIndustryGroupTargets() (map[string]float64, error) {
-	targets, err := r.GetByType("industry_group")
+func (r *Repository) GetIndustryTargets() (map[string]float64, error) {
+	targets, err := r.GetByType("industry")
 	if err != nil {
 		return nil, err
 	}
@@ -177,5 +182,85 @@ func (r *Repository) Delete(targetType, name string) error {
 		Int64("rows_affected", rowsAffected).
 		Msg("Allocation target deleted")
 
+	return nil
+}
+
+// GetAvailableGeographies returns distinct geographies from securities table
+func (r *Repository) GetAvailableGeographies() ([]string, error) {
+	if r.universeDB == nil {
+		return nil, fmt.Errorf("universe database not configured")
+	}
+
+	query := "SELECT DISTINCT geography FROM securities WHERE geography IS NOT NULL AND geography != ''"
+	rows, err := r.universeDB.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query geographies: %w", err)
+	}
+	defer rows.Close()
+
+	var result []string
+	for rows.Next() {
+		var geo string
+		if err := rows.Scan(&geo); err != nil {
+			return nil, fmt.Errorf("failed to scan geography: %w", err)
+		}
+		result = append(result, geo)
+	}
+
+	return result, rows.Err()
+}
+
+// GetAvailableIndustries returns distinct industries from securities table
+func (r *Repository) GetAvailableIndustries() ([]string, error) {
+	if r.universeDB == nil {
+		return nil, fmt.Errorf("universe database not configured")
+	}
+
+	query := "SELECT DISTINCT industry FROM securities WHERE industry IS NOT NULL AND industry != ''"
+	rows, err := r.universeDB.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query industries: %w", err)
+	}
+	defer rows.Close()
+
+	var result []string
+	for rows.Next() {
+		var industry string
+		if err := rows.Scan(&industry); err != nil {
+			return nil, fmt.Errorf("failed to scan industry: %w", err)
+		}
+		result = append(result, industry)
+	}
+
+	return result, rows.Err()
+}
+
+// SetGeographyTargets sets multiple geography allocation targets at once
+func (r *Repository) SetGeographyTargets(targets map[string]float64) error {
+	for name, weight := range targets {
+		target := AllocationTarget{
+			Type:      "geography",
+			Name:      name,
+			TargetPct: weight,
+		}
+		if err := r.Upsert(target); err != nil {
+			return fmt.Errorf("failed to set geography target %s: %w", name, err)
+		}
+	}
+	return nil
+}
+
+// SetIndustryTargets sets multiple industry allocation targets at once
+func (r *Repository) SetIndustryTargets(targets map[string]float64) error {
+	for name, weight := range targets {
+		target := AllocationTarget{
+			Type:      "industry",
+			Name:      name,
+			TargetPct: weight,
+		}
+		if err := r.Upsert(target); err != nil {
+			return fmt.Errorf("failed to set industry target %s: %w", name, err)
+		}
+	}
 	return nil
 }

@@ -3,10 +3,26 @@ package calculators
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/aristath/sentinel/internal/modules/planning/domain"
 	"github.com/rs/zerolog"
 )
+
+// parseGeographies splits a comma-separated geography string into a slice.
+func parseGeographies(geographyStr string) []string {
+	if geographyStr == "" {
+		return nil
+	}
+	var result []string
+	for _, g := range strings.Split(geographyStr, ",") {
+		trimmed := strings.TrimSpace(g)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
+}
 
 // RebalanceBuysCalculator identifies underweight positions to buy for rebalancing.
 // Supports optional tag-based pre-filtering for performance when EnableTagFiltering=true.
@@ -102,9 +118,9 @@ func (c *RebalanceBuysCalculator) Calculate(
 		return domain.CalculatorResult{PreFiltered: exclusions.Result()}, nil
 	}
 
-	// Check if we have country allocations and weights
-	if ctx.CountryAllocations == nil || ctx.CountryWeights == nil {
-		c.log.Debug().Msg("No country allocation data available")
+	// Check if we have geography allocations and weights
+	if ctx.GeographyAllocations == nil || ctx.GeographyWeights == nil {
+		c.log.Debug().Msg("No geography allocation data available")
 		return domain.CalculatorResult{PreFiltered: exclusions.Result()}, nil
 	}
 
@@ -112,32 +128,32 @@ func (c *RebalanceBuysCalculator) Calculate(
 		Float64("min_underweight_threshold", minUnderweightThreshold).
 		Msg("Calculating rebalance buys")
 
-	// Identify underweight countries
-	underweightCountries := make(map[string]float64)
-	for country, targetAllocation := range ctx.CountryWeights {
-		currentAllocation := ctx.CountryAllocations[country]
+	// Identify underweight geographies
+	underweightGeographies := make(map[string]float64)
+	for geo, targetAllocation := range ctx.GeographyWeights {
+		currentAllocation := ctx.GeographyAllocations[geo]
 		underweight := targetAllocation - currentAllocation
 		if underweight > minUnderweightThreshold {
-			underweightCountries[country] = underweight
+			underweightGeographies[geo] = underweight
 			c.log.Debug().
-				Str("country", country).
+				Str("geography", geo).
 				Float64("current", currentAllocation).
 				Float64("target", targetAllocation).
 				Float64("underweight", underweight).
-				Msg("Underweight country identified")
+				Msg("Underweight geography identified")
 		}
 	}
 
-	if len(underweightCountries) == 0 {
-		c.log.Debug().Msg("No underweight countries")
+	if len(underweightGeographies) == 0 {
+		c.log.Debug().Msg("No underweight geographies")
 		return domain.CalculatorResult{PreFiltered: exclusions.Result()}, nil
 	}
 
-	// Build candidates for securities in underweight countries
+	// Build candidates for securities in underweight geographies
 	type scoredCandidate struct {
 		isin        string
 		symbol      string
-		group       string
+		geography   string
 		underweight float64
 		score       float64
 	}
@@ -161,10 +177,10 @@ func (c *RebalanceBuysCalculator) Calculate(
 			}
 		}
 
-		// Get security and extract country
-		country := security.Country
-		if country == "" {
-			exclusions.Add(isin, symbol, securityName, "no country assigned")
+		// Get security and extract geography
+		geography := security.Geography
+		if geography == "" {
+			exclusions.Add(isin, symbol, securityName, "no geography assigned")
 			continue
 		}
 
@@ -177,20 +193,21 @@ func (c *RebalanceBuysCalculator) Calculate(
 			continue
 		}
 
-		// Map country to group
-		group := country
-		if ctx.CountryToGroup != nil {
-			if mappedGroup, ok := ctx.CountryToGroup[country]; ok {
-				group = mappedGroup
-			} else {
-				group = "OTHER"
+		// Check if any of the security's geographies are underweight
+		// Parse comma-separated geographies
+		geos := parseGeographies(geography)
+		var underweight float64
+		var matchedGeo string
+		for _, geo := range geos {
+			if uw, ok := underweightGeographies[geo]; ok {
+				if uw > underweight {
+					underweight = uw
+					matchedGeo = geo
+				}
 			}
 		}
-
-		// Check if this group is underweight
-		underweight, ok := underweightCountries[group]
-		if !ok {
-			exclusions.Add(isin, symbol, securityName, fmt.Sprintf("country group %s is not underweight", group))
+		if matchedGeo == "" {
+			exclusions.Add(isin, symbol, securityName, "geography not underweight")
 			continue
 		}
 
@@ -280,7 +297,7 @@ func (c *RebalanceBuysCalculator) Calculate(
 		scoredCandidates = append(scoredCandidates, scoredCandidate{
 			isin:        isin,
 			symbol:      symbol,
-			group:       group,
+			geography:   matchedGeo,
 			underweight: underweight,
 			score:       score,
 		})
@@ -383,7 +400,7 @@ func (c *RebalanceBuysCalculator) Calculate(
 
 		// Build reason
 		reason := fmt.Sprintf("Rebalance: %s underweight by %.1f%% (score: %.2f)",
-			scored.group, scored.underweight*100, scored.score)
+			scored.geography, scored.underweight*100, scored.score)
 
 		// Build tags
 		tags := []string{"rebalance", "buy", "underweight"}
@@ -407,7 +424,7 @@ func (c *RebalanceBuysCalculator) Calculate(
 
 	c.log.Info().
 		Int("candidates", len(candidates)).
-		Int("underweight_countries", len(underweightCountries)).
+		Int("underweight_countries", len(underweightGeographies)).
 		Int("pre_filtered", len(exclusions.Result())).
 		Msg("Rebalance buy opportunities identified")
 

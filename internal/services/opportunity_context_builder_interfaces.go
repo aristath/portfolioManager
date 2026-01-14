@@ -25,13 +25,8 @@ type SecurityRepository interface {
 // AllocationRepository provides access to allocation targets.
 type AllocationRepository interface {
 	GetAll() (map[string]float64, error)
-}
-
-// GroupingRepository provides access to country/industry groupings.
-type GroupingRepository interface {
-	GetCountryGroups() (map[string][]string, error)
-	GetIndustryGroups() (map[string][]string, error)
-	GetGroupWeights(groupType string) (map[string]float64, error)
+	GetGeographyTargets() (map[string]float64, error)
+	GetIndustryTargets() (map[string]float64, error)
 }
 
 // TradeRepository provides access to trade history for cooloff calculations.

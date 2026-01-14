@@ -53,7 +53,7 @@ CREATE TABLE securities_new (
     name TEXT NOT NULL,
     product_type TEXT,
     industry TEXT,
-    country TEXT,
+    geography TEXT,
     fullExchangeName TEXT,
     priority_multiplier REAL DEFAULT 1.0,
     min_lot INTEGER DEFAULT 1,
@@ -81,7 +81,7 @@ SELECT
     name,
     product_type,
     industry,
-    country,
+    geography,
     fullExchangeName,
     priority_multiplier,
     min_lot,
@@ -102,7 +102,7 @@ ALTER TABLE securities_new RENAME TO securities;
 
 -- Recreate indexes
 CREATE INDEX IF NOT EXISTS idx_securities_active ON securities(active);
-CREATE INDEX IF NOT EXISTS idx_securities_country ON securities(country);
+CREATE INDEX IF NOT EXISTS idx_securities_geography ON securities(geography);
 CREATE INDEX IF NOT EXISTS idx_securities_industry ON securities(industry);
 CREATE INDEX IF NOT EXISTS idx_securities_symbol ON securities(symbol); -- Index symbol for lookups
 

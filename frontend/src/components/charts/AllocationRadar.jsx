@@ -4,7 +4,7 @@ import { usePortfolioStore } from '../../stores/portfolioStore';
 
 /**
  * Allocation Radar Component
- * Displays country and industry allocations as radar charts
+ * Displays geography and industry allocations as radar charts
  */
 // Helper function to convert weights to percentages
 function getTargetPcts(weights, activeItems) {
@@ -22,35 +22,35 @@ function getTargetPcts(weights, activeItems) {
 }
 
 export function AllocationRadar({ type = 'both' }) {
-  const { allocation, activeCountries, activeIndustries } = usePortfolioStore();
+  const { allocation, activeGeographies, activeIndustries } = usePortfolioStore();
 
-  // Calculate country data
+  // Calculate geography data
   const geoData = useMemo(() => {
-    if (type !== 'country' && type !== 'both') return null;
+    if (type !== 'geography' && type !== 'both') return null;
 
-    const labels = Array.from(activeCountries || []);
-    if (labels.length === 0 || !allocation.country || allocation.country.length === 0) {
+    const labels = Array.from(activeGeographies || []);
+    if (labels.length === 0 || !allocation.geography || allocation.geography.length === 0) {
       return null;
     }
 
-    const currentData = labels.map(country => {
-      const item = allocation.country.find(a => a.name === country);
+    const currentData = labels.map(geography => {
+      const item = allocation.geography.find(a => a.name === geography);
       return item ? item.current_pct * 100 : 0;
     });
 
     const weights = {};
-    allocation.country.forEach(a => {
+    allocation.geography.forEach(a => {
       weights[a.name] = a.target_pct || 0;
     });
 
     const targetPcts = getTargetPcts(weights, labels);
-    const targetData = labels.map(country => (targetPcts[country] || 0) * 100);
+    const targetData = labels.map(geography => (targetPcts[geography] || 0) * 100);
 
     const allValues = [...targetData, ...currentData];
     const maxValue = allValues.length > 0 ? Math.max(...allValues) : 100;
 
     return { labels, targetData, currentData, maxValue };
-  }, [type, allocation.country, activeCountries]);
+  }, [type, allocation.geography, activeGeographies]);
 
   // Calculate industry data
   const industryData = useMemo(() => {
@@ -82,8 +82,8 @@ export function AllocationRadar({ type = 'both' }) {
 
   return (
     <div>
-      {/* Country Radar */}
-      {(type === 'country' || type === 'both') && geoData && (
+      {/* Geography Radar */}
+      {(type === 'geography' || type === 'both') && geoData && (
         <div style={{ marginBottom: type === 'both' ? '16px' : 0 }}>
           <RadarChart
             labels={geoData.labels}

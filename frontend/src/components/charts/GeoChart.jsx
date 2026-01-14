@@ -3,8 +3,8 @@ import { Group, Text, Button, Slider, Badge, Stack, Divider } from '@mantine/cor
 import { usePortfolioStore } from '../../stores/portfolioStore';
 import { formatPercent } from '../../utils/formatters';
 
-// Generate consistent color for country name
-function getCountryColor(name) {
+// Generate consistent color for geography name
+function getGeographyColor(name) {
   let hash = 0;
   for (let i = 0; i < name.length; i++) {
     hash = name.charCodeAt(i) + ((hash << 5) - hash);
@@ -14,15 +14,15 @@ function getCountryColor(name) {
 }
 
 // Convert weights to target percentages
-function getTargetPcts(weights, activeCountries) {
+function getTargetPcts(weights, activeGeographies) {
   let total = 0;
-  for (const name of activeCountries) {
+  for (const name of activeGeographies) {
     const weight = weights[name] || 0;
     total += weight;
   }
 
   const targets = {};
-  for (const name of activeCountries) {
+  for (const name of activeGeographies) {
     const weight = weights[name] || 0;
     targets[name] = total > 0 ? weight / total : 0;
   }
@@ -77,34 +77,34 @@ function getWeightBadgeClass(weight) {
 export function GeoChart() {
   const {
     allocation,
-    countryTargets,
-    editingCountry,
-    activeCountries,
-    startEditCountry,
-    cancelEditCountry,
-    adjustCountrySlider,
-    saveCountryTargets,
+    geographyTargets,
+    editingGeography,
+    activeGeographies,
+    startEditGeography,
+    cancelEditGeography,
+    adjustGeographySlider,
+    saveGeographyTargets,
     loading,
   } = usePortfolioStore();
-  const countryAllocations = allocation.country || [];
+  const geographyAllocations = allocation.geography || [];
 
   const targets = useMemo(() => {
-    return getTargetPcts(countryTargets, activeCountries);
-  }, [countryTargets, activeCountries]);
+    return getTargetPcts(geographyTargets, activeGeographies);
+  }, [geographyTargets, activeGeographies]);
 
-  const sortedCountries = useMemo(() => {
-    return [...activeCountries].sort();
-  }, [activeCountries]);
+  const sortedGeographies = useMemo(() => {
+    return [...activeGeographies].sort();
+  }, [activeGeographies]);
 
   return (
     <div>
       <Group justify="space-between" mb="md">
-        <Text size="xs" fw={500}>Country Groups</Text>
-        {!editingCountry && (
+        <Text size="xs" fw={500}>Geography Allocation</Text>
+        {!editingGeography && (
           <Button
             size="xs"
             variant="subtle"
-            onClick={startEditCountry}
+            onClick={startEditGeography}
           >
             Edit Weights
           </Button>
@@ -112,21 +112,21 @@ export function GeoChart() {
       </Group>
 
       {/* View Mode - Show deviation from target allocation */}
-      {!editingCountry && (
+      {!editingGeography && (
         <Stack gap="sm">
-          {countryAllocations.length === 0 ? (
+          {geographyAllocations.length === 0 ? (
             <Text size="sm" c="dimmed" ta="center" p="md">
-              No country allocation data available
+              No geography allocation data available
             </Text>
           ) : (
-            countryAllocations.map((country) => {
-            const deviation = getDeviation(country.name, country.current_pct, targets);
+            geographyAllocations.map((geography) => {
+            const deviation = getDeviation(geography.name, geography.current_pct, targets);
             const badgeClass = getDeviationBadgeClass(deviation);
             const barColor = getDeviationBarColor(deviation);
             const barStyle = getDeviationBarStyle(deviation);
 
             return (
-              <div key={country.name}>
+              <div key={geography.name}>
                 <Group justify="space-between" mb="xs">
                   <Group gap="xs">
                     <div
@@ -134,14 +134,14 @@ export function GeoChart() {
                         width: '10px',
                         height: '10px',
                         borderRadius: '50%',
-                        backgroundColor: getCountryColor(country.name),
+                        backgroundColor: getGeographyColor(geography.name),
                       }}
                     />
-                    <Text size="sm">{country.name}</Text>
+                    <Text size="sm">{geography.name}</Text>
                   </Group>
                   <Group gap="xs">
                     <Text size="sm" style={{ fontFamily: 'var(--mantine-font-family)' }}>
-                      {formatPercent(country.current_pct)}
+                      {formatPercent(geography.current_pct)}
                     </Text>
                     <Badge size="xs" {...badgeClass} style={{ fontFamily: 'var(--mantine-font-family)' }}>
                       {formatDeviation(deviation)}
@@ -186,8 +186,8 @@ export function GeoChart() {
         </Stack>
       )}
 
-      {/* Edit Mode - Weight sliders for active countries */}
-      {editingCountry && (
+      {/* Edit Mode - Weight sliders for active geographies */}
+      {editingGeography && (
         <Stack gap="md">
           {/* Weight Scale Legend */}
           <Group justify="space-between">
@@ -198,14 +198,14 @@ export function GeoChart() {
 
           <Divider />
 
-          {/* Dynamic Country Sliders */}
-          {sortedCountries.length === 0 ? (
+          {/* Dynamic Geography Sliders */}
+          {sortedGeographies.length === 0 ? (
             <Text size="sm" c="dimmed" ta="center" p="md">
-              No active countries available
+              No active geographies available
             </Text>
           ) : (
-            sortedCountries.map((name) => {
-            const weight = countryTargets[name] || 0;
+            sortedGeographies.map((name) => {
+            const weight = geographyTargets[name] || 0;
             const badgeClass = getWeightBadgeClass(weight);
 
             return (
@@ -217,7 +217,7 @@ export function GeoChart() {
                         width: '10px',
                         height: '10px',
                         borderRadius: '50%',
-                        backgroundColor: getCountryColor(name),
+                        backgroundColor: getGeographyColor(name),
                       }}
                     />
                     <Text size="sm">{name}</Text>
@@ -228,7 +228,7 @@ export function GeoChart() {
                 </Group>
                 <Slider
                   value={weight}
-                  onChange={(val) => adjustCountrySlider(name, val)}
+                  onChange={(val) => adjustGeographySlider(name, val)}
                   min={0}
                   max={1}
                   step={0.01}
@@ -248,14 +248,14 @@ export function GeoChart() {
           <Group grow>
             <Button
               variant="subtle"
-              onClick={cancelEditCountry}
+              onClick={cancelEditGeography}
             >
               Cancel
             </Button>
             <Button
-              onClick={saveCountryTargets}
-              disabled={loading.countrySave}
-              loading={loading.countrySave}
+              onClick={saveGeographyTargets}
+              disabled={loading.geographySave}
+              loading={loading.geographySave}
             >
               Save
             </Button>

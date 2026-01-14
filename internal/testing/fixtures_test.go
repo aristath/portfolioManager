@@ -28,20 +28,20 @@ func TestNewSecurityFixtures(t *testing.T) {
 func TestNewSecurityFixtures_DiverseSecurities(t *testing.T) {
 	fixtures := NewSecurityFixtures()
 
-	// Collect symbols and countries
+	// Collect symbols and geographies
 	symbols := make(map[string]bool)
-	countries := make(map[string]bool)
+	geographies := make(map[string]bool)
 
 	for _, security := range fixtures {
 		symbols[security.Symbol] = true
-		if security.Country != "" {
-			countries[security.Country] = true
+		if security.Geography != "" {
+			geographies[security.Geography] = true
 		}
 	}
 
 	// Verify diversity
 	assert.Greater(t, len(symbols), 1, "Fixtures should include multiple symbols")
-	assert.Greater(t, len(countries), 1, "Fixtures should include multiple countries")
+	assert.Greater(t, len(geographies), 1, "Fixtures should include multiple geographies")
 }
 
 // TestNewPositionFixtures tests that NewPositionFixtures creates valid test positions

@@ -6,7 +6,7 @@ import { api } from '../api/client';
 const DEFAULT_VISIBLE_COLUMNS = {
   chart: true,
   company: true,
-  country: true,
+  geography: true,
   exchange: true,
   sector: true,
   tags: true,
@@ -77,9 +77,9 @@ export const useSecuritiesStore = create((set, get) => ({
 
     let filtered = [...securities];
 
-    // Filter by country
+    // Filter by geography
     if (securityFilter !== 'all') {
-      filtered = filtered.filter(s => s.country === securityFilter);
+      filtered = filtered.filter(s => s.geography === securityFilter);
     }
 
     // Filter by industry

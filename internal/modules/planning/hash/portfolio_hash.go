@@ -197,7 +197,7 @@ func GeneratePortfolioHash(
 		}
 
 		// Extract config fields
-		country := security.Country
+		geography := security.Geography
 		industry := security.Industry
 
 		minTarget := ""
@@ -214,7 +214,7 @@ func GeneratePortfolioHash(
 			"allow_sell":           security.AllowSell,
 			"min_portfolio_target": minTarget,
 			"max_portfolio_target": maxTarget,
-			"country":              country,
+			"geography":            geography,
 			"industry":             industry,
 			"min_lot":              security.MinLot,
 			"priority_multiplier":  security.PriorityMultiplier,
@@ -242,7 +242,7 @@ func GeneratePortfolioHash(
 				"allow_sell":           false,
 				"min_portfolio_target": "",
 				"max_portfolio_target": "",
-				"country":              "",
+				"geography":            "",
 				"industry":             "",
 				"min_lot":              1,
 				"priority_multiplier":  1.0,
@@ -257,7 +257,7 @@ func GeneratePortfolioHash(
 			config["allow_sell"],
 			config["min_portfolio_target"],
 			config["max_portfolio_target"],
-			config["country"],
+			config["geography"],
 			config["industry"],
 			config["min_lot"],
 			config["priority_multiplier"],

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { notifications } from '@mantine/notifications';
 import { api } from '../api/client';
 import { handleEvent, clearAllDebounces } from './eventHandlers';
+import { formatCurrency } from '../utils/formatters';
 
 export const useAppStore = create((set, get) => ({
   // System status
@@ -59,7 +60,7 @@ export const useAppStore = create((set, get) => ({
     sync: false,
     historical: false,
     execute: false,
-    countrySave: false,
+    geographySave: false,
     industrySave: false,
     securitySave: false,
     refreshData: false,
@@ -153,7 +154,7 @@ export const useAppStore = create((set, get) => ({
     set({ loading: { ...get().loading, execute: true } });
     try {
       const result = await api.executeRecommendation();
-      get().showMessage(`Executed: ${result.quantity} ${result.symbol} @ €${result.price}`, 'success');
+      get().showMessage(`Executed: ${result.quantity} ${result.symbol} @ ${formatCurrency(result.price)}`, 'success');
       await get().fetchRecommendations();
     } catch (e) {
       get().showMessage('Failed to execute trade', 'error');

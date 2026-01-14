@@ -227,13 +227,13 @@ export function NextActionsCard() {
                       style={{ fontFamily: 'var(--mantine-font-family)' }}
                       c={step.side === 'SELL' ? 'red' : 'green'}
                     >
-                      {(step.side === 'SELL' ? '-' : '+')}€{step.estimated_value.toLocaleString()}
+                      {(step.side === 'SELL' ? '-' : '+')}{formatCurrency(step.estimated_value)}
                     </Text>
                     <Text size="sm" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family)' }}>
-                      {step.quantity} @ €{step.estimated_price}
+                      {step.quantity} @ {formatCurrency(step.estimated_price)}
                     </Text>
                     <Text size="xs" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family)' }}>
-                      Cash: €{step.available_cash_before.toLocaleString()} → €{step.available_cash_after.toLocaleString()}
+                      Cash: {formatCurrency(step.available_cash_before)} → {formatCurrency(step.available_cash_after)}
                     </Text>
                   </div>
                 </Group>
@@ -244,7 +244,7 @@ export function NextActionsCard() {
           {recommendations.final_available_cash && (
             <Text size="sm" c="dimmed" ta="center" mt="md" style={{ fontFamily: 'var(--mantine-font-family)' }}>
               Final cash: <Text span fw={600} c="dimmed" style={{ fontFamily: 'var(--mantine-font-family)' }}>
-                €{recommendations.final_available_cash.toLocaleString()}
+                {formatCurrency(recommendations.final_available_cash)}
               </Text>
             </Text>
           )}

@@ -444,7 +444,6 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		&ocbPositionRepoAdapter{repo: container.PositionRepo},
 		&ocbSecurityRepoAdapter{repo: container.SecurityRepo},
 		&ocbAllocationRepoAdapter{repo: container.AllocRepo},
-		&ocbGroupingRepoAdapter{repo: container.GroupingRepo, allocRepo: container.AllocRepo},
 		&ocbTradeRepoAdapter{repo: container.TradeRepo},
 		&ocbScoresRepoAdapter{db: container.PortfolioDB.Conn()},
 		&ocbSettingsRepoAdapter{repo: container.SettingsRepo, configRepo: container.PlannerConfigRepo},
@@ -1029,26 +1028,12 @@ func (a *ocbAllocationRepoAdapter) GetAll() (map[string]float64, error) {
 	return a.repo.GetAll()
 }
 
-// ocbGroupingRepoAdapter adapts allocation.GroupingRepository to services.GroupingRepository
-type ocbGroupingRepoAdapter struct {
-	repo      *allocation.GroupingRepository
-	allocRepo *allocation.Repository
+func (a *ocbAllocationRepoAdapter) GetGeographyTargets() (map[string]float64, error) {
+	return a.repo.GetGeographyTargets()
 }
 
-func (a *ocbGroupingRepoAdapter) GetCountryGroups() (map[string][]string, error) {
-	return a.repo.GetCountryGroups()
-}
-
-func (a *ocbGroupingRepoAdapter) GetIndustryGroups() (map[string][]string, error) {
-	return a.repo.GetIndustryGroups()
-}
-
-func (a *ocbGroupingRepoAdapter) GetGroupWeights(groupType string) (map[string]float64, error) {
-	// Get weights from allocation repository (targets)
-	if a.allocRepo == nil {
-		return make(map[string]float64), nil
-	}
-	return a.allocRepo.GetAll()
+func (a *ocbAllocationRepoAdapter) GetIndustryTargets() (map[string]float64, error) {
+	return a.repo.GetIndustryTargets()
 }
 
 // ocbTradeRepoAdapter adapts trading.TradeRepository to services.TradeRepository

@@ -21,7 +21,6 @@ func TestRegisterRoutes(t *testing.T) {
 	// Create handler - we're only testing that RegisterRoutes works, not handler execution
 	handler := NewHandler(
 		nil, // allocRepo - nil is OK for route registration test
-		nil, // groupingRepo
 		nil, // alertService
 		portfolioSummaryProvider,
 		eventManager,
@@ -44,17 +43,13 @@ func TestRegisterRoutes(t *testing.T) {
 		{"GET", "/allocation/targets", "GetTargets"},
 		{"GET", "/allocation/current", "GetCurrentAllocation"},
 		{"GET", "/allocation/deviations", "GetDeviations"},
-		{"GET", "/allocation/groups/country", "GetCountryGroups"},
-		{"GET", "/allocation/groups/industry", "GetIndustryGroups"},
-		{"PUT", "/allocation/groups/country", "UpdateCountryGroup"},
-		{"PUT", "/allocation/groups/industry", "UpdateIndustryGroup"},
-		{"DELETE", "/allocation/groups/country/test-group", "DeleteCountryGroup"},
-		{"DELETE", "/allocation/groups/industry/test-group", "DeleteIndustryGroup"},
-		{"GET", "/allocation/groups/available/countries", "GetAvailableCountries"},
-		{"GET", "/allocation/groups/available/industries", "GetAvailableIndustries"},
-		{"GET", "/allocation/groups/allocation", "GetGroupAllocation"},
-		{"PUT", "/allocation/groups/targets/country", "UpdateCountryGroupTargets"},
-		{"PUT", "/allocation/groups/targets/industry", "UpdateIndustryGroupTargets"},
+		{"GET", "/allocation/available/geographies", "GetAvailableGeographies"},
+		{"GET", "/allocation/available/industries", "GetAvailableIndustries"},
+		{"PUT", "/allocation/targets/geography", "SetGeographyTargets"},
+		{"PUT", "/allocation/targets/industry", "SetIndustryTargets"},
+		{"GET", "/allocation/vs-targets", "GetAllocationVsTargets"},
+		{"GET", "/allocation/rebalance-needs", "GetRebalanceNeeds"},
+		{"GET", "/allocation/contribution", "GetGroupContribution"},
 	}
 
 	for _, tc := range testCases {
@@ -95,7 +90,6 @@ func TestRegisterRoutes_RoutePrefix(t *testing.T) {
 
 	handler := NewHandler(
 		nil, // allocRepo
-		nil, // groupingRepo
 		nil, // alertService
 		portfolioSummaryProvider,
 		eventManager,

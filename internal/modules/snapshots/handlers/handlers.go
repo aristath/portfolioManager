@@ -127,7 +127,7 @@ func (h *Handler) HandleGetPortfolioState(w http.ResponseWriter, r *http.Request
 			"current_price":    pos.CurrentPrice,
 			"market_value_eur": pos.MarketValueEUR,
 			"name":             pos.StockName,
-			"country":          pos.Country,
+			"geography":        pos.Geography,
 			"industry":         pos.Industry,
 		})
 	}

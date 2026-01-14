@@ -91,8 +91,9 @@ func (e *MetadataEnricher) Enrich(security *Security) error {
 		enriched = true
 	}
 
-	if security.Country == "" && brokerInfo.Country != nil && *brokerInfo.Country != "" {
-		security.Country = *brokerInfo.Country
+	if security.Geography == "" && brokerInfo.Country != nil && *brokerInfo.Country != "" {
+		// Map broker's Country to our Geography field
+		security.Geography = *brokerInfo.Country
 		enriched = true
 	}
 
@@ -113,7 +114,7 @@ func (e *MetadataEnricher) Enrich(security *Security) error {
 		e.log.Info().
 			Str("symbol", security.Symbol).
 			Str("name", security.Name).
-			Str("country", security.Country).
+			Str("geography", security.Geography).
 			Str("industry", security.Industry).
 			Msg("Enriched security metadata from broker")
 	} else {

@@ -4,39 +4,39 @@ import { GeoChart } from './GeoChart';
 import { usePortfolioStore } from '../../stores/portfolioStore';
 import { formatPercent } from '../../utils/formatters';
 
-export function CountryRadarCard() {
+export function GeographyRadarCard() {
   const { alerts } = usePortfolioStore();
 
-  const countryAlerts = alerts.filter(a => a.type === 'country');
-  const hasCritical = countryAlerts.some(a => a.severity === 'critical');
+  const geographyAlerts = alerts.filter(a => a.type === 'geography');
+  const hasCritical = geographyAlerts.some(a => a.severity === 'critical');
 
   return (
     <Card p="md">
       <Group justify="space-between" mb="md">
         <Text size="xs" tt="uppercase" c="dimmed" fw={600}>
-          Country Allocation
+          Geography Allocation
         </Text>
-        {countryAlerts.length > 0 && (
+        {geographyAlerts.length > 0 && (
           <Badge
             size="sm"
             color={hasCritical ? 'red' : 'yellow'}
             variant="light"
           >
-            {countryAlerts.length} alert{countryAlerts.length > 1 ? 's' : ''}
+            {geographyAlerts.length} alert{geographyAlerts.length > 1 ? 's' : ''}
           </Badge>
         )}
       </Group>
 
-      <AllocationRadar type="country" />
+      <AllocationRadar type="geography" />
 
       <Divider my="md" />
 
       <GeoChart />
 
-      {/* Country Alerts */}
-      {countryAlerts.length > 0 && (
+      {/* Geography Alerts */}
+      {geographyAlerts.length > 0 && (
         <Stack gap="xs" mt="md" pt="md" style={{ borderTop: '1px solid var(--mantine-color-dark-6)' }}>
-          {countryAlerts.map((alert) => (
+          {geographyAlerts.map((alert) => (
             <Alert
               key={alert.name}
               color={alert.severity === 'critical' ? 'red' : 'yellow'}

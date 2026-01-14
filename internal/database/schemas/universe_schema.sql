@@ -3,13 +3,14 @@
 -- This schema represents the final state after all migrations
 
 -- Securities table: investment universe (ISIN as PRIMARY KEY)
+-- geography and industry support comma-separated values for multiple assignments
 CREATE TABLE IF NOT EXISTS securities (
     isin TEXT PRIMARY KEY,
     symbol TEXT NOT NULL,
     name TEXT NOT NULL,
     product_type TEXT,
-    industry TEXT,
-    country TEXT,
+    industry TEXT,                     -- Comma-separated for multiple industries (e.g., "Technology, Finance")
+    geography TEXT,                    -- Comma-separated for multiple geographies (e.g., "EU, US")
     fullExchangeName TEXT,
     priority_multiplier REAL DEFAULT 1.0,
     min_lot INTEGER DEFAULT 1,
@@ -25,31 +26,9 @@ CREATE TABLE IF NOT EXISTS securities (
 ) STRICT;
 
 CREATE INDEX IF NOT EXISTS idx_securities_active ON securities(active);
-CREATE INDEX IF NOT EXISTS idx_securities_country ON securities(country);
+CREATE INDEX IF NOT EXISTS idx_securities_geography ON securities(geography);
 CREATE INDEX IF NOT EXISTS idx_securities_industry ON securities(industry);
 CREATE INDEX IF NOT EXISTS idx_securities_symbol ON securities(symbol);
-
--- Country groups: custom groupings for allocation strategies
-CREATE TABLE IF NOT EXISTS country_groups (
-    group_name TEXT NOT NULL,
-    country_name TEXT NOT NULL,  -- '__EMPTY__' is special marker for empty groups
-    created_at INTEGER NOT NULL,      -- Unix timestamp (seconds since epoch)
-    updated_at INTEGER NOT NULL,     -- Unix timestamp (seconds since epoch)
-    PRIMARY KEY (group_name, country_name)
-) STRICT;
-
-CREATE INDEX IF NOT EXISTS idx_country_groups_group ON country_groups(group_name);
-
--- Industry groups: custom groupings for diversification strategies
-CREATE TABLE IF NOT EXISTS industry_groups (
-    group_name TEXT NOT NULL,
-    industry_name TEXT NOT NULL,  -- '__EMPTY__' is special marker for empty groups
-    created_at INTEGER NOT NULL,      -- Unix timestamp (seconds since epoch)
-    updated_at INTEGER NOT NULL,     -- Unix timestamp (seconds since epoch)
-    PRIMARY KEY (group_name, industry_name)
-) STRICT;
-
-CREATE INDEX IF NOT EXISTS idx_industry_groups_group ON industry_groups(group_name);
 
 -- Tags table: tag definitions with ID and human-readable name
 CREATE TABLE IF NOT EXISTS tags (

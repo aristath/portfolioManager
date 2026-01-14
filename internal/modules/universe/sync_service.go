@@ -145,7 +145,7 @@ func (s *SyncService) processSingleSecurity(symbol string) error {
 		// Client symbols no longer needed - all data comes from internal sources
 		err = s.scoreCalculator.CalculateAndSaveScore(
 			symbol,
-			security.Country,
+			security.Geography,
 			security.Industry,
 		)
 		if err != nil {

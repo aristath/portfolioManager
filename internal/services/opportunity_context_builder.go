@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/aristath/sentinel/internal/domain"
 	planningdomain "github.com/aristath/sentinel/internal/modules/planning/domain"
@@ -22,7 +23,6 @@ type OpportunityContextBuilder struct {
 	positionRepo           PositionRepository
 	securityRepo           SecurityRepository
 	allocRepo              AllocationRepository
-	groupingRepo           GroupingRepository
 	tradeRepo              TradeRepository
 	scoresRepo             ScoresRepository
 	settingsRepo           SettingsRepository
@@ -40,7 +40,6 @@ func NewOpportunityContextBuilder(
 	positionRepo PositionRepository,
 	securityRepo SecurityRepository,
 	allocRepo AllocationRepository,
-	groupingRepo GroupingRepository,
 	tradeRepo TradeRepository,
 	scoresRepo ScoresRepository,
 	settingsRepo SettingsRepository,
@@ -56,7 +55,6 @@ func NewOpportunityContextBuilder(
 		positionRepo:           positionRepo,
 		securityRepo:           securityRepo,
 		allocRepo:              allocRepo,
-		groupingRepo:           groupingRepo,
 		tradeRepo:              tradeRepo,
 		scoresRepo:             scoresRepo,
 		settingsRepo:           settingsRepo,
@@ -135,7 +133,7 @@ func (b *OpportunityContextBuilder) buildContext(
 			Symbol:    sec.Symbol,
 			ISIN:      sec.ISIN,
 			Active:    sec.Active,
-			Country:   sec.Country,
+			Geography: sec.Geography,
 			Currency:  domain.Currency(sec.Currency),
 			Name:      sec.Name,
 			AllowBuy:  sec.AllowBuy,
@@ -157,14 +155,11 @@ func (b *OpportunityContextBuilder) buildContext(
 	// Build enriched positions and calculate totals
 	enrichedPositions, totalValue := b.buildEnrichedPositions(positions, stocksByISIN, currentPrices, cashBalances)
 
-	// Get country weights (CRITICAL - was missing from handler)
-	countryWeights := b.populateCountryWeights()
+	// Get geography weights (CRITICAL - was missing from handler)
+	geographyWeights := b.populateGeographyWeights()
 
-	// Calculate country allocations from positions
-	countryAllocations := b.calculateCountryAllocations(enrichedPositions, totalValue)
-
-	// Get country to group mapping
-	countryToGroup := b.populateCountryToGroup()
+	// Calculate geography allocations from positions
+	geographyAllocations := b.calculateGeographyAllocations(enrichedPositions, totalValue)
 
 	// Get security scores
 	isinList := b.getISINList(securities)
@@ -199,7 +194,7 @@ func (b *OpportunityContextBuilder) buildContext(
 	dismissedFilters := b.populateDismissedFilters()
 
 	// Build PortfolioContext for scoring
-	portfolioCtx := b.buildPortfolioContext(enrichedPositions, countryWeights, countryToGroup, currentPrices, totalValue)
+	portfolioCtx := b.buildPortfolioContext(enrichedPositions, geographyWeights, currentPrices, totalValue)
 
 	return &planningdomain.OpportunityContext{
 		PortfolioContext:         portfolioCtx,
@@ -211,9 +206,8 @@ func (b *OpportunityContextBuilder) buildContext(
 		CurrentPrices:            currentPrices,
 		SecurityScores:           securityScores,
 		TargetWeights:            allocations,
-		CountryAllocations:       countryAllocations,
-		CountryWeights:           countryWeights,
-		CountryToGroup:           countryToGroup,
+		GeographyAllocations:     geographyAllocations,
+		GeographyWeights:         geographyWeights,
 		CAGRs:                    cagrs,
 		LongTermScores:           longTermScores,
 		StabilityScores:          stabilityScores,
@@ -344,7 +338,7 @@ func (b *OpportunityContextBuilder) buildEnrichedPositions(
 			MarketValueEUR: marketValueEUR,
 			CurrentPrice:   currentPrice,
 			SecurityName:   security.Name,
-			Country:        security.Country,
+			Geography:      security.Geography,
 			Active:         security.Active,
 			AllowBuy:       allowBuy,
 			AllowSell:      allowSell,
@@ -364,15 +358,15 @@ func (b *OpportunityContextBuilder) buildEnrichedPositions(
 	return enrichedPositions, totalValue
 }
 
-// populateCountryWeights gets country/group weights from grouping repository.
-func (b *OpportunityContextBuilder) populateCountryWeights() map[string]float64 {
-	if b.groupingRepo == nil {
+// populateGeographyWeights gets geography weights from allocation targets.
+func (b *OpportunityContextBuilder) populateGeographyWeights() map[string]float64 {
+	if b.allocRepo == nil {
 		return make(map[string]float64)
 	}
 
-	weights, err := b.groupingRepo.GetGroupWeights("country")
+	weights, err := b.allocRepo.GetGeographyTargets()
 	if err != nil {
-		b.log.Warn().Err(err).Msg("Failed to get country weights")
+		b.log.Warn().Err(err).Msg("Failed to get geography weights")
 		return make(map[string]float64)
 	}
 
@@ -380,56 +374,52 @@ func (b *OpportunityContextBuilder) populateCountryWeights() map[string]float64 
 	return normalizeWeights(weights)
 }
 
-// calculateCountryAllocations calculates current country allocations from positions.
-func (b *OpportunityContextBuilder) calculateCountryAllocations(positions []planningdomain.EnrichedPosition, totalValue float64) map[string]float64 {
+// calculateGeographyAllocations calculates current geography allocations from positions.
+// Securities with multiple geographies have their value split proportionally.
+func (b *OpportunityContextBuilder) calculateGeographyAllocations(positions []planningdomain.EnrichedPosition, totalValue float64) map[string]float64 {
 	allocations := make(map[string]float64)
 
 	if totalValue <= 0 {
 		return allocations
 	}
 
-	// Get country to group mapping
-	countryToGroup := b.populateCountryToGroup()
-
-	// Sum values by group
-	groupValues := make(map[string]float64)
+	// Sum values by geography (direct - no group mapping)
+	geographyValues := make(map[string]float64)
 	for _, pos := range positions {
-		group := pos.Country
-		if g, ok := countryToGroup[pos.Country]; ok {
-			group = g
+		// Parse comma-separated geographies
+		geographies := parseGeographies(pos.Geography)
+		if len(geographies) == 0 {
+			continue
 		}
-		groupValues[group] += pos.MarketValueEUR
+
+		// Split value proportionally across geographies
+		valuePerGeo := pos.MarketValueEUR / float64(len(geographies))
+		for _, geo := range geographies {
+			geographyValues[geo] += valuePerGeo
+		}
 	}
 
 	// Convert to percentages
-	for group, value := range groupValues {
-		allocations[group] = value / totalValue
+	for geo, value := range geographyValues {
+		allocations[geo] = value / totalValue
 	}
 
 	return allocations
 }
 
-// populateCountryToGroup gets country to group mapping.
-func (b *OpportunityContextBuilder) populateCountryToGroup() map[string]string {
-	if b.groupingRepo == nil {
-		return make(map[string]string)
+// parseGeographies splits a comma-separated geography string into a slice.
+func parseGeographies(geographyStr string) []string {
+	if geographyStr == "" {
+		return nil
 	}
-
-	groups, err := b.groupingRepo.GetCountryGroups()
-	if err != nil {
-		b.log.Warn().Err(err).Msg("Failed to get country groups")
-		return make(map[string]string)
-	}
-
-	// Invert the mapping: group -> countries becomes country -> group
-	countryToGroup := make(map[string]string)
-	for groupName, countries := range groups {
-		for _, country := range countries {
-			countryToGroup[country] = groupName
+	var result []string
+	for _, g := range strings.Split(geographyStr, ",") {
+		trimmed := strings.TrimSpace(g)
+		if trimmed != "" {
+			result = append(result, trimmed)
 		}
 	}
-
-	return countryToGroup
+	return result
 }
 
 // getISINList extracts ISINs from securities.
@@ -655,30 +645,28 @@ func (b *OpportunityContextBuilder) addPendingOrdersToCooloff(
 // buildPortfolioContext builds the scoring PortfolioContext.
 func (b *OpportunityContextBuilder) buildPortfolioContext(
 	positions []planningdomain.EnrichedPosition,
-	countryWeights map[string]float64,
-	countryToGroup map[string]string,
+	geographyWeights map[string]float64,
 	currentPrices map[string]float64,
 	totalValue float64,
 ) *scoringdomain.PortfolioContext {
 	// Build position values map
 	positionValues := make(map[string]float64)
 	positionAvgPrices := make(map[string]float64)
-	securityCountries := make(map[string]string)
+	securityGeographies := make(map[string]string)
 
 	for _, pos := range positions {
 		positionValues[pos.ISIN] = pos.MarketValueEUR
 		positionAvgPrices[pos.ISIN] = pos.AverageCost
-		securityCountries[pos.ISIN] = pos.Country
+		securityGeographies[pos.ISIN] = pos.Geography
 	}
 
 	return &scoringdomain.PortfolioContext{
-		CountryWeights:    countryWeights,
-		Positions:         positionValues,
-		SecurityCountries: securityCountries,
-		CountryToGroup:    countryToGroup,
-		PositionAvgPrices: positionAvgPrices,
-		CurrentPrices:     currentPrices,
-		TotalValue:        totalValue,
+		GeographyWeights:    geographyWeights,
+		Positions:           positionValues,
+		SecurityGeographies: securityGeographies,
+		PositionAvgPrices:   positionAvgPrices,
+		CurrentPrices:       currentPrices,
+		TotalValue:          totalValue,
 	}
 }
 

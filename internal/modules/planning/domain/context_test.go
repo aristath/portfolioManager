@@ -401,7 +401,7 @@ func TestOpportunityContext_EnrichedPositions_ISIN_DirectAccess(t *testing.T) {
 			Quantity:     100.0,
 			AverageCost:  150.0,
 			CurrentPrice: 160.0,
-			Country:      "US",
+			Geography:    "US",
 			Active:       true,
 			AllowBuy:     true,
 			AllowSell:    true,
@@ -412,7 +412,7 @@ func TestOpportunityContext_EnrichedPositions_ISIN_DirectAccess(t *testing.T) {
 			Quantity:     50.0,
 			AverageCost:  300.0,
 			CurrentPrice: 320.0,
-			Country:      "US",
+			Geography:    "US",
 			Active:       true,
 			AllowBuy:     true,
 			AllowSell:    true,
@@ -427,7 +427,7 @@ func TestOpportunityContext_EnrichedPositions_ISIN_DirectAccess(t *testing.T) {
 	for _, pos := range ctx.EnrichedPositions {
 		assert.NotEmpty(t, pos.ISIN, "ISIN should be directly accessible")
 		assert.NotEmpty(t, pos.Symbol, "Symbol should be directly accessible")
-		assert.NotEmpty(t, pos.Country, "Country (security metadata) should be embedded")
+		assert.NotEmpty(t, pos.Geography, "Geography (security metadata) should be embedded")
 		assert.Greater(t, pos.Quantity, 0.0, "Quantity should be accessible")
 		assert.Greater(t, pos.AverageCost, 0.0, "AverageCost should be accessible")
 		assert.Greater(t, pos.CurrentPrice, 0.0, "CurrentPrice should be embedded")

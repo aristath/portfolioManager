@@ -166,20 +166,20 @@ func (s *Service) BatchEvaluate(ctx context.Context, sequences []domain.ActionSe
 		evalSecurities = make([]models.Security, 0, len(opportunityCtx.Securities))
 		stocksByISIN = make(map[string]models.Security)
 		for _, sec := range opportunityCtx.Securities {
-			// Convert Country from string to *string
-			var countryPtr *string
-			if sec.Country != "" {
-				countryPtr = &sec.Country
+			// Convert Geography from string to *string
+			var geographyPtr *string
+			if sec.Geography != "" {
+				geographyPtr = &sec.Geography
 			}
 			// Note: domain.Security doesn't have Industry field, so we can't include it
 			// This is acceptable as Industry is optional in evaluation models
 			evalSec := models.Security{
-				ISIN:     sec.ISIN,
-				Symbol:   sec.Symbol,
-				Name:     sec.Name,
-				Country:  countryPtr,
-				Industry: nil, // domain.Security doesn't have Industry field
-				Currency: string(sec.Currency),
+				ISIN:      sec.ISIN,
+				Symbol:    sec.Symbol,
+				Name:      sec.Name,
+				Geography: geographyPtr,
+				Industry:  nil, // domain.Security doesn't have Industry field
+				Currency:  string(sec.Currency),
 			}
 			evalSecurities = append(evalSecurities, evalSec)
 			if sec.ISIN != "" {
@@ -303,18 +303,16 @@ func convertPortfolioContext(
 
 	return models.PortfolioContext{
 		// Core allocation data
-		CountryWeights:     scoringCtx.CountryWeights,
-		IndustryWeights:    scoringCtx.IndustryWeights,
-		Positions:          scoringCtx.Positions,
-		SecurityCountries:  scoringCtx.SecurityCountries,
-		SecurityIndustries: scoringCtx.SecurityIndustries,
-		SecurityScores:     scoringCtx.SecurityScores,
-		SecurityDividends:  scoringCtx.SecurityDividends,
-		CountryToGroup:     scoringCtx.CountryToGroup,
-		IndustryToGroup:    scoringCtx.IndustryToGroup,
-		PositionAvgPrices:  scoringCtx.PositionAvgPrices,
-		CurrentPrices:      scoringCtx.CurrentPrices,
-		TotalValue:         scoringCtx.TotalValue,
+		GeographyWeights:    scoringCtx.GeographyWeights,
+		IndustryWeights:     scoringCtx.IndustryWeights,
+		Positions:           scoringCtx.Positions,
+		SecurityGeographies: scoringCtx.SecurityGeographies,
+		SecurityIndustries:  scoringCtx.SecurityIndustries,
+		SecurityScores:      scoringCtx.SecurityScores,
+		SecurityDividends:   scoringCtx.SecurityDividends,
+		PositionAvgPrices:   scoringCtx.PositionAvgPrices,
+		CurrentPrices:       scoringCtx.CurrentPrices,
+		TotalValue:          scoringCtx.TotalValue,
 
 		// Extended metrics (from scoringCtx if available)
 		SecurityCAGRs:       scoringCtx.SecurityCAGRs,

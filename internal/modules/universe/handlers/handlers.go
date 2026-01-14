@@ -46,7 +46,7 @@ type PriorityInput struct {
 	AllocationFitScore *float64
 	Symbol             string
 	Name               string
-	Country            string
+	Geography          string
 	Industry           string
 	StockScore         float64
 	Multiplier         float64
@@ -61,7 +61,7 @@ type PriorityResult struct {
 	AllocationFitScore *float64
 	Symbol             string
 	Name               string
-	Country            string
+	Geography          string
 	Industry           string
 	StockScore         float64
 	Multiplier         float64
@@ -78,7 +78,7 @@ func calculatePriority(input PriorityInput) PriorityResult {
 	return PriorityResult{
 		Symbol:             input.Symbol,
 		Name:               input.Name,
-		Country:            input.Country,
+		Geography:          input.Geography,
 		Industry:           input.Industry,
 		StockScore:         input.StockScore,
 		Volatility:         input.Volatility,
@@ -193,7 +193,7 @@ func (h *UniverseHandlers) HandleGetStocks(w http.ResponseWriter, r *http.Reques
 		priorityInputs = append(priorityInputs, PriorityInput{
 			Symbol:             sec.Symbol,
 			Name:               sec.Name,
-			Country:            sec.Country,
+			Geography:          sec.Geography,
 			Industry:           sec.Industry,
 			StockScore:         stockScore,
 			Volatility:         sec.Volatility,
@@ -221,7 +221,7 @@ func (h *UniverseHandlers) HandleGetStocks(w http.ResponseWriter, r *http.Reques
 			"name":                 sec.Name,
 			"isin":                 sec.ISIN,
 			"product_type":         sec.ProductType,
-			"country":              sec.Country,
+			"geography":            sec.Geography,
 			"fullExchangeName":     sec.FullExchangeName,
 			"industry":             sec.Industry,
 			"priority_multiplier":  sec.PriorityMultiplier,
@@ -346,7 +346,7 @@ func (h *UniverseHandlers) HandleGetStock(w http.ResponseWriter, r *http.Request
 		"name":                 security.Name,
 		"product_type":         security.ProductType,
 		"industry":             security.Industry,
-		"country":              security.Country,
+		"geography":            security.Geography,
 		"fullExchangeName":     security.FullExchangeName,
 		"priority_multiplier":  security.PriorityMultiplier,
 		"min_lot":              security.MinLot,
@@ -567,7 +567,7 @@ func (h *UniverseHandlers) HandleRefreshAllScores(w http.ResponseWriter, r *http
 		// If missing, it will be updated during the next sync cycle
 
 		// Calculate score (client symbols no longer needed for scoring)
-		score, err := h.calculateAndSaveScore(security.ISIN, security.Country, security.Industry)
+		score, err := h.calculateAndSaveScore(security.ISIN, security.Geography, security.Industry)
 		if err != nil {
 			h.log.Warn().Err(err).Str("symbol", security.Symbol).Msg("Failed to calculate score")
 			continue
@@ -676,7 +676,7 @@ func (h *UniverseHandlers) HandleRefreshStockScore(w http.ResponseWriter, r *htt
 	symbol := security.Symbol
 
 	// Calculate and save score (client symbols no longer needed for scoring)
-	score, err := h.calculateAndSaveScore(security.ISIN, security.Country, security.Industry)
+	score, err := h.calculateAndSaveScore(security.ISIN, security.Geography, security.Industry)
 	if err != nil {
 		h.log.Error().Err(err).Str("symbol", symbol).Msg("Failed to calculate score")
 		http.Error(w, "Failed to calculate score", http.StatusInternalServerError)
@@ -781,7 +781,7 @@ func (h *UniverseHandlers) HandleUpdateStock(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Recalculate score (client symbols no longer needed for scoring)
-	score, err := h.calculateAndSaveScore(updatedSecurity.ISIN, updatedSecurity.Country, updatedSecurity.Industry)
+	score, err := h.calculateAndSaveScore(updatedSecurity.ISIN, updatedSecurity.Geography, updatedSecurity.Industry)
 	if err != nil {
 		h.log.Warn().Err(err).Str("isin", updatedSecurity.ISIN).Str("symbol", updatedSecurity.Symbol).Msg("Failed to recalculate score after update")
 		// Continue without score rather than failing the update
@@ -794,7 +794,7 @@ func (h *UniverseHandlers) HandleUpdateStock(w http.ResponseWriter, r *http.Requ
 		"name":                updatedSecurity.Name,
 		"product_type":        updatedSecurity.ProductType,
 		"industry":            updatedSecurity.Industry,
-		"country":             updatedSecurity.Country,
+		"geography":           updatedSecurity.Geography,
 		"fullExchangeName":    updatedSecurity.FullExchangeName,
 		"priority_multiplier": updatedSecurity.PriorityMultiplier,
 		"min_lot":             updatedSecurity.MinLot,
@@ -864,7 +864,7 @@ func (h *UniverseHandlers) HandleDeleteStock(w http.ResponseWriter, r *http.Requ
 // Wraps the private calculateAndSaveScore method
 // After migration: accepts symbol but looks up ISIN internally
 // Client symbols are no longer needed for scoring - all data comes from internal sources
-func (h *UniverseHandlers) CalculateAndSaveScore(symbol string, country string, industry string) error {
+func (h *UniverseHandlers) CalculateAndSaveScore(symbol string, geography string, industry string) error {
 	// Lookup ISIN from symbol
 	security, err := h.securityRepo.GetBySymbol(symbol)
 	if err != nil {
@@ -873,14 +873,14 @@ func (h *UniverseHandlers) CalculateAndSaveScore(symbol string, country string, 
 	if security == nil || security.ISIN == "" {
 		return fmt.Errorf("security not found or missing ISIN: %s", symbol)
 	}
-	_, err = h.calculateAndSaveScore(security.ISIN, country, industry)
+	_, err = h.calculateAndSaveScore(security.ISIN, geography, industry)
 	return err
 }
 
 // calculateAndSaveScore calculates and saves security score
 // All price data comes from internal history.db - no external API calls needed
 // After migration: accepts ISIN as primary identifier (first parameter)
-func (h *UniverseHandlers) calculateAndSaveScore(isin string, country string, industry string) (*universe.SecurityScore, error) {
+func (h *UniverseHandlers) calculateAndSaveScore(isin string, geography string, industry string) (*universe.SecurityScore, error) {
 	// Get security by ISIN to extract symbol
 	security, err := h.securityRepo.GetByISIN(isin)
 	if err != nil {
@@ -941,9 +941,9 @@ func (h *UniverseHandlers) calculateAndSaveScore(isin string, country string, in
 		MonthlyPrices: monthlyPricesConverted,
 	}
 
-	// Add country and industry for allocation fit scoring
-	if country != "" {
-		scoringInput.Country = &country
+	// Add geography and industry for allocation fit scoring
+	if geography != "" {
+		scoringInput.Geography = &geography
 	}
 	if industry != "" {
 		scoringInput.Industry = &industry

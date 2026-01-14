@@ -40,7 +40,7 @@ type CorrelationPair struct {
 type ConstraintsSummary struct {
 	TotalSecurities      int
 	SecuritiesWithBounds int
-	CountryConstraints   int
+	GeographyConstraints int
 	IndustryConstraints  int
 	TotalMinWeight       float64
 	TotalMaxWeight       float64
@@ -56,10 +56,10 @@ type PortfolioState struct {
 	PortfolioValue float64
 	CurrentPrices  map[string]float64 // ISIN -> price in EUR
 	CashBalance    float64
-	// CountryTargets holds RAW allocation weights as configured by user.
+	// GeographyTargets holds RAW allocation weights as configured by user.
 	// These are NOT normalized - normalization happens in buildSectorConstraints().
 	// Example: {EU: 0.8, US: 0.8, Asia: 0.4} - arbitrary numbers, not percentages.
-	CountryTargets map[string]float64
+	GeographyTargets map[string]float64
 	// IndustryTargets holds RAW allocation weights as configured by user.
 	// These are NOT normalized - normalization happens in buildSectorConstraints().
 	IndustryTargets map[string]float64
@@ -71,8 +71,8 @@ type Security struct {
 	ISIN               string // Primary identifier
 	Symbol             string // Broker symbol (needed for trade execution)
 	ProductType        string // EQUITY, ETF, MUTUALFUND, ETC, CASH, UNKNOWN
-	Country            string
-	Industry           string
+	Geography          string // Geography (comma-separated for multiple)
+	Industry           string // Industry (comma-separated for multiple)
 	MinPortfolioTarget float64
 	MaxPortfolioTarget float64
 	AllowBuy           bool

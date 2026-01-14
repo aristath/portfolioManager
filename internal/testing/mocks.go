@@ -819,7 +819,7 @@ func (m *MockSecurityRepository) GetWithScores(portfolioDB *sql.DB) ([]universe.
 			ISIN:               sec.ISIN,
 			Name:               sec.Name,
 			Industry:           sec.Industry,
-			Country:            sec.Country,
+			Geography:          sec.Geography,
 			FullExchangeName:   sec.FullExchangeName,
 			Currency:           sec.Currency,
 			ProductType:        sec.ProductType,
@@ -1710,10 +1710,10 @@ type MockPortfolioSummaryProvider struct {
 func NewMockPortfolioSummaryProvider() *MockPortfolioSummaryProvider {
 	return &MockPortfolioSummaryProvider{
 		summary: domain.PortfolioSummary{
-			CountryAllocations:  make([]domain.PortfolioAllocation, 0),
-			IndustryAllocations: make([]domain.PortfolioAllocation, 0),
-			TotalValue:          0.0,
-			CashBalance:         0.0,
+			GeographyAllocations: make([]domain.PortfolioAllocation, 0),
+			IndustryAllocations:  make([]domain.PortfolioAllocation, 0),
+			TotalValue:           0.0,
+			CashBalance:          0.0,
 		},
 	}
 }

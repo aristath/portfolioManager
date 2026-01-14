@@ -404,11 +404,10 @@ func (s *Server) setupRoutes() {
 
 		// Allocation module
 		allocRepo := s.container.AllocRepo
-		groupingRepo := s.container.GroupingRepo
 		alertService := s.container.ConcentrationAlertService
 		portfolioService := s.container.PortfolioService
 		portfolioSummaryAdapter := portfolio.NewPortfolioSummaryAdapter(portfolioService)
-		allocationHandler := allocationhandlers.NewHandler(allocRepo, groupingRepo, alertService, portfolioSummaryAdapter, s.container.EventManager, s.log)
+		allocationHandler := allocationhandlers.NewHandler(allocRepo, alertService, portfolioSummaryAdapter, s.container.EventManager, s.log)
 		allocationHandler.RegisterRoutes(r)
 
 		// Portfolio module

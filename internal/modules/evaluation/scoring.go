@@ -36,15 +36,13 @@ const (
 // convertToCorePorfolioContext converts local PortfolioContext to core models.PortfolioContext
 func convertToCorePortfolioContext(ctx PortfolioContext) coremodels.PortfolioContext {
 	return coremodels.PortfolioContext{
-		CountryWeights:         ctx.CountryWeights,
+		GeographyWeights:       ctx.GeographyWeights,
 		IndustryWeights:        ctx.IndustryWeights,
 		Positions:              ctx.Positions,
-		SecurityCountries:      ctx.SecurityCountries,
+		SecurityGeographies:    ctx.SecurityGeographies,
 		SecurityIndustries:     ctx.SecurityIndustries,
 		SecurityScores:         ctx.SecurityScores,
 		SecurityDividends:      ctx.SecurityDividends,
-		CountryToGroup:         ctx.CountryToGroup,
-		IndustryToGroup:        ctx.IndustryToGroup,
 		PositionAvgPrices:      ctx.PositionAvgPrices,
 		CurrentPrices:          ctx.CurrentPrices,
 		TotalValue:             ctx.TotalValue,
@@ -82,15 +80,13 @@ func convertToCoreSequence(sequence []ActionCandidate) []coremodels.ActionCandid
 // convertFromCorePortfolioContext converts core models.PortfolioContext to local PortfolioContext
 func convertFromCorePortfolioContext(ctx coremodels.PortfolioContext) PortfolioContext {
 	return PortfolioContext{
-		CountryWeights:         ctx.CountryWeights,
+		GeographyWeights:       ctx.GeographyWeights,
 		IndustryWeights:        ctx.IndustryWeights,
 		Positions:              ctx.Positions,
-		SecurityCountries:      ctx.SecurityCountries,
+		SecurityGeographies:    ctx.SecurityGeographies,
 		SecurityIndustries:     ctx.SecurityIndustries,
 		SecurityScores:         ctx.SecurityScores,
 		SecurityDividends:      ctx.SecurityDividends,
-		CountryToGroup:         ctx.CountryToGroup,
-		IndustryToGroup:        ctx.IndustryToGroup,
 		PositionAvgPrices:      ctx.PositionAvgPrices,
 		CurrentPrices:          ctx.CurrentPrices,
 		TotalValue:             ctx.TotalValue,
@@ -201,12 +197,12 @@ func EvaluateSequence(
 	coreSecurities := make([]coremodels.Security, len(context.Securities))
 	for i, sec := range context.Securities {
 		coreSecurities[i] = coremodels.Security{
-			ISIN:     sec.ISIN,
-			Symbol:   sec.Symbol,
-			Name:     sec.Name,
-			Country:  sec.Country,
-			Industry: sec.Industry,
-			Currency: sec.Currency,
+			ISIN:      sec.ISIN,
+			Symbol:    sec.Symbol,
+			Name:      sec.Name,
+			Geography: sec.Geography,
+			Industry:  sec.Industry,
+			Currency:  sec.Currency,
 		}
 	}
 	coreContext.Securities = coreSecurities

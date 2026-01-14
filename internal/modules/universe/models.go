@@ -14,14 +14,15 @@ type Tag struct {
 // Security represents a security in the investment universe
 // After Unix timestamp migration: LastSynced uses Unix timestamp (int64)
 // Converted to string only at JSON boundary for API compatibility
+// Geography and Industry support comma-separated values for multiple assignments
 type Security struct {
 	Currency           string   `json:"currency,omitempty"`
 	Name               string   `json:"name"`
 	ProductType        string   `json:"product_type"`
-	Country            string   `json:"country,omitempty"`
+	Geography          string   `json:"geography,omitempty"` // Comma-separated for multiple geographies (e.g., "EU, US")
 	FullExchangeName   string   `json:"fullExchangeName,omitempty"`
-	ISIN               string   `json:"isin,omitempty"` // Required: PRIMARY KEY after migration 030
-	Industry           string   `json:"industry,omitempty"`
+	ISIN               string   `json:"isin,omitempty"`     // Required: PRIMARY KEY after migration 030
+	Industry           string   `json:"industry,omitempty"` // Comma-separated for multiple industries (e.g., "Technology, Finance")
 	Symbol             string   `json:"symbol"`
 	LastSynced         *int64   `json:"-"` // Unix timestamp (seconds since epoch), converted to string in MarshalJSON
 	PriorityMultiplier float64  `json:"priority_multiplier"`
@@ -105,7 +106,7 @@ type SecurityWithScore struct {
 	Industry           string   `json:"industry,omitempty"`
 	FullExchangeName   string   `json:"fullExchangeName,omitempty"`
 	LastSynced         *int64   `json:"last_synced,omitempty"` // Unix timestamp, converted to string in handler
-	Country            string   `json:"country,omitempty"`
+	Geography          string   `json:"geography,omitempty"`
 	Currency           string   `json:"currency,omitempty"`
 	ProductType        string   `json:"product_type,omitempty"`
 	ISIN               string   `json:"isin,omitempty"`

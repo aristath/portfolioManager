@@ -31,7 +31,7 @@ type SecuritySetupServiceInterface interface {
 //
 // Responsibilities:
 //   - Calculate portfolio summaries (allocation vs targets)
-//   - Aggregate position values by country/industry
+//   - Aggregate position values by geography/industry
 //   - Convert currencies for portfolio totals
 //   - Provide portfolio state queries
 //
@@ -109,11 +109,11 @@ func (s *PortfolioService) GetPortfolioSummary() (PortfolioSummary, error) {
 	// Check for stale price data (warn only, don't block)
 	s.checkPriceStaleness(positions)
 
-	// Aggregate position values by country and industry
-	countryValues, industryValues, totalValue := s.aggregatePositionValues(positions)
+	// Aggregate position values by geography and industry
+	geographyValues, industryValues, totalValue := s.aggregatePositionValues(positions)
 
-	// Get all countries and industries from active securities in the universe
-	allStockCountries, allStockIndustries, err := s.getAllSecurityCountriesAndIndustries()
+	// Get all geographies and industries from active securities in the universe
+	allStockGeographies, allStockIndustries, err := s.getAllSecurityGeographiesAndIndustries()
 	if err != nil {
 		return PortfolioSummary{}, fmt.Errorf("failed to get securities: %w", err)
 	}
@@ -202,26 +202,26 @@ func (s *PortfolioService) GetPortfolioSummary() (PortfolioSummary, error) {
 	}
 
 	// Build allocations (using positions-only value for percentage calculations)
-	countryAllocations := s.buildCountryAllocations(targets, countryValues, totalValue, allStockCountries)
+	geographyAllocations := s.buildGeographyAllocations(targets, geographyValues, totalValue, allStockGeographies)
 	industryAllocations := s.buildIndustryAllocations(targets, industryValues, totalValue, allStockIndustries)
 
 	// Total portfolio value includes cash
 	totalPortfolioValue := totalValue + cashBalance
 
 	return PortfolioSummary{
-		TotalValue:          round(totalPortfolioValue, 2),
-		CashBalance:         round(cashBalance, 2),
-		CountryAllocations:  countryAllocations,
-		IndustryAllocations: industryAllocations,
+		TotalValue:           round(totalPortfolioValue, 2),
+		CashBalance:          round(cashBalance, 2),
+		GeographyAllocations: geographyAllocations,
+		IndustryAllocations:  industryAllocations,
 	}, nil
 }
 
-// aggregatePositionValues aggregates position values by country and industry
-// Faithful translation of Python: def _aggregate_position_values(self, positions)
+// aggregatePositionValues aggregates position values by geography and industry
+// Both geography and industry support comma-separated values for multiple assignments
 func (s *PortfolioService) aggregatePositionValues(positions []PositionWithSecurity) (
 	map[string]float64, map[string]float64, float64,
 ) {
-	countryValues := make(map[string]float64)
+	geographyValues := make(map[string]float64)
 	industryValues := make(map[string]float64)
 	totalValue := 0.0
 
@@ -233,9 +233,13 @@ func (s *PortfolioService) aggregatePositionValues(positions []PositionWithSecur
 		eurValue := s.calculatePositionValue(pos)
 		totalValue += eurValue
 
-		// Aggregate by country
-		if pos.Country != "" {
-			countryValues[pos.Country] += eurValue
+		// Aggregate by geography (split if multiple geographies)
+		geographies := parseGeographies(pos.Geography)
+		if len(geographies) > 0 {
+			splitValue := eurValue / float64(len(geographies))
+			for _, geo := range geographies {
+				geographyValues[geo] += splitValue
+			}
 		}
 
 		// Aggregate by industry (split if multiple industries)
@@ -248,7 +252,7 @@ func (s *PortfolioService) aggregatePositionValues(positions []PositionWithSecur
 		}
 	}
 
-	return countryValues, industryValues, totalValue
+	return geographyValues, industryValues, totalValue
 }
 
 // calculatePositionValue calculates EUR value for a position
@@ -371,42 +375,41 @@ func (s *PortfolioService) calculatePositionValue(pos PositionWithSecurity) floa
 	return eurValue
 }
 
-// buildCountryAllocations builds country allocation status list
-// Faithful translation of Python: def _build_country_allocations(...)
-func (s *PortfolioService) buildCountryAllocations(
+// buildGeographyAllocations builds geography allocation status list
+func (s *PortfolioService) buildGeographyAllocations(
 	targets map[string]float64,
-	countryValues map[string]float64,
+	geographyValues map[string]float64,
 	totalValue float64,
-	allStockCountries map[string]bool,
+	allStockGeographies map[string]bool,
 ) []AllocationStatus {
-	// Collect all countries
-	allCountries := make(map[string]bool)
+	// Collect all geographies
+	allGeographies := make(map[string]bool)
 	for key := range targets {
-		if strings.HasPrefix(key, "country:") {
-			country := strings.TrimPrefix(key, "country:")
-			allCountries[country] = true
+		if strings.HasPrefix(key, "geography:") {
+			geography := strings.TrimPrefix(key, "geography:")
+			allGeographies[geography] = true
 		}
 	}
-	for country := range countryValues {
-		allCountries[country] = true
+	for geography := range geographyValues {
+		allGeographies[geography] = true
 	}
-	for country := range allStockCountries {
-		allCountries[country] = true
+	for geography := range allStockGeographies {
+		allGeographies[geography] = true
 	}
 
 	// Build allocations
 	var allocations []AllocationStatus
-	for country := range allCountries {
-		weight := targets[fmt.Sprintf("country:%s", country)]
-		currentVal := countryValues[country]
+	for geography := range allGeographies {
+		weight := targets[fmt.Sprintf("geography:%s", geography)]
+		currentVal := geographyValues[geography]
 		currentPct := 0.0
 		if totalValue > 0 {
 			currentPct = currentVal / totalValue
 		}
 
 		allocations = append(allocations, AllocationStatus{
-			Category:     "country",
-			Name:         country,
+			Category:     "geography",
+			Name:         geography,
 			TargetPct:    weight,
 			CurrentPct:   round(currentPct, 4),
 			CurrentValue: round(currentVal, 2),
@@ -473,9 +476,10 @@ func (s *PortfolioService) buildIndustryAllocations(
 	return allocations
 }
 
-// getAllSecurityCountriesAndIndustries gets all countries and industries from active securities
-func (s *PortfolioService) getAllSecurityCountriesAndIndustries() (map[string]bool, map[string]bool, error) {
-	query := "SELECT country, industry FROM securities WHERE active = 1"
+// getAllSecurityGeographiesAndIndustries gets all geographies and industries from active securities
+// Both geography and industry fields can contain comma-separated values
+func (s *PortfolioService) getAllSecurityGeographiesAndIndustries() (map[string]bool, map[string]bool, error) {
+	query := "SELECT geography, industry FROM securities WHERE active = 1"
 
 	rows, err := s.universeDB.Query(query)
 	if err != nil {
@@ -483,17 +487,20 @@ func (s *PortfolioService) getAllSecurityCountriesAndIndustries() (map[string]bo
 	}
 	defer rows.Close()
 
-	countries := make(map[string]bool)
+	geographies := make(map[string]bool)
 	industries := make(map[string]bool)
 
 	for rows.Next() {
-		var country, industry sql.NullString
-		if err := rows.Scan(&country, &industry); err != nil {
+		var geography, industry sql.NullString
+		if err := rows.Scan(&geography, &industry); err != nil {
 			return nil, nil, fmt.Errorf("failed to scan security: %w", err)
 		}
 
-		if country.Valid && country.String != "" {
-			countries[country.String] = true
+		if geography.Valid && geography.String != "" {
+			geos := parseGeographies(geography.String)
+			for _, geo := range geos {
+				geographies[geo] = true
+			}
 		}
 
 		if industry.Valid && industry.String != "" {
@@ -508,11 +515,26 @@ func (s *PortfolioService) getAllSecurityCountriesAndIndustries() (map[string]bo
 		return nil, nil, fmt.Errorf("error iterating securities: %w", err)
 	}
 
-	return countries, industries, nil
+	return geographies, industries, nil
+}
+
+// parseGeographies parses comma-separated geography string into list
+func parseGeographies(geographyStr string) []string {
+	if geographyStr == "" {
+		return []string{}
+	}
+
+	var result []string
+	for _, geo := range strings.Split(geographyStr, ",") {
+		trimmed := strings.TrimSpace(geo)
+		if trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
 }
 
 // parseIndustries parses comma-separated industry string into list
-// Faithful translation of Python: def parse_industries(industry_str: str) -> list[str]
 func parseIndustries(industryStr string) []string {
 	if industryStr == "" {
 		return []string{}

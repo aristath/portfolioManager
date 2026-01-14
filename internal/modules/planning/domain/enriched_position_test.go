@@ -130,7 +130,7 @@ func TestEnrichedPosition_AllFieldsPopulated(t *testing.T) {
 
 		// Security metadata
 		SecurityName: "Apple Inc.",
-		Country:      "US",
+		Geography:    "US",
 		Exchange:     "NASDAQ",
 		Active:       true,
 		AllowBuy:     true,
@@ -163,7 +163,7 @@ func TestEnrichedPosition_AllFieldsPopulated(t *testing.T) {
 	require.NotNil(t, pos.LastSoldAt)
 	assert.True(t, lastSold.Equal(*pos.LastSoldAt))
 	assert.Equal(t, "Apple Inc.", pos.SecurityName)
-	assert.Equal(t, "US", pos.Country)
+	assert.Equal(t, "US", pos.Geography)
 	assert.Equal(t, "NASDAQ", pos.Exchange)
 	assert.True(t, pos.Active)
 	assert.True(t, pos.AllowBuy)

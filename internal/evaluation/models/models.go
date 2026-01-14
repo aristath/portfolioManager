@@ -38,12 +38,12 @@ type ActionCandidate struct {
 // Security represents a security in the investment universe
 // (simplified version with only fields needed for evaluation)
 type Security struct {
-	ISIN     string  `json:"isin"`     // International Securities Identification Number (PRIMARY identifier)
-	Symbol   string  `json:"symbol"`   // Security symbol (BOUNDARY identifier for APIs/UI)
-	Name     string  `json:"name"`     // Security name
-	Country  *string `json:"country"`  // Country (optional)
-	Industry *string `json:"industry"` // Industry (optional)
-	Currency string  `json:"currency"` // Trading currency
+	ISIN      string  `json:"isin"`      // International Securities Identification Number (PRIMARY identifier)
+	Symbol    string  `json:"symbol"`    // Security symbol (BOUNDARY identifier for APIs/UI)
+	Name      string  `json:"name"`      // Security name
+	Geography *string `json:"geography"` // Geography (optional, comma-separated for multiple)
+	Industry  *string `json:"industry"`  // Industry (optional, comma-separated for multiple)
+	Currency  string  `json:"currency"`  // Trading currency
 }
 
 // Position represents a current position in a security
@@ -64,20 +64,16 @@ type Position struct {
 // ISIN is the internal identifier; Symbol is only used at boundaries (UI, APIs).
 type PortfolioContext struct {
 	// Core portfolio weights and positions
-	CountryWeights  map[string]float64 `json:"country_weights"`  // group_name -> weight (0 to 1)
-	IndustryWeights map[string]float64 `json:"industry_weights"` // group_name -> weight (0 to 1)
-	Positions       map[string]float64 `json:"positions"`        // ISIN -> position_value in EUR
-	TotalValue      float64            `json:"total_value"`      // Total portfolio value in EUR
+	GeographyWeights map[string]float64 `json:"geography_weights"` // geography -> weight (0 to 1)
+	IndustryWeights  map[string]float64 `json:"industry_weights"`  // industry -> weight (0 to 1)
+	Positions        map[string]float64 `json:"positions"`         // ISIN -> position_value in EUR
+	TotalValue       float64            `json:"total_value"`       // Total portfolio value in EUR
 
 	// Additional data for portfolio scoring (ALL KEYED BY ISIN)
-	SecurityCountries  map[string]string  `json:"security_countries,omitempty"`  // ISIN -> country (individual)
-	SecurityIndustries map[string]string  `json:"security_industries,omitempty"` // ISIN -> industry (individual)
-	SecurityScores     map[string]float64 `json:"security_scores,omitempty"`     // ISIN -> quality_score (0-1)
-	SecurityDividends  map[string]float64 `json:"security_dividends,omitempty"`  // ISIN -> dividend_yield
-
-	// Group mappings (for mapping individual countries/industries to groups)
-	CountryToGroup  map[string]string `json:"country_to_group,omitempty"`  // country -> group_name
-	IndustryToGroup map[string]string `json:"industry_to_group,omitempty"` // industry -> group_name
+	SecurityGeographies map[string]string  `json:"security_geographies,omitempty"` // ISIN -> geography (comma-separated for multiple)
+	SecurityIndustries  map[string]string  `json:"security_industries,omitempty"`  // ISIN -> industry (comma-separated for multiple)
+	SecurityScores      map[string]float64 `json:"security_scores,omitempty"`      // ISIN -> quality_score (0-1)
+	SecurityDividends   map[string]float64 `json:"security_dividends,omitempty"`   // ISIN -> dividend_yield
 
 	// Cost basis data for averaging down and windfall detection (ALL KEYED BY ISIN)
 	PositionAvgPrices map[string]float64 `json:"position_avg_prices,omitempty"` // ISIN -> avg_purchase_price (EUR)

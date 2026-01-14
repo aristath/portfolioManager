@@ -25,16 +25,13 @@ func TestCalculatePortfolioScore(t *testing.T) {
 					"VGT":  4000.0,
 				},
 				TotalValue: 10000.0,
-				CountryWeights: map[string]float64{
+				GeographyWeights: map[string]float64{
 					"US": 0.0, // Balanced
 				},
-				SecurityCountries: map[string]string{
-					"AAPL": "United States",
-					"MSFT": "United States",
-					"VGT":  "United States",
-				},
-				CountryToGroup: map[string]string{
-					"United States": "US",
+				SecurityGeographies: map[string]string{
+					"AAPL": "US",
+					"MSFT": "US",
+					"VGT":  "US",
 				},
 				SecurityDividends: map[string]float64{
 					"AAPL": 0.02,
@@ -66,14 +63,11 @@ func TestCalculatePortfolioScore(t *testing.T) {
 					"QUALITY1": 10000.0,
 				},
 				TotalValue: 10000.0,
-				CountryWeights: map[string]float64{
+				GeographyWeights: map[string]float64{
 					"US": 0.0,
 				},
-				SecurityCountries: map[string]string{
-					"QUALITY1": "United States",
-				},
-				CountryToGroup: map[string]string{
-					"United States": "US",
+				SecurityGeographies: map[string]string{
+					"QUALITY1": "US",
 				},
 				SecurityDividends: map[string]float64{
 					"QUALITY1": 0.03,
@@ -93,15 +87,12 @@ func TestCalculatePortfolioScore(t *testing.T) {
 					"EUSTOCK": 10000.0,
 				},
 				TotalValue: 10000.0,
-				CountryWeights: map[string]float64{
-					"US":     1.0, // Prioritize (want 30%, have 0%)
-					"EUROPE": 0.0, // Avoid (want 0%, have 100%)
+				GeographyWeights: map[string]float64{
+					"US": 1.0, // Prioritize (want 30%, have 0%)
+					"EU": 0.0, // Avoid (want 0%, have 100%)
 				},
-				SecurityCountries: map[string]string{
-					"EUSTOCK": "Germany",
-				},
-				CountryToGroup: map[string]string{
-					"Germany": "EUROPE",
+				SecurityGeographies: map[string]string{
+					"EUSTOCK": "EU",
 				},
 				SecurityDividends: map[string]float64{
 					"EUSTOCK": 0.02,
@@ -161,7 +152,7 @@ func TestCalculatePostTransactionScore(t *testing.T) {
 		{
 			name:          "Adding to underweight region improves score",
 			symbol:        "EUSTOCK",
-			country:       "Germany",
+			country:       "EU",
 			industry:      strPtr("Technology"),
 			proposedValue: 1000.0,
 			stockQuality:  0.80,
@@ -171,16 +162,12 @@ func TestCalculatePostTransactionScore(t *testing.T) {
 					"USSTOCK": 9000.0,
 				},
 				TotalValue: 9000.0,
-				CountryWeights: map[string]float64{
-					"US":     0.2, // Slightly avoid (overweight)
-					"EUROPE": 0.8, // Slightly prioritize (underweight)
+				GeographyWeights: map[string]float64{
+					"US": 0.2, // Slightly avoid (overweight)
+					"EU": 0.8, // Slightly prioritize (underweight)
 				},
-				SecurityCountries: map[string]string{
-					"USSTOCK": "United States",
-				},
-				CountryToGroup: map[string]string{
-					"United States": "US",
-					"Germany":       "EUROPE",
+				SecurityGeographies: map[string]string{
+					"USSTOCK": "US",
 				},
 				SecurityDividends: map[string]float64{
 					"USSTOCK": 0.02,
@@ -196,7 +183,7 @@ func TestCalculatePostTransactionScore(t *testing.T) {
 		{
 			name:          "Adding high quality stock improves score",
 			symbol:        "HIGHQUAL",
-			country:       "United States",
+			country:       "US",
 			industry:      nil,
 			proposedValue: 1000.0,
 			stockQuality:  0.95, // Very high quality
@@ -206,14 +193,11 @@ func TestCalculatePostTransactionScore(t *testing.T) {
 					"AVGSTOCK": 9000.0,
 				},
 				TotalValue: 9000.0,
-				CountryWeights: map[string]float64{
+				GeographyWeights: map[string]float64{
 					"US": 0.0,
 				},
-				SecurityCountries: map[string]string{
-					"AVGSTOCK": "United States",
-				},
-				CountryToGroup: map[string]string{
-					"United States": "US",
+				SecurityGeographies: map[string]string{
+					"AVGSTOCK": "US",
 				},
 				SecurityDividends: map[string]float64{
 					"AVGSTOCK": 0.01,
@@ -228,7 +212,7 @@ func TestCalculatePostTransactionScore(t *testing.T) {
 		{
 			name:          "Adding to overweight region may not improve",
 			symbol:        "USSTOCK2",
-			country:       "United States",
+			country:       "US",
 			industry:      nil,
 			proposedValue: 1000.0,
 			stockQuality:  0.70,
@@ -238,15 +222,12 @@ func TestCalculatePostTransactionScore(t *testing.T) {
 					"USSTOCK1": 9000.0,
 				},
 				TotalValue: 9000.0,
-				CountryWeights: map[string]float64{
-					"US":     0.0, // Avoid (already overweight)
-					"EUROPE": 0.8, // Prioritize (underweight)
+				GeographyWeights: map[string]float64{
+					"US": 0.0, // Avoid (already overweight)
+					"EU": 0.8, // Prioritize (underweight)
 				},
-				SecurityCountries: map[string]string{
-					"USSTOCK1": "United States",
-				},
-				CountryToGroup: map[string]string{
-					"United States": "US",
+				SecurityGeographies: map[string]string{
+					"USSTOCK1": "US",
 				},
 				SecurityDividends: map[string]float64{
 					"USSTOCK1": 0.02,

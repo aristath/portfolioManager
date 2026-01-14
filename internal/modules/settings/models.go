@@ -161,7 +161,7 @@ var SettingDefaults = map[string]interface{}{
 	"display_momentum_sensitivity":         0.5,   // How much recent trend affects drift (0-1)
 
 	// UI Preferences
-	"security_table_visible_columns": `{"chart":true,"company":true,"country":true,"exchange":true,"sector":true,"tags":true,"value":true,"score":true,"mult":true,"bs":true,"priority":true}`, // JSON string with column visibility preferences
+	"security_table_visible_columns": `{"chart":true,"company":true,"geography":true,"exchange":true,"sector":true,"tags":true,"value":true,"score":true,"mult":true,"bs":true,"priority":true}`, // JSON string with column visibility preferences
 
 	// Limit Order Protection
 	"limit_order_buffer_percent": 0.05, // 5% buffer for limit orders (buy up to 5% above market price, sell down to 5% below)

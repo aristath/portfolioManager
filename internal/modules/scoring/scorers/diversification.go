@@ -31,7 +31,7 @@ func NewDiversificationScorer() *DiversificationScorer {
 // - Averaging Down (30%): Bonus for quality dips we own
 func (ds *DiversificationScorer) Calculate(
 	symbol string,
-	country string,
+	geography string,
 	industry *string,
 	qualityScore float64,
 	opportunityScore float64,
@@ -42,14 +42,14 @@ func (ds *DiversificationScorer) Calculate(
 		return DiversificationScore{
 			Score: 0.5,
 			Components: map[string]float64{
-				"country":   0.5,
+				"geography": 0.5,
 				"industry":  0.5,
 				"averaging": 0.5,
 			},
 		}
 	}
 
-	geoGapScore := calculateGeoGapScore(country, portfolioContext)
+	geoGapScore := calculateGeoGapScore(geography, portfolioContext)
 	industryGapScore := calculateIndustryGapScore(industry, portfolioContext)
 	averagingDownScore := calculateAveragingDownScore(symbol, qualityScore, opportunityScore, portfolioContext)
 
@@ -60,41 +60,53 @@ func (ds *DiversificationScorer) Calculate(
 	return DiversificationScore{
 		Score: round3(totalScore),
 		Components: map[string]float64{
-			"country":   round3(geoGapScore),
+			"geography": round3(geoGapScore),
 			"industry":  round3(industryGapScore),
 			"averaging": round3(averagingDownScore),
 		},
 	}
 }
 
-// calculateGeoGapScore calculates country gap score (40% weight)
+// calculateGeoGapScore calculates geography gap score (40% weight)
 // Higher weight = underweight region = higher score (buy to rebalance)
-func calculateGeoGapScore(country string, portfolioContext *domain.PortfolioContext) float64 {
-	// Map individual country to group
-	group := "OTHER"
-	if portfolioContext.CountryToGroup != nil {
-		if g, ok := portfolioContext.CountryToGroup[country]; ok {
-			group = g
+// For securities with multiple geographies, returns the highest score.
+func calculateGeoGapScore(geography string, portfolioContext *domain.PortfolioContext) float64 {
+	if geography == "" {
+		return 0.5
+	}
+
+	// Split comma-separated geographies and find highest score
+	geos := strings.Split(geography, ",")
+	maxScore := 0.1
+
+	for _, geo := range geos {
+		geo = strings.TrimSpace(geo)
+		if geo == "" {
+			continue
+		}
+
+		// Look up weight for the geography directly (0 to 1, where higher = prioritize)
+		geoWeight := 0.0
+		if portfolioContext.GeographyWeights != nil {
+			geoWeight = portfolioContext.GeographyWeights[geo]
+		}
+
+		// Convert weight to score: 0.1 + (weight * 0.8)
+		// weight=1 (prioritize) → score=0.9
+		// weight=0.5 (neutral) → score=0.5
+		// weight=0 (avoid) → score=0.1
+		geoGapScore := 0.1 + (geoWeight * 0.8)
+		if geoGapScore > maxScore {
+			maxScore = geoGapScore
 		}
 	}
 
-	// Look up weight for the group (0 to 1, where higher = prioritize)
-	geoWeight := 0.0
-	if portfolioContext.CountryWeights != nil {
-		geoWeight = portfolioContext.CountryWeights[group]
-	}
-
-	// Convert weight to score: 0.1 + (weight * 0.8)
-	// weight=1 (prioritize) → score=0.9
-	// weight=0.5 (neutral) → score=0.5
-	// weight=0 (avoid) → score=0.1
-	geoGapScore := 0.1 + (geoWeight * 0.8)
-
-	return math.Max(0.1, math.Min(0.9, geoGapScore))
+	return math.Max(0.1, math.Min(0.9, maxScore))
 }
 
 // calculateIndustryGapScore calculates industry gap score (30% weight)
 // Higher weight = underweight sector = higher score
+// For securities with multiple industries, returns the average score.
 func calculateIndustryGapScore(industry *string, portfolioContext *domain.PortfolioContext) float64 {
 	if industry == nil || *industry == "" {
 		return 0.5
@@ -113,18 +125,10 @@ func calculateIndustryGapScore(industry *string, portfolioContext *domain.Portfo
 			continue
 		}
 
-		// Map individual industry to group
-		group := "OTHER"
-		if portfolioContext.IndustryToGroup != nil {
-			if g, ok := portfolioContext.IndustryToGroup[ind]; ok {
-				group = g
-			}
-		}
-
-		// Look up weight for the group (0 to 1, where higher = prioritize)
+		// Look up weight for the industry directly (0 to 1, where higher = prioritize)
 		indWeight := 0.0
 		if portfolioContext.IndustryWeights != nil {
-			indWeight = portfolioContext.IndustryWeights[group]
+			indWeight = portfolioContext.IndustryWeights[ind]
 		}
 
 		// Convert weight to score: 0.1 + (weight * 0.8)
@@ -245,52 +249,51 @@ func applyConcentrationPenalty(positionValue float64, score float64, portfolioCo
 // calculateDiversificationScore calculates diversification score (40% weight)
 // Measures how close portfolio is to target geo/industry allocations
 func calculateDiversificationScore(portfolioContext *domain.PortfolioContext, totalValue float64) float64 {
-	var countryDeviations []float64
+	var geographyDeviations []float64
 
-	if portfolioContext.SecurityCountries != nil {
-		// Map individual countries to groups and aggregate by group
-		countryToGroup := portfolioContext.CountryToGroup
-		if countryToGroup == nil {
-			countryToGroup = make(map[string]string)
-		}
-
-		groupValues := make(map[string]float64)
+	if portfolioContext.SecurityGeographies != nil {
+		// Aggregate position values by geography (direct, no groups)
+		geographyValues := make(map[string]float64)
 		for symbol, value := range portfolioContext.Positions {
-			country, hasCountry := portfolioContext.SecurityCountries[symbol]
-			if !hasCountry {
-				country = "OTHER"
+			geography, hasGeography := portfolioContext.SecurityGeographies[symbol]
+			if !hasGeography {
+				geography = "OTHER"
 			}
 
-			group, hasGroup := countryToGroup[country]
-			if !hasGroup {
-				group = "OTHER"
+			// Split comma-separated geographies and distribute value equally
+			geos := strings.Split(geography, ",")
+			valuePerGeo := value / float64(len(geos))
+			for _, geo := range geos {
+				geo = strings.TrimSpace(geo)
+				if geo == "" {
+					geo = "OTHER"
+				}
+				geographyValues[geo] += valuePerGeo
 			}
-
-			groupValues[group] += value
 		}
 
-		// Compare group allocations to group targets
-		for group, weight := range portfolioContext.CountryWeights {
-			targetPct := weight // Group targets are already percentages (0-1)
+		// Compare geography allocations to geography targets
+		for geography, weight := range portfolioContext.GeographyWeights {
+			targetPct := weight // Targets are already percentages (0-1)
 			currentPct := 0.0
 			if totalValue > 0 {
-				currentPct = groupValues[group] / totalValue
+				currentPct = geographyValues[geography] / totalValue
 			}
 			deviation := math.Abs(currentPct - targetPct)
-			countryDeviations = append(countryDeviations, deviation)
+			geographyDeviations = append(geographyDeviations, deviation)
 		}
 	}
 
-	avgCountryDeviation := 0.2
-	if len(countryDeviations) > 0 {
+	avgGeographyDeviation := 0.2
+	if len(geographyDeviations) > 0 {
 		sum := 0.0
-		for _, dev := range countryDeviations {
+		for _, dev := range geographyDeviations {
 			sum += dev
 		}
-		avgCountryDeviation = sum / float64(len(countryDeviations))
+		avgGeographyDeviation = sum / float64(len(geographyDeviations))
 	}
 
-	return math.Max(0, 100*(1-avgCountryDeviation/0.3))
+	return math.Max(0, 100*(1-avgGeographyDeviation/0.3))
 }
 
 // calculateDividendScore calculates dividend score (30% weight)
@@ -375,7 +378,7 @@ func (ds *DiversificationScorer) CalculatePortfolioScore(portfolioContext *domai
 // Args:
 //
 //	symbol: Security symbol to buy
-//	country: Security country (e.g., "United States", "Germany")
+//	geography: Security geography (e.g., "US", "EU", "North America")
 //	industry: Security industry (can be nil)
 //	proposedValue: Transaction value (min_lot * price)
 //	stockQuality: Quality score of the security (0-1)
@@ -387,7 +390,7 @@ func (ds *DiversificationScorer) CalculatePortfolioScore(portfolioContext *domai
 //	Tuple of (new_portfolio_score, score_change)
 func (ds *DiversificationScorer) CalculatePostTransactionScore(
 	symbol string,
-	country string,
+	geography string,
 	industry *string,
 	proposedValue float64,
 	stockQuality float64,
@@ -405,12 +408,12 @@ func (ds *DiversificationScorer) CalculatePostTransactionScore(
 	newPositions[symbol] += proposedValue
 
 	newGeographies := make(map[string]string)
-	if portfolioContext.SecurityCountries != nil {
-		for k, v := range portfolioContext.SecurityCountries {
+	if portfolioContext.SecurityGeographies != nil {
+		for k, v := range portfolioContext.SecurityGeographies {
 			newGeographies[k] = v
 		}
 	}
-	newGeographies[symbol] = country
+	newGeographies[symbol] = geography
 
 	newIndustries := make(map[string]string)
 	if portfolioContext.SecurityIndustries != nil {
@@ -439,18 +442,16 @@ func (ds *DiversificationScorer) CalculatePostTransactionScore(
 	newDividends[symbol] = stockDividend
 
 	newContext := &domain.PortfolioContext{
-		CountryWeights:     portfolioContext.CountryWeights,
-		IndustryWeights:    portfolioContext.IndustryWeights,
-		Positions:          newPositions,
-		TotalValue:         portfolioContext.TotalValue + proposedValue,
-		SecurityCountries:  newGeographies,
-		SecurityIndustries: newIndustries,
-		SecurityScores:     newScores,
-		SecurityDividends:  newDividends,
-		CountryToGroup:     portfolioContext.CountryToGroup,
-		IndustryToGroup:    portfolioContext.IndustryToGroup,
-		PositionAvgPrices:  portfolioContext.PositionAvgPrices,
-		CurrentPrices:      portfolioContext.CurrentPrices,
+		GeographyWeights:    portfolioContext.GeographyWeights,
+		IndustryWeights:     portfolioContext.IndustryWeights,
+		Positions:           newPositions,
+		TotalValue:          portfolioContext.TotalValue + proposedValue,
+		SecurityGeographies: newGeographies,
+		SecurityIndustries:  newIndustries,
+		SecurityScores:      newScores,
+		SecurityDividends:   newDividends,
+		PositionAvgPrices:   portfolioContext.PositionAvgPrices,
+		CurrentPrices:       portfolioContext.CurrentPrices,
 	}
 
 	// Calculate new portfolio score

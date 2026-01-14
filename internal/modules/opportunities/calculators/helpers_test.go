@@ -18,7 +18,7 @@ func createEnrichedPosition(pos domain.Position, sec domain.Security, currentPri
 		AverageCost:  pos.AverageCost,
 		Currency:     string(sec.Currency),
 		SecurityName: sec.Name,
-		Country:      sec.Country,
+		Geography:    sec.Geography,
 		Exchange:     sec.Exchange,
 		Active:       sec.Active,
 		AllowBuy:     sec.AllowBuy,

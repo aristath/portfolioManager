@@ -133,15 +133,15 @@ func (j *GetOptimizerWeightsJob) Run() error {
 		return fmt.Errorf("failed to get allocations: %w", err)
 	}
 
-	// Step 7: Extract country and industry targets (raw - normalization happens in constraints)
-	countryTargets := make(map[string]float64)
+	// Step 7: Extract geography and industry targets (raw - normalization happens in constraints)
+	geographyTargets := make(map[string]float64)
 	industryTargets := make(map[string]float64)
 	for key, value := range allocations {
-		if strings.HasPrefix(key, "country_group:") {
-			country := strings.TrimPrefix(key, "country_group:")
-			countryTargets[country] = value
-		} else if strings.HasPrefix(key, "industry_group:") {
-			industry := strings.TrimPrefix(key, "industry_group:")
+		if strings.HasPrefix(key, "geography:") {
+			geography := strings.TrimPrefix(key, "geography:")
+			geographyTargets[geography] = value
+		} else if strings.HasPrefix(key, "industry:") {
+			industry := strings.TrimPrefix(key, "industry:")
 			industryTargets[industry] = value
 		}
 	}
@@ -180,7 +180,7 @@ func (j *GetOptimizerWeightsJob) Run() error {
 		optimizerSecurities = append(optimizerSecurities, optimization.Security{
 			ISIN:               sec.ISIN,   // PRIMARY identifier ✅
 			Symbol:             sec.Symbol, // BOUNDARY identifier
-			Country:            sec.Country,
+			Geography:          sec.Geography,
 			Industry:           sec.Industry,
 			MinPortfolioTarget: 0.0, // Could be from security settings
 			MaxPortfolioTarget: 1.0, // Could be from security settings
@@ -194,14 +194,14 @@ func (j *GetOptimizerWeightsJob) Run() error {
 
 	// Step 10: Build portfolio state
 	state := optimization.PortfolioState{
-		Securities:      optimizerSecurities,
-		Positions:       optimizerPositions,
-		PortfolioValue:  portfolioValue,
-		CurrentPrices:   currentPrices,
-		CashBalance:     cashBalances["EUR"],
-		CountryTargets:  countryTargets,
-		IndustryTargets: industryTargets,
-		DividendBonuses: make(map[string]float64), // Could fetch from dividend repo if needed
+		Securities:       optimizerSecurities,
+		Positions:        optimizerPositions,
+		PortfolioValue:   portfolioValue,
+		CurrentPrices:    currentPrices,
+		CashBalance:      cashBalances["EUR"],
+		GeographyTargets: geographyTargets,
+		IndustryTargets:  industryTargets,
+		DividendBonuses:  make(map[string]float64), // Could fetch from dividend repo if needed
 	}
 
 	// Step 11: Get optimizer settings from planner config

@@ -28,10 +28,10 @@ func TestCalculateTransactionCost(t *testing.T) {
 
 func TestCalculateDiversificationScore_EmptyPortfolio(t *testing.T) {
 	portfolioContext := models.PortfolioContext{
-		Positions:       make(map[string]float64),
-		TotalValue:      0.0,
-		CountryWeights:  make(map[string]float64),
-		IndustryWeights: make(map[string]float64),
+		Positions:        make(map[string]float64),
+		TotalValue:       0.0,
+		GeographyWeights: make(map[string]float64),
+		IndustryWeights:  make(map[string]float64),
 	}
 
 	score := CalculateDiversificationScore(portfolioContext)
@@ -40,25 +40,21 @@ func TestCalculateDiversificationScore_EmptyPortfolio(t *testing.T) {
 }
 
 func TestCalculateDiversificationScore_PerfectAllocation(t *testing.T) {
-	// Perfect geographic allocation
+	// Perfect geographic allocation - geography weights now match security geographies directly
 	portfolioContext := models.PortfolioContext{
 		Positions: map[string]float64{
 			"US_STOCK": 600.0,
 			"EU_STOCK": 400.0,
 		},
 		TotalValue: 1000.0,
-		CountryWeights: map[string]float64{
-			"NORTH_AMERICA": 0.6,
-			"EUROPE":        0.4,
+		GeographyWeights: map[string]float64{
+			"US": 0.6, // Direct geography values, no group mapping
+			"EU": 0.4,
 		},
 		IndustryWeights: map[string]float64{},
-		SecurityCountries: map[string]string{
-			"US_STOCK": "United States",
-			"EU_STOCK": "Germany",
-		},
-		CountryToGroup: map[string]string{
-			"United States": "NORTH_AMERICA",
-			"Germany":       "EUROPE",
+		SecurityGeographies: map[string]string{
+			"US_STOCK": "US",
+			"EU_STOCK": "EU",
 		},
 	}
 
@@ -78,18 +74,14 @@ func TestCalculateDiversificationScore_ImbalancedAllocation(t *testing.T) {
 			"EU_STOCK": 100.0,
 		},
 		TotalValue: 1000.0,
-		CountryWeights: map[string]float64{
-			"NORTH_AMERICA": 0.6,
-			"EUROPE":        0.4,
+		GeographyWeights: map[string]float64{
+			"US": 0.6,
+			"EU": 0.4,
 		},
 		IndustryWeights: map[string]float64{},
-		SecurityCountries: map[string]string{
-			"US_STOCK": "United States",
-			"EU_STOCK": "Germany",
-		},
-		CountryToGroup: map[string]string{
-			"United States": "NORTH_AMERICA",
-			"Germany":       "EUROPE",
+		SecurityGeographies: map[string]string{
+			"US_STOCK": "US",
+			"EU_STOCK": "EU",
 		},
 	}
 
@@ -106,16 +98,13 @@ func TestEvaluateEndState_BasicScore(t *testing.T) {
 			"MSFT": 500.0,
 		},
 		TotalValue: 1000.0,
-		CountryWeights: map[string]float64{
-			"NORTH_AMERICA": 1.0,
+		GeographyWeights: map[string]float64{
+			"US": 1.0,
 		},
 		IndustryWeights: map[string]float64{},
-		SecurityCountries: map[string]string{
-			"AAPL": "United States",
-			"MSFT": "United States",
-		},
-		CountryToGroup: map[string]string{
-			"United States": "NORTH_AMERICA",
+		SecurityGeographies: map[string]string{
+			"AAPL": "US",
+			"MSFT": "US",
 		},
 	}
 
@@ -143,9 +132,9 @@ func TestEvaluateEndState_WithCostPenalty(t *testing.T) {
 		Positions: map[string]float64{
 			"AAPL": 500.0,
 		},
-		TotalValue:      500.0,
-		CountryWeights:  make(map[string]float64),
-		IndustryWeights: make(map[string]float64),
+		TotalValue:       500.0,
+		GeographyWeights: make(map[string]float64),
+		IndustryWeights:  make(map[string]float64),
 	}
 
 	sequence := []models.ActionCandidate{
@@ -182,10 +171,10 @@ func TestEvaluateSequence_Feasible(t *testing.T) {
 	isin := "US0378331005" // AAPL ISIN
 	context := models.EvaluationContext{
 		PortfolioContext: models.PortfolioContext{
-			Positions:       make(map[string]float64),
-			TotalValue:      1000.0,
-			CountryWeights:  make(map[string]float64),
-			IndustryWeights: make(map[string]float64),
+			Positions:        make(map[string]float64),
+			TotalValue:       1000.0,
+			GeographyWeights: make(map[string]float64),
+			IndustryWeights:  make(map[string]float64),
 		},
 		AvailableCashEUR: 1000.0,
 		Securities: []models.Security{
@@ -218,10 +207,10 @@ func TestEvaluateSequence_Feasible(t *testing.T) {
 func TestEvaluateSequence_Infeasible(t *testing.T) {
 	context := models.EvaluationContext{
 		PortfolioContext: models.PortfolioContext{
-			Positions:       make(map[string]float64),
-			TotalValue:      1000.0,
-			CountryWeights:  make(map[string]float64),
-			IndustryWeights: make(map[string]float64),
+			Positions:        make(map[string]float64),
+			TotalValue:       1000.0,
+			GeographyWeights: make(map[string]float64),
+			IndustryWeights:  make(map[string]float64),
 		},
 		AvailableCashEUR:       500.0,
 		Securities:             []models.Security{},
@@ -259,16 +248,13 @@ func TestScoringIsPureEndState(t *testing.T) {
 			"MSFT": 500.0,
 		},
 		TotalValue: 1000.0,
-		CountryWeights: map[string]float64{
-			"NORTH_AMERICA": 1.0,
+		GeographyWeights: map[string]float64{
+			"US": 1.0,
 		},
 		IndustryWeights: map[string]float64{},
-		SecurityCountries: map[string]string{
-			"AAPL": "United States",
-			"MSFT": "United States",
-		},
-		CountryToGroup: map[string]string{
-			"United States": "NORTH_AMERICA",
+		SecurityGeographies: map[string]string{
+			"AAPL": "US",
+			"MSFT": "US",
 		},
 	}
 
@@ -278,16 +264,13 @@ func TestScoringIsPureEndState(t *testing.T) {
 			"MSFT": 400.0,
 		},
 		TotalValue: 1000.0,
-		CountryWeights: map[string]float64{
-			"NORTH_AMERICA": 1.0,
+		GeographyWeights: map[string]float64{
+			"US": 1.0,
 		},
 		IndustryWeights: map[string]float64{},
-		SecurityCountries: map[string]string{
-			"AAPL": "United States",
-			"MSFT": "United States",
-		},
-		CountryToGroup: map[string]string{
-			"United States": "NORTH_AMERICA",
+		SecurityGeographies: map[string]string{
+			"AAPL": "US",
+			"MSFT": "US",
 		},
 	}
 
@@ -353,18 +336,14 @@ func TestImprovementScoreRewardsProgress(t *testing.T) {
 			"SAP":  100.0,
 		},
 		TotalValue: 1000.0,
-		CountryWeights: map[string]float64{
-			"NORTH_AMERICA": 0.5,
-			"EUROPE":        0.5,
+		GeographyWeights: map[string]float64{
+			"US": 0.5,
+			"EU": 0.5,
 		},
 		IndustryWeights: map[string]float64{},
-		SecurityCountries: map[string]string{
-			"AAPL": "United States",
+		SecurityGeographies: map[string]string{
+			"AAPL": "US",
 			"SAP":  "Germany",
-		},
-		CountryToGroup: map[string]string{
-			"United States": "NORTH_AMERICA",
-			"Germany":       "EUROPE",
 		},
 		// Add some quality scores to differentiate
 		SecurityScores: map[string]float64{
@@ -380,18 +359,14 @@ func TestImprovementScoreRewardsProgress(t *testing.T) {
 			"SAP":  500.0,
 		},
 		TotalValue: 1000.0,
-		CountryWeights: map[string]float64{
-			"NORTH_AMERICA": 0.5,
-			"EUROPE":        0.5,
+		GeographyWeights: map[string]float64{
+			"US": 0.5,
+			"EU": 0.5,
 		},
 		IndustryWeights: map[string]float64{},
-		SecurityCountries: map[string]string{
-			"AAPL": "United States",
+		SecurityGeographies: map[string]string{
+			"AAPL": "US",
 			"SAP":  "Germany",
-		},
-		CountryToGroup: map[string]string{
-			"United States": "NORTH_AMERICA",
-			"Germany":       "EUROPE",
 		},
 		SecurityScores: map[string]float64{
 			"AAPL": 0.7,
@@ -427,18 +402,14 @@ func TestEndStateImprovementCalculation(t *testing.T) {
 			"MSFT": 100.0,
 		},
 		TotalValue: 1000.0,
-		CountryWeights: map[string]float64{
-			"NORTH_AMERICA": 0.5,
-			"EUROPE":        0.5,
+		GeographyWeights: map[string]float64{
+			"US": 0.5,
+			"EU": 0.5,
 		},
 		IndustryWeights: map[string]float64{},
-		SecurityCountries: map[string]string{
-			"AAPL": "United States",
-			"MSFT": "Germany",
-		},
-		CountryToGroup: map[string]string{
-			"United States": "NORTH_AMERICA",
-			"Germany":       "EUROPE",
+		SecurityGeographies: map[string]string{
+			"AAPL": "US",
+			"MSFT": "EU",
 		},
 	}
 
@@ -449,18 +420,14 @@ func TestEndStateImprovementCalculation(t *testing.T) {
 			"MSFT": 500.0,
 		},
 		TotalValue: 1000.0,
-		CountryWeights: map[string]float64{
-			"NORTH_AMERICA": 0.5,
-			"EUROPE":        0.5,
+		GeographyWeights: map[string]float64{
+			"US": 0.5,
+			"EU": 0.5,
 		},
 		IndustryWeights: map[string]float64{},
-		SecurityCountries: map[string]string{
-			"AAPL": "United States",
-			"MSFT": "Germany",
-		},
-		CountryToGroup: map[string]string{
-			"United States": "NORTH_AMERICA",
-			"Germany":       "EUROPE",
+		SecurityGeographies: map[string]string{
+			"AAPL": "US",
+			"MSFT": "EU",
 		},
 	}
 
@@ -481,9 +448,9 @@ func TestNoImprovementReturnsNeutral(t *testing.T) {
 			"AAPL": 500.0,
 			"MSFT": 500.0,
 		},
-		TotalValue:      1000.0,
-		CountryWeights:  map[string]float64{},
-		IndustryWeights: map[string]float64{},
+		TotalValue:       1000.0,
+		GeographyWeights: map[string]float64{},
+		IndustryWeights:  map[string]float64{},
 	}
 
 	improvementScore := calculateEndStateImprovementScore(sameContext, sameContext)
@@ -511,16 +478,13 @@ func createTestPortfolioContext(totalValue float64) models.PortfolioContext {
 			"MSFT": totalValue * 0.5,
 		},
 		TotalValue: totalValue,
-		CountryWeights: map[string]float64{
-			"NORTH_AMERICA": 1.0,
+		GeographyWeights: map[string]float64{
+			"US": 1.0,
 		},
 		IndustryWeights: map[string]float64{},
-		SecurityCountries: map[string]string{
-			"AAPL": "United States",
-			"MSFT": "United States",
-		},
-		CountryToGroup: map[string]string{
-			"United States": "NORTH_AMERICA",
+		SecurityGeographies: map[string]string{
+			"AAPL": "US",
+			"MSFT": "US",
 		},
 	}
 }

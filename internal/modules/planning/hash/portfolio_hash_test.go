@@ -22,8 +22,8 @@ func TestGeneratePortfolioHash(t *testing.T) {
 				{Symbol: "GOOGL", Quantity: 5},
 			},
 			securities: []*universe.Security{
-				{Symbol: "AAPL", Country: "US", AllowBuy: true},
-				{Symbol: "GOOGL", Country: "US", AllowBuy: true},
+				{Symbol: "AAPL", Geography: "US", AllowBuy: true},
+				{Symbol: "GOOGL", Geography: "US", AllowBuy: true},
 			},
 			cashBalances: map[string]float64{"EUR": 1000.0},
 			wantSameHash: true,
@@ -41,7 +41,7 @@ func TestGeneratePortfolioHash(t *testing.T) {
 				{Symbol: "AAPL", Quantity: 10},
 			},
 			securities: []*universe.Security{
-				{Symbol: "AAPL", Country: "US", AllowBuy: true},
+				{Symbol: "AAPL", Geography: "US", AllowBuy: true},
 			},
 			cashBalances: map[string]float64{"EUR": 1000.0},
 			pendingOrders: []PendingOrder{
@@ -74,7 +74,7 @@ func TestGeneratePortfolioHash_DifferentPortfolios(t *testing.T) {
 	// Portfolio 1
 	hash1 := GeneratePortfolioHash(
 		[]Position{{Symbol: "AAPL", Quantity: 10}},
-		[]*universe.Security{{Symbol: "AAPL", Country: "US", AllowBuy: true}},
+		[]*universe.Security{{Symbol: "AAPL", Geography: "US", AllowBuy: true}},
 		map[string]float64{"EUR": 1000.0},
 		nil,
 	)
@@ -82,7 +82,7 @@ func TestGeneratePortfolioHash_DifferentPortfolios(t *testing.T) {
 	// Portfolio 2 (different quantity)
 	hash2 := GeneratePortfolioHash(
 		[]Position{{Symbol: "AAPL", Quantity: 20}},
-		[]*universe.Security{{Symbol: "AAPL", Country: "US", AllowBuy: true}},
+		[]*universe.Security{{Symbol: "AAPL", Geography: "US", AllowBuy: true}},
 		map[string]float64{"EUR": 1000.0},
 		nil,
 	)
@@ -90,7 +90,7 @@ func TestGeneratePortfolioHash_DifferentPortfolios(t *testing.T) {
 	// Portfolio 3 (different cash)
 	hash3 := GeneratePortfolioHash(
 		[]Position{{Symbol: "AAPL", Quantity: 10}},
-		[]*universe.Security{{Symbol: "AAPL", Country: "US", AllowBuy: true}},
+		[]*universe.Security{{Symbol: "AAPL", Geography: "US", AllowBuy: true}},
 		map[string]float64{"EUR": 2000.0},
 		nil,
 	)
@@ -265,7 +265,7 @@ func TestApplyPendingOrdersToPortfolio(t *testing.T) {
 func TestGenerateRecommendationCacheKey(t *testing.T) {
 	positions := []Position{{Symbol: "AAPL", Quantity: 10}}
 	settings := map[string]interface{}{"min_security_score": 0.5}
-	securities := []*universe.Security{{Symbol: "AAPL", Country: "US", AllowBuy: true}}
+	securities := []*universe.Security{{Symbol: "AAPL", Geography: "US", AllowBuy: true}}
 	cashBalances := map[string]float64{"EUR": 1000.0}
 	allocations := map[string]float64{"country:US": 0.6}
 

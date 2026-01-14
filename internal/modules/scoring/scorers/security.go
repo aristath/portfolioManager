@@ -85,8 +85,8 @@ func (ss *SecurityScorer) SetFormulaStorage(storage *symbolic_regression.Formula
 type ScoreSecurityInput struct {
 	PortfolioContext    *domain.PortfolioContext
 	Industry            *string
-	Country             *string
-	ProductType         string // Product type: EQUITY, ETF, MUTUALFUND, ETC, CASH, UNKNOWN
+	Geography           *string // Comma-separated for multiple geographies
+	ProductType         string  // Product type: EQUITY, ETF, MUTUALFUND, ETC, CASH, UNKNOWN
 	SortinoRatio        *float64
 	MaxDrawdown         *float64
 	DividendYield       *float64 // Internally calculated from ledger.db

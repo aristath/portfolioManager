@@ -55,10 +55,9 @@ func (p Position) MarshalJSON() ([]byte, error) {
 }
 
 // AllocationStatus represents current allocation vs target
-// Faithful translation from Python: app/domain/models.py
 type AllocationStatus struct {
-	Category     string  `json:"category"`      // "country" or "industry"
-	Name         string  `json:"name"`          // Country name or Industry name
+	Category     string  `json:"category"`      // "geography" or "industry"
+	Name         string  `json:"name"`          // Geography name or Industry name
 	TargetPct    float64 `json:"target_pct"`    // Target allocation percentage
 	CurrentPct   float64 `json:"current_pct"`   // Current allocation percentage
 	CurrentValue float64 `json:"current_value"` // Current value in EUR
@@ -66,19 +65,18 @@ type AllocationStatus struct {
 }
 
 // PortfolioSummary represents complete portfolio allocation summary
-// Faithful translation from Python: app/domain/models.py
 type PortfolioSummary struct {
-	CountryAllocations  []AllocationStatus `json:"country_allocations"`
-	IndustryAllocations []AllocationStatus `json:"industry_allocations"`
-	TotalValue          float64            `json:"total_value"`
-	CashBalance         float64            `json:"cash_balance"`
+	GeographyAllocations []AllocationStatus `json:"geography_allocations"`
+	IndustryAllocations  []AllocationStatus `json:"industry_allocations"`
+	TotalValue           float64            `json:"total_value"`
+	CashBalance          float64            `json:"cash_balance"`
 }
 
 // PositionWithSecurity represents position with security information
 // Used by get_with_security_info() - combines Position + Security data
 type PositionWithSecurity struct {
 	ISIN             string  `db:"isin"` // Primary identifier for internal operations
-	Country          string  `db:"country"`
+	Geography        string  `db:"geography"`
 	StockName        string  `db:"name"`
 	Symbol           string  `db:"symbol"` // For broker API and UI display
 	Currency         string  `db:"currency"`

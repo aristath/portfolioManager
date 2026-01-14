@@ -37,12 +37,12 @@ type ActionCandidate struct {
 // Security represents a security in the investment universe
 // (simplified version with only fields needed for evaluation)
 type Security struct {
-	ISIN     string  `json:"isin"`     // International Securities Identification Number (PRIMARY identifier)
-	Symbol   string  `json:"symbol"`   // Security symbol (BOUNDARY identifier for APIs/UI)
-	Name     string  `json:"name"`     // Security name
-	Country  *string `json:"country"`  // Country (optional)
-	Industry *string `json:"industry"` // Industry (optional)
-	Currency string  `json:"currency"` // Trading currency
+	ISIN      string  `json:"isin"`      // International Securities Identification Number (PRIMARY identifier)
+	Symbol    string  `json:"symbol"`    // Security symbol (BOUNDARY identifier for APIs/UI)
+	Name      string  `json:"name"`      // Security name
+	Geography *string `json:"geography"` // Geography (optional, comma-separated for multiple)
+	Industry  *string `json:"industry"`  // Industry (optional, comma-separated for multiple)
+	Currency  string  `json:"currency"`  // Trading currency
 }
 
 // Position represents a current position in a security
@@ -58,26 +58,24 @@ type Position struct {
 
 // PortfolioContext contains portfolio state for allocation fit calculations
 type PortfolioContext struct {
-	CountryWeights         map[string]float64 `json:"country_weights"`
+	GeographyWeights       map[string]float64 `json:"geography_weights"`
 	IndustryWeights        map[string]float64 `json:"industry_weights"`
 	Positions              map[string]float64 `json:"positions"`
-	SecurityCountries      map[string]string  `json:"security_countries,omitempty"`
+	SecurityGeographies    map[string]string  `json:"security_geographies,omitempty"`
 	SecurityIndustries     map[string]string  `json:"security_industries,omitempty"`
 	SecurityScores         map[string]float64 `json:"security_scores,omitempty"`
 	SecurityDividends      map[string]float64 `json:"security_dividends,omitempty"`
-	CountryToGroup         map[string]string  `json:"country_to_group,omitempty"`
-	IndustryToGroup        map[string]string  `json:"industry_to_group,omitempty"`
 	PositionAvgPrices      map[string]float64 `json:"position_avg_prices,omitempty"`
 	CurrentPrices          map[string]float64 `json:"current_prices,omitempty"`
 	OptimizerTargetWeights map[string]float64 `json:"optimizer_target_weights,omitempty"` // Optimizer target allocations
 	TotalValue             float64            `json:"total_value"`
 
 	// Extended metrics for comprehensive evaluation
-	SecurityCAGRs       map[string]float64 `json:"security_cagrs,omitempty"`        // symbol -> historical CAGR
-	SecurityVolatility  map[string]float64 `json:"security_volatility,omitempty"`   // symbol -> annual volatility
-	SecuritySharpe      map[string]float64 `json:"security_sharpe,omitempty"`       // symbol -> Sharpe ratio
-	SecuritySortino     map[string]float64 `json:"security_sortino,omitempty"`      // symbol -> Sortino ratio
-	SecurityMaxDrawdown map[string]float64 `json:"security_max_drawdown,omitempty"` // symbol -> max drawdown (negative)
+	SecurityCAGRs       map[string]float64 `json:"security_cagrs,omitempty"`        // ISIN -> historical CAGR
+	SecurityVolatility  map[string]float64 `json:"security_volatility,omitempty"`   // ISIN -> annual volatility
+	SecuritySharpe      map[string]float64 `json:"security_sharpe,omitempty"`       // ISIN -> Sharpe ratio
+	SecuritySortino     map[string]float64 `json:"security_sortino,omitempty"`      // ISIN -> Sortino ratio
+	SecurityMaxDrawdown map[string]float64 `json:"security_max_drawdown,omitempty"` // ISIN -> max drawdown (negative)
 
 	// Market regime and adaptive weights
 	MarketRegimeScore float64            `json:"market_regime_score,omitempty"` // -1 (bear) to +1 (bull)

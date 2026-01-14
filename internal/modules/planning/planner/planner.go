@@ -356,7 +356,7 @@ func (p *Planner) generatePortfolioHash(ctx *domain.OpportunityContext) string {
 	for _, sec := range ctx.Securities {
 		securities = append(securities, &universe.Security{
 			Symbol:             sec.Symbol,
-			Country:            sec.Country,
+			Geography:          sec.Geography,
 			AllowBuy:           sec.Active, // Use Active as default for AllowBuy
 			AllowSell:          false,      // Default to false for safety
 			MinPortfolioTarget: 0,
