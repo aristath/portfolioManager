@@ -1,15 +1,21 @@
 package optimization
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math"
+	"sort"
+	"strings"
 	"time"
 
 	"gonum.org/v1/gonum/mat"
 	"gonum.org/v1/gonum/stat"
 
 	"github.com/aristath/sentinel/internal/market_regime"
+	"github.com/aristath/sentinel/internal/modules/calculations"
 	"github.com/rs/zerolog"
 )
 
@@ -19,11 +25,30 @@ const (
 	HighCorrelationThreshold = 0.80 // 80% correlation is considered "high"
 )
 
+// cachedCovResult holds covariance matrix results for cache serialization
+type cachedCovResult struct {
+	Cov          [][]float64          `json:"cov"`
+	Returns      map[string][]float64 `json:"returns"`
+	Correlations []CorrelationPair    `json:"correlations"`
+}
+
+// hashISINs creates a deterministic hash from a list of ISINs for cache keys.
+// ISINs are sorted to ensure consistent hashing regardless of input order.
+func hashISINs(isins []string) string {
+	sorted := make([]string, len(isins))
+	copy(sorted, isins)
+	sort.Strings(sorted)
+	combined := strings.Join(sorted, ",")
+	h := sha256.Sum256([]byte(combined))
+	return hex.EncodeToString(h[:16]) // Use first 16 bytes (32 hex chars) for efficiency
+}
+
 // RiskModelBuilder builds covariance matrices and risk models for optimization.
 type RiskModelBuilder struct {
-	db         *sql.DB // history.db
-	universeDB *sql.DB // universe.db (for symbol -> ISIN lookup)
-	configDB   *sql.DB // config.db (for market_indices table)
+	db         *sql.DB             // history.db
+	universeDB *sql.DB             // universe.db (for symbol -> ISIN lookup)
+	configDB   *sql.DB             // config.db (for market_indices table)
+	cache      *calculations.Cache // calculations.db (optional, for caching results)
 	log        zerolog.Logger
 }
 
@@ -51,14 +76,40 @@ func NewRiskModelBuilder(db *sql.DB, universeDB *sql.DB, configDB *sql.DB, log z
 	}
 }
 
+// SetCache sets the calculation cache for caching covariance matrices and other results.
+// This is optional - if not set, calculations are performed fresh each time.
+func (rb *RiskModelBuilder) SetCache(cache *calculations.Cache) {
+	rb.cache = cache
+}
+
 // BuildCovarianceMatrix builds a covariance matrix from historical prices.
 // All parameters and returns use ISIN keys (not Symbol keys).
+// Results are cached for 24 hours when a cache is configured via SetCache.
 func (rb *RiskModelBuilder) BuildCovarianceMatrix(
 	isins []string, // ISIN array ✅ (renamed from symbols)
 	lookbackDays int,
 ) ([][]float64, map[string][]float64, []CorrelationPair, error) {
 	if lookbackDays <= 0 {
 		lookbackDays = DefaultLookbackDays
+	}
+
+	// Generate cache key from sorted ISINs
+	isinHash := hashISINs(isins)
+
+	// Check cache first if available
+	if rb.cache != nil {
+		if data, ok := rb.cache.GetOptimizer("covariance", isinHash); ok {
+			var result cachedCovResult
+			if err := json.Unmarshal(data, &result); err == nil {
+				rb.log.Debug().
+					Int("num_isins", len(isins)).
+					Str("hash", isinHash[:8]).
+					Msg("Using cached covariance matrix")
+				return result.Cov, result.Returns, result.Correlations, nil
+			}
+			// If unmarshal fails, log and recalculate
+			rb.log.Warn().Msg("Failed to unmarshal cached covariance matrix, recalculating")
+		}
 	}
 
 	rb.log.Info().
@@ -103,6 +154,24 @@ func (rb *RiskModelBuilder) BuildCovarianceMatrix(
 	rb.log.Info().
 		Int("high_correlations", len(correlations)).
 		Msg("Identified high correlation pairs")
+
+	// Cache the result if cache is available
+	if rb.cache != nil {
+		result := cachedCovResult{
+			Cov:          covMatrix,
+			Returns:      returns,
+			Correlations: correlations,
+		}
+		if data, err := json.Marshal(result); err == nil {
+			if err := rb.cache.SetOptimizer("covariance", isinHash, data, calculations.TTLOptimizer); err != nil {
+				rb.log.Warn().Err(err).Msg("Failed to cache covariance matrix")
+			} else {
+				rb.log.Debug().
+					Str("hash", isinHash[:8]).
+					Msg("Cached covariance matrix")
+			}
+		}
+	}
 
 	return covMatrix, returns, correlations, nil
 }

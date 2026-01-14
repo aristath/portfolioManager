@@ -109,6 +109,27 @@ func (j *TagUpdateJob) Run() error {
 	return nil
 }
 
+// GetTagsWithUpdateTimes returns current tag IDs with their last update times for a security.
+// Implements calculations.TagUpdateService interface.
+func (j *TagUpdateJob) GetTagsWithUpdateTimes(symbol string) (map[string]time.Time, error) {
+	return j.securityRepo.GetTagsWithUpdateTimes(symbol)
+}
+
+// UpdateTagsForSecurity updates all tags for a single security by symbol.
+// Implements calculations.TagUpdateService interface.
+func (j *TagUpdateJob) UpdateTagsForSecurity(symbol string) error {
+	// Look up security by symbol
+	security, err := j.securityRepo.GetBySymbol(symbol)
+	if err != nil {
+		return fmt.Errorf("failed to get security: %w", err)
+	}
+	if security == nil {
+		return fmt.Errorf("security not found: %s", symbol)
+	}
+
+	return j.updateTagsForSecurity(*security)
+}
+
 // updateTagsForSecurity updates tags for a single security
 // Enhanced with per-tag update frequencies - only updates tags that need updating
 func (j *TagUpdateJob) updateTagsForSecurity(security universe.Security) error {

@@ -207,13 +207,14 @@ func (db *DB) Path() string {
 func (db *DB) Migrate() error {
 	// Map database names to their schema files
 	schemaFileMap := map[string]string{
-		"universe":    "universe_schema.sql",
-		"config":      "config_schema.sql",
-		"ledger":      "ledger_schema.sql",
-		"portfolio":   "portfolio_schema.sql",
-		"history":     "history_schema.sql",
-		"cache":       "cache_schema.sql",
-		"client_data": "client_data_schema.sql",
+		"universe":     "universe_schema.sql",
+		"config":       "config_schema.sql",
+		"ledger":       "ledger_schema.sql",
+		"portfolio":    "portfolio_schema.sql",
+		"history":      "history_schema.sql",
+		"cache":        "cache_schema.sql",
+		"client_data":  "client_data_schema.sql",
+		"calculations": "calculations_schema.sql",
 	}
 
 	schemaFile, ok := schemaFileMap[db.name]

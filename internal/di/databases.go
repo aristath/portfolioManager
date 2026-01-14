@@ -9,7 +9,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// InitializeDatabases initializes all 7 databases and applies schemas
+// InitializeDatabases initializes all 8 databases and applies schemas
 func InitializeDatabases(cfg *config.Config, log zerolog.Logger) (*Container, error) {
 	container := &Container{}
 
@@ -111,8 +111,26 @@ func InitializeDatabases(cfg *config.Config, log zerolog.Logger) (*Container, er
 	}
 	container.ClientDataDB = clientDataDB
 
+	// 8. calculations.db - Calculation cache (technical indicators, optimizer results)
+	calculationsDB, err := database.New(database.Config{
+		Path:    cfg.DataDir + "/calculations.db",
+		Profile: database.ProfileCache, // Maximum speed for cache data
+		Name:    "calculations",
+	})
+	if err != nil {
+		universeDB.Close()
+		configDB.Close()
+		ledgerDB.Close()
+		portfolioDB.Close()
+		historyDB.Close()
+		cacheDB.Close()
+		clientDataDB.Close()
+		return nil, fmt.Errorf("failed to initialize calculations database: %w", err)
+	}
+	container.CalculationsDB = calculationsDB
+
 	// Apply schemas to all databases (single source of truth)
-	for _, db := range []*database.DB{universeDB, configDB, ledgerDB, portfolioDB, historyDB, cacheDB, clientDataDB} {
+	for _, db := range []*database.DB{universeDB, configDB, ledgerDB, portfolioDB, historyDB, cacheDB, clientDataDB, calculationsDB} {
 		if err := db.Migrate(); err != nil {
 			// Cleanup on error
 			universeDB.Close()
@@ -122,6 +140,7 @@ func InitializeDatabases(cfg *config.Config, log zerolog.Logger) (*Container, er
 			historyDB.Close()
 			cacheDB.Close()
 			clientDataDB.Close()
+			calculationsDB.Close()
 			return nil, fmt.Errorf("failed to apply schema to %s: %w", db.Name(), err)
 		}
 	}

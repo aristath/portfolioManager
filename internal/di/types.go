@@ -11,6 +11,7 @@ import (
 	"github.com/aristath/sentinel/internal/modules/adaptation"
 	"github.com/aristath/sentinel/internal/modules/allocation"
 	"github.com/aristath/sentinel/internal/modules/analytics"
+	"github.com/aristath/sentinel/internal/modules/calculations"
 	"github.com/aristath/sentinel/internal/modules/cash_flows"
 	"github.com/aristath/sentinel/internal/modules/display"
 	"github.com/aristath/sentinel/internal/modules/dividends"
@@ -41,14 +42,15 @@ import (
 // Container holds all dependencies for the application
 // This is the single source of truth for all service instances
 type Container struct {
-	// Databases (7-database architecture)
-	UniverseDB   *database.DB
-	ConfigDB     *database.DB
-	LedgerDB     *database.DB
-	PortfolioDB  *database.DB
-	HistoryDB    *database.DB
-	CacheDB      *database.DB
-	ClientDataDB *database.DB
+	// Databases (8-database architecture)
+	UniverseDB     *database.DB
+	ConfigDB       *database.DB
+	LedgerDB       *database.DB
+	PortfolioDB    *database.DB
+	HistoryDB      *database.DB
+	CacheDB        *database.DB
+	ClientDataDB   *database.DB
+	CalculationsDB *database.DB
 
 	// Clients
 	BrokerClient   domain.BrokerClient
@@ -140,6 +142,8 @@ type Container struct {
 	RestoreService            *reliability.RestoreService
 	QuantumCalculator         *quantum.QuantumProbabilityCalculator
 	OpportunityContextBuilder *services.OpportunityContextBuilder
+	CalculationCache          *calculations.Cache
+	IdleProcessor             *calculations.IdleProcessor
 
 	// Handlers (will be populated in handlers.go)
 	// Note: Handlers are created per-route, so we don't store them in container
@@ -204,6 +208,9 @@ type JobInstances struct {
 	// R2 Cloud Backup jobs
 	R2Backup         scheduler.Job
 	R2BackupRotation scheduler.Job
+
+	// Calculation cleanup job
+	CalculationCleanup scheduler.Job
 
 	// Symbolic Regression jobs
 	FormulaDiscovery scheduler.Job

@@ -85,6 +85,7 @@ func main() {
 	defer container.HistoryDB.Close()
 	defer container.CacheDB.Close()
 	defer container.ClientDataDB.Close()
+	defer container.CalculationsDB.Close()
 
 	// Update config from settings DB (credentials, etc.) - BEFORE creating deployment manager
 	// This ensures GitHub token and other credentials are loaded from settings
@@ -226,6 +227,12 @@ func main() {
 	if container.StateMonitor != nil {
 		container.StateMonitor.Stop()
 		log.Info().Msg("State monitor stopped")
+	}
+
+	// Stop idle processor
+	if container.IdleProcessor != nil {
+		container.IdleProcessor.Stop()
+		log.Info().Msg("Idle processor stopped")
 	}
 
 	// Stop queue system components

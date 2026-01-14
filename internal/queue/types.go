@@ -24,6 +24,7 @@ const (
 	JobTypeHistoryCleanup     JobType = "history_cleanup"
 	JobTypeRecommendationGC   JobType = "recommendation_gc"
 	JobTypeClientDataCleanup  JobType = "client_data_cleanup"
+	JobTypeCalculationCleanup JobType = "calculation_cleanup"
 	JobTypeDeployment         JobType = "deployment"
 	JobTypeR2Backup           JobType = "r2_backup"
 	JobTypeR2BackupRotation   JobType = "r2_backup_rotation"
@@ -60,6 +61,11 @@ const (
 	JobTypeCheckCoreDatabases    JobType = "check_core_databases"
 	JobTypeCheckHistoryDatabases JobType = "check_history_databases"
 	JobTypeCheckWALCheckpoints   JobType = "check_wal_checkpoints"
+
+	// Idle processor jobs - per-security background work
+	JobTypeIdleTechnical JobType = "idle_technical"
+	JobTypeIdleSync      JobType = "idle_sync"
+	JobTypeIdleTags      JobType = "idle_tags"
 )
 
 // Priority represents job priority
@@ -149,6 +155,7 @@ func GetJobDescription(jobType JobType) string {
 		JobTypeHistoryCleanup:     "Cleaning up historical data",
 		JobTypeRecommendationGC:   "Cleaning up old recommendations",
 		JobTypeClientDataCleanup:  "Cleaning up expired API cache",
+		JobTypeCalculationCleanup: "Cleaning up expired calculation cache",
 		JobTypeDeployment:         "Checking for system updates",
 		JobTypeR2Backup:           "Uploading backup to cloud",
 		JobTypeR2BackupRotation:   "Rotating cloud backups",
@@ -185,6 +192,11 @@ func GetJobDescription(jobType JobType) string {
 		JobTypeCheckCoreDatabases:    "Checking core databases",
 		JobTypeCheckHistoryDatabases: "Checking history databases",
 		JobTypeCheckWALCheckpoints:   "Checking WAL checkpoints",
+
+		// Idle processor jobs
+		JobTypeIdleTechnical: "Calculating technical indicators",
+		JobTypeIdleSync:      "Syncing security data",
+		JobTypeIdleTags:      "Updating security tags",
 	}
 
 	if desc, exists := descriptions[jobType]; exists {

@@ -66,71 +66,10 @@ func RegisterListeners(bus *events.Bus, manager *Manager, registry *Registry, lo
 		}
 	})
 
-	// PlanGenerated -> tag_update (MEDIUM priority)
-	_ = bus.Subscribe(events.PlanGenerated, func(event *events.Event) {
-		job := &Job{
-			ID:          fmt.Sprintf("%s-%d", JobTypeTagUpdate, event.Timestamp.UnixNano()),
-			Type:        JobTypeTagUpdate,
-			Priority:    PriorityMedium,
-			Payload:     event.Data,
-			CreatedAt:   event.Timestamp,
-			AvailableAt: event.Timestamp,
-			Retries:     0,
-			MaxRetries:  3,
-		}
-		if err := manager.Enqueue(job); err != nil {
-			log.Error().
-				Err(err).
-				Str("event_type", string(events.PlanGenerated)).
-				Str("job_type", string(JobTypeTagUpdate)).
-				Str("job_id", job.ID).
-				Msg("Failed to enqueue job from event")
-		}
-	})
-
-	// PriceUpdated -> tag_update (LOW priority, will be debounced by manager)
-	_ = bus.Subscribe(events.PriceUpdated, func(event *events.Event) {
-		job := &Job{
-			ID:          fmt.Sprintf("%s-%d", JobTypeTagUpdate, event.Timestamp.UnixNano()),
-			Type:        JobTypeTagUpdate,
-			Priority:    PriorityLow,
-			Payload:     event.Data,
-			CreatedAt:   event.Timestamp,
-			AvailableAt: event.Timestamp,
-			Retries:     0,
-			MaxRetries:  3,
-		}
-		if err := manager.Enqueue(job); err != nil {
-			log.Error().
-				Err(err).
-				Str("event_type", string(events.PriceUpdated)).
-				Str("job_type", string(JobTypeTagUpdate)).
-				Str("job_id", job.ID).
-				Msg("Failed to enqueue job from event")
-		}
-	})
-
-	// ScoreUpdated -> tag_update (LOW priority)
-	_ = bus.Subscribe(events.ScoreUpdated, func(event *events.Event) {
-		job := &Job{
-			ID:          fmt.Sprintf("%s-%d", JobTypeTagUpdate, event.Timestamp.UnixNano()),
-			Type:        JobTypeTagUpdate,
-			Priority:    PriorityLow,
-			Payload:     event.Data,
-			CreatedAt:   event.Timestamp,
-			AvailableAt: event.Timestamp,
-			Retries:     0,
-			MaxRetries:  3,
-		}
-		if err := manager.Enqueue(job); err != nil {
-			log.Error().
-				Err(err).
-				Str("event_type", string(events.ScoreUpdated)).
-				Str("job_type", string(JobTypeTagUpdate)).
-				Str("job_id", job.ID).
-				Msg("Failed to enqueue job from event")
-		}
-	})
+	// NOTE: Tag updates are now handled by the IdleProcessor during idle time.
+	// Per-security tag updates are staggered to avoid paralyzing the system.
+	// Batch TagUpdateJob is still available via API for manual force-refresh.
+	// Removed event listeners: PlanGenerated, PriceUpdated, ScoreUpdated -> tag_update
 
 	// DividendDetected -> dividend_reinvestment (HIGH priority)
 	_ = bus.Subscribe(events.DividendDetected, func(event *events.Event) {

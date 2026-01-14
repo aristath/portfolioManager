@@ -10,6 +10,7 @@ import (
 	"github.com/aristath/sentinel/internal/database"
 	"github.com/aristath/sentinel/internal/deployment"
 	"github.com/aristath/sentinel/internal/domain"
+	"github.com/aristath/sentinel/internal/modules/calculations"
 	"github.com/aristath/sentinel/internal/modules/cleanup"
 	"github.com/aristath/sentinel/internal/modules/display"
 	"github.com/aristath/sentinel/internal/modules/symbolic_regression"
@@ -82,6 +83,16 @@ func RegisterJobs(container *Container, cfg *config.Config, displayManager *disp
 	container.JobRegistry.Register(queue.JobTypeTagUpdate, queue.JobToHandler(tagUpdateJob))
 	instances.TagUpdate = tagUpdateJob
 
+	// Wire TagProcessor into IdleProcessor now that TagUpdateJob is available
+	// TagUpdateJob implements calculations.TagUpdateService interface
+	tagProcessor := calculations.NewDefaultTagProcessor(
+		tagUpdateJob,
+		scheduler.GetTagsNeedingUpdate, // Use the scheduler's tag frequency checker
+		log,
+	)
+	container.IdleProcessor.SetTagProcessor(tagProcessor)
+	log.Info().Msg("Tag processor wired to idle processor")
+
 	// ==========================================
 	// RELIABILITY JOBS
 	// ==========================================
@@ -110,6 +121,11 @@ func RegisterJobs(container *Container, cfg *config.Config, displayManager *disp
 	container.JobRegistry.Register(queue.JobTypeClientDataCleanup, queue.JobToHandler(clientDataCleanup))
 	instances.ClientDataCleanup = clientDataCleanup
 
+	// Job 8c: Calculation Cleanup (removes expired technical/optimizer cache entries)
+	calculationCleanup := scheduler.NewCalculationCleanupJob(container.CalculationCache, log)
+	container.JobRegistry.Register(queue.JobTypeCalculationCleanup, queue.JobToHandler(calculationCleanup))
+	instances.CalculationCleanup = calculationCleanup
+
 	// Job 9: Hourly Backup
 	hourlyBackup := reliability.NewHourlyBackupJob(container.BackupService)
 	container.JobRegistry.Register(queue.JobTypeHourlyBackup, queue.JobToHandler(hourlyBackup))
@@ -124,13 +140,14 @@ func RegisterJobs(container *Container, cfg *config.Config, displayManager *disp
 	dataDir := cfg.DataDir
 	backupDir := dataDir + "/backups"
 	databases := map[string]*database.DB{
-		"universe":    container.UniverseDB,
-		"config":      container.ConfigDB,
-		"ledger":      container.LedgerDB,
-		"portfolio":   container.PortfolioDB,
-		"history":     container.HistoryDB,
-		"cache":       container.CacheDB,
-		"client_data": container.ClientDataDB,
+		"universe":     container.UniverseDB,
+		"config":       container.ConfigDB,
+		"ledger":       container.LedgerDB,
+		"portfolio":    container.PortfolioDB,
+		"history":      container.HistoryDB,
+		"cache":        container.CacheDB,
+		"client_data":  container.ClientDataDB,
+		"calculations": container.CalculationsDB,
 	}
 	dailyMaintenance := reliability.NewDailyMaintenanceJob(databases, container.HealthServices, backupDir, log)
 	container.JobRegistry.Register(queue.JobTypeDailyMaintenance, queue.JobToHandler(dailyMaintenance))
