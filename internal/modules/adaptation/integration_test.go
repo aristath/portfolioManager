@@ -200,7 +200,7 @@ func TestFullAdaptationFlow(t *testing.T) {
 
 	gatesJSON, err := json.Marshal(map[string]float64{
 		"stability": adaptiveGates.GetStability(),
-		"long_term":    adaptiveGates.GetLongTerm(),
+		"long_term": adaptiveGates.GetLongTerm(),
 	})
 	require.NoError(t, err)
 	_, err = configDB.Exec(
@@ -475,7 +475,7 @@ func TestAdaptiveParametersPersistence(t *testing.T) {
 	// Store gates
 	gatesJSON, _ := json.Marshal(map[string]float64{
 		"stability": gates.GetStability(),
-		"long_term":    gates.GetLongTerm(),
+		"long_term": gates.GetLongTerm(),
 	})
 	_, err = configDB.Exec(
 		`INSERT OR REPLACE INTO adaptive_parameters

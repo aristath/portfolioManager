@@ -2,7 +2,6 @@ package order_book
 
 import (
 	"fmt"
-	"math"
 
 	"github.com/aristath/sentinel/internal/domain"
 )
@@ -24,13 +23,7 @@ func (s *Service) calculateOptimalLimitPrice(symbol, side string, buffer float64
 		return 0, err
 	}
 
-	// 3. Cross-validate with secondary price source (if available) - ASYMMETRIC validation
-	if err := s.validatePriceAgainstSecondarySource(symbol, side, midpoint); err != nil {
-		// BLOCKS if midpoint would cause bad trade
-		return 0, err
-	}
-
-	// 4. Calculate limit with buffer
+	// 3. Calculate limit with buffer
 	limitPrice := s.calculateLimitWithBuffer(midpoint, buffer, side)
 
 	s.log.Info().
@@ -80,95 +73,6 @@ func (s *Service) calculateMidpoint(quote *domain.BrokerOrderBook) (float64, err
 		Msg("Calculated bid-ask midpoint")
 
 	return midpoint, nil
-}
-
-// validatePriceAgainstSecondarySource checks if midpoint price is reasonable
-// Uses ASYMMETRIC validation: only blocks when midpoint would cause bad trades
-// Implements "BUY CHEAP, SELL HIGH" principle
-func (s *Service) validatePriceAgainstSecondarySource(symbol, side string, midpointPrice float64) error {
-	// Try to fetch secondary price source for validation
-	validationPrice, err := s.fetchValidationPrice(symbol)
-	if err != nil {
-		// Validation source unavailable - proceed with midpoint only
-		s.log.Warn().
-			Str("symbol", symbol).
-			Err(err).
-			Msg("Validation price unavailable - using midpoint without validation")
-		return nil
-	}
-
-	// Get threshold (default 50%)
-	threshold := s.getSettingFloat("price_discrepancy_threshold", 0.50)
-
-	// ASYMMETRIC VALIDATION: Enforce "BUY CHEAP, SELL HIGH" principle
-	// Only block when midpoint would cause BAD trade
-	var shouldBlock bool
-	var reason string
-
-	if side == "BUY" {
-		// BUY CHEAP: Block if midpoint is significantly HIGHER than validation price (overpaying)
-		// Allow if midpoint is LOWER than validation price (buying cheap is good!)
-		maxAllowedPrice := validationPrice * (1.0 + threshold)
-		if midpointPrice > maxAllowedPrice {
-			shouldBlock = true
-			reason = fmt.Sprintf("overpaying: midpoint %.2f > validation %.2f * %.2f = %.2f",
-				midpointPrice, validationPrice, 1.0+threshold, maxAllowedPrice)
-		}
-	} else if side == "SELL" {
-		// SELL HIGH: Block if midpoint is significantly LOWER than validation price (underselling)
-		// Allow if midpoint is HIGHER than validation price (selling high is good!)
-		minAllowedPrice := validationPrice * (1.0 - threshold)
-		if midpointPrice < minAllowedPrice {
-			shouldBlock = true
-			reason = fmt.Sprintf("underselling: midpoint %.2f < validation %.2f * %.2f = %.2f",
-				midpointPrice, validationPrice, 1.0-threshold, minAllowedPrice)
-		}
-	}
-
-	if shouldBlock {
-		// BLOCK - API bug detected (bad trade would result)
-		s.log.Error().
-			Str("symbol", symbol).
-			Str("side", side).
-			Float64("midpoint_price", midpointPrice).
-			Float64("validation_price", validationPrice).
-			Float64("threshold_pct", threshold*100).
-			Str("reason", reason).
-			Msg("Price validation FAILED - BLOCKING trade (API bug suspected)")
-
-		return fmt.Errorf("price validation failed (%s) - API bug suspected", reason)
-	}
-
-	// Log validation success
-	discrepancyPct := math.Abs(midpointPrice-validationPrice) / validationPrice * 100
-	s.log.Info().
-		Str("symbol", symbol).
-		Str("side", side).
-		Float64("midpoint_price", midpointPrice).
-		Float64("validation_price", validationPrice).
-		Float64("discrepancy_pct", discrepancyPct).
-		Msg("Price validation passed - using midpoint")
-
-	return nil
-}
-
-// fetchValidationPrice gets price for validation using PriceValidator interface
-func (s *Service) fetchValidationPrice(symbol string) (float64, error) {
-	// Use PriceValidator interface (decouples from specific implementation)
-	price, err := s.priceValidator.GetValidationPrice(symbol)
-	if err != nil {
-		return 0, fmt.Errorf("failed to fetch validation price: %w", err)
-	}
-
-	if price == nil {
-		return 0, fmt.Errorf("validation price is nil")
-	}
-
-	if *price <= 0 {
-		return 0, fmt.Errorf("validation price is invalid: %.2f", *price)
-	}
-
-	return *price, nil
 }
 
 // calculateLimitWithBuffer applies buffer to price

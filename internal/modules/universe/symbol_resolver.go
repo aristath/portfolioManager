@@ -37,7 +37,6 @@ func (i IdentifierType) String() string {
 }
 
 // SymbolInfo contains resolved symbol information
-// Note: YahooSymbol removed - Yahoo is no longer used as data source
 type SymbolInfo struct {
 	TradernetSymbol *string // Tradernet symbol (e.g., AAPL.US)
 	ISIN            *string // ISIN (e.g., US0378331005)

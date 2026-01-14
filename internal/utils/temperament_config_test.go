@@ -426,7 +426,7 @@ func TestInverseRelationships(t *testing.T) {
 	}{
 		{"evaluation_quality_weight"},       // Aggression inverse
 		{"evaluation_risk_adjusted_weight"}, // Risk inverse
-		{"quality_stability_threshold"},  // Aggression inverse
+		{"quality_stability_threshold"},     // Aggression inverse
 		{"boost_bubble_risk"},               // Risk inverse
 		{"tag_overvalued_pe_threshold"},     // Risk inverse
 	}

@@ -9,33 +9,12 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// MetadataFetcher defines the interface for fetching security metadata.
-// This interface is implemented by services.DataFetcherService.
-// Only Tradernet is used as the data source (Yahoo removed).
-type MetadataFetcher interface {
-	// GetSecurityMetadata fetches company metadata from Tradernet.
-	// Returns metadata, the source that was used, and any error.
-	GetSecurityMetadata(tradernetSymbol string) (*SecurityMetadataResult, string, error)
-}
-
-// SecurityMetadataResult represents metadata from any source.
-type SecurityMetadataResult struct {
-	Name        string
-	Country     string
-	Exchange    string
-	Industry    string
-	Sector      string
-	Currency    string
-	ProductType string
-}
-
-// SecuritySetupService handles comprehensive security onboarding
-// Faithful translation from Python: app/modules/universe/services/security_setup_service.py
+// SecuritySetupService handles comprehensive security onboarding.
+// Uses Tradernet as the single source for security metadata.
 type SecuritySetupService struct {
 	symbolResolver  *SymbolResolver
 	securityRepo    *SecurityRepository
 	brokerClient    domain.BrokerClient
-	metadataFetcher MetadataFetcher // Optional - for multi-source metadata with fallback
 	historicalSync  *HistoricalSyncService
 	eventManager    *events.Manager
 	scoreCalculator ScoreCalculator // Interface for score calculation
@@ -44,7 +23,6 @@ type SecuritySetupService struct {
 
 // ScoreCalculator interface for calculating and saving security scores
 // Implemented by UniverseHandlers.calculateAndSaveScore
-// Client symbols no longer needed - all data comes from internal sources
 type ScoreCalculator interface {
 	CalculateAndSaveScore(symbol string, country string, industry string) error
 }
@@ -73,12 +51,6 @@ func NewSecuritySetupService(
 // SetScoreCalculator sets the score calculator (for deferred wiring)
 func (s *SecuritySetupService) SetScoreCalculator(calculator ScoreCalculator) {
 	s.scoreCalculator = calculator
-}
-
-// SetMetadataFetcher sets the metadata fetcher for multi-source metadata with fallback.
-// When set, the service will use configurable data source priorities for metadata.
-func (s *SecuritySetupService) SetMetadataFetcher(fetcher MetadataFetcher) {
-	s.metadataFetcher = fetcher
 }
 
 // CreateSecurity creates a security with explicit symbol and name
@@ -130,31 +102,11 @@ func (s *SecuritySetupService) CreateSecurity(
 		return nil, fmt.Errorf("security already exists: %s", existing.Symbol)
 	}
 
-	// Auto-detect country, exchange, and industry using metadata fetcher (Tradernet only)
+	// Metadata will be populated by metadata enricher after creation
 	var country, fullExchangeName, industry *string
 	var productType ProductType
 
-	if s.metadataFetcher != nil {
-		metadata, _, err := s.metadataFetcher.GetSecurityMetadata(symbol)
-		if err == nil && metadata != nil {
-			if metadata.Country != "" {
-				country = &metadata.Country
-			}
-			if metadata.Exchange != "" {
-				fullExchangeName = &metadata.Exchange
-			}
-			if metadata.Industry != "" {
-				industry = &metadata.Industry
-			}
-			if metadata.ProductType != "" {
-				productType = ProductType(metadata.ProductType)
-			}
-		} else {
-			s.log.Warn().Err(err).Str("symbol", symbol).Msg("Failed to get metadata")
-		}
-	}
-
-	// Detect product type from symbol pattern if not found
+	// Detect product type from symbol pattern
 	if productType == "" {
 		var err error
 		productType, err = s.detectProductType(symbol, name)
@@ -165,7 +117,6 @@ func (s *SecuritySetupService) CreateSecurity(
 	}
 
 	// Create security (ISIN is required as PRIMARY KEY)
-	// Client symbols (if needed for external data sources) stored in client_symbols table
 	security := Security{
 		ISIN:               isin,
 		Symbol:             symbol,
@@ -366,46 +317,15 @@ func (s *SecuritySetupService) AddSecurityByIdentifier(
 		return nil, fmt.Errorf("ISIN is required but could not be obtained from Tradernet API for symbol: %s. Please ensure the security exists in Tradernet and has an ISIN", tradernetSymbol)
 	}
 
-	// Step 3: Fetch metadata (country, exchange, industry) from Tradernet
+	// Metadata (country, exchange, industry) will be populated by metadata enricher after creation
 	var country, fullExchangeName, industry *string
 	var productType = ProductTypeUnknown
 
-	// Use MetadataFetcher if available (Tradernet only)
-	if s.metadataFetcher != nil {
-		metadata, source, err := s.metadataFetcher.GetSecurityMetadata(tradernetSymbol)
-		if err != nil {
-			s.log.Warn().Err(err).Str("symbol", tradernetSymbol).Msg("Failed to get metadata from DataFetcherService")
-		} else if metadata != nil {
-			s.log.Debug().Str("symbol", tradernetSymbol).Str("source", source).Msg("Fetched metadata via DataFetcherService")
-			if metadata.Country != "" {
-				country = &metadata.Country
-			}
-			if metadata.Exchange != "" {
-				fullExchangeName = &metadata.Exchange
-			}
-			if metadata.Industry != "" {
-				industry = &metadata.Industry
-			}
-			if metadata.ProductType != "" {
-				productType = ProductType(metadata.ProductType)
-			}
-		}
-	}
-
-	// Get name - prefer Tradernet name, fall back to metadata fetcher, then symbol
+	// Get name - prefer Tradernet name, then symbol
 	name := ""
 	if tradernetName != nil && *tradernetName != "" {
 		name = *tradernetName
 	} else {
-		// Try to get name from metadata fetcher
-		metaName, err := s.getSecurityName(tradernetSymbol)
-		if err == nil && metaName != nil {
-			name = *metaName
-		}
-	}
-
-	// If still no name, use the symbol as the name
-	if name == "" {
 		name = tradernetSymbol
 		s.log.Warn().Str("symbol", tradernetSymbol).Msg("Using symbol as name fallback")
 	}
@@ -417,19 +337,16 @@ func (s *SecuritySetupService) AddSecurityByIdentifier(
 		return nil, fmt.Errorf("ISIN is required but missing for security: %s (symbol: %s). Cannot create security without ISIN", name, tradernetSymbol)
 	}
 
-	// Detect product type using name heuristics (if not already set by MetadataFetcher)
-	if productType == ProductTypeUnknown {
-		detectedType, err := s.detectProductType(tradernetSymbol, name)
-		if err != nil {
-			s.log.Warn().Err(err).Str("symbol", tradernetSymbol).Msg("Failed to detect product type, using UNKNOWN")
-			productType = ProductTypeUnknown
-		} else {
-			productType = detectedType
-		}
+	// Detect product type using name heuristics
+	detectedType, err := s.detectProductType(tradernetSymbol, name)
+	if err != nil {
+		s.log.Warn().Err(err).Str("symbol", tradernetSymbol).Msg("Failed to detect product type, using UNKNOWN")
+		productType = ProductTypeUnknown
+	} else {
+		productType = detectedType
 	}
 
 	// Step 4: Create security
-	// Client symbols (if needed for external data sources) stored in client_symbols table
 	security := Security{
 		Symbol:             tradernetSymbol,
 		Name:               name,
@@ -591,24 +508,6 @@ func (s *SecuritySetupService) getTradernetSymbolFromISIN(isin string) (*Tradern
 		Currency: instrument.Currency,
 		ISIN:     instrument.ISIN,
 	}, nil
-}
-
-// getSecurityName gets security name from metadata fetcher (Tradernet only)
-func (s *SecuritySetupService) getSecurityName(symbol string) (*string, error) {
-	if s.metadataFetcher == nil {
-		return nil, fmt.Errorf("metadata fetcher not available")
-	}
-
-	metadata, _, err := s.metadataFetcher.GetSecurityMetadata(symbol)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get metadata: %w", err)
-	}
-
-	if metadata != nil && metadata.Name != "" {
-		return &metadata.Name, nil
-	}
-
-	return nil, fmt.Errorf("name not found in metadata")
 }
 
 // detectProductType detects product type using name heuristics

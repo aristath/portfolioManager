@@ -74,14 +74,6 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	container.BrokerClient = tradernet.NewTradernetBrokerAdapter(cfg.TradernetAPIKey, cfg.TradernetAPISecret, log)
 	log.Info().Msg("Broker client initialized (Tradernet adapter)")
 
-	// Client symbol mapper for converting ISINs to client-specific symbols
-	// Used for brokers (tradernet, ibkr, schwab)
-	// Note: ClientSymbolRepo must be initialized in InitializeRepositories first
-	if container.ClientSymbolRepo != nil {
-		container.ClientSymbolMapper = services.NewClientSymbolMapper(container.ClientSymbolRepo)
-		log.Info().Msg("Client symbol mapper initialized")
-	}
-
 	// Configure display service (App Lab HTTP API on localhost:7000)
 	// displayManager can be nil in tests - skip display configuration if nil
 	if displayManager != nil {
@@ -173,11 +165,8 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 
 	// Order Book service (validates liquidity and calculates optimal limit prices)
 	// Uses bid-ask midpoint pricing strategy for optimal execution
-	// NoOp price validator - price validation disabled (single data source Tradernet)
-	noOpPriceValidator := &noOpPriceValidator{}
 	container.OrderBookService = order_book.NewService(
 		container.BrokerClient,
-		noOpPriceValidator,
 		container.SettingsService,
 		log.With().Str("service", "order_book").Logger(),
 	)
@@ -647,7 +636,6 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		container.UniverseDB.Conn(),
 		container.HistoryDB.Conn(),
 		container.BrokerClient,
-		container.ClientSymbolRepo,
 		log,
 	)
 
@@ -1479,14 +1467,6 @@ func (a *dividendRepoForYieldAdapter) GetByISIN(isin string) ([]dividends.Divide
 		return nil, fmt.Errorf("dividend repository not available")
 	}
 	return a.repo.GetByISIN(isin)
-}
-
-// noOpPriceValidator is a no-op price validator that always returns an error
-// Used when external price validation is disabled (single data source mode)
-type noOpPriceValidator struct{}
-
-func (v *noOpPriceValidator) GetValidationPrice(symbol string) (*float64, error) {
-	return nil, fmt.Errorf("external price validation disabled")
 }
 
 // brokerPriceClientAdapter adapts domain.BrokerClient to services.PriceClient for OCB

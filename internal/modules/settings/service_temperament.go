@@ -146,10 +146,10 @@ func (s *Service) GetAdjustedRiskManagementParams() RiskManagementParams {
 // GetAdjustedQualityGateParams returns quality gate parameters adjusted by temperament
 func (s *Service) GetAdjustedQualityGateParams() QualityGateParams {
 	return QualityGateParams{
-		StabilityThreshold:    s.getAdjustedParam("quality_stability_threshold"),
-		LongTermThreshold:     s.getAdjustedParam("quality_long_term_threshold"),
-		ExceptionalThreshold:  s.getAdjustedParam("quality_exceptional_threshold"),
-		AbsoluteMinCAGR:       s.getAdjustedParam("quality_absolute_min_cagr"),
+		StabilityThreshold:   s.getAdjustedParam("quality_stability_threshold"),
+		LongTermThreshold:    s.getAdjustedParam("quality_long_term_threshold"),
+		ExceptionalThreshold: s.getAdjustedParam("quality_exceptional_threshold"),
+		AbsoluteMinCAGR:      s.getAdjustedParam("quality_absolute_min_cagr"),
 		// Path 2: Exceptional Excellence
 		ExceptionalExcellenceThreshold: s.getAdjustedParam("tag_quality_exceptional_excellence_threshold"),
 		// Path 3: Quality Value Play

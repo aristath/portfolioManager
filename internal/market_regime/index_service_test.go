@@ -73,7 +73,7 @@ func setupMarketIndexTestDB(t *testing.T) (*sql.DB, *sql.DB) {
 
 func TestEnsureIndicesExist(t *testing.T) {
 	universeDB, historyDB := setupMarketIndexTestDB(t)
-	service := NewMarketIndexService(universeDB, historyDB, nil, nil, zerolog.Nop())
+	service := NewMarketIndexService(universeDB, historyDB, nil, zerolog.Nop())
 
 	t.Run("Creates indices if they don't exist", func(t *testing.T) {
 		err := service.EnsureIndicesExist()
@@ -122,7 +122,7 @@ func TestEnsureIndicesExist(t *testing.T) {
 
 func TestGetCompositeReturns(t *testing.T) {
 	universeDB, historyDB := setupMarketIndexTestDB(t)
-	service := NewMarketIndexService(universeDB, historyDB, nil, nil, zerolog.Nop())
+	service := NewMarketIndexService(universeDB, historyDB, nil, zerolog.Nop())
 
 	// Setup: Create indices and add price data
 	err := service.EnsureIndicesExist()
@@ -196,7 +196,7 @@ func TestGetCompositeReturns(t *testing.T) {
 
 func TestGetMarketReturns(t *testing.T) {
 	universeDB, historyDB := setupMarketIndexTestDB(t)
-	service := NewMarketIndexService(universeDB, historyDB, nil, nil, zerolog.Nop())
+	service := NewMarketIndexService(universeDB, historyDB, nil, zerolog.Nop())
 
 	// Setup indices
 	err := service.EnsureIndicesExist()
@@ -245,7 +245,7 @@ func TestGetMarketReturns(t *testing.T) {
 
 func TestMarketIndexWeights(t *testing.T) {
 	universeDB, historyDB := setupMarketIndexTestDB(t)
-	service := NewMarketIndexService(universeDB, historyDB, nil, nil, zerolog.Nop())
+	service := NewMarketIndexService(universeDB, historyDB, nil, zerolog.Nop())
 
 	t.Run("Default weights match portfolio allocation", func(t *testing.T) {
 		indices := service.GetDefaultIndices()

@@ -103,7 +103,7 @@ func ConvertToSecurityScore(isin string, symbol string, calculated *scoringdomai
 		ConsistencyScore:       consistencyScore,
 		HistoryYears:           historyYears,
 		TechnicalScore:         groupScores["technicals"],
-		StabilityScore:       groupScores["stability"],
+		StabilityScore:         groupScores["stability"],
 		TotalScore:             calculated.TotalScore,
 		Volatility:             volatility,
 		FinancialStrengthScore: financialStrengthScore,

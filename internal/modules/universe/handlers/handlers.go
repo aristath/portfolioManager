@@ -216,7 +216,6 @@ func (h *UniverseHandlers) HandleGetStocks(w http.ResponseWriter, r *http.Reques
 	// Convert to response format (map[string]interface{} to match Python's dict response)
 	response := make([]map[string]interface{}, 0, len(securitiesData))
 	for _, sec := range securitiesData {
-		// Client-specific symbols now stored in client_symbols table, not here
 		stockDict := map[string]interface{}{
 			"symbol":               sec.Symbol,
 			"name":                 sec.Name,
@@ -390,7 +389,6 @@ func (h *UniverseHandlers) HandleGetStock(w http.ResponseWriter, r *http.Request
 
 // SecurityCreateRequest represents the request to create a security
 // After migration 030: ISIN is required (PRIMARY KEY)
-// Client symbols (for brokers, data providers) stored in client_symbols table
 type SecurityCreateRequest struct {
 	Symbol    string   `json:"symbol"`
 	Name      string   `json:"name"`
@@ -446,7 +444,6 @@ func (h *UniverseHandlers) HandleCreateStock(w http.ResponseWriter, r *http.Requ
 		Msg("Creating security")
 
 	// Call SecuritySetupService (ISIN is now required)
-	// Client symbols are now stored in client_symbols table, not on security
 	security, err := h.setupService.CreateSecurity(
 		req.Symbol,
 		req.Name,

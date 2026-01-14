@@ -15,7 +15,7 @@ func TestConvertToSecurityScore_ExtractsRawValues(t *testing.T) {
 		Volatility: floatPtr(0.20),
 		GroupScores: map[string]float64{
 			"long_term":       0.80,
-			"stability":    0.70,
+			"stability":       0.70,
 			"opportunity":     0.65,
 			"technicals":      0.60,
 			"dividends":       0.55,
@@ -77,7 +77,7 @@ func TestConvertToSecurityScore_HandlesMissingRawValues(t *testing.T) {
 		Symbol:     "TEST",
 		TotalScore: 0.50,
 		GroupScores: map[string]float64{
-			"long_term":    0.50,
+			"long_term": 0.50,
 			"stability": 0.50,
 		},
 		SubScores: map[string]map[string]float64{

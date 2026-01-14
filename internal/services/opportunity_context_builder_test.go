@@ -104,16 +104,16 @@ func (m *ocbMockTradeRepository) GetRecentlyBoughtISINs(days int) (map[string]bo
 }
 
 type ocbMockScoresRepository struct {
-	totalScores        map[string]float64
-	cagrs              map[string]float64
-	longTermScores     map[string]float64
-	stabilityScores map[string]float64
-	opportunityScores  map[string]float64
-	momentumScores     map[string]float64
-	volatility         map[string]float64
-	sharpe             map[string]float64
-	maxDrawdown        map[string]float64
-	err                error
+	totalScores       map[string]float64
+	cagrs             map[string]float64
+	longTermScores    map[string]float64
+	stabilityScores   map[string]float64
+	opportunityScores map[string]float64
+	momentumScores    map[string]float64
+	volatility        map[string]float64
+	sharpe            map[string]float64
+	maxDrawdown       map[string]float64
+	err               error
 }
 
 func (m *ocbMockScoresRepository) GetTotalScores(isinList []string) (map[string]float64, error) {
@@ -267,12 +267,12 @@ func TestOpportunityContextBuilder_Build_ReturnsCompleteContext(t *testing.T) {
 			recentlyBought: map[string]bool{},
 		},
 		&ocbMockScoresRepository{
-			totalScores:        map[string]float64{isin: 75.0},
-			cagrs:              map[string]float64{isin: 0.12},
-			longTermScores:     map[string]float64{isin: 80.0},
+			totalScores:     map[string]float64{isin: 75.0},
+			cagrs:           map[string]float64{isin: 0.12},
+			longTermScores:  map[string]float64{isin: 80.0},
 			stabilityScores: map[string]float64{isin: 70.0},
-			sharpe:             map[string]float64{isin: 1.5},
-			maxDrawdown:        map[string]float64{isin: -0.20},
+			sharpe:          map[string]float64{isin: 1.5},
+			maxDrawdown:     map[string]float64{isin: -0.20},
 		},
 		&ocbMockSettingsRepository{targetReturn: 0.11, thresholdPct: 0.80, cooloffDays: 180},
 		&ocbMockRegimeRepository{regimeScore: 0.5},

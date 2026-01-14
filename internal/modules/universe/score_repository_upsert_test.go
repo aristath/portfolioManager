@@ -64,7 +64,7 @@ func TestUpsert_InsertsAllColumns(t *testing.T) {
 		ConsistencyScore:       0.10,
 		HistoryYears:           5.0,
 		TechnicalScore:         0.50,
-		StabilityScore:       0.45,
+		StabilityScore:         0.45,
 		SharpeScore:            1.5,
 		DrawdownScore:          -0.15,
 		DividendBonus:          0.10,

@@ -86,16 +86,6 @@ var SettingDefaults = map[string]interface{}{
 
 	// Transaction costs (NOTE: transaction_cost_fixed and transaction_cost_percent moved to planner_settings)
 
-	// Security Discovery settings
-	"security_discovery_enabled":               1.0,          // 1.0 = enabled, 0.0 = disabled
-	"security_discovery_score_threshold":       0.75,         // Minimum score to add security
-	"security_discovery_max_per_month":         2.0,          // Maximum securities to add per month
-	"security_discovery_require_manual_review": 0.0,          // 1.0 = require review, 0.0 = auto-add
-	"security_discovery_geographies":           "EU,US,ASIA", // Comma-separated geography list
-	"security_discovery_exchanges":             "usa,europe", // Comma-separated exchange list
-	"security_discovery_min_volume":            1000000.0,    // Minimum daily volume for liquidity
-	"security_discovery_fetch_limit":           50.0,         // Maximum candidates to fetch from API
-
 	// Market Regime Detection settings
 	"market_regime_detection_enabled":     1.0,   // 1.0 = enabled, 0.0 = disabled
 	"market_regime_bull_cash_reserve":     0.02,  // Cash reserve percentage in bull market (2%)
@@ -186,8 +176,6 @@ var SettingDefaults = map[string]interface{}{
 // StringSettings defines which settings should be treated as strings rather than floats
 var StringSettings = map[string]bool{
 	"trading_mode":                   true,
-	"security_discovery_geographies": true,
-	"security_discovery_exchanges":   true,
 	"risk_profile":                   true,
 	"display_mode":                   true,
 	"tradernet_api_key":              true,

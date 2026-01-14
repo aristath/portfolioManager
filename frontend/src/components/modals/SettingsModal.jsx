@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Modal, Tabs, Text, Button, NumberInput, Switch, Group, Stack, Paper, Divider, Alert, TextInput, PasswordInput, Select, Badge, Tooltip } from '@mantine/core';
-import { IconCheck } from '@tabler/icons-react';
+import { Modal, Tabs, Text, Button, NumberInput, Switch, Group, Stack, Paper, Divider, Alert, TextInput, PasswordInput, Select } from '@mantine/core';
 import { useAppStore } from '../../stores/appStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { api } from '../../api/client';
@@ -139,7 +138,6 @@ export function SettingsModal() {
           <Tabs.Tab value="system">System</Tabs.Tab>
           <Tabs.Tab value="backup">Backup</Tabs.Tab>
           <Tabs.Tab value="credentials">Credentials</Tabs.Tab>
-          <Tabs.Tab value="datasources">Data Sources</Tabs.Tab>
         </Tabs.List>
 
         <Tabs.Panel value="trading" p="md">
@@ -730,61 +728,6 @@ export function SettingsModal() {
                     Changes are applied immediately - no restart required.
                   </Text>
                 </Alert>
-              </Stack>
-            </Paper>
-          </Stack>
-        </Tabs.Panel>
-
-        <Tabs.Panel value="datasources" p="md">
-          <Stack gap="md">
-            <Alert color="green" size="sm" mb="md">
-              <Text size="xs">
-                <strong>Tradernet is the sole data source.</strong> All market data, prices, and metadata
-                are fetched exclusively from your Tradernet broker account. No external data providers are required.
-              </Text>
-            </Alert>
-
-            <Paper p="md" withBorder>
-              <Text size="sm" fw={500} mb="xs" tt="uppercase">Data Sources</Text>
-              <Stack gap="sm">
-                <Group justify="space-between" p="xs" style={{ backgroundColor: 'var(--mantine-color-dark-6)', borderRadius: 4 }}>
-                  <Group gap="xs">
-                    <Badge size="sm" variant="filled" color="green">Active</Badge>
-                    <Text size="sm">Tradernet</Text>
-                    <Tooltip label="Primary data source">
-                      <IconCheck size={14} color="var(--mantine-color-green-5)" />
-                    </Tooltip>
-                  </Group>
-                </Group>
-              </Stack>
-            </Paper>
-
-            <Paper p="md" withBorder>
-              <Text size="sm" fw={500} mb="xs" tt="uppercase">Available Data</Text>
-              <Text size="xs" c="dimmed" mb="md">
-                Tradernet provides the following data for portfolio management:
-              </Text>
-              <Stack gap="xs">
-                <Group gap="xs">
-                  <IconCheck size={14} color="var(--mantine-color-green-5)" />
-                  <Text size="sm">Historical OHLCV prices</Text>
-                </Group>
-                <Group gap="xs">
-                  <IconCheck size={14} color="var(--mantine-color-green-5)" />
-                  <Text size="sm">Current/real-time quotes</Text>
-                </Group>
-                <Group gap="xs">
-                  <IconCheck size={14} color="var(--mantine-color-green-5)" />
-                  <Text size="sm">Exchange rates</Text>
-                </Group>
-                <Group gap="xs">
-                  <IconCheck size={14} color="var(--mantine-color-green-5)" />
-                  <Text size="sm">Dividend history</Text>
-                </Group>
-                <Group gap="xs">
-                  <IconCheck size={14} color="var(--mantine-color-green-5)" />
-                  <Text size="sm">Company metadata (country, sector)</Text>
-                </Group>
               </Stack>
             </Paper>
           </Stack>

@@ -76,16 +76,7 @@ func TestInitializeMarketIndices_EndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 3, indexCount, "Should create 3 market indices")
 
-	// Verify 2: Client symbols set in client_symbols table
-	var mappingCount int
-	err = container.UniverseDB.QueryRow(`
-		SELECT COUNT(*) FROM client_symbols
-		WHERE client_name = 'yahoo' AND isin LIKE 'INDEX-%'
-	`).Scan(&mappingCount)
-	require.NoError(t, err)
-	assert.Equal(t, 3, mappingCount, "Should set client symbols for all 3 indices")
-
-	// Verify 3: Historical data populated (at least some data for each index)
+	// Verify 2: Historical data populated (at least some data for each index)
 	rows, err := container.HistoryDB.Query(`
 		SELECT isin, COUNT(*) as record_count
 		FROM daily_prices

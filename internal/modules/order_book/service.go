@@ -20,16 +20,14 @@ type SettingsServiceInterface interface {
 // Validates liquidity and calculates optimal limit prices using bid-ask midpoint strategy
 type Service struct {
 	brokerClient    domain.BrokerClient
-	priceValidator  PriceValidator
 	settingsService SettingsServiceInterface
 	log             zerolog.Logger
 }
 
 // NewService creates a new order book service
-func NewService(broker domain.BrokerClient, priceValidator PriceValidator, settingsService SettingsServiceInterface, log zerolog.Logger) *Service {
+func NewService(broker domain.BrokerClient, settingsService SettingsServiceInterface, log zerolog.Logger) *Service {
 	return &Service{
 		brokerClient:    broker,
-		priceValidator:  priceValidator,
 		settingsService: settingsService,
 		log:             log,
 	}

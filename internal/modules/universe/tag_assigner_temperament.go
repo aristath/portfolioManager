@@ -55,9 +55,9 @@ type DangerConfig struct {
 
 // QualityGateConfig holds multi-path quality gate thresholds
 type QualityGateConfig struct {
-	StabilityThreshold float64 // Path 1: Balanced stability threshold
-	LongTermThreshold     float64 // Path 1: Balanced long-term threshold
-	ExceptionalThreshold  float64 // Path 2: Exceptional excellence threshold
+	StabilityThreshold   float64 // Path 1: Balanced stability threshold
+	LongTermThreshold    float64 // Path 1: Balanced long-term threshold
+	ExceptionalThreshold float64 // Path 2: Exceptional excellence threshold
 }
 
 // NewTagAssignerConfig creates a TagAssignerConfig from the settings service.
@@ -99,9 +99,9 @@ func newDangerConfigFromSettings(settingsService *settings.Service) DangerConfig
 func newQualityGateConfigFromSettings(settingsService *settings.Service) QualityGateConfig {
 	quality := settingsService.GetAdjustedQualityGateParams()
 	return QualityGateConfig{
-		StabilityThreshold: quality.StabilityThreshold,
-		LongTermThreshold:     quality.LongTermThreshold,
-		ExceptionalThreshold:  quality.ExceptionalThreshold,
+		StabilityThreshold:   quality.StabilityThreshold,
+		LongTermThreshold:    quality.LongTermThreshold,
+		ExceptionalThreshold: quality.ExceptionalThreshold,
 	}
 }
 
@@ -116,20 +116,20 @@ func NewDefaultTagAssignerConfig() TagAssignerConfig {
 			Below52wHighThreshold:       0.10, // Line 180: below52wHighPct > 10.0
 		},
 		Quality: settings.QualityThresholds{
-			HighQualityStability:     0.70, // Line 189: stabilityScore > 0.7
+			HighQualityStability:        0.70, // Line 189: stabilityScore > 0.7
 			HighQualityLongTerm:         0.70, // Line 189: longTermScore > 0.7
-			StableStability:          0.75, // Line 193: stabilityScore > 0.75
+			StableStability:             0.75, // Line 193: stabilityScore > 0.75
 			StableVolatilityMax:         0.25, // Line 193: volatility < 0.25
 			StableConsistency:           0.75, // Line 193: consistencyScore > 0.75
 			ConsistentGrowerConsistency: 0.75, // Line 199: consistencyScore > 0.75
 			ConsistentGrowerCAGR:        0.09, // Line 199: cagrRaw > 0.09
-			HighStabilityThreshold: 0.75, // Line 203: stabilityScore > 0.75
+			HighStabilityThreshold:      0.75, // Line 203: stabilityScore > 0.75
 		},
 		Technical: settings.TechnicalThresholds{
 			RSIOversold:               30.0,  // Line 210: *input.RSI < 30
 			RSIOverbought:             70.0,  // Line 269: *input.RSI > 70
 			RecoveryMomentumThreshold: -0.05, // Line 234: momentumScore < 0 (using -0.05 as threshold)
-			RecoveryStabilityMin:   0.65,  // Line 234: stabilityScore > 0.65
+			RecoveryStabilityMin:      0.65,  // Line 234: stabilityScore > 0.65
 			RecoveryDiscountMin:       0.12,  // Line 234: below52wHighPct > 12.0 (as decimal)
 		},
 		Dividend: settings.DividendThresholds{
@@ -155,33 +155,33 @@ func NewDefaultTagAssignerConfig() TagAssignerConfig {
 			NeedsRebalanceDeviation:    0.03, // Line 312: deviation > 0.03
 		},
 		RiskProfile: settings.RiskProfileThresholds{
-			LowRiskVolatilityMax:          0.15, // Line 320: volatility < 0.15
-			LowRiskStabilityMin:        0.70, // Line 320: stabilityScore > 0.7
-			LowRiskDrawdownMax:            0.20, // Line 320: maxDrawdown < 20.0
-			MediumRiskVolatilityMin:       0.15, // Line 324: volatility >= 0.15
-			MediumRiskVolatilityMax:       0.30, // Line 324: volatility <= 0.30
-			MediumRiskStabilityMin:     0.55, // Line 324: stabilityScore > 0.55
-			HighRiskVolatilityThreshold:   0.30, // Line 328: volatility > 0.30
-			HighRiskStabilityThreshold: 0.50, // Line 328: stabilityScore < 0.5
+			LowRiskVolatilityMax:        0.15, // Line 320: volatility < 0.15
+			LowRiskStabilityMin:         0.70, // Line 320: stabilityScore > 0.7
+			LowRiskDrawdownMax:          0.20, // Line 320: maxDrawdown < 20.0
+			MediumRiskVolatilityMin:     0.15, // Line 324: volatility >= 0.15
+			MediumRiskVolatilityMax:     0.30, // Line 324: volatility <= 0.30
+			MediumRiskStabilityMin:      0.55, // Line 324: stabilityScore > 0.55
+			HighRiskVolatilityThreshold: 0.30, // Line 328: volatility > 0.30
+			HighRiskStabilityThreshold:  0.50, // Line 328: stabilityScore < 0.5
 		},
 		QualityGate: QualityGateConfig{
-			StabilityThreshold: 0.55, // Line 348: stabilityThreshold := 0.55
-			LongTermThreshold:     0.45, // Line 349: longTermThreshold := 0.45
-			ExceptionalThreshold:  0.75, // Line 736: 0.75 (Path 2)
+			StabilityThreshold:   0.55, // Line 348: stabilityThreshold := 0.55
+			LongTermThreshold:    0.45, // Line 349: longTermThreshold := 0.45
+			ExceptionalThreshold: 0.75, // Line 736: 0.75 (Path 2)
 		},
 		BubbleTrap: settings.BubbleTrapThresholds{
-			BubbleCAGRThreshold:         0.15,  // Line 461: cagrRaw > 0.15
-			BubbleSharpeThreshold:       0.50,  // Line 464: sharpeRatio < 0.5
-			BubbleVolatilityThreshold:   0.40,  // Line 464: volatility > 0.40
-			BubbleStabilityThreshold: 0.55,  // Line 464: stabilityScore < 0.55
-			ValueTrapStability:       0.55,  // Line 525: stabilityScore < 0.55
-			ValueTrapLongTerm:           0.45,  // Line 525: longTermScore < 0.45
-			ValueTrapMomentum:           -0.05, // Line 525: momentumScore < -0.05
-			ValueTrapVolatility:         0.35,  // Line 525: volatility > 0.35
-			QuantumBubbleHighProb:       0.70,  // Line 511: quantumBubbleProb > 0.7
-			QuantumBubbleWarningProb:    0.50,  // Line 515: quantumBubbleProb > 0.5
-			QuantumTrapHighProb:         0.70,  // Line 552: quantumTrapProb > 0.7
-			QuantumTrapWarningProb:      0.50,  // Line 556: quantumTrapProb > 0.5
+			BubbleCAGRThreshold:       0.15,  // Line 461: cagrRaw > 0.15
+			BubbleSharpeThreshold:     0.50,  // Line 464: sharpeRatio < 0.5
+			BubbleVolatilityThreshold: 0.40,  // Line 464: volatility > 0.40
+			BubbleStabilityThreshold:  0.55,  // Line 464: stabilityScore < 0.55
+			ValueTrapStability:        0.55,  // Line 525: stabilityScore < 0.55
+			ValueTrapLongTerm:         0.45,  // Line 525: longTermScore < 0.45
+			ValueTrapMomentum:         -0.05, // Line 525: momentumScore < -0.05
+			ValueTrapVolatility:       0.35,  // Line 525: volatility > 0.35
+			QuantumBubbleHighProb:     0.70,  // Line 511: quantumBubbleProb > 0.7
+			QuantumBubbleWarningProb:  0.50,  // Line 515: quantumBubbleProb > 0.5
+			QuantumTrapHighProb:       0.70,  // Line 552: quantumTrapProb > 0.7
+			QuantumTrapWarningProb:    0.50,  // Line 556: quantumTrapProb > 0.5
 		},
 		TotalReturn: settings.TotalReturnThresholds{
 			ExcellentTotalReturn:     0.18, // Line 567: totalReturn >= 0.18
@@ -192,10 +192,10 @@ func NewDefaultTagAssignerConfig() TagAssignerConfig {
 		},
 		Regime: settings.RegimeThresholds{
 			BearSafeVolatility:       0.20, // Line 583: volatility < 0.20
-			BearSafeStability:     0.70, // Line 583: stabilityScore > 0.70
+			BearSafeStability:        0.70, // Line 583: stabilityScore > 0.70
 			BearSafeDrawdown:         0.20, // Line 583: maxDrawdown < 20.0
 			BullGrowthCAGR:           0.12, // Line 588: cagrRaw > 0.12
-			BullGrowthStability:   0.70, // Line 588: stabilityScore > 0.7
+			BullGrowthStability:      0.70, // Line 588: stabilityScore > 0.7
 			RegimeVolatileVolatility: 0.30, // Line 606: volatility > 0.30
 		},
 	}

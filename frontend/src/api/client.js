@@ -201,13 +201,6 @@ export const api = {
   rescheduleJobs: () => fetchJSON('/api/settings/reschedule-jobs', { method: 'POST' }),
   testTradernetConnection: () => fetchJSON('/api/system/tradernet'),
 
-  // Data Sources
-  fetchDataSources: () => fetchJSON('/api/settings/data-sources'),
-  updateDataSourcePriority: (dataType, priorities) => fetchJSON(`/api/settings/data-sources/${dataType}`, {
-    method: 'PUT',
-    body: JSON.stringify({ priorities }),
-  }),
-
   // R2 Backups
   listR2Backups: () => fetchJSON('/api/backups/r2'),
   createR2Backup: () => fetchJSON('/api/backups/r2', { method: 'POST' }),

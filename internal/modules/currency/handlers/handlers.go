@@ -206,11 +206,6 @@ func (h *Handler) HandleGetRateSources(w http.ResponseWriter, r *http.Request) {
 			"priority":    2,
 			"description": "Cached rates from history database",
 		},
-		{
-			"name":        "hardcoded",
-			"priority":    3,
-			"description": "Hardcoded fallback rates",
-		},
 	}
 
 	response := map[string]interface{}{
@@ -229,16 +224,14 @@ func (h *Handler) HandleGetRateSources(w http.ResponseWriter, r *http.Request) {
 // HandleGetRateStaleness handles GET /api/currency/rates/staleness
 func (h *Handler) HandleGetRateStaleness(w http.ResponseWriter, r *http.Request) {
 	// Return information about the rate fetching system
-	// Note: The system uses real-time fetching with multi-tier fallback,
-	// so traditional "staleness" tracking is not applicable
 	response := map[string]interface{}{
 		"data": map[string]interface{}{
 			"fetch_strategy":     "real-time with fallback",
 			"refresh_frequency":  "on-demand (every request)",
 			"cache_enabled":      true,
-			"fallback_tiers":     3,
+			"fallback_tiers":     2,
 			"staleness_tracking": "not applicable - rates fetched in real-time",
-			"note":               "Rates are fetched fresh on every request with automatic fallback through 3 tiers: Tradernet → DB Cache → Hardcoded fallbacks",
+			"note":               "Rates are fetched fresh on every request with automatic fallback: Tradernet API → DB Cache",
 		},
 		"metadata": map[string]interface{}{
 			"timestamp": time.Now().Format(time.RFC3339),
@@ -253,7 +246,6 @@ func (h *Handler) HandleGetFallbackChain(w http.ResponseWriter, r *http.Request)
 	chain := []map[string]interface{}{
 		{"order": 1, "source": "tradernet", "condition": "always_try_first"},
 		{"order": 2, "source": "cache", "condition": "if_tradernet_fails"},
-		{"order": 3, "source": "hardcoded", "condition": "if_all_else_fails"},
 	}
 
 	response := map[string]interface{}{

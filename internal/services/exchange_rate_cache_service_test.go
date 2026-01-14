@@ -106,52 +106,26 @@ func TestExchangeRateCacheService_GetRate_FromTradernet(t *testing.T) {
 	assert.InDelta(t, 1.10, rate, 0.001)
 }
 
-func TestExchangeRateCacheService_GetRate_HardcodedFallback(t *testing.T) {
-	// No Tradernet, no DB cache - should use hardcoded
+func TestExchangeRateCacheService_GetRate_NoSourcesAvailable(t *testing.T) {
+	// No Tradernet, no DB cache - should return error (no hardcoded fallback)
 	log := zerolog.Nop()
 	service := NewExchangeRateCacheService(nil, nil, nil, log)
 
 	rate, err := service.GetRate("EUR", "USD")
 
-	assert.NoError(t, err)
-	assert.InDelta(t, 1.10, rate, 0.001)
-}
-
-func TestExchangeRateCacheService_GetRate_AllCurrencyPairs(t *testing.T) {
-	log := zerolog.Nop()
-	service := NewExchangeRateCacheService(nil, nil, nil, log)
-
-	testCases := []struct {
-		from, to string
-	}{
-		{"EUR", "USD"},
-		{"USD", "EUR"},
-		{"EUR", "GBP"},
-		{"GBP", "EUR"},
-		{"EUR", "HKD"},
-		{"HKD", "EUR"},
-		{"USD", "GBP"},
-		{"GBP", "USD"},
-		{"USD", "HKD"},
-		{"HKD", "USD"},
-		{"GBP", "HKD"},
-		{"HKD", "GBP"},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.from+"_to_"+tc.to, func(t *testing.T) {
-			rate, err := service.GetRate(tc.from, tc.to)
-			assert.NoError(t, err)
-			assert.Greater(t, rate, 0.0)
-		})
-	}
+	assert.Error(t, err)
+	assert.Equal(t, 0.0, rate)
+	assert.Contains(t, err.Error(), "no rate available")
 }
 
 func TestExchangeRateCacheService_GetRate_UnsupportedPair(t *testing.T) {
+	// Mock exchange returns error for unsupported pair
+	mockExchange := &MockCurrencyExchangeService{
+		rates: map[string]float64{}, // no rates defined
+	}
 	log := zerolog.Nop()
-	service := NewExchangeRateCacheService(nil, nil, nil, log)
+	service := NewExchangeRateCacheService(mockExchange, nil, nil, log)
 
-	// CNY is not in our hardcoded rates
 	rate, err := service.GetRate("EUR", "CNY")
 
 	assert.Error(t, err)
@@ -159,32 +133,24 @@ func TestExchangeRateCacheService_GetRate_UnsupportedPair(t *testing.T) {
 }
 
 // ============================================================================
-// Hardcoded Rate Tests
-// ============================================================================
-
-func TestExchangeRateCacheService_HardcodedRates_Consistency(t *testing.T) {
-	log := zerolog.Nop()
-	service := NewExchangeRateCacheService(nil, nil, nil, log)
-
-	// Test that inverse rates are approximately consistent
-	eurUsd, _ := service.GetRate("EUR", "USD")
-	usdEur, _ := service.GetRate("USD", "EUR")
-
-	// EUR→USD and USD→EUR should be inverses (with some tolerance)
-	product := eurUsd * usdEur
-	assert.InDelta(t, 1.0, product, 0.05)
-}
-
-// ============================================================================
 // SyncRates Tests
 // ============================================================================
 
-func TestExchangeRateCacheService_SyncRates_PartialSuccess(t *testing.T) {
+func TestExchangeRateCacheService_SyncRates_AllSuccess(t *testing.T) {
 	mockExchange := &MockCurrencyExchangeService{
 		rates: map[string]float64{
 			"EUR:USD": 1.10,
 			"EUR:GBP": 0.85,
-			// Other pairs will fallback to hardcoded
+			"EUR:HKD": 8.50,
+			"USD:EUR": 0.91,
+			"USD:GBP": 0.77,
+			"USD:HKD": 7.80,
+			"GBP:EUR": 1.18,
+			"GBP:USD": 1.30,
+			"GBP:HKD": 10.00,
+			"HKD:EUR": 0.12,
+			"HKD:USD": 0.13,
+			"HKD:GBP": 0.10,
 		},
 	}
 	log := zerolog.Nop()
@@ -192,6 +158,17 @@ func TestExchangeRateCacheService_SyncRates_PartialSuccess(t *testing.T) {
 
 	err := service.SyncRates()
 
-	// Should succeed with partial rates (hardcoded fallback)
 	assert.NoError(t, err)
+}
+
+func TestExchangeRateCacheService_SyncRates_AllFail(t *testing.T) {
+	// No mock exchange, no DB - all rates will fail
+	log := zerolog.Nop()
+	service := NewExchangeRateCacheService(nil, nil, nil, log)
+
+	err := service.SyncRates()
+
+	// Should return error when all rate fetches fail
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "all rate fetches failed")
 }

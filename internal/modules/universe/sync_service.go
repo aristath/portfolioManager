@@ -128,21 +128,7 @@ func (s *SyncService) processSingleSecurity(symbol string) error {
 		}
 	}
 
-	// Step 2: Detect and update country/exchange
-	err := s.detectAndUpdateCountryAndExchange(symbol)
-	if err != nil {
-		s.log.Warn().Err(err).Str("symbol", symbol).Msg("Failed to update country/exchange")
-		// Continue - not fatal
-	}
-
-	// Step 3: Detect and update industry
-	err = s.detectAndUpdateIndustry(symbol)
-	if err != nil {
-		s.log.Warn().Err(err).Str("symbol", symbol).Msg("Failed to update industry")
-		// Continue - not fatal
-	}
-
-	// Step 4: Refresh score
+	// Step 2: Refresh score
 	security, err := s.securityRepo.GetBySymbol(symbol)
 	if err != nil {
 		return fmt.Errorf("failed to get security: %w", err)
@@ -204,20 +190,6 @@ func (s *SyncService) getSecuritiesNeedingSync() ([]Security, error) {
 	}
 
 	return securitiesNeedingSync, nil
-}
-
-// detectAndUpdateIndustry is a no-op since we removed external data sources
-// Industry is now populated from Tradernet metadata enricher during security setup
-func (s *SyncService) detectAndUpdateIndustry(symbol string) error {
-	s.log.Debug().Str("symbol", symbol).Msg("Industry detection skipped (external data sources removed)")
-	return nil
-}
-
-// detectAndUpdateCountryAndExchange is a no-op since we removed external data sources
-// Country and exchange are now populated from Tradernet metadata enricher during security setup
-func (s *SyncService) detectAndUpdateCountryAndExchange(symbol string) error {
-	s.log.Debug().Str("symbol", symbol).Msg("Country/exchange detection skipped (external data sources removed)")
-	return nil
 }
 
 // updateLastSynced updates the last_synced timestamp for a security
@@ -480,14 +452,10 @@ func (s *SyncService) SyncPricesForSymbols(symbolMap map[string]*string) (int, e
 
 	// Build symbol list and mappings
 	symbols := make([]string, 0, len(symbolMap))
-	symbolToYahoo := make(map[string]string) // symbol -> yahoo override
 	symbolToISIN := make(map[string]string)
 
-	for symbol, yahooOverride := range symbolMap {
+	for symbol := range symbolMap {
 		symbols = append(symbols, symbol)
-		if yahooOverride != nil && *yahooOverride != "" {
-			symbolToYahoo[symbol] = *yahooOverride
-		}
 		// Lookup ISIN from securities table (if securityRepo is available)
 		if s.securityRepo != nil {
 			security, err := s.securityRepo.GetBySymbol(symbol)

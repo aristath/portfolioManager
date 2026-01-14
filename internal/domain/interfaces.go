@@ -122,28 +122,3 @@ type ConcentrationAlert struct {
 	LimitPct          float64
 	AlertThresholdPct float64
 }
-
-// ClientSymbolRepositoryInterface defines the contract for client symbol mapping operations.
-// This interface is defined in the domain layer to avoid circular dependencies between
-// services and universe packages (clean architecture - dependency inversion).
-// Used for mapping ISINs to client-specific symbols (brokers, data providers, etc.).
-type ClientSymbolRepositoryInterface interface {
-	// GetClientSymbol returns the client-specific symbol for a given ISIN and client name.
-	// Returns error if mapping doesn't exist (fail-fast approach).
-	GetClientSymbol(isin, clientName string) (string, error)
-
-	// SetClientSymbol creates or updates a client symbol mapping.
-	// Replaces existing mapping if present (upsert operation).
-	SetClientSymbol(isin, clientName, symbol string) error
-
-	// GetAllClientSymbols returns all client symbols for a given ISIN.
-	// Returns a map of client_name -> client_symbol.
-	GetAllClientSymbols(isin string) (map[string]string, error)
-
-	// GetISINByClientSymbol performs reverse lookup: finds ISIN by client symbol.
-	// Returns error if mapping doesn't exist.
-	GetISINByClientSymbol(clientName, clientSymbol string) (string, error)
-
-	// DeleteClientSymbol removes a client symbol mapping for an ISIN/client pair.
-	DeleteClientSymbol(isin, clientName string) error
-}

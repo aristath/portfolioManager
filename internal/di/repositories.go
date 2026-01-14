@@ -36,12 +36,6 @@ func InitializeRepositories(container *Container, log zerolog.Logger) error {
 		log,
 	)
 
-	// Client symbol repository (needs universeDB)
-	container.ClientSymbolRepo = universe.NewClientSymbolRepository(
-		container.UniverseDB.Conn(),
-		log,
-	)
-
 	// Score repository (needs portfolioDB and universeDB for GetBySymbol)
 	container.ScoreRepo = universe.NewScoreRepositoryWithUniverse(
 		container.PortfolioDB.Conn(),

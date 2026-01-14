@@ -14,7 +14,6 @@ type Tag struct {
 // Security represents a security in the investment universe
 // After Unix timestamp migration: LastSynced uses Unix timestamp (int64)
 // Converted to string only at JSON boundary for API compatibility
-// Client-specific symbols (for brokers, data providers) stored in client_symbols table
 type Security struct {
 	Currency           string   `json:"currency,omitempty"`
 	Name               string   `json:"name"`
@@ -76,7 +75,7 @@ type SecurityScore struct {
 	TotalScore             float64    `json:"total_score,omitempty"`
 	SellScore              float64    `json:"sell_score,omitempty"`
 	TechnicalScore         float64    `json:"technical_score,omitempty"`
-	StabilityScore       float64    `json:"stability_score,omitempty"`
+	StabilityScore         float64    `json:"stability_score,omitempty"`
 	HistoryYears           float64    `json:"history_years,omitempty"`
 	Volatility             float64    `json:"volatility,omitempty"`
 	QualityScore           float64    `json:"quality_score,omitempty"`

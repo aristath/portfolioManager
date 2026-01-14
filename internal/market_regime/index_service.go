@@ -8,12 +8,6 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// ClientSymbolSetter interface for setting client symbols
-// Uses an interface to avoid importing universe package (prevents circular dependency)
-type ClientSymbolSetter interface {
-	SetClientSymbol(isin, clientName, symbol string) error
-}
-
 // MarketIndex represents a market index configuration
 type MarketIndex struct {
 	Symbol string  // e.g., "SPX.US"
@@ -25,11 +19,10 @@ type MarketIndex struct {
 
 // MarketIndexService manages market index tracking for regime detection
 type MarketIndexService struct {
-	universeDB       *sql.DB
-	historyDB        *sql.DB
-	tradernet        interface{} // Tradernet client (will be properly typed later)
-	clientSymbolRepo ClientSymbolSetter
-	log              zerolog.Logger
+	universeDB *sql.DB
+	historyDB  *sql.DB
+	tradernet  interface{} // Tradernet client (will be properly typed later)
+	log        zerolog.Logger
 }
 
 // NewMarketIndexService creates a new market index service
@@ -37,15 +30,13 @@ func NewMarketIndexService(
 	universeDB *sql.DB,
 	historyDB *sql.DB,
 	tradernet interface{},
-	clientSymbolRepo ClientSymbolSetter,
 	log zerolog.Logger,
 ) *MarketIndexService {
 	return &MarketIndexService{
-		universeDB:       universeDB,
-		historyDB:        historyDB,
-		tradernet:        tradernet,
-		clientSymbolRepo: clientSymbolRepo,
-		log:              log.With().Str("component", "market_index_service").Logger(),
+		universeDB: universeDB,
+		historyDB:  historyDB,
+		tradernet:  tradernet,
+		log:        log.With().Str("component", "market_index_service").Logger(),
 	}
 }
 
@@ -164,13 +155,6 @@ func (s *MarketIndexService) InitializeMarketIndices(historicalSync HistoricalSy
 		s.log.Info().Str("symbol", idx.Symbol).Msg("Successfully populated index historical data")
 	}
 
-	return nil
-}
-
-// ensureClientSymbolMappings is a no-op - external data providers have been removed
-// Market index data is now fetched from Tradernet using the index symbols directly
-func (s *MarketIndexService) ensureClientSymbolMappings() error {
-	// No-op: external data provider mappings removed
 	return nil
 }
 

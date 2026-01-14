@@ -21,7 +21,6 @@ type SecurityRepository struct {
 // Used to avoid SELECT * which can break when schema changes
 // Column order must match the table schema (matches SELECT * order)
 // After migration: isin is PRIMARY KEY
-// Note: yahoo_symbol, alphavantage_symbol columns removed - client symbols now stored in client_symbols table
 const securitiesColumns = `isin, symbol, name, product_type, industry, country, fullExchangeName,
 priority_multiplier, min_lot, active, allow_buy, allow_sell, currency, last_synced,
 min_portfolio_target, max_portfolio_target, created_at, updated_at`
@@ -230,7 +229,6 @@ func (r *SecurityRepository) Create(security Security) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	// Note: yahoo_symbol, alphavantage_symbol columns removed - client symbols stored in client_symbols table
 	query := `
 		INSERT INTO securities
 		(isin, symbol, name, product_type, industry, country, fullExchangeName,
@@ -284,12 +282,11 @@ func (r *SecurityRepository) Update(isin string, updates map[string]interface{})
 	}
 
 	// Whitelist of allowed update fields
-	// Note: yahoo_symbol, alphavantage_symbol removed - client symbols stored in client_symbols table
 	allowedFields := map[string]bool{
 		"active": true, "allow_buy": true, "allow_sell": true,
 		"name": true, "product_type": true, "sector": true, "industry": true,
 		"country": true, "fullExchangeName": true, "currency": true,
-		"exchange": true,
+		"exchange":             true,
 		"min_portfolio_target": true, "max_portfolio_target": true,
 		"isin": true, "min_lot": true, "priority_multiplier": true,
 		"symbol":      true,
@@ -579,7 +576,6 @@ func (r *SecurityRepository) GetWithScores(portfolioDB *sql.DB) ([]SecurityWithS
 }
 
 // scanSecurity scans a database row into a Security struct
-// Note: yahoo_symbol, alphavantage_symbol columns removed - client symbols stored in client_symbols table
 func (r *SecurityRepository) scanSecurity(rows *sql.Rows) (Security, error) {
 	var security Security
 	var isin, productType, country, fullExchangeName sql.NullString

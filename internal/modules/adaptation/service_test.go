@@ -195,39 +195,39 @@ func TestCalculateAdaptiveQualityGates(t *testing.T) {
 	service := NewAdaptiveMarketService(nil, nil, nil, nil, zerolog.Nop())
 
 	tests := []struct {
-		name                 string
-		regimeScore          float64
+		name              string
+		regimeScore       float64
 		expectedStability float64
-		expectedLongTerm     float64
-		description          string
+		expectedLongTerm  float64
+		description       string
 	}{
 		{
-			name:                 "Extreme bull - lower thresholds",
-			regimeScore:          1.0,
+			name:              "Extreme bull - lower thresholds",
+			regimeScore:       1.0,
 			expectedStability: 0.55,
-			expectedLongTerm:     0.45,
-			description:          "Bull should allow more growth stocks",
+			expectedLongTerm:  0.45,
+			description:       "Bull should allow more growth stocks",
 		},
 		{
-			name:                 "Extreme bear - higher thresholds",
-			regimeScore:          -1.0,
+			name:              "Extreme bear - higher thresholds",
+			regimeScore:       -1.0,
 			expectedStability: 0.65,
-			expectedLongTerm:     0.55,
-			description:          "Bear should be stricter",
+			expectedLongTerm:  0.55,
+			description:       "Bear should be stricter",
 		},
 		{
-			name:                 "Neutral - default thresholds",
-			regimeScore:          0.0,
+			name:              "Neutral - default thresholds",
+			regimeScore:       0.0,
 			expectedStability: 0.60,
-			expectedLongTerm:     0.50,
-			description:          "Neutral should use defaults",
+			expectedLongTerm:  0.50,
+			description:       "Neutral should use defaults",
 		},
 		{
-			name:                 "Bull-ish - slightly lower",
-			regimeScore:          0.4,
+			name:              "Bull-ish - slightly lower",
+			regimeScore:       0.4,
 			expectedStability: 0.58,
-			expectedLongTerm:     0.48,
-			description:          "Bull-ish should interpolate",
+			expectedLongTerm:  0.48,
+			description:       "Bull-ish should interpolate",
 		},
 	}
 

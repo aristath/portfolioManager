@@ -159,7 +159,7 @@ func (j *AdaptiveMarketJob) Run() error {
 		// Store quality gates
 		gatesJSON, err := json.Marshal(map[string]float64{
 			"stability": adaptiveGates.GetStability(),
-			"long_term":    adaptiveGates.GetLongTerm(),
+			"long_term": adaptiveGates.GetLongTerm(),
 		})
 		if err == nil {
 			_, err = j.configDB.Exec(

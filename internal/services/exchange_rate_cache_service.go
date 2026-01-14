@@ -16,9 +16,7 @@ type SettingsServiceInterface interface {
 }
 
 // ExchangeRateCacheService provides cached exchange rates with fallback
-// Uses two-tier fallback:
-// 1. Tradernet API (getCrossRatesForDate)
-// 2. Cached rates from history.db
+// Uses two-tier fallback: Tradernet API → Cached rates from history.db
 type ExchangeRateCacheService struct {
 	currencyExchangeService domain.CurrencyExchangeServiceInterface // Tradernet
 	historyDB               *universe.HistoryDB                     // Cache storage
@@ -41,10 +39,9 @@ func NewExchangeRateCacheService(
 	}
 }
 
-// GetRate returns exchange rate with 3-tier fallback:
+// GetRate returns exchange rate with 2-tier fallback:
 // 1. Try Tradernet (primary - uses broker's FX instruments)
 // 2. Try cached rate from DB
-// 3. Use hardcoded fallback rates
 func (s *ExchangeRateCacheService) GetRate(fromCurrency, toCurrency string) (float64, error) {
 	if fromCurrency == toCurrency {
 		return 1.0, nil
@@ -82,18 +79,6 @@ func (s *ExchangeRateCacheService) GetRate(fromCurrency, toCurrency string) (flo
 			Float64("rate", rate).
 			Str("source", "cache").
 			Msg("Using cached rate (API failed)")
-		return rate, nil
-	}
-
-	// Tier 3: Hardcoded fallback (last resort)
-	rate = s.getHardcodedRate(fromCurrency, toCurrency)
-	if rate > 0 {
-		s.log.Warn().
-			Str("from", fromCurrency).
-			Str("to", toCurrency).
-			Float64("rate", rate).
-			Str("source", "hardcoded").
-			Msg("Using hardcoded fallback rate")
 		return rate, nil
 	}
 
@@ -184,58 +169,4 @@ func (s *ExchangeRateCacheService) SyncRates() error {
 	}
 
 	return nil // Partial success OK
-}
-
-// getHardcodedRate returns hardcoded fallback rates
-// These are approximate rates for emergency fallback only
-func (s *ExchangeRateCacheService) getHardcodedRate(fromCurrency, toCurrency string) float64 {
-	// Hardcoded EUR conversion rates
-	if fromCurrency == "EUR" {
-		switch toCurrency {
-		case "USD":
-			return 1.10 // ~EUR→USD
-		case "GBP":
-			return 0.85 // ~EUR→GBP
-		case "HKD":
-			return 8.50 // ~EUR→HKD
-		}
-	}
-	if toCurrency == "EUR" {
-		switch fromCurrency {
-		case "USD":
-			return 0.91 // USD→EUR
-		case "GBP":
-			return 1.18 // GBP→EUR
-		case "HKD":
-			return 0.12 // HKD→EUR
-		}
-	}
-
-	// Cross rates via EUR
-	if fromCurrency == "USD" {
-		switch toCurrency {
-		case "GBP":
-			return 0.77 // USD→GBP
-		case "HKD":
-			return 7.80 // USD→HKD
-		}
-	}
-	if fromCurrency == "GBP" {
-		switch toCurrency {
-		case "USD":
-			return 1.30 // GBP→USD
-		case "HKD":
-			return 10.00 // GBP→HKD
-		}
-	}
-	if fromCurrency == "HKD" {
-		switch toCurrency {
-		case "USD":
-			return 0.13 // HKD→USD
-		case "GBP":
-			return 0.10 // HKD→GBP
-		}
-	}
-
-	return 0
 }

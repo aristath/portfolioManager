@@ -96,7 +96,7 @@ func TestQuantumProbabilityCalculator_CalculateBubbleProbability(t *testing.T) {
 		sharpe         float64
 		sortino        float64
 		volatility     float64
-		stability   float64
+		stability      float64
 		regimeScore    float64
 		wantRange      [2]float64
 		wantHighBubble bool
@@ -107,7 +107,7 @@ func TestQuantumProbabilityCalculator_CalculateBubbleProbability(t *testing.T) {
 			sharpe:         0.3,  // Poor
 			sortino:        0.3,  // Poor
 			volatility:     0.45, // High
-			stability:   0.5,  // Low
+			stability:      0.5,  // Low
 			regimeScore:    0.0,
 			wantRange:      [2]float64{0.6, 1.0},
 			wantHighBubble: true,
@@ -118,7 +118,7 @@ func TestQuantumProbabilityCalculator_CalculateBubbleProbability(t *testing.T) {
 			sharpe:         1.5,  // Good
 			sortino:        1.5,  // Good
 			volatility:     0.25, // Moderate
-			stability:   0.8,  // High
+			stability:      0.8,  // High
 			regimeScore:    0.0,
 			wantRange:      [2]float64{0.0, 0.5},
 			wantHighBubble: false,
@@ -129,7 +129,7 @@ func TestQuantumProbabilityCalculator_CalculateBubbleProbability(t *testing.T) {
 			sharpe:         0.5,
 			sortino:        0.5,
 			volatility:     0.30,
-			stability:   0.7,
+			stability:      0.7,
 			regimeScore:    0.0,
 			wantRange:      [2]float64{0.0, 0.4},
 			wantHighBubble: false,
@@ -164,48 +164,48 @@ func TestQuantumProbabilityCalculator_CalculateValueTrapProbability(t *testing.T
 	calc := NewQuantumProbabilityCalculator()
 
 	tests := []struct {
-		name         string
-		peVsMarket   float64
-		stability float64
-		longTerm     float64
-		momentum     float64
-		volatility   float64
-		regimeScore  float64
-		wantRange    [2]float64
-		wantTrap     bool
+		name        string
+		peVsMarket  float64
+		stability   float64
+		longTerm    float64
+		momentum    float64
+		volatility  float64
+		regimeScore float64
+		wantRange   [2]float64
+		wantTrap    bool
 	}{
 		{
-			name:         "Cheap with poor stability (trap)",
-			peVsMarket:   -0.30, // 30% cheaper
-			stability: 0.4,   // Poor
-			longTerm:     0.3,   // Poor
-			momentum:     -0.1,  // Negative
-			volatility:   0.40,  // High
-			regimeScore:  0.0,
-			wantRange:    [2]float64{0.6, 1.0},
-			wantTrap:     true,
+			name:        "Cheap with poor stability (trap)",
+			peVsMarket:  -0.30, // 30% cheaper
+			stability:   0.4,   // Poor
+			longTerm:    0.3,   // Poor
+			momentum:    -0.1,  // Negative
+			volatility:  0.40,  // High
+			regimeScore: 0.0,
+			wantRange:   [2]float64{0.6, 1.0},
+			wantTrap:    true,
 		},
 		{
-			name:         "Cheap with good stability (value)",
-			peVsMarket:   -0.25, // 25% cheaper
-			stability: 0.8,   // Good
-			longTerm:     0.8,   // Good
-			momentum:     0.1,   // Positive
-			volatility:   0.20,  // Low
-			regimeScore:  0.0,
-			wantRange:    [2]float64{0.0, 0.4},
-			wantTrap:     false,
+			name:        "Cheap with good stability (value)",
+			peVsMarket:  -0.25, // 25% cheaper
+			stability:   0.8,   // Good
+			longTerm:    0.8,   // Good
+			momentum:    0.1,   // Positive
+			volatility:  0.20,  // Low
+			regimeScore: 0.0,
+			wantRange:   [2]float64{0.0, 0.4},
+			wantTrap:    false,
 		},
 		{
-			name:         "Not cheap (not trap)",
-			peVsMarket:   -0.10, // Only 10% cheaper
-			stability: 0.5,
-			longTerm:     0.5,
-			momentum:     0.0,
-			volatility:   0.30,
-			regimeScore:  0.0,
-			wantRange:    [2]float64{0.0, 0.3},
-			wantTrap:     false,
+			name:        "Not cheap (not trap)",
+			peVsMarket:  -0.10, // Only 10% cheaper
+			stability:   0.5,
+			longTerm:    0.5,
+			momentum:    0.0,
+			volatility:  0.30,
+			regimeScore: 0.0,
+			wantRange:   [2]float64{0.0, 0.3},
+			wantTrap:    false,
 		},
 	}
 

@@ -110,10 +110,10 @@ type RiskManagementParams struct {
 
 // QualityGateParams holds adjusted quality gate thresholds
 type QualityGateParams struct {
-	StabilityThreshold    float64 // Minimum stability score (Path 1)
-	LongTermThreshold     float64 // Minimum long-term score (Path 1)
-	ExceptionalThreshold  float64 // Threshold for exceptional quality (Path 2)
-	AbsoluteMinCAGR       float64 // Absolute minimum CAGR requirement
+	StabilityThreshold   float64 // Minimum stability score (Path 1)
+	LongTermThreshold    float64 // Minimum long-term score (Path 1)
+	ExceptionalThreshold float64 // Threshold for exceptional quality (Path 2)
+	AbsoluteMinCAGR      float64 // Absolute minimum CAGR requirement
 	// Path 2: Exceptional Excellence
 	ExceptionalExcellenceThreshold float64 // Threshold for exceptional excellence (Path 2)
 	// Path 3: Quality Value Play

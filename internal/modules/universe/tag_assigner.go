@@ -62,11 +62,11 @@ type QualityThresholds struct {
 }
 
 type TechnicalThresholds struct {
-	RSIOversold             float64
-	RSIOverbought           float64
+	RSIOversold               float64
+	RSIOverbought             float64
 	RecoveryMomentumThreshold float64
-	RecoveryStabilityMin    float64
-	RecoveryDiscountMin     float64
+	RecoveryStabilityMin      float64
+	RecoveryDiscountMin       float64
 }
 
 type DividendThresholds struct {
@@ -137,10 +137,10 @@ type RegimeThresholds struct {
 }
 
 type QualityGateParams struct {
-	StabilityThreshold    float64 // Minimum stability score (Path 1)
-	LongTermThreshold     float64 // Minimum long-term score (Path 1)
-	ExceptionalThreshold  float64 // Threshold for exceptional quality (Path 2)
-	AbsoluteMinCAGR       float64 // Absolute minimum CAGR requirement
+	StabilityThreshold   float64 // Minimum stability score (Path 1)
+	LongTermThreshold    float64 // Minimum long-term score (Path 1)
+	ExceptionalThreshold float64 // Threshold for exceptional quality (Path 2)
+	AbsoluteMinCAGR      float64 // Absolute minimum CAGR requirement
 	// Path 2: Exceptional Excellence
 	ExceptionalExcellenceThreshold float64
 	// Path 3: Quality Value Play
@@ -162,8 +162,8 @@ type QualityGateParams struct {
 	CompositeScoreMin        float64
 	CompositeStabilityFloor  float64
 	// Path 7: Growth Opportunity
-	GrowthOpportunityCAGRMin      float64
-	GrowthOpportunityStabilityMin float64
+	GrowthOpportunityCAGRMin       float64
+	GrowthOpportunityStabilityMin  float64
 	GrowthOpportunityVolatilityMax float64
 	// High Score Tag
 	HighScoreThreshold float64

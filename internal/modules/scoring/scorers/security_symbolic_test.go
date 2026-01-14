@@ -69,7 +69,7 @@ func TestSecurityScorer_WithDiscoveredFormula(t *testing.T) {
 			{YearMonth: "2024-02", AvgAdjClose: 101},
 		},
 		TargetAnnualReturn: 0.11,
-			}
+	}
 
 	// Score security
 	result := scorer.ScoreSecurity(input)
@@ -103,7 +103,7 @@ func TestSecurityScorer_FallbackWhenNoFormula(t *testing.T) {
 			{YearMonth: "2024-01", AvgAdjClose: 100},
 		},
 		TargetAnnualReturn: 0.11,
-			}
+	}
 
 	// Should fall back to static weights when no discovered formula exists
 	result := scorer.ScoreSecurity(input)
