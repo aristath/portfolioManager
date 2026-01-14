@@ -11,7 +11,6 @@ require (
 	github.com/go-chi/chi/v5 v5.0.11
 	github.com/go-chi/cors v1.2.1
 	github.com/google/uuid v1.3.0
-	github.com/gorilla/websocket v1.5.1
 	github.com/joho/godotenv v1.5.1
 	github.com/markcheno/go-talib v0.0.0-20250114000313-ec55a20c902f
 	github.com/mattn/go-sqlite3 v1.14.16
@@ -22,6 +21,7 @@ require (
 	github.com/vmihailenco/msgpack/v5 v5.4.1
 	gonum.org/v1/gonum v0.16.0
 	modernc.org/sqlite v1.28.0
+	nhooyr.io/websocket v1.8.11
 )
 
 require (
@@ -58,7 +58,6 @@ require (
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	golang.org/x/mod v0.21.0 // indirect
-	golang.org/x/net v0.30.0 // indirect
 	golang.org/x/sync v0.12.0 // indirect
 	golang.org/x/sys v0.26.0 // indirect
 	golang.org/x/tools v0.26.0 // indirect

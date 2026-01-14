@@ -1,23 +1,25 @@
 package tradernet
 
 import (
+	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"math"
+	"net"
+	"net/http"
 	"sync"
 	"time"
 
 	"github.com/aristath/sentinel/internal/events"
-	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog"
+	"nhooyr.io/websocket"
 )
 
 const (
 	// WebSocket connection constants
-	writeWait      = 10 * time.Second
-	pongWait       = 60 * time.Second
-	pingPeriod     = (pongWait * 9) / 10
-	maxMessageSize = 512 * 1024 // 512KB
+	writeWait   = 10 * time.Second
+	dialTimeout = 30 * time.Second
 
 	// Reconnection constants
 	baseReconnectDelay   = 5 * time.Second
@@ -31,10 +33,12 @@ const (
 // MarketStatusWebSocket handles real-time market status updates from Tradernet
 type MarketStatusWebSocket struct {
 	// Connection
-	url  string
-	sid  string // Optional session ID
-	conn *websocket.Conn
-	mu   sync.RWMutex
+	url        string
+	sid        string // Optional session ID
+	conn       *websocket.Conn
+	connCtx    context.Context    // Connection context (cancelled on disconnect)
+	cancelFunc context.CancelFunc // For cancelling the connection context
+	mu         sync.RWMutex
 
 	// Dependencies
 	eventBus *events.Bus
@@ -50,6 +54,26 @@ type MarketStatusWebSocket struct {
 	marketCache map[string]MarketStatusData
 	lastUpdate  time.Time
 	cacheMu     sync.RWMutex
+}
+
+// createHTTP1Client creates an HTTP client that forces HTTP/1.1
+// Required because Cloudflare negotiates HTTP/2 via TLS ALPN,
+// but WebSocket requires HTTP/1.1 for the upgrade handshake.
+func createHTTP1Client() *http.Client {
+	return &http.Client{
+		Transport: &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+			TLSClientConfig: &tls.Config{
+				// Force HTTP/1.1 by only advertising http/1.1 in ALPN
+				// This prevents Cloudflare from negotiating HTTP/2
+				NextProtos: []string{"http/1.1"},
+			},
+			ForceAttemptHTTP2: false, // Explicitly disable HTTP/2
+		},
+	}
 }
 
 // NewMarketStatusWebSocket creates a new market status WebSocket client
@@ -76,8 +100,11 @@ func (ws *MarketStatusWebSocket) Start() error {
 		return err
 	}
 
-	// Start read loop in background
-	go ws.readMessages()
+	// Start read loop in background with connection context
+	ws.mu.RLock()
+	ctx := ws.connCtx
+	ws.mu.RUnlock()
+	go ws.readMessages(ctx)
 
 	ws.log.Info().Msg("Market status WebSocket client started successfully")
 	return nil
@@ -115,32 +142,40 @@ func (ws *MarketStatusWebSocket) Connect() error {
 
 	ws.log.Info().Str("url", wsURL).Msg("Connecting to Tradernet WebSocket")
 
-	// Dial WebSocket
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	// Create context with timeout for the dial operation
+	dialCtx, dialCancel := context.WithTimeout(context.Background(), dialTimeout)
+	defer dialCancel()
+
+	// Create HTTP/1.1 client to work around Cloudflare ALPN issues
+	httpClient := createHTTP1Client()
+
+	// Dial WebSocket with nhooyr.io/websocket
+	conn, _, err := websocket.Dial(dialCtx, wsURL, &websocket.DialOptions{
+		HTTPClient: httpClient,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to dial WebSocket: %w", err)
 	}
 
+	// Create a long-lived context for the connection
+	// This context is used for read operations and cancelled on disconnect
+	connCtx, connCancel := context.WithCancel(context.Background())
 	ws.conn = conn
+	ws.connCtx = connCtx
+	ws.cancelFunc = connCancel
 	ws.connected = true
 
-	// Configure connection
-	if err := conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
-		ws.log.Warn().Err(err).Msg("Failed to set initial read deadline")
-	}
-	conn.SetPongHandler(func(string) error {
-		// Note: Pong handler uses local conn variable to avoid race with Disconnect()
-		if err := conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
-			ws.log.Warn().Err(err).Msg("Failed to set read deadline in pong handler")
-		}
-		return nil
-	})
+	// nhooyr.io/websocket handles ping/pong automatically
+	// No need to set pong handler or read deadline manually
 
 	// Subscribe to markets channel
-	if err := ws.subscribe(); err != nil {
-		if disconnectErr := ws.Disconnect(); disconnectErr != nil {
-			ws.log.Warn().Err(disconnectErr).Msg("Failed to disconnect after subscribe error")
-		}
+	if err := ws.subscribe(connCtx); err != nil {
+		connCancel()
+		conn.Close(websocket.StatusNormalClosure, "subscribe failed")
+		ws.conn = nil
+		ws.connCtx = nil
+		ws.cancelFunc = nil
+		ws.connected = false
 		return fmt.Errorf("failed to subscribe to markets: %w", err)
 	}
 
@@ -159,32 +194,46 @@ func (ws *MarketStatusWebSocket) Disconnect() error {
 
 	ws.log.Info().Msg("Disconnecting from Tradernet WebSocket")
 
-	// Send close message
-	err := ws.conn.WriteMessage(
-		websocket.CloseMessage,
-		websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
-	)
+	// Cancel the connection context to unblock any pending Read operations
+	if ws.cancelFunc != nil {
+		ws.cancelFunc()
+		ws.cancelFunc = nil
+	}
 
-	// Close connection
-	ws.conn.Close()
+	// Close connection with normal closure status
+	// nhooyr.io/websocket.Close() sends close frame and waits for response
+	err := ws.conn.Close(websocket.StatusNormalClosure, "")
+
 	ws.conn = nil
+	ws.connCtx = nil
 	ws.connected = false
 
 	if err != nil {
-		return fmt.Errorf("error sending close message: %w", err)
+		return fmt.Errorf("error closing WebSocket: %w", err)
 	}
 
 	return nil
 }
 
 // subscribe sends subscription message to markets channel
-func (ws *MarketStatusWebSocket) subscribe() error {
+func (ws *MarketStatusWebSocket) subscribe(ctx context.Context) error {
 	// Tradernet WebSocket protocol: ["markets"]
 	subscribeMsg := []string{"markets"}
 
 	ws.log.Info().Msg("Subscribing to markets channel")
 
-	if err := ws.conn.WriteJSON(subscribeMsg); err != nil {
+	// Marshal to JSON
+	data, err := json.Marshal(subscribeMsg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal subscription message: %w", err)
+	}
+
+	// Create write context with timeout
+	writeCtx, cancel := context.WithTimeout(ctx, writeWait)
+	defer cancel()
+
+	// Write JSON message
+	if err := ws.conn.Write(writeCtx, websocket.MessageText, data); err != nil {
 		return fmt.Errorf("failed to send subscription message: %w", err)
 	}
 
@@ -193,7 +242,7 @@ func (ws *MarketStatusWebSocket) subscribe() error {
 }
 
 // readMessages continuously reads messages from WebSocket
-func (ws *MarketStatusWebSocket) readMessages() {
+func (ws *MarketStatusWebSocket) readMessages(ctx context.Context) {
 	defer func() {
 		ws.log.Info().Msg("Read loop stopped")
 		// Attempt reconnection if not intentionally stopped
@@ -209,6 +258,9 @@ func (ws *MarketStatusWebSocket) readMessages() {
 		select {
 		case <-ws.stopChan:
 			return
+		case <-ctx.Done():
+			ws.log.Debug().Msg("Read loop context cancelled")
+			return
 		default:
 		}
 
@@ -222,14 +274,26 @@ func (ws *MarketStatusWebSocket) readMessages() {
 			return
 		}
 
-		_, message, err := conn.ReadMessage()
+		// Read message with context
+		msgType, message, err := conn.Read(ctx)
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
-				ws.log.Error().Err(err).Msg("Unexpected WebSocket close")
+			// Check if this is an expected close
+			closeStatus := websocket.CloseStatus(err)
+			if closeStatus == websocket.StatusNormalClosure || closeStatus == websocket.StatusGoingAway {
+				ws.log.Info().Int("status", int(closeStatus)).Msg("WebSocket closed normally")
+			} else if ctx.Err() != nil {
+				// Context was cancelled (intentional disconnect)
+				ws.log.Debug().Msg("Read cancelled by context")
 			} else {
-				ws.log.Warn().Err(err).Msg("WebSocket read error")
+				ws.log.Error().Err(err).Msg("Unexpected WebSocket read error")
 			}
 			return
+		}
+
+		// Only process text messages
+		if msgType != websocket.MessageText {
+			ws.log.Debug().Int("type", int(msgType)).Msg("Ignoring non-text message")
+			continue
 		}
 
 		// Parse and handle message
@@ -431,8 +495,11 @@ func (ws *MarketStatusWebSocket) reconnectLoop() {
 		// Reset attempt counter on successful connection
 		attempt = 0
 
-		// Start read loop
-		go ws.readMessages()
+		// Start read loop with connection context
+		ws.mu.RLock()
+		ctx := ws.connCtx
+		ws.mu.RUnlock()
+		go ws.readMessages(ctx)
 		return
 	}
 }
