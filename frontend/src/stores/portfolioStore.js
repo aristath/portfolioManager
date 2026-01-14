@@ -58,26 +58,35 @@ export const usePortfolioStore = create((set, get) => ({
 
   fetchTargets: async () => {
     try {
-      const data = await api.fetchTargets();
-      const geographies = Object.keys(data.geography || {});
-      const industries = Object.keys(data.industry || {});
+      // Fetch targets and available options in parallel
+      const [targets, availableGeo, availableInd] = await Promise.all([
+        api.fetchTargets(),
+        api.fetchAvailableGeographies(),
+        api.fetchAvailableIndustries(),
+      ]);
+
+      // Available geographies/industries come from active securities in the universe
+      const activeGeographies = availableGeo.geographies || [];
+      const activeIndustries = availableInd.industries || [];
+
+      // Targets are the saved weights
       const geographyTargets = {};
       const industryTargets = {};
 
-      for (const [name, weight] of Object.entries(data.geography || {})) {
+      for (const [name, weight] of Object.entries(targets.geography || {})) {
         geographyTargets[name] = weight;
       }
-      for (const [name, weight] of Object.entries(data.industry || {})) {
+      for (const [name, weight] of Object.entries(targets.industry || {})) {
         industryTargets[name] = weight;
       }
 
       set({
-        geographies,
+        geographies: activeGeographies,
         geographyTargets,
-        industries,
+        industries: activeIndustries,
         industryTargets,
-        activeGeographies: geographies,
-        activeIndustries: industries,
+        activeGeographies,
+        activeIndustries,
       });
     } catch (e) {
       console.error('Failed to fetch targets:', e);

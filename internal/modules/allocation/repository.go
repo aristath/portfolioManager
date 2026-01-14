@@ -185,13 +185,13 @@ func (r *Repository) Delete(targetType, name string) error {
 	return nil
 }
 
-// GetAvailableGeographies returns distinct geographies from securities table
+// GetAvailableGeographies returns distinct geographies from active securities
 func (r *Repository) GetAvailableGeographies() ([]string, error) {
 	if r.universeDB == nil {
 		return nil, fmt.Errorf("universe database not configured")
 	}
 
-	query := "SELECT DISTINCT geography FROM securities WHERE geography IS NOT NULL AND geography != ''"
+	query := "SELECT DISTINCT geography FROM securities WHERE active = 1 AND geography IS NOT NULL AND geography != ''"
 	rows, err := r.universeDB.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query geographies: %w", err)
@@ -210,13 +210,13 @@ func (r *Repository) GetAvailableGeographies() ([]string, error) {
 	return result, rows.Err()
 }
 
-// GetAvailableIndustries returns distinct industries from securities table
+// GetAvailableIndustries returns distinct industries from active securities
 func (r *Repository) GetAvailableIndustries() ([]string, error) {
 	if r.universeDB == nil {
 		return nil, fmt.Errorf("universe database not configured")
 	}
 
-	query := "SELECT DISTINCT industry FROM securities WHERE industry IS NOT NULL AND industry != ''"
+	query := "SELECT DISTINCT industry FROM securities WHERE active = 1 AND industry IS NOT NULL AND industry != ''"
 	rows, err := r.universeDB.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query industries: %w", err)
