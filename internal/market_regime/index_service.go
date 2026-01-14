@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/aristath/sentinel/internal/domain"
 	"github.com/rs/zerolog"
 )
 
@@ -90,8 +91,8 @@ func (s *MarketIndexService) EnsureIndicesExist() error {
 		var exists bool
 		err := s.universeDB.QueryRow(`
 			SELECT COUNT(*) > 0 FROM securities
-			WHERE symbol = ? AND product_type = 'INDEX'
-		`, idx.Symbol).Scan(&exists)
+			WHERE symbol = ? AND product_type = ?
+		`, idx.Symbol, string(domain.ProductTypeIndex)).Scan(&exists)
 		if err != nil {
 			return fmt.Errorf("failed to check index existence: %w", err)
 		}
@@ -109,8 +110,8 @@ func (s *MarketIndexService) EnsureIndicesExist() error {
 		_, err = s.universeDB.Exec(`
 			INSERT INTO securities
 			(isin, symbol, name, product_type, active, allow_buy, allow_sell, created_at, updated_at)
-			VALUES (?, ?, ?, 'INDEX', 1, 0, 0, ?, ?)
-		`, isin, idx.Symbol, idx.Name, now, now)
+			VALUES (?, ?, ?, ?, 1, 0, 0, ?, ?)
+		`, isin, idx.Symbol, idx.Name, string(domain.ProductTypeIndex), now, now)
 		if err != nil {
 			return fmt.Errorf("failed to create index %s: %w", idx.Symbol, err)
 		}
@@ -264,8 +265,8 @@ func (s *MarketIndexService) getIndexReturns(symbol string, days int) ([]float64
 	var isin string
 	err := s.universeDB.QueryRow(`
 		SELECT isin FROM securities
-		WHERE symbol = ? AND product_type = 'INDEX'
-	`, symbol).Scan(&isin)
+		WHERE symbol = ? AND product_type = ?
+	`, symbol, string(domain.ProductTypeIndex)).Scan(&isin)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ISIN for index %s: %w", symbol, err)
 	}

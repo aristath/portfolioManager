@@ -198,6 +198,11 @@ func (s *SecuritySetupService) AddSecurityByIdentifier(
 		return nil, fmt.Errorf("identifier cannot be empty")
 	}
 
+	// Reject index symbols - indices are managed automatically via IndexSyncService
+	if strings.HasSuffix(identifier, ".IDX") {
+		return nil, fmt.Errorf("cannot add index %s via this endpoint; indices are managed automatically", identifier)
+	}
+
 	s.log.Info().Str("identifier", identifier).Msg("Adding security by identifier")
 
 	// Check if security already exists

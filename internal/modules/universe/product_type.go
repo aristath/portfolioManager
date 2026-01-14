@@ -15,9 +15,27 @@ const (
 	ProductTypeETC ProductType = "ETC"
 	// ProductTypeMutualFund represents mutual funds (some UCITS products)
 	ProductTypeMutualFund ProductType = "MUTUALFUND"
+	// ProductTypeIndex represents market indices (non-tradeable)
+	ProductTypeIndex ProductType = "INDEX"
 	// ProductTypeUnknown represents unknown type
 	ProductTypeUnknown ProductType = "UNKNOWN"
 )
+
+// IsTradable returns true if the product type represents a tradeable security.
+// Indices are not tradeable.
+func (pt ProductType) IsTradable() bool {
+	switch pt {
+	case ProductTypeEquity, ProductTypeETF, ProductTypeETC, ProductTypeMutualFund:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsIndex returns true if the product type is an index.
+func (pt ProductType) IsIndex() bool {
+	return pt == ProductTypeIndex
+}
 
 // FromQuoteType detects product type from a quote type string with heuristics
 //
@@ -78,8 +96,10 @@ func FromQuoteType(quoteType string, productName string) ProductType {
 
 		// Default to MUTUALFUND if no clear indicators
 		return ProductTypeMutualFund
+	} else if quoteType == "INDEX" {
+		return ProductTypeIndex
 	} else {
-		// Other types (INDEX, CURRENCY, etc.) - return UNKNOWN
+		// Other types (CURRENCY, etc.) - return UNKNOWN
 		return ProductTypeUnknown
 	}
 }

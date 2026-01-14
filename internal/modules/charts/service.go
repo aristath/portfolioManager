@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/modules/universe"
 	"github.com/aristath/sentinel/internal/utils"
 	_ "github.com/mattn/go-sqlite3"
@@ -58,8 +59,8 @@ func (s *Service) GetSparklinesAggregated(period string) (map[string][]ChartData
 		return nil, fmt.Errorf("invalid period: %s (must be 1Y or 5Y)", period)
 	}
 
-	// Get all active securities with ISINs
-	rows, err := s.universeDB.Query("SELECT symbol, isin FROM securities WHERE active = 1 AND isin != ''")
+	// Get all active tradable securities with ISINs (excludes indices)
+	rows, err := s.universeDB.Query("SELECT symbol, isin FROM securities WHERE active = 1 AND isin != '' AND (product_type IS NULL OR product_type != ?)", string(domain.ProductTypeIndex))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get active securities: %w", err)
 	}

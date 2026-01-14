@@ -15,13 +15,14 @@ func setupTestUniverseDB(t *testing.T) *sql.DB {
 	db, err := sql.Open("sqlite", ":memory:")
 	require.NoError(t, err)
 
-	// Create the securities table
+	// Create the securities table (with product_type for index filtering)
 	_, err = db.Exec(`
 		CREATE TABLE securities (
 			id INTEGER PRIMARY KEY,
 			isin TEXT UNIQUE NOT NULL,
 			symbol TEXT NOT NULL,
 			name TEXT NOT NULL,
+			product_type TEXT,
 			geography TEXT,
 			industry TEXT,
 			active INTEGER DEFAULT 1
@@ -34,10 +35,15 @@ func setupTestUniverseDB(t *testing.T) *sql.DB {
 
 // insertTestSecurity inserts a test security into the database
 func insertTestSecurity(t *testing.T, db *sql.DB, isin, symbol, name, geography, industry string, active int) {
+	insertTestSecurityWithType(t, db, isin, symbol, name, "", geography, industry, active)
+}
+
+// insertTestSecurityWithType inserts a test security with explicit product_type
+func insertTestSecurityWithType(t *testing.T, db *sql.DB, isin, symbol, name, productType, geography, industry string, active int) {
 	_, err := db.Exec(`
-		INSERT INTO securities (isin, symbol, name, geography, industry, active)
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, isin, symbol, name, geography, industry, active)
+		INSERT INTO securities (isin, symbol, name, product_type, geography, industry, active)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, isin, symbol, name, productType, geography, industry, active)
 	require.NoError(t, err)
 }
 
@@ -252,4 +258,73 @@ func TestGetAvailableGeographies_EmptyDatabase(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Empty(t, geographies)
+}
+
+func TestGetAvailableIndustries_ExcludesIndices(t *testing.T) {
+	db := setupTestUniverseDB(t)
+	defer db.Close()
+
+	// Insert regular securities
+	insertTestSecurityWithType(t, db, "US0000000001", "AAPL", "Apple", "EQUITY", "US", "Technology", 1)
+	insertTestSecurityWithType(t, db, "US0000000002", "XOM", "Exxon", "EQUITY", "US", "Energy", 1)
+
+	// Insert market index (should be excluded)
+	insertTestSecurityWithType(t, db, "INDEX-SP500.IDX", "SP500.IDX", "S&P 500", "INDEX", "US", "Index", 1)
+
+	repo := NewRepository(nil, zerolog.Nop())
+	repo.SetUniverseDB(db)
+
+	industries, err := repo.GetAvailableIndustries()
+	require.NoError(t, err)
+
+	// Should return Energy, Technology but NOT "Index"
+	expected := []string{"Energy", "Technology"}
+	assert.Equal(t, expected, industries)
+}
+
+func TestGetAvailableGeographies_ExcludesIndices(t *testing.T) {
+	db := setupTestUniverseDB(t)
+	defer db.Close()
+
+	// Insert regular securities
+	insertTestSecurityWithType(t, db, "US0000000001", "AAPL", "Apple", "EQUITY", "United States", "Technology", 1)
+	insertTestSecurityWithType(t, db, "DE0000000001", "SAP", "SAP", "EQUITY", "Germany", "Technology", 1)
+
+	// Insert market indices (should be excluded)
+	insertTestSecurityWithType(t, db, "INDEX-SP500.IDX", "SP500.IDX", "S&P 500", "INDEX", "United States", "Index", 1)
+	insertTestSecurityWithType(t, db, "INDEX-DAX.IDX", "DAX.IDX", "DAX", "INDEX", "Germany", "Index", 1)
+
+	repo := NewRepository(nil, zerolog.Nop())
+	repo.SetUniverseDB(db)
+
+	geographies, err := repo.GetAvailableGeographies()
+	require.NoError(t, err)
+
+	// Should return Germany, United States from regular securities
+	// The indices also have these geographies, but they should be excluded
+	expected := []string{"Germany", "United States"}
+	assert.Equal(t, expected, geographies)
+}
+
+func TestGetAvailableIndustries_IncludesNullProductType(t *testing.T) {
+	db := setupTestUniverseDB(t)
+	defer db.Close()
+
+	// Insert security with NULL product_type (should be included)
+	insertTestSecurityWithType(t, db, "US0000000001", "AAPL", "Apple", "", "US", "Technology", 1)
+	// Insert security with explicit EQUITY type
+	insertTestSecurityWithType(t, db, "US0000000002", "MSFT", "Microsoft", "EQUITY", "US", "Technology", 1)
+	// Insert index (should be excluded)
+	insertTestSecurityWithType(t, db, "INDEX-SP500.IDX", "SP500.IDX", "S&P 500", "INDEX", "US", "Index", 1)
+
+	repo := NewRepository(nil, zerolog.Nop())
+	repo.SetUniverseDB(db)
+
+	industries, err := repo.GetAvailableIndustries()
+	require.NoError(t, err)
+
+	// Should include Technology from both AAPL (NULL type) and MSFT (EQUITY)
+	// Should NOT include Index from SP500.IDX
+	expected := []string{"Technology"}
+	assert.Equal(t, expected, industries)
 }

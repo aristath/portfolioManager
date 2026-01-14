@@ -104,12 +104,12 @@ func (r *SecurityRepository) GetByIdentifier(identifier string) (*Security, erro
 	return r.GetBySymbol(identifier)
 }
 
-// GetAllActive returns all active securities
+// GetAllActive returns all active tradable securities (excludes indices)
 // Faithful translation of Python: async def get_all_active(self) -> List[Security]
 func (r *SecurityRepository) GetAllActive() ([]Security, error) {
-	query := "SELECT " + securitiesColumns + " FROM securities WHERE active = 1"
+	query := "SELECT " + securitiesColumns + " FROM securities WHERE active = 1 AND (product_type IS NULL OR product_type != ?)"
 
-	rows, err := r.universeDB.Query(query)
+	rows, err := r.universeDB.Query(query, string(ProductTypeIndex))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query active securities: %w", err)
 	}
@@ -131,13 +131,14 @@ func (r *SecurityRepository) GetAllActive() ([]Security, error) {
 	return securities, nil
 }
 
-// GetDistinctExchanges returns a list of distinct exchange names from active securities
+// GetDistinctExchanges returns a list of distinct exchange names from active tradable securities (excludes indices)
 func (r *SecurityRepository) GetDistinctExchanges() ([]string, error) {
 	query := `SELECT DISTINCT fullExchangeName FROM securities
 		WHERE fullExchangeName IS NOT NULL AND fullExchangeName != '' AND active = 1
+		AND (product_type IS NULL OR product_type != ?)
 		ORDER BY fullExchangeName`
 
-	rows, err := r.universeDB.Query(query)
+	rows, err := r.universeDB.Query(query, string(ProductTypeIndex))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query distinct exchanges: %w", err)
 	}
@@ -161,12 +162,12 @@ func (r *SecurityRepository) GetDistinctExchanges() ([]string, error) {
 	return exchanges, nil
 }
 
-// GetAllActiveTradable returns all active securities excluding cash
+// GetAllActiveTradable returns all active tradable securities (excludes indices and cash)
 // Used for scoring and trading operations
 func (r *SecurityRepository) GetAllActiveTradable() ([]Security, error) {
-	query := "SELECT " + securitiesColumns + " FROM securities WHERE active = 1"
+	query := "SELECT " + securitiesColumns + " FROM securities WHERE active = 1 AND (product_type IS NULL OR product_type != ?)"
 
-	rows, err := r.universeDB.Query(query)
+	rows, err := r.universeDB.Query(query, string(ProductTypeIndex))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query tradable securities: %w", err)
 	}
@@ -215,12 +216,12 @@ func (r *SecurityRepository) GetAll() ([]Security, error) {
 	return securities, nil
 }
 
-// GetByMarketCode returns all active securities with the specified market code
+// GetByMarketCode returns all active tradable securities with the specified market code (excludes indices)
 // Used for per-region regime detection and grouping securities by market
 func (r *SecurityRepository) GetByMarketCode(marketCode string) ([]Security, error) {
-	query := "SELECT " + securitiesColumns + " FROM securities WHERE market_code = ? AND active = 1"
+	query := "SELECT " + securitiesColumns + " FROM securities WHERE market_code = ? AND active = 1 AND (product_type IS NULL OR product_type != ?)"
 
-	rows, err := r.universeDB.Query(query, marketCode)
+	rows, err := r.universeDB.Query(query, marketCode, string(ProductTypeIndex))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query securities by market code: %w", err)
 	}
@@ -428,12 +429,12 @@ func (r *SecurityRepository) HardDelete(isin string) error {
 	return nil
 }
 
-// GetWithScores returns all active securities with their scores and positions
+// GetWithScores returns all active tradable securities with their scores and positions (excludes indices)
 // Faithful translation of Python: async def get_with_scores(self) -> List[dict]
 // Note: This method accesses multiple databases (universe.db and portfolio.db) - architecture violation
 func (r *SecurityRepository) GetWithScores(portfolioDB *sql.DB) ([]SecurityWithScore, error) {
-	// Fetch securities from universe.db
-	securityRows, err := r.universeDB.Query("SELECT " + securitiesColumns + " FROM securities WHERE active = 1")
+	// Fetch securities from universe.db (exclude indices)
+	securityRows, err := r.universeDB.Query("SELECT "+securitiesColumns+" FROM securities WHERE active = 1 AND (product_type IS NULL OR product_type != ?)", string(ProductTypeIndex))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query securities: %w", err)
 	}
@@ -1054,14 +1055,16 @@ func (r *SecurityRepository) GetByTags(tagIDs []string) ([]Security, error) {
 		INNER JOIN security_tags st ON s.isin = st.isin
 		WHERE st.tag_id IN (%s)
 		AND s.active = 1
+		AND (s.product_type IS NULL OR s.product_type != ?)
 		ORDER BY s.symbol ASC
 	`, placeholders)
 
-	// Build args slice
-	args := make([]interface{}, len(normalizedTags))
+	// Build args slice (tag IDs + ProductTypeIndex filter)
+	args := make([]interface{}, len(normalizedTags)+1)
 	for i, tagID := range normalizedTags {
 		args[i] = tagID
 	}
+	args[len(normalizedTags)] = string(ProductTypeIndex)
 
 	rows, err := r.universeDB.Query(query, args...)
 	if err != nil {
@@ -1151,17 +1154,19 @@ func (r *SecurityRepository) GetPositionsByTags(positionSymbols []string, tagIDs
 		WHERE s.symbol IN (%s)
 		AND st.tag_id IN (%s)
 		AND s.active = 1
+		AND (s.product_type IS NULL OR s.product_type != ?)
 		ORDER BY s.symbol ASC
 	`, symbolPlaceholders, tagPlaceholders)
 
-	// Build args slice (symbols first, then tags)
-	args := make([]interface{}, 0, len(normalizedSymbols)+len(normalizedTags))
+	// Build args slice (symbols first, then tags, then ProductTypeIndex filter)
+	args := make([]interface{}, 0, len(normalizedSymbols)+len(normalizedTags)+1)
 	for _, symbol := range normalizedSymbols {
 		args = append(args, symbol)
 	}
 	for _, tagID := range normalizedTags {
 		args = append(args, tagID)
 	}
+	args = append(args, string(ProductTypeIndex))
 
 	rows, err := r.universeDB.Query(query, args...)
 	if err != nil {

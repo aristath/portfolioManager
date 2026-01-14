@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/aristath/sentinel/internal/domain"
 	"github.com/rs/zerolog"
 )
 
@@ -64,8 +65,8 @@ func (s *IndexSyncService) SyncIndicesToSecurities() error {
 		_, err = s.universeDB.Exec(`
 			INSERT INTO securities
 			(isin, symbol, name, product_type, market_code, active, allow_buy, allow_sell, created_at, updated_at)
-			VALUES (?, ?, ?, 'INDEX', ?, 1, 0, 0, ?, ?)
-		`, isin, idx.Symbol, idx.Name, idx.MarketCode, now, now)
+			VALUES (?, ?, ?, ?, ?, 1, 0, 0, ?, ?)
+		`, isin, idx.Symbol, idx.Name, string(domain.ProductTypeIndex), idx.MarketCode, now, now)
 		if err != nil {
 			return fmt.Errorf("failed to create index %s in securities: %w", idx.Symbol, err)
 		}
@@ -217,12 +218,12 @@ func (s *IndexSyncService) EnsureIndexExists(symbol string) (string, error) {
 	_, err := s.universeDB.Exec(`
 		INSERT INTO securities
 		(isin, symbol, name, product_type, market_code, active, allow_buy, allow_sell, created_at, updated_at)
-		VALUES (?, ?, ?, 'INDEX', ?, 1, 0, 0, ?, ?)
+		VALUES (?, ?, ?, ?, ?, 1, 0, 0, ?, ?)
 		ON CONFLICT(isin) DO UPDATE SET
 			name = excluded.name,
 			market_code = excluded.market_code,
 			updated_at = excluded.updated_at
-	`, isin, symbol, foundIdx.Name, foundIdx.MarketCode, now, now)
+	`, isin, symbol, foundIdx.Name, string(domain.ProductTypeIndex), foundIdx.MarketCode, now, now)
 	if err != nil {
 		return "", fmt.Errorf("failed to upsert index %s: %w", symbol, err)
 	}

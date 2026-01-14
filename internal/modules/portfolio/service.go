@@ -477,12 +477,12 @@ func (s *PortfolioService) buildIndustryAllocations(
 	return allocations
 }
 
-// getAllSecurityGeographiesAndIndustries gets all geographies and industries from active securities
+// getAllSecurityGeographiesAndIndustries gets all geographies and industries from active tradable securities (excludes indices)
 // Both geography and industry fields can contain comma-separated values
 func (s *PortfolioService) getAllSecurityGeographiesAndIndustries() (map[string]bool, map[string]bool, error) {
-	query := "SELECT geography, industry FROM securities WHERE active = 1"
+	query := "SELECT geography, industry FROM securities WHERE active = 1 AND (product_type IS NULL OR product_type != ?)"
 
-	rows, err := s.universeDB.Query(query)
+	rows, err := s.universeDB.Query(query, string(domain.ProductTypeIndex))
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to query securities: %w", err)
 	}

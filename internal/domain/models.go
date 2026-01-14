@@ -13,6 +13,24 @@ const (
 	CurrencyTEST Currency = "TEST" // For research mode
 )
 
+// ProductType represents the type of financial product/instrument
+type ProductType string
+
+const (
+	// ProductTypeEquity represents individual stocks/shares
+	ProductTypeEquity ProductType = "EQUITY"
+	// ProductTypeETF represents Exchange Traded Funds
+	ProductTypeETF ProductType = "ETF"
+	// ProductTypeETC represents Exchange Traded Commodities
+	ProductTypeETC ProductType = "ETC"
+	// ProductTypeMutualFund represents mutual funds (some UCITS products)
+	ProductTypeMutualFund ProductType = "MUTUALFUND"
+	// ProductTypeIndex represents market indices (non-tradeable)
+	ProductTypeIndex ProductType = "INDEX"
+	// ProductTypeUnknown represents unknown type
+	ProductTypeUnknown ProductType = "UNKNOWN"
+)
+
 // Security represents a tradable security
 type Security struct {
 	LastUpdated time.Time `json:"last_updated"`

@@ -1188,3 +1188,118 @@ func TestGetPortfolioSummary_PositionError(t *testing.T) {
 	mockAllocRepo.AssertExpectations(t)
 	mockPositionRepo.AssertExpectations(t)
 }
+
+func TestGetAllSecurityGeographiesAndIndustries_ExcludesIndices(t *testing.T) {
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+
+	// Create test universeDB with geography, industry, and product_type columns
+	universeDB, err := sql.Open("sqlite3", ":memory:")
+	require.NoError(t, err)
+	defer universeDB.Close()
+
+	_, err = universeDB.Exec(`
+		CREATE TABLE securities (
+			isin TEXT PRIMARY KEY,
+			symbol TEXT NOT NULL,
+			name TEXT NOT NULL,
+			product_type TEXT,
+			geography TEXT,
+			industry TEXT,
+			active INTEGER DEFAULT 1,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)
+	`)
+	require.NoError(t, err)
+
+	// Insert regular securities
+	_, err = universeDB.Exec(`
+		INSERT INTO securities (isin, symbol, name, product_type, geography, industry, active, created_at, updated_at)
+		VALUES
+			('US0378331005', 'AAPL', 'Apple Inc.', 'EQUITY', 'United States', 'Technology', 1, strftime('%s', 'now'), strftime('%s', 'now')),
+			('DE0007164600', 'SAP', 'SAP SE', 'EQUITY', 'Germany', 'Technology', 1, strftime('%s', 'now'), strftime('%s', 'now'))
+	`)
+	require.NoError(t, err)
+
+	// Insert market indices (should be excluded)
+	_, err = universeDB.Exec(`
+		INSERT INTO securities (isin, symbol, name, product_type, geography, industry, active, created_at, updated_at)
+		VALUES
+			('INDEX-SP500.IDX', 'SP500.IDX', 'S&P 500', 'INDEX', 'United States', 'Index', 1, strftime('%s', 'now'), strftime('%s', 'now')),
+			('INDEX-DAX.IDX', 'DAX.IDX', 'DAX', 'INDEX', 'Germany', 'Index', 1, strftime('%s', 'now'), strftime('%s', 'now'))
+	`)
+	require.NoError(t, err)
+
+	service := &PortfolioService{
+		universeDB: universeDB,
+		log:        log,
+	}
+
+	// Execute
+	geographies, industries, err := service.getAllSecurityGeographiesAndIndustries()
+	require.NoError(t, err)
+
+	// Verify geographies include only regular securities
+	assert.True(t, geographies["United States"], "United States should be included from AAPL")
+	assert.True(t, geographies["Germany"], "Germany should be included from SAP")
+	assert.Len(t, geographies, 2, "Should have exactly 2 geographies")
+
+	// Verify industries exclude "Index" from indices
+	assert.True(t, industries["Technology"], "Technology should be included")
+	assert.False(t, industries["Index"], "Index industry should be excluded")
+	assert.Len(t, industries, 1, "Should have exactly 1 industry")
+}
+
+func TestGetAllSecurityGeographiesAndIndustries_IncludesNullProductType(t *testing.T) {
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+
+	// Create test universeDB
+	universeDB, err := sql.Open("sqlite3", ":memory:")
+	require.NoError(t, err)
+	defer universeDB.Close()
+
+	_, err = universeDB.Exec(`
+		CREATE TABLE securities (
+			isin TEXT PRIMARY KEY,
+			symbol TEXT NOT NULL,
+			name TEXT NOT NULL,
+			product_type TEXT,
+			geography TEXT,
+			industry TEXT,
+			active INTEGER DEFAULT 1,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)
+	`)
+	require.NoError(t, err)
+
+	// Insert security with NULL product_type (should be included)
+	_, err = universeDB.Exec(`
+		INSERT INTO securities (isin, symbol, name, product_type, geography, industry, active, created_at, updated_at)
+		VALUES
+			('US0378331005', 'AAPL', 'Apple Inc.', NULL, 'United States', 'Technology', 1, strftime('%s', 'now'), strftime('%s', 'now'))
+	`)
+	require.NoError(t, err)
+
+	// Insert index (should be excluded)
+	_, err = universeDB.Exec(`
+		INSERT INTO securities (isin, symbol, name, product_type, geography, industry, active, created_at, updated_at)
+		VALUES
+			('INDEX-SP500.IDX', 'SP500.IDX', 'S&P 500', 'INDEX', 'United States', 'Index', 1, strftime('%s', 'now'), strftime('%s', 'now'))
+	`)
+	require.NoError(t, err)
+
+	service := &PortfolioService{
+		universeDB: universeDB,
+		log:        log,
+	}
+
+	// Execute
+	geographies, industries, err := service.getAllSecurityGeographiesAndIndustries()
+	require.NoError(t, err)
+
+	// Verify NULL product_type is included
+	assert.True(t, geographies["United States"], "United States should be included from AAPL with NULL product_type")
+	assert.True(t, industries["Technology"], "Technology should be included from AAPL with NULL product_type")
+	assert.False(t, industries["Index"], "Index industry should be excluded")
+}

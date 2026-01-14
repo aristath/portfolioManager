@@ -388,11 +388,11 @@ func (h *SystemHandlers) GetSystemStatusSnapshot() (SystemStatusResponse, error)
 		}
 	}
 
-	// Query securities count
+	// Query securities count (excludes indices - they are non-tradable)
 	var securityCount int
 	err = h.universeDB.Conn().QueryRow(`
-		SELECT COUNT(*) FROM securities WHERE active = 1
-	`).Scan(&securityCount)
+		SELECT COUNT(*) FROM securities WHERE active = 1 AND (product_type IS NULL OR product_type != ?)
+	`, string(domain.ProductTypeIndex)).Scan(&securityCount)
 
 	if err != nil && err != sql.ErrNoRows {
 		h.log.Error().Err(err).Msg("Failed to query securities")

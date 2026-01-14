@@ -6,6 +6,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/utils"
 	"github.com/rs/zerolog"
 )
@@ -187,15 +188,15 @@ func (r *Repository) Delete(targetType, name string) error {
 	return nil
 }
 
-// GetAvailableGeographies returns distinct geographies from active securities.
+// GetAvailableGeographies returns distinct geographies from active tradable securities (excludes indices).
 // Parses comma-separated geography values and returns unique, sorted individual geographies.
 func (r *Repository) GetAvailableGeographies() ([]string, error) {
 	if r.universeDB == nil {
 		return nil, fmt.Errorf("universe database not configured")
 	}
 
-	query := "SELECT geography FROM securities WHERE active = 1 AND geography IS NOT NULL AND geography != ''"
-	rows, err := r.universeDB.Query(query)
+	query := "SELECT geography FROM securities WHERE active = 1 AND geography IS NOT NULL AND geography != '' AND (product_type IS NULL OR product_type != ?)"
+	rows, err := r.universeDB.Query(query, string(domain.ProductTypeIndex))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query geographies: %w", err)
 	}
@@ -225,15 +226,15 @@ func (r *Repository) GetAvailableGeographies() ([]string, error) {
 	return result, nil
 }
 
-// GetAvailableIndustries returns distinct industries from active securities.
+// GetAvailableIndustries returns distinct industries from active tradable securities (excludes indices).
 // Parses comma-separated industry values and returns unique, sorted individual industries.
 func (r *Repository) GetAvailableIndustries() ([]string, error) {
 	if r.universeDB == nil {
 		return nil, fmt.Errorf("universe database not configured")
 	}
 
-	query := "SELECT industry FROM securities WHERE active = 1 AND industry IS NOT NULL AND industry != ''"
-	rows, err := r.universeDB.Query(query)
+	query := "SELECT industry FROM securities WHERE active = 1 AND industry IS NOT NULL AND industry != '' AND (product_type IS NULL OR product_type != ?)"
+	rows, err := r.universeDB.Query(query, string(domain.ProductTypeIndex))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query industries: %w", err)
 	}

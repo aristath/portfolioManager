@@ -104,10 +104,10 @@ func TestProductTypeFromQuoteType(t *testing.T) {
 			want:        ProductTypeMutualFund,
 		},
 		{
-			name:        "Unknown quote type",
+			name:        "INDEX quote type",
 			quoteType:   "INDEX",
 			productName: "S&P 500 Index",
-			want:        ProductTypeUnknown,
+			want:        ProductTypeIndex,
 		},
 		{
 			name:        "Empty quote type",
@@ -121,6 +121,67 @@ func TestProductTypeFromQuoteType(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := FromQuoteType(tt.quoteType, tt.productName)
 			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestSecuritySetupService_AddByIdentifier_RejectsIndexSymbol(t *testing.T) {
+	log := zerolog.Nop()
+
+	service := NewSecuritySetupService(
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		log,
+	)
+
+	// Test various index symbol patterns
+	indexSymbols := []string{
+		"SP500.IDX",
+		"NASDAQ.IDX",
+		"DAX.IDX",
+		"sp500.idx", // lowercase
+	}
+
+	for _, symbol := range indexSymbols {
+		t.Run(symbol, func(t *testing.T) {
+			_, err := service.AddSecurityByIdentifier(symbol, 1, true, true)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "cannot add index")
+		})
+	}
+}
+
+func TestSecuritySetupService_AddByIdentifier_AllowsRegularSymbols(t *testing.T) {
+	log := zerolog.Nop()
+
+	// Regular symbols that should NOT be rejected (they may fail later due to nil clients, but not due to index validation)
+	regularSymbols := []string{
+		"AAPL.US",
+		"MSFT",
+		"INDEX.US", // "INDEX" as company name, not .IDX pattern
+		"MYIDX",    // Contains "IDX" but not as .IDX suffix
+	}
+
+	for _, symbol := range regularSymbols {
+		t.Run(symbol, func(t *testing.T) {
+			service := NewSecuritySetupService(
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				log,
+			)
+
+			// Should panic with nil security repo (not rejected by index validation)
+			assert.Panics(t, func() {
+				_, _ = service.AddSecurityByIdentifier(symbol, 1, true, true)
+			})
 		})
 	}
 }
