@@ -21,8 +21,9 @@ type Security struct {
 	ProductType        string   `json:"product_type"`
 	Geography          string   `json:"geography,omitempty"` // Comma-separated for multiple geographies (e.g., "EU, US")
 	FullExchangeName   string   `json:"fullExchangeName,omitempty"`
-	ISIN               string   `json:"isin,omitempty"`     // Required: PRIMARY KEY after migration 030
-	Industry           string   `json:"industry,omitempty"` // Comma-separated for multiple industries (e.g., "Technology, Finance")
+	MarketCode         string   `json:"market_code,omitempty"` // Tradernet market code (e.g., "FIX", "EU", "HKEX") for region mapping
+	ISIN               string   `json:"isin,omitempty"`        // Required: PRIMARY KEY after migration 030
+	Industry           string   `json:"industry,omitempty"`    // Comma-separated for multiple industries (e.g., "Technology, Finance")
 	Symbol             string   `json:"symbol"`
 	LastSynced         *int64   `json:"-"` // Unix timestamp (seconds since epoch), converted to string in MarshalJSON
 	PriorityMultiplier float64  `json:"priority_multiplier"`
@@ -105,6 +106,7 @@ type SecurityWithScore struct {
 	Symbol             string   `json:"symbol"`
 	Industry           string   `json:"industry,omitempty"`
 	FullExchangeName   string   `json:"fullExchangeName,omitempty"`
+	MarketCode         string   `json:"market_code,omitempty"` // Tradernet market code for region mapping
 	LastSynced         *int64   `json:"last_synced,omitempty"` // Unix timestamp, converted to string in handler
 	Geography          string   `json:"geography,omitempty"`
 	Currency           string   `json:"currency,omitempty"`

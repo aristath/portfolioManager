@@ -26,6 +26,7 @@ func setupTestDBWithISINPrimaryKey(t *testing.T) *sql.DB {
 			industry TEXT,
 			geography TEXT,
 			fullExchangeName TEXT,
+			market_code TEXT,
 			priority_multiplier REAL DEFAULT 1.0,
 			min_lot INTEGER DEFAULT 1,
 			active INTEGER DEFAULT 1,

@@ -19,6 +19,7 @@ type RegimePersistence struct {
 type RegimeHistoryEntry struct {
 	ID            int64
 	RecordedAt    time.Time
+	Region        string  // Region: US, EU, ASIA, or GLOBAL
 	RawScore      float64 // Raw score before smoothing
 	SmoothedScore float64 // Smoothed score (EMA)
 }
@@ -33,84 +34,15 @@ func NewRegimePersistence(db *sql.DB, log zerolog.Logger) *RegimePersistence {
 }
 
 // GetCurrentRegimeScore returns the current smoothed regime score
+// Uses GLOBAL region for backwards compatibility
 func (rp *RegimePersistence) GetCurrentRegimeScore() (MarketRegimeScore, error) {
-	// Order by id DESC to ensure we get the most recent record
-	// This is more reliable than ordering by recorded_at when stored as TEXT
-	query := `SELECT smoothed_score FROM market_regime_history
-	          ORDER BY id DESC LIMIT 1`
-
-	var score float64
-	err := rp.db.QueryRow(query).Scan(&score)
-	if err == sql.ErrNoRows {
-		// No history yet, return neutral
-		return NeutralScore, nil
-	}
-	if err != nil {
-		return NeutralScore, err
-	}
-
-	return MarketRegimeScore(score), nil
+	return rp.GetCurrentRegimeScoreForRegion("GLOBAL")
 }
 
 // RecordRegimeScore records a raw regime score and calculates smoothed score
+// Uses GLOBAL region for backwards compatibility
 func (rp *RegimePersistence) RecordRegimeScore(rawScore MarketRegimeScore) error {
-	// Get last smoothed score
-	lastSmoothed, err := rp.GetCurrentRegimeScore()
-	if err != nil {
-		return err
-	}
-
-	// Apply smoothing
-	// If lastSmoothed is NeutralScore (0.0) and we have no history, use current score directly
-	// Otherwise, apply exponential moving average
-	var smoothed float64
-	if lastSmoothed == NeutralScore {
-		// Check if we actually have history
-		var count int
-		err := rp.db.QueryRow("SELECT COUNT(*) FROM market_regime_history").Scan(&count)
-		if err == nil && count == 0 {
-			// No history - use raw score directly (first entry)
-			smoothed = float64(rawScore)
-		} else {
-			// We have history but last smoothed is 0.0 - apply smoothing
-			smoothed = rp.ApplySmoothing(float64(rawScore), float64(lastSmoothed), rp.smoothingAlpha)
-		}
-	} else {
-		// We have a previous smoothed score - apply EMA
-		// Formula: smoothed = alpha * current + (1 - alpha) * lastSmoothed
-		smoothed = rp.smoothingAlpha*float64(rawScore) + (1.0-rp.smoothingAlpha)*float64(lastSmoothed)
-		// Ensure we're actually applying smoothing (debug check)
-		if smoothed == float64(lastSmoothed) && float64(rawScore) != float64(lastSmoothed) {
-			// This should never happen if smoothing is working correctly
-			rp.log.Warn().
-				Float64("rawScore", float64(rawScore)).
-				Float64("lastSmoothed", float64(lastSmoothed)).
-				Float64("alpha", rp.smoothingAlpha).
-				Float64("calculated", smoothed).
-				Msg("Smoothing calculation resulted in same value as lastSmoothed")
-		}
-	}
-
-	// Discrete regime support is intentionally removed. Keep column populated for schema compatibility.
-	discrete := "n/a"
-
-	// Insert into database
-	query := `INSERT INTO market_regime_history
-	          (recorded_at, raw_score, smoothed_score, discrete_regime)
-	          VALUES (?, ?, ?, ?)`
-
-	_, err = rp.db.Exec(query, time.Now().Unix(), float64(rawScore), smoothed, discrete)
-	if err != nil {
-		return err
-	}
-
-	rp.log.Debug().
-		Float64("raw_score", float64(rawScore)).
-		Float64("smoothed_score", smoothed).
-		Str("discrete_regime", discrete).
-		Msg("Recorded regime score")
-
-	return nil
+	return rp.RecordRegimeScoreForRegion("GLOBAL", rawScore)
 }
 
 // GetSmoothedScore returns the exponentially smoothed score
@@ -191,4 +123,146 @@ func (rp *RegimePersistence) GetRegimeHistory(limit int) ([]RegimeHistoryEntry, 
 func (rp *RegimePersistence) ApplySmoothing(currentScore, lastSmoothed, alpha float64) float64 {
 	detector := NewMarketRegimeDetector(rp.log)
 	return detector.ApplySmoothing(currentScore, lastSmoothed, alpha)
+}
+
+// ============================================================================
+// Per-Region Methods
+// ============================================================================
+
+// GetCurrentRegimeScoreForRegion returns the current smoothed regime score for a specific region
+func (rp *RegimePersistence) GetCurrentRegimeScoreForRegion(region string) (MarketRegimeScore, error) {
+	query := `SELECT smoothed_score FROM market_regime_history
+	          WHERE region = ?
+	          ORDER BY id DESC LIMIT 1`
+
+	var score float64
+	err := rp.db.QueryRow(query, region).Scan(&score)
+	if err == sql.ErrNoRows {
+		// No history for this region yet, return neutral
+		return NeutralScore, nil
+	}
+	if err != nil {
+		return NeutralScore, err
+	}
+
+	return MarketRegimeScore(score), nil
+}
+
+// RecordRegimeScoreForRegion records a raw regime score for a specific region and calculates smoothed score
+func (rp *RegimePersistence) RecordRegimeScoreForRegion(region string, rawScore MarketRegimeScore) error {
+	// Get last smoothed score for this specific region
+	lastSmoothed, err := rp.GetCurrentRegimeScoreForRegion(region)
+	if err != nil {
+		return err
+	}
+
+	// Apply smoothing
+	var smoothed float64
+	if lastSmoothed == NeutralScore {
+		// Check if we actually have history for this region
+		var count int
+		err := rp.db.QueryRow("SELECT COUNT(*) FROM market_regime_history WHERE region = ?", region).Scan(&count)
+		if err == nil && count == 0 {
+			// No history for this region - use raw score directly (first entry)
+			smoothed = float64(rawScore)
+		} else {
+			// We have history but last smoothed is 0.0 - apply smoothing
+			smoothed = rp.ApplySmoothing(float64(rawScore), float64(lastSmoothed), rp.smoothingAlpha)
+		}
+	} else {
+		// Apply EMA smoothing
+		smoothed = rp.smoothingAlpha*float64(rawScore) + (1.0-rp.smoothingAlpha)*float64(lastSmoothed)
+	}
+
+	// Insert into database with region
+	query := `INSERT INTO market_regime_history
+	          (recorded_at, region, raw_score, smoothed_score, discrete_regime)
+	          VALUES (?, ?, ?, ?, ?)`
+
+	_, err = rp.db.Exec(query, time.Now().Unix(), region, float64(rawScore), smoothed, "n/a")
+	if err != nil {
+		return err
+	}
+
+	rp.log.Debug().
+		Str("region", region).
+		Float64("raw_score", float64(rawScore)).
+		Float64("smoothed_score", smoothed).
+		Msg("Recorded per-region regime score")
+
+	return nil
+}
+
+// GetAllCurrentScores returns the current smoothed regime score for all regions that have data
+func (rp *RegimePersistence) GetAllCurrentScores() (map[string]float64, error) {
+	// Get the latest score for each region using a subquery
+	query := `
+		SELECT region, smoothed_score
+		FROM market_regime_history h1
+		WHERE id = (
+			SELECT MAX(id) FROM market_regime_history h2
+			WHERE h2.region = h1.region
+		)
+	`
+
+	rows, err := rp.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	scores := make(map[string]float64)
+	for rows.Next() {
+		var region string
+		var score float64
+		if err := rows.Scan(&region, &score); err != nil {
+			return nil, err
+		}
+		scores[region] = score
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return scores, nil
+}
+
+// GetRegimeHistoryForRegion returns recent regime history entries for a specific region
+func (rp *RegimePersistence) GetRegimeHistoryForRegion(region string, limit int) ([]RegimeHistoryEntry, error) {
+	query := `SELECT id, recorded_at, region, raw_score, smoothed_score
+	          FROM market_regime_history
+	          WHERE region = ?
+	          ORDER BY id DESC
+	          LIMIT ?`
+
+	rows, err := rp.db.Query(query, region, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var entries []RegimeHistoryEntry
+	for rows.Next() {
+		var entry RegimeHistoryEntry
+		var recordedAtUnix sql.NullInt64
+
+		if err := rows.Scan(
+			&entry.ID,
+			&recordedAtUnix,
+			&entry.Region,
+			&entry.RawScore,
+			&entry.SmoothedScore,
+		); err != nil {
+			return nil, err
+		}
+
+		if recordedAtUnix.Valid {
+			entry.RecordedAt = time.Unix(recordedAtUnix.Int64, 0).UTC()
+		}
+
+		entries = append(entries, entry)
+	}
+
+	return entries, nil
 }

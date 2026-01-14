@@ -60,25 +60,48 @@ func (j *AdaptiveMarketJob) Run() error {
 	j.log.Info().Msg("Starting adaptive market check")
 	startTime := time.Now()
 
-	// Step 1: Calculate current regime score from market indices
-	currentScore, err := j.regimeDetector.GetRegimeScore()
+	// Step 1: Calculate per-region regime scores
+	// This calculates scores for US, EU, ASIA and stores them in market_regime_history
+	regionScores, err := j.regimeDetector.CalculateAllRegionScores(30) // 30-day window
 	if err != nil {
-		j.log.Warn().Err(err).Msg("Failed to get current regime score, skipping adaptation check")
-		return nil // Non-critical error, don't fail the job
+		j.log.Warn().Err(err).Msg("Failed to calculate per-region regime scores")
+		// Continue anyway - we'll try to get existing scores
+	} else {
+		j.log.Info().
+			Int("regions_calculated", len(regionScores)-1). // Exclude GLOBAL_AVERAGE
+			Interface("scores", regionScores).
+			Msg("Calculated per-region regime scores")
+	}
+
+	// Step 2: Get global average score for adaptation check
+	// Use the global average from calculated scores, or fetch existing if calculation failed
+	var currentScore market_regime.MarketRegimeScore
+	if regionScores != nil {
+		if globalAvg, ok := regionScores["GLOBAL_AVERAGE"]; ok {
+			currentScore = market_regime.MarketRegimeScore(globalAvg)
+		}
+	}
+	if currentScore == 0 {
+		// Fallback to existing stored global average
+		currentScore, err = j.regimeDetector.GetRegimeScore()
+		if err != nil {
+			j.log.Warn().Err(err).Msg("Failed to get regime score, skipping adaptation check")
+			return nil // Non-critical error, don't fail the job
+		}
 	}
 
 	j.log.Info().
-		Float64("current_score", float64(currentScore)).
-		Msg("Calculated current regime score")
+		Float64("global_average", float64(currentScore)).
+		Msg("Using global average for adaptation check")
 
-	// Step 2: Get last smoothed score for comparison
+	// Step 3: Get last smoothed score for comparison
 	lastScore, err := j.regimePersistence.GetCurrentRegimeScore()
 	if err != nil {
 		j.log.Warn().Err(err).Msg("Failed to get last regime score, using current as baseline")
 		lastScore = currentScore
 	}
 
-	// Step 3: Check if adaptation is needed
+	// Step 4: Check if adaptation is needed
 	shouldAdapt := j.adaptiveService.ShouldAdapt(
 		float64(currentScore),
 		float64(lastScore),
@@ -99,7 +122,7 @@ func (j *AdaptiveMarketJob) Run() error {
 		return nil
 	}
 
-	// Step 4: Calculate and store adaptive parameters
+	// Step 5: Calculate and store adaptive parameters
 	j.log.Info().
 		Float64("current_score", float64(currentScore)).
 		Float64("last_score", float64(lastScore)).

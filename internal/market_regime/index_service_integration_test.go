@@ -161,3 +161,66 @@ func TestInitializeMarketIndices_SkipsWhenDataExists(t *testing.T) {
 
 	assert.Equal(t, initialCount, finalCount, "Should not refetch data when recent data exists")
 }
+
+func TestPerRegionRegimeDetection_EndToEnd(t *testing.T) {
+	// Setup: Create container with test databases
+	cfg := &config.Config{DataDir: t.TempDir()}
+	log := zerolog.Nop()
+	container, _, err := di.Wire(cfg, log, nil, nil)
+	require.NoError(t, err)
+	defer cleanupContainer(container)
+
+	// Verify 1: Known indices are synced to securities table
+	var indexCount int
+	err = container.UniverseDB.QueryRow(`
+		SELECT COUNT(*) FROM securities WHERE product_type = 'INDEX'
+	`).Scan(&indexCount)
+	require.NoError(t, err)
+	assert.Greater(t, indexCount, 0, "Should have indices in securities table")
+
+	// Verify 2: market_indices table has regions configured
+	var regionCount int
+	err = container.ConfigDB.QueryRow(`
+		SELECT COUNT(DISTINCT region) FROM market_indices WHERE enabled = 1
+	`).Scan(&regionCount)
+	require.NoError(t, err)
+	assert.Equal(t, 3, regionCount, "Should have 3 regions (US, EU, ASIA)")
+
+	// Initialize historical data for indices
+	err = container.MarketIndexService.InitializeMarketIndices(container.HistoricalSyncService)
+	require.NoError(t, err)
+
+	// Execute: Calculate per-region regime scores
+	scores, err := container.RegimeDetector.CalculateAllRegionScores(30)
+	require.NoError(t, err)
+
+	// Verify 3: Scores calculated for all regions with indices
+	assert.Contains(t, scores, "US", "Should have US score")
+	assert.Contains(t, scores, "EU", "Should have EU score")
+	assert.Contains(t, scores, "ASIA", "Should have ASIA score")
+	assert.Contains(t, scores, "GLOBAL_AVERAGE", "Should have global average")
+
+	// Verify 4: Scores are in valid range
+	for region, score := range scores {
+		assert.GreaterOrEqual(t, score, -1.0, "%s score should be >= -1.0", region)
+		assert.LessOrEqual(t, score, 1.0, "%s score should be <= 1.0", region)
+	}
+
+	// Verify 5: Per-region scores are stored in history
+	storedScores, err := container.RegimePersistence.GetAllCurrentScores()
+	require.NoError(t, err)
+	assert.Contains(t, storedScores, "US", "Stored scores should have US")
+	assert.Contains(t, storedScores, "EU", "Stored scores should have EU")
+	assert.Contains(t, storedScores, "ASIA", "Stored scores should have ASIA")
+
+	// Verify 6: GetRegimeScoreForSecurity works correctly
+	// US security gets US score
+	usScore, err := container.RegimeDetector.GetRegimeScoreForSecurity("US")
+	require.NoError(t, err)
+	assert.InDelta(t, scores["US"], float64(usScore), 0.01)
+
+	// Unknown region gets global average
+	unknownScore, err := container.RegimeDetector.GetRegimeScoreForSecurity("RUSSIA")
+	require.NoError(t, err)
+	assert.InDelta(t, scores["GLOBAL_AVERAGE"], float64(unknownScore), 0.01)
+}

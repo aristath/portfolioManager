@@ -21,17 +21,19 @@ func setupTestDB(t *testing.T) *sql.DB {
 	db, err := sql.Open("sqlite3", tmpfile.Name())
 	require.NoError(t, err)
 
-	// Create table
+	// Create table with region column for per-region support
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS market_regime_history (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			recorded_at TEXT NOT NULL,
+			recorded_at INTEGER NOT NULL,
+			region TEXT NOT NULL DEFAULT 'GLOBAL',
 			raw_score REAL NOT NULL,
 			smoothed_score REAL NOT NULL,
 			discrete_regime TEXT NOT NULL,
-			created_at TEXT DEFAULT CURRENT_TIMESTAMP
+			created_at INTEGER DEFAULT (strftime('%s', 'now'))
 		);
 		CREATE INDEX IF NOT EXISTS idx_regime_history_recorded ON market_regime_history(recorded_at DESC);
+		CREATE INDEX IF NOT EXISTS idx_regime_history_region ON market_regime_history(region);
 	`)
 	require.NoError(t, err)
 

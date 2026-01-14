@@ -115,6 +115,8 @@ type Container struct {
 	RebalancingService        *rebalancing.Service
 	SecurityScorer            *scorers.SecurityScorer
 	MarketIndexService        *market_regime.MarketIndexService
+	IndexRepository           *market_regime.IndexRepository
+	IndexSyncService          *market_regime.IndexSyncService
 	RegimePersistence         *market_regime.RegimePersistence
 	RegimeDetector            *market_regime.MarketRegimeDetector
 	AdaptiveMarketService     *adaptation.AdaptiveMarketService

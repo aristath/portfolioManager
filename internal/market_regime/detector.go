@@ -356,3 +356,168 @@ func (d *MarketRegimeDetector) GetRegimeScore() (MarketRegimeScore, error) {
 
 	return NeutralScore, fmt.Errorf("no data source available")
 }
+
+// ============================================================================
+// Per-Region Methods
+// ============================================================================
+
+// GetRegimeScoreForSecurity returns the regime score to use for a security in the given region.
+// - Regions with indices (US, EU, ASIA): Returns that region's score
+// - Regions without indices (RUSSIA, MIDDLE_EAST, CENTRAL_ASIA, UNKNOWN): Returns global weighted average
+// - If region has no data but has indices: Returns global average
+func (d *MarketRegimeDetector) GetRegimeScoreForSecurity(region string) (MarketRegimeScore, error) {
+	if d.regimePersistence == nil {
+		return NeutralScore, fmt.Errorf("regime persistence not set")
+	}
+
+	// Get all current scores
+	allScores, err := d.regimePersistence.GetAllCurrentScores()
+	if err != nil {
+		return NeutralScore, fmt.Errorf("failed to get regime scores: %w", err)
+	}
+
+	// If no data at all, return neutral
+	if len(allScores) == 0 {
+		return NeutralScore, nil
+	}
+
+	// Check if this region has dedicated indices
+	if RegionHasIndices(region) {
+		// Region has indices - try to get its specific score
+		if score, ok := allScores[region]; ok {
+			return MarketRegimeScore(score), nil
+		}
+		// Region should have data but doesn't - fall back to global average
+		d.log.Warn().Str("region", region).Msg("Region has indices but no data, using global average")
+	}
+
+	// Region doesn't have indices OR has no data - use global average
+	globalAvg := CalculateGlobalAverage(allScores)
+	return MarketRegimeScore(globalAvg), nil
+}
+
+// GetCurrentRegimeScores returns the current smoothed regime scores for all regions
+// Also includes a GLOBAL_AVERAGE key with the weighted average of regions with indices
+func (d *MarketRegimeDetector) GetCurrentRegimeScores() (map[string]float64, error) {
+	if d.regimePersistence == nil {
+		return nil, fmt.Errorf("regime persistence not set")
+	}
+
+	scores, err := d.regimePersistence.GetAllCurrentScores()
+	if err != nil {
+		return nil, err
+	}
+
+	// Add global average if we have data
+	if len(scores) > 0 {
+		scores["GLOBAL_AVERAGE"] = CalculateGlobalAverage(scores)
+	}
+
+	return scores, nil
+}
+
+// GetRegimeScoreForRegion returns the regime score for a specific region
+// Returns neutral if no data available
+func (d *MarketRegimeDetector) GetRegimeScoreForRegion(region string) (MarketRegimeScore, error) {
+	if d.regimePersistence == nil {
+		return NeutralScore, fmt.Errorf("regime persistence not set")
+	}
+
+	return d.regimePersistence.GetCurrentRegimeScoreForRegion(region)
+}
+
+// CalculateRegimeScoreForRegion calculates and stores the regime score for a specific region.
+// This fetches index returns for the region, calculates the score, and persists it.
+// Returns the smoothed score.
+func (d *MarketRegimeDetector) CalculateRegimeScoreForRegion(region string, windowDays int) (MarketRegimeScore, error) {
+	if d.indexService == nil {
+		return NeutralScore, fmt.Errorf("market index service not set")
+	}
+	if d.regimePersistence == nil {
+		return NeutralScore, fmt.Errorf("regime persistence not set")
+	}
+
+	// Check if region has indices
+	if !RegionHasIndices(region) {
+		return NeutralScore, fmt.Errorf("region %s has no dedicated indices", region)
+	}
+
+	// Get composite returns for the region
+	returns, err := d.indexService.GetReturnsForRegion(region, windowDays)
+	if err != nil {
+		return NeutralScore, fmt.Errorf("failed to get returns for region %s: %w", region, err)
+	}
+
+	if len(returns) == 0 {
+		return NeutralScore, fmt.Errorf("no returns available for region %s", region)
+	}
+
+	// Calculate raw regime score from returns
+	rawScore := d.CalculateRegimeScoreFromReturns(returns)
+
+	// Record the score (this handles smoothing internally)
+	err = d.regimePersistence.RecordRegimeScoreForRegion(region, rawScore)
+	if err != nil {
+		return NeutralScore, fmt.Errorf("failed to record regime score for region %s: %w", region, err)
+	}
+
+	// Get the smoothed score back
+	smoothedScore, err := d.regimePersistence.GetCurrentRegimeScoreForRegion(region)
+	if err != nil {
+		d.log.Warn().Err(err).Str("region", region).Msg("Failed to get smoothed score, using raw score")
+		return rawScore, nil
+	}
+
+	d.log.Info().
+		Str("region", region).
+		Float64("raw_score", float64(rawScore)).
+		Float64("smoothed_score", float64(smoothedScore)).
+		Int("return_days", len(returns)).
+		Msg("Calculated regime score for region")
+
+	return smoothedScore, nil
+}
+
+// CalculateAllRegionScores calculates and stores regime scores for all regions with indices.
+// Returns a map of region -> smoothed score, and any errors encountered.
+// Continues processing even if some regions fail.
+func (d *MarketRegimeDetector) CalculateAllRegionScores(windowDays int) (map[string]float64, error) {
+	regions := GetAllRegionsWithIndices()
+	scores := make(map[string]float64)
+	var lastErr error
+
+	for _, region := range regions {
+		score, err := d.CalculateRegimeScoreForRegion(region, windowDays)
+		if err != nil {
+			d.log.Warn().Err(err).Str("region", region).Msg("Failed to calculate regime score")
+			lastErr = err
+			continue
+		}
+		scores[region] = float64(score)
+	}
+
+	if len(scores) == 0 && lastErr != nil {
+		return nil, fmt.Errorf("failed to calculate scores for any region: %w", lastErr)
+	}
+
+	// Add global average and persist it
+	if len(scores) > 0 {
+		globalAvg := CalculateGlobalAverage(scores)
+		scores["GLOBAL_AVERAGE"] = globalAvg
+
+		// Store GLOBAL_AVERAGE to persistence for later retrieval
+		if d.regimePersistence != nil {
+			if err := d.regimePersistence.RecordRegimeScoreForRegion("GLOBAL_AVERAGE", MarketRegimeScore(globalAvg)); err != nil {
+				d.log.Warn().Err(err).Msg("Failed to store GLOBAL_AVERAGE score")
+				// Don't fail - we still have the calculated value
+			}
+		}
+	}
+
+	d.log.Info().
+		Int("regions_calculated", len(scores)-1). // Exclude GLOBAL_AVERAGE
+		Float64("global_average", scores["GLOBAL_AVERAGE"]).
+		Msg("Calculated all regional regime scores")
+
+	return scores, nil
+}

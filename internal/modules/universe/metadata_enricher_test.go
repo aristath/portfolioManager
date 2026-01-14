@@ -71,6 +71,7 @@ func TestMetadataEnricher_Enrich_FillsMissingFields(t *testing.T) {
 	sector := "TEC"
 	exchangeName := "NASDAQ"
 	isin := "US0378331005"
+	marketCode := "FIX"
 
 	mockClient := &MockBrokerClient{
 		findSymbolResults: []domain.BrokerSecurityInfo{
@@ -82,6 +83,7 @@ func TestMetadataEnricher_Enrich_FillsMissingFields(t *testing.T) {
 				Country:      &country,
 				Sector:       &sector,
 				ExchangeName: &exchangeName,
+				Market:       &marketCode,
 			},
 		},
 	}
@@ -104,6 +106,7 @@ func TestMetadataEnricher_Enrich_FillsMissingFields(t *testing.T) {
 	assert.Equal(t, "Technology", security.Industry) // Mapped from TEC
 	assert.Equal(t, "NASDAQ", security.FullExchangeName)
 	assert.Equal(t, "US0378331005", security.ISIN)
+	assert.Equal(t, "FIX", security.MarketCode)
 }
 
 func TestMetadataEnricher_Enrich_PreservesExistingData(t *testing.T) {
@@ -112,6 +115,7 @@ func TestMetadataEnricher_Enrich_PreservesExistingData(t *testing.T) {
 	country := "US"
 	sector := "TEC"
 	exchangeName := "NASDAQ"
+	marketCode := "FIX"
 
 	mockClient := &MockBrokerClient{
 		findSymbolResults: []domain.BrokerSecurityInfo{
@@ -122,6 +126,7 @@ func TestMetadataEnricher_Enrich_PreservesExistingData(t *testing.T) {
 				Country:      &country,
 				Sector:       &sector,
 				ExchangeName: &exchangeName,
+				Market:       &marketCode,
 			},
 		},
 	}
@@ -136,6 +141,7 @@ func TestMetadataEnricher_Enrich_PreservesExistingData(t *testing.T) {
 		Geography:        "DE",
 		Industry:         "Custom Industry",
 		FullExchangeName: "Custom Exchange",
+		MarketCode:       "EU",
 	}
 
 	err := enricher.Enrich(security)
@@ -147,6 +153,7 @@ func TestMetadataEnricher_Enrich_PreservesExistingData(t *testing.T) {
 	assert.Equal(t, "DE", security.Geography)
 	assert.Equal(t, "Custom Industry", security.Industry)
 	assert.Equal(t, "Custom Exchange", security.FullExchangeName)
+	assert.Equal(t, "EU", security.MarketCode)
 }
 
 func TestMetadataEnricher_Enrich_PartialData(t *testing.T) {
@@ -264,4 +271,104 @@ func TestSectorMapping_UnknownCode(t *testing.T) {
 func TestSectorMapping_EmptyCode(t *testing.T) {
 	result := MapSectorToIndustry("")
 	assert.Equal(t, "", result)
+}
+
+// ============================================================================
+// Market Code Enrichment Tests
+// ============================================================================
+
+func TestMetadataEnricher_Enrich_AllMarketCodes(t *testing.T) {
+	// Test all known Tradernet market codes are properly enriched
+	testCases := []struct {
+		name       string
+		marketCode string
+	}{
+		{"US Markets (FIX)", "FIX"},
+		{"EU Markets", "EU"},
+		{"Athens (ATHEX)", "ATHEX"},
+		{"Hong Kong (HKEX)", "HKEX"},
+		{"Moscow Derivatives (FORTS)", "FORTS"},
+		{"Moscow Exchange (MCX)", "MCX"},
+		{"Saudi Arabia (TABADUL)", "TABADUL"},
+		{"Kazakhstan (KASE)", "KASE"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			name := "Test Security"
+			mockClient := &MockBrokerClient{
+				findSymbolResults: []domain.BrokerSecurityInfo{
+					{
+						Symbol: "TEST.XX",
+						Name:   &name,
+						Market: &tc.marketCode,
+					},
+				},
+			}
+			log := zerolog.Nop()
+			enricher := NewMetadataEnricher(mockClient, log)
+
+			security := &Security{
+				Symbol: "TEST.XX",
+			}
+
+			err := enricher.Enrich(security)
+
+			assert.NoError(t, err)
+			assert.Equal(t, tc.marketCode, security.MarketCode)
+		})
+	}
+}
+
+func TestMetadataEnricher_Enrich_MarketCodeNilNotOverwritten(t *testing.T) {
+	// If broker returns nil market code, existing value should be preserved
+	name := "Test Security"
+	mockClient := &MockBrokerClient{
+		findSymbolResults: []domain.BrokerSecurityInfo{
+			{
+				Symbol: "TEST.XX",
+				Name:   &name,
+				Market: nil, // No market code from broker
+			},
+		},
+	}
+	log := zerolog.Nop()
+	enricher := NewMetadataEnricher(mockClient, log)
+
+	security := &Security{
+		Symbol:     "TEST.XX",
+		MarketCode: "EU", // Existing market code
+	}
+
+	err := enricher.Enrich(security)
+
+	assert.NoError(t, err)
+	assert.Equal(t, "EU", security.MarketCode) // Should be preserved
+}
+
+func TestMetadataEnricher_Enrich_MarketCodeEmptyStringNotOverwritten(t *testing.T) {
+	// If broker returns empty string market code, existing value should be preserved
+	name := "Test Security"
+	emptyMarket := ""
+	mockClient := &MockBrokerClient{
+		findSymbolResults: []domain.BrokerSecurityInfo{
+			{
+				Symbol: "TEST.XX",
+				Name:   &name,
+				Market: &emptyMarket, // Empty string from broker
+			},
+		},
+	}
+	log := zerolog.Nop()
+	enricher := NewMetadataEnricher(mockClient, log)
+
+	security := &Security{
+		Symbol:     "TEST.XX",
+		MarketCode: "HKEX", // Existing market code
+	}
+
+	err := enricher.Enrich(security)
+
+	assert.NoError(t, err)
+	assert.Equal(t, "HKEX", security.MarketCode) // Should be preserved
 }

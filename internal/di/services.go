@@ -364,7 +364,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	container.OpportunitiesService = opportunities.NewService(tagFilter, securityRepoAdapter, log)
 
 	// Risk builder (needed for sequences service)
-	container.RiskBuilder = optimization.NewRiskModelBuilder(container.HistoryDB.Conn(), container.UniverseDB.Conn(), log)
+	container.RiskBuilder = optimization.NewRiskModelBuilder(container.HistoryDB.Conn(), container.UniverseDB.Conn(), container.ConfigDB.Conn(), log)
 
 	// Constraint enforcer for sequences service
 	// Uses security lookup to check per-security allow_buy/allow_sell constraints
@@ -628,6 +628,33 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		log,
 	)
 
+	// Index repository for per-region market indices
+	container.IndexRepository = market_regime.NewIndexRepository(container.ConfigDB.Conn(), log)
+
+	// Index sync service - ensures indices exist in both config DB and universe DB
+	container.IndexSyncService = market_regime.NewIndexSyncService(
+		container.UniverseDB.Conn(),
+		container.ConfigDB.Conn(),
+		log,
+	)
+
+	// Sync known indices to both databases (idempotent - safe to run on every startup)
+	// This ensures indices are in market_indices (config) AND securities (universe) tables
+	if err := container.IndexSyncService.SyncAll(); err != nil {
+		log.Warn().Err(err).Msg("Failed to sync market indices to databases (will use fallback)")
+		// Don't fail startup - fallback to hardcoded indices will work
+	}
+
+	// Sync historical prices for indices (needed for regime calculation)
+	// This fetches price data from broker API for all PRICE indices
+	// First run: fetches 10 years of data; subsequent runs: fetches 1 year of updates
+	if container.HistoricalSyncService != nil {
+		if err := container.IndexSyncService.SyncHistoricalPricesForIndices(container.HistoricalSyncService); err != nil {
+			log.Warn().Err(err).Msg("Failed to sync historical prices for indices (regime calculation may be limited)")
+			// Don't fail startup - regime detection will fall back to neutral scores
+		}
+	}
+
 	// Regime persistence for smoothing and history
 	container.RegimePersistence = market_regime.NewRegimePersistence(container.ConfigDB.Conn(), log)
 
@@ -659,6 +686,12 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	container.TagAssigner.SetAdaptiveService(tagAssignerAdapter)
 	container.TagAssigner.SetRegimeScoreProvider(container.RegimeScoreProvider)
 	log.Info().Msg("Adaptive service wired to TagAssigner")
+
+	// SecurityScorer: adaptive weights and per-region regime scores
+	// AdaptiveMarketService implements scorers.AdaptiveWeightsProvider interface directly
+	container.SecurityScorer.SetAdaptiveService(container.AdaptiveMarketService)
+	container.SecurityScorer.SetRegimeScoreProvider(container.RegimeScoreProvider)
+	log.Info().Msg("Adaptive service and regime score provider wired to SecurityScorer")
 
 	// ==========================================
 	// STEP 13: Initialize Reliability Services

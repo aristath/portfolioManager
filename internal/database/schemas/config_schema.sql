@@ -84,9 +84,11 @@ INSERT OR REPLACE INTO planner_settings (id, name, description, updated_at)
 VALUES ('main', 'default', 'Default planner configuration', (strftime('%s', 'now')));
 
 -- Market regime history: tracks continuous regime scores over time
+-- Per-region regime detection: each region has independent scores
 CREATE TABLE IF NOT EXISTS market_regime_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     recorded_at INTEGER NOT NULL,        -- Unix timestamp (seconds since epoch)
+    region TEXT NOT NULL DEFAULT 'GLOBAL',  -- Region: US, EU, ASIA, or GLOBAL (for backwards compat)
     raw_score REAL NOT NULL,             -- Raw regime score before smoothing (-1.0 to +1.0)
     smoothed_score REAL NOT NULL,         -- Exponentially smoothed score (-1.0 to +1.0)
     discrete_regime TEXT NOT NULL,       -- Label (unused by code)
@@ -95,6 +97,26 @@ CREATE TABLE IF NOT EXISTS market_regime_history (
 
 CREATE INDEX IF NOT EXISTS idx_regime_history_recorded ON market_regime_history(recorded_at DESC);
 CREATE INDEX IF NOT EXISTS idx_regime_history_smoothed ON market_regime_history(smoothed_score);
+CREATE INDEX IF NOT EXISTS idx_regime_history_region ON market_regime_history(region);
+
+-- Market indices: configuration for regime detection indices
+-- Index types:
+--   PRICE: Normal price indices used in regime composite (SP500, DAX, HSI, etc.)
+--   VOLATILITY: VIX-style indices excluded from composite (inverse correlation)
+CREATE TABLE IF NOT EXISTS market_indices (
+    symbol TEXT PRIMARY KEY,             -- Tradernet symbol (e.g., "SP500.IDX")
+    name TEXT NOT NULL,                  -- Human-readable name
+    market_code TEXT NOT NULL,           -- Tradernet market code (FIX, EU, HKEX)
+    region TEXT NOT NULL,                -- Region: US, EU, ASIA
+    index_type TEXT NOT NULL DEFAULT 'PRICE',  -- PRICE or VOLATILITY
+    enabled INTEGER NOT NULL DEFAULT 1,  -- Boolean: 1 = use for regime detection
+    created_at INTEGER NOT NULL,         -- Unix timestamp (seconds since epoch)
+    updated_at INTEGER NOT NULL          -- Unix timestamp (seconds since epoch)
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS idx_market_indices_region ON market_indices(region);
+CREATE INDEX IF NOT EXISTS idx_market_indices_enabled ON market_indices(enabled);
+CREATE INDEX IF NOT EXISTS idx_market_indices_type ON market_indices(index_type);
 
 -- Adaptive parameters: current active adaptive values
 CREATE TABLE IF NOT EXISTS adaptive_parameters (

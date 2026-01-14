@@ -40,7 +40,8 @@ func setupTagFilterTestDB(t *testing.T) *sql.DB {
 			min_portfolio_target REAL,
 			max_portfolio_target REAL,
 			created_at TEXT,
-			updated_at TEXT
+			updated_at TEXT,
+			market_code TEXT
 		)
 	`)
 	require.NoError(t, err)

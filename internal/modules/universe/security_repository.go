@@ -22,7 +22,7 @@ type SecurityRepository struct {
 // Column order must match the table schema (matches SELECT * order)
 // After migration: isin is PRIMARY KEY
 const securitiesColumns = `isin, symbol, name, product_type, industry, geography, fullExchangeName,
-priority_multiplier, min_lot, active, allow_buy, allow_sell, currency, last_synced,
+market_code, priority_multiplier, min_lot, active, allow_buy, allow_sell, currency, last_synced,
 min_portfolio_target, max_portfolio_target, created_at, updated_at`
 
 // NewSecurityRepository creates a new security repository
@@ -215,6 +215,33 @@ func (r *SecurityRepository) GetAll() ([]Security, error) {
 	return securities, nil
 }
 
+// GetByMarketCode returns all active securities with the specified market code
+// Used for per-region regime detection and grouping securities by market
+func (r *SecurityRepository) GetByMarketCode(marketCode string) ([]Security, error) {
+	query := "SELECT " + securitiesColumns + " FROM securities WHERE market_code = ? AND active = 1"
+
+	rows, err := r.universeDB.Query(query, marketCode)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query securities by market code: %w", err)
+	}
+	defer rows.Close()
+
+	var securities []Security
+	for rows.Next() {
+		security, err := r.scanSecurity(rows)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan security: %w", err)
+		}
+		securities = append(securities, security)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating securities: %w", err)
+	}
+
+	return securities, nil
+}
+
 // Create creates a new security in the repository
 func (r *SecurityRepository) Create(security Security) error {
 	now := time.Now().Unix()
@@ -232,10 +259,10 @@ func (r *SecurityRepository) Create(security Security) error {
 	query := `
 		INSERT INTO securities
 		(isin, symbol, name, product_type, industry, geography, fullExchangeName,
-		 priority_multiplier, min_lot, active, allow_buy, allow_sell,
+		 market_code, priority_multiplier, min_lot, active, allow_buy, allow_sell,
 		 currency, min_portfolio_target, max_portfolio_target,
 		 created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	// ISIN is required (PRIMARY KEY)
@@ -251,6 +278,7 @@ func (r *SecurityRepository) Create(security Security) error {
 		nullString(security.Industry),
 		nullString(security.Geography),
 		nullString(security.FullExchangeName),
+		nullString(security.MarketCode),
 		security.PriorityMultiplier,
 		security.MinLot,
 		boolToInt(security.Active),
@@ -287,6 +315,7 @@ func (r *SecurityRepository) Update(isin string, updates map[string]interface{})
 		"name": true, "product_type": true, "sector": true, "industry": true,
 		"geography": true, "fullExchangeName": true, "currency": true,
 		"exchange":             true,
+		"market_code":          true, // Tradernet market code for region mapping
 		"min_portfolio_target": true, "max_portfolio_target": true,
 		"isin": true, "min_lot": true, "priority_multiplier": true,
 		"symbol":      true,
@@ -386,6 +415,7 @@ func (r *SecurityRepository) GetWithScores(portfolioDB *sql.DB) ([]SecurityWithS
 			ProductType:        security.ProductType,
 			Geography:          security.Geography,
 			FullExchangeName:   security.FullExchangeName,
+			MarketCode:         security.MarketCode,
 			Industry:           security.Industry,
 			PriorityMultiplier: security.PriorityMultiplier,
 			MinLot:             security.MinLot,
@@ -579,6 +609,7 @@ func (r *SecurityRepository) GetWithScores(portfolioDB *sql.DB) ([]SecurityWithS
 func (r *SecurityRepository) scanSecurity(rows *sql.Rows) (Security, error) {
 	var security Security
 	var isin, productType, geography, fullExchangeName sql.NullString
+	var marketCode sql.NullString
 	var industry, currency sql.NullString
 	var lastSynced sql.NullInt64
 	var minPortfolioTarget, maxPortfolioTarget sql.NullFloat64
@@ -586,7 +617,7 @@ func (r *SecurityRepository) scanSecurity(rows *sql.Rows) (Security, error) {
 	var createdAt, updatedAt sql.NullInt64
 
 	// Table schema after migration: isin, symbol, name, product_type, industry, geography, fullExchangeName,
-	// priority_multiplier, min_lot, active, allow_buy, allow_sell, currency, last_synced,
+	// market_code, priority_multiplier, min_lot, active, allow_buy, allow_sell, currency, last_synced,
 	// min_portfolio_target, max_portfolio_target, created_at, updated_at
 	var symbol sql.NullString
 	err := rows.Scan(
@@ -597,6 +628,7 @@ func (r *SecurityRepository) scanSecurity(rows *sql.Rows) (Security, error) {
 		&industry,                    // industry
 		&geography,                   // geography
 		&fullExchangeName,            // fullExchangeName
+		&marketCode,                  // market_code
 		&security.PriorityMultiplier, // priority_multiplier
 		&security.MinLot,             // min_lot
 		&active,                      // active
@@ -628,6 +660,9 @@ func (r *SecurityRepository) scanSecurity(rows *sql.Rows) (Security, error) {
 	}
 	if fullExchangeName.Valid {
 		security.FullExchangeName = fullExchangeName.String
+	}
+	if marketCode.Valid {
+		security.MarketCode = marketCode.String
 	}
 	if industry.Valid {
 		security.Industry = industry.String
@@ -966,7 +1001,7 @@ func (r *SecurityRepository) GetByTags(tagIDs []string) ([]Security, error) {
 
 	query := fmt.Sprintf(`
 		SELECT DISTINCT s.isin, s.symbol, s.name, s.product_type, s.industry, s.geography, s.fullExchangeName,
-			s.priority_multiplier, s.min_lot, s.active, s.allow_buy, s.allow_sell, s.currency, s.last_synced,
+			s.market_code, s.priority_multiplier, s.min_lot, s.active, s.allow_buy, s.allow_sell, s.currency, s.last_synced,
 			s.min_portfolio_target, s.max_portfolio_target, s.created_at, s.updated_at
 		FROM securities s
 		INNER JOIN security_tags st ON s.isin = st.isin
@@ -1062,7 +1097,7 @@ func (r *SecurityRepository) GetPositionsByTags(positionSymbols []string, tagIDs
 
 	query := fmt.Sprintf(`
 		SELECT DISTINCT s.isin, s.symbol, s.name, s.product_type, s.industry, s.geography, s.fullExchangeName,
-			s.priority_multiplier, s.min_lot, s.active, s.allow_buy, s.allow_sell, s.currency, s.last_synced,
+			s.market_code, s.priority_multiplier, s.min_lot, s.active, s.allow_buy, s.allow_sell, s.currency, s.last_synced,
 			s.min_portfolio_target, s.max_portfolio_target, s.created_at, s.updated_at
 		FROM securities s
 		INNER JOIN security_tags st ON s.isin = st.isin

@@ -23,12 +23,8 @@ const (
 type RiskModelBuilder struct {
 	db         *sql.DB // history.db
 	universeDB *sql.DB // universe.db (for symbol -> ISIN lookup)
+	configDB   *sql.DB // config.db (for market_indices table)
 	log        zerolog.Logger
-}
-
-type marketIndexSpec struct {
-	Symbol string
-	Weight float64
 }
 
 type RegimeAwareRiskOptions struct {
@@ -37,11 +33,20 @@ type RegimeAwareRiskOptions struct {
 	Bandwidth        float64
 }
 
+// indexSpec represents a market index for regime calculation
+type indexSpec struct {
+	Symbol string
+	ISIN   string
+	Region string
+}
+
 // NewRiskModelBuilder creates a new risk model builder.
-func NewRiskModelBuilder(db *sql.DB, universeDB *sql.DB, log zerolog.Logger) *RiskModelBuilder {
+// configDB is optional (can be nil) - if provided, enables dynamic index lookup for regime-aware calculations.
+func NewRiskModelBuilder(db *sql.DB, universeDB *sql.DB, configDB *sql.DB, log zerolog.Logger) *RiskModelBuilder {
 	return &RiskModelBuilder{
 		db:         db,
 		universeDB: universeDB,
+		configDB:   configDB,
 		log:        log.With().Str("component", "risk_model").Logger(),
 	}
 }
@@ -152,55 +157,52 @@ func (rb *RiskModelBuilder) BuildRegimeAwareCovarianceMatrix(
 	assetReturns := rb.calculateReturns(assetFilled)
 
 	// 2. Build a regime score series aligned to asset returns observations.
-	indices := []marketIndexSpec{
-		{Symbol: "SPX.US", Weight: 0.20},
-		{Symbol: "STOXX600.EU", Weight: 0.50},
-		{Symbol: "MSCIASIA.ASIA", Weight: 0.30},
+	// Get market indices from database or use known indices as fallback
+	indices := rb.getMarketIndices()
+	if len(indices) == 0 {
+		rb.log.Warn().Msg("No market indices configured, using neutral regime weights")
+		// Fall through with empty indices - will use neutral regime score
 	}
-	// Market indices are stored with ISIN = "INDEX-SYMBOL" format
-	// Convert symbols to ISINs for querying
+
+	// Fetch index price data
 	indexISINs := make([]string, 0, len(indices))
 	for _, idx := range indices {
-		indexISINs = append(indexISINs, "INDEX-"+idx.Symbol)
+		indexISINs = append(indexISINs, idx.ISIN)
 	}
 
-	indexPriceData, err := rb.fetchPriceHistory(indexISINs, lookbackDays)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to fetch index price history: %w", err)
-	}
-
-	alignedIndex := rb.alignToDates(indexPriceData, assetFilled.Dates)
-	alignedIndexFilled := rb.handleMissingData(alignedIndex)
-	indexReturns := rb.calculateReturns(alignedIndexFilled)
-
-	// Composite market returns (aligned to asset returns length).
+	var marketReturns []float64
 	numObs := len(assetFilled.Dates) - 1
-	marketReturns := make([]float64, numObs)
-	totalWeight := 0.0
-	for _, idx := range indices {
-		totalWeight += idx.Weight
-	}
-	if totalWeight <= 0 {
-		return nil, nil, nil, fmt.Errorf("invalid market index weights")
-	}
 
-	for t := 0; t < numObs; t++ {
-		composite := 0.0
-		usedWeight := 0.0
-		for _, idx := range indices {
-			indexISIN := "INDEX-" + idx.Symbol
-			r, ok := indexReturns[indexISIN]
-			if !ok || len(r) != numObs {
-				continue
-			}
-			composite += r[t] * idx.Weight
-			usedWeight += idx.Weight
-		}
-		if usedWeight > 0 {
-			marketReturns[t] = composite / usedWeight
+	if len(indexISINs) > 0 {
+		indexPriceData, err := rb.fetchPriceHistory(indexISINs, lookbackDays)
+		if err != nil {
+			rb.log.Warn().Err(err).Msg("Failed to fetch index price history, using neutral regime")
+			marketReturns = make([]float64, numObs)
 		} else {
-			marketReturns[t] = 0.0
+			alignedIndex := rb.alignToDates(indexPriceData, assetFilled.Dates)
+			alignedIndexFilled := rb.handleMissingData(alignedIndex)
+			indexReturns := rb.calculateReturns(alignedIndexFilled)
+
+			// Composite market returns with equal weighting across indices
+			marketReturns = make([]float64, numObs)
+			for t := 0; t < numObs; t++ {
+				composite := 0.0
+				count := 0
+				for _, idx := range indices {
+					r, ok := indexReturns[idx.ISIN]
+					if !ok || len(r) != numObs {
+						continue
+					}
+					composite += r[t]
+					count++
+				}
+				if count > 0 {
+					marketReturns[t] = composite / float64(count)
+				}
+			}
 		}
+	} else {
+		marketReturns = make([]float64, numObs)
 	}
 
 	// Regime score series per observation: use rolling window of market returns.
@@ -739,6 +741,124 @@ func calculateCovarianceLedoitWolf(returns map[string][]float64, isins []string)
 	}
 
 	return shrunkCov, nil
+}
+
+// getMarketIndices returns market indices for regime calculation.
+// If configDB is available, queries the market_indices table for enabled PRICE indices.
+// Otherwise, falls back to known indices from the index discovery module.
+func (rb *RiskModelBuilder) getMarketIndices() []indexSpec {
+	// Try to get indices from config database first
+	if rb.configDB != nil {
+		indices, err := rb.getIndicesFromDB()
+		if err == nil && len(indices) > 0 {
+			rb.log.Debug().Int("count", len(indices)).Msg("Using market indices from database")
+			return indices
+		}
+		if err != nil {
+			rb.log.Warn().Err(err).Msg("Failed to get market indices from database, using fallback")
+		}
+	}
+
+	// Fallback to known indices
+	return rb.getFallbackIndices()
+}
+
+// getIndicesFromDB queries market_indices table for enabled PRICE indices
+// Note: market_indices is in configDB, securities is in universeDB - separate queries required
+func (rb *RiskModelBuilder) getIndicesFromDB() ([]indexSpec, error) {
+	// Step 1: Get enabled PRICE indices from config DB
+	query := `
+		SELECT symbol, region
+		FROM market_indices
+		WHERE enabled = 1 AND index_type = 'PRICE'
+	`
+
+	rows, err := rb.configDB.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query market indices: %w", err)
+	}
+	defer rows.Close()
+
+	// Collect symbols and regions
+	type indexMeta struct {
+		Symbol string
+		Region string
+	}
+	var metas []indexMeta
+	for rows.Next() {
+		var m indexMeta
+		if err := rows.Scan(&m.Symbol, &m.Region); err != nil {
+			return nil, fmt.Errorf("failed to scan market index: %w", err)
+		}
+		metas = append(metas, m)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating market indices: %w", err)
+	}
+
+	// Step 2: Look up ISINs from universe DB for each index
+	var indices []indexSpec
+	for _, m := range metas {
+		isin := rb.lookupISIN(m.Symbol)
+		if isin == "" {
+			rb.log.Debug().Str("symbol", m.Symbol).Msg("Index not found in securities table, skipping")
+			continue
+		}
+
+		indices = append(indices, indexSpec{
+			Symbol: m.Symbol,
+			ISIN:   isin,
+			Region: m.Region,
+		})
+	}
+
+	return indices, nil
+}
+
+// getFallbackIndices returns hardcoded indices for when database is unavailable
+// Uses the known indices from market_regime.GetKnownIndices()
+func (rb *RiskModelBuilder) getFallbackIndices() []indexSpec {
+	// Get known indices from the index discovery module
+	knownIndices := market_regime.GetKnownIndices()
+
+	var indices []indexSpec
+	for _, ki := range knownIndices {
+		// Only include PRICE indices, not VOLATILITY (like VIX)
+		if ki.IndexType != market_regime.IndexTypePrice {
+			continue
+		}
+
+		// Try to look up ISIN from universe database
+		isin := rb.lookupISIN(ki.Symbol)
+		if isin == "" {
+			rb.log.Debug().Str("symbol", ki.Symbol).Msg("Index not found in universe, skipping")
+			continue
+		}
+
+		indices = append(indices, indexSpec{
+			Symbol: ki.Symbol,
+			ISIN:   isin,
+			Region: ki.Region,
+		})
+	}
+
+	rb.log.Debug().Int("count", len(indices)).Msg("Using fallback market indices")
+	return indices
+}
+
+// lookupISIN looks up the ISIN for a symbol in the universe database
+func (rb *RiskModelBuilder) lookupISIN(symbol string) string {
+	if rb.universeDB == nil {
+		return ""
+	}
+
+	var isin string
+	err := rb.universeDB.QueryRow("SELECT isin FROM securities WHERE symbol = ?", symbol).Scan(&isin)
+	if err != nil {
+		return ""
+	}
+	return isin
 }
 
 func effectiveSampleSize(weights []float64) float64 {

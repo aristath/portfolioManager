@@ -86,6 +86,7 @@ type ScoreSecurityInput struct {
 	PortfolioContext    *domain.PortfolioContext
 	Industry            *string
 	Geography           *string // Comma-separated for multiple geographies
+	MarketCode          string  // Tradernet market code for per-region regime scoring (e.g., "FIX", "EU", "HKEX")
 	ProductType         string  // Product type: EQUITY, ETF, MUTUALFUND, ETC, CASH, UNKNOWN
 	SortinoRatio        *float64
 	MaxDrawdown         *float64
@@ -181,10 +182,18 @@ func (ss *SecurityScorer) ScoreSecurity(input ScoreSecurityInput) *domain.Calcul
 			securityType = symbolic_regression.SecurityTypeETF
 		}
 
-		// Get regime score if available
+		// Get regime score if available (use per-region score when MarketCode is available)
 		var regimePtr *float64
 		if ss.regimeScoreProvider != nil {
-			regimeScore, err := ss.regimeScoreProvider.GetCurrentRegimeScore()
+			var regimeScore float64
+			var err error
+			if input.MarketCode != "" {
+				// Use per-region regime score based on security's market
+				regimeScore, err = ss.regimeScoreProvider.GetRegimeScoreForMarketCode(input.MarketCode)
+			} else {
+				// Fallback to global score
+				regimeScore, err = ss.regimeScoreProvider.GetCurrentRegimeScore()
+			}
 			if err == nil {
 				regimePtr = &regimeScore
 			}
@@ -228,7 +237,7 @@ func (ss *SecurityScorer) ScoreSecurity(input ScoreSecurityInput) *domain.Calcul
 	// Fall back to static weighted sum if no discovered formula
 	if !useDiscoveredFormula {
 		// Get product-type-aware weights
-		weights := ss.getScoreWeights(input.ProductType)
+		weights := ss.getScoreWeights(input.ProductType, input.MarketCode)
 
 		// Normalize weights
 		normalizedWeights := normalizeWeights(weights)
@@ -309,28 +318,26 @@ func normalizeWeights(weights map[string]float64) map[string]float64 {
 }
 
 // RegimeScoreProvider interface for getting current regime score
+// Supports both global scores (backward compatible) and per-region scores.
 type RegimeScoreProvider interface {
+	// GetCurrentRegimeScore returns the global average regime score.
+	// For backward compatibility with existing code.
 	GetCurrentRegimeScore() (float64, error)
+
+	// GetRegimeScoreForMarketCode returns the regime score for a security
+	// based on its market code (e.g., "FIX" -> US, "EU" -> EU, "HKEX" -> ASIA).
+	// For regions without dedicated indices, returns the global average.
+	GetRegimeScoreForMarketCode(marketCode string) (float64, error)
 }
 
-// getScoreWeights returns score weights based on product type and market regime
-// Implements product-type-aware scoring weights as per PRODUCT_TYPE_DIFFERENTIATION.md
-// If adaptive service is available, uses adaptive weights based on regime score
-func (ss *SecurityScorer) getScoreWeights(productType string) map[string]float64 {
-	// Get current regime score if provider is available
-	regimeScore := 0.0
-	if ss.regimeScoreProvider != nil {
-		currentScore, err := ss.regimeScoreProvider.GetCurrentRegimeScore()
-		if err == nil {
-			regimeScore = currentScore
-		}
-	}
-
+// getBaseWeights returns the base score weights for a product type without any adaptive adjustments.
+// This is an internal method used by getScoreWeights and GetScoreWeightsWithRegime.
+func (ss *SecurityScorer) getBaseWeights(productType string) map[string]float64 {
 	// Treat ETFs and Mutual Funds identically (both are diversified products)
 	if productType == "ETF" || productType == "MUTUALFUND" {
 		// Diversified product weights (ETFs & Mutual Funds)
 		// Uses internal data only - no external stability or analyst data
-		baseWeights := map[string]float64{
+		return map[string]float64{
 			"long_term":   0.35, // ↑ from 30% (tracking quality matters most)
 			"stability":   0.15, // ↓ from 20% (less relevant for diversified products)
 			"dividends":   0.18, // Unchanged
@@ -338,54 +345,81 @@ func (ss *SecurityScorer) getScoreWeights(productType string) map[string]float64
 			"short_term":  0.10, // Unchanged
 			"technicals":  0.10, // ↑ from 7% (compensate for removed opinion/diversification)
 		}
-
-		// Apply adaptive weights if available
-		if ss.adaptiveService != nil {
-			return ss.GetScoreWeightsWithRegime(productType, regimeScore)
-		}
-
-		return baseWeights
 	}
 
 	// Default weights for stocks (EQUITY) and other types
-	// Apply adaptive weights if available
-	if ss.adaptiveService != nil {
-		return ss.GetScoreWeightsWithRegime(productType, regimeScore)
+	return ScoreWeights
+}
+
+// getScoreWeights returns score weights based on product type and market regime
+// Implements product-type-aware scoring weights as per PRODUCT_TYPE_DIFFERENTIATION.md
+// If adaptive service is available, uses adaptive weights based on regime score
+// marketCode is used for per-region regime scoring (can be empty for fallback to global)
+func (ss *SecurityScorer) getScoreWeights(productType, marketCode string) map[string]float64 {
+	// Get base weights first
+	baseWeights := ss.getBaseWeights(productType)
+
+	// If no adaptive service, return base weights
+	if ss.adaptiveService == nil {
+		return baseWeights
 	}
 
-	return ScoreWeights
+	// Get regime score if provider is available (use per-region when marketCode is available)
+	regimeScore := 0.0
+	if ss.regimeScoreProvider != nil {
+		var currentScore float64
+		var err error
+		if marketCode != "" {
+			currentScore, err = ss.regimeScoreProvider.GetRegimeScoreForMarketCode(marketCode)
+		} else {
+			currentScore, err = ss.regimeScoreProvider.GetCurrentRegimeScore()
+		}
+		if err == nil {
+			regimeScore = currentScore
+		}
+	}
+
+	// Apply adaptive weights
+	return ss.applyAdaptiveWeights(baseWeights, regimeScore)
 }
 
 // GetScoreWeightsWithRegime returns score weights with explicit regime score
 // This allows callers to provide regime score when available
 func (ss *SecurityScorer) GetScoreWeightsWithRegime(productType string, regimeScore float64) map[string]float64 {
 	// Get base weights first
-	baseWeights := ss.getScoreWeights(productType)
+	baseWeights := ss.getBaseWeights(productType)
 
 	// Apply adaptive weights if service is available
-	if ss.adaptiveService != nil {
-		adaptiveWeights := ss.adaptiveService.CalculateAdaptiveWeights(regimeScore)
-		if len(adaptiveWeights) > 0 {
-			// Merge: use adaptive weights for common keys, keep base weights for others
-			result := make(map[string]float64)
-			for key, baseWeight := range baseWeights {
-				if adaptiveWeight, ok := adaptiveWeights[key]; ok {
-					result[key] = adaptiveWeight
-				} else {
-					result[key] = baseWeight
-				}
-			}
-			// Add any adaptive weights not in base
-			for key, adaptiveWeight := range adaptiveWeights {
-				if _, ok := result[key]; !ok {
-					result[key] = adaptiveWeight
-				}
-			}
-			return result
-		}
+	return ss.applyAdaptiveWeights(baseWeights, regimeScore)
+}
+
+// applyAdaptiveWeights applies adaptive weights to base weights based on regime score
+func (ss *SecurityScorer) applyAdaptiveWeights(baseWeights map[string]float64, regimeScore float64) map[string]float64 {
+	if ss.adaptiveService == nil {
+		return baseWeights
 	}
 
-	return baseWeights
+	adaptiveWeights := ss.adaptiveService.CalculateAdaptiveWeights(regimeScore)
+	if len(adaptiveWeights) == 0 {
+		return baseWeights
+	}
+
+	// Merge: use adaptive weights for common keys, keep base weights for others
+	result := make(map[string]float64)
+	for key, baseWeight := range baseWeights {
+		if adaptiveWeight, ok := adaptiveWeights[key]; ok {
+			result[key] = adaptiveWeight
+		} else {
+			result[key] = baseWeight
+		}
+	}
+	// Add any adaptive weights not in base
+	for key, adaptiveWeight := range adaptiveWeights {
+		if _, ok := result[key]; !ok {
+			result[key] = adaptiveWeight
+		}
+	}
+	return result
 }
 
 // round4 rounds to 4 decimal places

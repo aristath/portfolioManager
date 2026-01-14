@@ -20,8 +20,16 @@ type AdaptiveQualityGatesProvider interface {
 }
 
 // RegimeScoreProvider provides access to current regime score
+// Supports both global scores (backward compatible) and per-region scores.
 type RegimeScoreProvider interface {
+	// GetCurrentRegimeScore returns the global average regime score.
+	// For backward compatibility with existing code.
 	GetCurrentRegimeScore() (float64, error)
+
+	// GetRegimeScoreForMarketCode returns the regime score for a security
+	// based on its market code (e.g., "FIX" -> US, "EU" -> EU, "HKEX" -> ASIA).
+	// For regions without dedicated indices, returns the global average.
+	GetRegimeScoreForMarketCode(marketCode string) (float64, error)
 }
 
 // TagSettingsService interface for temperament-aware tag thresholds.
@@ -703,10 +711,18 @@ func (ta *TagAssigner) AssignTagsForSecurity(input AssignTagsInput) ([]string, e
 	longTermThreshold := qualityGateParams.LongTermThreshold
 
 	if ta.adaptiveService != nil {
-		// Get current regime score if provider is available, otherwise use neutral (0.0)
+		// Get regime score if provider is available (use per-region when security has MarketCode)
 		regimeScore := 0.0
 		if ta.regimeScoreProvider != nil {
-			currentScore, err := ta.regimeScoreProvider.GetCurrentRegimeScore()
+			var currentScore float64
+			var err error
+			if input.Security.MarketCode != "" {
+				// Use per-region regime score based on security's market
+				currentScore, err = ta.regimeScoreProvider.GetRegimeScoreForMarketCode(input.Security.MarketCode)
+			} else {
+				// Fallback to global score
+				currentScore, err = ta.regimeScoreProvider.GetCurrentRegimeScore()
+			}
 			if err == nil {
 				regimeScore = currentScore
 			}
@@ -838,10 +854,18 @@ func (ta *TagAssigner) AssignTagsForSecurity(input AssignTagsInput) ([]string, e
 
 	// === QUANTUM BUBBLE DETECTION (Ensemble with Classical) ===
 
-	// Get regime score for adaptive weighting
+	// Get regime score for adaptive weighting (use per-region when security has MarketCode)
 	regimeScore := 0.0
 	if ta.regimeScoreProvider != nil {
-		currentScore, err := ta.regimeScoreProvider.GetCurrentRegimeScore()
+		var currentScore float64
+		var err error
+		if input.Security.MarketCode != "" {
+			// Use per-region regime score based on security's market
+			currentScore, err = ta.regimeScoreProvider.GetRegimeScoreForMarketCode(input.Security.MarketCode)
+		} else {
+			// Fallback to global score
+			currentScore, err = ta.regimeScoreProvider.GetCurrentRegimeScore()
+		}
 		if err == nil {
 			regimeScore = currentScore
 		}

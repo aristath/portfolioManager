@@ -110,12 +110,18 @@ func (e *MetadataEnricher) Enrich(security *Security) error {
 		enriched = true
 	}
 
+	if security.MarketCode == "" && brokerInfo.Market != nil && *brokerInfo.Market != "" {
+		security.MarketCode = *brokerInfo.Market
+		enriched = true
+	}
+
 	if enriched {
 		e.log.Info().
 			Str("symbol", security.Symbol).
 			Str("name", security.Name).
 			Str("geography", security.Geography).
 			Str("industry", security.Industry).
+			Str("market_code", security.MarketCode).
 			Msg("Enriched security metadata from broker")
 	} else {
 		e.log.Debug().

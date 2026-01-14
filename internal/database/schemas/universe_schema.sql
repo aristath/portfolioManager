@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS securities (
     industry TEXT,                     -- Comma-separated for multiple industries (e.g., "Technology, Finance")
     geography TEXT,                    -- Comma-separated for multiple geographies (e.g., "EU, US")
     fullExchangeName TEXT,
+    market_code TEXT,                  -- Tradernet market code (e.g., "FIX", "EU", "HKEX") for region mapping
     priority_multiplier REAL DEFAULT 1.0,
     min_lot INTEGER DEFAULT 1,
     active INTEGER DEFAULT 1,  -- Boolean: 1 = active, 0 = inactive (soft delete)
@@ -29,6 +30,7 @@ CREATE INDEX IF NOT EXISTS idx_securities_active ON securities(active);
 CREATE INDEX IF NOT EXISTS idx_securities_geography ON securities(geography);
 CREATE INDEX IF NOT EXISTS idx_securities_industry ON securities(industry);
 CREATE INDEX IF NOT EXISTS idx_securities_symbol ON securities(symbol);
+CREATE INDEX IF NOT EXISTS idx_securities_market_code ON securities(market_code);
 
 -- Tags table: tag definitions with ID and human-readable name
 CREATE TABLE IF NOT EXISTS tags (

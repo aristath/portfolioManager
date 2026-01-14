@@ -937,6 +937,7 @@ func (h *UniverseHandlers) calculateAndSaveScore(isin string, geography string, 
 	scoringInput := scorers.ScoreSecurityInput{
 		Symbol:        symbol,
 		ProductType:   security.ProductType, // Pass product type for product-type-aware scoring
+		MarketCode:    security.MarketCode,  // Pass market code for per-region regime scoring
 		DailyPrices:   closePrices,
 		MonthlyPrices: monthlyPricesConverted,
 	}
