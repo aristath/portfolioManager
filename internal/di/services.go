@@ -260,6 +260,17 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		log,
 	)
 
+	// Security deletion service
+	container.SecurityDeletionService = universe.NewSecurityDeletionService(
+		container.SecurityRepo,
+		container.PositionRepo,
+		container.ScoreRepo,
+		container.HistoryDBClient,
+		container.DismissedFilterRepo,
+		container.BrokerClient,
+		log,
+	)
+
 	// Create adapter for SecuritySetupService to match portfolio.SecuritySetupServiceInterface
 	setupServiceAdapter := &securitySetupServiceAdapter{service: container.SetupService}
 

@@ -127,6 +127,7 @@ type Container struct {
 	HistoricalSyncService     *universe.HistoricalSyncService
 	SyncService               *universe.SyncService
 	SetupService              *universe.SecuritySetupService
+	SecurityDeletionService   *universe.SecurityDeletionService
 	SymbolResolver            *universe.SymbolResolver
 	ConcentrationAlertService *allocation.ConcentrationAlertService
 	BackupService             *reliability.BackupService

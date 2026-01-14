@@ -26,11 +26,12 @@ type SecurityLookupInterface interface {
 }
 
 // HistoryDBInterface defines the contract for history database operations
-// Used by HistoricalSyncService to enable testing with mocks
+// Used by HistoricalSyncService and SecurityDeletionService
 type HistoryDBInterface interface {
 	HasMonthlyData(isin string) (bool, error)
 	SyncHistoricalPrices(isin string, prices []DailyPrice) error
 	GetRecentPrices(isin string, days int) ([]DailyPrice, error)
+	DeletePricesForSecurity(isin string) error
 }
 
 // NewHistoricalSyncService creates a new historical sync service.

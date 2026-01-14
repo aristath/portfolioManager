@@ -125,6 +125,7 @@ type UniverseHandlers struct {
 	securityScorer          *scorers.SecurityScorer
 	historyDB               *universe.HistoryDB
 	setupService            *universe.SecuritySetupService
+	deletionService         *universe.SecurityDeletionService
 	syncService             *universe.SyncService
 	currencyExchangeService domain.CurrencyExchangeServiceInterface
 	eventManager            *events.Manager
@@ -139,6 +140,7 @@ func NewUniverseHandlers(
 	securityScorer *scorers.SecurityScorer,
 	historyDB *universe.HistoryDB,
 	setupService *universe.SecuritySetupService,
+	deletionService *universe.SecurityDeletionService,
 	syncService *universe.SyncService,
 	currencyExchangeService domain.CurrencyExchangeServiceInterface,
 	eventManager *events.Manager,
@@ -152,6 +154,7 @@ func NewUniverseHandlers(
 		securityScorer:          securityScorer,
 		historyDB:               historyDB,
 		setupService:            setupService,
+		deletionService:         deletionService,
 		syncService:             syncService,
 		currencyExchangeService: currencyExchangeService,
 		eventManager:            eventManager,
@@ -812,7 +815,9 @@ func (h *UniverseHandlers) HandleUpdateStock(w http.ResponseWriter, r *http.Requ
 	_ = json.NewEncoder(w).Encode(response)
 }
 
-// HandleDeleteStock soft-deletes a security (sets active=0)
+// HandleDeleteStock hard-deletes a security and all related data
+// Returns 409 Conflict if security has open positions
+// Returns 404 Not Found if security does not exist
 // DELETE /api/securities/{isin}
 func (h *UniverseHandlers) HandleDeleteStock(w http.ResponseWriter, r *http.Request) {
 	isin := chi.URLParam(r, "isin")
@@ -824,40 +829,29 @@ func (h *UniverseHandlers) HandleDeleteStock(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	h.log.Info().Str("isin", isin).Msg("DELETE request - attempting to delete security")
+	h.log.Info().Str("isin", isin).Msg("DELETE request - attempting to hard delete security")
 
-	// Get security by ISIN
-	security, err := h.securityRepo.GetByISIN(isin)
+	// Use the deletion service which validates positions and removes all related data
+	err := h.deletionService.HardDelete(isin)
 	if err != nil {
-		h.log.Error().Err(err).Str("isin", isin).Msg("Failed to fetch security")
-		http.Error(w, "Failed to fetch security", http.StatusInternalServerError)
-		return
-	}
-	if security == nil {
-		h.log.Warn().Str("isin", isin).Msg("Security not found")
-		http.Error(w, "Security not found", http.StatusNotFound)
-		return
-	}
-
-	symbol := security.Symbol
-	h.log.Info().Str("isin", isin).Str("symbol", symbol).Msg("Soft deleting security (setting active=0)")
-
-	// Soft delete (set active=0) - use ISIN, not symbol
-	err = h.securityRepo.Delete(isin)
-	if err != nil {
-		h.log.Error().Err(err).Str("isin", isin).Str("symbol", symbol).Msg("Failed to delete security")
+		errStr := err.Error()
+		if strings.Contains(errStr, "open position") || strings.Contains(errStr, "pending order") {
+			h.log.Warn().Str("isin", isin).Err(err).Msg("Cannot delete security - active trades")
+			http.Error(w, errStr, http.StatusConflict)
+			return
+		}
+		if strings.Contains(errStr, "not found") {
+			h.log.Warn().Str("isin", isin).Msg("Security not found")
+			http.Error(w, errStr, http.StatusNotFound)
+			return
+		}
+		h.log.Error().Err(err).Str("isin", isin).Msg("Failed to delete security")
 		http.Error(w, "Failed to delete security", http.StatusInternalServerError)
 		return
 	}
 
-	h.log.Info().Str("isin", isin).Str("symbol", symbol).Msg("Security successfully deleted")
-
-	response := map[string]string{
-		"message": fmt.Sprintf("Security %s removed from universe", symbol),
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(response) // Ignore encode error - already committed response
+	h.log.Info().Str("isin", isin).Msg("Security successfully hard deleted")
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // CalculateAndSaveScore is the public interface implementation for ScoreCalculator

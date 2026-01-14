@@ -319,6 +319,7 @@ func (s *Server) setupRoutes() {
 			securityScorer,
 			historyDB,
 			setupService1,
+			s.container.SecurityDeletionService,
 			syncService1,
 			currencyExchangeService1,
 			s.container.EventManager,
@@ -404,6 +405,7 @@ func (s *Server) setupRoutes() {
 
 		// Allocation module
 		allocRepo := s.container.AllocRepo
+		allocRepo.SetUniverseDB(s.universeDB.Conn())
 		alertService := s.container.ConcentrationAlertService
 		portfolioService := s.container.PortfolioService
 		portfolioSummaryAdapter := portfolio.NewPortfolioSummaryAdapter(portfolioService)
@@ -436,6 +438,7 @@ func (s *Server) setupRoutes() {
 			universeSecurityScorer,
 			universeHistoryDB,
 			universeSetupService,
+			s.container.SecurityDeletionService,
 			universeSyncService,
 			universeCurrencyExchangeService,
 			s.container.EventManager,

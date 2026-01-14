@@ -16,6 +16,9 @@ type HistoryDB struct {
 	log zerolog.Logger
 }
 
+// Compile-time check that HistoryDB implements HistoryDBInterface
+var _ HistoryDBInterface = (*HistoryDB)(nil)
+
 // NewHistoryDB creates a new history database accessor
 func NewHistoryDB(db *sql.DB, log zerolog.Logger) *HistoryDB {
 	return &HistoryDB{
@@ -336,6 +339,43 @@ func (h *HistoryDB) GetLatestExchangeRate(fromCurrency, toCurrency string) (*Exc
 
 	er.Date = time.Unix(dateUnix, 0).UTC()
 	return &er, nil
+}
+
+// DeletePricesForSecurity removes all price history (daily and monthly) for a security
+// Used when hard-deleting a security from the universe
+func (h *HistoryDB) DeletePricesForSecurity(isin string) error {
+	tx, err := h.db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// Delete daily prices
+	dailyResult, err := tx.Exec("DELETE FROM daily_prices WHERE isin = ?", isin)
+	if err != nil {
+		return fmt.Errorf("failed to delete daily prices: %w", err)
+	}
+
+	// Delete monthly prices
+	monthlyResult, err := tx.Exec("DELETE FROM monthly_prices WHERE isin = ?", isin)
+	if err != nil {
+		return fmt.Errorf("failed to delete monthly prices: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	dailyRows, _ := dailyResult.RowsAffected()
+	monthlyRows, _ := monthlyResult.RowsAffected()
+
+	h.log.Info().
+		Str("isin", isin).
+		Int64("daily_deleted", dailyRows).
+		Int64("monthly_deleted", monthlyRows).
+		Msg("Deleted price history for security")
+
+	return nil
 }
 
 // DeleteStaleRates removes exchange rates older than threshold

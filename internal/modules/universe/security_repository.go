@@ -381,6 +381,53 @@ func (r *SecurityRepository) Delete(isin string) error {
 	return r.Update(isin, map[string]interface{}{"active": false})
 }
 
+// HardDelete permanently removes a security and all related data from universe.db
+// This includes: security_tags, broker_symbols, client_symbols, and the security itself
+func (r *SecurityRepository) HardDelete(isin string) error {
+	isin = strings.ToUpper(strings.TrimSpace(isin))
+
+	// Begin transaction
+	tx, err := r.universeDB.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// Delete related data first (security_tags has CASCADE but be explicit)
+	_, err = tx.Exec("DELETE FROM security_tags WHERE isin = ?", isin)
+	if err != nil {
+		return fmt.Errorf("failed to delete security_tags: %w", err)
+	}
+
+	_, err = tx.Exec("DELETE FROM broker_symbols WHERE isin = ?", isin)
+	if err != nil {
+		return fmt.Errorf("failed to delete broker_symbols: %w", err)
+	}
+
+	_, err = tx.Exec("DELETE FROM client_symbols WHERE isin = ?", isin)
+	if err != nil {
+		return fmt.Errorf("failed to delete client_symbols: %w", err)
+	}
+
+	// Delete the security itself
+	result, err := tx.Exec("DELETE FROM securities WHERE isin = ?", isin)
+	if err != nil {
+		return fmt.Errorf("failed to delete security: %w", err)
+	}
+
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("security not found: %s", isin)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	r.log.Info().Str("isin", isin).Msg("Security hard deleted from universe.db")
+	return nil
+}
+
 // GetWithScores returns all active securities with their scores and positions
 // Faithful translation of Python: async def get_with_scores(self) -> List[dict]
 // Note: This method accesses multiple databases (universe.db and portfolio.db) - architecture violation

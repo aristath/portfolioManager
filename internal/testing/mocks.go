@@ -805,6 +805,11 @@ func (m *MockSecurityRepository) Delete(isin string) error {
 	return nil
 }
 
+// HardDelete permanently removes a security from the mock repository
+func (m *MockSecurityRepository) HardDelete(isin string) error {
+	return m.Delete(isin) // Same behavior as Delete for mock
+}
+
 // GetWithScores returns securities with their scores joined
 func (m *MockSecurityRepository) GetWithScores(portfolioDB *sql.DB) ([]universe.SecurityWithScore, error) {
 	m.mu.RLock()

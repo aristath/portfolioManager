@@ -75,10 +75,30 @@ type SecurityRepositoryInterface interface {
 
 	// GetPositionsByTags returns securities that are in the provided position symbols AND have the specified tags
 	GetPositionsByTags(positionSymbols []string, tagIDs []string) ([]Security, error)
+
+	// HardDelete permanently removes a security and all related data from universe.db
+	HardDelete(isin string) error
 }
 
 // Compile-time check that SecurityRepository implements SecurityRepositoryInterface
 var _ SecurityRepositoryInterface = (*SecurityRepository)(nil)
+
+// SecurityDeletionServiceInterface defines the contract for hard deletion operations
+type SecurityDeletionServiceInterface interface {
+	// HardDelete permanently removes a security and all related data across databases
+	// Returns error if security has open positions, pending orders, or does not exist
+	HardDelete(isin string) error
+}
+
+// Compile-time check that SecurityDeletionService implements SecurityDeletionServiceInterface
+var _ SecurityDeletionServiceInterface = (*SecurityDeletionService)(nil)
+
+// DismissedFilterClearer defines operations for clearing dismissed filters
+// Used by SecurityDeletionService when deleting a security
+type DismissedFilterClearer interface {
+	// ClearForSecurity removes all dismissals for a specific security
+	ClearForSecurity(isin string) (int, error)
+}
 
 // DBExecutor defines the contract for database execution operations
 // Used by SyncService to enable testing with mocks

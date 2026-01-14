@@ -26,6 +26,7 @@ func TestRegisterRoutes(t *testing.T) {
 	securityScorer := &scorers.SecurityScorer{}
 	historyDB := &universe.HistoryDB{}
 	setupService := &universe.SecuritySetupService{}
+	deletionService := &universe.SecurityDeletionService{}
 	syncService := &universe.SyncService{}
 	var currencyExchangeService domain.CurrencyExchangeServiceInterface = nil
 	eventManager := &events.Manager{}
@@ -39,6 +40,7 @@ func TestRegisterRoutes(t *testing.T) {
 		securityScorer,
 		historyDB,
 		setupService,
+		deletionService,
 		syncService,
 		currencyExchangeService,
 		eventManager,
@@ -109,6 +111,7 @@ func TestRegisterRoutes_RoutePrefix(t *testing.T) {
 	securityScorer := &scorers.SecurityScorer{}
 	historyDB := &universe.HistoryDB{}
 	setupService := &universe.SecuritySetupService{}
+	deletionService := &universe.SecurityDeletionService{}
 	syncService := &universe.SyncService{}
 	var currencyExchangeService domain.CurrencyExchangeServiceInterface = nil
 	eventManager := &events.Manager{}
@@ -121,6 +124,7 @@ func TestRegisterRoutes_RoutePrefix(t *testing.T) {
 		securityScorer,
 		historyDB,
 		setupService,
+		deletionService,
 		syncService,
 		currencyExchangeService,
 		eventManager,
