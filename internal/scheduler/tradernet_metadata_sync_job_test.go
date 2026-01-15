@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/aristath/sentinel/internal/domain"
-	"github.com/aristath/sentinel/internal/modules/universe"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 )
@@ -92,69 +91,6 @@ func TestTradernetMetadataSyncJob_Run_NotConnected(t *testing.T) {
 	err := job.Run()
 	// Should not error, just skip
 	assert.NoError(t, err)
-}
-
-func TestTradernetMetadataSyncJob_hasAllMetadata(t *testing.T) {
-	log := zerolog.Nop()
-
-	job := NewTradernetMetadataSyncJob(TradernetMetadataSyncJobConfig{
-		Log: log,
-	})
-
-	// Security with all metadata
-	complete := universe.Security{
-		ISIN:             "US0378331005",
-		Symbol:           "AAPL.US",
-		Geography:        "US",
-		Industry:         "Technology",
-		FullExchangeName: "NASDAQ",
-		MarketCode:       "US",
-	}
-	assert.True(t, job.hasAllMetadata(complete))
-
-	// Security missing geography
-	missingGeography := universe.Security{
-		ISIN:             "US0378331005",
-		Symbol:           "AAPL.US",
-		Geography:        "",
-		Industry:         "Technology",
-		FullExchangeName: "NASDAQ",
-		MarketCode:       "US",
-	}
-	assert.False(t, job.hasAllMetadata(missingGeography))
-
-	// Security missing industry
-	missingIndustry := universe.Security{
-		ISIN:             "US0378331005",
-		Symbol:           "AAPL.US",
-		Geography:        "US",
-		Industry:         "",
-		FullExchangeName: "NASDAQ",
-		MarketCode:       "US",
-	}
-	assert.False(t, job.hasAllMetadata(missingIndustry))
-
-	// Security missing exchange name
-	missingExchange := universe.Security{
-		ISIN:             "US0378331005",
-		Symbol:           "AAPL.US",
-		Geography:        "US",
-		Industry:         "Technology",
-		FullExchangeName: "",
-		MarketCode:       "US",
-	}
-	assert.False(t, job.hasAllMetadata(missingExchange))
-
-	// Security missing market code
-	missingMarket := universe.Security{
-		ISIN:             "US0378331005",
-		Symbol:           "AAPL.US",
-		Geography:        "US",
-		Industry:         "Technology",
-		FullExchangeName: "NASDAQ",
-		MarketCode:       "",
-	}
-	assert.False(t, job.hasAllMetadata(missingMarket))
 }
 
 func TestMapSectorToIndustry(t *testing.T) {

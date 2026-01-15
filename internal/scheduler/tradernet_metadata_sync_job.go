@@ -69,14 +69,9 @@ func (j *TradernetMetadataSyncJob) Run() error {
 	failed := 0
 
 	for _, security := range securities {
-		// Skip securities that already have all metadata
-		if j.hasAllMetadata(security) {
-			skipped++
-			continue
-		}
-
-		// Fetch metadata from Tradernet
-		err := j.fetchAndUpdateMetadata(&security)
+		// Fetch metadata from Tradernet and update security
+		// Always updates fields - Tradernet is source of truth, overrides are for user customizations
+		wasUpdated, err := j.fetchAndUpdateMetadata(&security)
 		if err != nil {
 			j.log.Warn().
 				Err(err).
@@ -87,7 +82,11 @@ func (j *TradernetMetadataSyncJob) Run() error {
 			continue
 		}
 
-		updated++
+		if wasUpdated {
+			updated++
+		} else {
+			skipped++
+		}
 	}
 
 	duration := time.Since(startTime)
@@ -101,37 +100,32 @@ func (j *TradernetMetadataSyncJob) Run() error {
 	return nil
 }
 
-// hasAllMetadata checks if security already has all Tradernet metadata populated
-func (j *TradernetMetadataSyncJob) hasAllMetadata(security universe.Security) bool {
-	return security.Geography != "" &&
-		security.Industry != "" &&
-		security.FullExchangeName != "" &&
-		security.MarketCode != ""
-}
-
 // fetchAndUpdateMetadata fetches metadata from Tradernet and updates the security
-func (j *TradernetMetadataSyncJob) fetchAndUpdateMetadata(security *universe.Security) error {
+// Returns true if any fields were updated, false if no data from Tradernet
+// Tradernet is the source of truth - always overwrites existing values
+// User customizations should be stored in security_overrides table
+func (j *TradernetMetadataSyncJob) fetchAndUpdateMetadata(security *universe.Security) (bool, error) {
 	// Use FindSymbol to get security info (domain.BrokerClient uses BrokerSecurityInfo)
 	results, err := j.brokerClient.FindSymbol(security.Symbol, nil)
 	if err != nil {
-		return fmt.Errorf("failed to find symbol %s: %w", security.Symbol, err)
+		return false, fmt.Errorf("failed to find symbol %s: %w", security.Symbol, err)
 	}
 
 	if len(results) == 0 {
 		j.log.Debug().
 			Str("symbol", security.Symbol).
 			Msg("No results from Tradernet FindSymbol")
-		return nil // Not an error, just no data
+		return false, nil // Not an error, just no data
 	}
 
 	// Use first result (typically the primary exchange listing)
 	info := results[0]
 
-	// Build update map for empty fields only (don't overwrite existing data)
+	// Build update map - always update from Tradernet (source of truth)
 	updates := make(map[string]any)
 
 	// Geography: from country code
-	if security.Geography == "" && info.Country != nil && *info.Country != "" {
+	if info.Country != nil && *info.Country != "" {
 		updates["geography"] = *info.Country
 		j.log.Debug().
 			Str("symbol", security.Symbol).
@@ -140,7 +134,7 @@ func (j *TradernetMetadataSyncJob) fetchAndUpdateMetadata(security *universe.Sec
 	}
 
 	// Industry: from sector code (map to readable industry name)
-	if security.Industry == "" && info.Sector != nil && *info.Sector != "" {
+	if info.Sector != nil && *info.Sector != "" {
 		industry := mapSectorToIndustry(*info.Sector)
 		updates["industry"] = industry
 		j.log.Debug().
@@ -151,7 +145,7 @@ func (j *TradernetMetadataSyncJob) fetchAndUpdateMetadata(security *universe.Sec
 	}
 
 	// Full exchange name
-	if security.FullExchangeName == "" && info.ExchangeName != nil && *info.ExchangeName != "" {
+	if info.ExchangeName != nil && *info.ExchangeName != "" {
 		updates["fullExchangeName"] = *info.ExchangeName
 		j.log.Debug().
 			Str("symbol", security.Symbol).
@@ -160,7 +154,7 @@ func (j *TradernetMetadataSyncJob) fetchAndUpdateMetadata(security *universe.Sec
 	}
 
 	// Market code
-	if security.MarketCode == "" && info.Market != nil && *info.Market != "" {
+	if info.Market != nil && *info.Market != "" {
 		updates["market_code"] = *info.Market
 		j.log.Debug().
 			Str("symbol", security.Symbol).
@@ -168,11 +162,11 @@ func (j *TradernetMetadataSyncJob) fetchAndUpdateMetadata(security *universe.Sec
 			Msg("Setting market code from Tradernet")
 	}
 
-	// Update security if any fields need populating
+	// Update security if Tradernet provided any data
 	if len(updates) > 0 {
 		err := j.securityRepo.Update(security.ISIN, updates)
 		if err != nil {
-			return fmt.Errorf("failed to update security %s: %w", security.Symbol, err)
+			return false, fmt.Errorf("failed to update security %s: %w", security.Symbol, err)
 		}
 
 		j.log.Info().
@@ -180,9 +174,10 @@ func (j *TradernetMetadataSyncJob) fetchAndUpdateMetadata(security *universe.Sec
 			Str("isin", security.ISIN).
 			Int("fieldsUpdated", len(updates)).
 			Msg("Updated security metadata from Tradernet")
+		return true, nil
 	}
 
-	return nil
+	return false, nil
 }
 
 // mapSectorToIndustry maps Tradernet sector codes to readable industry names
