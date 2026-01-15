@@ -8,6 +8,7 @@ import (
 	"github.com/aristath/sentinel/internal/events"
 	planningdomain "github.com/aristath/sentinel/internal/modules/planning/domain"
 	"github.com/aristath/sentinel/internal/modules/trading"
+	"github.com/aristath/sentinel/internal/modules/universe"
 	"github.com/aristath/sentinel/internal/work"
 	"github.com/rs/zerolog"
 )
@@ -613,12 +614,32 @@ func (a *securityTagAdapter) GetSecuritiesNeedingTagUpdate() []string {
 	return nil
 }
 
+type metadataSyncAdapter struct {
+	service *universe.MetadataSyncService
+}
+
+func (a *metadataSyncAdapter) SyncMetadata(isin string) error {
+	return a.service.SyncMetadata(isin)
+}
+
+func (a *metadataSyncAdapter) GetAllActiveISINs() []string {
+	return a.service.GetAllActiveISINs()
+}
+
 func registerSecurityWork(registry *work.Registry, container *Container, log zerolog.Logger) {
+	// Create metadata sync service
+	metadataSyncService := universe.NewMetadataSyncService(
+		container.SecurityRepo,
+		container.BrokerClient,
+		log,
+	)
+
 	deps := &work.SecurityDeps{
-		HistorySyncService: &securityHistorySyncAdapter{container: container},
-		TechnicalService:   &securityTechnicalAdapter{container: container},
-		FormulaService:     &securityFormulaAdapter{container: container},
-		TagService:         &securityTagAdapter{container: container},
+		HistorySyncService:  &securityHistorySyncAdapter{container: container},
+		TechnicalService:    &securityTechnicalAdapter{container: container},
+		FormulaService:      &securityFormulaAdapter{container: container},
+		TagService:          &securityTagAdapter{container: container},
+		MetadataSyncService: &metadataSyncAdapter{service: metadataSyncService},
 	}
 
 	work.RegisterSecurityWorkTypes(registry, deps)

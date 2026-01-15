@@ -82,32 +82,53 @@ func (m *MockTagUpdateService) GetSecuritiesNeedingTagUpdate() []string {
 	return args.Get(0).([]string)
 }
 
+// MockMetadataSyncService mocks the metadata sync service
+type MockMetadataSyncService struct {
+	mock.Mock
+}
+
+func (m *MockMetadataSyncService) SyncMetadata(isin string) error {
+	args := m.Called(isin)
+	return args.Error(0)
+}
+
+func (m *MockMetadataSyncService) GetAllActiveISINs() []string {
+	args := m.Called()
+	if args.Get(0) == nil {
+		return nil
+	}
+	return args.Get(0).([]string)
+}
+
 func TestRegisterSecurityWorkTypes(t *testing.T) {
 	registry := NewRegistry()
 
 	deps := &SecurityDeps{
-		HistorySyncService: &MockSecurityHistorySyncService{},
-		TechnicalService:   &MockTechnicalCalculationService{},
-		FormulaService:     &MockFormulaDiscoveryService{},
-		TagService:         &MockTagUpdateService{},
+		HistorySyncService:  &MockSecurityHistorySyncService{},
+		TechnicalService:    &MockTechnicalCalculationService{},
+		FormulaService:      &MockFormulaDiscoveryService{},
+		TagService:          &MockTagUpdateService{},
+		MetadataSyncService: &MockMetadataSyncService{},
 	}
 
 	RegisterSecurityWorkTypes(registry, deps)
 
-	// Verify all 4 security work types are registered
+	// Verify all 5 security work types are registered
 	assert.True(t, registry.Has("security:sync"))
 	assert.True(t, registry.Has("security:technical"))
 	assert.True(t, registry.Has("security:formula"))
 	assert.True(t, registry.Has("security:tags"))
+	assert.True(t, registry.Has("security:metadata"))
 }
 
 func TestSecurityWorkTypes_Dependencies(t *testing.T) {
 	registry := NewRegistry()
 	deps := &SecurityDeps{
-		HistorySyncService: &MockSecurityHistorySyncService{},
-		TechnicalService:   &MockTechnicalCalculationService{},
-		FormulaService:     &MockFormulaDiscoveryService{},
-		TagService:         &MockTagUpdateService{},
+		HistorySyncService:  &MockSecurityHistorySyncService{},
+		TechnicalService:    &MockTechnicalCalculationService{},
+		FormulaService:      &MockFormulaDiscoveryService{},
+		TagService:          &MockTagUpdateService{},
+		MetadataSyncService: &MockMetadataSyncService{},
 	}
 
 	RegisterSecurityWorkTypes(registry, deps)
@@ -142,10 +163,11 @@ func TestSecuritySync_Execute(t *testing.T) {
 	historySyncService.On("GetStaleSecurities").Return([]string{"NL0010273215"}).Maybe()
 
 	deps := &SecurityDeps{
-		HistorySyncService: historySyncService,
-		TechnicalService:   &MockTechnicalCalculationService{},
-		FormulaService:     &MockFormulaDiscoveryService{},
-		TagService:         &MockTagUpdateService{},
+		HistorySyncService:  historySyncService,
+		TechnicalService:    &MockTechnicalCalculationService{},
+		FormulaService:      &MockFormulaDiscoveryService{},
+		TagService:          &MockTagUpdateService{},
+		MetadataSyncService: &MockMetadataSyncService{},
 	}
 
 	RegisterSecurityWorkTypes(registry, deps)
@@ -167,10 +189,11 @@ func TestSecuritySync_FindSubjects(t *testing.T) {
 	historySyncService.On("GetStaleSecurities").Return([]string{"NL0010273215", "US0378331005"})
 
 	deps := &SecurityDeps{
-		HistorySyncService: historySyncService,
-		TechnicalService:   &MockTechnicalCalculationService{},
-		FormulaService:     &MockFormulaDiscoveryService{},
-		TagService:         &MockTagUpdateService{},
+		HistorySyncService:  historySyncService,
+		TechnicalService:    &MockTechnicalCalculationService{},
+		FormulaService:      &MockFormulaDiscoveryService{},
+		TagService:          &MockTagUpdateService{},
+		MetadataSyncService: &MockMetadataSyncService{},
 	}
 
 	RegisterSecurityWorkTypes(registry, deps)
@@ -195,10 +218,11 @@ func TestSecurityTechnical_Execute(t *testing.T) {
 	historySyncService.On("GetStaleSecurities").Return([]string{}).Maybe()
 
 	deps := &SecurityDeps{
-		HistorySyncService: historySyncService,
-		TechnicalService:   technicalService,
-		FormulaService:     &MockFormulaDiscoveryService{},
-		TagService:         &MockTagUpdateService{},
+		HistorySyncService:  historySyncService,
+		TechnicalService:    technicalService,
+		FormulaService:      &MockFormulaDiscoveryService{},
+		TagService:          &MockTagUpdateService{},
+		MetadataSyncService: &MockMetadataSyncService{},
 	}
 
 	RegisterSecurityWorkTypes(registry, deps)
@@ -215,10 +239,11 @@ func TestSecurityTechnical_Execute(t *testing.T) {
 func TestSecurityWorkTypes_MarketTiming(t *testing.T) {
 	registry := NewRegistry()
 	deps := &SecurityDeps{
-		HistorySyncService: &MockSecurityHistorySyncService{},
-		TechnicalService:   &MockTechnicalCalculationService{},
-		FormulaService:     &MockFormulaDiscoveryService{},
-		TagService:         &MockTagUpdateService{},
+		HistorySyncService:  &MockSecurityHistorySyncService{},
+		TechnicalService:    &MockTechnicalCalculationService{},
+		FormulaService:      &MockFormulaDiscoveryService{},
+		TagService:          &MockTagUpdateService{},
+		MetadataSyncService: &MockMetadataSyncService{},
 	}
 
 	RegisterSecurityWorkTypes(registry, deps)
@@ -234,10 +259,11 @@ func TestSecurityWorkTypes_MarketTiming(t *testing.T) {
 func TestSecurityWorkTypes_Interval(t *testing.T) {
 	registry := NewRegistry()
 	deps := &SecurityDeps{
-		HistorySyncService: &MockSecurityHistorySyncService{},
-		TechnicalService:   &MockTechnicalCalculationService{},
-		FormulaService:     &MockFormulaDiscoveryService{},
-		TagService:         &MockTagUpdateService{},
+		HistorySyncService:  &MockSecurityHistorySyncService{},
+		TechnicalService:    &MockTechnicalCalculationService{},
+		FormulaService:      &MockFormulaDiscoveryService{},
+		TagService:          &MockTagUpdateService{},
+		MetadataSyncService: &MockMetadataSyncService{},
 	}
 
 	RegisterSecurityWorkTypes(registry, deps)
@@ -261,4 +287,95 @@ func TestSecurityWorkTypes_Interval(t *testing.T) {
 	tagsWt := registry.Get("security:tags")
 	require.NotNil(t, tagsWt)
 	assert.Equal(t, 7*24*time.Hour, tagsWt.Interval)
+
+	// security:metadata should have 24h interval
+	metadataWt := registry.Get("security:metadata")
+	require.NotNil(t, metadataWt)
+	assert.Equal(t, 24*time.Hour, metadataWt.Interval)
+}
+
+func TestSecurityMetadata_Execute(t *testing.T) {
+	registry := NewRegistry()
+
+	metadataService := &MockMetadataSyncService{}
+	metadataService.On("SyncMetadata", "NL0010273215").Return(nil)
+	metadataService.On("GetAllActiveISINs").Return([]string{"NL0010273215"}).Maybe()
+
+	deps := &SecurityDeps{
+		HistorySyncService:  &MockSecurityHistorySyncService{},
+		TechnicalService:    &MockTechnicalCalculationService{},
+		FormulaService:      &MockFormulaDiscoveryService{},
+		TagService:          &MockTagUpdateService{},
+		MetadataSyncService: metadataService,
+	}
+
+	RegisterSecurityWorkTypes(registry, deps)
+
+	wt := registry.Get("security:metadata")
+	require.NotNil(t, wt)
+
+	// Execute with ISIN as subject
+	err := wt.Execute(context.Background(), "NL0010273215")
+	require.NoError(t, err)
+
+	metadataService.AssertCalled(t, "SyncMetadata", "NL0010273215")
+}
+
+func TestSecurityMetadata_FindSubjects(t *testing.T) {
+	registry := NewRegistry()
+
+	metadataService := &MockMetadataSyncService{}
+	metadataService.On("GetAllActiveISINs").Return([]string{"NL0010273215", "US0378331005", "IE00B4L5Y983"})
+
+	deps := &SecurityDeps{
+		HistorySyncService:  &MockSecurityHistorySyncService{},
+		TechnicalService:    &MockTechnicalCalculationService{},
+		FormulaService:      &MockFormulaDiscoveryService{},
+		TagService:          &MockTagUpdateService{},
+		MetadataSyncService: metadataService,
+	}
+
+	RegisterSecurityWorkTypes(registry, deps)
+
+	wt := registry.Get("security:metadata")
+	require.NotNil(t, wt)
+
+	subjects := wt.FindSubjects()
+	assert.ElementsMatch(t, []string{"NL0010273215", "US0378331005", "IE00B4L5Y983"}, subjects)
+}
+
+func TestSecurityMetadata_MarketTiming(t *testing.T) {
+	registry := NewRegistry()
+	deps := &SecurityDeps{
+		HistorySyncService:  &MockSecurityHistorySyncService{},
+		TechnicalService:    &MockTechnicalCalculationService{},
+		FormulaService:      &MockFormulaDiscoveryService{},
+		TagService:          &MockTagUpdateService{},
+		MetadataSyncService: &MockMetadataSyncService{},
+	}
+
+	RegisterSecurityWorkTypes(registry, deps)
+
+	// security:metadata should run AnyTime (not dependent on market hours)
+	metadataWt := registry.Get("security:metadata")
+	require.NotNil(t, metadataWt)
+	assert.Equal(t, AnyTime, metadataWt.MarketTiming)
+}
+
+func TestSecurityMetadata_NoDependencies(t *testing.T) {
+	registry := NewRegistry()
+	deps := &SecurityDeps{
+		HistorySyncService:  &MockSecurityHistorySyncService{},
+		TechnicalService:    &MockTechnicalCalculationService{},
+		FormulaService:      &MockFormulaDiscoveryService{},
+		TagService:          &MockTagUpdateService{},
+		MetadataSyncService: &MockMetadataSyncService{},
+	}
+
+	RegisterSecurityWorkTypes(registry, deps)
+
+	// security:metadata has no dependencies (can run independently)
+	metadataWt := registry.Get("security:metadata")
+	require.NotNil(t, metadataWt)
+	assert.Empty(t, metadataWt.DependsOn)
 }

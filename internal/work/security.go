@@ -30,12 +30,19 @@ type TagUpdateServiceInterface interface {
 	GetSecuritiesNeedingTagUpdate() []string
 }
 
+// MetadataSyncServiceInterface defines the metadata sync service interface
+type MetadataSyncServiceInterface interface {
+	SyncMetadata(isin string) error
+	GetAllActiveISINs() []string
+}
+
 // SecurityDeps contains all dependencies for security work types
 type SecurityDeps struct {
-	HistorySyncService SecurityHistorySyncServiceInterface
-	TechnicalService   TechnicalCalculationServiceInterface
-	FormulaService     FormulaDiscoveryServiceInterface
-	TagService         TagUpdateServiceInterface
+	HistorySyncService  SecurityHistorySyncServiceInterface
+	TechnicalService    TechnicalCalculationServiceInterface
+	FormulaService      FormulaDiscoveryServiceInterface
+	TagService          TagUpdateServiceInterface
+	MetadataSyncService MetadataSyncServiceInterface
 }
 
 // RegisterSecurityWorkTypes registers all per-security work types with the registry
@@ -117,6 +124,27 @@ func RegisterSecurityWorkTypes(registry *Registry, deps *SecurityDeps) {
 			err := deps.TagService.UpdateTags(subject)
 			if err != nil {
 				return fmt.Errorf("failed to update tags for %s: %w", subject, err)
+			}
+
+			return nil
+		},
+	})
+
+	// security:metadata - Sync Tradernet metadata for a security
+	// Syncs geography (from CntryOfRisk), industry (raw sector code), min_lot (from quotes.x_lot)
+	registry.Register(&WorkType{
+		ID:           "security:metadata",
+		Priority:     PriorityLow,
+		MarketTiming: AnyTime,
+		Interval:     24 * time.Hour, // Daily
+		FindSubjects: func() []string {
+			return deps.MetadataSyncService.GetAllActiveISINs()
+		},
+		Execute: func(ctx context.Context, subject string) error {
+
+			err := deps.MetadataSyncService.SyncMetadata(subject)
+			if err != nil {
+				return fmt.Errorf("failed to sync metadata for %s: %w", subject, err)
 			}
 
 			return nil
