@@ -167,29 +167,29 @@ func (a *ScoresRepositoryAdapter) GetCAGRs(isinList []string) (map[string]float6
 		return cagrs, nil
 	}
 
-	query := `
+	placeholders := strings.Repeat("?,", len(isinList))
+	placeholders = placeholders[:len(placeholders)-1]
+	query := fmt.Sprintf(`
 		SELECT isin, cagr_score
 		FROM scores
-		WHERE cagr_score IS NOT NULL AND cagr_score > 0
-	`
-	rows, err := a.db.Query(query)
+		WHERE isin IN (%s) AND cagr_score IS NOT NULL AND cagr_score > 0
+	`, placeholders)
+
+	args := make([]interface{}, len(isinList))
+	for i, isin := range isinList {
+		args[i] = isin
+	}
+
+	rows, err := a.db.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	isinSet := make(map[string]bool)
-	for _, isin := range isinList {
-		isinSet[isin] = true
-	}
-
 	for rows.Next() {
 		var isin string
 		var cagrScore sql.NullFloat64
 		if err := rows.Scan(&isin, &cagrScore); err != nil {
-			continue
-		}
-		if !isinSet[isin] {
 			continue
 		}
 		if cagrScore.Valid && cagrScore.Float64 > 0 {
@@ -209,25 +209,29 @@ func (a *ScoresRepositoryAdapter) GetQualityScores(isinList []string) (map[strin
 		return longTermScores, stabilityScores, nil
 	}
 
-	query := `SELECT isin, cagr_score, stability_score FROM scores WHERE isin != '' AND isin IS NOT NULL`
-	rows, err := a.db.Query(query)
+	placeholders := strings.Repeat("?,", len(isinList))
+	placeholders = placeholders[:len(placeholders)-1]
+	query := fmt.Sprintf(`
+		SELECT isin, cagr_score, stability_score
+		FROM scores
+		WHERE isin IN (%s)
+	`, placeholders)
+
+	args := make([]interface{}, len(isinList))
+	for i, isin := range isinList {
+		args[i] = isin
+	}
+
+	rows, err := a.db.Query(query, args...)
 	if err != nil {
 		return nil, nil, err
 	}
 	defer rows.Close()
 
-	isinSet := make(map[string]bool)
-	for _, isin := range isinList {
-		isinSet[isin] = true
-	}
-
 	for rows.Next() {
 		var isin string
 		var cagrScore, stabilityScore sql.NullFloat64
 		if err := rows.Scan(&isin, &cagrScore, &stabilityScore); err != nil {
-			continue
-		}
-		if !isinSet[isin] {
 			continue
 		}
 		if cagrScore.Valid {
