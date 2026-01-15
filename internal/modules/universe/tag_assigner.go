@@ -297,10 +297,10 @@ func (ta *TagAssigner) getPortfolioRiskThresholds() PortfolioRiskThresholds {
 		return ta.settingsService.GetAdjustedPortfolioRiskThresholds()
 	}
 	return PortfolioRiskThresholds{
-		OverweightDeviation:        0.02,
-		OverweightAbsolute:         0.10,
-		ConcentrationRiskThreshold: 0.15,
-		NeedsRebalanceDeviation:    0.03,
+		OverweightDeviation:        0.05,
+		OverweightAbsolute:         0.15,
+		ConcentrationRiskThreshold: 0.25,
+		NeedsRebalanceDeviation:    0.05,
 	}
 }
 

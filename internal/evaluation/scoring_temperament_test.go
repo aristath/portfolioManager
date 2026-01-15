@@ -34,10 +34,11 @@ func TestScoringParamsStruct(t *testing.T) {
 // TestEvaluationWeightsFromSettings verifies weights can be retrieved from settings
 func TestEvaluationWeightsFromSettings(t *testing.T) {
 	// Pure end-state scoring with 4 components
+	// Quality-first philosophy: diversification is guardrail, not driver
 	weights := settings.EvaluationWeights{
-		PortfolioQuality:         0.35,
-		DiversificationAlignment: 0.30,
-		RiskAdjustedMetrics:      0.25,
+		PortfolioQuality:         0.45, // Quality compounding dominates
+		DiversificationAlignment: 0.15, // Guardrail only
+		RiskAdjustedMetrics:      0.30, // Risk-aware
 		EndStateImprovement:      0.10,
 	}
 
@@ -57,10 +58,11 @@ func TestEvaluationWeightsFromSettings(t *testing.T) {
 
 // TestDefaultWeightsMatchConstants verifies default weights match the new pure end-state constants
 func TestDefaultWeightsMatchConstants(t *testing.T) {
-	// Current constants for pure end-state scoring
-	assert.Equal(t, 0.35, WeightPortfolioQuality)
-	assert.Equal(t, 0.30, WeightDiversificationAlignment)
-	assert.Equal(t, 0.25, WeightRiskAdjustedMetrics)
+	// Current constants for quality-first scoring
+	// Quality dominates, diversification is guardrail only
+	assert.Equal(t, 0.45, WeightPortfolioQuality)
+	assert.Equal(t, 0.15, WeightDiversificationAlignment)
+	assert.Equal(t, 0.30, WeightRiskAdjustedMetrics)
 	assert.Equal(t, 0.10, WeightEndStateImprovement)
 
 	// Sum should be 1.0
@@ -77,11 +79,11 @@ func TestScoringThresholdsMatchDefaults(t *testing.T) {
 
 // TestTemperamentScorerInterface verifies the scorer can be created with settings
 func TestTemperamentScorerInterface(t *testing.T) {
-	// Pure end-state weights
+	// Quality-first weights
 	weights := settings.EvaluationWeights{
-		PortfolioQuality:         0.35,
-		DiversificationAlignment: 0.30,
-		RiskAdjustedMetrics:      0.25,
+		PortfolioQuality:         0.45,
+		DiversificationAlignment: 0.15,
+		RiskAdjustedMetrics:      0.30,
 		EndStateImprovement:      0.10,
 	}
 

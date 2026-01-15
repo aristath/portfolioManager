@@ -480,6 +480,18 @@ func (c *OpportunityBuysCalculator) Calculate(
 			continue
 		}
 
+		// Concentration guardrail - block if would exceed limits
+		passes, concentrationReason := CheckConcentrationGuardrail(isin, security.Geography, valueEUR, ctx)
+		if !passes {
+			c.log.Debug().
+				Str("symbol", symbol).
+				Str("isin", isin).
+				Str("reason", concentrationReason).
+				Msg("Skipping: concentration limit exceeded")
+			exclusions.Add(isin, symbol, securityName, concentrationReason)
+			continue
+		}
+
 		// Apply transaction costs
 		transactionCost := ctx.TransactionCostFixed + (valueEUR * ctx.TransactionCostPercent)
 		totalCostEUR := valueEUR + transactionCost

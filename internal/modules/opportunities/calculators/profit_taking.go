@@ -214,6 +214,13 @@ func (c *ProfitTakingCalculator) Calculate(
 		// Calculate priority with tag-based boosting
 		priority := c.calculatePriority(gainPercent, isWindfall, securityTags, config)
 
+		// Concentration relief - boost priority for selling over-concentrated positions
+		// Uses threshold from shared ConcentrationThresholds (default 20%)
+		isOverconcentrated := position.WeightInPortfolio > GetMaxPositionWeight()
+		if isOverconcentrated {
+			priority *= 1.3 // Strong boost to relieve concentration
+		}
+
 		// Apply tag-based priority boosts (with regime-aware logic, sell calculator - no quantum penalty)
 		if config.EnableTagFiltering && len(securityTags) > 0 {
 			priority = ApplyTagBasedPriorityBoosts(priority, securityTags, "profit_taking", c.securityRepo)
@@ -237,6 +244,9 @@ func (c *ProfitTakingCalculator) Calculate(
 		if contains(securityTags, "overweight") {
 			reason += " [Overweight]"
 		}
+		if isOverconcentrated {
+			reason += " [Concentration Relief]"
+		}
 
 		// Build tags
 		tags := []string{"profit_taking"}
@@ -248,6 +258,9 @@ func (c *ProfitTakingCalculator) Calculate(
 		}
 		if contains(securityTags, "needs-rebalance") {
 			tags = append(tags, "rebalance")
+		}
+		if isOverconcentrated {
+			tags = append(tags, "concentration_relief")
 		}
 
 		candidate := domain.ActionCandidate{
@@ -313,14 +326,14 @@ func (c *ProfitTakingCalculator) calculatePriority(
 		priority *= 1.4
 	}
 
-	// Needs rebalance gets boost (optimizer alignment)
+	// Needs rebalance gets moderate boost (optimizer alignment)
 	if contains(securityTags, "needs-rebalance") {
-		priority *= 1.3
+		priority *= 1.15
 	}
 
-	// Overweight gets moderate boost
+	// Overweight gets smaller boost (diversification is guardrail, not driver)
 	if contains(securityTags, "overweight") || contains(securityTags, "concentration-risk") {
-		priority *= 1.2
+		priority *= 1.1
 	}
 
 	// Overvalued gets moderate boost

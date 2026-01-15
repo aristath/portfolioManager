@@ -365,10 +365,10 @@ func TestCalculateOptimizerAlignment_NoTargets(t *testing.T) {
 func TestGetRegimeAdaptiveWeights_NeutralMarket(t *testing.T) {
 	weights := GetRegimeAdaptiveWeights(0.0)
 
-	// Pure end-state scoring weights
-	assert.InDelta(t, WeightPortfolioQuality, weights["quality"], 0.01, "Quality should be 35% in neutral")
-	assert.InDelta(t, WeightDiversificationAlignment, weights["diversification"], 0.01, "Diversification should be 30% in neutral")
-	assert.InDelta(t, WeightRiskAdjustedMetrics, weights["risk"], 0.01, "Risk should be 25% in neutral")
+	// Quality-first scoring weights (diversification is guardrail, not driver)
+	assert.InDelta(t, WeightPortfolioQuality, weights["quality"], 0.01, "Quality should be 45% in neutral")
+	assert.InDelta(t, WeightDiversificationAlignment, weights["diversification"], 0.01, "Diversification should be 15% in neutral")
+	assert.InDelta(t, WeightRiskAdjustedMetrics, weights["risk"], 0.01, "Risk should be 30% in neutral")
 	assert.InDelta(t, WeightEndStateImprovement, weights["improvement"], 0.01, "Improvement should be 10% in neutral")
 }
 

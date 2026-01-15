@@ -235,10 +235,10 @@ func TestBoundaryValues(t *testing.T) {
 		expectedAtMax float64 // value=1.0
 		tolerance     float64
 	}{
-		// Category 1: Evaluation weights
+		// Category 1: Evaluation weights (quality-first philosophy)
 		{"evaluation_opportunity_weight", "aggression", 0.25, 0.30, 0.35, 0.01},
-		{"evaluation_quality_weight", "aggression", 0.28, 0.25, 0.22, 0.01},           // inverse
-		{"evaluation_risk_adjusted_weight", "risk_tolerance", 0.20, 0.15, 0.12, 0.01}, // inverse
+		{"evaluation_quality_weight", "aggression", 0.48, 0.45, 0.42, 0.01},           // inverse - quality dominates
+		{"evaluation_risk_adjusted_weight", "risk_tolerance", 0.33, 0.30, 0.27, 0.01}, // inverse
 
 		// Category 2: Profit taking
 		{"profit_taking_min_gain_threshold", "patience", 0.25, 0.15, 0.10, 0.02}, // inverse patience

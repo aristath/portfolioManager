@@ -15,30 +15,30 @@ import (
 // NOT on action characteristics like priority or count.
 //
 // Philosophy:
-// - Portfolio Quality (35%): Quality compounding over 15 years matters
-// - Diversification & Alignment (30%): Geographic, industry, optimizer alignment
-// - Risk-Adjusted Metrics (25%): Risk-AWARE not risk-AVERSE
+// - Portfolio Quality (45%): Quality compounding over 15 years dominates
+// - Risk-Adjusted Metrics (30%): Risk-AWARE not risk-AVERSE
+// - Diversification & Alignment (15%): Guardrail, not driver
 // - End-State Improvement (10%): Reward progress toward better portfolio
 
 const (
 	// Main evaluation component weights (must sum to 1.0)
 	// ALL components measure END STATE QUALITY, not action characteristics
-	WeightPortfolioQuality         = 0.35 // End state quality (total return, promise, stability)
-	WeightDiversificationAlignment = 0.30 // Geographic, industry, optimizer alignment
-	WeightRiskAdjustedMetrics      = 0.25 // Sharpe, volatility, drawdown
+	WeightPortfolioQuality         = 0.45 // End state quality (total return, promise, stability)
+	WeightDiversificationAlignment = 0.15 // Geographic, industry, optimizer alignment (guardrail)
+	WeightRiskAdjustedMetrics      = 0.30 // Sharpe, volatility, drawdown
 	WeightEndStateImprovement      = 0.10 // Improvement from start to end state
 
-	// Sub-weights for Portfolio Quality (35%)
+	// Sub-weights for Portfolio Quality (45%)
 	QualityWeightTotalReturn     = 0.40 // CAGR + Dividends
 	QualityWeightLongTermPromise = 0.35 // Consistency, financial strength
 	QualityWeightStability       = 0.25 // Low volatility, minimal drawdown
 
-	// Sub-weights for Diversification & Alignment (30%)
+	// Sub-weights for Diversification & Alignment (15%)
 	DiversificationWeightGeographic = 0.35 // Geographic allocation fit
 	DiversificationWeightIndustry   = 0.30 // Industry/sector allocation fit
 	DiversificationWeightOptimizer  = 0.35 // Optimizer target weight alignment
 
-	// Sub-weights for Risk-Adjusted Metrics (25%)
+	// Sub-weights for Risk-Adjusted Metrics (30%)
 	RiskWeightSharpe     = 0.40 // Risk-adjusted return (Sharpe)
 	RiskWeightVolatility = 0.35 // Portfolio volatility
 	RiskWeightDrawdown   = 0.25 // Maximum drawdown impact

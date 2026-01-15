@@ -48,12 +48,14 @@ func TestTagAssignerConfigDefaults(t *testing.T) {
 		"high volatility threshold should be 40%")
 
 	// Portfolio risk thresholds (from plan Category 20)
-	assert.Equal(t, 0.02, config.PortfolioRisk.OverweightDeviation,
-		"overweight deviation should be 2%")
-	assert.Equal(t, 0.10, config.PortfolioRisk.OverweightAbsolute,
-		"overweight absolute should be 10%")
-	assert.Equal(t, 0.15, config.PortfolioRisk.ConcentrationRiskThreshold,
-		"concentration risk threshold should be 15%")
+	// Updated: looser thresholds for quality-first approach
+	// Diversification is guardrail, not driver
+	assert.Equal(t, 0.05, config.PortfolioRisk.OverweightDeviation,
+		"overweight deviation should be 5%")
+	assert.Equal(t, 0.15, config.PortfolioRisk.OverweightAbsolute,
+		"overweight absolute should be 15%")
+	assert.Equal(t, 0.25, config.PortfolioRisk.ConcentrationRiskThreshold,
+		"concentration risk threshold should be 25%")
 
 	// Risk profile thresholds (from plan Category 21)
 	assert.Equal(t, 0.15, config.RiskProfile.LowRiskVolatilityMax,

@@ -149,10 +149,10 @@ func NewDefaultTagAssignerConfig() TagAssignerConfig {
 			HighDrawdownThreshold:    0.30, // Line 293: maxDrawdown > 30.0 (as decimal)
 		},
 		PortfolioRisk: settings.PortfolioRiskThresholds{
-			OverweightDeviation:        0.02, // Line 298: targetWeight+0.02
-			OverweightAbsolute:         0.10, // Line 298: positionWeight > 0.10
-			ConcentrationRiskThreshold: 0.15, // Line 302: positionWeight > 0.15
-			NeedsRebalanceDeviation:    0.03, // Line 312: deviation > 0.03
+			OverweightDeviation:        0.05, // Looser threshold for quality-first approach
+			OverweightAbsolute:         0.15, // Absolute overweight threshold
+			ConcentrationRiskThreshold: 0.25, // Looser concentration - diversification is guardrail
+			NeedsRebalanceDeviation:    0.05, // Looser rebalance trigger
 		},
 		RiskProfile: settings.RiskProfileThresholds{
 			LowRiskVolatilityMax:        0.15, // Line 320: volatility < 0.15

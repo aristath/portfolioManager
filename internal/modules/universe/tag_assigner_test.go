@@ -427,9 +427,9 @@ func TestTagAssigner_NeedsRebalance(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 	assigner := NewTagAssigner(log)
 
-	// Test case 1: Overweight by more than 3%
-	positionWeight1 := 0.15 // 15%
-	targetWeight1 := 0.10   // 10% (deviation = 5% > 3%)
+	// Test case 1: Overweight by more than 5% (looser threshold for quality-first approach)
+	positionWeight1 := 0.17 // 17%
+	targetWeight1 := 0.10   // 10% (deviation = 7% > 5%)
 
 	input1 := AssignTagsInput{
 		Symbol:         "TEST",
@@ -441,9 +441,9 @@ func TestTagAssigner_NeedsRebalance(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Contains(t, tags1, "needs-rebalance")
 
-	// Test case 2: Underweight by more than 3%
-	positionWeight2 := 0.05 // 5%
-	targetWeight2 := 0.10   // 10% (deviation = -5% < -3%)
+	// Test case 2: Underweight by more than 5%
+	positionWeight2 := 0.03 // 3%
+	targetWeight2 := 0.10   // 10% (deviation = -7% < -5%)
 
 	input2 := AssignTagsInput{
 		Symbol:         "TEST",

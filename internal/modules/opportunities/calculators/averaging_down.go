@@ -249,6 +249,24 @@ func (c *AveragingDownCalculator) Calculate(
 			}
 		}
 
+		// Concentration guardrail - check position level for adds
+		// Note: Geography concentration doesn't block adds to existing positions (handled in CheckConcentration)
+		// We need to estimate the add value before checking - use percentage-based estimate
+		estimatedAddValue := position.MarketValueEUR * avgDownPercent
+		if estimatedAddValue > maxValuePerPosition {
+			estimatedAddValue = maxValuePerPosition
+		}
+		passes, concentrationReason := CheckConcentrationGuardrail(isin, position.Geography, estimatedAddValue, ctx)
+		if !passes {
+			c.log.Debug().
+				Str("symbol", symbol).
+				Str("isin", isin).
+				Str("reason", concentrationReason).
+				Msg("Skipping: concentration limit exceeded")
+			exclusions.Add(isin, symbol, securityName, concentrationReason)
+			continue
+		}
+
 		// Calculate quantity based on Kelly-optimal sizing (primary) or percentage (fallback)
 		var quantity int
 

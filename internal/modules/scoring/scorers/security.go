@@ -25,7 +25,6 @@ type SecurityScorer struct {
 	dividend            *DividendScorer
 	stability           *StabilityScorer // Replaces StabilityScorer (internal data only)
 	shortTerm           *ShortTermScorer
-	diversification     *DiversificationScorer
 	adaptiveService     AdaptiveWeightsProvider               // Optional: adaptive market service
 	regimeScoreProvider RegimeScoreProvider                   // Optional: regime score provider
 	formulaStorage      *symbolic_regression.FormulaStorage   // Optional: discovered formula storage
@@ -60,7 +59,6 @@ func NewSecurityScorer() *SecurityScorer {
 		dividend:          NewDividendScorer(),
 		stability:         NewStabilityScorer(),
 		shortTerm:         NewShortTermScorer(),
-		diversification:   NewDiversificationScorer(), // Kept for optional portfolio-aware scoring
 		quantumCalculator: quantum.NewQuantumProbabilityCalculator(),
 	}
 }

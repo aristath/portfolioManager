@@ -8,10 +8,10 @@ package settings
 // These weights sum to 1.0 after normalization and control how different aspects
 // of the end portfolio state are weighted in the evaluation function.
 //
-// Pure end-state scoring philosophy:
-// - Portfolio Quality (35%): Total return, long-term promise, stability
-// - Diversification & Alignment (30%): Geographic, industry, optimizer alignment
-// - Risk-Adjusted Metrics (25%): Sharpe, volatility, drawdown
+// Quality-first end-state scoring philosophy:
+// - Portfolio Quality (45%): Total return, long-term promise, stability
+// - Risk-Adjusted Metrics (30%): Sharpe, volatility, drawdown
+// - Diversification & Alignment (15%): Guardrail, not driver
 // - End-State Improvement (10%): How much the portfolio improved vs start
 type EvaluationWeights struct {
 	PortfolioQuality         float64 // Weight for total return, long-term promise, stability
@@ -26,11 +26,11 @@ func (w EvaluationWeights) Normalize() EvaluationWeights {
 		w.RiskAdjustedMetrics + w.EndStateImprovement
 
 	if sum == 0 {
-		// Default weights for pure end-state scoring
+		// Default weights for pure end-state scoring (quality-first philosophy)
 		return EvaluationWeights{
-			PortfolioQuality:         0.35,
-			DiversificationAlignment: 0.30,
-			RiskAdjustedMetrics:      0.25,
+			PortfolioQuality:         0.45,
+			DiversificationAlignment: 0.15,
+			RiskAdjustedMetrics:      0.30,
 			EndStateImprovement:      0.10,
 		}
 	}
