@@ -10,7 +10,6 @@ import (
 	"github.com/aristath/sentinel/internal/database"
 	"github.com/aristath/sentinel/internal/deployment"
 	"github.com/aristath/sentinel/internal/domain"
-	"github.com/aristath/sentinel/internal/modules/calculations"
 	"github.com/aristath/sentinel/internal/modules/cleanup"
 	"github.com/aristath/sentinel/internal/modules/display"
 	"github.com/aristath/sentinel/internal/modules/symbolic_regression"
@@ -83,15 +82,8 @@ func RegisterJobs(container *Container, cfg *config.Config, displayManager *disp
 	container.JobRegistry.Register(queue.JobTypeTagUpdate, queue.JobToHandler(tagUpdateJob))
 	instances.TagUpdate = tagUpdateJob
 
-	// Wire TagProcessor into IdleProcessor now that TagUpdateJob is available
-	// TagUpdateJob implements calculations.TagUpdateService interface
-	tagProcessor := calculations.NewDefaultTagProcessor(
-		tagUpdateJob,
-		scheduler.GetTagsNeedingUpdate, // Use the scheduler's tag frequency checker
-		log,
-	)
-	container.IdleProcessor.SetTagProcessor(tagProcessor)
-	log.Info().Msg("Tag processor wired to idle processor")
+	// Note: TagProcessor for work processor is handled in work.go security work types
+	// The TagUpdateJob is still used for scheduled tag updates via queue system
 
 	// ==========================================
 	// RELIABILITY JOBS
@@ -568,22 +560,20 @@ func RegisterJobs(container *Container, cfg *config.Config, displayManager *disp
 	log.Info().Msg("Tradernet metadata sync job registered")
 
 	// ==========================================
-	// Configure Worker Pool
+	// Configure Worker Pool (for manual job triggering only)
 	// ==========================================
 	// Set event manager for job status broadcasting
 	container.WorkerPool.SetEventManager(container.EventManager)
 
-	// ==========================================
-	// Start Queue System
-	// ==========================================
-	container.WorkerPool.Start()
-	container.TimeScheduler.Start()
+	// NOTE: The old queue system (WorkerPool, TimeScheduler) is NO LONGER started automatically.
+	// Automatic work is now handled by the Work Processor (see work.go).
+	// The jobs remain registered for backward-compatible manual triggering via UI.
 
 	jobCount := 38
 	if deploymentManager != nil {
 		jobCount = 38 // Include deployment job
 	}
-	log.Info().Int("jobs", jobCount).Msg("Jobs registered with queue system")
+	log.Info().Int("jobs", jobCount).Msg("Jobs registered (manual triggering only, automatic work handled by Work Processor)")
 
 	return instances, nil
 }

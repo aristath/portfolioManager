@@ -15,7 +15,8 @@ import (
 // 1. Initialize databases
 // 2. Initialize repositories
 // 3. Initialize services
-// 4. Register jobs
+// 4. Initialize work processor
+// 5. Register jobs (legacy - being phased out)
 // deploymentManager is optional (can be nil if deployment is disabled)
 func Wire(cfg *config.Config, log zerolog.Logger, displayManager *display.StateManager, deploymentManager interface{}) (*Container, *JobInstances, error) {
 	// Step 1: Initialize databases
@@ -50,7 +51,22 @@ func Wire(cfg *config.Config, log zerolog.Logger, displayManager *display.StateM
 		return nil, nil, fmt.Errorf("failed to initialize services: %w", err)
 	}
 
-	// Step 4: Register jobs (pass deployment manager if available)
+	// Step 4: Initialize work processor (replaces queue-based jobs)
+	workComponents, err := InitializeWork(container, log)
+	if err != nil {
+		// Cleanup on error
+		container.UniverseDB.Close()
+		container.ConfigDB.Close()
+		container.LedgerDB.Close()
+		container.PortfolioDB.Close()
+		container.HistoryDB.Close()
+		container.CacheDB.Close()
+		container.ClientDataDB.Close()
+		return nil, nil, fmt.Errorf("failed to initialize work processor: %w", err)
+	}
+	container.WorkComponents = workComponents
+
+	// Step 5: Register jobs (pass deployment manager if available)
 	jobs, err := RegisterJobs(container, cfg, displayManager, deploymentManager, log)
 	if err != nil {
 		// Cleanup on error

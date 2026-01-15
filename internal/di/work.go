@@ -3,12 +3,17 @@ package di
 
 import (
 	"context"
+	"fmt"
 	"time"
 
+	"github.com/aristath/sentinel/internal/database"
+	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/events"
 	planningdomain "github.com/aristath/sentinel/internal/modules/planning/domain"
+	planninghash "github.com/aristath/sentinel/internal/modules/planning/hash"
 	"github.com/aristath/sentinel/internal/modules/trading"
 	"github.com/aristath/sentinel/internal/modules/universe"
+	"github.com/aristath/sentinel/internal/scheduler"
 	"github.com/aristath/sentinel/internal/work"
 	"github.com/rs/zerolog"
 )
@@ -141,17 +146,79 @@ func (c *workCache) DeletePrefix(prefix string) {
 	}
 }
 
+// workBrokerPriceAdapter adapts domain.BrokerClient to scheduler.BrokerClientForPrices interface
+type workBrokerPriceAdapter struct {
+	client domain.BrokerClient
+}
+
+func (a *workBrokerPriceAdapter) GetBatchQuotes(symbolMap map[string]*string) (map[string]*float64, error) {
+	if a.client == nil {
+		return nil, fmt.Errorf("broker client not available")
+	}
+
+	// Extract symbols from map
+	symbols := make([]string, 0, len(symbolMap))
+	for symbol := range symbolMap {
+		symbols = append(symbols, symbol)
+	}
+
+	// Get quotes from broker
+	quotes, err := a.client.GetQuotes(symbols)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get broker quotes: %w", err)
+	}
+
+	// Convert to price map
+	prices := make(map[string]*float64)
+	for symbol, quote := range quotes {
+		if quote != nil && quote.Price > 0 {
+			price := quote.Price
+			prices[symbol] = &price
+		}
+	}
+
+	return prices, nil
+}
+
 // Planner adapters - wrap existing planner jobs
 type plannerOptimizerAdapter struct {
 	container *Container
 	cache     *workCache
+	log       zerolog.Logger
 }
 
 func (a *plannerOptimizerAdapter) CalculateWeights() (map[string]float64, error) {
-	// The weights calculation is complex and handled by the existing OpportunityContextBuilder
-	// which populates TargetWeights in the context. Return empty map as placeholder.
-	// The actual weights will be fetched from the context when needed.
-	return make(map[string]float64), nil
+	// Create adapters for the optimizer weights job
+	positionAdapter := scheduler.NewPositionRepositoryAdapter(a.container.PositionRepo)
+	securityAdapter := scheduler.NewSecurityRepositoryAdapter(a.container.SecurityRepo)
+	allocAdapter := scheduler.NewAllocationRepositoryAdapter(a.container.AllocRepo)
+	priceAdapter := scheduler.NewPriceClientAdapter(&workBrokerPriceAdapter{client: a.container.BrokerClient})
+	optimizerAdapter := scheduler.NewOptimizerServiceAdapter(a.container.OptimizerService)
+	priceConversionAdapter := scheduler.NewPriceConversionServiceAdapter(a.container.PriceConversionService)
+	plannerConfigAdapter := scheduler.NewPlannerConfigRepositoryAdapter(a.container.PlannerConfigRepo)
+	clientDataAdapter := scheduler.NewClientDataRepositoryAdapter(a.container.ClientDataRepo)
+	marketHoursAdapter := scheduler.NewMarketHoursServiceAdapter(a.container.MarketHoursService)
+
+	// Create and run the optimizer weights job
+	job := scheduler.NewGetOptimizerWeightsJob(
+		positionAdapter,
+		securityAdapter,
+		allocAdapter,
+		a.container.CashManager,
+		priceAdapter,
+		optimizerAdapter,
+		priceConversionAdapter,
+		plannerConfigAdapter,
+		clientDataAdapter,
+		marketHoursAdapter,
+	)
+	job.SetLogger(a.log)
+
+	if err := job.Run(); err != nil {
+		return nil, err
+	}
+
+	return job.GetTargetWeights(), nil
 }
 
 type plannerContextBuilderAdapter struct {
@@ -195,12 +262,81 @@ func (a *plannerServiceAdapter) CreatePlan(ctx interface{}) (interface{}, error)
 
 type plannerRecommendationRepoAdapter struct {
 	container *Container
+	log       zerolog.Logger
 }
 
 func (a *plannerRecommendationRepoAdapter) Store(recommendations interface{}) error {
-	// Store using the recommendation repo
-	// The actual store logic is handled by the planning service
+	// Type assert the plan to HolisticPlan
+	plan, ok := recommendations.(*planningdomain.HolisticPlan)
+	if !ok {
+		return fmt.Errorf("invalid plan type: expected *HolisticPlan")
+	}
+
+	// Generate portfolio hash for tracking using the hash package
+	portfolioHash := a.generatePortfolioHash()
+
+	// Store the plan using the recommendation repository
+	err := a.container.RecommendationRepo.StorePlan(plan, portfolioHash)
+	if err != nil {
+		return fmt.Errorf("failed to store plan: %w", err)
+	}
+
+	a.log.Info().
+		Str("portfolio_hash", portfolioHash).
+		Int("steps", len(plan.Steps)).
+		Msg("Successfully stored recommendations")
+
 	return nil
+}
+
+func (a *plannerRecommendationRepoAdapter) generatePortfolioHash() string {
+	// Get positions
+	positions, err := a.container.PositionRepo.GetAll()
+	if err != nil {
+		a.log.Warn().Err(err).Msg("Failed to get positions for hash")
+		return ""
+	}
+
+	// Get securities
+	securities, err := a.container.SecurityRepo.GetAllActive()
+	if err != nil {
+		a.log.Warn().Err(err).Msg("Failed to get securities for hash")
+		return ""
+	}
+
+	// Get cash balances
+	cashBalances := make(map[string]float64)
+	if a.container.CashManager != nil {
+		balances, err := a.container.CashManager.GetAllCashBalances()
+		if err != nil {
+			a.log.Warn().Err(err).Msg("Failed to get cash balances for hash")
+		} else {
+			cashBalances = balances
+		}
+	}
+
+	// Convert to hash format
+	hashPositions := make([]planninghash.Position, 0, len(positions))
+	for _, pos := range positions {
+		hashPositions = append(hashPositions, planninghash.Position{
+			Symbol:   pos.Symbol,
+			Quantity: int(pos.Quantity),
+		})
+	}
+
+	hashSecurities := make([]*universe.Security, 0, len(securities))
+	for i := range securities {
+		hashSecurities = append(hashSecurities, &securities[i])
+	}
+
+	pendingOrders := []planninghash.PendingOrder{}
+
+	return planninghash.GeneratePortfolioHash(
+		hashPositions,
+		hashSecurities,
+		cashBalances,
+		pendingOrders,
+	)
 }
 
 type plannerEventManagerAdapter struct {
@@ -214,10 +350,10 @@ func (a *plannerEventManagerAdapter) Emit(event string, data interface{}) {
 func registerPlannerWork(registry *work.Registry, container *Container, cache *workCache, log zerolog.Logger) {
 	deps := &work.PlannerDeps{
 		Cache:              cache,
-		OptimizerService:   &plannerOptimizerAdapter{container: container, cache: cache},
+		OptimizerService:   &plannerOptimizerAdapter{container: container, cache: cache, log: log},
 		ContextBuilder:     &plannerContextBuilderAdapter{container: container},
 		PlannerService:     &plannerServiceAdapter{container: container, cache: cache},
-		RecommendationRepo: &plannerRecommendationRepoAdapter{container: container},
+		RecommendationRepo: &plannerRecommendationRepoAdapter{container: container, log: log},
 		EventManager:       &plannerEventManagerAdapter{container: container},
 	}
 
@@ -348,10 +484,52 @@ func (a *maintenanceR2BackupAdapter) RotateBackups() error {
 
 type maintenanceVacuumAdapter struct {
 	container *Container
+	log       zerolog.Logger
 }
 
 func (a *maintenanceVacuumAdapter) VacuumDatabases() error {
-	// Vacuum each database - placeholder for now
+	// Vacuum ephemeral databases: cache, history, portfolio (following WeeklyMaintenanceJob pattern)
+	// Ledger is append-only and should not be vacuumed
+	dbs := []struct {
+		name string
+		db   *database.DB
+	}{
+		{"cache", a.container.CacheDB},
+		{"history", a.container.HistoryDB},
+		{"portfolio", a.container.PortfolioDB},
+	}
+
+	for _, dbInfo := range dbs {
+		if dbInfo.db == nil {
+			continue
+		}
+
+		// Get size before vacuum
+		var pageCount, pageSize int
+		dbInfo.db.Conn().QueryRow("PRAGMA page_count").Scan(&pageCount)
+		dbInfo.db.Conn().QueryRow("PRAGMA page_size").Scan(&pageSize)
+		sizeBefore := float64(pageCount*pageSize) / 1024 / 1024
+
+		// Run VACUUM
+		_, err := dbInfo.db.Conn().Exec("VACUUM")
+		if err != nil {
+			a.log.Error().Err(err).Str("database", dbInfo.name).Msg("VACUUM failed")
+			continue // Don't fail the entire operation
+		}
+
+		// Get size after vacuum
+		dbInfo.db.Conn().QueryRow("PRAGMA page_count").Scan(&pageCount)
+		sizeAfter := float64(pageCount*pageSize) / 1024 / 1024
+		spaceReclaimed := sizeBefore - sizeAfter
+
+		a.log.Info().
+			Str("database", dbInfo.name).
+			Float64("size_before_mb", sizeBefore).
+			Float64("size_after_mb", sizeAfter).
+			Float64("space_reclaimed_mb", spaceReclaimed).
+			Msg("VACUUM completed")
+	}
+
 	return nil
 }
 
@@ -371,15 +549,33 @@ func (a *maintenanceHealthAdapter) RunHealthChecks() error {
 
 type maintenanceCleanupAdapter struct {
 	container *Container
+	log       zerolog.Logger
 }
 
 func (a *maintenanceCleanupAdapter) CleanupHistory() error {
-	// History cleanup - placeholder for now
+	// History database cleanup: run WAL checkpoint to prevent bloat
+	// Full history deletion is not implemented as we want to preserve historical data
+	if a.container.HistoryDB != nil {
+		_, err := a.container.HistoryDB.Conn().Exec("PRAGMA wal_checkpoint(TRUNCATE)")
+		if err != nil {
+			a.log.Warn().Err(err).Msg("History WAL checkpoint failed")
+		} else {
+			a.log.Debug().Msg("History WAL checkpoint completed")
+		}
+	}
 	return nil
 }
 
 func (a *maintenanceCleanupAdapter) CleanupCache() error {
-	// Cache cleanup - placeholder for now
+	// Cache database cleanup: run WAL checkpoint to prevent bloat
+	if a.container.CacheDB != nil {
+		_, err := a.container.CacheDB.Conn().Exec("PRAGMA wal_checkpoint(TRUNCATE)")
+		if err != nil {
+			a.log.Warn().Err(err).Msg("Cache WAL checkpoint failed")
+		} else {
+			a.log.Debug().Msg("Cache WAL checkpoint completed")
+		}
+	}
 	return nil
 }
 
@@ -398,9 +594,9 @@ func registerMaintenanceWork(registry *work.Registry, container *Container, log 
 	deps := &work.MaintenanceDeps{
 		BackupService:      &maintenanceBackupAdapter{container: container},
 		R2BackupService:    &maintenanceR2BackupAdapter{container: container},
-		VacuumService:      &maintenanceVacuumAdapter{container: container},
+		VacuumService:      &maintenanceVacuumAdapter{container: container, log: log},
 		HealthCheckService: &maintenanceHealthAdapter{container: container},
-		CleanupService:     &maintenanceCleanupAdapter{container: container},
+		CleanupService:     &maintenanceCleanupAdapter{container: container, log: log},
 	}
 
 	work.RegisterMaintenanceWorkTypes(registry, deps)

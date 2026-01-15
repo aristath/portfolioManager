@@ -200,6 +200,12 @@ func main() {
 	container.StateMonitor.Start()
 	log.Info().Msg("State monitor started (checking every minute)")
 
+	// Start work processor (event-driven background job system)
+	if container.WorkComponents != nil && container.WorkComponents.Processor != nil {
+		go container.WorkComponents.Processor.Run()
+		log.Info().Msg("Work processor started")
+	}
+
 	// Start LED status monitors
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -232,21 +238,14 @@ func main() {
 		log.Info().Msg("State monitor stopped")
 	}
 
-	// Stop idle processor
-	if container.IdleProcessor != nil {
-		container.IdleProcessor.Stop()
-		log.Info().Msg("Idle processor stopped")
+	// Stop work processor
+	if container.WorkComponents != nil && container.WorkComponents.Processor != nil {
+		container.WorkComponents.Processor.Stop()
+		log.Info().Msg("Work processor stopped")
 	}
 
-	// Stop queue system components
-	if container.TimeScheduler != nil {
-		container.TimeScheduler.Stop()
-		log.Info().Msg("Time scheduler stopped")
-	}
-	if container.WorkerPool != nil {
-		container.WorkerPool.Stop()
-		log.Info().Msg("Worker pool stopped")
-	}
+	// NOTE: Old queue system (TimeScheduler, WorkerPool) is no longer started,
+	// so we don't need to stop it. The Work Processor handles all automatic work.
 
 	// Stop WebSocket client
 	if container.MarketStatusWS != nil {

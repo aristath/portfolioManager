@@ -837,115 +837,12 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	}
 
 	// ==========================================
-	// STEP 15: Initialize Idle Processor
-	// ==========================================
-
-	// Create adapters for idle processor dependencies
-	securityProviderAdapter := &idleSecurityProviderAdapter{repo: container.SecurityRepo}
-	priceProviderAdapter := &idlePriceProviderAdapter{historyDB: container.HistoryDBClient}
-	syncProcessor := calculations.NewDefaultSyncProcessor(container.SyncService, log)
-
-	// Create event emitter adapter for idle processor visibility in Activity UI
-	idleEventEmitter := &idleEventEmitterAdapter{eventManager: container.EventManager}
-
-	// Create idle processor (tag processor not yet wired - will be added via job registration)
-	container.IdleProcessor = calculations.NewIdleProcessor(calculations.IdleProcessorDeps{
-		Cache:            container.CalculationCache,
-		Queue:            container.QueueManager,
-		SecurityProvider: securityProviderAdapter,
-		PriceProvider:    priceProviderAdapter,
-		SyncProcessor:    syncProcessor,
-		TagProcessor:     nil, // Will be wired later via TagUpdateJob
-		EventEmitter:     idleEventEmitter,
-		Log:              log,
-	})
-
-	// Start idle processor
-	container.IdleProcessor.Start()
-	log.Info().Msg("Idle processor started")
+	// Note: IdleProcessor has been replaced by the Work Processor
+	// See InitializeWork() in work.go for the new event-driven job system
 
 	log.Info().Msg("All services initialized")
 
 	return nil
-}
-
-// idleSecurityProviderAdapter adapts universe.SecurityRepository to calculations.SecurityProvider
-type idleSecurityProviderAdapter struct {
-	repo *universe.SecurityRepository
-}
-
-func (a *idleSecurityProviderAdapter) GetActiveSecurities() ([]calculations.SecurityInfo, error) {
-	securities, err := a.repo.GetAllActive()
-	if err != nil {
-		return nil, err
-	}
-
-	result := make([]calculations.SecurityInfo, len(securities))
-	for i, sec := range securities {
-		result[i] = calculations.SecurityInfo{
-			ISIN:       sec.ISIN,
-			Symbol:     sec.Symbol,
-			LastSynced: sec.LastSynced,
-		}
-	}
-	return result, nil
-}
-
-// idlePriceProviderAdapter adapts universe.HistoryDBInterface to calculations.PriceProvider
-type idlePriceProviderAdapter struct {
-	historyDB universe.HistoryDBInterface
-}
-
-func (a *idlePriceProviderAdapter) GetDailyPrices(isin string, days int) ([]float64, error) {
-	prices, err := a.historyDB.GetDailyPrices(isin, days)
-	if err != nil {
-		return nil, err
-	}
-
-	// Extract close prices
-	result := make([]float64, len(prices))
-	for i, p := range prices {
-		result[i] = p.Close
-	}
-	return result, nil
-}
-
-// idleEventEmitterAdapter adapts events.Manager to calculations.JobEventEmitter
-// for Activity UI visibility of idle processor work
-type idleEventEmitterAdapter struct {
-	eventManager *events.Manager
-}
-
-func (a *idleEventEmitterAdapter) EmitJobStarted(jobType, jobID, description string) {
-	a.eventManager.EmitTyped(events.JobStarted, "idle_processor", &events.JobStatusData{
-		JobID:       jobID,
-		JobType:     jobType,
-		Status:      "started",
-		Description: description,
-	})
-}
-
-func (a *idleEventEmitterAdapter) EmitJobCompleted(jobType, jobID, description string) {
-	a.eventManager.EmitTyped(events.JobCompleted, "idle_processor", &events.JobStatusData{
-		JobID:       jobID,
-		JobType:     jobType,
-		Status:      "completed",
-		Description: description,
-	})
-}
-
-func (a *idleEventEmitterAdapter) EmitJobFailed(jobType, jobID, description string, err error) {
-	errStr := ""
-	if err != nil {
-		errStr = err.Error()
-	}
-	a.eventManager.EmitTyped(events.JobFailed, "idle_processor", &events.JobStatusData{
-		JobID:       jobID,
-		JobType:     jobType,
-		Status:      "failed",
-		Description: description,
-		Error:       errStr,
-	})
 }
 
 // qualityGatesAdapter adapts adaptation.AdaptiveMarketService to universe.AdaptiveQualityGatesProvider

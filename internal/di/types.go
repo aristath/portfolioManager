@@ -143,7 +143,9 @@ type Container struct {
 	QuantumCalculator         *quantum.QuantumProbabilityCalculator
 	OpportunityContextBuilder *services.OpportunityContextBuilder
 	CalculationCache          *calculations.Cache
-	IdleProcessor             *calculations.IdleProcessor
+
+	// Work Processor (replaces IdleProcessor and queue-based jobs)
+	WorkComponents *WorkComponents
 
 	// Handlers (will be populated in handlers.go)
 	// Note: Handlers are created per-route, so we don't store them in container

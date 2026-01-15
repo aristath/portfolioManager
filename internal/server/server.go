@@ -655,6 +655,11 @@ func (s *Server) setupRoutes() {
 		// Quantum module (API extension)
 		quantumHandler := s.createQuantumHandler()
 		quantumHandler.RegisterRoutes(r)
+
+		// Work processor routes (manual triggering, status)
+		if s.container.WorkComponents != nil && s.container.WorkComponents.Handlers != nil {
+			s.container.WorkComponents.Handlers.RegisterRoutes(r)
+		}
 	})
 
 	// Evaluation module routes
