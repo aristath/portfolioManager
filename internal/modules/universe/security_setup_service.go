@@ -185,8 +185,9 @@ func (s *SecuritySetupService) CreateSecurity(
 // 3. Fetches metadata from Tradernet (country, exchange, industry)
 // 4. Creates the security in the database
 // 5. Publishes SecurityAdded event
-// 6. Fetches historical price data (10 years initial seed)
-// 7. Calculates and saves the initial security score
+//
+// Historical data sync and score calculation are handled asynchronously by the
+// idle processor, which detects securities with last_synced = NULL.
 func (s *SecuritySetupService) AddSecurityByIdentifier(
 	identifier string,
 	minLot int,
@@ -388,37 +389,9 @@ func (s *SecuritySetupService) AddSecurityByIdentifier(
 		})
 	}
 
-	// Step 6: Fetch historical data (10 years initial seed)
-	// Non-fatal - continue if this fails
-	if s.historicalSync != nil {
-		err = s.historicalSync.SyncHistoricalPrices(security.Symbol)
-		if err != nil {
-			s.log.Warn().
-				Err(err).
-				Str("symbol", security.Symbol).
-				Msg("Failed to fetch historical data - continuing anyway")
-		} else {
-			s.log.Info().Str("symbol", security.Symbol).Msg("Fetched historical data")
-		}
-	}
-
-	// Step 7: Calculate initial score
-	// Non-fatal - continue if this fails
-	if s.scoreCalculator != nil {
-		err = s.scoreCalculator.CalculateAndSaveScore(
-			security.Symbol,
-			security.Geography,
-			security.Industry,
-		)
-		if err != nil {
-			s.log.Warn().
-				Err(err).
-				Str("symbol", security.Symbol).
-				Msg("Failed to calculate initial score - continuing anyway")
-		} else {
-			s.log.Info().Str("symbol", security.Symbol).Msg("Calculated initial score")
-		}
-	}
+	// Historical data sync and score calculation are handled asynchronously
+	// by the idle processor, which detects securities with last_synced = NULL.
+	// This allows the API to return immediately instead of blocking for 20+ seconds.
 
 	s.log.Info().
 		Str("symbol", security.Symbol).
