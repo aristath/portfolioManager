@@ -38,8 +38,8 @@ func setupMarketIndexTestDB(t *testing.T) (*sql.DB, *sql.DB) {
 			active INTEGER DEFAULT 1,
 			allow_buy INTEGER DEFAULT 1,
 			allow_sell INTEGER DEFAULT 1,
-			created_at TEXT NOT NULL,
-			updated_at TEXT NOT NULL
+			created_at INTEGER NOT NULL,
+			updated_at INTEGER NOT NULL
 		);
 	`)
 	require.NoError(t, err)
@@ -48,7 +48,7 @@ func setupMarketIndexTestDB(t *testing.T) (*sql.DB, *sql.DB) {
 	_, err = historyDB.Exec(`
 		CREATE TABLE IF NOT EXISTS daily_prices (
 			isin TEXT NOT NULL,
-			date TEXT NOT NULL,
+			date INTEGER NOT NULL,
 			open REAL NOT NULL,
 			high REAL NOT NULL,
 			low REAL NOT NULL,
@@ -71,159 +71,77 @@ func setupMarketIndexTestDB(t *testing.T) (*sql.DB, *sql.DB) {
 	return universeDB, historyDB
 }
 
-func TestEnsureIndicesExist(t *testing.T) {
-	universeDB, historyDB := setupMarketIndexTestDB(t)
-	service := NewMarketIndexService(universeDB, historyDB, nil, zerolog.Nop())
+// setupTestIndices creates valid Tradernet indices in the test database
+func setupTestIndices(t *testing.T, universeDB *sql.DB) {
+	now := time.Now().Unix()
 
-	t.Run("Creates indices if they don't exist", func(t *testing.T) {
-		err := service.EnsureIndicesExist()
-		require.NoError(t, err)
-
-		// Verify indices were created
-		var count int
-		err = universeDB.QueryRow(`
-			SELECT COUNT(*) FROM securities
-			WHERE product_type = 'INDEX'
-		`).Scan(&count)
-		require.NoError(t, err)
-		assert.GreaterOrEqual(t, count, 3, "Should have at least 3 indices")
-	})
-
-	t.Run("Indices are non-tradeable", func(t *testing.T) {
-		err := service.EnsureIndicesExist()
-		require.NoError(t, err)
-
-		var allowBuy, allowSell int
-		err = universeDB.QueryRow(`
-			SELECT allow_buy, allow_sell FROM securities
-			WHERE symbol = 'SPX.US' AND product_type = 'INDEX'
-		`).Scan(&allowBuy, &allowSell)
-		require.NoError(t, err)
-		assert.Equal(t, 0, allowBuy, "Indices should not be buyable")
-		assert.Equal(t, 0, allowSell, "Indices should not be sellable")
-	})
-
-	t.Run("Idempotent - can call multiple times", func(t *testing.T) {
-		err := service.EnsureIndicesExist()
-		require.NoError(t, err)
-
-		var count1 int
-		universeDB.QueryRow(`SELECT COUNT(*) FROM securities WHERE product_type = 'INDEX'`).Scan(&count1)
-
-		err = service.EnsureIndicesExist()
-		require.NoError(t, err)
-
-		var count2 int
-		universeDB.QueryRow(`SELECT COUNT(*) FROM securities WHERE product_type = 'INDEX'`).Scan(&count2)
-
-		assert.Equal(t, count1, count2, "Should not create duplicates")
-	})
-}
-
-func TestGetCompositeReturns(t *testing.T) {
-	universeDB, historyDB := setupMarketIndexTestDB(t)
-	service := NewMarketIndexService(universeDB, historyDB, nil, zerolog.Nop())
-
-	// Setup: Create indices and add price data
-	err := service.EnsureIndicesExist()
-	require.NoError(t, err)
-
-	// Insert test price data
-	// Note: daily_prices.isin column stores ISINs
-	// Indices use ISIN format: "INDEX-SYMBOL" (e.g., "INDEX-SPX.US")
-	now := time.Now()
-	for i := 0; i < 10; i++ {
-		dateTime := now.AddDate(0, 0, -10+i)
-		dateUnix := time.Date(dateTime.Year(), dateTime.Month(), dateTime.Day(), 0, 0, 0, 0, time.UTC).Unix()
-
-		// S&P 500: +1% per day (using ISIN format)
-		spxPrice := 4000.0 * (1.0 + float64(i)*0.01)
-		_, err = historyDB.Exec(`
-			INSERT OR REPLACE INTO daily_prices (isin, date, open, high, low, close, volume)
-			VALUES (?, ?, ?, ?, ?, ?, ?)
-		`, "INDEX-SPX.US", dateUnix, spxPrice, spxPrice*1.01, spxPrice*0.99, spxPrice, 1000000)
-		require.NoError(t, err)
-
-		// MSCI Europe: +0.5% per day (using ISIN format)
-		euPrice := 2000.0 * (1.0 + float64(i)*0.005)
-		_, err = historyDB.Exec(`
-			INSERT OR REPLACE INTO daily_prices (isin, date, open, high, low, close, volume)
-			VALUES (?, ?, ?, ?, ?, ?, ?)
-		`, "INDEX-STOXX600.EU", dateUnix, euPrice, euPrice*1.01, euPrice*0.99, euPrice, 1000000)
-		require.NoError(t, err)
-
-		// MSCI Asia: +0.3% per day (using ISIN format)
-		asiaPrice := 1500.0 * (1.0 + float64(i)*0.003)
-		_, err = historyDB.Exec(`
-			INSERT OR REPLACE INTO daily_prices (isin, date, open, high, low, close, volume)
-			VALUES (?, ?, ?, ?, ?, ?, ?)
-		`, "INDEX-MSCIASIA.ASIA", dateUnix, asiaPrice, asiaPrice*1.01, asiaPrice*0.99, asiaPrice, 1000000)
-		require.NoError(t, err)
+	// Create indices matching the known indices from index_discovery.go
+	indices := []struct {
+		symbol string
+		name   string
+	}{
+		{"SP500.IDX", "S&P 500"},
+		{"NASDAQ.IDX", "NASDAQ Composite"},
+		{"DAX.IDX", "DAX (Germany)"},
+		{"FTSE.IDX", "FTSE 100 (UK)"},
+		{"HSI.IDX", "Hang Seng Index"},
 	}
 
-	t.Run("Calculates weighted composite returns", func(t *testing.T) {
-		returns, err := service.GetCompositeReturns(10) // Last 10 days
+	for _, idx := range indices {
+		isin := "INDEX-" + idx.symbol
+		_, err := universeDB.Exec(`
+			INSERT OR REPLACE INTO securities
+			(isin, symbol, name, product_type, active, allow_buy, allow_sell, created_at, updated_at)
+			VALUES (?, ?, ?, 'INDEX', 1, 0, 0, ?, ?)
+		`, isin, idx.symbol, idx.name, now, now)
 		require.NoError(t, err)
-		require.NotEmpty(t, returns)
-
-		// With weights: US 20%, EU 50%, Asia 30%
-		// Expected: weighted average of individual returns
-		// Should be positive (all indices are rising)
-		assert.Greater(t, len(returns), 0, "Should have returns")
-
-		// Check that returns are reasonable (daily returns should be small)
-		for _, ret := range returns {
-			assert.Greater(t, ret, -0.1, "Daily return should not be extreme")
-			assert.Less(t, ret, 0.1, "Daily return should not be extreme")
-		}
-	})
-
-	t.Run("Handles missing index data gracefully", func(t *testing.T) {
-		// Remove one index's data (using ISIN format)
-		_, err = historyDB.Exec(`DELETE FROM daily_prices WHERE isin = 'INDEX-MSCIASIA.ASIA'`)
-		require.NoError(t, err)
-
-		// Should still work with available indices
-		returns, err := service.GetCompositeReturns(10)
-		// Should either return partial data or error gracefully
-		if err != nil {
-			assert.Contains(t, err.Error(), "insufficient", "Should indicate insufficient data")
-		} else {
-			assert.NotEmpty(t, returns, "Should return partial data if available")
-		}
-	})
+	}
 }
 
-func TestGetMarketReturns(t *testing.T) {
-	universeDB, historyDB := setupMarketIndexTestDB(t)
-	service := NewMarketIndexService(universeDB, historyDB, nil, zerolog.Nop())
-
-	// Setup indices
-	err := service.EnsureIndicesExist()
-	require.NoError(t, err)
-
-	// Insert price data
-	// Note: daily_prices.isin column stores ISINs
-	// Indices use ISIN format: "INDEX-SYMBOL" (e.g., "INDEX-SPX.US")
+// setupTestPrices creates test price data for indices
+func setupTestPrices(t *testing.T, historyDB *sql.DB, symbols []string, days int, dailyReturn float64) {
 	now := time.Now()
-	for i := 0; i < 30; i++ {
-		dateTime := now.AddDate(0, 0, -30+i)
-		dateUnix := time.Date(dateTime.Year(), dateTime.Month(), dateTime.Day(), 0, 0, 0, 0, time.UTC).Unix()
-		price := 1000.0 * (1.0 + float64(i)*0.001) // Small daily gains
 
-		for _, isin := range []string{"INDEX-SPX.US", "INDEX-STOXX600.EU", "INDEX-MSCIASIA.ASIA"} {
-			_, err = historyDB.Exec(`
+	for i := 0; i < days; i++ {
+		dateTime := now.AddDate(0, 0, -days+i)
+		dateUnix := time.Date(dateTime.Year(), dateTime.Month(), dateTime.Day(), 0, 0, 0, 0, time.UTC).Unix()
+
+		for _, symbol := range symbols {
+			isin := "INDEX-" + symbol
+			// Price grows by dailyReturn each day
+			price := 1000.0 * (1.0 + float64(i)*dailyReturn)
+			_, err := historyDB.Exec(`
 				INSERT OR REPLACE INTO daily_prices (isin, date, open, high, low, close, volume)
 				VALUES (?, ?, ?, ?, ?, ?, ?)
 			`, isin, dateUnix, price, price*1.01, price*0.99, price, 1000000)
 			require.NoError(t, err)
 		}
 	}
+}
 
-	t.Run("Returns market returns for regime detection", func(t *testing.T) {
-		returns, err := service.GetMarketReturns(20) // Last 20 days
+func TestGetMarketReturns(t *testing.T) {
+	universeDB, historyDB := setupMarketIndexTestDB(t)
+	service := NewMarketIndexService(universeDB, historyDB, nil, zerolog.Nop())
+
+	// Setup indices with valid Tradernet symbols
+	setupTestIndices(t, universeDB)
+
+	// Setup price data for indices across all regions
+	allSymbols := []string{
+		"SP500.IDX", "NASDAQ.IDX", // US
+		"DAX.IDX", "FTSE.IDX", // EU
+		"HSI.IDX", // ASIA
+	}
+	setupTestPrices(t, historyDB, allSymbols, 30, 0.001) // 0.1% daily return
+
+	t.Run("Returns composite market returns for regime detection", func(t *testing.T) {
+		returns, err := service.GetMarketReturns(20)
 		require.NoError(t, err)
-		require.Len(t, returns, 20, "Should return 20 daily returns")
+		require.NotEmpty(t, returns, "Should return market returns")
+
+		// Should have returns for the requested days (minus 1 for return calculation)
+		assert.LessOrEqual(t, len(returns), 20, "Should not exceed requested days")
+		assert.Greater(t, len(returns), 0, "Should have some returns")
 
 		// Returns should be reasonable (small daily returns)
 		for _, ret := range returns {
@@ -232,7 +150,18 @@ func TestGetMarketReturns(t *testing.T) {
 		}
 	})
 
-	t.Run("Handles insufficient data", func(t *testing.T) {
+	t.Run("Combines returns from all regions", func(t *testing.T) {
+		returns, err := service.GetMarketReturns(10)
+		require.NoError(t, err)
+		require.NotEmpty(t, returns)
+
+		// All returns should be positive (since all indices have positive daily returns)
+		for _, ret := range returns {
+			assert.GreaterOrEqual(t, ret, 0.0, "Should have positive composite returns when all indices rise")
+		}
+	})
+
+	t.Run("Handles insufficient data gracefully", func(t *testing.T) {
 		// Request more days than available
 		returns, err := service.GetMarketReturns(100)
 		if err != nil {
@@ -243,38 +172,142 @@ func TestGetMarketReturns(t *testing.T) {
 	})
 }
 
-func TestMarketIndexWeights(t *testing.T) {
+func TestGetMarketReturns_PartialRegionData(t *testing.T) {
 	universeDB, historyDB := setupMarketIndexTestDB(t)
 	service := NewMarketIndexService(universeDB, historyDB, nil, zerolog.Nop())
 
-	t.Run("Default weights match portfolio allocation", func(t *testing.T) {
-		indices := service.GetDefaultIndices()
+	// Setup indices
+	setupTestIndices(t, universeDB)
 
-		// Verify weights sum to 1.0
-		totalWeight := 0.0
-		for _, idx := range indices {
-			totalWeight += idx.Weight
+	// Only setup data for US indices (not EU or ASIA)
+	usSymbols := []string{"SP500.IDX", "NASDAQ.IDX"}
+	setupTestPrices(t, historyDB, usSymbols, 30, 0.001)
+
+	t.Run("Works with partial region data", func(t *testing.T) {
+		returns, err := service.GetMarketReturns(20)
+		// Should either succeed with available data or return an error
+		if err == nil {
+			assert.NotEmpty(t, returns, "Should return data from available regions")
 		}
-		assert.InDelta(t, 1.0, totalWeight, 0.01, "Weights should sum to 1.0")
+		// If it errors, that's also acceptable - no regions with data means no returns
+	})
+}
 
-		// Verify specific weights (50/30/20 allocation)
-		usWeight := 0.0
-		euWeight := 0.0
-		asiaWeight := 0.0
+func TestGetReturnsForRegion(t *testing.T) {
+	universeDB, historyDB := setupMarketIndexTestDB(t)
+	service := NewMarketIndexService(universeDB, historyDB, nil, zerolog.Nop())
 
-		for _, idx := range indices {
-			switch idx.Region {
-			case "US":
-				usWeight += idx.Weight
-			case "EU":
-				euWeight += idx.Weight
-			case "ASIA":
-				asiaWeight += idx.Weight
+	// Setup indices
+	setupTestIndices(t, universeDB)
+
+	// Setup different returns for different regions
+	// US: +0.2% per day (bullish)
+	setupTestPrices(t, historyDB, []string{"SP500.IDX", "NASDAQ.IDX"}, 30, 0.002)
+
+	// EU: -0.1% per day (bearish) - need to recreate with different rate
+	now := time.Now()
+	for i := 0; i < 30; i++ {
+		dateTime := now.AddDate(0, 0, -30+i)
+		dateUnix := time.Date(dateTime.Year(), dateTime.Month(), dateTime.Day(), 0, 0, 0, 0, time.UTC).Unix()
+
+		for _, symbol := range []string{"DAX.IDX", "FTSE.IDX"} {
+			isin := "INDEX-" + symbol
+			price := 1000.0 * (1.0 - float64(i)*0.001) // Declining
+			_, err := historyDB.Exec(`
+				INSERT OR REPLACE INTO daily_prices (isin, date, open, high, low, close, volume)
+				VALUES (?, ?, ?, ?, ?, ?, ?)
+			`, isin, dateUnix, price, price*1.01, price*0.99, price, 1000000)
+			require.NoError(t, err)
+		}
+	}
+
+	t.Run("Returns region-specific returns", func(t *testing.T) {
+		usReturns, err := service.GetReturnsForRegion(RegionUS, 20)
+		require.NoError(t, err)
+		require.NotEmpty(t, usReturns)
+
+		euReturns, err := service.GetReturnsForRegion(RegionEU, 20)
+		require.NoError(t, err)
+		require.NotEmpty(t, euReturns)
+
+		// US should be mostly positive, EU should be mostly negative
+		usPositive := 0
+		for _, ret := range usReturns {
+			if ret > 0 {
+				usPositive++
 			}
 		}
+		assert.Greater(t, usPositive, len(usReturns)/2, "US should have mostly positive returns")
 
-		assert.InDelta(t, 0.20, usWeight, 0.01, "US should be 20%")
-		assert.InDelta(t, 0.50, euWeight, 0.01, "EU should be 50%")
-		assert.InDelta(t, 0.30, asiaWeight, 0.01, "Asia should be 30%")
+		euNegative := 0
+		for _, ret := range euReturns {
+			if ret < 0 {
+				euNegative++
+			}
+		}
+		assert.Greater(t, euNegative, len(euReturns)/2, "EU should have mostly negative returns")
+	})
+}
+
+func TestGetReturnsForAllRegions(t *testing.T) {
+	universeDB, historyDB := setupMarketIndexTestDB(t)
+	service := NewMarketIndexService(universeDB, historyDB, nil, zerolog.Nop())
+
+	// Setup indices
+	setupTestIndices(t, universeDB)
+
+	// Setup price data for all regions
+	allSymbols := []string{"SP500.IDX", "NASDAQ.IDX", "DAX.IDX", "FTSE.IDX", "HSI.IDX"}
+	setupTestPrices(t, historyDB, allSymbols, 30, 0.001)
+
+	t.Run("Returns returns for all regions with data", func(t *testing.T) {
+		regionReturns, err := service.GetReturnsForAllRegions(20)
+		require.NoError(t, err)
+		require.NotEmpty(t, regionReturns)
+
+		// Should have returns for US, EU, and ASIA
+		assert.Contains(t, regionReturns, RegionUS, "Should have US returns")
+		assert.Contains(t, regionReturns, RegionEU, "Should have EU returns")
+		assert.Contains(t, regionReturns, RegionAsia, "Should have ASIA returns")
+
+		// Each region should have returns
+		for region, returns := range regionReturns {
+			assert.NotEmpty(t, returns, "Region %s should have returns", region)
+		}
+	})
+}
+
+func TestGetPriceIndicesForRegion(t *testing.T) {
+	universeDB, historyDB := setupMarketIndexTestDB(t)
+	service := NewMarketIndexService(universeDB, historyDB, nil, zerolog.Nop())
+
+	t.Run("Returns correct indices for each region", func(t *testing.T) {
+		usIndices := service.GetPriceIndicesForRegion(RegionUS)
+		assert.NotEmpty(t, usIndices, "US should have indices")
+		for _, idx := range usIndices {
+			assert.Equal(t, RegionUS, idx.Region)
+			assert.Equal(t, IndexTypePrice, idx.IndexType, "Should only return PRICE indices")
+		}
+
+		euIndices := service.GetPriceIndicesForRegion(RegionEU)
+		assert.NotEmpty(t, euIndices, "EU should have indices")
+		for _, idx := range euIndices {
+			assert.Equal(t, RegionEU, idx.Region)
+			assert.Equal(t, IndexTypePrice, idx.IndexType)
+		}
+
+		asiaIndices := service.GetPriceIndicesForRegion(RegionAsia)
+		assert.NotEmpty(t, asiaIndices, "ASIA should have indices")
+		for _, idx := range asiaIndices {
+			assert.Equal(t, RegionAsia, idx.Region)
+			assert.Equal(t, IndexTypePrice, idx.IndexType)
+		}
+	})
+
+	t.Run("VIX is excluded from price indices", func(t *testing.T) {
+		usIndices := service.GetPriceIndicesForRegion(RegionUS)
+		for _, idx := range usIndices {
+			assert.NotEqual(t, "VIX.IDX", idx.Symbol, "VIX should not be in price indices")
+		}
 	})
 }

@@ -9,7 +9,6 @@ import (
 	"github.com/aristath/sentinel/internal/modules/allocation"
 	"github.com/aristath/sentinel/internal/modules/dividends"
 	"github.com/aristath/sentinel/internal/modules/optimization"
-	"github.com/aristath/sentinel/internal/modules/planning"
 	planningdomain "github.com/aristath/sentinel/internal/modules/planning/domain"
 	planningplanner "github.com/aristath/sentinel/internal/modules/planning/planner"
 	"github.com/aristath/sentinel/internal/modules/planning/progress"
@@ -575,60 +574,6 @@ func (a *PlannerServiceAdapter) CreatePlanWithDetailedProgress(ctx interface{}, 
 		}
 	}
 	return a.service.CreatePlanWithDetailedProgress(opportunityContext, plannerConfig, cb)
-}
-
-// RecommendationRepositoryAdapter adapts *planning.RecommendationRepository to RecommendationRepositoryInterface
-type RecommendationRepositoryAdapter struct {
-	repo *planning.RecommendationRepository
-}
-
-func NewRecommendationRepositoryAdapter(repo *planning.RecommendationRepository) *RecommendationRepositoryAdapter {
-	return &RecommendationRepositoryAdapter{repo: repo}
-}
-
-func (a *RecommendationRepositoryAdapter) StorePlan(plan *planningdomain.HolisticPlan, portfolioHash string) error {
-	if plan == nil {
-		return fmt.Errorf("plan cannot be nil")
-	}
-
-	if len(plan.Steps) == 0 {
-		// If plan has no steps, dismiss all old pending recommendations
-		// This ensures old invalid recommendations are cleared when no new plan is generated.
-		// We use DismissAllPending() instead of DismissAllByPortfolioHash() because old
-		// recommendations may have different portfolio hashes from before portfolio changes.
-		_, _ = a.repo.DismissAllPending()
-		return nil
-	}
-
-	// Dismiss all old pending recommendations before storing new ones
-	// This ensures old invalid recommendations (e.g., from before constraint enforcer was added)
-	// don't persist when new recommendations are created.
-	// We dismiss ALL pending recommendations because old ones may have different portfolio hashes
-	// from before portfolio changes, and we want a clean slate for the new plan.
-	_, _ = a.repo.DismissAllPending()
-
-	for stepIdx, step := range plan.Steps {
-		rec := planning.Recommendation{
-			Symbol:                step.Symbol,
-			Name:                  step.Name,
-			Side:                  step.Side,
-			Quantity:              float64(step.Quantity),
-			EstimatedPrice:        step.EstimatedPrice,
-			EstimatedValue:        step.EstimatedValue,
-			Reason:                step.Reason,
-			Currency:              step.Currency,
-			Priority:              float64(stepIdx),
-			CurrentPortfolioScore: plan.CurrentScore,
-			NewPortfolioScore:     plan.EndStateScore,
-			ScoreChange:           plan.Improvement,
-			Status:                "pending",
-			PortfolioHash:         portfolioHash,
-		}
-		if _, err := a.repo.CreateOrUpdate(rec); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // DividendRepositoryAdapter adapts *dividends.DividendRepository to DividendRepositoryInterface

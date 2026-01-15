@@ -41,8 +41,7 @@ sentinel/
 ├── cmd/server/                 # Application entry point (main.go)
 ├── internal/                   # Private application code
 │   ├── clients/               # External API clients
-│   │   ├── tradernet/         # Tradernet API client (Go SDK)
-│   │   └── yahoo/              # Yahoo Finance client
+│   │   └── tradernet/         # Tradernet API client (Go SDK)
 │   ├── config/                 # Configuration management
 │   ├── database/               # SQLite access layer (7-database architecture)
 │   ├── deployment/             # Automated deployment system
@@ -124,7 +123,7 @@ The system uses a clean 7-database architecture:
 4. **portfolio.db** - Current portfolio state (positions, scores, metrics, snapshots)
 5. **history.db** - Historical time-series data (prices, rates, cleanup tracking)
 6. **cache.db** - Ephemeral operational data (job history)
-7. **client_data.db** - External API response cache (Alpha Vantage, Yahoo, OpenFIGI)
+7. **client_data.db** - Cache for exchange rates and current prices
 
 All databases use SQLite with WAL mode and profile-specific PRAGMAs for optimal performance and safety.
 

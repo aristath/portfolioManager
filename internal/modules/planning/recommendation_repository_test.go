@@ -114,31 +114,3 @@ func TestInMemoryRecommendationRepository_GetRejectedSequences_MultipleHashes(t 
 	assert.Len(t, retrieved2, 2)
 	assert.Equal(t, 0.9, retrieved2[0].Score)
 }
-
-func TestRecommendationRepository_StoreRejectedSequences(t *testing.T) {
-	// Test the database-backed repository as well (in-memory for testing)
-	repo := &RecommendationRepository{
-		rejectedSequences: make(map[string][]planningdomain.RejectedSequence),
-		log:               zerolog.Nop(),
-	}
-
-	rejectedSequences := []planningdomain.RejectedSequence{
-		{
-			Rank:     2,
-			Actions:  []planningdomain.ActionCandidate{{Symbol: "GOOGL", Side: "SELL", Quantity: 3}},
-			Score:    0.75,
-			Feasible: true,
-			Reason:   "lower_score",
-		},
-	}
-
-	portfolioHash := "test-hash-456"
-	err := repo.StoreRejectedSequences(rejectedSequences, portfolioHash)
-	require.NoError(t, err)
-
-	// Retrieve and verify
-	retrieved := repo.GetRejectedSequences(portfolioHash)
-	require.NotNil(t, retrieved)
-	assert.Len(t, retrieved, 1)
-	assert.Equal(t, "GOOGL", retrieved[0].Actions[0].Symbol)
-}

@@ -95,7 +95,7 @@ func TestSyncPrices_Error(t *testing.T) {
 	}
 
 	// Mock expectations - SyncPrices() calls SyncPricesWithReporter(nil)
-	mockSyncService.On("SyncAllPricesWithReporter", (ProgressReporter)(nil)).Return(0, errors.New("yahoo api error"))
+	mockSyncService.On("SyncAllPricesWithReporter", (ProgressReporter)(nil)).Return(0, errors.New("tradernet api error"))
 
 	// Execute
 	err := service.SyncPrices()

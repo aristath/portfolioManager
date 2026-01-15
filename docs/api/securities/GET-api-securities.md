@@ -19,7 +19,6 @@ Returns a list of all securities in the universe with their scores, priority ran
       "symbol": "AAPL.US",
       "name": "Apple Inc.",
       "isin": "US0378331005",
-      "yahoo_symbol": "AAPL",
       "product_type": "EQUITY",
       "country": "US",
       "fullExchangeName": "NASDAQ",

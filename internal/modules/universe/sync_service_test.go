@@ -12,32 +12,6 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// MockYahooClient is a mock Yahoo Finance client for testing
-type MockYahooClient struct {
-	mock.Mock
-}
-
-func (m *MockYahooClient) GetBatchQuotes(symbolMap map[string]*string) (map[string]*float64, error) {
-	args := m.Called(symbolMap)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(map[string]*float64), args.Error(1)
-}
-
-func (m *MockYahooClient) GetSecurityIndustry(symbol string, yahooSymbolOverride *string) (*string, error) {
-	args := m.Called(symbol, yahooSymbolOverride)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*string), args.Error(1)
-}
-
-func (m *MockYahooClient) GetSecurityCountryAndExchange(symbol string, yahooSymbolOverride *string) (*string, *string, error) {
-	args := m.Called(symbol, yahooSymbolOverride)
-	return args.Get(0).(*string), args.Get(1).(*string), args.Error(2)
-}
-
 // syncTestBrokerClient is a minimal broker client mock for sync service tests
 type syncTestBrokerClient struct {
 	mu     sync.RWMutex

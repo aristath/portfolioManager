@@ -53,9 +53,8 @@ func (s *SecuritySetupService) SetScoreCalculator(calculator ScoreCalculator) {
 	s.scoreCalculator = calculator
 }
 
-// CreateSecurity creates a security with explicit symbol and name
-// DEPRECATED: Use AddSecurityByIdentifier instead, which ensures ISIN is always present
-// This method is kept for backward compatibility but requires ISIN parameter
+// CreateSecurity creates a security with explicit symbol and name.
+// This is the primary endpoint handler for POST /api/securities.
 //
 // This method:
 // 1. Validates symbol is unique

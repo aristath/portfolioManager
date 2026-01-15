@@ -60,7 +60,7 @@ func TestSyncPricesJob_Run_ServiceError(t *testing.T) {
 	})
 
 	// Mock expectations - sync fails
-	mockUniverseService.On("SyncPrices").Return(errors.New("yahoo api error"))
+	mockUniverseService.On("SyncPrices").Return(errors.New("tradernet api error"))
 
 	// Execute - should not panic, just log error
 	err := job.Run()

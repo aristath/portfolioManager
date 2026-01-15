@@ -13,7 +13,7 @@ func (h *UniverseHandlers) RegisterRoutes(r chi.Router) {
 		r.Get("/{isin}", h.HandleGetStock) // Get security detail by ISIN
 
 		// POST endpoints (proxied to Python for complex operations)
-		r.Post("/", h.HandleCreateStock)                           // Create security (requires Yahoo Finance)
+		r.Post("/", h.HandleCreateStock)                           // Create security
 		r.Post("/add-by-identifier", h.HandleAddStockByIdentifier) // Auto-setup by symbol/ISIN
 		r.Post("/refresh-all", h.HandleRefreshAllScores)           // Recalculate all scores
 

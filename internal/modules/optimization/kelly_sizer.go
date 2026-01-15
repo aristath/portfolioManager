@@ -185,7 +185,6 @@ func (ks *KellyPositionSizer) CalculateOptimalSizeForISIN(
 }
 
 // CalculateOptimalSizeForSymbol calculates optimal size for a security by symbol.
-// DEPRECATED: Use CalculateOptimalSizeForISIN instead. This method is kept for backward compatibility.
 // Uses temperament-adjusted parameters when settings service is available.
 func (ks *KellyPositionSizer) CalculateOptimalSizeForSymbol(
 	symbol string,

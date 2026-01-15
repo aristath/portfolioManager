@@ -247,7 +247,7 @@ func (r *InMemoryRecommendationRepository) GetRecommendationsAsPlan(getEvaluated
 			"score_change":           rec.ScoreChange,
 			"available_cash_before":  availableCashBefore,
 			"available_cash_after":   availableCashAfter,
-			"is_emergency":           false,
+			"is_emergency":           IsEmergencyReason(rec.Reason),
 		}
 
 		steps = append(steps, step)

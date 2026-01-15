@@ -14,7 +14,6 @@ Creates a new security record. Requires ISIN as the primary key. Tags are ignore
     "symbol": "AAPL.US",
     "name": "Apple Inc.",
     "isin": "US0378331005",
-    "yahoo_symbol": "AAPL",
     "product_type": "EQUITY",
     "country": "US",
     "fullExchangeName": "NASDAQ",
@@ -30,7 +29,6 @@ Creates a new security record. Requires ISIN as the primary key. Tags are ignore
   - `symbol` (string, required): Security symbol
   - `name` (string, required): Security name
   - `isin` (string, required): ISIN identifier (PRIMARY KEY)
-  - `yahoo_symbol` (string, optional): Yahoo Finance symbol
   - `product_type` (string, optional): Product type (EQUITY, ETF, etc.)
   - `country` (string, optional): Country code
   - `fullExchangeName` (string, optional): Exchange name

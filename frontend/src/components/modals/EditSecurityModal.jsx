@@ -27,7 +27,6 @@ export function EditSecurityModal() {
       const updateData = {};
       const editableFields = [
         'symbol',
-        'yahoo_symbol',
         'name',
         'geography',
         'fullExchangeName',
@@ -81,14 +80,6 @@ export function EditSecurityModal() {
           value={formData.symbol || ''}
           onChange={(e) => setFormData({ ...formData, symbol: e.target.value })}
           description="Tradernet ticker symbol (e.g., ASML.NL, RHM.DE)"
-        />
-        <TextInput
-          className="edit-security-modal__input edit-security-modal__input--yahoo-symbol"
-          label="Yahoo Symbol (override)"
-          value={formData.yahoo_symbol || ''}
-          onChange={(e) => setFormData({ ...formData, yahoo_symbol: e.target.value })}
-          placeholder="Leave empty to use convention"
-          description="e.g., 1810.HK for Xiaomi, 300750.SZ for CATL"
         />
         <TextInput
           className="edit-security-modal__input edit-security-modal__input--name"

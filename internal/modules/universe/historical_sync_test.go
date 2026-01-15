@@ -44,6 +44,6 @@ func TestHistoricalSyncService_SyncWithoutClients(t *testing.T) {
 	})
 }
 
-// Note: Full integration tests with real Yahoo Finance and database
+// Note: Full integration tests with real Tradernet and database
 // should be in integration test suite. These are unit tests focusing
 // on service logic without external dependencies.

@@ -68,8 +68,5 @@ type RecommendationRepositoryInterface interface {
 	MarkFailed(recUUID string, failureReason string) error
 }
 
-// Compile-time check that RecommendationRepository implements RecommendationRepositoryInterface
-var _ RecommendationRepositoryInterface = (*RecommendationRepository)(nil)
-
 // Compile-time check that InMemoryRecommendationRepository implements RecommendationRepositoryInterface
 var _ RecommendationRepositoryInterface = (*InMemoryRecommendationRepository)(nil)
