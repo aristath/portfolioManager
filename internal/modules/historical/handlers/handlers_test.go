@@ -19,7 +19,7 @@ func TestHandleGetDailyPrices(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	historyDB := universe.NewHistoryDB(db, logger)
+	historyDB := universe.NewHistoryDB(db, nil, logger)
 	handler := NewHandler(historyDB, logger)
 
 	tests := []struct {
@@ -75,7 +75,7 @@ func TestHandleGetMonthlyPrices(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	historyDB := universe.NewHistoryDB(db, logger)
+	historyDB := universe.NewHistoryDB(db, nil, logger)
 	handler := NewHandler(historyDB, logger)
 
 	tests := []struct {
@@ -107,7 +107,7 @@ func TestHandleGetLatestPrice(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	historyDB := universe.NewHistoryDB(db, logger)
+	historyDB := universe.NewHistoryDB(db, nil, logger)
 	handler := NewHandler(historyDB, logger)
 
 	req := httptest.NewRequest("GET", "/api/historical/prices/latest/US0378331005", nil)
@@ -123,7 +123,7 @@ func TestHandleGetPriceRange(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	historyDB := universe.NewHistoryDB(db, logger)
+	historyDB := universe.NewHistoryDB(db, nil, logger)
 	handler := NewHandler(historyDB, logger)
 
 	tests := []struct {
@@ -160,7 +160,7 @@ func TestHandleGetDailyReturns(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	historyDB := universe.NewHistoryDB(db, logger)
+	historyDB := universe.NewHistoryDB(db, nil, logger)
 	handler := NewHandler(historyDB, logger)
 
 	req := httptest.NewRequest("GET", "/api/historical/returns/daily/US0378331005", nil)
@@ -176,7 +176,7 @@ func TestHandleGetMonthlyReturns(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	historyDB := universe.NewHistoryDB(db, logger)
+	historyDB := universe.NewHistoryDB(db, nil, logger)
 	handler := NewHandler(historyDB, logger)
 
 	req := httptest.NewRequest("GET", "/api/historical/returns/monthly/US0378331005", nil)
@@ -192,7 +192,7 @@ func TestHandleGetCorrelationMatrix(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	historyDB := universe.NewHistoryDB(db, logger)
+	historyDB := universe.NewHistoryDB(db, nil, logger)
 	handler := NewHandler(historyDB, logger)
 
 	req := httptest.NewRequest("GET", "/api/historical/returns/correlation-matrix", nil)
@@ -208,7 +208,7 @@ func TestHandleGetExchangeRateHistory(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	historyDB := universe.NewHistoryDB(db, logger)
+	historyDB := universe.NewHistoryDB(db, nil, logger)
 	handler := NewHandler(historyDB, logger)
 
 	tests := []struct {
@@ -250,7 +250,7 @@ func TestHandleGetCurrentExchangeRates(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	historyDB := universe.NewHistoryDB(db, logger)
+	historyDB := universe.NewHistoryDB(db, nil, logger)
 	handler := NewHandler(historyDB, logger)
 
 	req := httptest.NewRequest("GET", "/api/historical/exchange-rates/current", nil)
@@ -266,7 +266,7 @@ func TestHandleGetExchangeRate(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	historyDB := universe.NewHistoryDB(db, logger)
+	historyDB := universe.NewHistoryDB(db, nil, logger)
 	handler := NewHandler(historyDB, logger)
 
 	req := httptest.NewRequest("GET", "/api/historical/exchange-rates/USD/EUR", nil)

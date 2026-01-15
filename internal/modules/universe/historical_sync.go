@@ -10,12 +10,12 @@ import (
 
 // HistoricalSyncService handles synchronization of historical price data.
 // Uses Tradernet as the single source for historical price data.
+// Stores raw data without validation - filtering happens on read via HistoryDB.
 type HistoricalSyncService struct {
 	brokerClient   domain.BrokerClient
 	securityRepo   SecurityLookupInterface
 	historyDB      HistoryDBInterface
-	priceValidator *PriceValidator // Validates and interpolates abnormal prices
-	rateLimitDelay time.Duration   // API rate limit delay
+	rateLimitDelay time.Duration // API rate limit delay
 	log            zerolog.Logger
 }
 
@@ -36,11 +36,11 @@ type HistoryDBInterface interface {
 
 // NewHistoricalSyncService creates a new historical sync service.
 // Uses Tradernet (via broker client) as the single source of truth for historical prices.
+// No validation on write - filtering happens on read in HistoryDB.
 func NewHistoricalSyncService(
 	brokerClient domain.BrokerClient,
 	securityRepo SecurityLookupInterface,
 	historyDB HistoryDBInterface,
-	priceValidator *PriceValidator,
 	rateLimitDelay time.Duration,
 	log zerolog.Logger,
 ) *HistoricalSyncService {
@@ -48,7 +48,6 @@ func NewHistoricalSyncService(
 		brokerClient:   brokerClient,
 		securityRepo:   securityRepo,
 		historyDB:      historyDB,
-		priceValidator: priceValidator,
 		rateLimitDelay: rateLimitDelay,
 		log:            log.With().Str("service", "historical_sync").Logger(),
 	}
@@ -56,14 +55,14 @@ func NewHistoricalSyncService(
 
 // SyncHistoricalPrices synchronizes historical price data for a security.
 // Uses Tradernet as the single source of truth for historical prices.
+// Stores raw data without validation - filtering happens on read.
 //
 // Workflow:
 // 1. Get security metadata from database
 // 2. Check if monthly_prices has data (determines date range)
 // 3. Fetch historical data from Tradernet
-// 4. Insert/replace daily_prices in transaction
-// 5. Aggregate to monthly_prices
-// 6. Rate limit delay
+// 4. Store raw data to history database
+// 5. Rate limit delay
 func (s *HistoricalSyncService) SyncHistoricalPrices(symbol string) error {
 	s.log.Info().Str("symbol", symbol).Msg("Starting historical price sync")
 
@@ -137,51 +136,7 @@ func (s *HistoricalSyncService) SyncHistoricalPrices(symbol string) error {
 		Int("count", len(dailyPrices)).
 		Msg("Fetched historical prices")
 
-	// Validate and interpolate abnormal prices before storing
-	if s.priceValidator != nil {
-		// Fetch recent prices from database for context
-		context, err := s.historyDB.GetRecentPrices(isin, 30)
-		if err != nil {
-			s.log.Warn().
-				Err(err).
-				Str("symbol", symbol).
-				Str("isin", isin).
-				Msg("Failed to fetch recent prices for context, proceeding without validation")
-			context = []DailyPrice{}
-		}
-
-		// Validate and interpolate
-		validatedPrices, interpolationLogs, err := s.priceValidator.ValidateAndInterpolate(dailyPrices, context)
-		if err != nil {
-			s.log.Error().
-				Err(err).
-				Str("symbol", symbol).
-				Msg("Price validation failed, using original prices")
-			validatedPrices = dailyPrices
-		} else {
-			// Log interpolation summary
-			if len(interpolationLogs) > 0 {
-				s.log.Warn().
-					Str("symbol", symbol).
-					Int("interpolated_count", len(interpolationLogs)).
-					Msg("Interpolated abnormal prices")
-				for _, log := range interpolationLogs {
-					s.log.Info().
-						Str("symbol", symbol).
-						Str("isin", isin).
-						Str("date", log.Date).
-						Float64("original_close", log.OriginalClose).
-						Float64("interpolated_close", log.InterpolatedClose).
-						Str("method", log.Method).
-						Str("reason", log.Reason).
-						Msg("Price interpolation")
-				}
-			}
-			dailyPrices = validatedPrices
-		}
-	}
-
-	// Write to history database (transaction, daily + monthly aggregation)
+	// Write raw data to history database (no validation - filtering happens on read)
 	err = s.historyDB.SyncHistoricalPrices(isin, dailyPrices)
 	if err != nil {
 		return fmt.Errorf("failed to sync historical prices to database: %w", err)

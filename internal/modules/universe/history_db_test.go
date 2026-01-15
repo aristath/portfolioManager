@@ -63,7 +63,7 @@ func TestNewHistoryDB(t *testing.T) {
 	defer db.Close()
 
 	log := zerolog.New(nil).Level(zerolog.Disabled)
-	historyDB := NewHistoryDB(db, log)
+	historyDB := NewHistoryDB(db, nil, log) // nil filter for basic tests
 
 	require.NotNil(t, historyDB)
 	assert.NotNil(t, historyDB.db)
@@ -89,7 +89,7 @@ func TestGetDailyPrices_WithISIN(t *testing.T) {
 	require.NoError(t, err)
 
 	log := zerolog.New(nil).Level(zerolog.Disabled)
-	historyDB := NewHistoryDB(db, log)
+	historyDB := NewHistoryDB(db, nil, log)
 
 	// Test: Get daily prices for ISIN US0378331005 (AAPL)
 	prices, err := historyDB.GetDailyPrices("US0378331005", 10)
@@ -110,7 +110,7 @@ func TestGetDailyPrices_NoData(t *testing.T) {
 	defer db.Close()
 
 	log := zerolog.New(nil).Level(zerolog.Disabled)
-	historyDB := NewHistoryDB(db, log)
+	historyDB := NewHistoryDB(db, nil, log)
 
 	// Test: Get daily prices for ISIN with no data
 	prices, err := historyDB.GetDailyPrices("US0000000000", 10)
@@ -134,7 +134,7 @@ func TestGetDailyPrices_Limit(t *testing.T) {
 	}
 
 	log := zerolog.New(nil).Level(zerolog.Disabled)
-	historyDB := NewHistoryDB(db, log)
+	historyDB := NewHistoryDB(db, nil, log)
 
 	// Test: Limit to 3
 	prices, err := historyDB.GetDailyPrices("US0378331005", 3)
@@ -159,7 +159,7 @@ func TestGetMonthlyPrices_WithISIN(t *testing.T) {
 	require.NoError(t, err)
 
 	log := zerolog.New(nil).Level(zerolog.Disabled)
-	historyDB := NewHistoryDB(db, log)
+	historyDB := NewHistoryDB(db, nil, log)
 
 	// Test: Get monthly prices for ISIN US0378331005
 	prices, err := historyDB.GetMonthlyPrices("US0378331005", 10)
@@ -175,7 +175,7 @@ func TestGetMonthlyPrices_NoData(t *testing.T) {
 	defer db.Close()
 
 	log := zerolog.New(nil).Level(zerolog.Disabled)
-	historyDB := NewHistoryDB(db, log)
+	historyDB := NewHistoryDB(db, nil, log)
 
 	// Test: Get monthly prices for ISIN with no data
 	prices, err := historyDB.GetMonthlyPrices("US0000000000", 10)
@@ -189,7 +189,7 @@ func TestHasMonthlyData_WithISIN(t *testing.T) {
 	defer db.Close()
 
 	log := zerolog.New(nil).Level(zerolog.Disabled)
-	historyDB := NewHistoryDB(db, log)
+	historyDB := NewHistoryDB(db, nil, log)
 
 	// Test: No monthly data initially
 	hasData, err := historyDB.HasMonthlyData("US0378331005")
@@ -219,7 +219,7 @@ func TestSyncHistoricalPrices_WithISIN(t *testing.T) {
 	defer db.Close()
 
 	log := zerolog.New(nil).Level(zerolog.Disabled)
-	historyDB := NewHistoryDB(db, log)
+	historyDB := NewHistoryDB(db, nil, log)
 
 	// Test data
 	isin := "US0378331005"
@@ -257,7 +257,7 @@ func TestSyncHistoricalPrices_MultipleISINs(t *testing.T) {
 	defer db.Close()
 
 	log := zerolog.New(nil).Level(zerolog.Disabled)
-	historyDB := NewHistoryDB(db, log)
+	historyDB := NewHistoryDB(db, nil, log)
 
 	// Sync prices for first ISIN
 	isin1 := "US0378331005"
@@ -301,7 +301,7 @@ func TestSyncHistoricalPrices_ReplaceExisting(t *testing.T) {
 	defer db.Close()
 
 	log := zerolog.New(nil).Level(zerolog.Disabled)
-	historyDB := NewHistoryDB(db, log)
+	historyDB := NewHistoryDB(db, nil, log)
 
 	isin := "US0378331005"
 
@@ -340,7 +340,7 @@ func TestSyncHistoricalPrices_MonthlyAggregation(t *testing.T) {
 	defer db.Close()
 
 	log := zerolog.New(nil).Level(zerolog.Disabled)
-	historyDB := NewHistoryDB(db, log)
+	historyDB := NewHistoryDB(db, nil, log)
 
 	isin := "US0378331005"
 	// Prices spanning two months
@@ -378,4 +378,276 @@ func TestSyncHistoricalPrices_MonthlyAggregation(t *testing.T) {
 // Helper function
 func intPtr(i int64) *int64 {
 	return &i
+}
+
+// ==========================================
+// Cache and Filtering Tests
+// ==========================================
+
+func setupHistoryDBWithFilter(t *testing.T) (*sql.DB, *HistoryDB) {
+	db := setupHistoryTestDB(t)
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+	priceFilter := NewPriceFilter(log)
+	historyDB := NewHistoryDB(db, priceFilter, log)
+	return db, historyDB
+}
+
+func TestHistoryDB_GetDailyPrices_FiltersAnomalies(t *testing.T) {
+	db, historyDB := setupHistoryDBWithFilter(t)
+	defer db.Close()
+
+	// Insert data including an anomaly (extreme high)
+	date1 := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC).Unix()
+	date2 := time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC).Unix()
+	date3 := time.Date(2024, 1, 4, 0, 0, 0, 0, time.UTC).Unix()
+	_, err := db.Exec(`
+		INSERT INTO daily_prices (isin, date, open, high, low, close, volume, adjusted_close)
+		VALUES
+			('US0378331005', ?, 185.0, 186.5, 184.0, 185.5, 50000000, 185.5),
+			('US0378331005', ?, 185.5, 50000.0, 185.0, 186.0, 45000000, 186.0),
+			('US0378331005', ?, 186.0, 188.0, 185.5, 187.5, 55000000, 187.5)
+	`, date1, date2, date3)
+	require.NoError(t, err)
+
+	// The anomaly (High=50000 while Close=186) should be filtered out
+	prices, err := historyDB.GetDailyPrices("US0378331005", 10)
+	assert.NoError(t, err)
+	assert.Len(t, prices, 2, "Anomaly should be filtered out")
+	// Results are ordered by date descending (most recent first)
+	assert.Equal(t, 187.5, prices[0].Close) // Jan 4 (most recent)
+	assert.Equal(t, 185.5, prices[1].Close) // Jan 2 (oldest)
+}
+
+func TestHistoryDB_GetDailyPrices_CachesResult(t *testing.T) {
+	db, historyDB := setupHistoryDBWithFilter(t)
+	defer db.Close()
+
+	// Insert data
+	date1 := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC).Unix()
+	_, err := db.Exec(`
+		INSERT INTO daily_prices (isin, date, open, high, low, close, volume, adjusted_close)
+		VALUES ('US0378331005', ?, 185.0, 186.5, 184.0, 185.5, 50000000, 185.5)
+	`, date1)
+	require.NoError(t, err)
+
+	// First call
+	prices1, err := historyDB.GetDailyPrices("US0378331005", 10)
+	assert.NoError(t, err)
+	assert.Len(t, prices1, 1)
+
+	// Delete data from DB directly (simulating stale cache scenario)
+	_, err = db.Exec("DELETE FROM daily_prices WHERE isin = 'US0378331005'")
+	require.NoError(t, err)
+
+	// Second call should return cached data (DB is now empty)
+	prices2, err := historyDB.GetDailyPrices("US0378331005", 10)
+	assert.NoError(t, err)
+	assert.Len(t, prices2, 1, "Should return cached data")
+	assert.Equal(t, prices1[0].Close, prices2[0].Close)
+}
+
+func TestHistoryDB_SyncHistoricalPrices_InvalidatesCache(t *testing.T) {
+	db, historyDB := setupHistoryDBWithFilter(t)
+	defer db.Close()
+
+	isin := "US0378331005"
+
+	// First sync and read (populates cache)
+	prices1 := []DailyPrice{
+		{Date: "2024-01-02", Open: 185.0, High: 186.5, Low: 184.0, Close: 185.5, Volume: intPtr(50000000)},
+	}
+	err := historyDB.SyncHistoricalPrices(isin, prices1)
+	require.NoError(t, err)
+
+	cached1, err := historyDB.GetDailyPrices(isin, 10)
+	require.NoError(t, err)
+	require.Len(t, cached1, 1)
+	assert.Equal(t, 185.5, cached1[0].Close)
+
+	// Second sync with different data (should invalidate cache)
+	prices2 := []DailyPrice{
+		{Date: "2024-01-02", Open: 200.0, High: 205.0, Low: 195.0, Close: 200.0, Volume: intPtr(60000000)},
+	}
+	err = historyDB.SyncHistoricalPrices(isin, prices2)
+	require.NoError(t, err)
+
+	// Should get new data, not cached data
+	cached2, err := historyDB.GetDailyPrices(isin, 10)
+	require.NoError(t, err)
+	require.Len(t, cached2, 1)
+	assert.Equal(t, 200.0, cached2[0].Close, "Cache should be invalidated, showing new data")
+}
+
+func TestHistoryDB_Cache_IndependentPerISIN(t *testing.T) {
+	db, historyDB := setupHistoryDBWithFilter(t)
+	defer db.Close()
+
+	isin1 := "US0378331005"
+	isin2 := "NL0010273215"
+
+	// Sync and cache first ISIN
+	err := historyDB.SyncHistoricalPrices(isin1, []DailyPrice{
+		{Date: "2024-01-02", Open: 185.0, High: 186.5, Low: 184.0, Close: 185.5},
+	})
+	require.NoError(t, err)
+	_, err = historyDB.GetDailyPrices(isin1, 10)
+	require.NoError(t, err)
+
+	// Sync and cache second ISIN
+	err = historyDB.SyncHistoricalPrices(isin2, []DailyPrice{
+		{Date: "2024-01-02", Open: 800.0, High: 810.0, Low: 795.0, Close: 805.0},
+	})
+	require.NoError(t, err)
+	_, err = historyDB.GetDailyPrices(isin2, 10)
+	require.NoError(t, err)
+
+	// Update first ISIN (should only invalidate its cache)
+	err = historyDB.SyncHistoricalPrices(isin1, []DailyPrice{
+		{Date: "2024-01-02", Open: 200.0, High: 205.0, Low: 195.0, Close: 200.0},
+	})
+	require.NoError(t, err)
+
+	// Delete second ISIN from DB (to verify its cache is still intact)
+	_, err = db.Exec("DELETE FROM daily_prices WHERE isin = ?", isin2)
+	require.NoError(t, err)
+
+	// Second ISIN should still return cached data
+	prices2, err := historyDB.GetDailyPrices(isin2, 10)
+	assert.NoError(t, err)
+	assert.Len(t, prices2, 1, "Second ISIN cache should be unaffected")
+	assert.Equal(t, 805.0, prices2[0].Close)
+
+	// First ISIN should return fresh data
+	prices1, err := historyDB.GetDailyPrices(isin1, 10)
+	assert.NoError(t, err)
+	assert.Len(t, prices1, 1)
+	assert.Equal(t, 200.0, prices1[0].Close, "First ISIN should have fresh data")
+}
+
+func TestHistoryDB_GetRecentPrices_UsesFilterAndCache(t *testing.T) {
+	db, historyDB := setupHistoryDBWithFilter(t)
+	defer db.Close()
+
+	// Insert recent data including an anomaly
+	now := time.Now()
+	date1 := time.Date(now.Year(), now.Month(), now.Day()-2, 0, 0, 0, 0, time.UTC).Unix()
+	date2 := time.Date(now.Year(), now.Month(), now.Day()-1, 0, 0, 0, 0, time.UTC).Unix()
+
+	_, err := db.Exec(`
+		INSERT INTO daily_prices (isin, date, open, high, low, close, volume, adjusted_close)
+		VALUES
+			('US0378331005', ?, 185.0, 186.5, 184.0, 185.5, 50000000, 185.5),
+			('US0378331005', ?, 185.5, 50000.0, 185.0, 186.0, 45000000, 186.0)
+	`, date1, date2)
+	require.NoError(t, err)
+
+	// The anomaly should be filtered out
+	prices, err := historyDB.GetRecentPrices("US0378331005", 30)
+	assert.NoError(t, err)
+	assert.Len(t, prices, 1, "Anomaly should be filtered out")
+	assert.Equal(t, 185.5, prices[0].Close)
+}
+
+func TestHistoryDB_InvalidateCache(t *testing.T) {
+	db, historyDB := setupHistoryDBWithFilter(t)
+	defer db.Close()
+
+	isin := "US0378331005"
+
+	// Sync and cache
+	err := historyDB.SyncHistoricalPrices(isin, []DailyPrice{
+		{Date: "2024-01-02", Open: 185.0, High: 186.5, Low: 184.0, Close: 185.5},
+	})
+	require.NoError(t, err)
+	_, err = historyDB.GetDailyPrices(isin, 10)
+	require.NoError(t, err)
+
+	// Delete from DB
+	_, err = db.Exec("DELETE FROM daily_prices WHERE isin = ?", isin)
+	require.NoError(t, err)
+
+	// Should still return cached data
+	prices1, err := historyDB.GetDailyPrices(isin, 10)
+	assert.NoError(t, err)
+	assert.Len(t, prices1, 1)
+
+	// Invalidate cache
+	historyDB.InvalidateCache(isin)
+
+	// Now should return empty (DB is empty)
+	prices2, err := historyDB.GetDailyPrices(isin, 10)
+	assert.NoError(t, err)
+	assert.Empty(t, prices2, "After invalidation, should fetch from empty DB")
+}
+
+func TestHistoryDB_InvalidateAllCaches(t *testing.T) {
+	db, historyDB := setupHistoryDBWithFilter(t)
+	defer db.Close()
+
+	isin1 := "US0378331005"
+	isin2 := "NL0010273215"
+
+	// Sync and cache both ISINs
+	err := historyDB.SyncHistoricalPrices(isin1, []DailyPrice{
+		{Date: "2024-01-02", Open: 185.0, High: 186.5, Low: 184.0, Close: 185.5},
+	})
+	require.NoError(t, err)
+	_, err = historyDB.GetDailyPrices(isin1, 10)
+	require.NoError(t, err)
+
+	err = historyDB.SyncHistoricalPrices(isin2, []DailyPrice{
+		{Date: "2024-01-02", Open: 800.0, High: 810.0, Low: 795.0, Close: 805.0},
+	})
+	require.NoError(t, err)
+	_, err = historyDB.GetDailyPrices(isin2, 10)
+	require.NoError(t, err)
+
+	// Delete all from DB
+	_, err = db.Exec("DELETE FROM daily_prices")
+	require.NoError(t, err)
+
+	// Should still return cached data for both
+	prices1, _ := historyDB.GetDailyPrices(isin1, 10)
+	assert.Len(t, prices1, 1)
+	prices2, _ := historyDB.GetDailyPrices(isin2, 10)
+	assert.Len(t, prices2, 1)
+
+	// Invalidate all caches
+	historyDB.InvalidateAllCaches()
+
+	// Now both should return empty
+	prices1, _ = historyDB.GetDailyPrices(isin1, 10)
+	assert.Empty(t, prices1)
+	prices2, _ = historyDB.GetDailyPrices(isin2, 10)
+	assert.Empty(t, prices2)
+}
+
+func TestHistoryDB_GetDailyPrices_LimitWorksWithCache(t *testing.T) {
+	db, historyDB := setupHistoryDBWithFilter(t)
+	defer db.Close()
+
+	// Insert 5 days of data
+	for i := 1; i <= 5; i++ {
+		dateUnix := time.Date(2024, 1, i+1, 0, 0, 0, 0, time.UTC).Unix()
+		_, err := db.Exec(`
+			INSERT INTO daily_prices (isin, date, open, high, low, close, volume, adjusted_close)
+			VALUES (?, ?, 100.0, 105.0, 95.0, ?, 1000000, ?)
+		`, "US0378331005", dateUnix, float64(100+i), float64(100+i))
+		require.NoError(t, err)
+	}
+
+	// First call with limit 3
+	prices1, err := historyDB.GetDailyPrices("US0378331005", 3)
+	assert.NoError(t, err)
+	assert.Len(t, prices1, 3)
+
+	// Second call with limit 5 (should still work from cache)
+	prices2, err := historyDB.GetDailyPrices("US0378331005", 5)
+	assert.NoError(t, err)
+	assert.Len(t, prices2, 5)
+
+	// Third call with limit 2
+	prices3, err := historyDB.GetDailyPrices("US0378331005", 2)
+	assert.NoError(t, err)
+	assert.Len(t, prices3, 2)
 }

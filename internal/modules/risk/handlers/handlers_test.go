@@ -129,7 +129,7 @@ func TestHandleGetPortfolioVaR(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	historyDB := universe.NewHistoryDB(db, logger)
+	historyDB := universe.NewHistoryDB(db, nil, logger)
 	handler := NewHandler(historyDB, &mockPositionRepository{}, logger)
 
 	req := httptest.NewRequest("GET", "/api/risk/portfolio/var", nil)
@@ -158,7 +158,7 @@ func TestHandleGetPortfolioCVaR(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	historyDB := universe.NewHistoryDB(db, logger)
+	historyDB := universe.NewHistoryDB(db, nil, logger)
 	handler := NewHandler(historyDB, &mockPositionRepository{}, logger)
 
 	req := httptest.NewRequest("GET", "/api/risk/portfolio/cvar", nil)
@@ -183,7 +183,7 @@ func TestHandleGetPortfolioVolatility(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	historyDB := universe.NewHistoryDB(db, logger)
+	historyDB := universe.NewHistoryDB(db, nil, logger)
 	handler := NewHandler(historyDB, &mockPositionRepository{}, logger)
 
 	req := httptest.NewRequest("GET", "/api/risk/portfolio/volatility", nil)
@@ -206,7 +206,7 @@ func TestHandleGetPortfolioSharpe(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	historyDB := universe.NewHistoryDB(db, logger)
+	historyDB := universe.NewHistoryDB(db, nil, logger)
 	handler := NewHandler(historyDB, &mockPositionRepository{}, logger)
 
 	req := httptest.NewRequest("GET", "/api/risk/portfolio/sharpe", nil)
@@ -229,7 +229,7 @@ func TestHandleGetPortfolioSortino(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	historyDB := universe.NewHistoryDB(db, logger)
+	historyDB := universe.NewHistoryDB(db, nil, logger)
 	handler := NewHandler(historyDB, &mockPositionRepository{}, logger)
 
 	req := httptest.NewRequest("GET", "/api/risk/portfolio/sortino", nil)
@@ -252,7 +252,7 @@ func TestHandleGetPortfolioMaxDrawdown(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	historyDB := universe.NewHistoryDB(db, logger)
+	historyDB := universe.NewHistoryDB(db, nil, logger)
 	handler := NewHandler(historyDB, &mockPositionRepository{}, logger)
 
 	req := httptest.NewRequest("GET", "/api/risk/portfolio/max-drawdown", nil)
@@ -277,7 +277,7 @@ func TestHandleGetSecurityVolatility(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	historyDB := universe.NewHistoryDB(db, logger)
+	historyDB := universe.NewHistoryDB(db, nil, logger)
 	handler := NewHandler(historyDB, &mockPositionRepository{}, logger)
 
 	tests := []struct {
@@ -329,7 +329,7 @@ func TestHandleGetSecuritySharpe(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	historyDB := universe.NewHistoryDB(db, logger)
+	historyDB := universe.NewHistoryDB(db, nil, logger)
 	handler := NewHandler(historyDB, &mockPositionRepository{}, logger)
 
 	tests := []struct {
@@ -374,7 +374,7 @@ func TestHandleGetSecuritySortino(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	historyDB := universe.NewHistoryDB(db, logger)
+	historyDB := universe.NewHistoryDB(db, nil, logger)
 	handler := NewHandler(historyDB, &mockPositionRepository{}, logger)
 
 	tests := []struct {
@@ -419,7 +419,7 @@ func TestHandleGetSecurityMaxDrawdown(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	historyDB := universe.NewHistoryDB(db, logger)
+	historyDB := universe.NewHistoryDB(db, nil, logger)
 	handler := NewHandler(historyDB, &mockPositionRepository{}, logger)
 
 	tests := []struct {
@@ -464,7 +464,7 @@ func TestHandleGetSecurityBeta(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	historyDB := universe.NewHistoryDB(db, logger)
+	historyDB := universe.NewHistoryDB(db, nil, logger)
 	handler := NewHandler(historyDB, &mockPositionRepository{}, logger)
 
 	req := httptest.NewRequest("GET", "/api/risk/securities/US0378331005/beta", nil)
@@ -489,7 +489,7 @@ func TestHandleGetKellySizes(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	historyDB := universe.NewHistoryDB(db, logger)
+	historyDB := universe.NewHistoryDB(db, nil, logger)
 	handler := NewHandler(historyDB, &mockPositionRepository{}, logger)
 
 	req := httptest.NewRequest("GET", "/api/risk/kelly-sizes", nil)
@@ -514,7 +514,7 @@ func TestHandleGetKellySize(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	historyDB := universe.NewHistoryDB(db, logger)
+	historyDB := universe.NewHistoryDB(db, nil, logger)
 	handler := NewHandler(historyDB, &mockPositionRepository{}, logger)
 
 	req := httptest.NewRequest("GET", "/api/risk/kelly-sizes/US0378331005", nil)
@@ -539,7 +539,7 @@ func TestRouteIntegration(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	historyDB := universe.NewHistoryDB(db, logger)
+	historyDB := universe.NewHistoryDB(db, nil, logger)
 	handler := NewHandler(historyDB, &mockPositionRepository{}, logger)
 
 	router := chi.NewRouter()

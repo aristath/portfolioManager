@@ -92,9 +92,11 @@ func InitializeRepositories(container *Container, log zerolog.Logger) error {
 	// Planner repository (IN-MEMORY - ephemeral sequences/evaluations/best_results)
 	container.PlannerRepo = planningrepo.NewInMemoryPlannerRepository(log)
 
-	// History DB client (needs historyDB)
+	// History DB client with price filter for read-time anomaly filtering
+	priceFilter := universe.NewPriceFilter(log)
 	container.HistoryDBClient = universe.NewHistoryDB(
 		container.HistoryDB.Conn(),
+		priceFilter,
 		log,
 	)
 

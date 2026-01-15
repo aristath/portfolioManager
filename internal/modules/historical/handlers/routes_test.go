@@ -14,7 +14,7 @@ func TestRegisterRoutes(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	historyDB := universe.NewHistoryDB(db, logger)
+	historyDB := universe.NewHistoryDB(db, nil, logger)
 	handler := NewHandler(historyDB, logger)
 
 	router := chi.NewRouter()

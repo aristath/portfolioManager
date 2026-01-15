@@ -3,6 +3,8 @@ package universe
 import (
 	"database/sql"
 	"fmt"
+	"sort"
+	"sync"
 	"time"
 
 	"github.com/aristath/sentinel/internal/utils"
@@ -11,19 +13,27 @@ import (
 )
 
 // HistoryDB provides access to historical price data
+// Includes in-memory caching and read-time filtering of anomalies
 type HistoryDB struct {
-	db  *sql.DB
-	log zerolog.Logger
+	db          *sql.DB
+	priceFilter *PriceFilter
+	log         zerolog.Logger
+
+	// In-memory cache for filtered prices
+	cacheMu    sync.RWMutex
+	priceCache map[string][]DailyPrice // keyed by ISIN
 }
 
 // Compile-time check that HistoryDB implements HistoryDBInterface
 var _ HistoryDBInterface = (*HistoryDB)(nil)
 
-// NewHistoryDB creates a new history database accessor
-func NewHistoryDB(db *sql.DB, log zerolog.Logger) *HistoryDB {
+// NewHistoryDB creates a new history database accessor with price filtering and caching
+func NewHistoryDB(db *sql.DB, priceFilter *PriceFilter, log zerolog.Logger) *HistoryDB {
 	return &HistoryDB{
-		db:  db,
-		log: log.With().Str("component", "history_db").Logger(),
+		db:          db,
+		priceFilter: priceFilter,
+		log:         log.With().Str("component", "history_db").Logger(),
+		priceCache:  make(map[string][]DailyPrice),
 	}
 }
 
@@ -44,22 +54,75 @@ type MonthlyPrice struct {
 }
 
 // GetDailyPrices fetches daily price data for an ISIN
+// Returns filtered, cached data with anomalies removed
 func (h *HistoryDB) GetDailyPrices(isin string, limit int) ([]DailyPrice, error) {
+	// Check cache first
+	h.cacheMu.RLock()
+	if cached, ok := h.priceCache[isin]; ok {
+		h.cacheMu.RUnlock()
+		return h.applyLimit(cached, limit), nil
+	}
+	h.cacheMu.RUnlock()
+
+	// Fetch from DB, filter, and cache
+	filtered, err := h.fetchAndFilter(isin)
+	if err != nil {
+		return nil, err
+	}
+
+	// Cache the result
+	h.cacheMu.Lock()
+	h.priceCache[isin] = filtered
+	h.cacheMu.Unlock()
+
+	return h.applyLimit(filtered, limit), nil
+}
+
+// GetRecentPrices fetches recent daily price data for an ISIN
+// Returns prices from the last N days, ordered by date descending
+// Uses the same cache as GetDailyPrices but filters by date
+func (h *HistoryDB) GetRecentPrices(isin string, days int) ([]DailyPrice, error) {
+	if days <= 0 {
+		return []DailyPrice{}, nil
+	}
+
+	// Get all cached/filtered prices
+	allPrices, err := h.GetDailyPrices(isin, 0) // 0 = no limit
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter by date cutoff
+	cutoffDate := time.Now().AddDate(0, 0, -days)
+	cutoffStr := cutoffDate.Format("2006-01-02")
+
+	var recent []DailyPrice
+	for _, p := range allPrices {
+		if p.Date >= cutoffStr {
+			recent = append(recent, p)
+		}
+	}
+
+	return recent, nil
+}
+
+// fetchAndFilter fetches all prices from DB, converts to chronological order,
+// filters anomalies, then returns in descending order (most recent first)
+func (h *HistoryDB) fetchAndFilter(isin string) ([]DailyPrice, error) {
 	query := `
 		SELECT date, close, high, low, open, volume
 		FROM daily_prices
 		WHERE isin = ?
-		ORDER BY date DESC
-		LIMIT ?
+		ORDER BY date ASC
 	`
 
-	rows, err := h.db.Query(query, isin, limit)
+	rows, err := h.db.Query(query, isin)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query daily prices: %w", err)
 	}
 	defer rows.Close()
 
-	var prices []DailyPrice
+	var rawPrices []DailyPrice
 	for rows.Next() {
 		var p DailyPrice
 		var volume sql.NullInt64
@@ -71,7 +134,6 @@ func (h *HistoryDB) GetDailyPrices(isin string, limit int) ([]DailyPrice, error)
 		}
 
 		if dateUnix.Valid {
-			// Convert Unix timestamp to YYYY-MM-DD format
 			t := time.Unix(dateUnix.Int64, 0).UTC()
 			p.Date = t.Format("2006-01-02")
 		}
@@ -79,68 +141,49 @@ func (h *HistoryDB) GetDailyPrices(isin string, limit int) ([]DailyPrice, error)
 			p.Volume = &volume.Int64
 		}
 
-		prices = append(prices, p)
+		rawPrices = append(rawPrices, p)
 	}
 
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating daily prices: %w", err)
 	}
 
-	return prices, nil
+	// Filter anomalies (prices are in chronological order for filtering)
+	var filtered []DailyPrice
+	if h.priceFilter != nil {
+		filtered = h.priceFilter.Filter(rawPrices)
+	} else {
+		filtered = rawPrices
+	}
+
+	// Sort descending (most recent first) for return
+	sort.Slice(filtered, func(i, j int) bool {
+		return filtered[i].Date > filtered[j].Date
+	})
+
+	return filtered, nil
 }
 
-// GetRecentPrices fetches recent daily price data for an ISIN
-// Returns prices from the last N days, ordered by date descending
-func (h *HistoryDB) GetRecentPrices(isin string, days int) ([]DailyPrice, error) {
-	if days <= 0 {
-		return []DailyPrice{}, nil
+// applyLimit returns the first n elements if limit > 0, otherwise all
+func (h *HistoryDB) applyLimit(prices []DailyPrice, limit int) []DailyPrice {
+	if limit <= 0 || len(prices) <= limit {
+		return prices
 	}
+	return prices[:limit]
+}
 
-	// Calculate cutoff date (days ago)
-	cutoffDate := time.Now().AddDate(0, 0, -days)
-	cutoffUnix := cutoffDate.Unix()
+// InvalidateCache removes the cached data for a specific ISIN
+func (h *HistoryDB) InvalidateCache(isin string) {
+	h.cacheMu.Lock()
+	delete(h.priceCache, isin)
+	h.cacheMu.Unlock()
+}
 
-	query := `
-		SELECT date, close, high, low, open, volume
-		FROM daily_prices
-		WHERE isin = ? AND date >= ?
-		ORDER BY date DESC
-	`
-
-	rows, err := h.db.Query(query, isin, cutoffUnix)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query recent prices: %w", err)
-	}
-	defer rows.Close()
-
-	var prices []DailyPrice
-	for rows.Next() {
-		var p DailyPrice
-		var volume sql.NullInt64
-		var dateUnix sql.NullInt64
-
-		err := rows.Scan(&dateUnix, &p.Close, &p.High, &p.Low, &p.Open, &volume)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan daily price: %w", err)
-		}
-
-		if dateUnix.Valid {
-			// Convert Unix timestamp to YYYY-MM-DD format
-			t := time.Unix(dateUnix.Int64, 0).UTC()
-			p.Date = t.Format("2006-01-02")
-		}
-		if volume.Valid {
-			p.Volume = &volume.Int64
-		}
-
-		prices = append(prices, p)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating recent prices: %w", err)
-	}
-
-	return prices, nil
+// InvalidateAllCaches removes all cached price data
+func (h *HistoryDB) InvalidateAllCaches() {
+	h.cacheMu.Lock()
+	h.priceCache = make(map[string][]DailyPrice)
+	h.cacheMu.Unlock()
 }
 
 // GetMonthlyPrices fetches monthly price data for an ISIN
@@ -191,7 +234,7 @@ func (h *HistoryDB) HasMonthlyData(isin string) (bool, error) {
 }
 
 // SyncHistoricalPrices writes historical price data to the database
-// Faithful translation from Python: app/jobs/securities_data_sync.py -> _sync_historical_for_symbol()
+// Stores raw data from Tradernet without validation - filtering happens on read
 //
 // Inserts/replaces daily prices and aggregates to monthly prices in a single transaction
 // The isin parameter is the ISIN (e.g., US0378331005), not the Tradernet symbol
@@ -267,6 +310,9 @@ func (h *HistoryDB) SyncHistoricalPrices(isin string, prices []DailyPrice) error
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
+
+	// Invalidate cache for this ISIN after successful write
+	h.InvalidateCache(isin)
 
 	h.log.Info().
 		Str("isin", isin).
@@ -365,6 +411,9 @@ func (h *HistoryDB) DeletePricesForSecurity(isin string) error {
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
+
+	// Invalidate cache for this ISIN
+	h.InvalidateCache(isin)
 
 	dailyRows, _ := dailyResult.RowsAffected()
 	monthlyRows, _ := monthlyResult.RowsAffected()

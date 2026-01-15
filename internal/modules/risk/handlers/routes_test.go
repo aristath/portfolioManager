@@ -14,7 +14,7 @@ func TestRegisterRoutes(t *testing.T) {
 	db := setupTestDB(t)
 	defer db.Close()
 
-	historyDB := universe.NewHistoryDB(db, logger)
+	historyDB := universe.NewHistoryDB(db, nil, logger)
 	mockRepo := &mockPositionRepository{}
 	handler := NewHandler(historyDB, mockRepo, logger)
 

@@ -119,7 +119,7 @@ func setupTestHandler(t *testing.T) *Handler {
 	require.NoError(t, err)
 
 	positionRepo := portfolio.NewPositionRepository(portfolioDB, universeDB, logger)
-	historyDB := universe.NewHistoryDB(historyDBConn, logger)
+	historyDB := universe.NewHistoryDB(historyDBConn, nil, logger)
 	cashManager := &mockCashManager{}
 
 	// Create real service instances
