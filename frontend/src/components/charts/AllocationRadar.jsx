@@ -81,10 +81,10 @@ export function AllocationRadar({ type = 'both' }) {
   }, [type, allocation.industry, activeIndustries]);
 
   return (
-    <div>
+    <div className="allocation-radar">
       {/* Geography Radar */}
       {(type === 'geography' || type === 'both') && geoData && (
-        <div style={{ marginBottom: type === 'both' ? '16px' : 0 }}>
+        <div className="allocation-radar__geography" style={{ marginBottom: type === 'both' ? '16px' : 0 }}>
           <RadarChart
             labels={geoData.labels}
             targetData={geoData.targetData}
@@ -96,7 +96,7 @@ export function AllocationRadar({ type = 'both' }) {
 
       {/* Industry Radar */}
       {(type === 'industry' || type === 'both') && industryData && (
-        <div>
+        <div className="allocation-radar__industry">
           <RadarChart
             labels={industryData.labels}
             targetData={industryData.targetData}

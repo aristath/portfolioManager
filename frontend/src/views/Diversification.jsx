@@ -5,13 +5,13 @@ import { ConcentrationAlerts } from '../components/portfolio/ConcentrationAlerts
 
 export function Diversification() {
   return (
-    <Stack gap="md">
+    <Stack className="diversification-view" gap="md">
       <ConcentrationAlerts />
-      <Grid mt="md">
-        <Grid.Col span={{ base: 12, md: 6 }}>
+      <Grid className="diversification-view__charts" mt="md">
+        <Grid.Col className="diversification-view__geography-col" span={{ base: 12, md: 6 }}>
           <GeographyRadarCard />
         </Grid.Col>
-        <Grid.Col span={{ base: 12, md: 6 }}>
+        <Grid.Col className="diversification-view__industry-col" span={{ base: 12, md: 6 }}>
           <IndustryRadarCard />
         </Grid.Col>
       </Grid>

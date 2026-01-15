@@ -8,14 +8,14 @@ export function AppHeader() {
   const { tradingMode, toggleTradingMode } = useSettingsStore();
 
   return (
-    <header style={{
+    <header className="app-header" style={{
       padding: '12px 0',
       borderBottom: '1px solid var(--mantine-color-dark-6)',
       backgroundColor: 'var(--mantine-color-dark-9)',
     }}>
-      <Group justify="space-between" align="center">
-        <div>
-          <h1 style={{
+      <Group className="app-header__content" justify="space-between" align="center">
+        <div className="app-header__branding">
+          <h1 className="app-header__title" style={{
             margin: 0,
             fontSize: '1.25rem',
             fontWeight: 'bold',
@@ -25,7 +25,7 @@ export function AppHeader() {
           }}>
             Sentinel
           </h1>
-          <p style={{
+          <p className="app-header__subtitle" style={{
             margin: 0,
             fontSize: '0.875rem',
             color: 'var(--mantine-color-dark-2)',
@@ -34,10 +34,11 @@ export function AppHeader() {
             Automated Portfolio Management
           </p>
         </div>
-        <Group gap="md">
+        <Group className="app-header__actions" gap="md">
           {/* Tradernet Connection */}
-          <Group gap="xs">
+          <Group className="app-header__connection" gap="xs">
             <div
+              className={`app-header__indicator app-header__indicator--${tradernet.connected ? 'online' : 'offline'}`}
               style={{
                 width: '8px',
                 height: '8px',
@@ -45,20 +46,22 @@ export function AppHeader() {
                 backgroundColor: tradernet.connected ? 'var(--mantine-color-green-5)' : 'var(--mantine-color-red-5)',
               }}
             />
-            <span style={{ fontSize: '0.875rem', color: tradernet.connected ? 'var(--mantine-color-green-4)' : 'var(--mantine-color-red-4)' }}>
+            <span className="app-header__connection-text" style={{ fontSize: '0.875rem', color: tradernet.connected ? 'var(--mantine-color-green-4)' : 'var(--mantine-color-red-4)' }}>
               {tradernet.connected ? 'Tradernet' : 'Offline'}
             </span>
           </Group>
           {/* Trading Mode Toggle */}
           <Button
+            className="app-header__mode-toggle"
             variant="light"
             size="xs"
             onClick={toggleTradingMode}
             color={tradingMode === 'research' ? 'yellow' : 'green'}
             title={tradingMode === 'research' ? 'Research Mode: Trades are simulated' : 'Live Mode: Trades are executed'}
           >
-            <Group gap="xs">
+            <Group className="app-header__mode-content" gap="xs">
               <div
+                className={`app-header__mode-indicator app-header__mode-indicator--${tradingMode}`}
                 style={{
                   width: '8px',
                   height: '8px',
@@ -66,12 +69,13 @@ export function AppHeader() {
                   backgroundColor: tradingMode === 'research' ? 'var(--mantine-color-yellow-5)' : 'var(--mantine-color-green-5)',
                 }}
               />
-              <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>
+              <span className="app-header__mode-text" style={{ fontSize: '0.875rem', fontWeight: 500 }}>
                 {tradingMode === 'research' ? 'Research' : 'Live'}
               </span>
             </Group>
           </Button>
           <Button
+            className="app-header__settings-btn"
             variant="subtle"
             size="xs"
             onClick={openSettingsModal}

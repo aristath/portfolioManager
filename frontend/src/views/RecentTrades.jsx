@@ -1,5 +1,9 @@
 import { TradesTable } from '../components/trading/TradesTable';
 
 export function RecentTrades() {
-  return <TradesTable />;
+  return (
+    <div className="recent-trades-view">
+      <TradesTable />
+    </div>
+  );
 }

@@ -39,13 +39,15 @@ export function AddSecurityModal() {
 
   return (
     <Modal
+      className="add-security-modal"
       opened={showAddSecurityModal}
       onClose={closeAddSecurityModal}
       title="Add Security to Universe"
       size="md"
     >
-      <div>
+      <div className="add-security-modal__content">
         <TextInput
+          className="add-security-modal__input"
           label="Identifier"
           placeholder="e.g., AAPL.US or US0378331005"
           value={identifier}
@@ -53,16 +55,16 @@ export function AddSecurityModal() {
           mb="md"
           required
         />
-        <Alert color="blue" variant="light" mb="md">
-          <Text size="xs">
+        <Alert className="add-security-modal__alert" color="blue" variant="light" mb="md">
+          <Text className="add-security-modal__alert-text" size="xs">
             All data will be automatically fetched: name, geography, exchange, industry, currency, ISIN, historical data (10 years), and initial score calculation.
           </Text>
         </Alert>
-        <Group justify="flex-end">
-          <Button variant="subtle" onClick={closeAddSecurityModal}>
+        <Group className="add-security-modal__actions" justify="flex-end">
+          <Button className="add-security-modal__cancel-btn" variant="subtle" onClick={closeAddSecurityModal}>
             Cancel
           </Button>
-          <Button onClick={handleAdd} loading={loading} disabled={!identifier.trim()}>
+          <Button className="add-security-modal__submit-btn" onClick={handleAdd} loading={loading} disabled={!identifier.trim()}>
             Add Security
           </Button>
         </Group>

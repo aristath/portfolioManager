@@ -16,6 +16,7 @@ export function StatusBar() {
 
   return (
     <Paper
+      className="status-bar"
       p="md"
       style={{
         backgroundColor: 'var(--mantine-color-dark-7)',
@@ -23,10 +24,11 @@ export function StatusBar() {
       }}
     >
       {/* System Status Row */}
-      <Group justify="space-between" mb="xs">
-        <Group gap="md">
-          <Group gap="xs">
+      <Group className="status-bar__system" justify="space-between" mb="xs">
+        <Group className="status-bar__system-info" gap="md">
+          <Group className="status-bar__health" gap="xs">
             <div
+              className={`status-bar__health-indicator status-bar__health-indicator--${status.status === 'healthy' ? 'healthy' : 'unhealthy'}`}
               style={{
                 width: '6px',
                 height: '6px',
@@ -34,29 +36,30 @@ export function StatusBar() {
                 backgroundColor: status.status === 'healthy' ? 'var(--mantine-color-green-0)' : 'var(--mantine-color-red-0)',
               }}
             />
-            <Text size="xs" c="dimmed" ff="var(--mantine-font-family)">
+            <Text className="status-bar__health-text" size="xs" c="dimmed" ff="var(--mantine-font-family)">
               {status.status === 'healthy' ? 'System Online' : 'System Offline'}
             </Text>
           </Group>
-          <Text size="xs" c="dimmed" ff="var(--mantine-font-family)">|</Text>
-          <Text size="xs" c="dimmed" ff="var(--mantine-font-family)">
-            Last sync: <span>{status.last_sync ? formatTimestamp(status.last_sync) : 'Never'}</span>
+          <Text className="status-bar__separator" size="xs" c="dimmed" ff="var(--mantine-font-family)">|</Text>
+          <Text className="status-bar__sync" size="xs" c="dimmed" ff="var(--mantine-font-family)">
+            Last sync: <span className="status-bar__sync-time">{status.last_sync ? formatTimestamp(status.last_sync) : 'Never'}</span>
           </Text>
         </Group>
       </Group>
 
       {/* Activity Row */}
-      <Group gap="sm" wrap="wrap" mb="xs">
-        <Text size="xs" c="dimmed" fw={500} ff="var(--mantine-font-family)">
+      <Group className="status-bar__activity" gap="sm" wrap="wrap" mb="xs">
+        <Text className="status-bar__activity-label" size="xs" c="dimmed" fw={500} ff="var(--mantine-font-family)">
           Activity:
         </Text>
         {!hasActivity && (
-          <Text size="xs" c="dimmed" ff="var(--mantine-font-family)">
+          <Text className="status-bar__activity-idle" size="xs" c="dimmed" ff="var(--mantine-font-family)">
             IDLE
           </Text>
         )}
         {Object.values(runningJobs).map((job) => (
           <Badge
+            className="status-bar__job status-bar__job--running"
             key={job.jobId}
             size="sm"
             variant="light"
@@ -71,6 +74,7 @@ export function StatusBar() {
         ))}
         {Object.values(completedJobs).map((job) => (
           <Badge
+            className={`status-bar__job status-bar__job--${job.status === 'completed' ? 'completed' : 'failed'}`}
             key={job.jobId}
             size="sm"
             variant="light"
@@ -88,22 +92,22 @@ export function StatusBar() {
       </Group>
 
       {/* Portfolio Summary Row */}
-      <Group justify="space-between">
-        <Group gap="md" wrap="wrap">
-          <Text size="xs" c="dimmed" ff="var(--mantine-font-family)">
-            Total Value: <span style={{ color: 'var(--mantine-color-green-0)' }}>
+      <Group className="status-bar__portfolio" justify="space-between">
+        <Group className="status-bar__portfolio-info" gap="md" wrap="wrap">
+          <Text className="status-bar__total-value" size="xs" c="dimmed" ff="var(--mantine-font-family)">
+            Total Value: <span className="status-bar__total-value-amount" style={{ color: 'var(--mantine-color-green-0)' }}>
               {formatCurrency(allocation.total_value)}
             </span>
           </Text>
-          <Text size="xs" c="dimmed" ff="var(--mantine-font-family)">|</Text>
-          <Text size="xs" c="dimmed" ff="var(--mantine-font-family)">
-            Cash: <span>
+          <Text className="status-bar__separator" size="xs" c="dimmed" ff="var(--mantine-font-family)">|</Text>
+          <Text className="status-bar__cash" size="xs" c="dimmed" ff="var(--mantine-font-family)">
+            Cash: <span className="status-bar__cash-amount">
               {formatCurrency(allocation.cash_balance)}
             </span>
           </Text>
           {cashBreakdown && cashBreakdown.length > 0 && (
             <>
-              <Text size="xs" c="dimmed" ff="var(--mantine-font-family)">
+              <Text className="status-bar__cash-breakdown" size="xs" c="dimmed" ff="var(--mantine-font-family)">
                 ({cashBreakdown.map((cb, index) => {
                   if (cb.currency === 'TEST') {
                     const displayAmount = cb.amount ?? 0;
@@ -111,11 +115,12 @@ export function StatusBar() {
                     const currentValue = testCashValue !== null ? testCashValue : displayAmount;
 
                     return (
-                      <span key={cb.currency}>
-                        <span style={{ backgroundColor: 'rgba(166, 227, 161, 0.15)', padding: '2px 4px', borderRadius: '2px', border: '1px solid rgba(166, 227, 161, 0.3)' }}>
-                          <span style={{ color: 'var(--mantine-color-green-0)' }}>{cb.currency}</span>:
+                      <span className="status-bar__currency status-bar__currency--test" key={cb.currency}>
+                        <span className="status-bar__currency-highlight" style={{ backgroundColor: 'rgba(166, 227, 161, 0.15)', padding: '2px 4px', borderRadius: '2px', border: '1px solid rgba(166, 227, 161, 0.3)' }}>
+                          <span className="status-bar__currency-code" style={{ color: 'var(--mantine-color-green-0)' }}>{cb.currency}</span>:
                           {isEditing ? (
                             <NumberInput
+                              className="status-bar__test-cash-input"
                               value={currentValue}
                               onChange={(val) => setTestCashValue(val ?? 0)}
                               onBlur={async () => {
@@ -162,6 +167,7 @@ export function StatusBar() {
                             />
                           ) : (
                             <span
+                              className="status-bar__test-cash-value"
                               style={{
                                 color: 'var(--mantine-color-green-0)',
                                 cursor: 'pointer',
@@ -182,9 +188,9 @@ export function StatusBar() {
                     );
                   }
                   return (
-                    <span key={cb.currency}>
-                      <span>
-                        {cb.currency}: <span>{formatNumber(cb.amount ?? 0, 2)}</span>
+                    <span className="status-bar__currency" key={cb.currency}>
+                      <span className="status-bar__currency-item">
+                        {cb.currency}: <span className="status-bar__currency-amount">{formatNumber(cb.amount ?? 0, 2)}</span>
                       </span>
                       {index < cashBreakdown.length - 1 && ', '}
                     </span>
@@ -193,9 +199,9 @@ export function StatusBar() {
               </Text>
             </>
           )}
-          <Text size="xs" c="dimmed" ff="var(--mantine-font-family)">|</Text>
-          <Text size="xs" c="dimmed" ff="var(--mantine-font-family)">
-            Positions: <span>
+          <Text className="status-bar__separator" size="xs" c="dimmed" ff="var(--mantine-font-family)">|</Text>
+          <Text className="status-bar__positions" size="xs" c="dimmed" ff="var(--mantine-font-family)">
+            Positions: <span className="status-bar__positions-count">
               {status.active_positions || 0}
             </span>
           </Text>

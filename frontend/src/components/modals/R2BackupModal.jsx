@@ -109,19 +109,21 @@ export function R2BackupModal({ opened, onClose }) {
   return (
     <>
       <Modal
+        className="backup-modal"
         opened={opened}
         onClose={onClose}
         title="Cloudflare R2 Backups"
         size="xl"
       >
-        <Stack gap="md">
+        <Stack className="backup-modal__content" gap="md">
           {!showRestoreConfirm && (
             <>
-              <Group justify="space-between">
-                <Text size="sm" c="dimmed">
+              <Group className="backup-modal__header" justify="space-between">
+                <Text className="backup-modal__count" size="sm" c="dimmed">
                   {backups.length} backup{backups.length !== 1 ? 's' : ''} available
                 </Text>
                 <Button
+                  className="backup-modal__refresh-btn"
                   size="xs"
                   variant="light"
                   leftSection={<IconRefresh size={16} />}
@@ -133,40 +135,41 @@ export function R2BackupModal({ opened, onClose }) {
               </Group>
 
               {backups.length === 0 && !loading && (
-                <Alert color="blue">
-                  <Text size="sm">No backups found. Create your first backup using the &quot;Backup Now&quot; button in Settings.</Text>
+                <Alert className="backup-modal__empty-alert" color="blue">
+                  <Text className="backup-modal__empty-text" size="sm">No backups found. Create your first backup using the &quot;Backup Now&quot; button in Settings.</Text>
                 </Alert>
               )}
 
               {backups.length > 0 && (
-                <Table striped highlightOnHover>
-                  <Table.Thead>
-                    <Table.Tr>
-                      <Table.Th>Date</Table.Th>
-                      <Table.Th>Age</Table.Th>
-                      <Table.Th>Size</Table.Th>
-                      <Table.Th style={{ textAlign: 'right' }}>Actions</Table.Th>
+                <Table className="backup-modal__table" striped highlightOnHover>
+                  <Table.Thead className="backup-modal__table-head">
+                    <Table.Tr className="backup-modal__table-header-row">
+                      <Table.Th className="backup-modal__table-th backup-modal__table-th--date">Date</Table.Th>
+                      <Table.Th className="backup-modal__table-th backup-modal__table-th--age">Age</Table.Th>
+                      <Table.Th className="backup-modal__table-th backup-modal__table-th--size">Size</Table.Th>
+                      <Table.Th className="backup-modal__table-th backup-modal__table-th--actions" style={{ textAlign: 'right' }}>Actions</Table.Th>
                     </Table.Tr>
                   </Table.Thead>
-                  <Table.Tbody>
+                  <Table.Tbody className="backup-modal__table-body">
                     {backups.map((backup) => (
-                      <Table.Tr key={backup.filename}>
-                        <Table.Td>
-                          <Text size="sm" fw={500}>{formatTimestamp(backup.timestamp)}</Text>
-                          <Text size="xs" c="dimmed">{backup.filename}</Text>
+                      <Table.Tr className="backup-modal__table-row" key={backup.filename}>
+                        <Table.Td className="backup-modal__table-td backup-modal__table-td--date">
+                          <Text className="backup-modal__date" size="sm" fw={500}>{formatTimestamp(backup.timestamp)}</Text>
+                          <Text className="backup-modal__filename" size="xs" c="dimmed">{backup.filename}</Text>
                         </Table.Td>
-                        <Table.Td>
-                          <Badge size="sm" variant="light">
+                        <Table.Td className="backup-modal__table-td backup-modal__table-td--age">
+                          <Badge className="backup-modal__age-badge" size="sm" variant="light">
                             {formatAge(backup.timestamp)}
                           </Badge>
                         </Table.Td>
-                        <Table.Td>
-                          <Text size="sm">{formatBytes(backup.size)}</Text>
+                        <Table.Td className="backup-modal__table-td backup-modal__table-td--size">
+                          <Text className="backup-modal__size" size="sm">{formatBytes(backup.size)}</Text>
                         </Table.Td>
-                        <Table.Td>
-                          <Group gap="xs" justify="flex-end">
+                        <Table.Td className="backup-modal__table-td backup-modal__table-td--actions">
+                          <Group className="backup-modal__action-buttons" gap="xs" justify="flex-end">
                             <Tooltip label="Download backup">
                               <ActionIcon
+                                className="backup-modal__action-btn backup-modal__action-btn--download"
                                 variant="light"
                                 color="blue"
                                 onClick={() => handleDownload(backup.filename)}
@@ -177,6 +180,7 @@ export function R2BackupModal({ opened, onClose }) {
                             </Tooltip>
                             <Tooltip label="Restore backup">
                               <ActionIcon
+                                className="backup-modal__action-btn backup-modal__action-btn--restore"
                                 variant="light"
                                 color="green"
                                 onClick={() => handleRestoreClick(backup)}
@@ -187,6 +191,7 @@ export function R2BackupModal({ opened, onClose }) {
                             </Tooltip>
                             <Tooltip label="Delete backup">
                               <ActionIcon
+                                className="backup-modal__action-btn backup-modal__action-btn--delete"
                                 variant="light"
                                 color="red"
                                 onClick={() => handleDelete(backup.filename)}
@@ -206,42 +211,43 @@ export function R2BackupModal({ opened, onClose }) {
           )}
 
           {showRestoreConfirm && (
-            <Stack gap="md">
-              <Alert color="orange" title="Confirm Restore">
-                <Stack gap="sm">
-                  <Text size="sm">
+            <Stack className="backup-modal__restore-confirm" gap="md">
+              <Alert className="backup-modal__restore-alert" color="orange" title="Confirm Restore">
+                <Stack className="backup-modal__restore-details" gap="sm">
+                  <Text className="backup-modal__restore-text" size="sm">
                     You are about to restore the following backup:
                   </Text>
-                  <Text size="sm" fw={500}>
+                  <Text className="backup-modal__restore-filename" size="sm" fw={500}>
                     {showRestoreConfirm.filename}
                   </Text>
-                  <Text size="sm" c="dimmed">
+                  <Text className="backup-modal__restore-created" size="sm" c="dimmed">
                     Created: {formatTimestamp(showRestoreConfirm.timestamp)}
                   </Text>
-                  <Text size="sm" c="dimmed">
+                  <Text className="backup-modal__restore-size" size="sm" c="dimmed">
                     Size: {formatBytes(showRestoreConfirm.size)}
                   </Text>
-                  <Divider />
-                  <Text size="sm" fw={500} c="red">
+                  <Divider className="backup-modal__restore-divider" />
+                  <Text className="backup-modal__restore-warning" size="sm" fw={500} c="red">
                     Warning: This will replace all current databases!
                   </Text>
-                  <Text size="xs" c="dimmed">
+                  <Text className="backup-modal__restore-note" size="xs" c="dimmed">
                     • Your current databases will be backed up automatically before restore
                   </Text>
-                  <Text size="xs" c="dimmed">
+                  <Text className="backup-modal__restore-note" size="xs" c="dimmed">
                     • The system will restart automatically
                   </Text>
-                  <Text size="xs" c="dimmed">
+                  <Text className="backup-modal__restore-note" size="xs" c="dimmed">
                     • You may lose connection briefly during restart
                   </Text>
-                  <Text size="xs" c="dimmed">
+                  <Text className="backup-modal__restore-note" size="xs" c="dimmed">
                     • Pre-restore backup will be saved in case recovery is needed
                   </Text>
                 </Stack>
               </Alert>
 
-              <Group justify="flex-end" gap="sm">
+              <Group className="backup-modal__restore-actions" justify="flex-end" gap="sm">
                 <Button
+                  className="backup-modal__restore-cancel-btn"
                   variant="default"
                   onClick={() => setShowRestoreConfirm(null)}
                   disabled={actionLoading}
@@ -249,6 +255,7 @@ export function R2BackupModal({ opened, onClose }) {
                   Cancel
                 </Button>
                 <Button
+                  className="backup-modal__restore-confirm-btn"
                   color="orange"
                   onClick={handleRestoreConfirm}
                   loading={actionLoading === `restore-${showRestoreConfirm.filename}`}

@@ -125,42 +125,45 @@ export function SettingsModal() {
   return (
     <>
       <Modal
+        className="settings-modal"
         opened={showSettingsModal}
         onClose={closeSettingsModal}
         title="Settings"
         size="xl"
         styles={{ body: { padding: 0 } }}
       >
-      <Tabs value={activeTab} onChange={setActiveTab}>
-        <Tabs.List grow>
-          <Tabs.Tab value="trading">Trading</Tabs.Tab>
-          <Tabs.Tab value="display">Display</Tabs.Tab>
-          <Tabs.Tab value="system">System</Tabs.Tab>
-          <Tabs.Tab value="backup">Backup</Tabs.Tab>
-          <Tabs.Tab value="credentials">Credentials</Tabs.Tab>
+      <Tabs className="settings-modal__tabs" value={activeTab} onChange={setActiveTab}>
+        <Tabs.List className="settings-modal__tab-list" grow>
+          <Tabs.Tab className="settings-modal__tab settings-modal__tab--trading" value="trading">Trading</Tabs.Tab>
+          <Tabs.Tab className="settings-modal__tab settings-modal__tab--display" value="display">Display</Tabs.Tab>
+          <Tabs.Tab className="settings-modal__tab settings-modal__tab--system" value="system">System</Tabs.Tab>
+          <Tabs.Tab className="settings-modal__tab settings-modal__tab--backup" value="backup">Backup</Tabs.Tab>
+          <Tabs.Tab className="settings-modal__tab settings-modal__tab--credentials" value="credentials">Credentials</Tabs.Tab>
         </Tabs.List>
 
-        <Tabs.Panel value="trading" p="md">
-          <Stack gap="md">
+        <Tabs.Panel className="settings-modal__panel settings-modal__panel--trading" value="trading" p="md">
+          <Stack className="settings-modal__trading-content" gap="md">
             {/* Trade Frequency Limits */}
-            <Paper p="md" withBorder>
-              <Text size="sm" fw={500} mb="xs" tt="uppercase">Trade Frequency Limits</Text>
-              <Text size="xs" c="dimmed" mb="md">
+            <Paper className="settings-modal__section settings-modal__section--frequency" p="md" withBorder>
+              <Text className="settings-modal__section-title" size="sm" fw={500} mb="xs" tt="uppercase">Trade Frequency Limits</Text>
+              <Text className="settings-modal__section-desc" size="xs" c="dimmed" mb="md">
                 Prevent excessive trading by enforcing minimum time between trades and daily/weekly limits.
               </Text>
-              <Stack gap="sm">
+              <Stack className="settings-modal__section-content" gap="sm">
                 <Switch
+                  className="settings-modal__switch settings-modal__switch--frequency-enabled"
                   label="Enable frequency limits"
                   checked={getSetting('trade_frequency_limits_enabled', 1) === 1}
                   onChange={(e) => handleUpdateSetting('trade_frequency_limits_enabled', e.currentTarget.checked ? 1 : 0)}
                 />
-                <Group justify="space-between">
-                  <div>
-                    <Text size="sm">Min Time Between Trades</Text>
-                    <Text size="xs" c="dimmed">Minimum minutes between any trades</Text>
+                <Group className="settings-modal__setting-row" justify="space-between">
+                  <div className="settings-modal__setting-label">
+                    <Text className="settings-modal__setting-name" size="sm">Min Time Between Trades</Text>
+                    <Text className="settings-modal__setting-hint" size="xs" c="dimmed">Minimum minutes between any trades</Text>
                   </div>
-                  <Group gap="xs">
+                  <Group className="settings-modal__setting-input" gap="xs">
                     <NumberInput
+                      className="settings-modal__number-input"
                       value={getSetting('min_time_between_trades_minutes', 60)}
                       onChange={(val) => handleUpdateSetting('min_time_between_trades_minutes', val)}
                       min={0}
@@ -168,15 +171,16 @@ export function SettingsModal() {
                       w={80}
                       size="sm"
                     />
-                    <Text size="sm" c="dimmed">min</Text>
+                    <Text className="settings-modal__setting-unit" size="sm" c="dimmed">min</Text>
                   </Group>
                 </Group>
-                <Group justify="space-between">
-                  <div>
-                    <Text size="sm">Max Trades Per Day</Text>
-                    <Text size="xs" c="dimmed">Maximum trades per calendar day</Text>
+                <Group className="settings-modal__setting-row" justify="space-between">
+                  <div className="settings-modal__setting-label">
+                    <Text className="settings-modal__setting-name" size="sm">Max Trades Per Day</Text>
+                    <Text className="settings-modal__setting-hint" size="xs" c="dimmed">Maximum trades per calendar day</Text>
                   </div>
                   <NumberInput
+                    className="settings-modal__number-input"
                     value={getSetting('max_trades_per_day', 4)}
                     onChange={(val) => handleUpdateSetting('max_trades_per_day', val)}
                     min={1}
@@ -185,12 +189,13 @@ export function SettingsModal() {
                     size="sm"
                   />
                 </Group>
-                <Group justify="space-between">
-                  <div>
-                    <Text size="sm">Max Trades Per Week</Text>
-                    <Text size="xs" c="dimmed">Maximum trades per rolling 7-day window</Text>
+                <Group className="settings-modal__setting-row" justify="space-between">
+                  <div className="settings-modal__setting-label">
+                    <Text className="settings-modal__setting-name" size="sm">Max Trades Per Week</Text>
+                    <Text className="settings-modal__setting-hint" size="xs" c="dimmed">Maximum trades per rolling 7-day window</Text>
                   </div>
                   <NumberInput
+                    className="settings-modal__number-input"
                     value={getSetting('max_trades_per_week', 10)}
                     onChange={(val) => handleUpdateSetting('max_trades_per_week', val)}
                     min={1}
@@ -203,16 +208,17 @@ export function SettingsModal() {
             </Paper>
 
             {/* Limit Order Protection */}
-            <Paper p="md" withBorder>
-              <Text size="sm" fw={500} mb="xs" tt="uppercase">Limit Order Protection</Text>
-              <Stack gap="sm">
-                <Group justify="space-between">
-                  <div>
-                    <Text size="sm">Limit Order Buffer</Text>
-                    <Text size="xs" c="dimmed">Price protection buffer for limit orders</Text>
+            <Paper className="settings-modal__section settings-modal__section--limit-order" p="md" withBorder>
+              <Text className="settings-modal__section-title" size="sm" fw={500} mb="xs" tt="uppercase">Limit Order Protection</Text>
+              <Stack className="settings-modal__section-content" gap="sm">
+                <Group className="settings-modal__setting-row" justify="space-between">
+                  <div className="settings-modal__setting-label">
+                    <Text className="settings-modal__setting-name" size="sm">Limit Order Buffer</Text>
+                    <Text className="settings-modal__setting-hint" size="xs" c="dimmed">Price protection buffer for limit orders</Text>
                   </div>
-                  <Group gap="xs">
+                  <Group className="settings-modal__setting-input" gap="xs">
                     <NumberInput
+                      className="settings-modal__number-input"
                       value={(getSetting('limit_order_buffer_percent', 0.05) * 100).toFixed(1)}
                       onChange={(val) => handleUpdateSetting('limit_order_buffer_percent', (val || 0) / 100)}
                       min={1}
@@ -222,11 +228,11 @@ export function SettingsModal() {
                       w={80}
                       size="sm"
                     />
-                    <Text size="sm" c="dimmed">%</Text>
+                    <Text className="settings-modal__setting-unit" size="sm" c="dimmed">%</Text>
                   </Group>
                 </Group>
-                <Alert color="blue" variant="light" styles={{message: {fontSize: '12px'}}}>
-                  <Text size="xs">
+                <Alert className="settings-modal__alert" color="blue" variant="light" styles={{message: {fontSize: '12px'}}}>
+                  <Text className="settings-modal__alert-text" size="xs">
                     <strong>Example:</strong> If current price is €30 and buffer is 5%, buy limit is €31.50.
                     Protects against order book price discrepancies.
                   </Text>
@@ -235,16 +241,17 @@ export function SettingsModal() {
             </Paper>
 
             {/* Scoring Parameters */}
-            <Paper p="md" withBorder>
-              <Text size="sm" fw={500} mb="xs" tt="uppercase">Scoring Parameters</Text>
-              <Stack gap="sm">
-                <Group justify="space-between">
-                  <div>
-                    <Text size="sm">Target Annual Return</Text>
-                    <Text size="xs" c="dimmed">Target CAGR for scoring</Text>
+            <Paper className="settings-modal__section settings-modal__section--scoring" p="md" withBorder>
+              <Text className="settings-modal__section-title" size="sm" fw={500} mb="xs" tt="uppercase">Scoring Parameters</Text>
+              <Stack className="settings-modal__section-content" gap="sm">
+                <Group className="settings-modal__setting-row" justify="space-between">
+                  <div className="settings-modal__setting-label">
+                    <Text className="settings-modal__setting-name" size="sm">Target Annual Return</Text>
+                    <Text className="settings-modal__setting-hint" size="xs" c="dimmed">Target CAGR for scoring</Text>
                   </div>
-                  <Group gap="xs">
+                  <Group className="settings-modal__setting-input" gap="xs">
                     <NumberInput
+                      className="settings-modal__number-input"
                       value={(getSetting('target_annual_return', 0.11) * 100).toFixed(0)}
                       onChange={(val) => handleUpdateSetting('target_annual_return', (val || 0) / 100)}
                       min={0}
@@ -252,31 +259,33 @@ export function SettingsModal() {
                       w={80}
                       size="sm"
                     />
-                    <Text size="sm" c="dimmed">%</Text>
+                    <Text className="settings-modal__setting-unit" size="sm" c="dimmed">%</Text>
                   </Group>
                 </Group>
               </Stack>
             </Paper>
 
             {/* Market Regime Detection */}
-            <Paper p="md" withBorder>
-              <Text size="sm" fw={500} mb="xs" tt="uppercase">Market Regime Detection</Text>
-              <Text size="xs" c="dimmed" mb="md">
+            <Paper className="settings-modal__section settings-modal__section--regime" p="md" withBorder>
+              <Text className="settings-modal__section-title" size="sm" fw={500} mb="xs" tt="uppercase">Market Regime Detection</Text>
+              <Text className="settings-modal__section-desc" size="xs" c="dimmed" mb="md">
                 Cash reserves adjust automatically based on market conditions (SPY/QQQ 200-day MA).
               </Text>
-              <Stack gap="sm">
+              <Stack className="settings-modal__section-content" gap="sm">
                 <Switch
+                  className="settings-modal__switch settings-modal__switch--regime-enabled"
                   label="Enable regime-based cash reserves"
                   checked={getSetting('market_regime_detection_enabled', 1) === 1}
                   onChange={(e) => handleUpdateSetting('market_regime_detection_enabled', e.currentTarget.checked ? 1 : 0)}
                 />
-                <Group justify="space-between">
-                  <div>
-                    <Text size="sm">Bull Market Reserve</Text>
-                    <Text size="xs" c="dimmed">Cash reserve percentage</Text>
+                <Group className="settings-modal__setting-row" justify="space-between">
+                  <div className="settings-modal__setting-label">
+                    <Text className="settings-modal__setting-name" size="sm">Bull Market Reserve</Text>
+                    <Text className="settings-modal__setting-hint" size="xs" c="dimmed">Cash reserve percentage</Text>
                   </div>
-                  <Group gap="xs">
+                  <Group className="settings-modal__setting-input" gap="xs">
                     <NumberInput
+                      className="settings-modal__number-input"
                       value={(getSetting('market_regime_bull_cash_reserve', 0.02) * 100).toFixed(1)}
                       onChange={(val) => {
                         const v = Math.max(0.01, Math.min(0.40, (val || 0) / 100));
@@ -288,16 +297,17 @@ export function SettingsModal() {
                       w={80}
                       size="sm"
                     />
-                    <Text size="sm" c="dimmed">%</Text>
+                    <Text className="settings-modal__setting-unit" size="sm" c="dimmed">%</Text>
                   </Group>
                 </Group>
-                <Group justify="space-between">
-                  <div>
-                    <Text size="sm">Bear Market Reserve</Text>
-                    <Text size="xs" c="dimmed">Cash reserve percentage</Text>
+                <Group className="settings-modal__setting-row" justify="space-between">
+                  <div className="settings-modal__setting-label">
+                    <Text className="settings-modal__setting-name" size="sm">Bear Market Reserve</Text>
+                    <Text className="settings-modal__setting-hint" size="xs" c="dimmed">Cash reserve percentage</Text>
                   </div>
-                  <Group gap="xs">
+                  <Group className="settings-modal__setting-input" gap="xs">
                     <NumberInput
+                      className="settings-modal__number-input"
                       value={(getSetting('market_regime_bear_cash_reserve', 0.05) * 100).toFixed(1)}
                       onChange={(val) => {
                         const v = Math.max(0.01, Math.min(0.40, (val || 0) / 100));
@@ -309,16 +319,17 @@ export function SettingsModal() {
                       w={80}
                       size="sm"
                     />
-                    <Text size="sm" c="dimmed">%</Text>
+                    <Text className="settings-modal__setting-unit" size="sm" c="dimmed">%</Text>
                   </Group>
                 </Group>
-                <Group justify="space-between">
-                  <div>
-                    <Text size="sm">Sideways Market Reserve</Text>
-                    <Text size="xs" c="dimmed">Cash reserve percentage</Text>
+                <Group className="settings-modal__setting-row" justify="space-between">
+                  <div className="settings-modal__setting-label">
+                    <Text className="settings-modal__setting-name" size="sm">Sideways Market Reserve</Text>
+                    <Text className="settings-modal__setting-hint" size="xs" c="dimmed">Cash reserve percentage</Text>
                   </div>
-                  <Group gap="xs">
+                  <Group className="settings-modal__setting-input" gap="xs">
                     <NumberInput
+                      className="settings-modal__number-input"
                       value={(getSetting('market_regime_sideways_cash_reserve', 0.03) * 100).toFixed(1)}
                       onChange={(val) => {
                         const v = Math.max(0.01, Math.min(0.40, (val || 0) / 100));
@@ -330,10 +341,10 @@ export function SettingsModal() {
                       w={80}
                       size="sm"
                     />
-                    <Text size="sm" c="dimmed">%</Text>
+                    <Text className="settings-modal__setting-unit" size="sm" c="dimmed">%</Text>
                   </Group>
                 </Group>
-                <Text size="xs" c="dimmed" mt="xs">
+                <Text className="settings-modal__note" size="xs" c="dimmed" mt="xs">
                   Reserves are calculated as percentage of total portfolio value, with a minimum floor set in Planner Configuration.
                 </Text>
               </Stack>
@@ -341,15 +352,16 @@ export function SettingsModal() {
           </Stack>
         </Tabs.Panel>
 
-        <Tabs.Panel value="display" p="md">
-          <Stack gap="md">
+        <Tabs.Panel className="settings-modal__panel settings-modal__panel--display" value="display" p="md">
+          <Stack className="settings-modal__display-content" gap="md">
             {/* Display Mode */}
-            <Paper p="md" withBorder>
-              <Text size="sm" fw={500} mb="xs" tt="uppercase">Display Mode</Text>
-              <Text size="xs" c="dimmed" mb="md">
+            <Paper className="settings-modal__section settings-modal__section--display-mode" p="md" withBorder>
+              <Text className="settings-modal__section-title" size="sm" fw={500} mb="xs" tt="uppercase">Display Mode</Text>
+              <Text className="settings-modal__section-desc" size="xs" c="dimmed" mb="md">
                 Choose what to show on the LED matrix display.
               </Text>
               <Select
+                className="settings-modal__select"
                 label="Display Mode"
                 value={getSetting('display_mode', 'TEXT') || 'TEXT'}
                 onChange={(val) => handleUpdateSetting('display_mode', val)}
@@ -363,16 +375,17 @@ export function SettingsModal() {
             </Paper>
 
             {/* LED Matrix */}
-            <Paper p="md" withBorder>
-              <Text size="sm" fw={500} mb="xs" tt="uppercase">LED Matrix</Text>
-              <Stack gap="sm">
-                <Group justify="space-between">
-                  <div>
-                    <Text size="sm">Ticker Speed</Text>
-                    <Text size="xs" c="dimmed">Lower = faster scroll</Text>
+            <Paper className="settings-modal__section settings-modal__section--led" p="md" withBorder>
+              <Text className="settings-modal__section-title" size="sm" fw={500} mb="xs" tt="uppercase">LED Matrix</Text>
+              <Stack className="settings-modal__section-content" gap="sm">
+                <Group className="settings-modal__setting-row" justify="space-between">
+                  <div className="settings-modal__setting-label">
+                    <Text className="settings-modal__setting-name" size="sm">Ticker Speed</Text>
+                    <Text className="settings-modal__setting-hint" size="xs" c="dimmed">Lower = faster scroll</Text>
                   </div>
-                  <Group gap="xs">
+                  <Group className="settings-modal__setting-input" gap="xs">
                     <NumberInput
+                      className="settings-modal__number-input"
                       value={getSetting('ticker_speed', 50)}
                       onChange={(val) => handleUpdateSetting('ticker_speed', val)}
                       min={1}
@@ -381,15 +394,16 @@ export function SettingsModal() {
                       w={80}
                       size="sm"
                     />
-                    <Text size="sm" c="dimmed">ms</Text>
+                    <Text className="settings-modal__setting-unit" size="sm" c="dimmed">ms</Text>
                   </Group>
                 </Group>
-                <Group justify="space-between">
-                  <div>
-                    <Text size="sm">Brightness</Text>
-                    <Text size="xs" c="dimmed">0-255 (default 150)</Text>
+                <Group className="settings-modal__setting-row" justify="space-between">
+                  <div className="settings-modal__setting-label">
+                    <Text className="settings-modal__setting-name" size="sm">Brightness</Text>
+                    <Text className="settings-modal__setting-hint" size="xs" c="dimmed">0-255 (default 150)</Text>
                   </div>
                   <NumberInput
+                    className="settings-modal__number-input"
                     value={getSetting('led_brightness', 150)}
                     onChange={(val) => handleUpdateSetting('led_brightness', val)}
                     min={0}
@@ -399,32 +413,37 @@ export function SettingsModal() {
                     size="sm"
                   />
                 </Group>
-                <Divider />
-                <Text size="xs" fw={500} tt="uppercase" mb="xs">Ticker Content</Text>
-                <Stack gap="xs">
+                <Divider className="settings-modal__divider" />
+                <Text className="settings-modal__subsection-title" size="xs" fw={500} tt="uppercase" mb="xs">Ticker Content</Text>
+                <Stack className="settings-modal__ticker-options" gap="xs">
                   <Switch
+                    className="settings-modal__switch settings-modal__switch--ticker-value"
                     label="Portfolio value"
                     checked={getSetting('ticker_show_value', 1) === 1}
                     onChange={(e) => handleUpdateSetting('ticker_show_value', e.currentTarget.checked ? 1 : 0)}
                   />
                   <Switch
+                    className="settings-modal__switch settings-modal__switch--ticker-cash"
                     label="Cash balance"
                     checked={getSetting('ticker_show_cash', 1) === 1}
                     onChange={(e) => handleUpdateSetting('ticker_show_cash', e.currentTarget.checked ? 1 : 0)}
                   />
                   <Switch
+                    className="settings-modal__switch settings-modal__switch--ticker-actions"
                     label="Next actions"
                     checked={getSetting('ticker_show_actions', 1) === 1}
                     onChange={(e) => handleUpdateSetting('ticker_show_actions', e.currentTarget.checked ? 1 : 0)}
                   />
                   <Switch
+                    className="settings-modal__switch settings-modal__switch--ticker-amounts"
                     label="Show amounts"
                     checked={getSetting('ticker_show_amounts', 1) === 1}
                     onChange={(e) => handleUpdateSetting('ticker_show_amounts', e.currentTarget.checked ? 1 : 0)}
                   />
-                  <Group justify="space-between">
-                    <Text size="sm">Max actions</Text>
+                  <Group className="settings-modal__setting-row" justify="space-between">
+                    <Text className="settings-modal__setting-name" size="sm">Max actions</Text>
                     <NumberInput
+                      className="settings-modal__number-input"
                       value={getSetting('ticker_max_actions', 3)}
                       onChange={(val) => handleUpdateSetting('ticker_max_actions', val)}
                       min={1}
@@ -440,22 +459,23 @@ export function SettingsModal() {
           </Stack>
         </Tabs.Panel>
 
-        <Tabs.Panel value="system" p="md">
-          <Stack gap="md">
+        <Tabs.Panel className="settings-modal__panel settings-modal__panel--system" value="system" p="md">
+          <Stack className="settings-modal__system-content" gap="md">
             {/* Job Scheduling */}
-            <Paper p="md" withBorder>
-              <Text size="sm" fw={500} mb="xs" tt="uppercase">Job Scheduling</Text>
-              <Text size="xs" c="dimmed" mb="md">
+            <Paper className="settings-modal__section settings-modal__section--scheduling" p="md" withBorder>
+              <Text className="settings-modal__section-title" size="sm" fw={500} mb="xs" tt="uppercase">Job Scheduling</Text>
+              <Text className="settings-modal__section-desc" size="xs" c="dimmed" mb="md">
                 Simplified to 4 consolidated jobs: sync cycle (trading), daily pipeline (data), and maintenance.
               </Text>
-              <Stack gap="sm">
-                <Group justify="space-between">
-                  <div>
-                    <Text size="sm">Sync Cycle</Text>
-                    <Text size="xs" c="dimmed">Trades, prices, recommendations, execution</Text>
+              <Stack className="settings-modal__section-content" gap="sm">
+                <Group className="settings-modal__setting-row" justify="space-between">
+                  <div className="settings-modal__setting-label">
+                    <Text className="settings-modal__setting-name" size="sm">Sync Cycle</Text>
+                    <Text className="settings-modal__setting-hint" size="xs" c="dimmed">Trades, prices, recommendations, execution</Text>
                   </div>
-                  <Group gap="xs">
+                  <Group className="settings-modal__setting-input" gap="xs">
                     <NumberInput
+                      className="settings-modal__number-input"
                       value={getSetting('job_sync_cycle_minutes', 15)}
                       onChange={(val) => handleUpdateSetting('job_sync_cycle_minutes', val)}
                       min={5}
@@ -464,16 +484,17 @@ export function SettingsModal() {
                       w={80}
                       size="sm"
                     />
-                    <Text size="sm" c="dimmed">min</Text>
+                    <Text className="settings-modal__setting-unit" size="sm" c="dimmed">min</Text>
                   </Group>
                 </Group>
-                <Group justify="space-between">
-                  <div>
-                    <Text size="sm">Maintenance</Text>
-                    <Text size="xs" c="dimmed">Daily backup and cleanup hour</Text>
+                <Group className="settings-modal__setting-row" justify="space-between">
+                  <div className="settings-modal__setting-label">
+                    <Text className="settings-modal__setting-name" size="sm">Maintenance</Text>
+                    <Text className="settings-modal__setting-hint" size="xs" c="dimmed">Daily backup and cleanup hour</Text>
                   </div>
-                  <Group gap="xs">
+                  <Group className="settings-modal__setting-input" gap="xs">
                     <NumberInput
+                      className="settings-modal__number-input"
                       value={getSetting('job_maintenance_hour', 3)}
                       onChange={(val) => handleUpdateSetting('job_maintenance_hour', val)}
                       min={0}
@@ -482,16 +503,17 @@ export function SettingsModal() {
                       w={80}
                       size="sm"
                     />
-                    <Text size="sm" c="dimmed">h</Text>
+                    <Text className="settings-modal__setting-unit" size="sm" c="dimmed">h</Text>
                   </Group>
                 </Group>
-                <Group justify="space-between">
-                  <div>
-                    <Text size="sm">Auto-Deploy</Text>
-                    <Text size="xs" c="dimmed">Check for updates and deploy changes</Text>
+                <Group className="settings-modal__setting-row" justify="space-between">
+                  <div className="settings-modal__setting-label">
+                    <Text className="settings-modal__setting-name" size="sm">Auto-Deploy</Text>
+                    <Text className="settings-modal__setting-hint" size="xs" c="dimmed">Check for updates and deploy changes</Text>
                   </div>
-                  <Group gap="xs">
+                  <Group className="settings-modal__setting-input" gap="xs">
                     <NumberInput
+                      className="settings-modal__number-input"
                       value={getSetting('job_auto_deploy_minutes', 5)}
                       onChange={(val) => handleUpdateSetting('job_auto_deploy_minutes', val)}
                       min={0}
@@ -499,23 +521,24 @@ export function SettingsModal() {
                       w={80}
                       size="sm"
                     />
-                    <Text size="sm" c="dimmed">min</Text>
+                    <Text className="settings-modal__setting-unit" size="sm" c="dimmed">min</Text>
                   </Group>
                 </Group>
-                <Divider />
-                <Text size="xs" fw={500} tt="uppercase" mb="xs">Fixed Schedules</Text>
-                <Text size="xs" c="dimmed">Daily Pipeline: Hourly (per-symbol data sync)</Text>
-                <Text size="xs" c="dimmed">Weekly Maintenance: Sundays (integrity checks)</Text>
+                <Divider className="settings-modal__divider" />
+                <Text className="settings-modal__subsection-title" size="xs" fw={500} tt="uppercase" mb="xs">Fixed Schedules</Text>
+                <Text className="settings-modal__fixed-schedule" size="xs" c="dimmed">Daily Pipeline: Hourly (per-symbol data sync)</Text>
+                <Text className="settings-modal__fixed-schedule" size="xs" c="dimmed">Weekly Maintenance: Sundays (integrity checks)</Text>
               </Stack>
             </Paper>
 
             {/* System Actions */}
-            <Paper p="md" withBorder>
-              <Text size="sm" fw={500} mb="xs" tt="uppercase">System</Text>
-              <Stack gap="sm">
-                <Group justify="space-between">
-                  <Text size="sm">Caches</Text>
+            <Paper className="settings-modal__section settings-modal__section--system-actions" p="md" withBorder>
+              <Text className="settings-modal__section-title" size="sm" fw={500} mb="xs" tt="uppercase">System</Text>
+              <Stack className="settings-modal__section-content" gap="sm">
+                <Group className="settings-modal__action-row" justify="space-between">
+                  <Text className="settings-modal__action-label" size="sm">Caches</Text>
                   <Button
+                    className="settings-modal__action-btn settings-modal__action-btn--reset-cache"
                     size="xs"
                     variant="light"
                     onClick={handleResetCache}
@@ -524,9 +547,10 @@ export function SettingsModal() {
                     Reset
                   </Button>
                 </Group>
-                <Group justify="space-between">
-                  <Text size="sm">Historical Data</Text>
+                <Group className="settings-modal__action-row" justify="space-between">
+                  <Text className="settings-modal__action-label" size="sm">Historical Data</Text>
                   <Button
+                    className="settings-modal__action-btn settings-modal__action-btn--sync-historical"
                     size="xs"
                     variant="light"
                     onClick={handleSyncHistorical}
@@ -535,9 +559,10 @@ export function SettingsModal() {
                     {syncingHistorical ? 'Syncing...' : 'Sync'}
                   </Button>
                 </Group>
-                <Group justify="space-between">
-                  <Text size="sm">System</Text>
+                <Group className="settings-modal__action-row" justify="space-between">
+                  <Text className="settings-modal__action-label" size="sm">System</Text>
                   <Button
+                    className="settings-modal__action-btn settings-modal__action-btn--restart"
                     size="xs"
                     color="red"
                     variant="light"
@@ -551,18 +576,19 @@ export function SettingsModal() {
             </Paper>
 
             {/* Hardware Actions */}
-            <Paper p="md" withBorder>
-              <Text size="sm" fw={500} mb="xs" tt="uppercase">Hardware</Text>
-              <Text size="xs" c="dimmed" mb="md">
+            <Paper className="settings-modal__section settings-modal__section--hardware" p="md" withBorder>
+              <Text className="settings-modal__section-title" size="sm" fw={500} mb="xs" tt="uppercase">Hardware</Text>
+              <Text className="settings-modal__section-desc" size="xs" c="dimmed" mb="md">
                 Manage Arduino MCU hardware. These actions only work when running on Arduino hardware.
               </Text>
-              <Stack gap="sm">
-                <Group justify="space-between">
-                  <div>
-                    <Text size="sm">LED Display Sketch</Text>
-                    <Text size="xs" c="dimmed">Compile and upload sketch to MCU</Text>
+              <Stack className="settings-modal__section-content" gap="sm">
+                <Group className="settings-modal__action-row" justify="space-between">
+                  <div className="settings-modal__action-label">
+                    <Text className="settings-modal__action-name" size="sm">LED Display Sketch</Text>
+                    <Text className="settings-modal__action-hint" size="xs" c="dimmed">Compile and upload sketch to MCU</Text>
                   </div>
                   <Button
+                    className="settings-modal__action-btn settings-modal__action-btn--upload-sketch"
                     size="xs"
                     variant="light"
                     onClick={handleUploadSketch}
@@ -576,24 +602,26 @@ export function SettingsModal() {
           </Stack>
         </Tabs.Panel>
 
-        <Tabs.Panel value="backup" p="md">
-          <Stack gap="md">
+        <Tabs.Panel className="settings-modal__panel settings-modal__panel--backup" value="backup" p="md">
+          <Stack className="settings-modal__backup-content" gap="md">
             {/* Cloudflare R2 Backup */}
-            <Paper p="md" withBorder>
-              <Text size="sm" fw={500} mb="xs" tt="uppercase">Cloudflare R2 Backup</Text>
-              <Text size="xs" c="dimmed" mb="md">
+            <Paper className="settings-modal__section settings-modal__section--r2" p="md" withBorder>
+              <Text className="settings-modal__section-title" size="sm" fw={500} mb="xs" tt="uppercase">Cloudflare R2 Backup</Text>
+              <Text className="settings-modal__section-desc" size="xs" c="dimmed" mb="md">
                 Automatically backup databases to Cloudflare R2 cloud storage. Backups include all 7 databases in a single compressed archive.
               </Text>
-              <Stack gap="md">
+              <Stack className="settings-modal__section-content" gap="md">
                 <Switch
+                  className="settings-modal__switch settings-modal__switch--r2-enabled"
                   label="Enable R2 backups"
                   checked={getSetting('r2_backup_enabled', 0) === 1}
                   onChange={(e) => handleUpdateSetting('r2_backup_enabled', e.currentTarget.checked ? 1 : 0)}
                   description="Automatically backup databases to Cloudflare R2 daily at 3:00 AM"
                 />
-                <Divider />
-                <Text size="xs" fw={500} tt="uppercase" mb="xs">R2 Configuration</Text>
+                <Divider className="settings-modal__divider" />
+                <Text className="settings-modal__subsection-title" size="xs" fw={500} tt="uppercase" mb="xs">R2 Configuration</Text>
                 <TextInput
+                  className="settings-modal__text-input settings-modal__text-input--account-id"
                   label="Account ID"
                   value={getSetting('r2_account_id', '') || ''}
                   onChange={(e) => handleUpdateSetting('r2_account_id', e.target.value)}
@@ -601,6 +629,7 @@ export function SettingsModal() {
                   description="Your Cloudflare account ID"
                 />
                 <TextInput
+                  className="settings-modal__text-input settings-modal__text-input--access-key"
                   label="Access Key ID"
                   value={getSetting('r2_access_key_id', '') || ''}
                   onChange={(e) => handleUpdateSetting('r2_access_key_id', e.target.value)}
@@ -608,6 +637,7 @@ export function SettingsModal() {
                   description="R2 access key ID for authentication"
                 />
                 <PasswordInput
+                  className="settings-modal__password-input settings-modal__password-input--secret-key"
                   label="Secret Access Key"
                   value={getSetting('r2_secret_access_key', '') || ''}
                   onChange={(e) => handleUpdateSetting('r2_secret_access_key', e.target.value)}
@@ -615,6 +645,7 @@ export function SettingsModal() {
                   description="R2 secret access key (hidden for security)"
                 />
                 <TextInput
+                  className="settings-modal__text-input settings-modal__text-input--bucket"
                   label="Bucket Name"
                   value={getSetting('r2_bucket_name', '') || ''}
                   onChange={(e) => handleUpdateSetting('r2_bucket_name', e.target.value)}
@@ -622,6 +653,7 @@ export function SettingsModal() {
                   description="Name of your R2 bucket for backups"
                 />
                 <Select
+                  className="settings-modal__select settings-modal__select--backup-schedule"
                   label="Backup Schedule"
                   value={getSetting('r2_backup_schedule', 'daily') || 'daily'}
                   onChange={(val) => handleUpdateSetting('r2_backup_schedule', val)}
@@ -632,12 +664,13 @@ export function SettingsModal() {
                   ]}
                   description="How often to automatically backup to R2"
                 />
-                <Group justify="space-between">
-                  <div>
-                    <Text size="sm">Retention Days</Text>
-                    <Text size="xs" c="dimmed">Keep backups for this many days (0 = forever)</Text>
+                <Group className="settings-modal__setting-row" justify="space-between">
+                  <div className="settings-modal__setting-label">
+                    <Text className="settings-modal__setting-name" size="sm">Retention Days</Text>
+                    <Text className="settings-modal__setting-hint" size="xs" c="dimmed">Keep backups for this many days (0 = forever)</Text>
                   </div>
                   <NumberInput
+                    className="settings-modal__number-input"
                     value={getSetting('r2_backup_retention_days', 90)}
                     onChange={(val) => handleUpdateSetting('r2_backup_retention_days', val)}
                     min={0}
@@ -646,10 +679,11 @@ export function SettingsModal() {
                     size="sm"
                   />
                 </Group>
-                <Divider />
-                <Text size="xs" fw={500} tt="uppercase" mb="xs">Actions</Text>
-                <Group gap="sm">
+                <Divider className="settings-modal__divider" />
+                <Text className="settings-modal__subsection-title" size="xs" fw={500} tt="uppercase" mb="xs">Actions</Text>
+                <Group className="settings-modal__r2-actions" gap="sm">
                   <Button
+                    className="settings-modal__action-btn settings-modal__action-btn--test-r2"
                     size="sm"
                     variant="light"
                     onClick={handleTestR2Connection}
@@ -659,6 +693,7 @@ export function SettingsModal() {
                     Test Connection
                   </Button>
                   <Button
+                    className="settings-modal__action-btn settings-modal__action-btn--view-backups"
                     size="sm"
                     variant="light"
                     onClick={handleViewR2Backups}
@@ -667,6 +702,7 @@ export function SettingsModal() {
                     View Backups
                   </Button>
                   <Button
+                    className="settings-modal__action-btn settings-modal__action-btn--backup-now"
                     size="sm"
                     variant="filled"
                     onClick={handleBackupToR2}
@@ -676,8 +712,8 @@ export function SettingsModal() {
                     Backup Now
                   </Button>
                 </Group>
-                <Alert color="blue" size="sm">
-                  <Text size="xs">
+                <Alert className="settings-modal__alert" color="blue" size="sm">
+                  <Text className="settings-modal__alert-text" size="xs">
                     Backups are stored as compressed .tar.gz archives containing all databases.
                     Automatic backups run according to your schedule at 3:00 AM. Old backups are rotated based on retention policy.
                   </Text>
@@ -687,17 +723,18 @@ export function SettingsModal() {
           </Stack>
         </Tabs.Panel>
 
-        <Tabs.Panel value="credentials" p="md">
-          <Stack gap="md">
+        <Tabs.Panel className="settings-modal__panel settings-modal__panel--credentials" value="credentials" p="md">
+          <Stack className="settings-modal__credentials-content" gap="md">
             {/* API Credentials */}
-            <Paper p="md" withBorder>
-              <Text size="sm" fw={500} mb="xs" tt="uppercase">API Credentials</Text>
-              <Text size="xs" c="dimmed" mb="md">
+            <Paper className="settings-modal__section settings-modal__section--api-credentials" p="md" withBorder>
+              <Text className="settings-modal__section-title" size="sm" fw={500} mb="xs" tt="uppercase">API Credentials</Text>
+              <Text className="settings-modal__section-desc" size="xs" c="dimmed" mb="md">
                 Configure API keys for external services. Credentials are stored securely in the database.
                 The .env file is no longer required - all configuration can be managed through this UI.
               </Text>
-              <Stack gap="md">
+              <Stack className="settings-modal__section-content" gap="md">
                 <TextInput
+                  className="settings-modal__text-input settings-modal__text-input--tradernet-key"
                   label="Tradernet API Key"
                   value={getSetting('tradernet_api_key', '') || ''}
                   onChange={(e) => handleUpdateSetting('tradernet_api_key', e.target.value)}
@@ -705,6 +742,7 @@ export function SettingsModal() {
                   description="Your Tradernet API key for accessing trading services"
                 />
                 <TextInput
+                  className="settings-modal__text-input settings-modal__text-input--tradernet-secret"
                   label="Tradernet API Secret"
                   type="password"
                   value={getSetting('tradernet_api_secret', '') || ''}
@@ -712,8 +750,9 @@ export function SettingsModal() {
                   placeholder="Enter your Tradernet API secret"
                   description="Your Tradernet API secret (hidden for security)"
                 />
-                <Divider />
+                <Divider className="settings-modal__divider" />
                 <TextInput
+                  className="settings-modal__text-input settings-modal__text-input--github-token"
                   label="GitHub Token"
                   type="password"
                   value={getSetting('github_token', '') || ''}
@@ -721,9 +760,9 @@ export function SettingsModal() {
                   placeholder="ghp_your_token_here"
                   description="GitHub personal access token for auto-deployment artifact downloads (requires repo and actions:read scopes)"
                 />
-                <Divider />
-                <Alert color="blue" size="sm">
-                  <Text size="xs">
+                <Divider className="settings-modal__divider" />
+                <Alert className="settings-modal__alert" color="blue" size="sm">
+                  <Text className="settings-modal__alert-text" size="xs">
                     Credentials are stored in the settings database and take precedence over environment variables.
                     Changes are applied immediately - no restart required.
                   </Text>

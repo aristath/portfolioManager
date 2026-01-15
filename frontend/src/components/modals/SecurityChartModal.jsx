@@ -13,6 +13,7 @@ export function SecurityChartModal() {
 
   return (
     <Modal
+      className="security-chart-modal"
       opened={showSecurityChart}
       onClose={closeModal}
       title="Security Chart"
@@ -20,6 +21,7 @@ export function SecurityChartModal() {
     >
       {selectedSecurityIsin && (
         <SecurityChart
+          className="security-chart-modal__chart"
           ref={chartRef}
           isin={selectedSecurityIsin}
           symbol={selectedSecuritySymbol}

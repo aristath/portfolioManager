@@ -15,7 +15,7 @@ export function SecuritySparkline({ symbol, hasPosition = false, avgPrice, curre
 
     const data = sparklines[symbol];
     if (!data || data.length < 2) {
-      containerRef.current.innerHTML = '<span style="color: var(--mantine-color-dimmed); font-size: 0.875rem;">-</span>';
+      containerRef.current.innerHTML = '<span class="sparkline__empty" style="color: var(--mantine-color-dimmed); font-size: 0.875rem;">-</span>';
       return;
     }
 
@@ -79,6 +79,7 @@ export function SecuritySparkline({ symbol, hasPosition = false, avgPrice, curre
       // Render multiple path segments
       const svgPaths = segments.map(seg =>
         `<path
+           class="sparkline__segment"
            d="${seg.path}"
            fill="none"
            stroke="${seg.color}"
@@ -88,7 +89,7 @@ export function SecuritySparkline({ symbol, hasPosition = false, avgPrice, curre
          />`
       ).join('');
 
-      svgContent = `<svg width="${width}" height="${height}" style="display: block;">
+      svgContent = `<svg class="sparkline__svg" width="${width}" height="${height}" style="display: block;">
         ${svgPaths}
       </svg>`;
     } else {
@@ -101,8 +102,9 @@ export function SecuritySparkline({ symbol, hasPosition = false, avgPrice, curre
         : (isPositive ? '#89b4fa' : '#6c7086'); // Blue/gray for non-positions
       const pathData = `M ${points.join(' L ')}`;
 
-      svgContent = `<svg width="${width}" height="${height}" style="display: block;">
+      svgContent = `<svg class="sparkline__svg" width="${width}" height="${height}" style="display: block;">
         <path
+          class="sparkline__path"
           d="${pathData}"
           fill="none"
           stroke="${color}"
@@ -117,8 +119,8 @@ export function SecuritySparkline({ symbol, hasPosition = false, avgPrice, curre
   }, [symbol, hasPosition, avgPrice, currentPrice, sparklines]);
 
   if (!symbol) {
-    return <span style={{ color: 'var(--mantine-color-dimmed)', fontSize: '0.875rem' }}>-</span>;
+    return <span className="sparkline__empty" style={{ color: 'var(--mantine-color-dimmed)', fontSize: '0.875rem' }}>-</span>;
   }
 
-  return <div ref={containerRef} style={{ display: 'inline-block' }} />;
+  return <div className="sparkline" ref={containerRef} style={{ display: 'inline-block' }} />;
 }

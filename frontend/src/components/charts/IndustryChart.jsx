@@ -99,11 +99,12 @@ export function IndustryChart() {
   }, [activeIndustries]);
 
   return (
-    <div>
-      <Group justify="space-between" mb="md">
-        <Text size="xs" fw={500}>Industry Groups</Text>
+    <div className="industry-chart">
+      <Group className="industry-chart__header" justify="space-between" mb="md">
+        <Text className="industry-chart__title" size="xs" fw={500}>Industry Groups</Text>
         {!editingIndustry && (
           <Button
+            className="industry-chart__edit-btn"
             size="xs"
             variant="subtle"
             color="violet"
@@ -116,9 +117,9 @@ export function IndustryChart() {
 
       {/* View Mode - Show deviation from target allocation */}
       {!editingIndustry && (
-        <Stack gap="sm">
+        <Stack className="industry-chart__view" gap="sm">
           {industryAllocations.length === 0 ? (
-            <Text size="sm" c="dimmed" ta="center" p="md">
+            <Text className="industry-chart__empty" size="sm" c="dimmed" ta="center" p="md">
               No industry allocation data available
             </Text>
           ) : (
@@ -129,22 +130,23 @@ export function IndustryChart() {
             const barStyle = getDeviationBarStyle(deviation);
 
             return (
-              <div key={industry.name}>
-                <Group justify="space-between" mb="xs">
-                  <Text size="sm" truncate style={{ maxWidth: '200px' }}>
+              <div className="industry-chart__item" key={industry.name}>
+                <Group className="industry-chart__item-header" justify="space-between" mb="xs">
+                  <Text className="industry-chart__item-name" size="sm" truncate style={{ maxWidth: '200px' }}>
                     {industry.name}
                   </Text>
-                  <Group gap="xs" style={{ flexShrink: 0 }}>
-                    <Text size="xs" style={{ fontFamily: 'var(--mantine-font-family)' }}>
+                  <Group className="industry-chart__item-values" gap="xs" style={{ flexShrink: 0 }}>
+                    <Text className="industry-chart__item-current" size="xs" style={{ fontFamily: 'var(--mantine-font-family)' }}>
                       {formatPercent(industry.current_pct)}
                     </Text>
-                    <Badge size="xs" {...badgeClass} style={{ fontFamily: 'var(--mantine-font-family)' }}>
+                    <Badge className="industry-chart__item-badge" size="xs" {...badgeClass} style={{ fontFamily: 'var(--mantine-font-family)' }}>
                       {formatDeviation(deviation)}
                     </Badge>
                   </Group>
                 </Group>
                 {/* Deviation bar */}
                 <div
+                  className="industry-chart__deviation-bar"
                   style={{
                     height: '6px',
                     backgroundColor: 'var(--mantine-color-dark-6)',
@@ -154,6 +156,7 @@ export function IndustryChart() {
                   }}
                 >
                   <div
+                    className="industry-chart__deviation-center"
                     style={{
                       position: 'absolute',
                       top: 0,
@@ -165,6 +168,7 @@ export function IndustryChart() {
                     }}
                   />
                   <div
+                    className={`industry-chart__deviation-fill industry-chart__deviation-fill--${barColor}`}
                     style={{
                       position: 'absolute',
                       top: 0,
@@ -183,19 +187,19 @@ export function IndustryChart() {
 
       {/* Edit Mode - Weight sliders for active industries */}
       {editingIndustry && (
-        <Stack gap="md">
+        <Stack className="industry-chart__edit" gap="md">
           {/* Weight Scale Legend */}
-          <Group justify="space-between">
-            <Text size="xs" c="red">0 Avoid</Text>
-            <Text size="xs" c="dimmed">0.5 Neutral</Text>
-            <Text size="xs" c="green">1 Prioritize</Text>
+          <Group className="industry-chart__legend" justify="space-between">
+            <Text className="industry-chart__legend-avoid" size="xs" c="red">0 Avoid</Text>
+            <Text className="industry-chart__legend-neutral" size="xs" c="dimmed">0.5 Neutral</Text>
+            <Text className="industry-chart__legend-prioritize" size="xs" c="green">1 Prioritize</Text>
           </Group>
 
-          <Divider />
+          <Divider className="industry-chart__divider" />
 
           {/* Dynamic Industry Sliders */}
           {sortedIndustries.length === 0 ? (
-            <Text size="sm" c="dimmed" ta="center" p="md">
+            <Text className="industry-chart__empty" size="sm" c="dimmed" ta="center" p="md">
               No active industries available
             </Text>
           ) : (
@@ -204,16 +208,17 @@ export function IndustryChart() {
             const badgeClass = getWeightBadgeClass(weight);
 
             return (
-              <div key={name}>
-                <Group justify="space-between" mb="xs">
-                  <Text size="sm" truncate style={{ maxWidth: '200px' }}>
+              <div className="industry-chart__slider-item" key={name}>
+                <Group className="industry-chart__slider-header" justify="space-between" mb="xs">
+                  <Text className="industry-chart__slider-name" size="sm" truncate style={{ maxWidth: '200px' }}>
                     {name}
                   </Text>
-                  <Badge size="xs" {...badgeClass} style={{ flexShrink: 0, fontFamily: 'var(--mantine-font-family)' }}>
+                  <Badge className="industry-chart__slider-badge" size="xs" {...badgeClass} style={{ flexShrink: 0, fontFamily: 'var(--mantine-font-family)' }}>
                     {formatWeight(weight)}
                   </Badge>
                 </Group>
                 <Slider
+                  className="industry-chart__slider"
                   value={weight}
                   onChange={(val) => adjustIndustrySlider(name, val)}
                   min={0}
@@ -230,17 +235,19 @@ export function IndustryChart() {
             );
           }))}
 
-          <Divider />
+          <Divider className="industry-chart__divider" />
 
           {/* Buttons */}
-          <Group grow>
+          <Group className="industry-chart__actions" grow>
             <Button
+              className="industry-chart__cancel-btn"
               variant="subtle"
               onClick={cancelEditIndustry}
             >
               Cancel
             </Button>
             <Button
+              className="industry-chart__save-btn"
               color="violet"
               onClick={handleSave}
               disabled={loading.industrySave}

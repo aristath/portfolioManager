@@ -63,12 +63,13 @@ export function LogsViewer() {
   };
 
   return (
-    <Card p="md" style={{ backgroundColor: 'var(--mantine-color-dark-7)', border: '1px solid var(--mantine-color-dark-6)' }}>
-      <Stack gap="md">
+    <Card className="logs-viewer" p="md" style={{ backgroundColor: 'var(--mantine-color-dark-7)', border: '1px solid var(--mantine-color-dark-6)' }}>
+      <Stack className="logs-viewer__content" gap="md">
         {/* Controls */}
-        <Card p="md" style={{ backgroundColor: 'var(--mantine-color-dark-8)', border: '1px solid var(--mantine-color-dark-6)' }}>
-          <Group gap="md" wrap="wrap">
+        <Card className="logs-viewer__controls" p="md" style={{ backgroundColor: 'var(--mantine-color-dark-8)', border: '1px solid var(--mantine-color-dark-6)' }}>
+          <Group className="logs-viewer__filters" gap="md" wrap="wrap">
             <Select
+              className="logs-viewer__select logs-viewer__select--level"
               label="Level"
               data={[
                 { value: 'all', label: 'All' },
@@ -84,6 +85,7 @@ export function LogsViewer() {
               style={{ width: '120px' }}
             />
             <TextInput
+              className="logs-viewer__search"
               label="Search"
               placeholder="Search logs..."
               value={searchQuery}
@@ -92,6 +94,7 @@ export function LogsViewer() {
               style={{ flex: 1, minWidth: '150px' }}
             />
             <NumberInput
+              className="logs-viewer__lines-input"
               label="Lines"
               value={lineCount}
               onChange={(val) => setLineCount(Number(val))}
@@ -101,20 +104,23 @@ export function LogsViewer() {
               size="xs"
               style={{ width: '100px' }}
             />
-            <Stack gap="xs" mt="xl">
+            <Stack className="logs-viewer__checkboxes" gap="xs" mt="xl">
               <Checkbox
+                className="logs-viewer__checkbox logs-viewer__checkbox--errors"
                 label="Errors Only"
                 checked={showErrorsOnly}
                 onChange={(e) => setShowErrorsOnly(e.currentTarget.checked)}
                 size="xs"
               />
               <Checkbox
+                className="logs-viewer__checkbox logs-viewer__checkbox--auto-refresh"
                 label="Auto-refresh"
                 checked={autoRefresh}
                 onChange={(e) => setAutoRefresh(e.currentTarget.checked)}
                 size="xs"
               />
               <Checkbox
+                className="logs-viewer__checkbox logs-viewer__checkbox--auto-scroll"
                 label="Auto-scroll"
                 checked={autoScroll}
                 onChange={(e) => setAutoScroll(e.currentTarget.checked)}
@@ -123,19 +129,20 @@ export function LogsViewer() {
             </Stack>
           </Group>
 
-          <Group gap="xs" mt="md">
-            <Button size="xs" onClick={fetchLogs} loading={loading}>
+          <Group className="logs-viewer__actions" gap="xs" mt="md">
+            <Button className="logs-viewer__refresh-btn" size="xs" onClick={fetchLogs} loading={loading}>
               Refresh
             </Button>
-            <Text size="xs" c="dimmed">
+            <Text className="logs-viewer__count" size="xs" c="dimmed">
               {entries.length} lines
             </Text>
           </Group>
         </Card>
 
         {/* Log Entries */}
-        <ScrollArea h={600} ref={scrollAreaRef}>
+        <ScrollArea className="logs-viewer__scroll-area" h={600} ref={scrollAreaRef}>
           <Code
+            className="logs-viewer__code"
             block
             style={{
               padding: '12px',
@@ -145,11 +152,12 @@ export function LogsViewer() {
             }}
           >
             {entries.length === 0 ? (
-              <Text c="dimmed" size="sm" style={{ fontFamily: 'var(--mantine-font-family)' }}>No log entries</Text>
+              <Text className="logs-viewer__empty" c="dimmed" size="sm" style={{ fontFamily: 'var(--mantine-font-family)' }}>No log entries</Text>
             ) : (
               entries.map((entry, index) => (
-                <div key={index} style={{ marginBottom: '4px' }}>
+                <div className={`logs-viewer__entry logs-viewer__entry--${entry.level?.toLowerCase() || 'unknown'}`} key={index} style={{ marginBottom: '4px' }}>
                   <Text
+                    className="logs-viewer__entry-text"
                     size="xs"
                     c={getLevelColor(entry.level)}
                     span

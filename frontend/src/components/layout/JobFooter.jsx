@@ -121,6 +121,7 @@ export function JobFooter() {
 
   return (
     <Paper
+      className="job-footer"
       p="md"
       mt="xl"
       style={{
@@ -129,11 +130,12 @@ export function JobFooter() {
         border: '1px solid var(--mantine-color-dark-6)',
       }}
     >
-      <Title 
-        order={4} 
-        mb="md" 
+      <Title
+        className="job-footer__title"
+        order={4}
+        mb="md"
         onClick={() => setOpened((o) => !o)}
-        style={{ 
+        style={{
           fontFamily: 'var(--mantine-font-family)',
           cursor: 'pointer',
           userSelect: 'none'
@@ -141,17 +143,18 @@ export function JobFooter() {
       >
         Manual Job Triggers
       </Title>
-      <Collapse in={opened}>
-        <Stack gap="lg">
+      <Collapse className="job-footer__collapse" in={opened}>
+        <Stack className="job-footer__categories" gap="lg">
           {jobCategories.map((category) => (
-            <Stack key={category.name} gap="xs">
-              <Text size="sm" fw={600} c="dimmed" tt="uppercase" style={{ fontFamily: 'var(--mantine-font-family)' }}>
+            <Stack className="job-footer__category" key={category.name} gap="xs">
+              <Text className="job-footer__category-name" size="sm" fw={600} c="dimmed" tt="uppercase" style={{ fontFamily: 'var(--mantine-font-family)' }}>
                 {category.name}
               </Text>
-              <Group gap="xs" wrap="wrap">
+              <Group className="job-footer__jobs" gap="xs" wrap="wrap">
                 {category.jobs.map((job) => (
-                  <Stack key={job.id} gap="xs" style={{ minWidth: '140px' }}>
+                  <Stack className="job-footer__job" key={job.id} gap="xs" style={{ minWidth: '140px' }}>
                     <Button
+                      className="job-footer__job-btn"
                       size="xs"
                       variant="light"
                       onClick={() => triggerJob(job)}
@@ -162,6 +165,7 @@ export function JobFooter() {
                     </Button>
                     {messages[job.id] && (
                       <Text
+                        className={`job-footer__job-message job-footer__job-message--${messages[job.id].type}`}
                         size="xs"
                         c={messages[job.id].type === 'success' ? 'green' : 'red'}
                         ta="center"
@@ -172,7 +176,7 @@ export function JobFooter() {
                   </Stack>
                 ))}
               </Group>
-              <Divider />
+              <Divider className="job-footer__divider" />
             </Stack>
           ))}
         </Stack>

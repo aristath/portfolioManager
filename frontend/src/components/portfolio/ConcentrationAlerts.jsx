@@ -13,16 +13,16 @@ export function ConcentrationAlerts() {
   }
 
   return (
-    <Stack gap="xs">
+    <Stack className="concentration-alerts" gap="xs">
       {criticalAlerts.length > 0 && (
-        <Alert color="red" variant="light" title={`${criticalAlerts.length} Critical Alert${criticalAlerts.length > 1 ? 's' : ''}`}>
-          <Stack gap="xs">
+        <Alert className="concentration-alerts__critical" color="red" variant="light" title={`${criticalAlerts.length} Critical Alert${criticalAlerts.length > 1 ? 's' : ''}`}>
+          <Stack className="concentration-alerts__critical-list" gap="xs">
             {criticalAlerts.map((alert) => (
-              <div key={alert.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text size="sm" fw={500}>
+              <div className="concentration-alerts__item concentration-alerts__item--critical" key={alert.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text className="concentration-alerts__item-name" size="sm" fw={500}>
                   {alert.name} ({alert.type})
                 </Text>
-                <Text size="sm" style={{ fontFamily: 'var(--mantine-font-family)' }} fw={600}>
+                <Text className="concentration-alerts__item-value" size="sm" style={{ fontFamily: 'var(--mantine-font-family)' }} fw={600}>
                   {formatPercent(alert.current_pct)} / {formatPercent(alert.limit_pct, 0)} limit
                 </Text>
               </div>
@@ -32,14 +32,14 @@ export function ConcentrationAlerts() {
       )}
 
       {warningAlerts.length > 0 && (
-        <Alert color="yellow" variant="light" title={`${warningAlerts.length} Warning${warningAlerts.length > 1 ? 's' : ''}`}>
-          <Stack gap="xs">
+        <Alert className="concentration-alerts__warning" color="yellow" variant="light" title={`${warningAlerts.length} Warning${warningAlerts.length > 1 ? 's' : ''}`}>
+          <Stack className="concentration-alerts__warning-list" gap="xs">
             {warningAlerts.map((alert) => (
-              <div key={alert.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text size="sm" fw={500}>
+              <div className="concentration-alerts__item concentration-alerts__item--warning" key={alert.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text className="concentration-alerts__item-name" size="sm" fw={500}>
                   {alert.name} ({alert.type})
                 </Text>
-                <Text size="sm" style={{ fontFamily: 'var(--mantine-font-family)' }} fw={600}>
+                <Text className="concentration-alerts__item-value" size="sm" style={{ fontFamily: 'var(--mantine-font-family)' }} fw={600}>
                   {formatPercent(alert.current_pct)} / {formatPercent(alert.limit_pct, 0)} limit
                 </Text>
               </div>

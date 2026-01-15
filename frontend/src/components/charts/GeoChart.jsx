@@ -97,11 +97,12 @@ export function GeoChart() {
   }, [activeGeographies]);
 
   return (
-    <div>
-      <Group justify="space-between" mb="md">
-        <Text size="xs" fw={500}>Geography Allocation</Text>
+    <div className="geo-chart">
+      <Group className="geo-chart__header" justify="space-between" mb="md">
+        <Text className="geo-chart__title" size="xs" fw={500}>Geography Allocation</Text>
         {!editingGeography && (
           <Button
+            className="geo-chart__edit-btn"
             size="xs"
             variant="subtle"
             onClick={startEditGeography}
@@ -113,9 +114,9 @@ export function GeoChart() {
 
       {/* View Mode - Show deviation from target allocation */}
       {!editingGeography && (
-        <Stack gap="sm">
+        <Stack className="geo-chart__view" gap="sm">
           {geographyAllocations.length === 0 ? (
-            <Text size="sm" c="dimmed" ta="center" p="md">
+            <Text className="geo-chart__empty" size="sm" c="dimmed" ta="center" p="md">
               No geography allocation data available
             </Text>
           ) : (
@@ -126,10 +127,11 @@ export function GeoChart() {
             const barStyle = getDeviationBarStyle(deviation);
 
             return (
-              <div key={geography.name}>
-                <Group justify="space-between" mb="xs">
-                  <Group gap="xs">
+              <div className="geo-chart__item" key={geography.name}>
+                <Group className="geo-chart__item-header" justify="space-between" mb="xs">
+                  <Group className="geo-chart__item-label" gap="xs">
                     <div
+                      className="geo-chart__item-dot"
                       style={{
                         width: '10px',
                         height: '10px',
@@ -137,19 +139,20 @@ export function GeoChart() {
                         backgroundColor: getGeographyColor(geography.name),
                       }}
                     />
-                    <Text size="sm">{geography.name}</Text>
+                    <Text className="geo-chart__item-name" size="sm">{geography.name}</Text>
                   </Group>
-                  <Group gap="xs">
-                    <Text size="sm" style={{ fontFamily: 'var(--mantine-font-family)' }}>
+                  <Group className="geo-chart__item-values" gap="xs">
+                    <Text className="geo-chart__item-current" size="sm" style={{ fontFamily: 'var(--mantine-font-family)' }}>
                       {formatPercent(geography.current_pct)}
                     </Text>
-                    <Badge size="xs" {...badgeClass} style={{ fontFamily: 'var(--mantine-font-family)' }}>
+                    <Badge className="geo-chart__item-badge" size="xs" {...badgeClass} style={{ fontFamily: 'var(--mantine-font-family)' }}>
                       {formatDeviation(deviation)}
                     </Badge>
                   </Group>
                 </Group>
                 {/* Deviation bar */}
                 <div
+                  className="geo-chart__deviation-bar"
                   style={{
                     height: '6px',
                     backgroundColor: 'var(--mantine-color-dark-6)',
@@ -159,6 +162,7 @@ export function GeoChart() {
                   }}
                 >
                   <div
+                    className="geo-chart__deviation-center"
                     style={{
                       position: 'absolute',
                       top: 0,
@@ -170,6 +174,7 @@ export function GeoChart() {
                     }}
                   />
                   <div
+                    className={`geo-chart__deviation-fill geo-chart__deviation-fill--${barColor}`}
                     style={{
                       position: 'absolute',
                       top: 0,
@@ -188,19 +193,19 @@ export function GeoChart() {
 
       {/* Edit Mode - Weight sliders for active geographies */}
       {editingGeography && (
-        <Stack gap="md">
+        <Stack className="geo-chart__edit" gap="md">
           {/* Weight Scale Legend */}
-          <Group justify="space-between">
-            <Text size="xs" c="red">0 Avoid</Text>
-            <Text size="xs" c="dimmed">0.5 Neutral</Text>
-            <Text size="xs" c="green">1 Prioritize</Text>
+          <Group className="geo-chart__legend" justify="space-between">
+            <Text className="geo-chart__legend-avoid" size="xs" c="red">0 Avoid</Text>
+            <Text className="geo-chart__legend-neutral" size="xs" c="dimmed">0.5 Neutral</Text>
+            <Text className="geo-chart__legend-prioritize" size="xs" c="green">1 Prioritize</Text>
           </Group>
 
-          <Divider />
+          <Divider className="geo-chart__divider" />
 
           {/* Dynamic Geography Sliders */}
           {sortedGeographies.length === 0 ? (
-            <Text size="sm" c="dimmed" ta="center" p="md">
+            <Text className="geo-chart__empty" size="sm" c="dimmed" ta="center" p="md">
               No active geographies available
             </Text>
           ) : (
@@ -209,10 +214,11 @@ export function GeoChart() {
             const badgeClass = getWeightBadgeClass(weight);
 
             return (
-              <div key={name}>
-                <Group justify="space-between" mb="xs">
-                  <Group gap="xs">
+              <div className="geo-chart__slider-item" key={name}>
+                <Group className="geo-chart__slider-header" justify="space-between" mb="xs">
+                  <Group className="geo-chart__slider-label" gap="xs">
                     <div
+                      className="geo-chart__slider-dot"
                       style={{
                         width: '10px',
                         height: '10px',
@@ -220,13 +226,14 @@ export function GeoChart() {
                         backgroundColor: getGeographyColor(name),
                       }}
                     />
-                    <Text size="sm">{name}</Text>
+                    <Text className="geo-chart__slider-name" size="sm">{name}</Text>
                   </Group>
-                  <Badge size="xs" {...badgeClass} style={{ fontFamily: 'var(--mantine-font-family)' }}>
+                  <Badge className="geo-chart__slider-badge" size="xs" {...badgeClass} style={{ fontFamily: 'var(--mantine-font-family)' }}>
                     {formatWeight(weight)}
                   </Badge>
                 </Group>
                 <Slider
+                  className="geo-chart__slider"
                   value={weight}
                   onChange={(val) => adjustGeographySlider(name, val)}
                   min={0}
@@ -242,17 +249,19 @@ export function GeoChart() {
             );
           }))}
 
-          <Divider />
+          <Divider className="geo-chart__divider" />
 
           {/* Buttons */}
-          <Group grow>
+          <Group className="geo-chart__actions" grow>
             <Button
+              className="geo-chart__cancel-btn"
               variant="subtle"
               onClick={cancelEditGeography}
             >
               Cancel
             </Button>
             <Button
+              className="geo-chart__save-btn"
               onClick={saveGeographyTargets}
               disabled={loading.geographySave}
               loading={loading.geographySave}

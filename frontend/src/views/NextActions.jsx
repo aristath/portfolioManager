@@ -20,27 +20,29 @@ export function NextActions() {
   };
 
   return (
-    <Stack gap="md">
+    <Stack className="next-actions-view" gap="md">
       {/* Actions */}
-      <Group justify="space-between" wrap="wrap">
+      <Group className="next-actions-view__actions" justify="space-between" wrap="wrap">
         {/* Research mode testing controls */}
         {isResearchMode && (
           <Tooltip label="Disable cooloff period checks for testing (only works in research mode)">
-            <Group gap="xs">
+            <Group className="next-actions-view__cooloff-toggle" gap="xs">
               <Switch
+                className="next-actions-view__cooloff-switch"
                 checked={isCooloffDisabled}
                 onChange={handleCooloffToggle}
                 size="sm"
                 color="orange"
               />
-              <Text size="sm" c="dimmed">Disable Cooloff</Text>
+              <Text className="next-actions-view__cooloff-label" size="sm" c="dimmed">Disable Cooloff</Text>
             </Group>
           </Tooltip>
         )}
 
-        {!isResearchMode && <div />}
+        {!isResearchMode && <div className="next-actions-view__spacer" />}
 
         <Button
+          className="next-actions-view__configure-btn"
           variant="light"
           color="green"
           size="sm"

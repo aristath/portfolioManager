@@ -40,14 +40,15 @@ export function MarketStatus() {
   }
 
   return (
-    <Group gap="md" wrap="wrap" mb="md">
+    <Group className="market-status" gap="md" wrap="wrap" mb="md">
       {sortedRegions.map(([region, regionMarkets]) => (
-        <Group key={region} gap="xs" align="center">
-          <Text size="xs" fw={500} c="dimmed">
+        <Group className="market-status__region" key={region} gap="xs" align="center">
+          <Text className="market-status__region-label" size="xs" fw={500} c="dimmed">
             {region}:
           </Text>
           {regionMarkets.map((market) => (
             <Badge
+              className={`market-status__market market-status__market--${market.status}`}
               key={market.code}
               color={market.status === 'open' ? 'green' : 'gray'}
               variant="light"

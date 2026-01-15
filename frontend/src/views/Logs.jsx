@@ -1,5 +1,9 @@
 import { LogsViewer } from '../components/system/LogsViewer';
 
 export function Logs() {
-  return <LogsViewer />;
+  return (
+    <div className="logs-view">
+      <LogsViewer />
+    </div>
+  );
 }

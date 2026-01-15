@@ -32,38 +32,40 @@ export function NextActionsCard() {
 
   return (
     <Card
+      className="next-actions"
       p="lg"
       style={{
         border: '1px solid var(--mantine-color-dark-6)',
         backgroundColor: 'var(--mantine-color-dark-7)',
       }}
     >
-      <Group justify="space-between" mb="md">
-        <div style={{ flex: 1 }}>
-          <Text size="lg" fw={700} c="blue" tt="uppercase" mb="xs" style={{ fontFamily: 'var(--mantine-font-family)' }}>
+      <Group className="next-actions__header" justify="space-between" mb="md">
+        <div className="next-actions__title-section" style={{ flex: 1 }}>
+          <Text className="next-actions__title" size="lg" fw={700} c="blue" tt="uppercase" mb="xs" style={{ fontFamily: 'var(--mantine-font-family)' }}>
             Next Actions
           </Text>
-          <Text size="xs" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family)' }}>
+          <Text className="next-actions__subtitle" size="xs" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family)' }}>
             Automated portfolio management recommendations
           </Text>
         </div>
-        <Group gap="md" visibleFrom="md">
-          <div style={{ textAlign: 'right' }}>
-            <Text size="xs" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family)' }}>Total Value</Text>
-            <Text size="sm" fw={600} c="green" style={{ fontFamily: 'var(--mantine-font-family)' }}>
+        <Group className="next-actions__stats" gap="md" visibleFrom="md">
+          <div className="next-actions__stat next-actions__stat--total" style={{ textAlign: 'right' }}>
+            <Text className="next-actions__stat-label" size="xs" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family)' }}>Total Value</Text>
+            <Text className="next-actions__stat-value" size="sm" fw={600} c="green" style={{ fontFamily: 'var(--mantine-font-family)' }}>
               {formatCurrency(allocation.total_value)}
             </Text>
           </div>
-          <div style={{ width: '1px', height: '32px', backgroundColor: 'var(--mantine-color-dark-6)' }} />
-          <div style={{ textAlign: 'right' }}>
-            <Text size="xs" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family)' }}>Cash</Text>
-            <Text size="sm" fw={600} c="dimmed" style={{ fontFamily: 'var(--mantine-font-family)' }}>
+          <div className="next-actions__divider" style={{ width: '1px', height: '32px', backgroundColor: 'var(--mantine-color-dark-6)' }} />
+          <div className="next-actions__stat next-actions__stat--cash" style={{ textAlign: 'right' }}>
+            <Text className="next-actions__stat-label" size="xs" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family)' }}>Cash</Text>
+            <Text className="next-actions__stat-value" size="sm" fw={600} c="dimmed" style={{ fontFamily: 'var(--mantine-font-family)' }}>
               {formatCurrency(allocation.cash_balance)}
             </Text>
           </div>
         </Group>
-        <Group gap="xs">
+        <Group className="next-actions__actions" gap="xs">
           <ActionIcon
+            className="next-actions__refresh-btn"
             variant="subtle"
             onClick={fetchRecommendations}
             loading={loading.recommendations}
@@ -72,6 +74,7 @@ export function NextActionsCard() {
             <IconRefresh size={18} />
           </ActionIcon>
           <ActionIcon
+            className="next-actions__planner-btn"
             variant="subtle"
             onClick={handleTriggerPlanner}
             disabled={isPlanning}
@@ -84,23 +87,24 @@ export function NextActionsCard() {
 
       {/* Planner Job Status */}
       {isPlanning && (
-        <Paper p="md" mb="md" style={{ border: '1px solid var(--mantine-color-blue-0)', backgroundColor: 'var(--mantine-color-dark-7)' }}>
-          <Group gap="xs" mb="sm">
+        <Paper className="next-actions__planner-status" p="md" mb="md" style={{ border: '1px solid var(--mantine-color-blue-0)', backgroundColor: 'var(--mantine-color-dark-7)' }}>
+          <Group className="next-actions__planner-header" gap="xs" mb="sm">
             <Loader size={14} color="blue" />
-            <Text size="sm" fw={600} c="blue">
+            <Text className="next-actions__planner-description" size="sm" fw={600} c="blue">
               {plannerJob.description || 'Planning...'}
             </Text>
           </Group>
 
           {plannerJob.progress && plannerJob.progress.total > 0 && (
-            <div>
+            <div className="next-actions__planner-progress">
               <Progress
+                className="next-actions__progress-bar"
                 value={(plannerJob.progress.current / plannerJob.progress.total) * 100}
                 size="sm"
                 mb="xs"
                 color="blue"
               />
-              <Text size="xs" c="dimmed" ta="center">
+              <Text className="next-actions__progress-text" size="xs" c="dimmed" ta="center">
                 Step {plannerJob.progress.current} of {plannerJob.progress.total}
                 {plannerJob.progress.description && ` - ${plannerJob.progress.description}`}
               </Text>
@@ -111,11 +115,11 @@ export function NextActionsCard() {
 
       {/* Empty State */}
       {!loading.recommendations && !hasRecommendations && (
-        <Stack align="center" py="xl">
-          <Text size="lg" fw={600} c="dimmed">
+        <Stack className="next-actions__empty" align="center" py="xl">
+          <Text className="next-actions__empty-title" size="lg" fw={600} c="dimmed">
             No recommendations pending
           </Text>
-          <Text size="sm" c="dimmed">
+          <Text className="next-actions__empty-subtitle" size="sm" c="dimmed">
             {recommendations?.rejected_opportunities && recommendations.rejected_opportunities.length > 0
               ? 'All opportunities were filtered out'
               : recommendations?.pre_filtered_securities && recommendations.pre_filtered_securities.length > 0
@@ -127,36 +131,37 @@ export function NextActionsCard() {
 
       {/* Recommendations Sequence */}
       {hasRecommendations && (
-        <Stack gap="md">
+        <Stack className="next-actions__sequence" gap="md">
           {recommendations.evaluated_count !== undefined && (
-            <Text size="sm" c="dimmed">
+            <Text className="next-actions__evaluated-count" size="sm" c="dimmed">
               Scenarios evaluated: {(recommendations.evaluated_count || 0).toLocaleString()}
             </Text>
           )}
-          <Group justify="space-between">
-            <Group gap="md">
-              <Text size="sm" fw={600}>
+          <Group className="next-actions__sequence-header" justify="space-between">
+            <Group className="next-actions__sequence-info" gap="md">
+              <Text className="next-actions__sequence-title" size="sm" fw={600}>
                 Optimal Sequence ({steps.length} step{steps.length > 1 ? 's' : ''})
               </Text>
               {recommendations.total_score_improvement > 0 && (
-                <Badge color="green" variant="light">
+                <Badge className="next-actions__score-badge next-actions__score-badge--positive" color="green" variant="light">
                   +{recommendations.total_score_improvement.toFixed(1)} score
                 </Badge>
               )}
               {recommendations.total_score_improvement < 0 && (
-                <Badge color="red" variant="light">
+                <Badge className="next-actions__score-badge next-actions__score-badge--negative" color="red" variant="light">
                   {recommendations.total_score_improvement.toFixed(1)} score
                 </Badge>
               )}
             </Group>
-            <Text size="xs" c="dimmed" fs="italic">
+            <Text className="next-actions__auto-note" size="xs" c="dimmed" fs="italic">
               Trades execute automatically every {Math.round(settings.job_sync_cycle_minutes || 15)} minutes
             </Text>
           </Group>
 
-          <Stack gap="md">
+          <Stack className="next-actions__steps" gap="md">
             {steps.map((step) => (
               <Paper
+                className={`next-actions__step next-actions__step--${step.side.toLowerCase()} ${step.is_emergency ? 'next-actions__step--emergency' : ''}`}
                 key={`step-${step.step}`}
                 p="md"
                 style={{
@@ -169,18 +174,19 @@ export function NextActionsCard() {
                   backgroundColor: 'var(--mantine-color-dark-8)',
                 }}
               >
-                <Group justify="space-between" align="flex-start">
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <Group gap="xs" mb="xs" wrap="wrap">
-                      <Badge size="sm" variant="filled" color="dark" style={{ fontFamily: 'var(--mantine-font-family)' }}>
+                <Group className="next-actions__step-content" justify="space-between" align="flex-start">
+                  <div className="next-actions__step-main" style={{ flex: 1, minWidth: 0 }}>
+                    <Group className="next-actions__step-badges" gap="xs" mb="xs" wrap="wrap">
+                      <Badge className="next-actions__step-number" size="sm" variant="filled" color="dark" style={{ fontFamily: 'var(--mantine-font-family)' }}>
                         Step {step.step}
                       </Badge>
                       {step.is_emergency && (
-                        <Badge size="sm" color="orange" variant="light" style={{ fontFamily: 'var(--mantine-font-family)' }}>
+                        <Badge className="next-actions__emergency-badge" size="sm" color="orange" variant="light" style={{ fontFamily: 'var(--mantine-font-family)' }}>
                           🚨 EMERGENCY
                         </Badge>
                       )}
                       <Badge
+                        className="next-actions__side-badge"
                         size="sm"
                         color={step.side === 'SELL' ? 'red' : 'green'}
                         variant="light"
@@ -188,14 +194,15 @@ export function NextActionsCard() {
                       >
                         {step.side}
                       </Badge>
-                      <Text size="lg" fw={700} style={{ fontFamily: 'var(--mantine-font-family)' }} c={step.side === 'SELL' ? 'red' : 'green'}>
+                      <Text className="next-actions__step-symbol" size="lg" fw={700} style={{ fontFamily: 'var(--mantine-font-family)' }} c={step.side === 'SELL' ? 'red' : 'green'}>
                         {step.symbol}
                       </Text>
                     </Group>
-                    <Text size="md" fw={500} mb="xs" style={{ fontFamily: 'var(--mantine-font-family)' }}>
+                    <Text className="next-actions__step-name" size="md" fw={500} mb="xs" style={{ fontFamily: 'var(--mantine-font-family)' }}>
                       {step.name}
                     </Text>
                     <Text
+                      className="next-actions__step-reason"
                       size="sm"
                       mb="xs"
                       c={step.is_emergency ? 'orange' : 'dimmed'}
@@ -204,24 +211,25 @@ export function NextActionsCard() {
                     >
                       {step.reason}
                     </Text>
-                    <Group gap="md" wrap="wrap">
-                      <Text size="sm" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family)' }}>
+                    <Group className="next-actions__step-scores" gap="md" wrap="wrap">
+                      <Text className="next-actions__score-change" size="sm" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family)' }}>
                         Score: {step.portfolio_score_before.toFixed(1)} → {step.portfolio_score_after.toFixed(1)}
                       </Text>
                       {step.score_change > 0 && (
-                        <Badge size="sm" color="green" variant="light" style={{ fontFamily: 'var(--mantine-font-family)' }}>
+                        <Badge className="next-actions__score-delta next-actions__score-delta--positive" size="sm" color="green" variant="light" style={{ fontFamily: 'var(--mantine-font-family)' }}>
                           +{step.score_change.toFixed(1)}
                         </Badge>
                       )}
                       {step.score_change < 0 && (
-                        <Badge size="sm" color="red" variant="light" style={{ fontFamily: 'var(--mantine-font-family)' }}>
+                        <Badge className="next-actions__score-delta next-actions__score-delta--negative" size="sm" color="red" variant="light" style={{ fontFamily: 'var(--mantine-font-family)' }}>
                           {step.score_change.toFixed(1)}
                         </Badge>
                       )}
                     </Group>
                   </div>
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <div className="next-actions__step-values" style={{ textAlign: 'right', flexShrink: 0 }}>
                     <Text
+                      className="next-actions__step-amount"
                       size="lg"
                       fw={700}
                       style={{ fontFamily: 'var(--mantine-font-family)' }}
@@ -229,10 +237,10 @@ export function NextActionsCard() {
                     >
                       {(step.side === 'SELL' ? '-' : '+')}{formatCurrency(step.estimated_value)}
                     </Text>
-                    <Text size="sm" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family)' }}>
+                    <Text className="next-actions__step-quantity" size="sm" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family)' }}>
                       {step.quantity} @ {formatCurrency(step.estimated_price)}
                     </Text>
-                    <Text size="xs" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family)' }}>
+                    <Text className="next-actions__step-cash" size="xs" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family)' }}>
                       Cash: {formatCurrency(step.available_cash_before)} → {formatCurrency(step.available_cash_after)}
                     </Text>
                   </div>
@@ -242,7 +250,7 @@ export function NextActionsCard() {
           </Stack>
 
           {recommendations.final_available_cash && (
-            <Text size="sm" c="dimmed" ta="center" mt="md" style={{ fontFamily: 'var(--mantine-font-family)' }}>
+            <Text className="next-actions__final-cash" size="sm" c="dimmed" ta="center" mt="md" style={{ fontFamily: 'var(--mantine-font-family)' }}>
               Final cash: <Text span fw={600} c="dimmed" style={{ fontFamily: 'var(--mantine-font-family)' }}>
                 {formatCurrency(recommendations.final_available_cash)}
               </Text>
@@ -253,17 +261,18 @@ export function NextActionsCard() {
 
       {/* Rejected Opportunities - Always visible when present */}
       {recommendations?.rejected_opportunities && recommendations.rejected_opportunities.length > 0 && (
-        <div style={{
+        <div className="next-actions__rejected" style={{
           marginTop: hasRecommendations ? '1rem' : '0',
           borderTop: hasRecommendations ? '1px solid var(--mantine-color-dark-6)' : 'none',
           paddingTop: hasRecommendations ? '1rem' : '0'
         }}>
-          <Text size="sm" c="dimmed" fw={500} mb="sm" style={{ fontFamily: 'var(--mantine-font-family)' }}>
+          <Text className="next-actions__rejected-title" size="sm" c="dimmed" fw={500} mb="sm" style={{ fontFamily: 'var(--mantine-font-family)' }}>
             Rejected Opportunities ({recommendations.rejected_opportunities.length})
           </Text>
-          <Stack gap="xs">
+          <Stack className="next-actions__rejected-list" gap="xs">
             {recommendations.rejected_opportunities.map((rejected, index) => (
               <Paper
+                className="next-actions__rejected-item"
                 key={`rejected-${rejected.symbol}-${rejected.side}-${index}`}
                 p="sm"
                 style={{
@@ -271,8 +280,9 @@ export function NextActionsCard() {
                   backgroundColor: 'var(--mantine-color-dark-8)',
                 }}
               >
-                <Group gap="xs" mb="xs" wrap="wrap">
+                <Group className="next-actions__rejected-header" gap="xs" mb="xs" wrap="wrap">
                   <Badge
+                    className="next-actions__rejected-side"
                     size="sm"
                     color={rejected.side === 'SELL' ? 'red' : 'green'}
                     variant="light"
@@ -280,17 +290,17 @@ export function NextActionsCard() {
                   >
                     {rejected.side}
                   </Badge>
-                  <Text size="sm" fw={600} style={{ fontFamily: 'var(--mantine-font-family)' }} c="dimmed">
+                  <Text className="next-actions__rejected-symbol" size="sm" fw={600} style={{ fontFamily: 'var(--mantine-font-family)' }} c="dimmed">
                     {rejected.symbol}
                   </Text>
                   {rejected.name && (
-                    <Text size="sm" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family)' }}>
+                    <Text className="next-actions__rejected-name" size="sm" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family)' }}>
                       - {rejected.name}
                     </Text>
                   )}
                 </Group>
                 {rejected.reasons && rejected.reasons.length > 0 && (
-                  <Text size="xs" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family)', lineHeight: 1.5 }}>
+                  <Text className="next-actions__rejected-reasons" size="xs" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family)', lineHeight: 1.5 }}>
                     {rejected.reasons.join('; ')}
                   </Text>
                 )}
@@ -324,20 +334,21 @@ export function NextActionsCard() {
         const groupedSecurities = Object.values(groupedBySymbol);
 
         return (
-          <div style={{
+          <div className="next-actions__filtered" style={{
             marginTop: (hasRecommendations || recommendations?.rejected_opportunities?.length > 0) ? '1rem' : '0',
             borderTop: (hasRecommendations || recommendations?.rejected_opportunities?.length > 0) ? '1px solid var(--mantine-color-dark-6)' : 'none',
             paddingTop: (hasRecommendations || recommendations?.rejected_opportunities?.length > 0) ? '1rem' : '0'
           }}>
-            <Text size="sm" c="dimmed" fw={500} mb="sm" style={{ fontFamily: 'var(--mantine-font-family)' }}>
+            <Text className="next-actions__filtered-title" size="sm" c="dimmed" fw={500} mb="sm" style={{ fontFamily: 'var(--mantine-font-family)' }}>
               Pre-Filtered Securities ({groupedSecurities.length} securities)
             </Text>
-            <Text size="xs" c="dimmed" mb="sm" style={{ fontFamily: 'var(--mantine-font-family)', fontStyle: 'italic' }}>
+            <Text className="next-actions__filtered-subtitle" size="xs" c="dimmed" mb="sm" style={{ fontFamily: 'var(--mantine-font-family)', fontStyle: 'italic' }}>
               Securities excluded before reaching the opportunity identification stage
             </Text>
-            <Stack gap="xs">
+            <Stack className="next-actions__filtered-list" gap="xs">
               {groupedSecurities.map((security) => (
                 <Paper
+                  className="next-actions__filtered-item"
                   key={`filtered-${security.isin}`}
                   p="sm"
                   style={{
@@ -345,17 +356,17 @@ export function NextActionsCard() {
                     backgroundColor: 'var(--mantine-color-dark-8)',
                   }}
                 >
-                  <Group gap="xs" mb="xs" wrap="wrap">
-                    <Text size="sm" fw={600} style={{ fontFamily: 'var(--mantine-font-family)' }} c="dimmed">
+                  <Group className="next-actions__filtered-header" gap="xs" mb="xs" wrap="wrap">
+                    <Text className="next-actions__filtered-symbol" size="sm" fw={600} style={{ fontFamily: 'var(--mantine-font-family)' }} c="dimmed">
                       {security.symbol || security.isin}
                     </Text>
                     {security.name && (
-                      <Text size="sm" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family)' }}>
+                      <Text className="next-actions__filtered-name" size="sm" c="dimmed" style={{ fontFamily: 'var(--mantine-font-family)' }}>
                         - {security.name}
                       </Text>
                     )}
                   </Group>
-                  <Stack gap={4}>
+                  <Stack className="next-actions__filtered-reasons" gap={4}>
                     {security.reasons.map((entry, entryIndex) => (
                       entry.reasons.map((reasonObj, reasonIndex) => {
                         // Handle both old format (string) and new format (object with reason & dismissed)
@@ -377,8 +388,9 @@ export function NextActionsCard() {
                         };
 
                         return (
-                          <Group key={`${entryIndex}-${reasonIndex}`} gap="xs" wrap="nowrap">
+                          <Group className="next-actions__filter-reason" key={`${entryIndex}-${reasonIndex}`} gap="xs" wrap="nowrap">
                             <Text
+                              className={`next-actions__reason-text ${isDismissed ? 'next-actions__reason-text--dismissed' : ''}`}
                               size="xs"
                               c="dimmed"
                               td={isDismissed ? 'line-through' : undefined}
@@ -387,6 +399,7 @@ export function NextActionsCard() {
                               • <Text span size="xs" c="gray.5" style={{ fontFamily: 'var(--mantine-font-family)' }}>{entry.calculator}</Text> {reasonText}
                             </Text>
                             <ActionIcon
+                              className={`next-actions__dismiss-btn ${isDismissed ? 'next-actions__dismiss-btn--dismissed' : ''}`}
                               size="xs"
                               variant="subtle"
                               color={isDismissed ? 'green' : 'red'}

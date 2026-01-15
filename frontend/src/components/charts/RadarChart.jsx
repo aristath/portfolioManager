@@ -46,22 +46,22 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
 
     // Create groups
     const gridGroup = document.createElementNS(svgNS, 'g');
-    gridGroup.setAttribute('class', 'grid');
+    gridGroup.setAttribute('class', 'radar-chart__grid');
 
     const radialGroup = document.createElementNS(svgNS, 'g');
-    radialGroup.setAttribute('class', 'radial-lines');
+    radialGroup.setAttribute('class', 'radar-chart__radial-lines');
 
     const tickGroup = document.createElementNS(svgNS, 'g');
-    tickGroup.setAttribute('class', 'ticks');
+    tickGroup.setAttribute('class', 'radar-chart__ticks');
 
     const dataGroup = document.createElementNS(svgNS, 'g');
-    dataGroup.setAttribute('class', 'data');
+    dataGroup.setAttribute('class', 'radar-chart__data');
 
     const labelGroup = document.createElementNS(svgNS, 'g');
-    labelGroup.setAttribute('class', 'labels');
+    labelGroup.setAttribute('class', 'radar-chart__labels');
 
     const legendGroup = document.createElementNS(svgNS, 'g');
-    legendGroup.setAttribute('class', 'legend');
+    legendGroup.setAttribute('class', 'radar-chart__legend');
 
     // Draw grid circles (5 levels: 0%, 25%, 50%, 75%, 100%)
     for (let i = 0; i <= 4; i++) {
@@ -74,6 +74,7 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
       circle.setAttribute('fill', 'none');
       circle.setAttribute('stroke', '#313244'); // Catppuccin Mocha Surface 0
       circle.setAttribute('stroke-width', '1');
+      circle.setAttribute('class', 'radar-chart__grid-circle');
       gridGroup.appendChild(circle);
     }
 
@@ -100,6 +101,7 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
       line.setAttribute('y2', coord.y);
       line.setAttribute('stroke', '#313244'); // Catppuccin Mocha Surface 0
       line.setAttribute('stroke-width', '1');
+      line.setAttribute('class', 'radar-chart__radial-line');
       radialGroup.appendChild(line);
     });
 
@@ -121,6 +123,7 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
       tick.setAttribute('y2', tickY + tickLength);
       tick.setAttribute('stroke', '#6c7086'); // Catppuccin Mocha Overlay 0
       tick.setAttribute('stroke-width', '1');
+      tick.setAttribute('class', 'radar-chart__tick');
       tickGroup.appendChild(tick);
 
       // Tick label
@@ -132,6 +135,7 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
       label.setAttribute('fill', '#6c7086'); // Catppuccin Mocha Overlay 0
       label.setAttribute('font-size', '9');
       label.setAttribute('font-family', 'JetBrains Mono, Fira Code, IBM Plex Mono, monospace');
+      label.setAttribute('class', 'radar-chart__tick-label');
       label.textContent = tickValue.toString();
       tickGroup.appendChild(label);
     });
@@ -166,6 +170,7 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
       currentPolygon.setAttribute('fill', '#a6e3a1'); // Catppuccin Mocha Green
       currentPolygon.setAttribute('fill-opacity', '0.2');
       currentPolygon.setAttribute('stroke', 'none');
+      currentPolygon.setAttribute('class', 'radar-chart__current-polygon');
       dataGroup.appendChild(currentPolygon);
 
       const currentPolyline = document.createElementNS(svgNS, 'polyline');
@@ -175,6 +180,7 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
       currentPolyline.setAttribute('stroke', '#a6e3a1'); // Catppuccin Mocha Green
       currentPolyline.setAttribute('stroke-opacity', '0.8');
       currentPolyline.setAttribute('stroke-width', '2');
+      currentPolyline.setAttribute('class', 'radar-chart__current-line');
       dataGroup.appendChild(currentPolyline);
 
       currentPoints.forEach(point => {
@@ -184,6 +190,7 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
         circle.setAttribute('r', '3');
         circle.setAttribute('fill', '#a6e3a1'); // Catppuccin Mocha Green
         circle.setAttribute('fill-opacity', '0.8');
+        circle.setAttribute('class', 'radar-chart__current-point');
         dataGroup.appendChild(circle);
       });
     }
@@ -198,6 +205,7 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
       targetPolyline.setAttribute('stroke-opacity', '0.8');
       targetPolyline.setAttribute('stroke-width', '2');
       targetPolyline.setAttribute('stroke-dasharray', '5,5');
+      targetPolyline.setAttribute('class', 'radar-chart__target-line');
       dataGroup.appendChild(targetPolyline);
 
       targetPoints.forEach(point => {
@@ -207,6 +215,7 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
         circle.setAttribute('r', '3');
         circle.setAttribute('fill', '#89b4fa'); // Catppuccin Mocha Blue
         circle.setAttribute('fill-opacity', '0.8');
+        circle.setAttribute('class', 'radar-chart__target-point');
         dataGroup.appendChild(circle);
       });
     }
@@ -225,6 +234,7 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
       label.setAttribute('fill', '#cdd6f4'); // Catppuccin Mocha Text
       label.setAttribute('font-size', '10');
       label.setAttribute('font-family', 'JetBrains Mono, Fira Code, IBM Plex Mono, monospace');
+      label.setAttribute('class', 'radar-chart__point-label');
       label.textContent = labels[i];
       labelGroup.appendChild(label);
     });
@@ -243,6 +253,7 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
     targetLegendLine.setAttribute('stroke-opacity', '0.8');
     targetLegendLine.setAttribute('stroke-width', '2');
     targetLegendLine.setAttribute('stroke-dasharray', '5,5');
+    targetLegendLine.setAttribute('class', 'radar-chart__legend-line radar-chart__legend-line--target');
     legendGroup.appendChild(targetLegendLine);
 
     const targetLegendText = document.createElementNS(svgNS, 'text');
@@ -252,6 +263,7 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
     targetLegendText.setAttribute('fill', '#a6adc8'); // Catppuccin Mocha Subtext 0
       targetLegendText.setAttribute('font-size', '10');
       targetLegendText.setAttribute('font-family', 'JetBrains Mono, Fira Code, IBM Plex Mono, monospace');
+    targetLegendText.setAttribute('class', 'radar-chart__legend-text radar-chart__legend-text--target');
     targetLegendText.textContent = 'Target';
     legendGroup.appendChild(targetLegendText);
 
@@ -264,6 +276,7 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
     currentLegendLine.setAttribute('stroke', '#a6e3a1'); // Catppuccin Mocha Green
     currentLegendLine.setAttribute('stroke-opacity', '0.8');
     currentLegendLine.setAttribute('stroke-width', '2');
+    currentLegendLine.setAttribute('class', 'radar-chart__legend-line radar-chart__legend-line--current');
     legendGroup.appendChild(currentLegendLine);
 
     const currentLegendText = document.createElementNS(svgNS, 'text');
@@ -273,6 +286,7 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
     currentLegendText.setAttribute('fill', '#a6adc8'); // Catppuccin Mocha Subtext 0
       currentLegendText.setAttribute('font-size', '10');
       currentLegendText.setAttribute('font-family', 'JetBrains Mono, Fira Code, IBM Plex Mono, monospace');
+    currentLegendText.setAttribute('class', 'radar-chart__legend-text radar-chart__legend-text--current');
     currentLegendText.textContent = 'Current';
     legendGroup.appendChild(currentLegendText);
 
@@ -286,8 +300,9 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
   }, [labels, targetData, currentData, maxValue]);
 
   return (
-    <div style={{ position: 'relative', width: '100%', aspectRatio: '1' }}>
+    <div className="radar-chart" style={{ position: 'relative', width: '100%', aspectRatio: '1' }}>
       <svg
+        className="radar-chart__svg"
         ref={svgRef}
         viewBox="0 0 500 500"
         style={{ width: '100%', height: '100%' }}

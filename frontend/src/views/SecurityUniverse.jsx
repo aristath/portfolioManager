@@ -3,7 +3,7 @@ import { SecurityTable } from '../components/portfolio/SecurityTable';
 
 export function SecurityUniverse() {
   return (
-    <Stack gap="md">
+    <Stack className="security-universe-view" gap="md">
       <SecurityTable />
     </Stack>
   );

@@ -112,81 +112,92 @@ export function SecurityTable() {
   const visibleColumnCount = getVisibleColumnCount();
 
   return (
-    <Card p="md">
-      <Group justify="space-between" mb="md">
-        <Text size="xs" tt="uppercase" c="dimmed" fw={600}>
+    <Card className="security-table" p="md">
+      <Group className="security-table__header" justify="space-between" mb="md">
+        <Text className="security-table__title" size="xs" tt="uppercase" c="dimmed" fw={600}>
           Security Universe
         </Text>
-        <Group gap="xs">
+        <Group className="security-table__header-actions" gap="xs">
           <Menu width={200}>
             <Menu.Target>
-              <ActionIcon variant="subtle" size="sm" title="Column visibility">
+              <ActionIcon className="security-table__columns-btn" variant="subtle" size="sm" title="Column visibility">
                 <IconColumns size={16} />
               </ActionIcon>
             </Menu.Target>
-            <Menu.Dropdown>
+            <Menu.Dropdown className="security-table__columns-dropdown">
               <Menu.Label>Show Columns</Menu.Label>
               <Menu.Item
+                className="security-table__column-toggle"
                 leftSection={visibleColumns.chart ? <IconCheck size={14} /> : <span style={{ width: 14 }} />}
                 onClick={() => toggleColumnVisibility('chart')}
               >
                 Chart
               </Menu.Item>
               <Menu.Item
+                className="security-table__column-toggle"
                 leftSection={visibleColumns.company ? <IconCheck size={14} /> : <span style={{ width: 14 }} />}
                 onClick={() => toggleColumnVisibility('company')}
               >
                 Company
               </Menu.Item>
               <Menu.Item
+                className="security-table__column-toggle"
                 leftSection={visibleColumns.geography ? <IconCheck size={14} /> : <span style={{ width: 14 }} />}
                 onClick={() => toggleColumnVisibility('geography')}
               >
                 Geography
               </Menu.Item>
               <Menu.Item
+                className="security-table__column-toggle"
                 leftSection={visibleColumns.exchange ? <IconCheck size={14} /> : <span style={{ width: 14 }} />}
                 onClick={() => toggleColumnVisibility('exchange')}
               >
                 Exchange
               </Menu.Item>
               <Menu.Item
+                className="security-table__column-toggle"
                 leftSection={visibleColumns.sector ? <IconCheck size={14} /> : <span style={{ width: 14 }} />}
                 onClick={() => toggleColumnVisibility('sector')}
               >
                 Sector
               </Menu.Item>
               <Menu.Item
+                className="security-table__column-toggle"
                 leftSection={visibleColumns.tags ? <IconCheck size={14} /> : <span style={{ width: 14 }} />}
                 onClick={() => toggleColumnVisibility('tags')}
               >
                 Tags
               </Menu.Item>
               <Menu.Item
+                className="security-table__column-toggle"
                 leftSection={visibleColumns.value ? <IconCheck size={14} /> : <span style={{ width: 14 }} />}
                 onClick={() => toggleColumnVisibility('value')}
               >
                 Value
               </Menu.Item>
               <Menu.Item
+                className="security-table__column-toggle"
                 leftSection={visibleColumns.score ? <IconCheck size={14} /> : <span style={{ width: 14 }} />}
                 onClick={() => toggleColumnVisibility('score')}
               >
                 Score
               </Menu.Item>
               <Menu.Item
+                className="security-table__column-toggle"
                 leftSection={visibleColumns.mult ? <IconCheck size={14} /> : <span style={{ width: 14 }} />}
                 onClick={() => toggleColumnVisibility('mult')}
               >
                 Mult
               </Menu.Item>
               <Menu.Item
+                className="security-table__column-toggle"
                 leftSection={visibleColumns.bs ? <IconCheck size={14} /> : <span style={{ width: 14 }} />}
                 onClick={() => toggleColumnVisibility('bs')}
               >
                 B/S
               </Menu.Item>
               <Menu.Item
+                className="security-table__column-toggle"
                 leftSection={visibleColumns.priority ? <IconCheck size={14} /> : <span style={{ width: 14 }} />}
                 onClick={() => toggleColumnVisibility('priority')}
               >
@@ -194,15 +205,16 @@ export function SecurityTable() {
               </Menu.Item>
             </Menu.Dropdown>
           </Menu>
-          <Button size="xs" onClick={openAddSecurityModal}>
+          <Button className="security-table__add-btn" size="xs" onClick={openAddSecurityModal}>
             + Add Security
           </Button>
         </Group>
       </Group>
 
       {/* Filter Bar */}
-      <Group gap="xs" mb="md" wrap="wrap">
+      <Group className="security-table__filters" gap="xs" mb="md" wrap="wrap">
         <TextInput
+          className="security-table__search"
           placeholder="Search symbol or name..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
@@ -210,6 +222,7 @@ export function SecurityTable() {
           size="xs"
         />
         <Select
+          className="security-table__geography-filter"
           placeholder="All Geographies"
           data={['all', ...geographies]}
           value={securityFilter}
@@ -218,6 +231,7 @@ export function SecurityTable() {
           style={{ width: '150px' }}
         />
         <Select
+          className="security-table__sector-filter"
           placeholder="All Sectors"
           data={['all', ...industries]}
           value={industryFilter}
@@ -226,6 +240,7 @@ export function SecurityTable() {
           style={{ width: '150px' }}
         />
         <Select
+          className="security-table__score-filter"
           placeholder="Any Score"
           data={[
             { value: '0', label: 'Any Score' },
@@ -239,6 +254,7 @@ export function SecurityTable() {
           style={{ width: '120px' }}
         />
         <SegmentedControl
+          className="security-table__timeframe"
           value={sparklineTimeframe}
           onChange={setSparklineTimeframe}
           data={[
@@ -251,18 +267,19 @@ export function SecurityTable() {
 
       {/* Results count */}
       {securities.length > 0 && (
-        <Text size="xs" c="dimmed" mb="xs">
+        <Text className="security-table__count" size="xs" c="dimmed" mb="xs">
           {filteredSecurities.length} of {securities.length} securities
         </Text>
       )}
 
       {/* Table */}
-      <div style={{ overflowX: 'auto' }}>
-        <Table highlightOnHover>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th style={{ position: 'sticky', left: 0, backgroundColor: 'var(--mantine-color-body)', zIndex: 10 }}>
+      <div className="security-table__wrapper" style={{ overflowX: 'auto' }}>
+        <Table className="security-table__table" highlightOnHover>
+          <Table.Thead className="security-table__thead">
+            <Table.Tr className="security-table__header-row">
+              <Table.Th className="security-table__th security-table__th--symbol" style={{ position: 'sticky', left: 0, backgroundColor: 'var(--mantine-color-body)', zIndex: 10 }}>
                 <Text
+                  className="security-table__sort-label"
                   size="xs"
                   style={{ cursor: 'pointer' }}
                   onClick={() => handleSort('symbol')}
@@ -270,10 +287,11 @@ export function SecurityTable() {
                   Symbol {sortBy === 'symbol' && (sortDesc ? '▼' : '▲')}
                 </Text>
               </Table.Th>
-              {visibleColumns.chart && <Table.Th>Chart</Table.Th>}
+              {visibleColumns.chart && <Table.Th className="security-table__th security-table__th--chart">Chart</Table.Th>}
               {visibleColumns.company && (
-                <Table.Th>
+                <Table.Th className="security-table__th security-table__th--company">
                   <Text
+                    className="security-table__sort-label"
                     size="xs"
                     style={{ cursor: 'pointer' }}
                     onClick={() => handleSort('name')}
@@ -283,8 +301,9 @@ export function SecurityTable() {
                 </Table.Th>
               )}
               {visibleColumns.geography && (
-                <Table.Th>
+                <Table.Th className="security-table__th security-table__th--geography">
                   <Text
+                    className="security-table__sort-label"
                     size="xs"
                     style={{ cursor: 'pointer' }}
                     onClick={() => handleSort('geography')}
@@ -294,8 +313,9 @@ export function SecurityTable() {
                 </Table.Th>
               )}
               {visibleColumns.exchange && (
-                <Table.Th>
+                <Table.Th className="security-table__th security-table__th--exchange">
                   <Text
+                    className="security-table__sort-label"
                     size="xs"
                     style={{ cursor: 'pointer' }}
                     onClick={() => handleSort('fullExchangeName')}
@@ -305,8 +325,9 @@ export function SecurityTable() {
                 </Table.Th>
               )}
               {visibleColumns.sector && (
-                <Table.Th>
+                <Table.Th className="security-table__th security-table__th--sector">
                   <Text
+                    className="security-table__sort-label"
                     size="xs"
                     style={{ cursor: 'pointer' }}
                     onClick={() => handleSort('industry')}
@@ -315,10 +336,11 @@ export function SecurityTable() {
                   </Text>
                 </Table.Th>
               )}
-              {visibleColumns.tags && <Table.Th>Tags</Table.Th>}
+              {visibleColumns.tags && <Table.Th className="security-table__th security-table__th--tags">Tags</Table.Th>}
               {visibleColumns.value && (
-                <Table.Th ta="right">
+                <Table.Th className="security-table__th security-table__th--value" ta="right">
                   <Text
+                    className="security-table__sort-label"
                     size="xs"
                     style={{ cursor: 'pointer' }}
                     onClick={() => handleSort('position_value')}
@@ -328,8 +350,9 @@ export function SecurityTable() {
                 </Table.Th>
               )}
               {visibleColumns.score && (
-                <Table.Th ta="right">
+                <Table.Th className="security-table__th security-table__th--score" ta="right">
                   <Text
+                    className="security-table__sort-label"
                     size="xs"
                     style={{ cursor: 'pointer' }}
                     onClick={() => handleSort('total_score')}
@@ -338,11 +361,12 @@ export function SecurityTable() {
                   </Text>
                 </Table.Th>
               )}
-              {visibleColumns.mult && <Table.Th ta="center">Mult</Table.Th>}
-              {visibleColumns.bs && <Table.Th ta="center">B/S</Table.Th>}
+              {visibleColumns.mult && <Table.Th className="security-table__th security-table__th--mult" ta="center">Mult</Table.Th>}
+              {visibleColumns.bs && <Table.Th className="security-table__th security-table__th--bs" ta="center">B/S</Table.Th>}
               {visibleColumns.priority && (
-                <Table.Th ta="right">
+                <Table.Th className="security-table__th security-table__th--priority" ta="right">
                   <Text
+                    className="security-table__sort-label"
                     size="xs"
                     style={{ cursor: 'pointer' }}
                     onClick={() => handleSort('priority_score')}
@@ -351,21 +375,21 @@ export function SecurityTable() {
                   </Text>
                 </Table.Th>
               )}
-              <Table.Th ta="center">Actions</Table.Th>
+              <Table.Th className="security-table__th security-table__th--actions" ta="center">Actions</Table.Th>
             </Table.Tr>
           </Table.Thead>
-          <Table.Tbody>
+          <Table.Tbody className="security-table__tbody">
             {filteredSecurities.length === 0 && securities.length > 0 && (
-              <Table.Tr>
+              <Table.Tr className="security-table__empty-row">
                 <Table.Td colSpan={visibleColumnCount} ta="center" py="xl">
-                  <Text c="dimmed" size="sm">No securities match your filters</Text>
+                  <Text className="security-table__empty-message" c="dimmed" size="sm">No securities match your filters</Text>
                 </Table.Td>
               </Table.Tr>
             )}
             {securities.length === 0 && (
-              <Table.Tr>
+              <Table.Tr className="security-table__empty-row">
                 <Table.Td colSpan={visibleColumnCount} ta="center" py="xl">
-                  <Text c="dimmed" size="sm">No securities in universe</Text>
+                  <Text className="security-table__empty-message" c="dimmed" size="sm">No securities in universe</Text>
                 </Table.Td>
               </Table.Tr>
             )}
@@ -373,6 +397,7 @@ export function SecurityTable() {
               const alert = getPositionAlert(security.symbol);
               return (
                 <Table.Tr
+                  className={`security-table__row ${alert ? `security-table__row--${alert.severity}` : ''}`}
                   key={security.symbol}
                   style={{
                     borderLeft: alert
@@ -380,8 +405,9 @@ export function SecurityTable() {
                       : undefined,
                   }}
                 >
-                  <Table.Td style={{ position: 'sticky', left: 0, backgroundColor: 'var(--mantine-color-body)', zIndex: 5 }}>
+                  <Table.Td className="security-table__td security-table__td--symbol" style={{ position: 'sticky', left: 0, backgroundColor: 'var(--mantine-color-body)', zIndex: 5 }}>
                     <Text
+                      className="security-table__symbol-link"
                       size="sm"
                       style={{ fontFamily: 'var(--mantine-font-family)', cursor: 'pointer' }}
                       c="blue"
@@ -393,7 +419,7 @@ export function SecurityTable() {
                     </Text>
                   </Table.Td>
                   {visibleColumns.chart && (
-                    <Table.Td>
+                    <Table.Td className="security-table__td security-table__td--chart">
                       {sparklinesLoading ? (
                         <Skeleton height={32} width={80} />
                       ) : (
@@ -407,39 +433,40 @@ export function SecurityTable() {
                     </Table.Td>
                   )}
                   {visibleColumns.company && (
-                    <Table.Td>
-                      <Text size="sm" truncate style={{ maxWidth: '128px' }}>
+                    <Table.Td className="security-table__td security-table__td--company">
+                      <Text className="security-table__company-name" size="sm" truncate style={{ maxWidth: '128px' }}>
                         {security.name}
                       </Text>
                     </Table.Td>
                   )}
                   {visibleColumns.geography && (
-                    <Table.Td>
-                      <Text size="sm" c="dimmed" truncate style={{ maxWidth: '96px' }}>
+                    <Table.Td className="security-table__td security-table__td--geography">
+                      <Text className="security-table__geography" size="sm" c="dimmed" truncate style={{ maxWidth: '96px' }}>
                         {security.geography || '-'}
                       </Text>
                     </Table.Td>
                   )}
                   {visibleColumns.exchange && (
-                    <Table.Td>
-                      <Text size="sm" c="dimmed" truncate style={{ maxWidth: '96px' }}>
+                    <Table.Td className="security-table__td security-table__td--exchange">
+                      <Text className="security-table__exchange" size="sm" c="dimmed" truncate style={{ maxWidth: '96px' }}>
                         {security.fullExchangeName || '-'}
                       </Text>
                     </Table.Td>
                   )}
                   {visibleColumns.sector && (
-                    <Table.Td>
-                      <Text size="sm" c="dimmed" truncate style={{ maxWidth: '96px' }}>
+                    <Table.Td className="security-table__td security-table__td--sector">
+                      <Text className="security-table__sector" size="sm" c="dimmed" truncate style={{ maxWidth: '96px' }}>
                         {security.industry || '-'}
                       </Text>
                     </Table.Td>
                   )}
                   {visibleColumns.tags && (
-                    <Table.Td>
+                    <Table.Td className="security-table__td security-table__td--tags">
                       {security.tags && security.tags.length > 0 ? (
-                        <Group gap="xs" wrap="wrap">
+                        <Group className="security-table__tags" gap="xs" wrap="wrap">
                           {security.tags.map((tagId) => (
                             <Badge
+                              className="security-table__tag"
                               key={tagId}
                               size="xs"
                               {...getTagColor(tagId)}
@@ -450,18 +477,19 @@ export function SecurityTable() {
                           ))}
                         </Group>
                       ) : (
-                        <Text size="sm" c="dimmed">-</Text>
+                        <Text className="security-table__no-tags" size="sm" c="dimmed">-</Text>
                       )}
                     </Table.Td>
                   )}
                   {visibleColumns.value && (
-                    <Table.Td ta="right">
-                      <Group gap="xs" justify="flex-end">
-                        <Text size="sm" style={{ fontFamily: 'var(--mantine-font-family)' }}>
+                    <Table.Td className="security-table__td security-table__td--value" ta="right">
+                      <Group className="security-table__value-group" gap="xs" justify="flex-end">
+                        <Text className="security-table__value" size="sm" style={{ fontFamily: 'var(--mantine-font-family)' }}>
                           {security.position_value ? formatCurrency(security.position_value) : '-'}
                         </Text>
                         {alert && (
                           <Text
+                            className={`security-table__alert-icon security-table__alert-icon--${alert.severity}`}
                             size="xs"
                             c={alert.severity === 'critical' ? 'red' : 'yellow'}
                             title={`Position concentration: ${(alert.current_pct * 100).toFixed(1)}% (Limit: ${(alert.limit_pct * 100).toFixed(0)}%)`}
@@ -473,15 +501,16 @@ export function SecurityTable() {
                     </Table.Td>
                   )}
                   {visibleColumns.score && (
-                    <Table.Td ta="right">
-                      <Badge size="sm" {...getScoreClass(security.total_score)}>
+                    <Table.Td className="security-table__td security-table__td--score" ta="right">
+                      <Badge className="security-table__score-badge" size="sm" {...getScoreClass(security.total_score)}>
                         {formatScore(security.total_score)}
                       </Badge>
                     </Table.Td>
                   )}
                   {visibleColumns.mult && (
-                    <Table.Td ta="center">
+                    <Table.Td className="security-table__td security-table__td--mult" ta="center">
                       <NumberInput
+                        className="security-table__mult-input"
                         size="xs"
                         value={security.priority_multiplier || 1}
                         min={0.1}
@@ -493,10 +522,11 @@ export function SecurityTable() {
                     </Table.Td>
                   )}
                   {visibleColumns.bs && (
-                    <Table.Td ta="center">
-                      <Group gap="xs" justify="center">
+                    <Table.Td className="security-table__td security-table__td--bs" ta="center">
+                      <Group className="security-table__bs-indicators" gap="xs" justify="center">
                         {security.allow_buy && (
                           <div
+                            className="security-table__bs-indicator security-table__bs-indicator--buy"
                             style={{
                               width: '10px',
                               height: '10px',
@@ -508,6 +538,7 @@ export function SecurityTable() {
                         )}
                         {security.allow_sell && (
                           <div
+                            className="security-table__bs-indicator security-table__bs-indicator--sell"
                             style={{
                               width: '10px',
                               height: '10px',
@@ -522,15 +553,16 @@ export function SecurityTable() {
                     </Table.Td>
                   )}
                   {visibleColumns.priority && (
-                    <Table.Td ta="right">
-                      <Badge size="sm" {...getPriorityClass(security.priority_score)}>
+                    <Table.Td className="security-table__td security-table__td--priority" ta="right">
+                      <Badge className="security-table__priority-badge" size="sm" {...getPriorityClass(security.priority_score)}>
                         {formatPriority(security.priority_score)}
                       </Badge>
                     </Table.Td>
                   )}
-                  <Table.Td ta="center">
-                    <Group gap="xs" justify="center">
+                  <Table.Td className="security-table__td security-table__td--actions" ta="center">
+                    <Group className="security-table__actions" gap="xs" justify="center">
                       <ActionIcon
+                        className="security-table__action-btn security-table__action-btn--edit"
                         size="sm"
                         variant="subtle"
                         onClick={() => openEditSecurityModal(security)}
@@ -539,6 +571,7 @@ export function SecurityTable() {
                         <IconEdit size={14} />
                       </ActionIcon>
                       <ActionIcon
+                        className="security-table__action-btn security-table__action-btn--refresh"
                         size="sm"
                         variant="subtle"
                         onClick={() => refreshScore(security.isin)}
@@ -547,6 +580,7 @@ export function SecurityTable() {
                         <IconRefresh size={14} />
                       </ActionIcon>
                       <ActionIcon
+                        className="security-table__action-btn security-table__action-btn--remove"
                         size="sm"
                         variant="subtle"
                         color="red"

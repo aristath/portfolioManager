@@ -18,32 +18,33 @@ export class ErrorBoundary extends Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{
+        <div className="error-boundary" style={{
           padding: '2rem',
           maxWidth: '800px',
           margin: '0 auto',
           fontFamily: 'var(--mantine-font-family)',
         }}>
           <Alert
+            className="error-boundary__alert"
             color="red"
             title="Something went wrong"
             variant="filled"
             style={{ fontFamily: 'var(--mantine-font-family)' }}
           >
-            <Stack gap="md">
-              <Text style={{ fontFamily: 'var(--mantine-font-family)' }}>
+            <Stack className="error-boundary__content" gap="md">
+              <Text className="error-boundary__message" style={{ fontFamily: 'var(--mantine-font-family)' }}>
                 An unexpected error occurred. Please refresh the page or contact support if the problem persists.
               </Text>
               {this.state.error && (
-                <details style={{ marginTop: '1rem' }}>
-                  <summary style={{
+                <details className="error-boundary__details" style={{ marginTop: '1rem' }}>
+                  <summary className="error-boundary__summary" style={{
                     cursor: 'pointer',
                     marginBottom: '0.5rem',
                     fontFamily: 'var(--mantine-font-family)',
                   }}>
                     Error Details
                   </summary>
-                  <pre style={{
+                  <pre className="error-boundary__stack" style={{
                     backgroundColor: 'var(--mantine-color-dark-7)',
                     border: '1px solid var(--mantine-color-dark-6)',
                     padding: '1rem',
@@ -59,6 +60,7 @@ export class ErrorBoundary extends Component {
                 </details>
               )}
               <Button
+                className="error-boundary__reload-btn"
                 onClick={() => {
                   this.setState({ hasError: false, error: null });
                   window.location.reload();

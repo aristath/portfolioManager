@@ -69,17 +69,18 @@ export function Layout() {
   }, [startEventStream, stopEventStream]);
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: 'var(--mantine-color-dark-9)' }}>
-      <Container size="xl" py="md">
+    <div className="layout" style={{ minHeight: '100vh', backgroundColor: 'var(--mantine-color-dark-9)' }}>
+      <Container className="layout__container" size="xl" py="md">
         <AppHeader />
         <MarketStatus />
         <StatusBar />
         <TabNavigation />
-        <div style={{ marginTop: '16px' }}>
+        <main className="layout__main" style={{ marginTop: '16px' }}>
           <Outlet />
-        </div>
+        </main>
         <JobFooter />
         <Text
+          className="layout__version"
           size="xs"
           c="dimmed"
           ta="center"

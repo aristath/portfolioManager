@@ -123,13 +123,14 @@ const SecurityChartComponent = forwardRef(({ isin, symbol, onClose }, ref) => {
   }, [isin, loadChartData]);
 
   return (
-    <div>
-      <Group justify="space-between" mb="md">
-        <Text size="lg" fw={600}>
+    <div className="security-chart">
+      <Group className="security-chart__header" justify="space-between" mb="md">
+        <Text className="security-chart__title" size="lg" fw={600}>
           {symbol} Chart
         </Text>
-        <Group gap="xs">
+        <Group className="security-chart__controls" gap="xs">
           <Select
+            className="security-chart__range-select"
             size="xs"
             data={[
               { value: '1M', label: '1 Month' },
@@ -145,6 +146,7 @@ const SecurityChartComponent = forwardRef(({ isin, symbol, onClose }, ref) => {
             style={{ width: '120px' }}
           />
           <Select
+            className="security-chart__source-select"
             size="xs"
             data={[
               { value: 'tradernet', label: 'Tradernet' },
@@ -155,7 +157,7 @@ const SecurityChartComponent = forwardRef(({ isin, symbol, onClose }, ref) => {
             style={{ width: '140px' }}
           />
           {onClose && (
-            <Button size="xs" variant="subtle" onClick={onClose}>
+            <Button className="security-chart__close-btn" size="xs" variant="subtle" onClick={onClose}>
               Close
             </Button>
           )}
@@ -163,18 +165,19 @@ const SecurityChartComponent = forwardRef(({ isin, symbol, onClose }, ref) => {
       </Group>
 
       {loading && (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '40px' }}>
+        <div className="security-chart__loading" style={{ display: 'flex', justifyContent: 'center', padding: '40px' }}>
           <Loader />
         </div>
       )}
 
       {error && (
-        <Text c="red" ta="center" py="xl">
+        <Text className="security-chart__error" c="red" ta="center" py="xl">
           {error}
         </Text>
       )}
 
       <div
+        className="security-chart__container"
         ref={chartContainerRef}
         style={{ width: '100%', height: '400px' }}
       />
