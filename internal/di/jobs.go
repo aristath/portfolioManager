@@ -428,19 +428,9 @@ func RegisterJobs(container *Container, cfg *config.Config, displayManager *disp
 	instances.ExecuteDividendTrades = executeDividendTrades
 
 	// ==========================================
-	// COMPOSITE DIVIDEND REINVESTMENT JOB (orchestrates individual dividend jobs)
+	// NOTE: DividendReinvestmentJob composite removed - Work Processor handles orchestration
+	// Individual dividend jobs above remain for manual triggering via API
 	// ==========================================
-	dividendReinvest := scheduler.NewDividendReinvestmentJob(scheduler.DividendReinvestmentConfig{
-		Log:                              log,
-		GetUnreinvestedDividendsJob:      getUnreinvestedDividends,
-		GroupDividendsBySymbolJob:        groupDividendsBySymbol,
-		CheckDividendYieldsJob:           checkDividendYields,
-		CreateDividendRecommendationsJob: createDividendRecommendations,
-		SetPendingBonusesJob:             setPendingBonuses,
-		ExecuteDividendTradesJob:         executeDividendTrades,
-	})
-	container.JobRegistry.Register(queue.JobTypeDividendReinvest, queue.JobToHandler(dividendReinvest))
-	instances.DividendReinvest = dividendReinvest
 
 	// ==========================================
 	// INDIVIDUAL HEALTH CHECK JOBS
@@ -478,16 +468,9 @@ func RegisterJobs(container *Container, cfg *config.Config, displayManager *disp
 	instances.CheckWALCheckpoints = checkWALCheckpoints
 
 	// ==========================================
-	// COMPOSITE HEALTH CHECK JOB (orchestrates individual health check jobs)
+	// NOTE: HealthCheckJob composite removed - Work Processor handles orchestration
+	// Individual health check jobs above remain for manual triggering via API
 	// ==========================================
-	healthCheck := scheduler.NewHealthCheckJob(scheduler.HealthCheckConfig{
-		Log:                      log,
-		CheckCoreDatabasesJob:    checkCoreDatabases,
-		CheckHistoryDatabasesJob: checkHistoryDatabases,
-		CheckWALCheckpointsJob:   checkWALCheckpoints,
-	})
-	container.JobRegistry.Register(queue.JobTypeHealthCheck, queue.JobToHandler(healthCheck))
-	instances.HealthCheck = healthCheck
 
 	// ==========================================
 	// DEPLOYMENT JOB (optional - only if deployment manager is provided)

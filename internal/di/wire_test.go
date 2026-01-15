@@ -35,10 +35,10 @@ func TestWire(t *testing.T) {
 	assert.NotNil(t, container.TradingService)
 	assert.NotNil(t, container.CashManager)
 
-	// Verify jobs are registered
-	// NOTE: Composite jobs (SyncCycle, PlannerBatch) removed - work processor handles orchestration
-	assert.NotNil(t, jobs.HealthCheck)
-	assert.NotNil(t, jobs.DividendReinvest)
+	// Verify individual jobs are registered
+	// NOTE: All composite jobs removed - Work Processor handles orchestration
+	assert.NotNil(t, jobs.EventBasedTrading)
+	assert.NotNil(t, jobs.TagUpdate)
 
 	// Cleanup - stop background services first
 	t.Cleanup(func() {

@@ -150,10 +150,8 @@ func main() {
 	})
 
 	// Wire up jobs for manual triggering via API
-	// NOTE: Composite jobs (SyncCycle, PlannerBatch) removed - use Work Processor endpoints instead
+	// NOTE: All composite jobs removed - use Work Processor endpoints instead
 	srv.SetJobs(
-		jobs.HealthCheck,
-		jobs.DividendReinvest,
 		jobs.EventBasedTrading,
 		jobs.TagUpdate,
 		// Individual sync jobs

@@ -181,10 +181,8 @@ func New(cfg Config) *Server {
 }
 
 // SetJobs registers job instances for manual triggering via API
-// NOTE: Composite jobs (SyncCycle, PlannerBatch) removed - use Work Processor endpoints instead
+// NOTE: All composite jobs removed - use Work Processor endpoints instead
 func (s *Server) SetJobs(
-	healthCheck scheduler.Job,
-	dividendReinvest scheduler.Job,
 	eventBasedTrading scheduler.Job,
 	tagUpdate scheduler.Job,
 	// Individual sync jobs
@@ -213,8 +211,6 @@ func (s *Server) SetJobs(
 	checkWALCheckpoints scheduler.Job,
 ) {
 	s.systemHandlers.SetJobs(
-		healthCheck,
-		dividendReinvest,
 		eventBasedTrading,
 		tagUpdate,
 		syncTrades,

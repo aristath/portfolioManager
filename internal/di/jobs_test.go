@@ -60,10 +60,8 @@ func TestRegisterJobs(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, jobInstances)
 
-	// Verify all jobs are registered
-	// NOTE: Composite jobs (SyncCycle, PlannerBatch) removed - Work Processor handles orchestration
-	assert.NotNil(t, jobInstances.HealthCheck)
-	assert.NotNil(t, jobInstances.DividendReinvest)
+	// Verify individual jobs are registered
+	// NOTE: All composite jobs removed - Work Processor handles orchestration
 	assert.NotNil(t, jobInstances.EventBasedTrading)
 	assert.NotNil(t, jobInstances.TagUpdate)
 	assert.NotNil(t, jobInstances.HistoryCleanup)

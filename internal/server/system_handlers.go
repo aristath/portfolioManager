@@ -44,9 +44,7 @@ type SystemHandlers struct {
 	marketHoursService      *market_hours.MarketHoursService
 	marketStatusWS          *tradernet.MarketStatusWebSocket
 	// Jobs (will be set after job registration in main.go)
-	// NOTE: Composite jobs (syncCycleJob, plannerBatchJob) removed - use Work Processor endpoints instead
-	healthCheckJob       scheduler.Job
-	dividendReinvestJob  scheduler.Job
+	// NOTE: All composite jobs removed - use Work Processor endpoints instead
 	eventBasedTradingJob scheduler.Job
 	tagUpdateJob         scheduler.Job
 
@@ -133,10 +131,8 @@ func NewSystemHandlers(
 
 // SetJobs registers job references for manual triggering
 // Called after jobs are registered in main.go
-// NOTE: Composite jobs (SyncCycle, PlannerBatch) removed - use Work Processor endpoints instead
+// NOTE: All composite jobs removed - use Work Processor endpoints instead
 func (h *SystemHandlers) SetJobs(
-	healthCheck scheduler.Job,
-	dividendReinvest scheduler.Job,
 	eventBasedTrading scheduler.Job,
 	tagUpdate scheduler.Job,
 	// Individual sync jobs
@@ -164,8 +160,6 @@ func (h *SystemHandlers) SetJobs(
 	checkHistoryDatabases scheduler.Job,
 	checkWALCheckpoints scheduler.Job,
 ) {
-	h.healthCheckJob = healthCheck
-	h.dividendReinvestJob = dividendReinvest
 	h.eventBasedTradingJob = eventBasedTrading
 	h.tagUpdateJob = tagUpdate
 
@@ -1041,63 +1035,31 @@ func (h *SystemHandlers) HandleTriggerSyncCycle(w http.ResponseWriter, r *http.R
 
 // HandleTriggerHealthCheck triggers the health check job immediately
 // POST /api/jobs/health-check
+// NOTE: HealthCheck composite job removed - use Work Processor or individual health check endpoints
 func (h *SystemHandlers) HandleTriggerHealthCheck(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	if h.healthCheckJob == nil {
-		h.log.Warn().Msg("Health check job not registered yet")
-		h.writeJSON(w, map[string]string{
-			"status":  "error",
-			"message": "Health check job not registered",
-		})
-		return
-	}
-
-	h.log.Info().Msg("Manual health check triggered")
-
-	if err := h.enqueueJob(queue.JobTypeHealthCheck, queue.PriorityMedium); err != nil {
-		h.log.Error().Err(err).Msg("Failed to trigger health check")
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
 	h.writeJSON(w, map[string]string{
-		"status":  "success",
-		"message": "Health check triggered successfully",
+		"status":  "deprecated",
+		"message": "HealthCheck composite job removed. Use Work Processor endpoints: POST /api/work/maintenance:health/execute, or individual endpoints: /api/jobs/check-core-databases, /api/jobs/check-history-databases, /api/jobs/check-wal-checkpoints",
 	})
 }
 
 // HandleTriggerDividendReinvestment triggers the dividend reinvestment job immediately
 // POST /api/jobs/dividend-reinvestment
+// NOTE: DividendReinvestment composite job removed - use Work Processor or individual dividend endpoints
 func (h *SystemHandlers) HandleTriggerDividendReinvestment(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	if h.dividendReinvestJob == nil {
-		h.log.Warn().Msg("Dividend reinvestment job not registered yet")
-		h.writeJSON(w, map[string]string{
-			"status":  "error",
-			"message": "Dividend reinvestment job not registered",
-		})
-		return
-	}
-
-	h.log.Info().Msg("Manual dividend reinvestment triggered")
-
-	if err := h.enqueueJob(queue.JobTypeDividendReinvest, queue.PriorityHigh); err != nil {
-		h.log.Error().Err(err).Msg("Failed to trigger dividend reinvestment")
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
 	h.writeJSON(w, map[string]string{
-		"status":  "success",
-		"message": "Dividend reinvestment triggered successfully",
+		"status":  "deprecated",
+		"message": "DividendReinvestment composite job removed. Use Work Processor endpoints: POST /api/work/dividend:detect/execute, etc., or individual endpoints: /api/jobs/get-unreinvested-dividends, /api/jobs/check-dividend-yields, etc.",
 	})
 }
 
