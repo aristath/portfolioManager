@@ -741,88 +741,168 @@ func transformCandles(sdkResult interface{}, symbol string) ([]OHLCV, error) {
 	return validatedCandles, nil
 }
 
-// validateAndInterpolateCandles validates OHLCV candles and interpolates abnormal ones
-// Uses surrounding candles in the same response for interpolation context
-func validateAndInterpolateCandles(candles []OHLCV) []OHLCV {
-	if len(candles) == 0 {
-		return candles
+// Validation thresholds for Layer 1 (API response validation)
+// Note: No absolute price bounds - only relative checks. This system must work for 15+ years
+// and absolute bounds like "Close > 10,000" are arbitrary and will break over time.
+const (
+	highCloseMaxRatioL1 = 100.0  // High ≤ Close × 100
+	lowCloseMinRatioL1  = 0.01   // Low ≥ Close × 0.01
+	maxPriceChangePctL1 = 1000.0 // >1000% spike detection
+	minPriceChangePctL1 = -90.0  // <-90% crash detection
+)
+
+// OHLCValidation tracks validity of each OHLC component
+type OHLCValidation struct {
+	OpenValid  bool
+	HighValid  bool
+	LowValid   bool
+	CloseValid bool
+	Reason     string
+}
+
+// NeedsFullInterpolation returns true when Close is invalid (Close is the anchor)
+func (v OHLCValidation) NeedsFullInterpolation() bool {
+	return !v.CloseValid
+}
+
+// NeedsInterpolation returns true when any component is invalid
+func (v OHLCValidation) NeedsInterpolation() bool {
+	return !v.OpenValid || !v.HighValid || !v.LowValid || !v.CloseValid
+}
+
+// AllValid returns true when all components are valid
+func (v OHLCValidation) AllValid() bool {
+	return v.OpenValid && v.HighValid && v.LowValid && v.CloseValid
+}
+
+// validateOHLCComponents validates each OHLC component independently
+// Note: No absolute price bounds - only relative checks. This system must work for 15+ years
+// and absolute bounds like "Close > 10,000" are arbitrary and will break over time.
+// However, zero/negative prices are clearly invalid (missing data) regardless of time horizon.
+func validateOHLCComponents(candle OHLCV, prev, next *OHLCV) OHLCValidation {
+	result := OHLCValidation{
+		OpenValid: true, HighValid: true, LowValid: true, CloseValid: true,
 	}
 
-	validated := make([]OHLCV, 0, len(candles))
+	// Zero/negative Close indicates missing or invalid data
+	if candle.Close <= 0 {
+		result.CloseValid = false
+		result.OpenValid = false
+		result.HighValid = false
+		result.LowValid = false
+		result.Reason = "close_zero_or_negative"
+		return result
+	}
 
-	for i, candle := range candles {
-		// Basic OHLC consistency checks
-		if candle.High < candle.Low || candle.High < candle.Open || candle.High < candle.Close ||
-			candle.Low > candle.Open || candle.Low > candle.Close {
-			// OHLC inconsistent - interpolate using surrounding candles
-			interpolated := interpolateOHLCV(candle, i, candles)
-			validated = append(validated, interpolated)
-			continue
+	// High validation - relative to Close (100x threshold)
+	if candle.Close > 0 && candle.High > candle.Close*highCloseMaxRatioL1 {
+		result.HighValid = false
+		result.Reason = "high_extreme_relative_to_close"
+	}
+
+	// Low validation - relative to Close (0.01x threshold)
+	if candle.Close > 0 && candle.Low > 0 && candle.Low < candle.Close*lowCloseMinRatioL1 {
+		result.LowValid = false
+		if result.Reason == "" {
+			result.Reason = "low_extreme_relative_to_close"
 		}
+	}
 
-		// Check absolute bounds (basic sanity check)
-		if candle.Close > 10000.0 || candle.Close < 0.01 {
-			// Absolute bound exceeded - interpolate
-			interpolated := interpolateOHLCV(candle, i, candles)
-			validated = append(validated, interpolated)
-			continue
+	// OHLC consistency checks
+	if candle.High < candle.Low {
+		result.HighValid = false
+		result.LowValid = false
+		if result.Reason == "" {
+			result.Reason = "ohlc_inconsistent_high_below_low"
 		}
+	}
+	if candle.High < candle.Open {
+		result.HighValid = false
+		if result.Reason == "" {
+			result.Reason = "ohlc_inconsistent_high_below_open"
+		}
+	}
+	if candle.High < candle.Close {
+		result.HighValid = false
+		if result.Reason == "" {
+			result.Reason = "ohlc_inconsistent_high_below_close"
+		}
+	}
+	if candle.Low > candle.Open {
+		result.LowValid = false
+		if result.Reason == "" {
+			result.Reason = "ohlc_inconsistent_low_above_open"
+		}
+	}
+	if candle.Low > candle.Close {
+		result.LowValid = false
+		if result.Reason == "" {
+			result.Reason = "ohlc_inconsistent_low_above_close"
+		}
+	}
 
-		// Check for spikes/crashes relative to surrounding candles
-		if i > 0 && i < len(candles)-1 {
-			prevClose := candles[i-1].Close
-			nextClose := candles[i+1].Close
-			if prevClose > 0 {
-				changePercent := ((candle.Close - prevClose) / prevClose) * 100.0
-				// If >1000% change or <-90% change, and next price is normal, interpolate
-				if (changePercent > 1000.0 || changePercent < -90.0) && nextClose > 0 {
-					nextChangePercent := ((nextClose - prevClose) / prevClose) * 100.0
-					// If next price is also abnormal, might be a real move - keep it
-					// Otherwise, interpolate
-					if nextChangePercent <= 1000.0 && nextChangePercent >= -90.0 {
-						interpolated := interpolateOHLCV(candle, i, candles)
-						validated = append(validated, interpolated)
-						continue
-					}
+	// Spike/crash detection for Close (requires neighbors)
+	if prev != nil && prev.Close > 0 {
+		changePercent := ((candle.Close - prev.Close) / prev.Close) * 100.0
+		if changePercent > maxPriceChangePctL1 || changePercent < minPriceChangePctL1 {
+			// Check if next confirms it's anomalous
+			if next != nil && next.Close > 0 {
+				nextChange := ((next.Close - prev.Close) / prev.Close) * 100.0
+				if nextChange <= maxPriceChangePctL1 && nextChange >= minPriceChangePctL1 {
+					// Next is normal, so current is spike/crash
+					result.CloseValid = false
+					result.OpenValid = false
+					result.HighValid = false
+					result.LowValid = false
+					result.Reason = "close_spike_or_crash"
 				}
 			}
 		}
-
-		// Price is valid
-		validated = append(validated, candle)
 	}
 
-	return validated
+	return result
 }
 
-// interpolateOHLCV interpolates an abnormal OHLCV using surrounding candles
-func interpolateOHLCV(candle OHLCV, index int, allCandles []OHLCV) OHLCV {
+// interpolateOHLCVSelective interpolates only invalid components
+func interpolateOHLCVSelective(candle OHLCV, index int, allCandles []OHLCV, validation OHLCValidation) OHLCV {
+	if validation.NeedsFullInterpolation() {
+		return interpolateOHLCVFull(candle, index, allCandles)
+	}
+
+	interpolated := candle // Preserve valid values
+
+	before, after := findValidNeighborsL1(index, allCandles)
+
+	if !validation.HighValid {
+		ratio := getTypicalHighCloseRatioL1(before, after)
+		interpolated.High = interpolated.Close * ratio
+	}
+
+	if !validation.LowValid {
+		ratio := getTypicalLowCloseRatioL1(before, after)
+		interpolated.Low = interpolated.Close * ratio
+	}
+
+	if !validation.OpenValid {
+		if before != nil {
+			interpolated.Open = before.Close
+		} else if after != nil {
+			interpolated.Open = after.Open
+		}
+	}
+
+	ensureOHLCConsistencyL1(&interpolated)
+	return interpolated
+}
+
+// interpolateOHLCVFull performs full interpolation when Close is invalid
+func interpolateOHLCVFull(candle OHLCV, index int, allCandles []OHLCV) OHLCV {
 	interpolated := candle // Preserve timestamp and volume
 
-	// Find before and after candles
-	var before, after *OHLCV
-
-	// Look for valid before candle
-	for i := index - 1; i >= 0; i-- {
-		prev := allCandles[i]
-		if prev.Close > 0.01 && prev.Close <= 10000.0 {
-			before = &prev
-			break
-		}
-	}
-
-	// Look for valid after candle
-	for i := index + 1; i < len(allCandles); i++ {
-		next := allCandles[i]
-		if next.Close > 0.01 && next.Close <= 10000.0 {
-			after = &next
-			break
-		}
-	}
+	before, after := findValidNeighborsL1(index, allCandles)
 
 	// Linear interpolation if both available
 	if before != nil && after != nil {
-		// Simple interpolation: use average of before and after
 		interpolated.Close = (before.Close + after.Close) / 2.0
 		interpolated.Open = (before.Open + after.Open) / 2.0
 		interpolated.High = (before.High + after.High) / 2.0
@@ -840,26 +920,128 @@ func interpolateOHLCV(candle OHLCV, index int, allCandles []OHLCV) OHLCV {
 		interpolated.High = after.High
 		interpolated.Low = after.Low
 	}
-	// If neither available, return original (shouldn't happen in practice)
 
-	// Ensure OHLC consistency
-	if interpolated.High < interpolated.Close {
-		interpolated.High = interpolated.Close
-	}
-	if interpolated.Low > interpolated.Close {
-		interpolated.Low = interpolated.Close
-	}
-	if interpolated.High < interpolated.Open {
-		interpolated.High = interpolated.Open
-	}
-	if interpolated.Low > interpolated.Open {
-		interpolated.Low = interpolated.Open
-	}
-	if interpolated.High < interpolated.Low {
-		interpolated.High = interpolated.Low
-	}
-
+	ensureOHLCConsistencyL1(&interpolated)
 	return interpolated
+}
+
+// findValidNeighborsL1 finds valid candles before and after given index
+func findValidNeighborsL1(index int, candles []OHLCV) (*OHLCV, *OHLCV) {
+	var before, after *OHLCV
+
+	for i := index - 1; i >= 0; i-- {
+		v := validateOHLCComponents(candles[i], nil, nil)
+		if v.CloseValid {
+			before = &candles[i]
+			break
+		}
+	}
+
+	for i := index + 1; i < len(candles); i++ {
+		v := validateOHLCComponents(candles[i], nil, nil)
+		if v.CloseValid {
+			after = &candles[i]
+			break
+		}
+	}
+
+	return before, after
+}
+
+// getTypicalHighCloseRatioL1 calculates average High/Close ratio from neighbors
+func getTypicalHighCloseRatioL1(before, after *OHLCV) float64 {
+	var sum float64
+	var count int
+
+	if before != nil && before.Close > 0 {
+		sum += before.High / before.Close
+		count++
+	}
+	if after != nil && after.Close > 0 {
+		sum += after.High / after.Close
+		count++
+	}
+
+	if count == 0 {
+		return 1.02 // Default: High is 2% above Close
+	}
+	return sum / float64(count)
+}
+
+// getTypicalLowCloseRatioL1 calculates average Low/Close ratio from neighbors
+func getTypicalLowCloseRatioL1(before, after *OHLCV) float64 {
+	var sum float64
+	var count int
+
+	if before != nil && before.Close > 0 {
+		sum += before.Low / before.Close
+		count++
+	}
+	if after != nil && after.Close > 0 {
+		sum += after.Low / after.Close
+		count++
+	}
+
+	if count == 0 {
+		return 0.98 // Default: Low is 2% below Close
+	}
+	return sum / float64(count)
+}
+
+// ensureOHLCConsistencyL1 ensures OHLC consistency for OHLCV type
+func ensureOHLCConsistencyL1(candle *OHLCV) {
+	// Ensure High >= all
+	if candle.High < candle.Close {
+		candle.High = candle.Close
+	}
+	if candle.High < candle.Open {
+		candle.High = candle.Open
+	}
+
+	// Ensure Low <= all
+	if candle.Low > candle.Close {
+		candle.Low = candle.Close
+	}
+	if candle.Low > candle.Open {
+		candle.Low = candle.Open
+	}
+
+	// Ensure High >= Low
+	if candle.High < candle.Low {
+		candle.High = candle.Low
+	}
+}
+
+// validateAndInterpolateCandles validates OHLCV candles and interpolates abnormal ones
+// Uses component-level validation to preserve valid data while fixing invalid components
+func validateAndInterpolateCandles(candles []OHLCV) []OHLCV {
+	if len(candles) == 0 {
+		return candles
+	}
+
+	validated := make([]OHLCV, 0, len(candles))
+
+	for i, candle := range candles {
+		var prev, next *OHLCV
+		if i > 0 {
+			prev = &candles[i-1]
+		}
+		if i < len(candles)-1 {
+			next = &candles[i+1]
+		}
+
+		validation := validateOHLCComponents(candle, prev, next)
+
+		if validation.AllValid() {
+			validated = append(validated, candle)
+			continue
+		}
+
+		interpolated := interpolateOHLCVSelective(candle, i, candles, validation)
+		validated = append(validated, interpolated)
+	}
+
+	return validated
 }
 
 // Helper functions

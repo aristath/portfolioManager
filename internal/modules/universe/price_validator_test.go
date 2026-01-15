@@ -101,7 +101,9 @@ func TestPriceValidator_ValidatePrice_OHLCConsistency(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			valid, reason := validator.ValidatePrice(tt.price, nil, tt.context)
+			validation := validator.ValidatePrice(tt.price, nil, tt.context)
+			valid := validation.AllValid()
+			reason := validation.Reason
 			assert.Equal(t, tt.want, valid, "validation result mismatch")
 			if !tt.want {
 				assert.Equal(t, tt.reason, reason, "reason mismatch")
@@ -217,7 +219,9 @@ func TestPriceValidator_ValidatePrice_PercentageChange(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			valid, reason := validator.ValidatePrice(tt.price, tt.previousPrice, tt.context)
+			validation := validator.ValidatePrice(tt.price, tt.previousPrice, tt.context)
+			valid := validation.AllValid()
+			reason := validation.Reason
 			assert.Equal(t, tt.want, valid, "validation result mismatch")
 			if !tt.want {
 				assert.Equal(t, tt.reason, reason, "reason mismatch")
@@ -253,14 +257,14 @@ func TestPriceValidator_ValidatePrice_DayOverDayUsesPreviousPrice(t *testing.T) 
 	}
 
 	// Should be valid - uses previousPrice (49.0 -> 50.0 = 2% change), not context[0] (100.0)
-	valid, reason := validator.ValidatePrice(price, previousPrice, context)
-	assert.True(t, valid, "price should be valid when using previousPrice, not context[0]")
-	assert.Empty(t, reason, "should have no reason when valid")
+	validation := validator.ValidatePrice(price, previousPrice, context)
+	assert.True(t, validation.AllValid(), "price should be valid when using previousPrice, not context[0]")
+	assert.Empty(t, validation.Reason, "should have no reason when valid")
 
 	// Without previousPrice, should still be valid (average-based check, not day-over-day)
-	valid2, reason2 := validator.ValidatePrice(price, nil, context)
-	assert.True(t, valid2, "price should be valid even without previousPrice (uses average)")
-	assert.Empty(t, reason2, "should have no reason when valid")
+	validation2 := validator.ValidatePrice(price, nil, context)
+	assert.True(t, validation2.AllValid(), "price should be valid even without previousPrice (uses average)")
+	assert.Empty(t, validation2.Reason, "should have no reason when valid")
 }
 
 func TestPriceValidator_ValidatePrice_AbsoluteBounds(t *testing.T) {
@@ -287,37 +291,15 @@ func TestPriceValidator_ValidatePrice_AbsoluteBounds(t *testing.T) {
 			want:    true,
 			reason:  "",
 		},
-		{
-			name: "absolute bound exceeded (>10,000)",
-			price: DailyPrice{
-				Date:  "2025-01-15",
-				Close: 15000.0, // > 10,000
-				Open:  15000.0,
-				High:  15100.0,
-				Low:   14900.0,
-			},
-			context: []DailyPrice{}, // No context
-			want:    false,
-			reason:  "absolute_bound_exceeded",
-		},
-		{
-			name: "absolute bound below minimum (<0.01)",
-			price: DailyPrice{
-				Date:  "2025-01-15",
-				Close: 0.005, // < 0.01
-				Open:  0.005,
-				High:  0.006,
-				Low:   0.004,
-			},
-			context: []DailyPrice{}, // No context
-			want:    false,
-			reason:  "absolute_bound_below_minimum",
-		},
+		// Note: No absolute bounds tests - absolute bounds were removed since they are arbitrary
+		// and would break over a 15+ year system. We rely on relative checks instead.
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			valid, reason := validator.ValidatePrice(tt.price, nil, tt.context)
+			validation := validator.ValidatePrice(tt.price, nil, tt.context)
+			valid := validation.AllValid()
+			reason := validation.Reason
 			assert.Equal(t, tt.want, valid, "validation result mismatch")
 			if !tt.want {
 				assert.Equal(t, tt.reason, reason, "reason mismatch")
@@ -347,7 +329,16 @@ func TestPriceValidator_InterpolatePrice_Linear(t *testing.T) {
 		Volume: intPtrForPriceValidator(1285994),
 	}
 
-	interpolated, method, err := validator.InterpolatePrice(price, before, after)
+	// Close is invalid, so full interpolation is needed
+	validation := OHLCValidation{
+		OpenValid:  false,
+		HighValid:  false,
+		LowValid:   false,
+		CloseValid: false,
+		Reason:     "spike_detected",
+	}
+
+	interpolated, method, err := validator.InterpolatePrice(price, validation, before, after)
 	require.NoError(t, err)
 	assert.Equal(t, "linear", method)
 
@@ -384,7 +375,16 @@ func TestPriceValidator_InterpolatePrice_ForwardFill(t *testing.T) {
 		Volume: intPtrForPriceValidator(1285994),
 	}
 
-	interpolated, method, err := validator.InterpolatePrice(price, before, after)
+	// Close is invalid, so full interpolation is needed
+	validation := OHLCValidation{
+		OpenValid:  false,
+		HighValid:  false,
+		LowValid:   false,
+		CloseValid: false,
+		Reason:     "spike_detected",
+	}
+
+	interpolated, method, err := validator.InterpolatePrice(price, validation, before, after)
 	require.NoError(t, err)
 	assert.Equal(t, "forward_fill", method)
 
@@ -414,7 +414,16 @@ func TestPriceValidator_InterpolatePrice_BackwardFill(t *testing.T) {
 		Volume: intPtrForPriceValidator(1285994),
 	}
 
-	interpolated, method, err := validator.InterpolatePrice(price, before, after)
+	// Close is invalid, so full interpolation is needed
+	validation := OHLCValidation{
+		OpenValid:  false,
+		HighValid:  false,
+		LowValid:   false,
+		CloseValid: false,
+		Reason:     "spike_detected",
+	}
+
+	interpolated, method, err := validator.InterpolatePrice(price, validation, before, after)
 	require.NoError(t, err)
 	assert.Equal(t, "backward_fill", method)
 
@@ -439,8 +448,17 @@ func TestPriceValidator_InterpolatePrice_NoContext(t *testing.T) {
 		Volume: intPtrForPriceValidator(1285994),
 	}
 
+	// Close is invalid, so full interpolation is needed
+	validation := OHLCValidation{
+		OpenValid:  false,
+		HighValid:  false,
+		LowValid:   false,
+		CloseValid: false,
+		Reason:     "spike_detected",
+	}
+
 	// No before or after prices
-	interpolated, method, err := validator.InterpolatePrice(price, []DailyPrice{}, []DailyPrice{})
+	interpolated, method, err := validator.InterpolatePrice(price, validation, []DailyPrice{}, []DailyPrice{})
 	require.NoError(t, err)
 	assert.Equal(t, "no_interpolation", method)
 	// Should return original price when no context available
@@ -575,14 +593,15 @@ func TestPriceValidator_ValidateAndInterpolate_EmptyContext(t *testing.T) {
 	log := zerolog.Nop()
 	validator := NewPriceValidator(log)
 
-	// No context available
+	// No context available - use a price with extreme High to trigger validation
+	// Without absolute bounds, we rely on relative checks (High > Close * 100)
 	prices := []DailyPrice{
 		{
 			Date:  "2025-08-11",
-			Close: 44458.62, // Abnormal but no context
-			Open:  44050.53,
-			High:  44497.59,
-			Low:   44050.53,
+			Close: 1.922, // Normal close
+			Open:  1.856,
+			High:  46137.2, // Extreme: 24000x Close - triggers high_extreme_relative_to_close
+			Low:   1.8,
 		},
 	}
 
@@ -591,10 +610,12 @@ func TestPriceValidator_ValidateAndInterpolate_EmptyContext(t *testing.T) {
 	require.Len(t, result, 1)
 	require.Len(t, logs, 1)
 
-	// Should be flagged by absolute bounds
-	assert.Equal(t, "absolute_bound_exceeded", logs[0].Reason)
-	// Should use no_interpolation (no before, no after)
-	assert.Equal(t, "no_interpolation", logs[0].Method)
+	// Should be flagged by extreme High relative to Close
+	assert.Equal(t, "high_extreme_relative_to_close", logs[0].Reason)
+	// Should preserve valid O/L/C and only fix High (selective interpolation)
+	assert.Equal(t, "selective", logs[0].Method)
+	// Close should be preserved
+	assert.Equal(t, 1.922, result[0].Close, "Close should be preserved")
 }
 
 // Test that before/after price lookups work correctly with DESC-ordered context
@@ -634,6 +655,184 @@ func TestPriceValidator_ValidateAndInterpolate_ContextLookups(t *testing.T) {
 	// Should use linear interpolation between 48.0 and 50.0
 	assert.Equal(t, "linear", logs[0].Method, "should use linear interpolation with both before and after from context")
 	assert.InDelta(t, 49.0, result[0].Close, 1.0, "should interpolate between 48.0 and 50.0")
+}
+
+// Component-level validation tests
+
+func TestValidatePrice_ExtremeHighDetected(t *testing.T) {
+	log := zerolog.Nop()
+	validator := NewPriceValidator(log)
+
+	price := DailyPrice{
+		Date:  "2025-09-07",
+		Open:  1.856,
+		High:  46137.2, // Extreme: 24000x Close
+		Low:   1.8,
+		Close: 1.922,
+	}
+
+	validation := validator.ValidatePrice(price, nil, []DailyPrice{})
+
+	assert.True(t, validation.CloseValid, "Close should be valid")
+	assert.True(t, validation.OpenValid, "Open should be valid")
+	assert.True(t, validation.LowValid, "Low should be valid")
+	assert.False(t, validation.HighValid, "High should be invalid")
+	assert.Equal(t, "high_extreme_relative_to_close", validation.Reason)
+}
+
+func TestValidatePrice_ExtremeLowDetected(t *testing.T) {
+	log := zerolog.Nop()
+	validator := NewPriceValidator(log)
+
+	price := DailyPrice{
+		Date:  "2025-09-07",
+		Open:  100,
+		High:  105,
+		Low:   0.001, // Extreme: 0.001% of Close
+		Close: 102,
+	}
+
+	validation := validator.ValidatePrice(price, nil, []DailyPrice{})
+
+	assert.True(t, validation.CloseValid, "Close should be valid")
+	assert.True(t, validation.OpenValid, "Open should be valid")
+	assert.True(t, validation.HighValid, "High should be valid")
+	assert.False(t, validation.LowValid, "Low should be invalid")
+	assert.Equal(t, "low_extreme_relative_to_close", validation.Reason)
+}
+
+func TestValidatePrice_NormalCandlePassesAllChecks(t *testing.T) {
+	log := zerolog.Nop()
+	validator := NewPriceValidator(log)
+
+	price := DailyPrice{
+		Date:  "2025-09-07",
+		Open:  100,
+		High:  105,
+		Low:   98,
+		Close: 102,
+	}
+
+	validation := validator.ValidatePrice(price, nil, []DailyPrice{})
+
+	assert.True(t, validation.AllValid(), "Normal candle should pass all checks")
+}
+
+func TestValidatePrice_ZeroCloseTriggersFullInvalid(t *testing.T) {
+	log := zerolog.Nop()
+	validator := NewPriceValidator(log)
+
+	price := DailyPrice{
+		Date:  "2025-09-07",
+		Open:  100,
+		High:  105,
+		Low:   98,
+		Close: 0,
+	}
+
+	validation := validator.ValidatePrice(price, nil, []DailyPrice{})
+
+	assert.False(t, validation.AllValid(), "Zero close should fail validation")
+	assert.False(t, validation.CloseValid, "Close should be invalid")
+	assert.Equal(t, "close_zero_or_negative", validation.Reason)
+}
+
+func TestValidatePrice_NegativeCloseTriggersFullInvalid(t *testing.T) {
+	log := zerolog.Nop()
+	validator := NewPriceValidator(log)
+
+	price := DailyPrice{
+		Date:  "2025-09-07",
+		Open:  100,
+		High:  105,
+		Low:   98,
+		Close: -5,
+	}
+
+	validation := validator.ValidatePrice(price, nil, []DailyPrice{})
+
+	assert.False(t, validation.AllValid(), "Negative close should fail validation")
+	assert.False(t, validation.CloseValid, "Close should be invalid")
+	assert.Equal(t, "close_zero_or_negative", validation.Reason)
+}
+
+func TestValidateAndInterpolate_PreservesValidComponents(t *testing.T) {
+	log := zerolog.Nop()
+	validator := NewPriceValidator(log)
+
+	prices := []DailyPrice{
+		{Date: "2025-09-06", Open: 1.8, High: 1.9, Low: 1.75, Close: 1.85},
+		{Date: "2025-09-07", Open: 1.856, High: 46137.2, Low: 1.8, Close: 1.922},
+		{Date: "2025-09-08", Open: 1.9, High: 2.0, Low: 1.85, Close: 1.95},
+	}
+
+	result, logs, err := validator.ValidateAndInterpolate(prices, []DailyPrice{})
+
+	require.NoError(t, err)
+	require.Len(t, result, 3)
+	require.Len(t, logs, 1)
+
+	// Middle price should have preserved O/L/C
+	assert.Equal(t, 1.922, result[1].Close, "Close should be preserved")
+	assert.Equal(t, 1.856, result[1].Open, "Open should be preserved")
+	assert.Equal(t, 1.8, result[1].Low, "Low should be preserved")
+	// High should be interpolated
+	assert.Less(t, result[1].High, 100.0, "High should be fixed")
+	assert.GreaterOrEqual(t, result[1].High, result[1].Close, "High should be >= Close")
+}
+
+func TestOHLCValidation_AllValid(t *testing.T) {
+	v := OHLCValidation{
+		OpenValid:  true,
+		HighValid:  true,
+		LowValid:   true,
+		CloseValid: true,
+	}
+	assert.True(t, v.AllValid())
+
+	v2 := OHLCValidation{
+		OpenValid:  true,
+		HighValid:  false,
+		LowValid:   true,
+		CloseValid: true,
+	}
+	assert.False(t, v2.AllValid())
+}
+
+func TestOHLCValidation_NeedsFullInterpolation(t *testing.T) {
+	v := OHLCValidation{
+		OpenValid:  true,
+		HighValid:  false,
+		LowValid:   true,
+		CloseValid: true,
+	}
+	assert.False(t, v.NeedsFullInterpolation(), "Should not need full interpolation when Close is valid")
+
+	v2 := OHLCValidation{
+		OpenValid:  false,
+		HighValid:  false,
+		LowValid:   false,
+		CloseValid: false,
+	}
+	assert.True(t, v2.NeedsFullInterpolation(), "Should need full interpolation when Close is invalid")
+}
+
+func TestOHLCValidation_NeedsInterpolation(t *testing.T) {
+	v := OHLCValidation{
+		OpenValid:  true,
+		HighValid:  true,
+		LowValid:   true,
+		CloseValid: true,
+	}
+	assert.False(t, v.NeedsInterpolation(), "Should not need interpolation when all valid")
+
+	v2 := OHLCValidation{
+		OpenValid:  true,
+		HighValid:  false,
+		LowValid:   true,
+		CloseValid: true,
+	}
+	assert.True(t, v2.NeedsInterpolation(), "Should need interpolation when High is invalid")
 }
 
 func intPtrForPriceValidator(i int64) *int64 {
