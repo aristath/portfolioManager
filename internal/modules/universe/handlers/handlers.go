@@ -122,6 +122,7 @@ type UniverseHandlers struct {
 	positionRepo            *portfolio.PositionRepository
 	securityRepo            *universe.SecurityRepository
 	scoreRepo               *universe.ScoreRepository
+	overrideRepo            *universe.OverrideRepository
 	securityScorer          *scorers.SecurityScorer
 	historyDB               universe.HistoryDBInterface
 	setupService            *universe.SecuritySetupService
@@ -135,6 +136,7 @@ type UniverseHandlers struct {
 func NewUniverseHandlers(
 	securityRepo *universe.SecurityRepository,
 	scoreRepo *universe.ScoreRepository,
+	overrideRepo *universe.OverrideRepository,
 	portfolioDB *sql.DB,
 	positionRepo *portfolio.PositionRepository,
 	securityScorer *scorers.SecurityScorer,
@@ -149,6 +151,7 @@ func NewUniverseHandlers(
 	return &UniverseHandlers{
 		securityRepo:            securityRepo,
 		scoreRepo:               scoreRepo,
+		overrideRepo:            overrideRepo,
 		portfolioDB:             portfolioDB,
 		positionRepo:            positionRepo,
 		securityScorer:          securityScorer,
@@ -392,14 +395,13 @@ func (h *UniverseHandlers) HandleGetStock(w http.ResponseWriter, r *http.Request
 
 // SecurityCreateRequest represents the request to create a security
 // After migration 030: ISIN is required (PRIMARY KEY)
+// Note: User-configurable fields (min_lot, allow_buy, allow_sell, priority_multiplier)
+// are set via security_overrides after creation, not during the create operation.
 type SecurityCreateRequest struct {
-	Symbol    string   `json:"symbol"`
-	Name      string   `json:"name"`
-	ISIN      string   `json:"isin"` // Required: PRIMARY KEY after migration 030
-	MinLot    int      `json:"min_lot"`
-	AllowBuy  bool     `json:"allow_buy"`
-	AllowSell bool     `json:"allow_sell"`
-	Tags      []string `json:"tags,omitempty"` // Ignored - tags are internal only
+	Symbol string   `json:"symbol"`
+	Name   string   `json:"name"`
+	ISIN   string   `json:"isin"`           // Required: PRIMARY KEY after migration 030
+	Tags   []string `json:"tags,omitempty"` // Ignored - tags are internal only
 }
 
 // HandleCreateStock creates a new security in the universe
@@ -433,27 +435,18 @@ func (h *UniverseHandlers) HandleCreateStock(w http.ResponseWriter, r *http.Requ
 		h.log.Debug().Str("symbol", req.Symbol).Msg("Tags provided in create request - ignoring (tags are internal only)")
 	}
 
-	// Set defaults
-	if req.MinLot == 0 {
-		req.MinLot = 1
-	}
-
 	h.log.Info().
 		Str("symbol", req.Symbol).
 		Str("name", req.Name).
-		Int("min_lot", req.MinLot).
-		Bool("allow_buy", req.AllowBuy).
-		Bool("allow_sell", req.AllowSell).
+		Str("isin", req.ISIN).
 		Msg("Creating security")
 
 	// Call SecuritySetupService (ISIN is now required)
+	// Note: User-configurable fields are set via security_overrides after creation
 	security, err := h.setupService.CreateSecurity(
 		req.Symbol,
 		req.Name,
 		req.ISIN,
-		req.MinLot,
-		req.AllowBuy,
-		req.AllowSell,
 	)
 	if err != nil {
 		h.log.Error().Err(err).Str("symbol", req.Symbol).Msg("Failed to create security")
@@ -479,11 +472,10 @@ func (h *UniverseHandlers) HandleCreateStock(w http.ResponseWriter, r *http.Requ
 }
 
 // AddByIdentifierRequest represents the request to add a security by identifier
+// Note: User-configurable fields (min_lot, allow_buy, allow_sell) are set via
+// security_overrides after creation, not during the add operation.
 type AddByIdentifierRequest struct {
 	Identifier string `json:"identifier"`
-	MinLot     int    `json:"min_lot"`
-	AllowBuy   bool   `json:"allow_buy"`
-	AllowSell  bool   `json:"allow_sell"`
 }
 
 // HandleAddStockByIdentifier adds a security to the universe by symbol or ISIN
@@ -495,16 +487,8 @@ func (h *UniverseHandlers) HandleAddStockByIdentifier(w http.ResponseWriter, r *
 		return
 	}
 
-	// Set defaults
-	if req.MinLot == 0 {
-		req.MinLot = 1
-	}
-
 	h.log.Info().
 		Str("identifier", req.Identifier).
-		Int("min_lot", req.MinLot).
-		Bool("allow_buy", req.AllowBuy).
-		Bool("allow_sell", req.AllowSell).
 		Msg("Adding security by identifier")
 
 	if h.setupService == nil {
@@ -514,12 +498,8 @@ func (h *UniverseHandlers) HandleAddStockByIdentifier(w http.ResponseWriter, r *
 	}
 
 	// Call SecuritySetupService
-	security, err := h.setupService.AddSecurityByIdentifier(
-		req.Identifier,
-		req.MinLot,
-		req.AllowBuy,
-		req.AllowSell,
-	)
+	// Note: User-configurable fields are set via security_overrides after creation
+	security, err := h.setupService.AddSecurityByIdentifier(req.Identifier)
 	if err != nil {
 		h.log.Error().Err(err).Str("identifier", req.Identifier).Msg("Failed to add security")
 
@@ -755,24 +735,70 @@ func (h *UniverseHandlers) HandleUpdateStock(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Apply updates (using ISIN as primary identifier)
-	if err := h.securityRepo.Update(oldISIN, updates); err != nil {
-		h.log.Error().Err(err).Str("isin", oldISIN).Str("symbol", oldSymbol).Msg("Failed to update security")
+	// Separate overridable fields from regular fields
+	// Overridable fields are stored in security_overrides table
+	overridableFields := map[string]bool{
+		"allow_buy":           true,
+		"allow_sell":          true,
+		"min_lot":             true,
+		"priority_multiplier": true,
+		"geography":           true,
+		"industry":            true,
+		"name":                true,
+		"product_type":        true,
+	}
 
-		// Return specific error message for validation errors, generic for others
-		errorMsg := "Failed to update security"
-		if strings.Contains(err.Error(), "invalid update field") {
-			errorMsg = err.Error()
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"message": errorMsg,
-			})
+	overrideUpdates := make(map[string]string)
+	regularUpdates := make(map[string]interface{})
+
+	for field, value := range updates {
+		if overridableFields[field] {
+			// Convert to string for override storage
+			overrideUpdates[field] = fmt.Sprintf("%v", value)
+		} else {
+			regularUpdates[field] = value
+		}
+	}
+
+	// Apply override updates to security_overrides table
+	if len(overrideUpdates) > 0 && h.overrideRepo != nil {
+		for field, value := range overrideUpdates {
+			if err := h.overrideRepo.SetOverride(oldISIN, field, value); err != nil {
+				h.log.Error().Err(err).
+					Str("isin", oldISIN).
+					Str("field", field).
+					Msg("Failed to set override")
+				http.Error(w, fmt.Sprintf("Failed to set override for %s: %v", field, err), http.StatusInternalServerError)
+				return
+			}
+			h.log.Debug().
+				Str("isin", oldISIN).
+				Str("field", field).
+				Str("value", value).
+				Msg("Set security override")
+		}
+	}
+
+	// Apply regular updates to securities table (only if there are any)
+	if len(regularUpdates) > 0 {
+		if err := h.securityRepo.Update(oldISIN, regularUpdates); err != nil {
+			h.log.Error().Err(err).Str("isin", oldISIN).Str("symbol", oldSymbol).Msg("Failed to update security")
+
+			// Return specific error message for validation errors, generic for others
+			errorMsg := "Failed to update security"
+			if strings.Contains(err.Error(), "invalid update field") {
+				errorMsg = err.Error()
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"message": errorMsg,
+				})
+				return
+			}
+
+			http.Error(w, errorMsg, http.StatusInternalServerError)
 			return
 		}
-
-		http.Error(w, errorMsg, http.StatusInternalServerError)
-		return
 	}
 
 	// Get updated security (by ISIN - ISIN doesn't change)
@@ -1094,4 +1120,187 @@ func convertUnixToString(ts *int64) string {
 	}
 	t := time.Unix(*ts, 0).UTC()
 	return t.Format(time.RFC3339)
+}
+
+// HandleGetSecurityOverrides returns all overrides for a specific security
+// GET /api/securities/{isin}/overrides
+func (h *UniverseHandlers) HandleGetSecurityOverrides(w http.ResponseWriter, r *http.Request) {
+	isin := chi.URLParam(r, "isin")
+	isin = strings.TrimSpace(strings.ToUpper(isin))
+
+	// Validate ISIN format
+	if !isISIN(isin) {
+		http.Error(w, "Invalid ISIN format", http.StatusBadRequest)
+		return
+	}
+
+	// Check if security exists
+	security, err := h.securityRepo.GetByISIN(isin)
+	if err != nil {
+		h.log.Error().Err(err).Str("isin", isin).Msg("Failed to fetch security")
+		http.Error(w, "Failed to fetch security", http.StatusInternalServerError)
+		return
+	}
+	if security == nil {
+		http.Error(w, "Security not found", http.StatusNotFound)
+		return
+	}
+
+	// Get overrides for this security
+	if h.overrideRepo == nil {
+		// No override repo - return empty map (all defaults)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{})
+		return
+	}
+
+	overrides, err := h.overrideRepo.GetOverrides(isin)
+	if err != nil {
+		h.log.Error().Err(err).Str("isin", isin).Msg("Failed to fetch overrides")
+		http.Error(w, "Failed to fetch overrides", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(overrides)
+}
+
+// HandleDeleteSecurityOverride deletes a specific override field for a security,
+// reverting it to the default value
+// DELETE /api/securities/{isin}/overrides/{field}
+func (h *UniverseHandlers) HandleDeleteSecurityOverride(w http.ResponseWriter, r *http.Request) {
+	isin := chi.URLParam(r, "isin")
+	isin = strings.TrimSpace(strings.ToUpper(isin))
+
+	field := chi.URLParam(r, "field")
+	field = strings.TrimSpace(strings.ToLower(field))
+
+	// Validate ISIN format
+	if !isISIN(isin) {
+		http.Error(w, "Invalid ISIN format", http.StatusBadRequest)
+		return
+	}
+
+	if field == "" {
+		http.Error(w, "Field name is required", http.StatusBadRequest)
+		return
+	}
+
+	h.log.Info().Str("isin", isin).Str("field", field).Msg("Deleting security override")
+
+	// Check if security exists
+	security, err := h.securityRepo.GetByISIN(isin)
+	if err != nil {
+		h.log.Error().Err(err).Str("isin", isin).Msg("Failed to fetch security")
+		http.Error(w, "Failed to fetch security", http.StatusInternalServerError)
+		return
+	}
+	if security == nil {
+		http.Error(w, "Security not found", http.StatusNotFound)
+		return
+	}
+
+	// Delete the override
+	if h.overrideRepo == nil {
+		http.Error(w, "Override repository not configured", http.StatusInternalServerError)
+		return
+	}
+
+	err = h.overrideRepo.DeleteOverride(isin, field)
+	if err != nil {
+		h.log.Error().Err(err).Str("isin", isin).Str("field", field).Msg("Failed to delete override")
+		http.Error(w, "Failed to delete override", http.StatusInternalServerError)
+		return
+	}
+
+	h.log.Info().Str("isin", isin).Str("field", field).Msg("Override deleted successfully")
+
+	// Return the updated security (with default applied for deleted field)
+	updatedSecurity, err := h.securityRepo.GetByISIN(isin)
+	if err != nil {
+		h.log.Error().Err(err).Str("isin", isin).Msg("Failed to fetch updated security")
+		http.Error(w, "Failed to fetch updated security", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	response := map[string]interface{}{
+		"message":  fmt.Sprintf("Override for '%s' deleted successfully", field),
+		"security": updatedSecurity,
+	}
+	_ = json.NewEncoder(w).Encode(response)
+}
+
+// HandleSetSecurityOverride sets or updates a specific override field for a security
+// PUT /api/securities/{isin}/overrides/{field}
+func (h *UniverseHandlers) HandleSetSecurityOverride(w http.ResponseWriter, r *http.Request) {
+	isin := chi.URLParam(r, "isin")
+	isin = strings.TrimSpace(strings.ToUpper(isin))
+
+	field := chi.URLParam(r, "field")
+	field = strings.TrimSpace(strings.ToLower(field))
+
+	// Validate ISIN format
+	if !isISIN(isin) {
+		http.Error(w, "Invalid ISIN format", http.StatusBadRequest)
+		return
+	}
+
+	if field == "" {
+		http.Error(w, "Field name is required", http.StatusBadRequest)
+		return
+	}
+
+	// Parse request body
+	var req struct {
+		Value string `json:"value"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	h.log.Info().Str("isin", isin).Str("field", field).Str("value", req.Value).Msg("Setting security override")
+
+	// Check if security exists
+	security, err := h.securityRepo.GetByISIN(isin)
+	if err != nil {
+		h.log.Error().Err(err).Str("isin", isin).Msg("Failed to fetch security")
+		http.Error(w, "Failed to fetch security", http.StatusInternalServerError)
+		return
+	}
+	if security == nil {
+		http.Error(w, "Security not found", http.StatusNotFound)
+		return
+	}
+
+	// Set the override
+	if h.overrideRepo == nil {
+		http.Error(w, "Override repository not configured", http.StatusInternalServerError)
+		return
+	}
+
+	err = h.overrideRepo.SetOverride(isin, field, req.Value)
+	if err != nil {
+		h.log.Error().Err(err).Str("isin", isin).Str("field", field).Msg("Failed to set override")
+		http.Error(w, "Failed to set override", http.StatusInternalServerError)
+		return
+	}
+
+	h.log.Info().Str("isin", isin).Str("field", field).Str("value", req.Value).Msg("Override set successfully")
+
+	// Return the updated security (with new override applied)
+	updatedSecurity, err := h.securityRepo.GetByISIN(isin)
+	if err != nil {
+		h.log.Error().Err(err).Str("isin", isin).Msg("Failed to fetch updated security")
+		http.Error(w, "Failed to fetch updated security", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	response := map[string]interface{}{
+		"message":  fmt.Sprintf("Override for '%s' set successfully", field),
+		"security": updatedSecurity,
+	}
+	_ = json.NewEncoder(w).Encode(response)
 }

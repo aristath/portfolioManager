@@ -4,6 +4,7 @@
 
 -- Securities table: investment universe (ISIN as PRIMARY KEY)
 -- geography and industry support comma-separated values for multiple assignments
+-- User-configurable fields (allow_buy, allow_sell, min_lot, priority_multiplier) are stored in security_overrides
 CREATE TABLE IF NOT EXISTS securities (
     isin TEXT PRIMARY KEY,
     symbol TEXT NOT NULL,
@@ -13,17 +14,13 @@ CREATE TABLE IF NOT EXISTS securities (
     geography TEXT,                    -- Comma-separated for multiple geographies (e.g., "EU, US")
     fullExchangeName TEXT,
     market_code TEXT,                  -- Tradernet market code (e.g., "FIX", "EU", "HKEX") for region mapping
-    priority_multiplier REAL DEFAULT 1.0,
-    min_lot INTEGER DEFAULT 1,
-    active INTEGER DEFAULT 1,  -- Boolean: 1 = active, 0 = inactive (soft delete)
-    allow_buy INTEGER DEFAULT 1,
-    allow_sell INTEGER DEFAULT 1,
+    active INTEGER DEFAULT 1,          -- Boolean: 1 = active, 0 = inactive (soft delete)
     currency TEXT,
     last_synced INTEGER,               -- Unix timestamp (seconds since epoch)
     min_portfolio_target REAL,
     max_portfolio_target REAL,
-    created_at INTEGER NOT NULL,      -- Unix timestamp (seconds since epoch)
-    updated_at INTEGER NOT NULL      -- Unix timestamp (seconds since epoch)
+    created_at INTEGER NOT NULL,       -- Unix timestamp (seconds since epoch)
+    updated_at INTEGER NOT NULL        -- Unix timestamp (seconds since epoch)
 ) STRICT;
 
 CREATE INDEX IF NOT EXISTS idx_securities_active ON securities(active);
@@ -31,6 +28,23 @@ CREATE INDEX IF NOT EXISTS idx_securities_geography ON securities(geography);
 CREATE INDEX IF NOT EXISTS idx_securities_industry ON securities(industry);
 CREATE INDEX IF NOT EXISTS idx_securities_symbol ON securities(symbol);
 CREATE INDEX IF NOT EXISTS idx_securities_market_code ON securities(market_code);
+
+-- Security overrides table: EAV pattern for user customizations
+-- Stores overrides for fields like allow_buy, allow_sell, min_lot, priority_multiplier,
+-- as well as user corrections to Tradernet-provided data (geography, industry, name, etc.)
+-- Defaults (when no override exists):
+--   allow_buy: true, allow_sell: true, min_lot: 1, priority_multiplier: 1.0
+CREATE TABLE IF NOT EXISTS security_overrides (
+    isin TEXT NOT NULL,
+    field TEXT NOT NULL,               -- Field name (e.g., 'allow_buy', 'geography', 'min_lot')
+    value TEXT NOT NULL,               -- Value as string (converted to appropriate type at read time)
+    created_at INTEGER NOT NULL,       -- Unix timestamp (seconds since epoch)
+    updated_at INTEGER NOT NULL,       -- Unix timestamp (seconds since epoch)
+    PRIMARY KEY (isin, field),
+    FOREIGN KEY (isin) REFERENCES securities(isin) ON DELETE CASCADE
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS idx_security_overrides_isin ON security_overrides(isin);
 
 -- Tags table: tag definitions with ID and human-readable name
 CREATE TABLE IF NOT EXISTS tags (

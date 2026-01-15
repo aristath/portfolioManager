@@ -21,6 +21,7 @@ func TestRegisterRoutes(t *testing.T) {
 	// Create mock dependencies
 	securityRepo := &universe.SecurityRepository{}
 	scoreRepo := &universe.ScoreRepository{}
+	var overrideRepo *universe.OverrideRepository = nil
 	var portfolioDB *sql.DB = nil
 	var positionRepo *portfolio.PositionRepository = nil
 	securityScorer := &scorers.SecurityScorer{}
@@ -35,6 +36,7 @@ func TestRegisterRoutes(t *testing.T) {
 	handler := NewUniverseHandlers(
 		securityRepo,
 		scoreRepo,
+		overrideRepo,
 		portfolioDB,
 		positionRepo,
 		securityScorer,
@@ -106,6 +108,7 @@ func TestRegisterRoutes_RoutePrefix(t *testing.T) {
 	// Verify that routes are registered under /securities prefix
 	securityRepo := &universe.SecurityRepository{}
 	scoreRepo := &universe.ScoreRepository{}
+	var overrideRepo *universe.OverrideRepository = nil
 	var portfolioDB *sql.DB = nil
 	var positionRepo *portfolio.PositionRepository = nil
 	securityScorer := &scorers.SecurityScorer{}
@@ -119,6 +122,7 @@ func TestRegisterRoutes_RoutePrefix(t *testing.T) {
 	handler := NewUniverseHandlers(
 		securityRepo,
 		scoreRepo,
+		overrideRepo,
 		portfolioDB,
 		positionRepo,
 		securityScorer,

@@ -20,8 +20,10 @@ type SettingsServiceInterface interface {
 
 // SecuritySetupServiceInterface defines the contract for adding securities to the universe
 // Using interface{} return type to avoid import cycle with universe package
+// Note: User-configurable fields (min_lot, allow_buy, allow_sell, priority_multiplier)
+// are stored in security_overrides table, not passed during creation.
 type SecuritySetupServiceInterface interface {
-	AddSecurityByIdentifier(identifier string, minLot int, allowBuy bool, allowSell bool) (interface{}, error)
+	AddSecurityByIdentifier(identifier string) (interface{}, error)
 }
 
 // PortfolioService orchestrates portfolio operations and calculations.
@@ -596,13 +598,9 @@ func (s *PortfolioService) SyncFromTradernet() error {
 					Msg("Security not found in universe, automatically adding it")
 
 				// Use SecuritySetupService to add the security with full data pipeline
+				// Note: User-configurable fields are set via security_overrides after creation
 				if s.securitySetupService != nil {
-					_, addErr := s.securitySetupService.AddSecurityByIdentifier(
-						tradernetPos.Symbol,
-						1,    // minLot
-						true, // allowBuy
-						true, // allowSell
-					)
+					_, addErr := s.securitySetupService.AddSecurityByIdentifier(tradernetPos.Symbol)
 					if addErr != nil {
 						s.log.Error().
 							Err(addErr).

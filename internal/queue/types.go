@@ -66,6 +66,9 @@ const (
 	JobTypeIdleTechnical JobType = "idle_technical"
 	JobTypeIdleSync      JobType = "idle_sync"
 	JobTypeIdleTags      JobType = "idle_tags"
+
+	// Tradernet metadata sync job
+	JobTypeTradernetMetadataSync JobType = "tradernet_metadata_sync"
 )
 
 // Priority represents job priority
@@ -197,6 +200,9 @@ func GetJobDescription(jobType JobType) string {
 		JobTypeIdleTechnical: "Calculating technical indicators",
 		JobTypeIdleSync:      "Syncing security data",
 		JobTypeIdleTags:      "Updating security tags",
+
+		// Tradernet metadata sync
+		JobTypeTradernetMetadataSync: "Syncing Tradernet metadata",
 	}
 
 	if desc, exists := descriptions[jobType]; exists {

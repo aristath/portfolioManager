@@ -30,9 +30,16 @@ func InitializeRepositories(container *Container, log zerolog.Logger) error {
 		log,
 	)
 
-	// Security repository (needs universeDB)
-	container.SecurityRepo = universe.NewSecurityRepository(
+	// Override repository (needs universeDB) - must be created before SecurityRepository
+	container.OverrideRepo = universe.NewOverrideRepository(
 		container.UniverseDB.Conn(),
+		log,
+	)
+
+	// Security repository (needs universeDB and OverrideRepo for override merging)
+	container.SecurityRepo = universe.NewSecurityRepositoryWithOverrides(
+		container.UniverseDB.Conn(),
+		container.OverrideRepo,
 		log,
 	)
 

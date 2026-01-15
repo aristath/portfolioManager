@@ -79,6 +79,9 @@ type SystemHandlers struct {
 	checkCoreDatabasesJob    scheduler.Job
 	checkHistoryDatabasesJob scheduler.Job
 	checkWALCheckpointsJob   scheduler.Job
+
+	// Tradernet metadata sync job
+	tradernetMetadataSyncJob scheduler.Job
 }
 
 // NewSystemHandlers creates a new system handlers instance
@@ -203,6 +206,11 @@ func (h *SystemHandlers) SetJobs(
 // SetTagUpdateJob sets the tag update job (called after job registration)
 func (h *SystemHandlers) SetTagUpdateJob(tagUpdate scheduler.Job) {
 	h.tagUpdateJob = tagUpdate
+}
+
+// SetTradernetMetadataSyncJob sets the Tradernet metadata sync job (called after job registration)
+func (h *SystemHandlers) SetTradernetMetadataSyncJob(job scheduler.Job) {
+	h.tradernetMetadataSyncJob = job
 }
 
 // enqueueJob is a helper to enqueue a job for manual execution
@@ -1797,4 +1805,28 @@ func (h *SystemHandlers) writeJSON(w http.ResponseWriter, data interface{}) {
 		h.log.Error().Err(err).Msg("Failed to encode JSON response")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
+}
+
+// HandleTriggerTradernetMetadataSync triggers the Tradernet metadata sync job
+// POST /api/system/jobs/tradernet-metadata-sync
+func (h *SystemHandlers) HandleTriggerTradernetMetadataSync(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if h.tradernetMetadataSyncJob == nil {
+		h.writeJSON(w, map[string]string{"status": "error", "message": "Tradernet metadata sync job not registered"})
+		return
+	}
+
+	h.log.Info().Msg("Manual Tradernet metadata sync triggered")
+
+	if err := h.enqueueJob(queue.JobTypeTradernetMetadataSync, queue.PriorityMedium); err != nil {
+		h.log.Error().Err(err).Msg("Failed to trigger Tradernet metadata sync")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	h.writeJSON(w, map[string]string{"status": "success", "message": "Tradernet metadata sync triggered successfully"})
 }

@@ -12,25 +12,38 @@ import (
 // SecurityRepository handles security database operations
 // Faithful translation from Python: app/modules/universe/database/security_repository.py
 type SecurityRepository struct {
-	universeDB *sql.DB // universe.db - securities table
-	tagRepo    *TagRepository
-	log        zerolog.Logger
+	universeDB   *sql.DB // universe.db - securities table
+	tagRepo      *TagRepository
+	overrideRepo OverrideRepositoryInterface
+	log          zerolog.Logger
 }
 
 // securitiesColumns is the list of columns for the securities table
 // Used to avoid SELECT * which can break when schema changes
 // Column order must match the table schema (matches SELECT * order)
-// After migration: isin is PRIMARY KEY
+// After migration 036: allow_buy, allow_sell, min_lot, priority_multiplier are removed
+// These fields are now stored in security_overrides table with defaults applied at read time
 const securitiesColumns = `isin, symbol, name, product_type, industry, geography, fullExchangeName,
-market_code, priority_multiplier, min_lot, active, allow_buy, allow_sell, currency, last_synced,
+market_code, active, currency, last_synced,
 min_portfolio_target, max_portfolio_target, created_at, updated_at`
 
-// NewSecurityRepository creates a new security repository
+// NewSecurityRepository creates a new security repository (backward compatible, no override support)
 func NewSecurityRepository(universeDB *sql.DB, log zerolog.Logger) *SecurityRepository {
 	return &SecurityRepository{
-		universeDB: universeDB,
-		tagRepo:    NewTagRepository(universeDB, log),
-		log:        log.With().Str("repo", "security").Logger(),
+		universeDB:   universeDB,
+		tagRepo:      NewTagRepository(universeDB, log),
+		overrideRepo: nil,
+		log:          log.With().Str("repo", "security").Logger(),
+	}
+}
+
+// NewSecurityRepositoryWithOverrides creates a new security repository with override support
+func NewSecurityRepositoryWithOverrides(universeDB *sql.DB, overrideRepo OverrideRepositoryInterface, log zerolog.Logger) *SecurityRepository {
+	return &SecurityRepository{
+		universeDB:   universeDB,
+		tagRepo:      NewTagRepository(universeDB, log),
+		overrideRepo: overrideRepo,
+		log:          log.With().Str("repo", "security").Logger(),
 	}
 }
 
@@ -54,6 +67,16 @@ func (r *SecurityRepository) GetBySymbol(symbol string) (*Security, error) {
 		return nil, fmt.Errorf("failed to scan security: %w", err)
 	}
 
+	// Apply overrides if override repository is available
+	if r.overrideRepo != nil && security.ISIN != "" {
+		overrides, err := r.overrideRepo.GetOverrides(security.ISIN)
+		if err != nil {
+			r.log.Warn().Str("isin", security.ISIN).Err(err).Msg("Failed to fetch overrides")
+		} else if len(overrides) > 0 {
+			ApplyOverrides(&security, overrides)
+		}
+	}
+
 	return &security, nil
 }
 
@@ -62,7 +85,8 @@ func (r *SecurityRepository) GetBySymbol(symbol string) (*Security, error) {
 func (r *SecurityRepository) GetByISIN(isin string) (*Security, error) {
 	query := "SELECT " + securitiesColumns + " FROM securities WHERE isin = ?"
 
-	rows, err := r.universeDB.Query(query, strings.ToUpper(strings.TrimSpace(isin)))
+	normalizedISIN := strings.ToUpper(strings.TrimSpace(isin))
+	rows, err := r.universeDB.Query(query, normalizedISIN)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query security by ISIN: %w", err)
 	}
@@ -75,6 +99,16 @@ func (r *SecurityRepository) GetByISIN(isin string) (*Security, error) {
 	security, err := r.scanSecurity(rows)
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan security: %w", err)
+	}
+
+	// Apply overrides if override repository is available
+	if r.overrideRepo != nil {
+		overrides, err := r.overrideRepo.GetOverrides(normalizedISIN)
+		if err != nil {
+			r.log.Warn().Str("isin", normalizedISIN).Err(err).Msg("Failed to fetch overrides")
+		} else if len(overrides) > 0 {
+			ApplyOverrides(&security, overrides)
+		}
 	}
 
 	return &security, nil
@@ -126,6 +160,20 @@ func (r *SecurityRepository) GetAllActive() ([]Security, error) {
 
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating securities: %w", err)
+	}
+
+	// Apply overrides if override repository is available (batch mode for efficiency)
+	if r.overrideRepo != nil && len(securities) > 0 {
+		allOverrides, err := r.overrideRepo.GetAllOverrides()
+		if err != nil {
+			r.log.Warn().Err(err).Msg("Failed to fetch all overrides")
+		} else {
+			for i := range securities {
+				if overrides, exists := allOverrides[securities[i].ISIN]; exists && len(overrides) > 0 {
+					ApplyOverrides(&securities[i], overrides)
+				}
+			}
+		}
 	}
 
 	return securities, nil
@@ -186,6 +234,20 @@ func (r *SecurityRepository) GetAllActiveTradable() ([]Security, error) {
 		return nil, fmt.Errorf("error iterating securities: %w", err)
 	}
 
+	// Apply overrides if override repository is available (batch mode for efficiency)
+	if r.overrideRepo != nil && len(securities) > 0 {
+		allOverrides, err := r.overrideRepo.GetAllOverrides()
+		if err != nil {
+			r.log.Warn().Err(err).Msg("Failed to fetch all overrides")
+		} else {
+			for i := range securities {
+				if overrides, exists := allOverrides[securities[i].ISIN]; exists && len(overrides) > 0 {
+					ApplyOverrides(&securities[i], overrides)
+				}
+			}
+		}
+	}
+
 	return securities, nil
 }
 
@@ -211,6 +273,20 @@ func (r *SecurityRepository) GetAll() ([]Security, error) {
 
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating securities: %w", err)
+	}
+
+	// Apply overrides if override repository is available (batch mode for efficiency)
+	if r.overrideRepo != nil && len(securities) > 0 {
+		allOverrides, err := r.overrideRepo.GetAllOverrides()
+		if err != nil {
+			r.log.Warn().Err(err).Msg("Failed to fetch all overrides")
+		} else {
+			for i := range securities {
+				if overrides, exists := allOverrides[securities[i].ISIN]; exists && len(overrides) > 0 {
+					ApplyOverrides(&securities[i], overrides)
+				}
+			}
+		}
 	}
 
 	return securities, nil
@@ -240,10 +316,26 @@ func (r *SecurityRepository) GetByMarketCode(marketCode string) ([]Security, err
 		return nil, fmt.Errorf("error iterating securities: %w", err)
 	}
 
+	// Apply overrides if override repository is available (batch mode for efficiency)
+	if r.overrideRepo != nil && len(securities) > 0 {
+		allOverrides, err := r.overrideRepo.GetAllOverrides()
+		if err != nil {
+			r.log.Warn().Err(err).Msg("Failed to fetch all overrides")
+		} else {
+			for i := range securities {
+				if overrides, exists := allOverrides[securities[i].ISIN]; exists && len(overrides) > 0 {
+					ApplyOverrides(&securities[i], overrides)
+				}
+			}
+		}
+	}
+
 	return securities, nil
 }
 
 // Create creates a new security in the repository
+// Note: allow_buy, allow_sell, min_lot, priority_multiplier are no longer stored in securities table
+// They should be set via security_overrides using the OverrideRepository
 func (r *SecurityRepository) Create(security Security) error {
 	now := time.Now().Unix()
 
@@ -260,10 +352,9 @@ func (r *SecurityRepository) Create(security Security) error {
 	query := `
 		INSERT INTO securities
 		(isin, symbol, name, product_type, industry, geography, fullExchangeName,
-		 market_code, priority_multiplier, min_lot, active, allow_buy, allow_sell,
-		 currency, min_portfolio_target, max_portfolio_target,
+		 market_code, active, currency, min_portfolio_target, max_portfolio_target,
 		 created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	// ISIN is required (PRIMARY KEY)
@@ -280,11 +371,7 @@ func (r *SecurityRepository) Create(security Security) error {
 		nullString(security.Geography),
 		nullString(security.FullExchangeName),
 		nullString(security.MarketCode),
-		security.PriorityMultiplier,
-		security.MinLot,
 		boolToInt(security.Active),
-		boolToInt(security.AllowBuy),
-		boolToInt(security.AllowSell),
 		nullString(security.Currency),
 		nullFloat64(security.MinPortfolioTarget),
 		nullFloat64(security.MaxPortfolioTarget),
@@ -305,20 +392,24 @@ func (r *SecurityRepository) Create(security Security) error {
 
 // Update updates security fields by ISIN
 // Changed from symbol to ISIN as primary identifier
+// Note: allow_buy, allow_sell, min_lot, priority_multiplier are no longer in securities table
+// They should be set via security_overrides using the OverrideRepository
 func (r *SecurityRepository) Update(isin string, updates map[string]interface{}) error {
 	if len(updates) == 0 {
 		return nil
 	}
 
 	// Whitelist of allowed update fields
+	// Note: allow_buy, allow_sell, min_lot, priority_multiplier are NOT allowed here
+	// They should be set via security_overrides table
 	allowedFields := map[string]bool{
-		"active": true, "allow_buy": true, "allow_sell": true,
-		"name": true, "product_type": true, "sector": true, "industry": true,
+		"active": true,
+		"name":   true, "product_type": true, "sector": true, "industry": true,
 		"geography": true, "fullExchangeName": true, "currency": true,
 		"exchange":             true,
 		"market_code":          true, // Tradernet market code for region mapping
 		"min_portfolio_target": true, "max_portfolio_target": true,
-		"isin": true, "min_lot": true, "priority_multiplier": true,
+		"isin":        true,
 		"symbol":      true,
 		"last_synced": true, // Unix timestamp
 	}
@@ -335,7 +426,7 @@ func (r *SecurityRepository) Update(isin string, updates map[string]interface{})
 	updates["updated_at"] = now
 
 	// Convert booleans to integers
-	for _, boolField := range []string{"active", "allow_buy", "allow_sell"} {
+	for _, boolField := range []string{"active"} {
 		if val, ok := updates[boolField]; ok {
 			if boolVal, isBool := val.(bool); isBool {
 				updates[boolField] = boolToInt(boolVal)
@@ -487,6 +578,21 @@ func (r *SecurityRepository) GetWithScores(portfolioDB *sql.DB) ([]SecurityWithS
 
 	if err := securityRows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating securities: %w", err)
+	}
+
+	// Apply overrides to securities (batch mode for efficiency)
+	if r.overrideRepo != nil && len(securitiesMap) > 0 {
+		allOverrides, err := r.overrideRepo.GetAllOverrides()
+		if err != nil {
+			r.log.Warn().Err(err).Msg("Failed to fetch all overrides")
+		} else {
+			for isin, sws := range securitiesMap {
+				if overrides, exists := allOverrides[isin]; exists && len(overrides) > 0 {
+					ApplyOverridesToSecurityWithScore(&sws, overrides)
+					securitiesMap[isin] = sws
+				}
+			}
+		}
 	}
 
 	// Fetch scores from portfolio.db
@@ -654,6 +760,8 @@ func (r *SecurityRepository) GetWithScores(portfolioDB *sql.DB) ([]SecurityWithS
 }
 
 // scanSecurity scans a database row into a Security struct
+// After migration 036: allow_buy, allow_sell, min_lot, priority_multiplier are removed from DB
+// These fields are now stored in security_overrides table with defaults applied at read time
 func (r *SecurityRepository) scanSecurity(rows *sql.Rows) (Security, error) {
 	var security Security
 	var isin, productType, geography, fullExchangeName sql.NullString
@@ -661,33 +769,29 @@ func (r *SecurityRepository) scanSecurity(rows *sql.Rows) (Security, error) {
 	var industry, currency sql.NullString
 	var lastSynced sql.NullInt64
 	var minPortfolioTarget, maxPortfolioTarget sql.NullFloat64
-	var active, allowBuy, allowSell sql.NullInt64
+	var active sql.NullInt64
 	var createdAt, updatedAt sql.NullInt64
 
-	// Table schema after migration: isin, symbol, name, product_type, industry, geography, fullExchangeName,
-	// market_code, priority_multiplier, min_lot, active, allow_buy, allow_sell, currency, last_synced,
-	// min_portfolio_target, max_portfolio_target, created_at, updated_at
+	// Table schema after migration 036: isin, symbol, name, product_type, industry, geography, fullExchangeName,
+	// market_code, active, currency, last_synced, min_portfolio_target, max_portfolio_target, created_at, updated_at
+	// Note: allow_buy, allow_sell, min_lot, priority_multiplier have been moved to security_overrides
 	var symbol sql.NullString
 	err := rows.Scan(
-		&isin,                        // isin (PRIMARY KEY)
-		&symbol,                      // symbol
-		&security.Name,               // name
-		&productType,                 // product_type
-		&industry,                    // industry
-		&geography,                   // geography
-		&fullExchangeName,            // fullExchangeName
-		&marketCode,                  // market_code
-		&security.PriorityMultiplier, // priority_multiplier
-		&security.MinLot,             // min_lot
-		&active,                      // active
-		&allowBuy,                    // allow_buy
-		&allowSell,                   // allow_sell
-		&currency,                    // currency
-		&lastSynced,                  // last_synced
-		&minPortfolioTarget,          // min_portfolio_target
-		&maxPortfolioTarget,          // max_portfolio_target
-		&createdAt,                   // created_at
-		&updatedAt,                   // updated_at
+		&isin,               // isin (PRIMARY KEY)
+		&symbol,             // symbol
+		&security.Name,      // name
+		&productType,        // product_type
+		&industry,           // industry
+		&geography,          // geography
+		&fullExchangeName,   // fullExchangeName
+		&marketCode,         // market_code
+		&active,             // active
+		&currency,           // currency
+		&lastSynced,         // last_synced
+		&minPortfolioTarget, // min_portfolio_target
+		&maxPortfolioTarget, // max_portfolio_target
+		&createdAt,          // created_at
+		&updatedAt,          // updated_at
 	)
 	if err != nil {
 		return security, err
@@ -728,17 +832,9 @@ func (r *SecurityRepository) scanSecurity(rows *sql.Rows) (Security, error) {
 		security.MaxPortfolioTarget = maxPortfolioTarget.Float64
 	}
 
-	// Handle boolean fields (stored as integers in SQLite)
+	// Handle boolean field (stored as integer in SQLite)
 	if active.Valid {
 		security.Active = active.Int64 != 0
-	}
-	if allowBuy.Valid {
-		security.AllowBuy = allowBuy.Int64 != 0
-	} else {
-		security.AllowBuy = true // Default
-	}
-	if allowSell.Valid {
-		security.AllowSell = allowSell.Int64 != 0
 	}
 
 	// Timestamps are read but not stored in Security model
@@ -747,13 +843,9 @@ func (r *SecurityRepository) scanSecurity(rows *sql.Rows) (Security, error) {
 	// Normalize symbol
 	security.Symbol = strings.ToUpper(strings.TrimSpace(security.Symbol))
 
-	// Default values
-	if security.PriorityMultiplier == 0 {
-		security.PriorityMultiplier = 1.0
-	}
-	if security.MinLot == 0 {
-		security.MinLot = 1
-	}
+	// Apply defaults for fields moved to security_overrides
+	// These will be overridden by actual overrides in the calling method
+	ApplyDefaults(&security)
 
 	// Load tags for the security
 	// Use ISIN as primary identifier (security_tags table uses isin, not symbol)
@@ -1049,7 +1141,7 @@ func (r *SecurityRepository) GetByTags(tagIDs []string) ([]Security, error) {
 
 	query := fmt.Sprintf(`
 		SELECT DISTINCT s.isin, s.symbol, s.name, s.product_type, s.industry, s.geography, s.fullExchangeName,
-			s.market_code, s.priority_multiplier, s.min_lot, s.active, s.allow_buy, s.allow_sell, s.currency, s.last_synced,
+			s.market_code, s.active, s.currency, s.last_synced,
 			s.min_portfolio_target, s.max_portfolio_target, s.created_at, s.updated_at
 		FROM securities s
 		INNER JOIN security_tags st ON s.isin = st.isin
@@ -1101,6 +1193,20 @@ func (r *SecurityRepository) GetByTags(tagIDs []string) ([]Security, error) {
 		return nil, fmt.Errorf("error iterating securities: %w", err)
 	}
 
+	// Apply overrides if override repository is available (batch mode for efficiency)
+	if r.overrideRepo != nil && len(securities) > 0 {
+		allOverrides, err := r.overrideRepo.GetAllOverrides()
+		if err != nil {
+			r.log.Warn().Err(err).Msg("Failed to fetch all overrides")
+		} else {
+			for i := range securities {
+				if overrides, exists := allOverrides[securities[i].ISIN]; exists && len(overrides) > 0 {
+					ApplyOverrides(&securities[i], overrides)
+				}
+			}
+		}
+	}
+
 	r.log.Debug().
 		Int("tag_count", len(normalizedTags)).
 		Int("securities_found", len(securities)).
@@ -1147,7 +1253,7 @@ func (r *SecurityRepository) GetPositionsByTags(positionSymbols []string, tagIDs
 
 	query := fmt.Sprintf(`
 		SELECT DISTINCT s.isin, s.symbol, s.name, s.product_type, s.industry, s.geography, s.fullExchangeName,
-			s.market_code, s.priority_multiplier, s.min_lot, s.active, s.allow_buy, s.allow_sell, s.currency, s.last_synced,
+			s.market_code, s.active, s.currency, s.last_synced,
 			s.min_portfolio_target, s.max_portfolio_target, s.created_at, s.updated_at
 		FROM securities s
 		INNER JOIN security_tags st ON s.isin = st.isin
@@ -1202,6 +1308,20 @@ func (r *SecurityRepository) GetPositionsByTags(positionSymbols []string, tagIDs
 
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating securities: %w", err)
+	}
+
+	// Apply overrides if override repository is available (batch mode for efficiency)
+	if r.overrideRepo != nil && len(securities) > 0 {
+		allOverrides, err := r.overrideRepo.GetAllOverrides()
+		if err != nil {
+			r.log.Warn().Err(err).Msg("Failed to fetch all overrides")
+		} else {
+			for i := range securities {
+				if overrides, exists := allOverrides[securities[i].ISIN]; exists && len(overrides) > 0 {
+					ApplyOverrides(&securities[i], overrides)
+				}
+			}
+		}
 	}
 
 	r.log.Debug().

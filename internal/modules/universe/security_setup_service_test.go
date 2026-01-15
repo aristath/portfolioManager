@@ -36,7 +36,7 @@ func TestSecuritySetupService_AddByIdentifier_EmptyIdentifier(t *testing.T) {
 		log,
 	)
 
-	_, err := service.AddSecurityByIdentifier("", 1, true, true)
+	_, err := service.AddSecurityByIdentifier("")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "identifier cannot be empty")
 }
@@ -56,7 +56,7 @@ func TestSecuritySetupService_AddByIdentifier_WithoutClients(t *testing.T) {
 
 	// Should panic with nil security repo (nil pointer dereference)
 	assert.Panics(t, func() {
-		_, _ = service.AddSecurityByIdentifier("AAPL.US", 1, true, true)
+		_, _ = service.AddSecurityByIdentifier("AAPL.US")
 	})
 }
 
@@ -148,7 +148,7 @@ func TestSecuritySetupService_AddByIdentifier_RejectsIndexSymbol(t *testing.T) {
 
 	for _, symbol := range indexSymbols {
 		t.Run(symbol, func(t *testing.T) {
-			_, err := service.AddSecurityByIdentifier(symbol, 1, true, true)
+			_, err := service.AddSecurityByIdentifier(symbol)
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), "cannot add index")
 		})
@@ -180,7 +180,7 @@ func TestSecuritySetupService_AddByIdentifier_AllowsRegularSymbols(t *testing.T)
 
 			// Should panic with nil security repo (not rejected by index validation)
 			assert.Panics(t, func() {
-				_, _ = service.AddSecurityByIdentifier(symbol, 1, true, true)
+				_, _ = service.AddSecurityByIdentifier(symbol)
 			})
 		})
 	}

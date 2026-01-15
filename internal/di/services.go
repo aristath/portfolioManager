@@ -54,8 +54,9 @@ type securitySetupServiceAdapter struct {
 }
 
 // AddSecurityByIdentifier implements portfolio.SecuritySetupServiceInterface
-func (a *securitySetupServiceAdapter) AddSecurityByIdentifier(identifier string, minLot int, allowBuy bool, allowSell bool) (interface{}, error) {
-	return a.service.AddSecurityByIdentifier(identifier, minLot, allowBuy, allowSell)
+// Note: User-configurable fields (min_lot, allow_buy, allow_sell) are set via security_overrides after creation
+func (a *securitySetupServiceAdapter) AddSecurityByIdentifier(identifier string) (interface{}, error) {
+	return a.service.AddSecurityByIdentifier(identifier)
 }
 
 // InitializeServices creates all services and stores them in the container

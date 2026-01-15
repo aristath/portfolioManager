@@ -58,22 +58,23 @@ func (s *SecuritySetupService) SetScoreCalculator(calculator ScoreCalculator) {
 //
 // This method:
 // 1. Validates symbol is unique
-// 2. Auto-detects country, exchange, industry from Tradernet metadata
+// 2. Auto-detects product type from name heuristics
 // 3. Creates the security in the database (requires ISIN)
 // 4. Publishes SecurityAdded event
 // 5. Calculates and saves the initial security score
 //
+// Note: User-configurable fields (allow_buy, allow_sell, min_lot, priority_multiplier)
+// are stored in security_overrides table, not in securities table. Use OverrideRepository
+// to set these values after creation.
+//
 // Unlike AddSecurityByIdentifier, this does NOT:
 // - Fetch historical price data (handled by background sync jobs)
-// - Fetch Tradernet metadata (currency, ISIN) - ISIN must be provided
+// - Fetch Tradernet metadata (currency, ISIN, geography, industry) - ISIN must be provided
 // - Resolve identifiers (symbol is already provided)
 func (s *SecuritySetupService) CreateSecurity(
 	symbol string,
 	name string,
 	isin string, // Required: PRIMARY KEY after migration 030
-	minLot int,
-	allowBuy bool,
-	allowSell bool,
 ) (*Security, error) {
 	symbol = strings.TrimSpace(strings.ToUpper(symbol))
 	if symbol == "" {
@@ -116,19 +117,17 @@ func (s *SecuritySetupService) CreateSecurity(
 	}
 
 	// Create security (ISIN is required as PRIMARY KEY)
+	// Note: allow_buy, allow_sell, min_lot, priority_multiplier are stored in security_overrides
+	// Defaults will be applied at read time: allow_buy=true, allow_sell=true, min_lot=1, priority_multiplier=1.0
 	security := Security{
-		ISIN:               isin,
-		Symbol:             symbol,
-		Name:               name,
-		ProductType:        string(productType),
-		Geography:          stringValue(country), // Map broker country to geography
-		FullExchangeName:   stringValue(fullExchangeName),
-		Industry:           stringValue(industry),
-		PriorityMultiplier: 1.0,
-		MinLot:             minLot,
-		Active:             true,
-		AllowBuy:           allowBuy,
-		AllowSell:          allowSell,
+		ISIN:             isin,
+		Symbol:           symbol,
+		Name:             name,
+		ProductType:      string(productType),
+		Geography:        stringValue(country), // Map broker country to geography
+		FullExchangeName: stringValue(fullExchangeName),
+		Industry:         stringValue(industry),
+		Active:           true,
 	}
 
 	err = s.securityRepo.Create(security)
@@ -185,13 +184,14 @@ func (s *SecuritySetupService) CreateSecurity(
 // 4. Creates the security in the database
 // 5. Publishes SecurityAdded event
 //
+// Note: User-configurable fields (allow_buy, allow_sell, min_lot, priority_multiplier)
+// are stored in security_overrides table, not in securities table. Use OverrideRepository
+// to set these values after creation.
+//
 // Historical data sync and score calculation are handled asynchronously by the
 // idle processor, which detects securities with last_synced = NULL.
 func (s *SecuritySetupService) AddSecurityByIdentifier(
 	identifier string,
-	minLot int,
-	allowBuy bool,
-	allowSell bool,
 ) (*Security, error) {
 	identifier = strings.TrimSpace(strings.ToUpper(identifier))
 	if identifier == "" {
@@ -352,20 +352,18 @@ func (s *SecuritySetupService) AddSecurityByIdentifier(
 	}
 
 	// Step 4: Create security
+	// Note: allow_buy, allow_sell, min_lot, priority_multiplier are stored in security_overrides
+	// Defaults will be applied at read time: allow_buy=true, allow_sell=true, min_lot=1, priority_multiplier=1.0
 	security := Security{
-		Symbol:             tradernetSymbol,
-		Name:               name,
-		ProductType:        string(productType),
-		Geography:          stringValue(country),
-		FullExchangeName:   stringValue(fullExchangeName),
-		ISIN:               stringValue(isin),
-		Industry:           stringValue(industry),
-		Currency:           stringValue(currency),
-		PriorityMultiplier: 1.0,
-		MinLot:             minLot,
-		Active:             true,
-		AllowBuy:           allowBuy,
-		AllowSell:          allowSell,
+		Symbol:           tradernetSymbol,
+		Name:             name,
+		ProductType:      string(productType),
+		Geography:        stringValue(country),
+		FullExchangeName: stringValue(fullExchangeName),
+		ISIN:             stringValue(isin),
+		Industry:         stringValue(industry),
+		Currency:         stringValue(currency),
+		Active:           true,
 	}
 
 	err = s.securityRepo.Create(security)
@@ -401,9 +399,14 @@ func (s *SecuritySetupService) AddSecurityByIdentifier(
 }
 
 // TradernetData represents data fetched from Tradernet API
+// Includes metadata for geography, industry, and exchange information
 type TradernetData struct {
-	Currency *string
-	ISIN     *string
+	Currency     *string
+	ISIN         *string
+	Country      *string // Issuer country code -> maps to Geography
+	Sector       *string // Sector/industry code -> maps to Industry
+	Market       *string // Market code (e.g., "FIX", "EU", "US")
+	ExchangeName *string // Full exchange name
 }
 
 // getTradernetData gets currency and ISIN from Tradernet for a symbol
@@ -435,8 +438,12 @@ func (s *SecuritySetupService) getTradernetData(symbol string) (*TradernetData, 
 	security := securities[0]
 
 	return &TradernetData{
-		Currency: security.Currency,
-		ISIN:     security.ISIN,
+		Currency:     security.Currency,
+		ISIN:         security.ISIN,
+		Country:      security.Country,      // Issuer country code -> Geography
+		Sector:       security.Sector,       // Sector/industry code -> Industry
+		Market:       security.Market,       // Market code for region mapping
+		ExchangeName: security.ExchangeName, // Full exchange name
 	}, nil
 }
 

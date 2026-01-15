@@ -24,5 +24,10 @@ func (h *UniverseHandlers) RegisterRoutes(r chi.Router) {
 		// PUT/DELETE endpoints
 		r.Put("/{isin}", h.HandleUpdateStock)    // Update security (requires score recalc)
 		r.Delete("/{isin}", h.HandleDeleteStock) // Soft delete (implemented in Go)
+
+		// Override endpoints (for user customizations separate from Tradernet defaults)
+		r.Get("/{isin}/overrides", h.HandleGetSecurityOverrides)              // Get all overrides for security
+		r.Put("/{isin}/overrides/{field}", h.HandleSetSecurityOverride)       // Set specific override
+		r.Delete("/{isin}/overrides/{field}", h.HandleDeleteSecurityOverride) // Reset field to default
 	})
 }

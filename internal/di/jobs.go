@@ -556,6 +556,18 @@ func RegisterJobs(container *Container, cfg *config.Config, displayManager *disp
 	}
 
 	// ==========================================
+	// TRADERNET METADATA SYNC JOB
+	// ==========================================
+	tradernetMetadataSync := scheduler.NewTradernetMetadataSyncJob(scheduler.TradernetMetadataSyncJobConfig{
+		Log:          log,
+		SecurityRepo: container.SecurityRepo,
+		BrokerClient: container.BrokerClient,
+	})
+	container.JobRegistry.Register(queue.JobTypeTradernetMetadataSync, queue.JobToHandler(tradernetMetadataSync))
+	instances.TradernetMetadataSync = tradernetMetadataSync
+	log.Info().Msg("Tradernet metadata sync job registered")
+
+	// ==========================================
 	// Configure Worker Pool
 	// ==========================================
 	// Set event manager for job status broadcasting

@@ -60,6 +60,7 @@ type Container struct {
 	PositionRepo       *portfolio.PositionRepository
 	SecurityRepo       *universe.SecurityRepository
 	ScoreRepo          *universe.ScoreRepository
+	OverrideRepo       *universe.OverrideRepository
 	DividendRepo       *dividends.DividendRepository
 	CashRepo           *cash_flows.CashRepository
 	TradeRepo          *trading.TradeRepository
@@ -219,4 +220,7 @@ type JobInstances struct {
 
 	// Deployment job
 	Deployment scheduler.Job
+
+	// Tradernet metadata sync job
+	TradernetMetadataSync scheduler.Job
 }

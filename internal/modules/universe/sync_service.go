@@ -406,12 +406,8 @@ func (s *SyncService) RebuildUniverseFromPortfolio() (int, error) {
 		s.log.Info().Str("symbol", symbol).Msg("Adding missing security to universe")
 
 		// Use AddSecurityByIdentifier (handles full data pipeline)
-		security, err := s.setupService.AddSecurityByIdentifier(
-			symbol, // identifier
-			1,      // minLot
-			true,   // allowBuy
-			true,   // allowSell
-		)
+		// Note: User-configurable fields are set via security_overrides after creation
+		security, err := s.setupService.AddSecurityByIdentifier(symbol)
 
 		if err != nil {
 			s.log.Error().Err(err).Str("symbol", symbol).Msg("Failed to add security")

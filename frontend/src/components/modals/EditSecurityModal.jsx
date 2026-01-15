@@ -1,4 +1,5 @@
-import { Modal, TextInput, NumberInput, Switch, Button, Group, Stack, Select } from '@mantine/core';
+import { Modal, TextInput, NumberInput, Switch, Button, Group, Stack, Select, ActionIcon, Tooltip, Badge } from '@mantine/core';
+import { IconRefresh } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useAppStore } from '../../stores/appStore';
 import { useSecuritiesStore } from '../../stores/securitiesStore';
@@ -9,13 +10,73 @@ export function EditSecurityModal() {
   const { showEditSecurityModal, editingSecurity, closeEditSecurityModal } = useAppStore();
   const { fetchSecurities } = useSecuritiesStore();
   const [formData, setFormData] = useState(null);
+  const [overrides, setOverrides] = useState({});
   const [loading, setLoading] = useState(false);
+  const [resettingField, setResettingField] = useState(null);
 
   useEffect(() => {
     if (editingSecurity) {
       setFormData({ ...editingSecurity });
+      // Fetch overrides for this security
+      api.getSecurityOverrides(editingSecurity.isin)
+        .then(setOverrides)
+        .catch(err => {
+          console.error('Failed to fetch overrides:', err);
+          setOverrides({});
+        });
     }
   }, [editingSecurity]);
+
+  const handleResetField = async (field) => {
+    if (!formData?.isin) return;
+
+    setResettingField(field);
+    try {
+      await api.deleteSecurityOverride(formData.isin, field);
+      // Refresh overrides
+      const newOverrides = await api.getSecurityOverrides(formData.isin);
+      setOverrides(newOverrides);
+      // Refresh security data to get default value
+      await fetchSecurities();
+      notifications.show({
+        title: 'Reset',
+        message: `${field} reset to default`,
+        color: 'blue',
+      });
+    } catch (e) {
+      console.error(`Failed to reset ${field}:`, e);
+      notifications.show({
+        title: 'Error',
+        message: `Failed to reset ${field}: ${e.message}`,
+        color: 'red',
+      });
+    } finally {
+      setResettingField(null);
+    }
+  };
+
+  // Helper to create field with override indicator
+  const OverrideIndicator = ({ field }) => {
+    const isOverridden = field in overrides;
+    if (!isOverridden) return null;
+
+    return (
+      <Group gap="xs">
+        <Badge size="xs" color="blue" variant="light">Customized</Badge>
+        <Tooltip label={`Reset ${field} to default`}>
+          <ActionIcon
+            size="xs"
+            variant="subtle"
+            color="gray"
+            onClick={() => handleResetField(field)}
+            loading={resettingField === field}
+          >
+            <IconRefresh size={12} />
+          </ActionIcon>
+        </Tooltip>
+      </Group>
+    );
+  };
 
   const handleSave = async () => {
     if (!formData || !formData.isin) return;
@@ -83,7 +144,7 @@ export function EditSecurityModal() {
         />
         <TextInput
           className="edit-security-modal__input edit-security-modal__input--name"
-          label="Name"
+          label={<Group gap="xs">Name <OverrideIndicator field="name" /></Group>}
           value={formData.name || ''}
           onChange={(e) => setFormData({ ...formData, name: e.target.value })}
         />
@@ -96,7 +157,7 @@ export function EditSecurityModal() {
         />
         <TextInput
           className="edit-security-modal__input edit-security-modal__input--geography"
-          label="Geography"
+          label={<Group gap="xs">Geography <OverrideIndicator field="geography" /></Group>}
           value={formData.geography || ''}
           onChange={(e) => setFormData({ ...formData, geography: e.target.value })}
           placeholder="e.g., EU, US, ASIA (comma-separated for multiple)"
@@ -112,7 +173,7 @@ export function EditSecurityModal() {
         />
         <TextInput
           className="edit-security-modal__input edit-security-modal__input--industry"
-          label="Industry"
+          label={<Group gap="xs">Industry <OverrideIndicator field="industry" /></Group>}
           value={formData.industry || ''}
           onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
           placeholder="e.g., Technology, Healthcare, Financial Services"
@@ -120,7 +181,7 @@ export function EditSecurityModal() {
         />
         <Select
           className="edit-security-modal__select edit-security-modal__select--product-type"
-          label="Product Type"
+          label={<Group gap="xs">Product Type <OverrideIndicator field="product_type" /></Group>}
           value={formData.product_type || 'UNKNOWN'}
           onChange={(value) => setFormData({ ...formData, product_type: value })}
           data={[
@@ -135,25 +196,29 @@ export function EditSecurityModal() {
         />
         <NumberInput
           className="edit-security-modal__number-input edit-security-modal__number-input--min-lot"
-          label="Min Lot Size"
+          label={<Group gap="xs">Min Lot Size <OverrideIndicator field="min_lot" /></Group>}
           value={formData.min_lot || 1}
           onChange={(val) => setFormData({ ...formData, min_lot: Number(val) || 1 })}
           min={1}
           step={1}
           description="Minimum shares per trade (e.g., 100 for Japanese securities)"
         />
-        <Switch
-          className="edit-security-modal__switch edit-security-modal__switch--allow-buy"
-          label="Allow Buy"
-          checked={formData.allow_buy !== false}
-          onChange={(e) => setFormData({ ...formData, allow_buy: e.currentTarget.checked })}
-        />
-        <Switch
-          className="edit-security-modal__switch edit-security-modal__switch--allow-sell"
-          label="Allow Sell"
-          checked={formData.allow_sell !== false}
-          onChange={(e) => setFormData({ ...formData, allow_sell: e.currentTarget.checked })}
-        />
+        <Group gap="md">
+          <Switch
+            className="edit-security-modal__switch edit-security-modal__switch--allow-buy"
+            label={<Group gap="xs">Allow Buy <OverrideIndicator field="allow_buy" /></Group>}
+            checked={formData.allow_buy !== false}
+            onChange={(e) => setFormData({ ...formData, allow_buy: e.currentTarget.checked })}
+          />
+        </Group>
+        <Group gap="md">
+          <Switch
+            className="edit-security-modal__switch edit-security-modal__switch--allow-sell"
+            label={<Group gap="xs">Allow Sell <OverrideIndicator field="allow_sell" /></Group>}
+            checked={formData.allow_sell !== false}
+            onChange={(e) => setFormData({ ...formData, allow_sell: e.currentTarget.checked })}
+          />
+        </Group>
         <Group className="edit-security-modal__actions" justify="flex-end">
           <Button className="edit-security-modal__cancel-btn" variant="subtle" onClick={closeEditSecurityModal}>
             Cancel

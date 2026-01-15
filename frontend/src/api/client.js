@@ -97,6 +97,7 @@ export const api = {
   triggerHealthCheck: () => fetchJSON('/api/system/jobs/health-check', { method: 'POST' }),
   triggerEventBasedTrading: () => fetchJSON('/api/system/jobs/event-based-trading', { method: 'POST' }),
   triggerTagUpdate: () => fetchJSON('/api/system/jobs/tag-update', { method: 'POST' }),
+  triggerTradernetMetadataSync: () => fetchJSON('/api/system/jobs/tradernet-metadata-sync', { method: 'POST' }),
   hardUpdate: () => fetchJSON('/api/system/deployment/hard-update', { method: 'POST' }),
 
   // Jobs - Individual sync jobs
@@ -156,6 +157,16 @@ export const api = {
   deleteSecurity: (isin) => fetchJSON(`/api/securities/${isin}`, { method: 'DELETE' }),
   refreshScore: (isin) => fetchJSON(`/api/securities/${isin}/refresh`, { method: 'POST' }),
   refreshAllScores: () => fetchJSON('/api/securities/refresh-all', { method: 'POST' }),
+
+  // Security overrides (user customizations separate from Tradernet defaults)
+  getSecurityOverrides: (isin) => fetchJSON(`/api/securities/${isin}/overrides`),
+  setSecurityOverride: (isin, field, value) => fetchJSON(`/api/securities/${isin}/overrides/${field}`, {
+    method: 'PUT',
+    body: JSON.stringify({ value }),
+  }),
+  deleteSecurityOverride: (isin, field) => fetchJSON(`/api/securities/${isin}/overrides/${field}`, {
+    method: 'DELETE',
+  }),
 
   // Trades
   fetchTrades: () => fetchJSON('/api/trades'),

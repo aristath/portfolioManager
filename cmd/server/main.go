@@ -183,6 +183,9 @@ func main() {
 		jobs.CheckWALCheckpoints,
 	)
 
+	// Set Tradernet metadata sync job (for manual triggering)
+	srv.SetTradernetMetadataSyncJob(jobs.TradernetMetadataSync)
+
 	// Start server in goroutine
 	go func() {
 		if err := srv.Start(); err != nil {

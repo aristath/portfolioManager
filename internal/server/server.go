@@ -248,6 +248,11 @@ func (s *Server) SetTagUpdateJob(tagUpdate scheduler.Job) {
 	s.systemHandlers.SetTagUpdateJob(tagUpdate)
 }
 
+// SetTradernetMetadataSyncJob sets the Tradernet metadata sync job (called after job registration)
+func (s *Server) SetTradernetMetadataSyncJob(job scheduler.Job) {
+	s.systemHandlers.SetTradernetMetadataSyncJob(job)
+}
+
 // setupMiddleware configures middleware
 func (s *Server) setupMiddleware(devMode bool) {
 	// Recovery from panics
@@ -305,6 +310,7 @@ func (s *Server) setupRoutes() {
 		// Use services from container (single source of truth)
 		securityRepo := s.container.SecurityRepo
 		scoreRepo := s.container.ScoreRepo
+		overrideRepo := s.container.OverrideRepo
 		positionRepo := s.container.PositionRepo
 		securityScorer := s.container.SecurityScorer
 		historyDB := s.container.HistoryDBClient
@@ -315,6 +321,7 @@ func (s *Server) setupRoutes() {
 		systemUniverseHandlers := universehandlers.NewUniverseHandlers(
 			securityRepo,
 			scoreRepo,
+			overrideRepo,
 			s.portfolioDB.Conn(),
 			positionRepo,
 			securityScorer,
@@ -401,6 +408,9 @@ func (s *Server) setupRoutes() {
 				r.Post("/check-core-databases", systemHandlers.HandleTriggerCheckCoreDatabases)
 				r.Post("/check-history-databases", systemHandlers.HandleTriggerCheckHistoryDatabases)
 				r.Post("/check-wal-checkpoints", systemHandlers.HandleTriggerCheckWALCheckpoints)
+
+				// Tradernet metadata sync job
+				r.Post("/tradernet-metadata-sync", systemHandlers.HandleTriggerTradernetMetadataSync)
 			})
 		})
 
@@ -425,6 +435,7 @@ func (s *Server) setupRoutes() {
 		// Universe module
 		universeSecurityRepo := s.container.SecurityRepo
 		universeScoreRepo := s.container.ScoreRepo
+		universeOverrideRepo := s.container.OverrideRepo
 		universePositionRepo := s.container.PositionRepo
 		universeSecurityScorer := s.container.SecurityScorer
 		universeHistoryDB := s.container.HistoryDBClient
@@ -434,6 +445,7 @@ func (s *Server) setupRoutes() {
 		universeHandler := universehandlers.NewUniverseHandlers(
 			universeSecurityRepo,
 			universeScoreRepo,
+			universeOverrideRepo,
 			s.portfolioDB.Conn(), // Pass portfolioDB for GetWithScores
 			universePositionRepo,
 			universeSecurityScorer,
