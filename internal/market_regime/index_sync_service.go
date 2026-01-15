@@ -32,9 +32,9 @@ func NewIndexSyncService(universeDB, configDB *sql.DB, log zerolog.Logger) *Inde
 //   - ISIN: "INDEX-{SYMBOL}" format
 //   - product_type: "INDEX"
 //   - active: 1
-//   - allow_buy: 0 (indices are not tradeable)
-//   - allow_sell: 0
 //   - market_code: from the known index config
+//
+// Note: allow_buy/allow_sell are stored in security_overrides table (set to false for indices)
 func (s *IndexSyncService) SyncIndicesToSecurities() error {
 	knownIndices := GetKnownIndices()
 	now := time.Now().Unix()
@@ -64,11 +64,23 @@ func (s *IndexSyncService) SyncIndicesToSecurities() error {
 		// Create index in securities table
 		_, err = s.universeDB.Exec(`
 			INSERT INTO securities
-			(isin, symbol, name, product_type, market_code, active, allow_buy, allow_sell, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, 1, 0, 0, ?, ?)
+			(isin, symbol, name, product_type, market_code, active, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, 1, ?, ?)
 		`, isin, idx.Symbol, idx.Name, string(domain.ProductTypeIndex), idx.MarketCode, now, now)
 		if err != nil {
 			return fmt.Errorf("failed to create index %s in securities: %w", idx.Symbol, err)
+		}
+
+		// Set allow_buy=false and allow_sell=false for indices via security_overrides
+		for _, field := range []string{"allow_buy", "allow_sell"} {
+			_, err = s.universeDB.Exec(`
+				INSERT INTO security_overrides (isin, field, value, created_at, updated_at)
+				VALUES (?, ?, 'false', ?, ?)
+				ON CONFLICT(isin, field) DO UPDATE SET value = 'false', updated_at = excluded.updated_at
+			`, isin, field, now, now)
+			if err != nil {
+				s.log.Warn().Err(err).Str("isin", isin).Str("field", field).Msg("Failed to set override for index")
+			}
 		}
 
 		synced++
@@ -217,8 +229,8 @@ func (s *IndexSyncService) EnsureIndexExists(symbol string) (string, error) {
 	// Upsert the index
 	_, err := s.universeDB.Exec(`
 		INSERT INTO securities
-		(isin, symbol, name, product_type, market_code, active, allow_buy, allow_sell, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, 1, 0, 0, ?, ?)
+		(isin, symbol, name, product_type, market_code, active, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, 1, ?, ?)
 		ON CONFLICT(isin) DO UPDATE SET
 			name = excluded.name,
 			market_code = excluded.market_code,
@@ -226,6 +238,18 @@ func (s *IndexSyncService) EnsureIndexExists(symbol string) (string, error) {
 	`, isin, symbol, foundIdx.Name, string(domain.ProductTypeIndex), foundIdx.MarketCode, now, now)
 	if err != nil {
 		return "", fmt.Errorf("failed to upsert index %s: %w", symbol, err)
+	}
+
+	// Ensure allow_buy=false and allow_sell=false for indices via security_overrides
+	for _, field := range []string{"allow_buy", "allow_sell"} {
+		_, err = s.universeDB.Exec(`
+			INSERT INTO security_overrides (isin, field, value, created_at, updated_at)
+			VALUES (?, ?, 'false', ?, ?)
+			ON CONFLICT(isin, field) DO UPDATE SET value = 'false', updated_at = excluded.updated_at
+		`, isin, field, now, now)
+		if err != nil {
+			s.log.Warn().Err(err).Str("isin", isin).Str("field", field).Msg("Failed to set override for index")
+		}
 	}
 
 	return isin, nil

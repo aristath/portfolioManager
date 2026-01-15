@@ -258,6 +258,8 @@ func (h *Handler) getSettings() (optimization.Settings, error) {
 }
 
 func (h *Handler) getSecurities() ([]optimization.Security, error) {
+	// Note: allow_buy, allow_sell, min_lot, priority_multiplier are now in security_overrides table
+	// Using defaults here: allow_buy=true, allow_sell=true, min_lot=1, priority_multiplier=1.0
 	query := `
 		SELECT
 			symbol,
@@ -266,12 +268,7 @@ func (h *Handler) getSecurities() ([]optimization.Security, error) {
 			COALESCE(geography, 'OTHER') as geography,
 			COALESCE(industry, 'OTHER') as industry,
 			COALESCE(min_portfolio_target, 0.0) as min_portfolio_target,
-			COALESCE(max_portfolio_target, 0.0) as max_portfolio_target,
-			COALESCE(allow_buy, 1) as allow_buy,
-			COALESCE(allow_sell, 1) as allow_sell,
-			COALESCE(min_lot, 0.0) as min_lot,
-			COALESCE(priority_multiplier, 1.0) as priority_multiplier,
-			COALESCE(target_price_eur, 0.0) as target_price_eur
+			COALESCE(max_portfolio_target, 0.0) as max_portfolio_target
 		FROM securities
 		WHERE active = 1
 	`
@@ -285,7 +282,6 @@ func (h *Handler) getSecurities() ([]optimization.Security, error) {
 	securities := make([]optimization.Security, 0)
 	for rows.Next() {
 		var sec optimization.Security
-		var allowBuyInt, allowSellInt int
 
 		err := rows.Scan(
 			&sec.Symbol,
@@ -295,18 +291,16 @@ func (h *Handler) getSecurities() ([]optimization.Security, error) {
 			&sec.Industry,
 			&sec.MinPortfolioTarget,
 			&sec.MaxPortfolioTarget,
-			&allowBuyInt,
-			&allowSellInt,
-			&sec.MinLot,
-			&sec.PriorityMultiplier,
-			&sec.TargetPriceEUR,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan security: %w", err)
 		}
 
-		sec.AllowBuy = allowBuyInt == 1
-		sec.AllowSell = allowSellInt == 1
+		// Apply defaults for fields now stored in security_overrides
+		sec.AllowBuy = true
+		sec.AllowSell = true
+		sec.MinLot = 1
+		sec.PriorityMultiplier = 1.0
 
 		securities = append(securities, sec)
 	}

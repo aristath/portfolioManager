@@ -15,7 +15,11 @@ func setupUniverseTestDB(t *testing.T) *sql.DB {
 	db, err := sql.Open("sqlite3", ":memory:")
 	require.NoError(t, err)
 
-	// Create securities table matching universe schema
+	// Enable foreign keys
+	_, err = db.Exec("PRAGMA foreign_keys = ON")
+	require.NoError(t, err)
+
+	// Create securities table matching universe schema (after migration 036)
 	_, err = db.Exec(`
 		CREATE TABLE securities (
 			isin TEXT PRIMARY KEY,
@@ -26,17 +30,27 @@ func setupUniverseTestDB(t *testing.T) *sql.DB {
 			geography TEXT,
 			fullExchangeName TEXT,
 			market_code TEXT,
-			priority_multiplier REAL DEFAULT 1.0,
-			min_lot INTEGER DEFAULT 1,
 			active INTEGER DEFAULT 1,
-			allow_buy INTEGER DEFAULT 1,
-			allow_sell INTEGER DEFAULT 1,
 			currency TEXT,
 			last_synced INTEGER,
 			min_portfolio_target REAL,
 			max_portfolio_target REAL,
 			created_at INTEGER NOT NULL,
 			updated_at INTEGER NOT NULL
+		)
+	`)
+	require.NoError(t, err)
+
+	// Create security_overrides table (EAV pattern for user customizations)
+	_, err = db.Exec(`
+		CREATE TABLE security_overrides (
+			isin TEXT NOT NULL,
+			field TEXT NOT NULL,
+			value TEXT NOT NULL,
+			created_at INTEGER NOT NULL,
+			updated_at INTEGER NOT NULL,
+			PRIMARY KEY (isin, field),
+			FOREIGN KEY (isin) REFERENCES securities(isin) ON DELETE CASCADE
 		)
 	`)
 	require.NoError(t, err)
@@ -66,11 +80,10 @@ func TestIndexSyncService_SyncIndicesToSecurities(t *testing.T) {
 
 	// Verify specific index
 	var isin, symbol, name, productType, marketCode string
-	var allowBuy, allowSell int
 	err = universeDB.QueryRow(`
-		SELECT isin, symbol, name, product_type, market_code, allow_buy, allow_sell
+		SELECT isin, symbol, name, product_type, market_code
 		FROM securities WHERE symbol = 'SP500.IDX'
-	`).Scan(&isin, &symbol, &name, &productType, &marketCode, &allowBuy, &allowSell)
+	`).Scan(&isin, &symbol, &name, &productType, &marketCode)
 	require.NoError(t, err)
 
 	assert.Equal(t, "INDEX-SP500.IDX", isin)
@@ -78,8 +91,20 @@ func TestIndexSyncService_SyncIndicesToSecurities(t *testing.T) {
 	assert.Equal(t, "S&P 500", name)
 	assert.Equal(t, "INDEX", productType)
 	assert.Equal(t, "FIX", marketCode)
-	assert.Equal(t, 0, allowBuy, "Indices should not be buyable")
-	assert.Equal(t, 0, allowSell, "Indices should not be sellable")
+
+	// Verify allow_buy and allow_sell are set to false via security_overrides
+	var allowBuyValue, allowSellValue string
+	err = universeDB.QueryRow(`
+		SELECT value FROM security_overrides WHERE isin = 'INDEX-SP500.IDX' AND field = 'allow_buy'
+	`).Scan(&allowBuyValue)
+	require.NoError(t, err)
+	assert.Equal(t, "false", allowBuyValue, "Indices should not be buyable")
+
+	err = universeDB.QueryRow(`
+		SELECT value FROM security_overrides WHERE isin = 'INDEX-SP500.IDX' AND field = 'allow_sell'
+	`).Scan(&allowSellValue)
+	require.NoError(t, err)
+	assert.Equal(t, "false", allowSellValue, "Indices should not be sellable")
 }
 
 func TestIndexSyncService_Idempotent(t *testing.T) {

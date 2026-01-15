@@ -99,8 +99,9 @@ func (r *PositionRepository) GetWithSecurityInfo() ([]PositionWithSecurity, erro
 
 	// Get securities from universe.db (by ISIN)
 	// Note: Cash securities should not exist in universe.db after migration
+	// Note: allow_sell is now in security_overrides table, defaults to true
 	securityRows, err := r.universeDB.Query(`
-		SELECT isin, symbol, name, geography, fullExchangeName, industry, currency, allow_sell
+		SELECT isin, symbol, name, geography, fullExchangeName, industry, currency
 		FROM securities
 		WHERE active = 1
 	`)
@@ -110,6 +111,7 @@ func (r *PositionRepository) GetWithSecurityInfo() ([]PositionWithSecurity, erro
 	defer securityRows.Close()
 
 	// Read securities into map (keyed by ISIN)
+	// Note: allow_sell is now stored in security_overrides table (defaults to true)
 	type SecurityInfo struct {
 		ISIN             string
 		Symbol           string
@@ -118,7 +120,6 @@ func (r *PositionRepository) GetWithSecurityInfo() ([]PositionWithSecurity, erro
 		FullExchangeName sql.NullString
 		Industry         sql.NullString
 		Currency         sql.NullString
-		AllowSell        bool
 	}
 
 	securitiesByISIN := make(map[string]SecurityInfo)
@@ -132,7 +133,6 @@ func (r *PositionRepository) GetWithSecurityInfo() ([]PositionWithSecurity, erro
 			&sec.FullExchangeName,
 			&sec.Industry,
 			&sec.Currency,
-			&sec.AllowSell,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan security: %w", err)
 		}
@@ -161,7 +161,7 @@ func (r *PositionRepository) GetWithSecurityInfo() ([]PositionWithSecurity, erro
 
 		if found {
 			merged.StockName = sec.Name
-			merged.AllowSell = sec.AllowSell
+			merged.AllowSell = true // Default: allow_sell is now in security_overrides, defaults to true
 			if sec.Geography.Valid {
 				merged.Geography = sec.Geography.String
 			}
@@ -174,7 +174,7 @@ func (r *PositionRepository) GetWithSecurityInfo() ([]PositionWithSecurity, erro
 		} else {
 			// Fallback: use symbol as name if security not found
 			merged.StockName = pos.Symbol
-			merged.AllowSell = false // Default to not allowing sell if security not found
+			merged.AllowSell = true // Default to allowing sell (system default)
 		}
 
 		result = append(result, merged)
