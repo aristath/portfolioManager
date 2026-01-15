@@ -1,5 +1,5 @@
 import { Card, Group, Text, Badge, Stack, Paper, ActionIcon } from '@mantine/core';
-import { IconRefresh, IconRotateClockwise, IconX, IconPlus } from '@tabler/icons-react';
+import { IconRefresh, IconRotateClockwise } from '@tabler/icons-react';
 import { useAppStore } from '../../stores/appStore';
 import { usePortfolioStore } from '../../stores/portfolioStore';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -351,46 +351,19 @@ export function NextActionsCard() {
                   <Stack className="next-actions__filtered-reasons" gap={4}>
                     {security.reasons.map((entry, entryIndex) => (
                       entry.reasons.map((reasonObj, reasonIndex) => {
-                        // Handle both old format (string) and new format (object with reason & dismissed)
+                        // Extract reason text (supports both string and object format)
                         const reasonText = typeof reasonObj === 'string' ? reasonObj : reasonObj.reason;
-                        const isDismissed = typeof reasonObj === 'object' && reasonObj.dismissed;
-
-                        const handleToggleDismiss = async () => {
-                          try {
-                            if (isDismissed) {
-                              await api.undismissFilter(security.isin, entry.calculator, reasonText);
-                            } else {
-                              await api.dismissFilter(security.isin, entry.calculator, reasonText);
-                            }
-                            // Refresh recommendations to update the UI
-                            fetchRecommendations();
-                          } catch (error) {
-                            console.error('Failed to toggle dismiss:', error);
-                          }
-                        };
 
                         return (
-                          <Group className="next-actions__filter-reason" key={`${entryIndex}-${reasonIndex}`} gap="xs" wrap="nowrap">
-                            <Text
-                              className={`next-actions__reason-text ${isDismissed ? 'next-actions__reason-text--dismissed' : ''}`}
-                              size="xs"
-                              c="dimmed"
-                              td={isDismissed ? 'line-through' : undefined}
-                              style={{ fontFamily: 'var(--mantine-font-family)', lineHeight: 1.4, flex: 1 }}
-                            >
-                              • <Text span size="xs" c="gray.5" style={{ fontFamily: 'var(--mantine-font-family)' }}>{entry.calculator}</Text> {reasonText}
-                            </Text>
-                            <ActionIcon
-                              className={`next-actions__dismiss-btn ${isDismissed ? 'next-actions__dismiss-btn--dismissed' : ''}`}
-                              size="xs"
-                              variant="subtle"
-                              color={isDismissed ? 'green' : 'red'}
-                              onClick={handleToggleDismiss}
-                              title={isDismissed ? 'Re-enable this filter' : 'Dismiss this filter'}
-                            >
-                              {isDismissed ? <IconPlus size={12} /> : <IconX size={12} />}
-                            </ActionIcon>
-                          </Group>
+                          <Text
+                            className="next-actions__reason-text"
+                            key={`${entryIndex}-${reasonIndex}`}
+                            size="xs"
+                            c="dimmed"
+                            style={{ fontFamily: 'var(--mantine-font-family)', lineHeight: 1.4 }}
+                          >
+                            • <Text span size="xs" c="gray.5" style={{ fontFamily: 'var(--mantine-font-family)' }}>{entry.calculator}</Text> {reasonText}
+                          </Text>
                         );
                       })
                     ))}

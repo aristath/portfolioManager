@@ -56,7 +56,7 @@ func (c *RebalanceBuysCalculator) Calculate(
 	minTradeAmount := ctx.CalculateMinTradeAmount(maxCostRatio)
 
 	// Initialize exclusion collector
-	exclusions := NewExclusionCollector(c.Name(), ctx.DismissedFilters)
+	exclusions := NewExclusionCollector(c.Name())
 
 	// Extract config for tag filtering
 	var config *domain.PlannerConfiguration

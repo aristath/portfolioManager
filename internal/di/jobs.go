@@ -355,6 +355,8 @@ func RegisterJobs(container *Container, cfg *config.Config, displayManager *disp
 	optimizerServiceAdapter := scheduler.NewOptimizerServiceAdapter(container.OptimizerService)
 	priceConversionServiceAdapter := scheduler.NewPriceConversionServiceAdapter(container.PriceConversionService)
 	plannerConfigRepoAdapter := scheduler.NewPlannerConfigRepositoryAdapter(container.PlannerConfigRepo)
+	clientDataRepoAdapter := scheduler.NewClientDataRepositoryAdapter(container.ClientDataRepo)
+	marketHoursServiceAdapter := scheduler.NewMarketHoursServiceAdapter(container.MarketHoursService)
 	getOptimizerWeights := scheduler.NewGetOptimizerWeightsJob(
 		positionRepoAdapter,
 		securityRepoAdapter,
@@ -364,6 +366,8 @@ func RegisterJobs(container *Container, cfg *config.Config, displayManager *disp
 		optimizerServiceAdapter,
 		priceConversionServiceAdapter,
 		plannerConfigRepoAdapter,
+		clientDataRepoAdapter,
+		marketHoursServiceAdapter,
 	)
 	getOptimizerWeights.SetLogger(log)
 	container.JobRegistry.Register(queue.JobTypeGetOptimizerWeights, queue.JobToHandler(getOptimizerWeights))

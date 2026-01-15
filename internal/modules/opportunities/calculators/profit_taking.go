@@ -54,7 +54,7 @@ func (c *ProfitTakingCalculator) Calculate(
 	_ = minHoldDays                                                        // Reserved for future use
 
 	// Initialize exclusion collector
-	exclusions := NewExclusionCollector(c.Name(), ctx.DismissedFilters)
+	exclusions := NewExclusionCollector(c.Name())
 
 	if !ctx.AllowSell {
 		c.log.Debug().Msg("Selling not allowed, skipping profit taking")

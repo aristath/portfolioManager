@@ -541,14 +541,12 @@ func (s *Server) setupRoutes() {
 		planningService := s.container.PlanningService
 		planningConfigRepo := s.container.PlannerConfigRepo
 		planningPlannerRepo := s.container.PlannerRepo // Use in-memory planner repo from container
-		planningDismissedFilterRepo := s.container.DismissedFilterRepo
 		planningValidator := planningconfig.NewValidator()
 		planningEventBroadcaster := planninghandlers.NewEventBroadcaster(s.log)
 		planningHandler := planninghandlers.NewHandler(
 			planningService,
 			planningConfigRepo,
 			planningPlannerRepo,
-			planningDismissedFilterRepo,
 			planningValidator,
 			planningEventBroadcaster,
 			s.container.EventManager,

@@ -50,7 +50,7 @@ func (c *RebalanceSellsCalculator) Calculate(
 	maxPositions := GetIntParam(params, "max_positions", 0)                           // 0 = unlimited
 
 	// Initialize exclusion collector
-	exclusions := NewExclusionCollector(c.Name(), ctx.DismissedFilters)
+	exclusions := NewExclusionCollector(c.Name())
 
 	// Extract config for tag filtering (will be used in Phase 4 for priority boosting)
 	var config *domain.PlannerConfiguration

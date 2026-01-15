@@ -78,7 +78,4 @@ type BrokerClient interface {
 	GetPendingOrders() ([]domain.BrokerPendingOrder, error)
 }
 
-// DismissedFilterRepository provides access to user-dismissed pre-filter reasons.
-type DismissedFilterRepository interface {
-	GetAll() (map[string]map[string][]string, error) // map[ISIN][calculator][]reasons
-}
+// Removed DismissedFilterRepository - dismissed filter functionality removed

@@ -221,8 +221,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		container.PlannerConfigRepo,
 		container.HistoryDB.Conn(),
 		container.SecurityRepo,
-		container.MarketHoursService,  // Market hours validation
-		container.DismissedFilterRepo, // Clear dismissed filters after trades
+		container.MarketHoursService, // Market hours validation
 		log,
 	)
 
@@ -267,7 +266,6 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		container.PositionRepo,
 		container.ScoreRepo,
 		container.HistoryDBClient,
-		container.DismissedFilterRepo,
 		container.BrokerClient,
 		log,
 	)
@@ -464,7 +462,6 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		&brokerPriceClientAdapter{client: container.BrokerClient},
 		container.PriceConversionService,
 		&ocbBrokerClientAdapter{client: container.BrokerClient},
-		&ocbDismissedFilterRepoAdapter{repo: container.DismissedFilterRepo},
 		log,
 	)
 	log.Info().Msg("Opportunity context builder initialized")
@@ -543,6 +540,9 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 
 	// Wire cache into RiskBuilder for optimizer caching
 	container.RiskBuilder.SetCache(container.CalculationCache)
+
+	// Wire cache into OptimizerService for HRP and MV caching
+	container.OptimizerService.SetCache(container.CalculationCache)
 
 	// Factor Exposure Tracker
 	container.FactorExposureTracker = analytics.NewFactorExposureTracker(log)
@@ -1523,18 +1523,6 @@ func (a *ocbBrokerClientAdapter) GetPendingOrders() ([]domain.BrokerPendingOrder
 		return nil, fmt.Errorf("broker client not available")
 	}
 	return a.client.GetPendingOrders()
-}
-
-// ocbDismissedFilterRepoAdapter adapts DismissedFilterRepository to services.DismissedFilterRepository
-type ocbDismissedFilterRepoAdapter struct {
-	repo *planningrepo.DismissedFilterRepository
-}
-
-func (a *ocbDismissedFilterRepoAdapter) GetAll() (map[string]map[string][]string, error) {
-	if a.repo == nil {
-		return make(map[string]map[string][]string), nil
-	}
-	return a.repo.GetAll()
 }
 
 // positionValueProviderAdapter adapts PositionRepository to dividends.PositionValueProvider

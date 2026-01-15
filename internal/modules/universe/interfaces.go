@@ -93,13 +93,6 @@ type SecurityDeletionServiceInterface interface {
 // Compile-time check that SecurityDeletionService implements SecurityDeletionServiceInterface
 var _ SecurityDeletionServiceInterface = (*SecurityDeletionService)(nil)
 
-// DismissedFilterClearer defines operations for clearing dismissed filters
-// Used by SecurityDeletionService when deleting a security
-type DismissedFilterClearer interface {
-	// ClearForSecurity removes all dismissals for a specific security
-	ClearForSecurity(isin string) (int, error)
-}
-
 // DBExecutor defines the contract for database execution operations
 // Used by SyncService to enable testing with mocks
 type DBExecutor interface {

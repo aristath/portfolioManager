@@ -57,7 +57,7 @@ func (c *OpportunityBuysCalculator) Calculate(
 	minTradeAmount := ctx.CalculateMinTradeAmount(maxCostRatio)
 
 	// Initialize exclusion collector to track pre-filtered securities
-	exclusions := NewExclusionCollector(c.Name(), ctx.DismissedFilters)
+	exclusions := NewExclusionCollector(c.Name())
 
 	if !ctx.AllowBuy {
 		c.log.Debug().Msg("Buying not allowed, skipping opportunity buys")

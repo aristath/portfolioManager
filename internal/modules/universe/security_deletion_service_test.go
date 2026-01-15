@@ -158,18 +158,7 @@ func (m *mockHistoryDBForDeletion) GetRecentPrices(isin string, days int) ([]Dai
 	return nil, nil
 }
 
-type mockDismissedFilterRepoForDeletion struct {
-	clearErr error
-	cleared  bool
-}
-
-func (m *mockDismissedFilterRepoForDeletion) ClearForSecurity(isin string) (int, error) {
-	if m.clearErr != nil {
-		return 0, m.clearErr
-	}
-	m.cleared = true
-	return 1, nil
-}
+// Removed mockDismissedFilterRepoForDeletion - dismissed filter functionality removed
 
 type mockBrokerClientForDeletion struct {
 	pendingOrders []domain.BrokerPendingOrder
@@ -231,11 +220,10 @@ func TestSecurityDeletionService_HardDelete(t *testing.T) {
 		positionRepo := &mockPositionRepoForDeletion{}
 		scoreRepo := &mockScoreRepoForDeletion{}
 		historyDB := &mockHistoryDBForDeletion{}
-		dismissedFilterRepo := &mockDismissedFilterRepoForDeletion{}
 		brokerClient := &mockBrokerClientForDeletion{}
 
 		service := NewSecurityDeletionService(
-			securityRepo, positionRepo, scoreRepo, historyDB, dismissedFilterRepo, brokerClient, log,
+			securityRepo, positionRepo, scoreRepo, historyDB, brokerClient, log,
 		)
 
 		err := service.HardDelete("NONEXISTENT")
@@ -254,11 +242,10 @@ func TestSecurityDeletionService_HardDelete(t *testing.T) {
 		}
 		scoreRepo := &mockScoreRepoForDeletion{}
 		historyDB := &mockHistoryDBForDeletion{}
-		dismissedFilterRepo := &mockDismissedFilterRepoForDeletion{}
 		brokerClient := &mockBrokerClientForDeletion{}
 
 		service := NewSecurityDeletionService(
-			securityRepo, positionRepo, scoreRepo, historyDB, dismissedFilterRepo, brokerClient, log,
+			securityRepo, positionRepo, scoreRepo, historyDB, brokerClient, log,
 		)
 
 		err := service.HardDelete("US0378331005")
@@ -277,7 +264,6 @@ func TestSecurityDeletionService_HardDelete(t *testing.T) {
 		}
 		scoreRepo := &mockScoreRepoForDeletion{}
 		historyDB := &mockHistoryDBForDeletion{}
-		dismissedFilterRepo := &mockDismissedFilterRepoForDeletion{}
 		brokerClient := &mockBrokerClientForDeletion{
 			pendingOrders: []domain.BrokerPendingOrder{
 				{Symbol: "AAPL", Side: "BUY", Quantity: 10},
@@ -285,7 +271,7 @@ func TestSecurityDeletionService_HardDelete(t *testing.T) {
 		}
 
 		service := NewSecurityDeletionService(
-			securityRepo, positionRepo, scoreRepo, historyDB, dismissedFilterRepo, brokerClient, log,
+			securityRepo, positionRepo, scoreRepo, historyDB, brokerClient, log,
 		)
 
 		err := service.HardDelete("US0378331005")
@@ -304,11 +290,10 @@ func TestSecurityDeletionService_HardDelete(t *testing.T) {
 		}
 		scoreRepo := &mockScoreRepoForDeletion{}
 		historyDB := &mockHistoryDBForDeletion{}
-		dismissedFilterRepo := &mockDismissedFilterRepoForDeletion{}
 		brokerClient := &mockBrokerClientForDeletion{pendingOrders: []domain.BrokerPendingOrder{}}
 
 		service := NewSecurityDeletionService(
-			securityRepo, positionRepo, scoreRepo, historyDB, dismissedFilterRepo, brokerClient, log,
+			securityRepo, positionRepo, scoreRepo, historyDB, brokerClient, log,
 		)
 
 		err := service.HardDelete("US0378331005")
@@ -318,7 +303,6 @@ func TestSecurityDeletionService_HardDelete(t *testing.T) {
 		assert.True(t, positionRepo.deleted, "Position should be deleted")
 		assert.True(t, scoreRepo.deleted, "Scores should be deleted")
 		assert.True(t, historyDB.deleted, "Price history should be deleted")
-		assert.True(t, dismissedFilterRepo.cleared, "Dismissed filters should be cleared")
 	})
 
 	t.Run("successfully deletes security when no position record exists", func(t *testing.T) {
@@ -328,11 +312,10 @@ func TestSecurityDeletionService_HardDelete(t *testing.T) {
 		positionRepo := &mockPositionRepoForDeletion{position: nil} // No position record
 		scoreRepo := &mockScoreRepoForDeletion{}
 		historyDB := &mockHistoryDBForDeletion{}
-		dismissedFilterRepo := &mockDismissedFilterRepoForDeletion{}
 		brokerClient := &mockBrokerClientForDeletion{pendingOrders: []domain.BrokerPendingOrder{}}
 
 		service := NewSecurityDeletionService(
-			securityRepo, positionRepo, scoreRepo, historyDB, dismissedFilterRepo, brokerClient, log,
+			securityRepo, positionRepo, scoreRepo, historyDB, brokerClient, log,
 		)
 
 		err := service.HardDelete("US0378331005")
@@ -349,13 +332,12 @@ func TestSecurityDeletionService_HardDelete(t *testing.T) {
 		positionRepo := &mockPositionRepoForDeletion{position: nil}
 		scoreRepo := &mockScoreRepoForDeletion{}
 		historyDB := &mockHistoryDBForDeletion{}
-		dismissedFilterRepo := &mockDismissedFilterRepoForDeletion{}
 		brokerClient := &mockBrokerClientForDeletion{
 			pendingErr: errors.New("broker connection failed"),
 		}
 
 		service := NewSecurityDeletionService(
-			securityRepo, positionRepo, scoreRepo, historyDB, dismissedFilterRepo, brokerClient, log,
+			securityRepo, positionRepo, scoreRepo, historyDB, brokerClient, log,
 		)
 
 		err := service.HardDelete("US0378331005")
@@ -375,11 +357,10 @@ func TestSecurityDeletionService_HardDelete(t *testing.T) {
 		}
 		scoreRepo := &mockScoreRepoForDeletion{deleteErr: errors.New("score delete failed")}
 		historyDB := &mockHistoryDBForDeletion{deleteErr: errors.New("history delete failed")}
-		dismissedFilterRepo := &mockDismissedFilterRepoForDeletion{clearErr: errors.New("filter clear failed")}
 		brokerClient := &mockBrokerClientForDeletion{pendingOrders: []domain.BrokerPendingOrder{}}
 
 		service := NewSecurityDeletionService(
-			securityRepo, positionRepo, scoreRepo, historyDB, dismissedFilterRepo, brokerClient, log,
+			securityRepo, positionRepo, scoreRepo, historyDB, brokerClient, log,
 		)
 
 		err := service.HardDelete("US0378331005")
@@ -397,11 +378,10 @@ func TestSecurityDeletionService_HardDelete(t *testing.T) {
 		positionRepo := &mockPositionRepoForDeletion{position: nil}
 		scoreRepo := &mockScoreRepoForDeletion{}
 		historyDB := &mockHistoryDBForDeletion{}
-		dismissedFilterRepo := &mockDismissedFilterRepoForDeletion{}
 		brokerClient := &mockBrokerClientForDeletion{pendingOrders: []domain.BrokerPendingOrder{}}
 
 		service := NewSecurityDeletionService(
-			securityRepo, positionRepo, scoreRepo, historyDB, dismissedFilterRepo, brokerClient, log,
+			securityRepo, positionRepo, scoreRepo, historyDB, brokerClient, log,
 		)
 
 		err := service.HardDelete("US0378331005")
@@ -411,7 +391,6 @@ func TestSecurityDeletionService_HardDelete(t *testing.T) {
 		// Secondary cleanups should not have run
 		assert.False(t, scoreRepo.deleted)
 		assert.False(t, historyDB.deleted)
-		assert.False(t, dismissedFilterRepo.cleared)
 	})
 
 	t.Run("fails if security lookup returns error", func(t *testing.T) {
@@ -422,11 +401,10 @@ func TestSecurityDeletionService_HardDelete(t *testing.T) {
 		positionRepo := &mockPositionRepoForDeletion{}
 		scoreRepo := &mockScoreRepoForDeletion{}
 		historyDB := &mockHistoryDBForDeletion{}
-		dismissedFilterRepo := &mockDismissedFilterRepoForDeletion{}
 		brokerClient := &mockBrokerClientForDeletion{}
 
 		service := NewSecurityDeletionService(
-			securityRepo, positionRepo, scoreRepo, historyDB, dismissedFilterRepo, brokerClient, log,
+			securityRepo, positionRepo, scoreRepo, historyDB, brokerClient, log,
 		)
 
 		err := service.HardDelete("US0378331005")
@@ -446,11 +424,10 @@ func TestSecurityDeletionService_HardDelete(t *testing.T) {
 		}
 		scoreRepo := &mockScoreRepoForDeletion{}
 		historyDB := &mockHistoryDBForDeletion{}
-		dismissedFilterRepo := &mockDismissedFilterRepoForDeletion{}
 		brokerClient := &mockBrokerClientForDeletion{}
 
 		service := NewSecurityDeletionService(
-			securityRepo, positionRepo, scoreRepo, historyDB, dismissedFilterRepo, brokerClient, log,
+			securityRepo, positionRepo, scoreRepo, historyDB, brokerClient, log,
 		)
 
 		err := service.HardDelete("US0378331005")
@@ -467,7 +444,6 @@ func TestSecurityDeletionService_HardDelete(t *testing.T) {
 		positionRepo := &mockPositionRepoForDeletion{position: nil}
 		scoreRepo := &mockScoreRepoForDeletion{}
 		historyDB := &mockHistoryDBForDeletion{}
-		dismissedFilterRepo := &mockDismissedFilterRepoForDeletion{}
 		brokerClient := &mockBrokerClientForDeletion{
 			pendingOrders: []domain.BrokerPendingOrder{
 				{Symbol: "aapl", Side: "BUY", Quantity: 10}, // lowercase symbol
@@ -475,7 +451,7 @@ func TestSecurityDeletionService_HardDelete(t *testing.T) {
 		}
 
 		service := NewSecurityDeletionService(
-			securityRepo, positionRepo, scoreRepo, historyDB, dismissedFilterRepo, brokerClient, log,
+			securityRepo, positionRepo, scoreRepo, historyDB, brokerClient, log,
 		)
 
 		err := service.HardDelete("US0378331005")

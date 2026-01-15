@@ -7,24 +7,12 @@ import (
 )
 
 func TestPreFilteredReason(t *testing.T) {
-	t.Run("creates with reason and dismissed flag", func(t *testing.T) {
+	t.Run("creates with reason text", func(t *testing.T) {
 		reason := PreFilteredReason{
-			Reason:    "score below minimum",
-			Dismissed: false,
+			Reason: "score below minimum",
 		}
 
 		assert.Equal(t, "score below minimum", reason.Reason)
-		assert.False(t, reason.Dismissed)
-	})
-
-	t.Run("dismissed flag can be true", func(t *testing.T) {
-		reason := PreFilteredReason{
-			Reason:    "value trap detected",
-			Dismissed: true,
-		}
-
-		assert.Equal(t, "value trap detected", reason.Reason)
-		assert.True(t, reason.Dismissed)
 	})
 }
 
@@ -36,8 +24,8 @@ func TestPreFilteredSecurity(t *testing.T) {
 			Name:       "Apple Inc.",
 			Calculator: "opportunity_buys",
 			Reasons: []PreFilteredReason{
-				{Reason: "score 0.45 below minimum 0.65", Dismissed: false},
-				{Reason: "quality gate failed", Dismissed: true},
+				{Reason: "score 0.45 below minimum 0.65"},
+				{Reason: "quality gate failed"},
 			},
 		}
 
@@ -47,8 +35,7 @@ func TestPreFilteredSecurity(t *testing.T) {
 		assert.Equal(t, "opportunity_buys", pf.Calculator)
 		assert.Len(t, pf.Reasons, 2)
 		assert.Equal(t, "score 0.45 below minimum 0.65", pf.Reasons[0].Reason)
-		assert.False(t, pf.Reasons[0].Dismissed)
-		assert.True(t, pf.Reasons[1].Dismissed)
+		assert.Equal(t, "quality gate failed", pf.Reasons[1].Reason)
 	})
 
 	t.Run("can have empty reasons", func(t *testing.T) {
@@ -73,8 +60,8 @@ func TestCalculatorResult(t *testing.T) {
 				{Symbol: "AAPL", Side: "BUY", Priority: 0.8},
 			},
 			PreFiltered: []PreFilteredSecurity{
-				{Symbol: "MSFT", Calculator: "opportunity_buys", Reasons: []PreFilteredReason{{Reason: "value trap", Dismissed: false}}},
-				{Symbol: "GOOG", Calculator: "opportunity_buys", Reasons: []PreFilteredReason{{Reason: "low score", Dismissed: true}}},
+				{Symbol: "MSFT", Calculator: "opportunity_buys", Reasons: []PreFilteredReason{{Reason: "value trap"}}},
+				{Symbol: "GOOG", Calculator: "opportunity_buys", Reasons: []PreFilteredReason{{Reason: "low score"}}},
 			},
 		}
 
@@ -82,8 +69,8 @@ func TestCalculatorResult(t *testing.T) {
 		assert.Len(t, result.PreFiltered, 2)
 		assert.Equal(t, "AAPL", result.Candidates[0].Symbol)
 		assert.Equal(t, "MSFT", result.PreFiltered[0].Symbol)
-		assert.False(t, result.PreFiltered[0].Reasons[0].Dismissed)
-		assert.True(t, result.PreFiltered[1].Reasons[0].Dismissed)
+		assert.Equal(t, "value trap", result.PreFiltered[0].Reasons[0].Reason)
+		assert.Equal(t, "low score", result.PreFiltered[1].Reasons[0].Reason)
 	})
 
 	t.Run("handles empty results", func(t *testing.T) {
@@ -255,7 +242,7 @@ func TestOpportunitiesResultByCategory(t *testing.T) {
 					{Symbol: "AAPL", Side: "BUY"},
 				},
 				PreFiltered: []PreFilteredSecurity{
-					{Symbol: "MSFT", Reasons: []PreFilteredReason{{Reason: "value trap", Dismissed: false}}},
+					{Symbol: "MSFT", Reasons: []PreFilteredReason{{Reason: "value trap"}}},
 				},
 			},
 			OpportunityCategoryAveragingDown: CalculatorResult{

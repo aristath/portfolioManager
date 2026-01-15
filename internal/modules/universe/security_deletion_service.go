@@ -13,13 +13,12 @@ import (
 // across multiple databases. It validates that no open positions or pending orders
 // exist before deletion.
 type SecurityDeletionService struct {
-	securityRepo        SecurityRepositoryInterface
-	positionRepo        portfolio.PositionRepositoryInterface
-	scoreRepo           ScoreRepositoryInterface
-	historyDB           HistoryDBInterface
-	dismissedFilterRepo DismissedFilterClearer
-	brokerClient        domain.BrokerClient
-	log                 zerolog.Logger
+	securityRepo SecurityRepositoryInterface
+	positionRepo portfolio.PositionRepositoryInterface
+	scoreRepo    ScoreRepositoryInterface
+	historyDB    HistoryDBInterface
+	brokerClient domain.BrokerClient
+	log          zerolog.Logger
 }
 
 // NewSecurityDeletionService creates a new security deletion service
@@ -28,18 +27,16 @@ func NewSecurityDeletionService(
 	positionRepo portfolio.PositionRepositoryInterface,
 	scoreRepo ScoreRepositoryInterface,
 	historyDB HistoryDBInterface,
-	dismissedFilterRepo DismissedFilterClearer,
 	brokerClient domain.BrokerClient,
 	log zerolog.Logger,
 ) *SecurityDeletionService {
 	return &SecurityDeletionService{
-		securityRepo:        securityRepo,
-		positionRepo:        positionRepo,
-		scoreRepo:           scoreRepo,
-		historyDB:           historyDB,
-		dismissedFilterRepo: dismissedFilterRepo,
-		brokerClient:        brokerClient,
-		log:                 log.With().Str("service", "security_deletion").Logger(),
+		securityRepo: securityRepo,
+		positionRepo: positionRepo,
+		scoreRepo:    scoreRepo,
+		historyDB:    historyDB,
+		brokerClient: brokerClient,
+		log:          log.With().Str("service", "security_deletion").Logger(),
 	}
 }
 
@@ -53,7 +50,6 @@ func NewSecurityDeletionService(
 // 1. universe.db: securities, security_tags, broker_symbols, client_symbols
 // 2. portfolio.db: positions, scores (kelly_sizes deleted via CASCADE)
 // 3. history.db: daily_prices, monthly_prices
-// 4. config.db: dismissed_filters
 //
 // ledger.db is UNTOUCHED (audit trail preserved)
 func (s *SecurityDeletionService) HardDelete(isin string) error {
@@ -122,11 +118,6 @@ func (s *SecurityDeletionService) HardDelete(isin string) error {
 	// Delete price history
 	if err := s.historyDB.DeletePricesForSecurity(isin); err != nil {
 		s.log.Error().Err(err).Str("isin", isin).Msg("Failed to delete price history")
-	}
-
-	// Delete dismissed filters
-	if _, err := s.dismissedFilterRepo.ClearForSecurity(isin); err != nil {
-		s.log.Error().Err(err).Str("isin", isin).Msg("Failed to delete dismissed filters")
 	}
 
 	s.log.Info().

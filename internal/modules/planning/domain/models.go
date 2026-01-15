@@ -99,10 +99,9 @@ type RejectedOpportunity struct {
 	OriginalReason string   `json:"original_reason,omitempty"` // Original opportunity reason if available (from calculator)
 }
 
-// PreFilteredReason represents a single pre-filter reason with its dismissal status.
+// PreFilteredReason represents a single pre-filter reason.
 type PreFilteredReason struct {
-	Reason    string `json:"reason"`    // The filter reason text
-	Dismissed bool   `json:"dismissed"` // Whether the user has dismissed this reason
+	Reason string `json:"reason"` // The filter reason text
 }
 
 // PreFilteredSecurity represents a security that was excluded during pre-filtering
@@ -113,7 +112,7 @@ type PreFilteredSecurity struct {
 	Symbol     string              `json:"symbol"`         // Security symbol
 	Name       string              `json:"name,omitempty"` // Security name (if available)
 	Calculator string              `json:"calculator"`     // Calculator that filtered this security
-	Reasons    []PreFilteredReason `json:"reasons"`        // Why this security was filtered out (with dismissal status)
+	Reasons    []PreFilteredReason `json:"reasons"`        // Why this security was filtered out
 }
 
 // CalculatorResult wraps the output of a calculator, including both

@@ -57,21 +57,20 @@ type Container struct {
 	MarketStatusWS *tradernet.MarketStatusWebSocket
 
 	// Repositories
-	PositionRepo        *portfolio.PositionRepository
-	SecurityRepo        *universe.SecurityRepository
-	ScoreRepo           *universe.ScoreRepository
-	DividendRepo        *dividends.DividendRepository
-	CashRepo            *cash_flows.CashRepository
-	TradeRepo           *trading.TradeRepository
-	AllocRepo           *allocation.Repository
-	SettingsRepo        *settings.Repository
-	CashFlowsRepo       *cash_flows.Repository
-	RecommendationRepo  planning.RecommendationRepositoryInterface // Interface - can be DB or in-memory
-	PlannerConfigRepo   *planningrepo.ConfigRepository
-	PlannerRepo         planningrepo.PlannerRepositoryInterface // Interface - can be DB or in-memory
-	HistoryDBClient     *universe.HistoryDB
-	ClientDataRepo      *clientdata.Repository
-	DismissedFilterRepo *planningrepo.DismissedFilterRepository
+	PositionRepo       *portfolio.PositionRepository
+	SecurityRepo       *universe.SecurityRepository
+	ScoreRepo          *universe.ScoreRepository
+	DividendRepo       *dividends.DividendRepository
+	CashRepo           *cash_flows.CashRepository
+	TradeRepo          *trading.TradeRepository
+	AllocRepo          *allocation.Repository
+	SettingsRepo       *settings.Repository
+	CashFlowsRepo      *cash_flows.Repository
+	RecommendationRepo planning.RecommendationRepositoryInterface // Interface - can be DB or in-memory
+	PlannerConfigRepo  *planningrepo.ConfigRepository
+	PlannerRepo        planningrepo.PlannerRepositoryInterface // Interface - can be DB or in-memory
+	HistoryDBClient    *universe.HistoryDB
+	ClientDataRepo     *clientdata.Repository
 
 	// Services
 	CurrencyExchangeService   *services.CurrencyExchangeService
