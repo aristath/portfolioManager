@@ -1,8 +1,10 @@
 package scheduler
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/aristath/sentinel/internal/modules/optimization"
 	"github.com/aristath/sentinel/internal/modules/portfolio"
@@ -22,6 +24,8 @@ type GetOptimizerWeightsJob struct {
 	optimizerService       OptimizerServiceInterface
 	priceConversionService PriceConversionServiceInterface
 	plannerConfigRepo      PlannerConfigRepositoryInterface
+	clientDataRepo         ClientDataRepositoryInterface
+	marketHoursService     MarketHoursServiceInterface
 	targetWeights          map[string]float64 // Store computed weights
 }
 
@@ -35,6 +39,8 @@ func NewGetOptimizerWeightsJob(
 	optimizerService OptimizerServiceInterface,
 	priceConversionService PriceConversionServiceInterface,
 	plannerConfigRepo PlannerConfigRepositoryInterface,
+	clientDataRepo ClientDataRepositoryInterface,
+	marketHoursService MarketHoursServiceInterface,
 ) *GetOptimizerWeightsJob {
 	return &GetOptimizerWeightsJob{
 		log:                    zerolog.Nop(),
@@ -46,6 +52,8 @@ func NewGetOptimizerWeightsJob(
 		optimizerService:       optimizerService,
 		priceConversionService: priceConversionService,
 		plannerConfigRepo:      plannerConfigRepo,
+		clientDataRepo:         clientDataRepo,
+		marketHoursService:     marketHoursService,
 		targetWeights:          make(map[string]float64),
 	}
 }
@@ -260,35 +268,80 @@ func (j *GetOptimizerWeightsJob) GetTargetWeights() map[string]float64 {
 }
 
 // fetchCurrentPrices fetches current prices for all securities and converts them to EUR
+// Uses cache with market-aware TTL: 30min when markets open, 24h when closed
 // Returns ISIN-keyed map (not Symbol-keyed)
 func (j *GetOptimizerWeightsJob) fetchCurrentPrices(securities []universe.Security) map[string]float64 {
 	prices := make(map[string]float64)
-
-	// Skip if price client is not available
-	if j.priceClient == nil {
-		j.log.Warn().Msg("Price client not available, using empty prices")
-		return prices
-	}
 
 	if len(securities) == 0 {
 		return prices
 	}
 
-	// Build symbol map for price API
-	// Note: Yahoo symbol override removed - Tradernet is now the only data source
-	symbolMap := make(map[string]*string)
-	for _, security := range securities {
-		symbolMap[security.Symbol] = nil // No override needed
+	// Determine TTL based on market hours
+	ttl := 24 * time.Hour // Default: markets closed
+	if j.marketHoursService != nil && j.marketHoursService.AnyMajorMarketOpen(time.Now()) {
+		ttl = 30 * time.Minute // Markets open: shorter TTL
 	}
 
-	// Fetch batch quotes (returns prices in native currencies) - external API uses Symbol
-	quotes, err := j.priceClient.GetBatchQuotes(symbolMap)
-	if err != nil {
-		j.log.Warn().Err(err).Msg("Failed to fetch batch quotes, using empty prices")
+	// Step 1: Check cache for each security
+	needFetch := make([]universe.Security, 0)
+	for _, sec := range securities {
+		if sec.ISIN == "" {
+			continue
+		}
+
+		// Try to get cached price
+		if j.clientDataRepo != nil {
+			if data, err := j.clientDataRepo.GetIfFresh("current_prices", sec.ISIN); err == nil && data != nil {
+				var cachedPrice float64
+				if json.Unmarshal(data, &cachedPrice) == nil {
+					prices[sec.ISIN] = cachedPrice
+					continue
+				}
+			}
+		}
+
+		// Cache miss - need to fetch
+		needFetch = append(needFetch, sec)
+	}
+
+	cacheHits := len(securities) - len(needFetch)
+	if cacheHits > 0 {
+		j.log.Debug().
+			Int("cache_hits", cacheHits).
+			Int("need_fetch", len(needFetch)).
+			Msg("Price cache hits")
+	}
+
+	// Step 2: If all prices were cached, return early
+	if len(needFetch) == 0 {
+		j.log.Info().
+			Int("total", len(prices)).
+			Msg("All prices served from cache")
 		return prices
 	}
 
-	// Convert quotes to price map (native currencies) - Symbol-keyed from API
+	// Step 3: Fetch missing prices from API
+	if j.priceClient == nil {
+		j.log.Warn().Msg("Price client not available, cannot fetch missing prices")
+		// Fall back to stale cache for missing prices
+		return j.fallbackToStaleCache(securities, prices)
+	}
+
+	// Build symbol map for price API (only for securities that need fetching)
+	symbolMap := make(map[string]*string)
+	for _, security := range needFetch {
+		symbolMap[security.Symbol] = nil
+	}
+
+	// Fetch batch quotes
+	quotes, err := j.priceClient.GetBatchQuotes(symbolMap)
+	if err != nil {
+		j.log.Warn().Err(err).Msg("Failed to fetch batch quotes, falling back to stale cache")
+		return j.fallbackToStaleCache(securities, prices)
+	}
+
+	// Convert quotes to price map (native currencies)
 	nativePrices := make(map[string]float64)
 	for symbol, pricePtr := range quotes {
 		if pricePtr != nil {
@@ -296,27 +349,36 @@ func (j *GetOptimizerWeightsJob) fetchCurrentPrices(securities []universe.Securi
 		}
 	}
 
-	// Convert all prices to EUR using shared service (still Symbol-keyed)
+	// Convert all prices to EUR
 	var eurPricesSymbol map[string]float64
 	if j.priceConversionService != nil {
-		eurPricesSymbol = j.priceConversionService.ConvertPricesToEUR(nativePrices, securities)
+		eurPricesSymbol = j.priceConversionService.ConvertPricesToEUR(nativePrices, needFetch)
 	} else {
-		// Fallback: use native prices if service unavailable
-		j.log.Warn().Msg("Price conversion service not available, using native currency prices (may cause valuation errors)")
+		j.log.Warn().Msg("Price conversion service not available, using native currency prices")
 		eurPricesSymbol = nativePrices
 	}
 
-	// Transform Symbol keys → ISIN keys (internal boundary)
+	// Build Symbol → ISIN mapping for the fetched securities
 	symbolToISIN := make(map[string]string)
-	for _, sec := range securities {
+	for _, sec := range needFetch {
 		if sec.ISIN != "" && sec.Symbol != "" {
 			symbolToISIN[sec.Symbol] = sec.ISIN
 		}
 	}
 
+	// Transform Symbol keys → ISIN keys and cache the results
+	fetchedCount := 0
 	for symbol, price := range eurPricesSymbol {
 		if isin, ok := symbolToISIN[symbol]; ok {
-			prices[isin] = price // ISIN key ✅
+			prices[isin] = price
+			fetchedCount++
+
+			// Cache the fetched price
+			if j.clientDataRepo != nil {
+				if err := j.clientDataRepo.Store("current_prices", isin, price, ttl); err != nil {
+					j.log.Warn().Err(err).Str("isin", isin).Msg("Failed to cache price")
+				}
+			}
 		} else {
 			j.log.Warn().
 				Str("symbol", symbol).
@@ -325,9 +387,47 @@ func (j *GetOptimizerWeightsJob) fetchCurrentPrices(securities []universe.Securi
 	}
 
 	j.log.Info().
-		Int("fetched", len(eurPricesSymbol)).
-		Int("mapped_to_isin", len(prices)).
-		Msg("Fetched and converted prices to ISIN keys")
+		Int("from_cache", cacheHits).
+		Int("fetched", fetchedCount).
+		Int("total", len(prices)).
+		Dur("ttl", ttl).
+		Msg("Fetched and cached prices")
+
+	return prices
+}
+
+// fallbackToStaleCache attempts to get stale cached prices when API fails
+func (j *GetOptimizerWeightsJob) fallbackToStaleCache(securities []universe.Security, prices map[string]float64) map[string]float64 {
+	if j.clientDataRepo == nil {
+		return prices
+	}
+
+	staleCount := 0
+	for _, sec := range securities {
+		if sec.ISIN == "" {
+			continue
+		}
+
+		// Skip if we already have this price (from fresh cache)
+		if _, ok := prices[sec.ISIN]; ok {
+			continue
+		}
+
+		// Try to get stale cached price
+		if data, err := j.clientDataRepo.Get("current_prices", sec.ISIN); err == nil && data != nil {
+			var cachedPrice float64
+			if json.Unmarshal(data, &cachedPrice) == nil {
+				prices[sec.ISIN] = cachedPrice
+				staleCount++
+			}
+		}
+	}
+
+	if staleCount > 0 {
+		j.log.Info().
+			Int("stale_fallback", staleCount).
+			Msg("Used stale cached prices as fallback")
+	}
 
 	return prices
 }

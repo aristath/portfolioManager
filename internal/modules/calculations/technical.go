@@ -9,9 +9,10 @@ import (
 
 // TTL constants for cache expiration
 const (
-	TTLTechnical   = 24 * time.Hour     // Per-security metrics (EMA, RSI, Sharpe)
-	TTLOptimizer   = 24 * time.Hour     // Covariance, HRP, returns
-	TTLConstraints = 7 * 24 * time.Hour // Allocation targets rarely change
+	TTLTechnical        = 24 * time.Hour     // Per-security metrics (EMA, RSI, Sharpe)
+	TTLOptimizer        = 24 * time.Hour     // Covariance, HRP, returns
+	TTLRegimeCovariance = 4 * time.Hour      // Regime-aware covariance (shorter TTL due to regime sensitivity)
+	TTLConstraints      = 7 * 24 * time.Hour // Allocation targets rarely change
 
 	// MinPricesRequired is the minimum number of prices needed to calculate any metric
 	MinPricesRequired = 50

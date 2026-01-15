@@ -1,6 +1,9 @@
 package scheduler
 
 import (
+	"encoding/json"
+	"time"
+
 	"github.com/aristath/sentinel/internal/events"
 	planningdomain "github.com/aristath/sentinel/internal/modules/planning/domain"
 	"github.com/aristath/sentinel/internal/modules/universe"
@@ -223,4 +226,22 @@ type TradeResultForDividends struct {
 	Symbol string
 	Status string // "success", "blocked", "error"
 	Error  *string
+}
+
+// ClientDataRepositoryInterface defines the contract for client data cache operations
+// Used for caching external API responses (prices, exchange rates)
+type ClientDataRepositoryInterface interface {
+	// GetIfFresh returns cached data only if not expired
+	GetIfFresh(table, key string) (json.RawMessage, error)
+	// Get returns cached data regardless of expiration (for stale fallback)
+	Get(table, key string) (json.RawMessage, error)
+	// Store saves data with the specified TTL
+	Store(table, key string, data interface{}, ttl time.Duration) error
+}
+
+// MarketHoursServiceInterface defines the contract for market hours operations
+// Used to determine cache TTL based on market state
+type MarketHoursServiceInterface interface {
+	// AnyMajorMarketOpen returns true if any major market is currently open
+	AnyMajorMarketOpen(t time.Time) bool
 }

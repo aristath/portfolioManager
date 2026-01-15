@@ -2,12 +2,16 @@ package scheduler
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
+	"github.com/aristath/sentinel/internal/clientdata"
 	"github.com/aristath/sentinel/internal/modules/allocation"
 	"github.com/aristath/sentinel/internal/modules/dividends"
+	market_hours "github.com/aristath/sentinel/internal/modules/market_hours"
 	"github.com/aristath/sentinel/internal/modules/optimization"
 	planningdomain "github.com/aristath/sentinel/internal/modules/planning/domain"
 	planningplanner "github.com/aristath/sentinel/internal/modules/planning/planner"
@@ -744,4 +748,40 @@ func NewDisplayManagerAdapter(updateTicker func() error) *DisplayManagerAdapter 
 
 func (a *DisplayManagerAdapter) UpdateTicker() error {
 	return a.updateTicker()
+}
+
+// ClientDataRepositoryAdapter adapts *clientdata.Repository to ClientDataRepositoryInterface
+type ClientDataRepositoryAdapter struct {
+	repo *clientdata.Repository
+}
+
+func NewClientDataRepositoryAdapter(repo *clientdata.Repository) *ClientDataRepositoryAdapter {
+	return &ClientDataRepositoryAdapter{repo: repo}
+}
+
+func (a *ClientDataRepositoryAdapter) GetIfFresh(table, key string) (json.RawMessage, error) {
+	return a.repo.GetIfFresh(table, key)
+}
+
+func (a *ClientDataRepositoryAdapter) Get(table, key string) (json.RawMessage, error) {
+	return a.repo.Get(table, key)
+}
+
+func (a *ClientDataRepositoryAdapter) Store(table, key string, data interface{}, ttl time.Duration) error {
+	return a.repo.Store(table, key, data, ttl)
+}
+
+// MarketHoursServiceAdapter adapts *market_hours.MarketHoursService to MarketHoursServiceInterface
+type MarketHoursServiceAdapter struct {
+	service *market_hours.MarketHoursService
+}
+
+func NewMarketHoursServiceAdapter(service *market_hours.MarketHoursService) *MarketHoursServiceAdapter {
+	return &MarketHoursServiceAdapter{service: service}
+}
+
+func (a *MarketHoursServiceAdapter) AnyMajorMarketOpen(t time.Time) bool {
+	// Check if any market is currently open
+	openMarkets := a.service.GetOpenMarkets(t)
+	return len(openMarkets) > 0
 }

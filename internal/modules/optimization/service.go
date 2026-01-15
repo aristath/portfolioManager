@@ -1,11 +1,17 @@
 package optimization
 
 import (
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"time"
 
+	"github.com/aristath/sentinel/internal/modules/calculations"
 	"github.com/aristath/sentinel/internal/modules/settings"
 	"github.com/rs/zerolog"
 )
@@ -20,6 +26,88 @@ const (
 	DefaultTransactionCostFixed = 2.0   // EUR per trade
 	DefaultTransactionCostPct   = 0.002 // 0.2%
 )
+
+// hashHRPCacheKey creates a deterministic hash for HRP weights caching.
+// The key includes:
+// - Covariance matrix (sampled diagonal + first row for efficiency)
+// - Sorted ISINs (order-independent)
+// - Linkage method
+func hashHRPCacheKey(covMatrix [][]float64, isins []string, linkage hrpLinkage) string {
+	h := sha256.New()
+
+	// Hash covariance matrix (sample diagonal + first row for efficiency)
+	n := len(covMatrix)
+	for i := 0; i < n && i < 10; i++ {
+		if i < len(covMatrix[i]) {
+			if err := binary.Write(h, binary.LittleEndian, covMatrix[i][i]); err == nil {
+			}
+		}
+		if len(covMatrix) > 0 && i < len(covMatrix[0]) {
+			if err := binary.Write(h, binary.LittleEndian, covMatrix[0][i]); err == nil {
+			}
+		}
+	}
+
+	// Hash linkage method
+	h.Write([]byte(string(linkage)))
+
+	// Hash sorted ISINs
+	sorted := make([]string, len(isins))
+	copy(sorted, isins)
+	sort.Strings(sorted)
+	h.Write([]byte(strings.Join(sorted, ",")))
+
+	return hex.EncodeToString(h.Sum(nil)[:16])
+}
+
+// cachedMVResult holds MV optimization results for cache serialization
+type cachedMVResult struct {
+	Weights  map[string]float64 `json:"weights"`
+	Fallback *string            `json:"fallback,omitempty"`
+}
+
+// hashMVCacheKey creates a deterministic hash for MV weights caching.
+// The key includes:
+// - Expected returns (hash of sorted values)
+// - Covariance matrix (sampled diagonal + first row)
+// - Constraints (ISINs, target return)
+func hashMVCacheKey(expectedReturns map[string]float64, covMatrix [][]float64, constraints Constraints, targetReturn float64) string {
+	h := sha256.New()
+
+	// Hash expected returns (sorted by ISIN for consistency)
+	isins := make([]string, 0, len(expectedReturns))
+	for isin := range expectedReturns {
+		isins = append(isins, isin)
+	}
+	sort.Strings(isins)
+	for _, isin := range isins {
+		h.Write([]byte(isin))
+		_ = binary.Write(h, binary.LittleEndian, expectedReturns[isin])
+	}
+
+	// Hash covariance matrix sample (diagonal + first row)
+	n := len(covMatrix)
+	for i := 0; i < n && i < 5; i++ {
+		if i < len(covMatrix[i]) {
+			_ = binary.Write(h, binary.LittleEndian, covMatrix[i][i])
+		}
+		if len(covMatrix) > 0 && i < len(covMatrix[0]) {
+			_ = binary.Write(h, binary.LittleEndian, covMatrix[0][i])
+		}
+	}
+
+	// Hash constraints
+	_ = binary.Write(h, binary.LittleEndian, targetReturn)
+	_ = binary.Write(h, binary.LittleEndian, float64(len(constraints.ISINs)))
+
+	// Hash sorted constraint ISINs
+	sorted := make([]string, len(constraints.ISINs))
+	copy(sorted, constraints.ISINs)
+	sort.Strings(sorted)
+	h.Write([]byte(strings.Join(sorted, ",")))
+
+	return hex.EncodeToString(h.Sum(nil)[:16])
+}
 
 // AdaptiveBlendProvider interface for getting adaptive blend
 type AdaptiveBlendProvider interface {
@@ -44,6 +132,7 @@ type OptimizerService struct {
 	adaptiveService     AdaptiveBlendProvider    // Optional: adaptive market service
 	regimeScoreProvider RegimeScoreProvider      // Optional: regime score provider
 	settingsService     *settings.Service        // Optional: settings service for configuration
+	cache               *calculations.Cache      // Optional: cache for HRP and MV weights
 	log                 zerolog.Logger
 }
 
@@ -102,6 +191,11 @@ func (os *OptimizerService) SetSettingsService(settingsService *settings.Service
 	os.settingsService = settingsService
 	// Wire MVOptimizer with latest dependencies
 	os.wireMVOptimizer()
+}
+
+// SetCache sets the calculation cache for caching HRP and MV weights
+func (os *OptimizerService) SetCache(cache *calculations.Cache) {
+	os.cache = cache
 }
 
 // wireMVOptimizer recreates the MVOptimizer with current dependencies
@@ -492,12 +586,32 @@ func (os *OptimizerService) Optimize(state PortfolioState, settings Settings) (*
 }
 
 // runMeanVariance runs Mean-Variance optimization using native Go implementation.
+// Results are cached for 4 hours when a cache is configured via SetCache.
 func (os *OptimizerService) runMeanVariance(
 	expectedReturns map[string]float64, // ISIN-keyed ✅
 	covMatrix [][]float64,
 	constraints Constraints,
 	targetReturn float64,
 ) (map[string]float64, *string, error) {
+	// Generate cache key
+	cacheKey := hashMVCacheKey(expectedReturns, covMatrix, constraints, targetReturn)
+
+	// Check cache first if available
+	if os.cache != nil {
+		if data, ok := os.cache.GetOptimizer("mv_weights", cacheKey); ok {
+			var cached cachedMVResult
+			if err := json.Unmarshal(data, &cached); err == nil {
+				os.log.Debug().
+					Int("num_weights", len(cached.Weights)).
+					Str("hash", cacheKey[:8]).
+					Msg("Using cached MV weights")
+				return cached.Weights, cached.Fallback, nil
+			}
+			// If unmarshal fails, log and recalculate
+			os.log.Warn().Msg("Failed to unmarshal cached MV weights, recalculating")
+		}
+	}
+
 	// Try strategies in order: efficient_return → min_volatility → max_sharpe → efficient_risk
 	strategies := []string{"efficient_return", "min_volatility", "max_sharpe", "efficient_risk"}
 	var lastErr error
@@ -540,6 +654,25 @@ func (os *OptimizerService) runMeanVariance(
 			// Note: achievedReturn is ignored in return signature but logged
 			_ = achievedReturn
 
+			// Cache the result if cache is available
+			if os.cache != nil {
+				result := cachedMVResult{
+					Weights:  weights,
+					Fallback: fallback,
+				}
+				if data, err := json.Marshal(result); err == nil {
+					// Use 4 hour TTL for MV weights (same as regime covariance)
+					if err := os.cache.SetOptimizer("mv_weights", cacheKey, data, calculations.TTLRegimeCovariance); err != nil {
+						os.log.Warn().Err(err).Msg("Failed to cache MV weights")
+					} else {
+						os.log.Debug().
+							Str("hash", cacheKey[:8]).
+							Dur("ttl", calculations.TTLRegimeCovariance).
+							Msg("Cached MV weights")
+					}
+				}
+			}
+
 			return weights, fallback, nil
 		}
 
@@ -554,13 +687,35 @@ func (os *OptimizerService) runMeanVariance(
 }
 
 // runHRP runs Hierarchical Risk Parity optimization using native Go implementation.
+// Results are cached for 24 hours when a cache is configured via SetCache.
 func (os *OptimizerService) runHRP(covMatrix [][]float64, isins []string, regimeScore float64) (map[string]float64, error) {
 	if len(isins) < 2 {
 		return nil, fmt.Errorf("HRP needs at least 2 ISINs, got %d", len(isins)) // Use ISINs ✅
 	}
 
-	// Call native HRP optimizer
+	// Determine linkage based on regime
 	opts := HRPOptions{Linkage: hrpLinkageForRegime(regimeScore)}
+
+	// Generate cache key
+	cacheKey := hashHRPCacheKey(covMatrix, isins, opts.Linkage)
+
+	// Check cache first if available
+	if os.cache != nil {
+		if data, ok := os.cache.GetOptimizer("hrp_weights", cacheKey); ok {
+			var cachedWeights map[string]float64
+			if err := json.Unmarshal(data, &cachedWeights); err == nil {
+				os.log.Debug().
+					Int("num_isins", len(cachedWeights)).
+					Str("hash", cacheKey[:8]).
+					Msg("Using cached HRP weights")
+				return cachedWeights, nil
+			}
+			// If unmarshal fails, log and recalculate
+			os.log.Warn().Msg("Failed to unmarshal cached HRP weights, recalculating")
+		}
+	}
+
+	// Call native HRP optimizer
 	weights, err := os.hrpOptimizer.OptimizeWithOptions(covMatrix, isins, opts) // Use ISINs ✅
 	if err != nil {
 		return nil, fmt.Errorf("HRP optimization failed: %w", err)
@@ -570,6 +725,20 @@ func (os *OptimizerService) runHRP(covMatrix [][]float64, isins []string, regime
 		Int("num_isins", len(weights)).
 		Str("hrp_linkage", string(opts.Linkage)).
 		Msg("HRP optimization succeeded")
+
+	// Cache the result if cache is available
+	if os.cache != nil {
+		if data, err := json.Marshal(weights); err == nil {
+			if err := os.cache.SetOptimizer("hrp_weights", cacheKey, data, calculations.TTLOptimizer); err != nil {
+				os.log.Warn().Err(err).Msg("Failed to cache HRP weights")
+			} else {
+				os.log.Debug().
+					Str("hash", cacheKey[:8]).
+					Dur("ttl", calculations.TTLOptimizer).
+					Msg("Cached HRP weights")
+			}
+		}
+	}
 
 	return weights, nil
 }

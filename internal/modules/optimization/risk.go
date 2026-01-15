@@ -43,6 +43,27 @@ func hashISINs(isins []string) string {
 	return hex.EncodeToString(h[:16]) // Use first 16 bytes (32 hex chars) for efficiency
 }
 
+// hashRegimeAwareCovKey creates a deterministic hash for regime-aware covariance caching.
+// The key includes:
+// - Sorted ISINs (order-independent)
+// - Lookback days
+// - Regime score (rounded to 0.1 for cache stability)
+func hashRegimeAwareCovKey(isins []string, lookbackDays int, regimeScore float64) string {
+	// Round regime score to 0.1 precision for cache key stability
+	// This prevents cache misses for tiny regime score changes
+	roundedRegime := math.Round(regimeScore*10) / 10
+
+	// Sort ISINs for consistent hashing
+	sorted := make([]string, len(isins))
+	copy(sorted, isins)
+	sort.Strings(sorted)
+
+	// Build key data string
+	keyData := fmt.Sprintf("%s|%d|%.1f", strings.Join(sorted, ","), lookbackDays, roundedRegime)
+	h := sha256.Sum256([]byte(keyData))
+	return hex.EncodeToString(h[:16])
+}
+
 // RiskModelBuilder builds covariance matrices and risk models for optimization.
 type RiskModelBuilder struct {
 	db         *sql.DB             // history.db
@@ -204,6 +225,26 @@ func (rb *RiskModelBuilder) BuildRegimeAwareCovarianceMatrix(
 		bandwidth = 0.25
 	}
 
+	// Generate cache key from inputs
+	cacheKey := hashRegimeAwareCovKey(isins, lookbackDays, currentRegimeScore)
+
+	// Check cache first if available
+	if rb.cache != nil {
+		if data, ok := rb.cache.GetOptimizer("regime_covariance", cacheKey); ok {
+			var result cachedCovResult
+			if err := json.Unmarshal(data, &result); err == nil {
+				rb.log.Debug().
+					Int("num_isins", len(isins)).
+					Str("hash", cacheKey[:8]).
+					Float64("regime_score", currentRegimeScore).
+					Msg("Using cached regime-aware covariance matrix")
+				return result.Cov, result.Returns, result.Correlations, nil
+			}
+			// If unmarshal fails, log and recalculate
+			rb.log.Warn().Msg("Failed to unmarshal cached regime-aware covariance matrix, recalculating")
+		}
+	}
+
 	rb.log.Info().
 		Int("num_isins", len(isins)).
 		Int("lookback_days", lookbackDays).
@@ -310,6 +351,25 @@ func (rb *RiskModelBuilder) BuildRegimeAwareCovarianceMatrix(
 		Float64("effective_sample_size", effectiveSampleSize(obsWeights)).
 		Int("high_correlations", len(correlations)).
 		Msg("Built regime-aware covariance matrix")
+
+	// Cache the result if cache is available
+	if rb.cache != nil {
+		result := cachedCovResult{
+			Cov:          covMatrix,
+			Returns:      assetReturns,
+			Correlations: correlations,
+		}
+		if data, err := json.Marshal(result); err == nil {
+			if err := rb.cache.SetOptimizer("regime_covariance", cacheKey, data, calculations.TTLRegimeCovariance); err != nil {
+				rb.log.Warn().Err(err).Msg("Failed to cache regime-aware covariance matrix")
+			} else {
+				rb.log.Debug().
+					Str("hash", cacheKey[:8]).
+					Dur("ttl", calculations.TTLRegimeCovariance).
+					Msg("Cached regime-aware covariance matrix")
+			}
+		}
+	}
 
 	return covMatrix, assetReturns, correlations, nil
 }

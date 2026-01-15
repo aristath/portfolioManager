@@ -146,3 +146,196 @@ func TestNoDualKeyDuplication(t *testing.T) {
 	// We should only have 2 entries (2 ISINs)
 	assert.NotEqual(t, 4, len(state.CurrentPrices), "Should not have dual-key duplication")
 }
+
+// ========================================
+// Tests for hashHRPCacheKey
+// ========================================
+
+func TestHashHRPCacheKey_Deterministic(t *testing.T) {
+	covMatrix := [][]float64{
+		{0.04, 0.01},
+		{0.01, 0.03},
+	}
+	isins := []string{"US0378331005", "US5949181045"}
+	linkage := hrpLinkageSingle
+
+	// Generate hash multiple times
+	hash1 := hashHRPCacheKey(covMatrix, isins, linkage)
+	hash2 := hashHRPCacheKey(covMatrix, isins, linkage)
+	hash3 := hashHRPCacheKey(covMatrix, isins, linkage)
+
+	// All should be identical
+	assert.Equal(t, hash1, hash2, "Hash should be deterministic")
+	assert.Equal(t, hash2, hash3, "Hash should be deterministic")
+	assert.Len(t, hash1, 32, "Hash should be 32 hex characters (16 bytes)")
+}
+
+func TestHashHRPCacheKey_OrderIndependent(t *testing.T) {
+	covMatrix := [][]float64{
+		{0.04, 0.01, 0.005},
+		{0.01, 0.03, 0.008},
+		{0.005, 0.008, 0.025},
+	}
+	linkage := hrpLinkageSingle
+
+	// Different orderings of the same ISINs
+	order1 := []string{"US0378331005", "US5949181045", "US88160R1014"}
+	order2 := []string{"US88160R1014", "US0378331005", "US5949181045"}
+	order3 := []string{"US5949181045", "US88160R1014", "US0378331005"}
+
+	hash1 := hashHRPCacheKey(covMatrix, order1, linkage)
+	hash2 := hashHRPCacheKey(covMatrix, order2, linkage)
+	hash3 := hashHRPCacheKey(covMatrix, order3, linkage)
+
+	assert.Equal(t, hash1, hash2, "Hash should be order-independent")
+	assert.Equal(t, hash2, hash3, "Hash should be order-independent")
+}
+
+func TestHashHRPCacheKey_DifferentLinkage(t *testing.T) {
+	covMatrix := [][]float64{
+		{0.04, 0.01},
+		{0.01, 0.03},
+	}
+	isins := []string{"ISIN1", "ISIN2"}
+
+	hashSingle := hashHRPCacheKey(covMatrix, isins, hrpLinkageSingle)
+	hashComplete := hashHRPCacheKey(covMatrix, isins, hrpLinkageComplete)
+
+	assert.NotEqual(t, hashSingle, hashComplete, "Different linkage methods should produce different hashes")
+}
+
+func TestHashHRPCacheKey_DifferentCovMatrix(t *testing.T) {
+	isins := []string{"ISIN1", "ISIN2"}
+	linkage := hrpLinkageSingle
+
+	cov1 := [][]float64{
+		{0.04, 0.01},
+		{0.01, 0.03},
+	}
+	cov2 := [][]float64{
+		{0.05, 0.01},
+		{0.01, 0.03},
+	}
+
+	hash1 := hashHRPCacheKey(cov1, isins, linkage)
+	hash2 := hashHRPCacheKey(cov2, isins, linkage)
+
+	assert.NotEqual(t, hash1, hash2, "Different covariance matrices should produce different hashes")
+}
+
+func TestHashHRPCacheKey_DifferentISINs(t *testing.T) {
+	covMatrix := [][]float64{
+		{0.04, 0.01},
+		{0.01, 0.03},
+	}
+	linkage := hrpLinkageSingle
+
+	isins1 := []string{"ISIN1", "ISIN2"}
+	isins2 := []string{"ISIN1", "ISIN3"}
+
+	hash1 := hashHRPCacheKey(covMatrix, isins1, linkage)
+	hash2 := hashHRPCacheKey(covMatrix, isins2, linkage)
+
+	assert.NotEqual(t, hash1, hash2, "Different ISINs should produce different hashes")
+}
+
+// ========================================
+// Tests for hashMVCacheKey
+// ========================================
+
+func TestHashMVCacheKey_Deterministic(t *testing.T) {
+	expectedReturns := map[string]float64{
+		"US0378331005": 0.12,
+		"US5949181045": 0.08,
+	}
+	covMatrix := [][]float64{
+		{0.04, 0.01},
+		{0.01, 0.03},
+	}
+	constraints := Constraints{
+		ISINs: []string{"US0378331005", "US5949181045"},
+	}
+	targetReturn := 0.10
+
+	// Generate hash multiple times
+	hash1 := hashMVCacheKey(expectedReturns, covMatrix, constraints, targetReturn)
+	hash2 := hashMVCacheKey(expectedReturns, covMatrix, constraints, targetReturn)
+	hash3 := hashMVCacheKey(expectedReturns, covMatrix, constraints, targetReturn)
+
+	// All should be identical
+	assert.Equal(t, hash1, hash2, "Hash should be deterministic")
+	assert.Equal(t, hash2, hash3, "Hash should be deterministic")
+	assert.Len(t, hash1, 32, "Hash should be 32 hex characters (16 bytes)")
+}
+
+func TestHashMVCacheKey_OrderIndependent(t *testing.T) {
+	covMatrix := [][]float64{
+		{0.04, 0.01},
+		{0.01, 0.03},
+	}
+	targetReturn := 0.10
+
+	// Different orderings in constraints
+	constraints1 := Constraints{ISINs: []string{"ISIN1", "ISIN2"}}
+	constraints2 := Constraints{ISINs: []string{"ISIN2", "ISIN1"}}
+
+	// Different orderings in expected returns (maps are unordered)
+	returns1 := map[string]float64{"ISIN1": 0.12, "ISIN2": 0.08}
+	returns2 := map[string]float64{"ISIN2": 0.08, "ISIN1": 0.12}
+
+	hash1 := hashMVCacheKey(returns1, covMatrix, constraints1, targetReturn)
+	hash2 := hashMVCacheKey(returns2, covMatrix, constraints2, targetReturn)
+
+	assert.Equal(t, hash1, hash2, "Hash should be order-independent")
+}
+
+func TestHashMVCacheKey_DifferentTargetReturn(t *testing.T) {
+	expectedReturns := map[string]float64{"ISIN1": 0.12, "ISIN2": 0.08}
+	covMatrix := [][]float64{
+		{0.04, 0.01},
+		{0.01, 0.03},
+	}
+	constraints := Constraints{ISINs: []string{"ISIN1", "ISIN2"}}
+
+	hash10 := hashMVCacheKey(expectedReturns, covMatrix, constraints, 0.10)
+	hash12 := hashMVCacheKey(expectedReturns, covMatrix, constraints, 0.12)
+
+	assert.NotEqual(t, hash10, hash12, "Different target returns should produce different hashes")
+}
+
+func TestHashMVCacheKey_DifferentExpectedReturns(t *testing.T) {
+	covMatrix := [][]float64{
+		{0.04, 0.01},
+		{0.01, 0.03},
+	}
+	constraints := Constraints{ISINs: []string{"ISIN1", "ISIN2"}}
+	targetReturn := 0.10
+
+	returns1 := map[string]float64{"ISIN1": 0.12, "ISIN2": 0.08}
+	returns2 := map[string]float64{"ISIN1": 0.10, "ISIN2": 0.08}
+
+	hash1 := hashMVCacheKey(returns1, covMatrix, constraints, targetReturn)
+	hash2 := hashMVCacheKey(returns2, covMatrix, constraints, targetReturn)
+
+	assert.NotEqual(t, hash1, hash2, "Different expected returns should produce different hashes")
+}
+
+func TestHashMVCacheKey_DifferentCovMatrix(t *testing.T) {
+	expectedReturns := map[string]float64{"ISIN1": 0.12, "ISIN2": 0.08}
+	constraints := Constraints{ISINs: []string{"ISIN1", "ISIN2"}}
+	targetReturn := 0.10
+
+	cov1 := [][]float64{
+		{0.04, 0.01},
+		{0.01, 0.03},
+	}
+	cov2 := [][]float64{
+		{0.05, 0.01},
+		{0.01, 0.03},
+	}
+
+	hash1 := hashMVCacheKey(expectedReturns, cov1, constraints, targetReturn)
+	hash2 := hashMVCacheKey(expectedReturns, cov2, constraints, targetReturn)
+
+	assert.NotEqual(t, hash1, hash2, "Different covariance matrices should produce different hashes")
+}

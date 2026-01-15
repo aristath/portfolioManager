@@ -310,6 +310,135 @@ func TestWeightedCovariance_SymmetricAndPositiveDiagonal(t *testing.T) {
 	assert.GreaterOrEqual(t, cov[1][1], 0.0)
 }
 
+// ========================================
+// Tests for hashRegimeAwareCovKey
+// ========================================
+
+func TestHashRegimeAwareCovKey_Deterministic(t *testing.T) {
+	isins := []string{"US0378331005", "US5949181045", "US88160R1014"}
+	lookbackDays := 252
+	regimeScore := 0.75
+
+	// Generate hash multiple times
+	hash1 := hashRegimeAwareCovKey(isins, lookbackDays, regimeScore)
+	hash2 := hashRegimeAwareCovKey(isins, lookbackDays, regimeScore)
+	hash3 := hashRegimeAwareCovKey(isins, lookbackDays, regimeScore)
+
+	// All should be identical
+	assert.Equal(t, hash1, hash2, "Hash should be deterministic")
+	assert.Equal(t, hash2, hash3, "Hash should be deterministic")
+	assert.Len(t, hash1, 32, "Hash should be 32 hex characters (16 bytes)")
+}
+
+func TestHashRegimeAwareCovKey_OrderIndependent(t *testing.T) {
+	lookbackDays := 252
+	regimeScore := 0.5
+
+	// Different orderings of the same ISINs
+	order1 := []string{"US0378331005", "US5949181045", "US88160R1014"}
+	order2 := []string{"US88160R1014", "US0378331005", "US5949181045"}
+	order3 := []string{"US5949181045", "US88160R1014", "US0378331005"}
+
+	hash1 := hashRegimeAwareCovKey(order1, lookbackDays, regimeScore)
+	hash2 := hashRegimeAwareCovKey(order2, lookbackDays, regimeScore)
+	hash3 := hashRegimeAwareCovKey(order3, lookbackDays, regimeScore)
+
+	assert.Equal(t, hash1, hash2, "Hash should be order-independent")
+	assert.Equal(t, hash2, hash3, "Hash should be order-independent")
+}
+
+func TestHashRegimeAwareCovKey_RegimeRounding(t *testing.T) {
+	isins := []string{"ISIN1", "ISIN2"}
+	lookbackDays := 252
+
+	tests := []struct {
+		name        string
+		regime1     float64
+		regime2     float64
+		expectSame  bool
+		description string
+	}{
+		{
+			name:        "within same 0.1 bucket (0.71 and 0.74)",
+			regime1:     0.71,
+			regime2:     0.74,
+			expectSame:  true,
+			description: "Both round to 0.7",
+		},
+		{
+			name:        "different 0.1 buckets (0.74 and 0.76)",
+			regime1:     0.74,
+			regime2:     0.76,
+			expectSame:  false,
+			description: "0.74 rounds to 0.7, 0.76 rounds to 0.8",
+		},
+		{
+			name:        "exact values (0.5 and 0.5)",
+			regime1:     0.5,
+			regime2:     0.5,
+			expectSame:  true,
+			description: "Same exact value",
+		},
+		{
+			name:        "boundary case (0.75 and 0.75)",
+			regime1:     0.75,
+			regime2:     0.75,
+			expectSame:  true,
+			description: "Both round to 0.8 (banker's rounding)",
+		},
+		{
+			name:        "close to boundary (0.749 and 0.751)",
+			regime1:     0.749,
+			regime2:     0.751,
+			expectSame:  false,
+			description: "0.749 rounds to 0.7, 0.751 rounds to 0.8",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hash1 := hashRegimeAwareCovKey(isins, lookbackDays, tt.regime1)
+			hash2 := hashRegimeAwareCovKey(isins, lookbackDays, tt.regime2)
+
+			if tt.expectSame {
+				assert.Equal(t, hash1, hash2, "Expected same hash: %s", tt.description)
+			} else {
+				assert.NotEqual(t, hash1, hash2, "Expected different hash: %s", tt.description)
+			}
+		})
+	}
+}
+
+func TestHashRegimeAwareCovKey_DifferentLookbackDays(t *testing.T) {
+	isins := []string{"ISIN1", "ISIN2"}
+	regimeScore := 0.5
+
+	hash252 := hashRegimeAwareCovKey(isins, 252, regimeScore)
+	hash126 := hashRegimeAwareCovKey(isins, 126, regimeScore)
+	hash63 := hashRegimeAwareCovKey(isins, 63, regimeScore)
+
+	assert.NotEqual(t, hash252, hash126, "Different lookback days should produce different hashes")
+	assert.NotEqual(t, hash126, hash63, "Different lookback days should produce different hashes")
+	assert.NotEqual(t, hash252, hash63, "Different lookback days should produce different hashes")
+}
+
+func TestHashRegimeAwareCovKey_DifferentISINs(t *testing.T) {
+	lookbackDays := 252
+	regimeScore := 0.5
+
+	isins1 := []string{"ISIN1", "ISIN2"}
+	isins2 := []string{"ISIN1", "ISIN3"}
+	isins3 := []string{"ISIN1", "ISIN2", "ISIN3"}
+
+	hash1 := hashRegimeAwareCovKey(isins1, lookbackDays, regimeScore)
+	hash2 := hashRegimeAwareCovKey(isins2, lookbackDays, regimeScore)
+	hash3 := hashRegimeAwareCovKey(isins3, lookbackDays, regimeScore)
+
+	assert.NotEqual(t, hash1, hash2, "Different ISINs should produce different hashes")
+	assert.NotEqual(t, hash1, hash3, "Different ISIN count should produce different hashes")
+	assert.NotEqual(t, hash2, hash3, "Different ISINs should produce different hashes")
+}
+
 // Helper function to calculate condition number (ratio of largest to smallest eigenvalue)
 func conditionNumber(matrix [][]float64) float64 {
 	// Simple approximation: use trace and determinant for 2x2
