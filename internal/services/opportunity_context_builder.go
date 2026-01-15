@@ -159,7 +159,8 @@ func (b *OpportunityContextBuilder) buildContext(
 	geographyWeights := b.populateGeographyWeights()
 
 	// Calculate geography allocations from positions
-	geographyAllocations := b.calculateGeographyAllocations(enrichedPositions, totalValue)
+	// Pass geographyWeights so securities without geography can be split across ALL
+	geographyAllocations := b.calculateGeographyAllocations(enrichedPositions, totalValue, geographyWeights)
 
 	// Get security scores
 	isinList := b.getISINList(securities)
@@ -376,7 +377,12 @@ func (b *OpportunityContextBuilder) populateGeographyWeights() map[string]float6
 
 // calculateGeographyAllocations calculates current geography allocations from positions.
 // Securities with multiple geographies have their value split proportionally.
-func (b *OpportunityContextBuilder) calculateGeographyAllocations(positions []planningdomain.EnrichedPosition, totalValue float64) map[string]float64 {
+// Securities without a geography are split equally across ALL known geographies.
+func (b *OpportunityContextBuilder) calculateGeographyAllocations(
+	positions []planningdomain.EnrichedPosition,
+	totalValue float64,
+	allGeographies map[string]float64,
+) map[string]float64 {
 	allocations := make(map[string]float64)
 
 	if totalValue <= 0 {
@@ -388,14 +394,19 @@ func (b *OpportunityContextBuilder) calculateGeographyAllocations(positions []pl
 	for _, pos := range positions {
 		// Parse comma-separated geographies
 		geographies := utils.ParseCSV(pos.Geography)
-		if len(geographies) == 0 {
-			continue
-		}
 
-		// Split value proportionally across geographies
-		valuePerGeo := pos.MarketValueEUR / float64(len(geographies))
-		for _, geo := range geographies {
-			geographyValues[geo] += valuePerGeo
+		if len(geographies) == 0 && len(allGeographies) > 0 {
+			// No geography assigned - split equally across ALL known geographies
+			valuePerGeo := pos.MarketValueEUR / float64(len(allGeographies))
+			for geo := range allGeographies {
+				geographyValues[geo] += valuePerGeo
+			}
+		} else if len(geographies) > 0 {
+			// Split value proportionally across specified geographies
+			valuePerGeo := pos.MarketValueEUR / float64(len(geographies))
+			for _, geo := range geographies {
+				geographyValues[geo] += valuePerGeo
+			}
 		}
 	}
 

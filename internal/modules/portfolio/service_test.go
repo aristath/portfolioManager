@@ -768,8 +768,14 @@ func TestGetPortfolioSummary_Success(t *testing.T) {
 		log:          log,
 	}
 
+	// Define all known geographies and industries for aggregation
+	allGeographies := map[string]bool{"USA": true, "Germany": true, "Japan": true}
+	allIndustries := map[string]bool{"Technology": true, "Finance": true, "Healthcare": true, "Manufacturing": true}
+
 	// Test aggregatePositionValues directly (doesn't need DB)
-	geographyValues, industryValues, totalValue := service.aggregatePositionValues(positions)
+	geographyValues, industryValues, totalValue := service.aggregatePositionValues(
+		positions, allGeographies, allIndustries,
+	)
 
 	// Verify aggregations
 	assert.Equal(t, 2350.0, geographyValues["USA"])       // AAPL (1600) + JPM (750)
@@ -795,7 +801,12 @@ func TestAggregatePositionValues_MultipleIndustries(t *testing.T) {
 		},
 	}
 
-	geographyValues, industryValues, totalValue := service.aggregatePositionValues(positions)
+	allGeographies := map[string]bool{"USA": true}
+	allIndustries := map[string]bool{"Technology": true, "Manufacturing": true}
+
+	geographyValues, industryValues, totalValue := service.aggregatePositionValues(
+		positions, allGeographies, allIndustries,
+	)
 
 	assert.Equal(t, 1000.0, geographyValues["USA"])
 	assert.Equal(t, 500.0, industryValues["Technology"])    // Split 50/50
@@ -803,7 +814,8 @@ func TestAggregatePositionValues_MultipleIndustries(t *testing.T) {
 	assert.Equal(t, 1000.0, totalValue)
 }
 
-// TestAggregatePositionValues_EmptyIndustry tests handling of empty industry
+// TestAggregatePositionValues_EmptyIndustry tests that securities without industry
+// have their value split equally across ALL known industries
 func TestAggregatePositionValues_EmptyIndustry(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 	service := &PortfolioService{log: log}
@@ -815,14 +827,24 @@ func TestAggregatePositionValues_EmptyIndustry(t *testing.T) {
 			CurrentPrice:   50.0,
 			MarketValueEUR: 500.0,
 			Geography:      "USA",
-			Industry:       "", // Empty industry
+			Industry:       "", // Empty industry - should count as ALL
 		},
 	}
 
-	geographyValues, industryValues, totalValue := service.aggregatePositionValues(positions)
+	allGeographies := map[string]bool{"USA": true}
+	allIndustries := map[string]bool{
+		"Technology": true,
+		"Finance":    true,
+	}
+
+	geographyValues, industryValues, totalValue := service.aggregatePositionValues(
+		positions, allGeographies, allIndustries,
+	)
 
 	assert.Equal(t, 500.0, geographyValues["USA"])
-	assert.Equal(t, 0, len(industryValues)) // No industries
+	// Empty industry should split across ALL industries
+	assert.InDelta(t, 250.0, industryValues["Technology"], 0.01) // 500 / 2
+	assert.InDelta(t, 250.0, industryValues["Finance"], 0.01)    // 500 / 2
 	assert.Equal(t, 500.0, totalValue)
 }
 
@@ -843,7 +865,10 @@ func TestAggregatePositionValues_ZeroMarketValue(t *testing.T) {
 		},
 	}
 
-	_, _, totalValue := service.aggregatePositionValues(positions)
+	allGeographies := map[string]bool{"USA": true}
+	allIndustries := map[string]bool{"Technology": true}
+
+	_, _, totalValue := service.aggregatePositionValues(positions, allGeographies, allIndustries)
 
 	// Should use quantity * current_price = 10 * 60 = 600
 	assert.Equal(t, 600.0, totalValue)
@@ -866,7 +891,10 @@ func TestAggregatePositionValues_ZeroPrices(t *testing.T) {
 		},
 	}
 
-	_, _, totalValue := service.aggregatePositionValues(positions)
+	allGeographies := map[string]bool{"USA": true}
+	allIndustries := map[string]bool{"Technology": true}
+
+	_, _, totalValue := service.aggregatePositionValues(positions, allGeographies, allIndustries)
 
 	// Should use quantity * avg_price = 10 * 50 = 500
 	assert.Equal(t, 500.0, totalValue)
@@ -1302,4 +1330,141 @@ func TestGetAllSecurityGeographiesAndIndustries_IncludesNullProductType(t *testi
 	assert.True(t, geographies["United States"], "United States should be included from AAPL with NULL product_type")
 	assert.True(t, industries["Technology"], "Technology should be included from AAPL with NULL product_type")
 	assert.False(t, industries["Index"], "Index industry should be excluded")
+}
+
+// TestAggregatePositionValues_EmptyGeography tests that securities without geography
+// have their value split equally across ALL known geographies
+func TestAggregatePositionValues_EmptyGeography(t *testing.T) {
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+	service := &PortfolioService{log: log}
+
+	positions := []PositionWithSecurity{
+		{
+			Symbol:         "GLOBAL_ETF",
+			Quantity:       10,
+			CurrentPrice:   100.0,
+			MarketValueEUR: 1000.0,
+			Geography:      "", // Empty geography - should count as ALL
+			Industry:       "Finance",
+		},
+	}
+
+	// Define all known geographies
+	allGeographies := map[string]bool{
+		"USA":     true,
+		"Germany": true,
+		"Japan":   true,
+	}
+	allIndustries := map[string]bool{
+		"Finance":    true,
+		"Technology": true,
+	}
+
+	geographyValues, industryValues, totalValue := service.aggregatePositionValues(
+		positions, allGeographies, allIndustries,
+	)
+
+	// Should split 1000 equally across 3 geographies = 333.33... each
+	expectedPerGeography := 1000.0 / 3.0
+	assert.InDelta(t, expectedPerGeography, geographyValues["USA"], 0.01)
+	assert.InDelta(t, expectedPerGeography, geographyValues["Germany"], 0.01)
+	assert.InDelta(t, expectedPerGeography, geographyValues["Japan"], 0.01)
+
+	// Industry should be attributed normally
+	assert.Equal(t, 1000.0, industryValues["Finance"])
+	assert.Equal(t, 1000.0, totalValue)
+}
+
+// TestAggregatePositionValues_EmptyGeographyAndIndustry tests that securities without
+// both geography and industry have their value split across ALL known categories
+func TestAggregatePositionValues_EmptyGeographyAndIndustry(t *testing.T) {
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+	service := &PortfolioService{log: log}
+
+	positions := []PositionWithSecurity{
+		{
+			Symbol:         "UNKNOWN_SECURITY",
+			Quantity:       10,
+			CurrentPrice:   100.0,
+			MarketValueEUR: 1000.0,
+			Geography:      "", // Empty - should count as ALL
+			Industry:       "", // Empty - should count as ALL
+		},
+	}
+
+	allGeographies := map[string]bool{
+		"USA":    true,
+		"Europe": true,
+	}
+	allIndustries := map[string]bool{
+		"Technology": true,
+		"Finance":    true,
+		"Healthcare": true,
+	}
+
+	geographyValues, industryValues, totalValue := service.aggregatePositionValues(
+		positions, allGeographies, allIndustries,
+	)
+
+	// Should split 1000 equally across 2 geographies = 500 each
+	assert.InDelta(t, 500.0, geographyValues["USA"], 0.01)
+	assert.InDelta(t, 500.0, geographyValues["Europe"], 0.01)
+
+	// Should split 1000 equally across 3 industries = 333.33... each
+	expectedPerIndustry := 1000.0 / 3.0
+	assert.InDelta(t, expectedPerIndustry, industryValues["Technology"], 0.01)
+	assert.InDelta(t, expectedPerIndustry, industryValues["Finance"], 0.01)
+	assert.InDelta(t, expectedPerIndustry, industryValues["Healthcare"], 0.01)
+
+	assert.Equal(t, 1000.0, totalValue)
+}
+
+// TestAggregatePositionValues_MixedEmptyAndSpecific tests aggregation with a mix of
+// securities that have specific geographies and ones that don't (count as ALL)
+func TestAggregatePositionValues_MixedEmptyAndSpecific(t *testing.T) {
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+	service := &PortfolioService{log: log}
+
+	positions := []PositionWithSecurity{
+		{
+			Symbol:         "AAPL",
+			Quantity:       10,
+			CurrentPrice:   100.0,
+			MarketValueEUR: 1000.0,
+			Geography:      "USA", // Specific geography
+			Industry:       "Technology",
+		},
+		{
+			Symbol:         "GLOBAL_ETF",
+			Quantity:       10,
+			CurrentPrice:   50.0,
+			MarketValueEUR: 500.0,
+			Geography:      "", // Empty - should count as ALL
+			Industry:       "Finance",
+		},
+	}
+
+	allGeographies := map[string]bool{
+		"USA":     true,
+		"Germany": true,
+	}
+	allIndustries := map[string]bool{
+		"Technology": true,
+		"Finance":    true,
+	}
+
+	geographyValues, industryValues, totalValue := service.aggregatePositionValues(
+		positions, allGeographies, allIndustries,
+	)
+
+	// USA: 1000 (AAPL) + 250 (half of GLOBAL_ETF split across 2 geographies) = 1250
+	// Germany: 250 (half of GLOBAL_ETF)
+	assert.InDelta(t, 1250.0, geographyValues["USA"], 0.01)
+	assert.InDelta(t, 250.0, geographyValues["Germany"], 0.01)
+
+	// Industries attributed normally
+	assert.Equal(t, 1000.0, industryValues["Technology"])
+	assert.Equal(t, 500.0, industryValues["Finance"])
+
+	assert.Equal(t, 1500.0, totalValue)
 }

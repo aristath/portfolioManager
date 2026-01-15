@@ -638,48 +638,54 @@ func TestVerifyMultiGeoValueDistribution(t *testing.T) {
 		"Multi-geo security with perfect target match should have good score - if this fails, parsing is broken")
 }
 
-func TestCalculateGeoDiversification_EmptyGeographyTreatedAsOther(t *testing.T) {
+func TestCalculateGeoDiversification_EmptyGeographySplitAcrossAll(t *testing.T) {
 	portfolioContext := models.PortfolioContext{
 		Positions: map[string]float64{
 			"AAPL": 500.0,
-			"XYZ":  500.0, // Unknown company with no geography
+			"XYZ":  500.0, // Unknown company with no geography - split across ALL
 		},
 		TotalValue: 1000.0,
 		GeographyWeights: map[string]float64{
-			"US":    0.5,
-			"OTHER": 0.5,
+			"US":     0.5,
+			"Europe": 0.5,
 		},
 		SecurityGeographies: map[string]string{
 			"AAPL": "US",
-			"XYZ":  "", // Empty geography should be treated as OTHER
+			"XYZ":  "", // Empty geography - should be split across ALL (US and Europe)
 		},
 	}
 
 	score := CalculateDiversificationScore(portfolioContext)
 
-	// Should handle empty geography gracefully
-	assert.GreaterOrEqual(t, score, 0.0, "Empty geography should be handled gracefully")
+	// XYZ (500) should be split: US gets 250, Europe gets 250
+	// US total: 500 + 250 = 750 (75%)
+	// Europe total: 250 (25%)
+	// Not a perfect match but should handle gracefully
+	assert.GreaterOrEqual(t, score, 0.0, "Empty geography should be split across all")
 }
 
-func TestCalculateIndustryDiversification_EmptyIndustryTreatedAsOther(t *testing.T) {
+func TestCalculateIndustryDiversification_EmptyIndustrySplitAcrossAll(t *testing.T) {
 	portfolioContext := models.PortfolioContext{
 		Positions: map[string]float64{
 			"AAPL": 500.0,
-			"XYZ":  500.0, // Unknown company with no industry
+			"XYZ":  500.0, // Unknown company with no industry - split across ALL
 		},
 		TotalValue: 1000.0,
 		IndustryWeights: map[string]float64{
 			"Technology": 0.5,
-			"OTHER":      0.5,
+			"Finance":    0.5,
 		},
 		SecurityIndustries: map[string]string{
 			"AAPL": "Technology",
-			"XYZ":  "", // Empty industry should be treated as OTHER
+			"XYZ":  "", // Empty industry - should be split across ALL (Technology and Finance)
 		},
 	}
 
 	score := CalculateDiversificationScore(portfolioContext)
 
-	// Should handle empty industry gracefully
-	assert.GreaterOrEqual(t, score, 0.0, "Empty industry should be handled gracefully")
+	// XYZ (500) should be split: Technology gets 250, Finance gets 250
+	// Technology total: 500 + 250 = 750 (75%)
+	// Finance total: 250 (25%)
+	// Not a perfect match but should handle gracefully
+	assert.GreaterOrEqual(t, score, 0.0, "Empty industry should be split across all")
 }

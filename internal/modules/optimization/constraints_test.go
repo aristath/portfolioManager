@@ -118,17 +118,17 @@ func TestBuildSectorConstraints_MultiIndustry(t *testing.T) {
 	assert.NotContains(t, indISINs["Technology"], "US0000000002", "XOM should NOT be in Technology group")
 }
 
-func TestBuildSectorConstraints_EmptyGeographyFallsBackToOther(t *testing.T) {
+func TestBuildSectorConstraints_EmptyGeographyAddedToAllGroups(t *testing.T) {
 	cm := NewConstraintsManager(zerolog.Nop())
 
 	securities := []Security{
 		{ISIN: "US0000000001", Symbol: "AAPL", Geography: "US", Industry: "Technology"},
-		{ISIN: "US0000000002", Symbol: "XYZ", Geography: "", Industry: "Technology"}, // Empty geography
+		{ISIN: "US0000000002", Symbol: "XYZ", Geography: "", Industry: "Technology"}, // Empty geography - added to ALL
 	}
 
 	geographyTargets := map[string]float64{
-		"US":    0.8,
-		"OTHER": 0.2,
+		"US":     0.5,
+		"Europe": 0.5,
 	}
 	industryTargets := map[string]float64{
 		"Technology": 1.0,
@@ -144,24 +144,25 @@ func TestBuildSectorConstraints_EmptyGeographyFallsBackToOther(t *testing.T) {
 		}
 	}
 
-	// XYZ should fall back to OTHER
-	assert.Contains(t, geoISINs["OTHER"], "US0000000002", "Security with empty geography should be in OTHER group")
+	// XYZ (empty geography) should be in ALL geography groups
+	assert.Contains(t, geoISINs["US"], "US0000000002", "Security with empty geography should be in US group")
+	assert.Contains(t, geoISINs["Europe"], "US0000000002", "Security with empty geography should be in Europe group")
 }
 
-func TestBuildSectorConstraints_EmptyIndustryFallsBackToOther(t *testing.T) {
+func TestBuildSectorConstraints_EmptyIndustryAddedToAllGroups(t *testing.T) {
 	cm := NewConstraintsManager(zerolog.Nop())
 
 	securities := []Security{
 		{ISIN: "US0000000001", Symbol: "AAPL", Geography: "US", Industry: "Technology"},
-		{ISIN: "US0000000002", Symbol: "XYZ", Geography: "US", Industry: ""}, // Empty industry
+		{ISIN: "US0000000002", Symbol: "XYZ", Geography: "US", Industry: ""}, // Empty industry - added to ALL
 	}
 
 	geographyTargets := map[string]float64{
 		"US": 1.0,
 	}
 	industryTargets := map[string]float64{
-		"Technology": 0.8,
-		"OTHER":      0.2,
+		"Technology": 0.5,
+		"Finance":    0.5,
 	}
 
 	_, indCons := cm.buildSectorConstraints(securities, geographyTargets, industryTargets)
@@ -174,8 +175,9 @@ func TestBuildSectorConstraints_EmptyIndustryFallsBackToOther(t *testing.T) {
 		}
 	}
 
-	// XYZ should fall back to OTHER
-	assert.Contains(t, indISINs["OTHER"], "US0000000002", "Security with empty industry should be in OTHER group")
+	// XYZ (empty industry) should be in ALL industry groups
+	assert.Contains(t, indISINs["Technology"], "US0000000002", "Security with empty industry should be in Technology group")
+	assert.Contains(t, indISINs["Finance"], "US0000000002", "Security with empty industry should be in Finance group")
 }
 
 func TestBuildSectorConstraints_MixedMultiAndSingle(t *testing.T) {

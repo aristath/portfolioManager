@@ -405,21 +405,26 @@ func calculateGeoDiversification(ctx models.PortfolioContext, totalValue float64
 
 	// Aggregate position values by geography (direct, no groups)
 	// Parse comma-separated geographies and distribute value equally across them
+	// Securities without geography are split across ALL known geographies
 	geographyValues := make(map[string]float64)
 	for isin, value := range ctx.Positions {
 		geoStr, hasGeography := ctx.SecurityGeographies[isin]
 		if !hasGeography {
-			geoStr = "OTHER"
+			geoStr = ""
 		}
 
 		geographies := utils.ParseCSV(geoStr)
-		if len(geographies) == 0 {
-			geographies = []string{"OTHER"}
-		}
-
-		valuePerGeo := value / float64(len(geographies))
-		for _, geo := range geographies {
-			geographyValues[geo] += valuePerGeo
+		if len(geographies) == 0 && len(ctx.GeographyWeights) > 0 {
+			// No geography assigned - split equally across ALL known geographies
+			valuePerGeo := value / float64(len(ctx.GeographyWeights))
+			for geo := range ctx.GeographyWeights {
+				geographyValues[geo] += valuePerGeo
+			}
+		} else if len(geographies) > 0 {
+			valuePerGeo := value / float64(len(geographies))
+			for _, geo := range geographies {
+				geographyValues[geo] += valuePerGeo
+			}
 		}
 	}
 
@@ -447,21 +452,26 @@ func calculateIndustryDiversification(ctx models.PortfolioContext, totalValue fl
 
 	// Aggregate position values by industry (direct, no groups)
 	// Parse comma-separated industries and distribute value equally across them
+	// Securities without industry are split across ALL known industries
 	industryValues := make(map[string]float64)
 	for isin, value := range ctx.Positions {
 		indStr, hasIndustry := ctx.SecurityIndustries[isin]
 		if !hasIndustry {
-			indStr = "OTHER"
+			indStr = ""
 		}
 
 		industries := utils.ParseCSV(indStr)
-		if len(industries) == 0 {
-			industries = []string{"OTHER"}
-		}
-
-		valuePerInd := value / float64(len(industries))
-		for _, industry := range industries {
-			industryValues[industry] += valuePerInd
+		if len(industries) == 0 && len(ctx.IndustryWeights) > 0 {
+			// No industry assigned - split equally across ALL known industries
+			valuePerInd := value / float64(len(ctx.IndustryWeights))
+			for ind := range ctx.IndustryWeights {
+				industryValues[ind] += valuePerInd
+			}
+		} else if len(industries) > 0 {
+			valuePerInd := value / float64(len(industries))
+			for _, industry := range industries {
+				industryValues[industry] += valuePerInd
+			}
 		}
 	}
 

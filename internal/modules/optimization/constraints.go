@@ -236,14 +236,33 @@ func (cm *ConstraintsManager) buildSectorConstraints(
 
 	// Group securities by geography (use ISINs)
 	// Parse comma-separated geographies so securities can belong to multiple groups
+	// Securities without geography are added to ALL geography groups (they're "global")
 	geographyGroups := make(map[string][]string)
+
+	// First pass: collect all known geographies from securities and targets
+	allGeographies := make(map[string]bool)
+	for geo := range normalizedGeographyTargets {
+		allGeographies[geo] = true
+	}
+	for _, security := range securities {
+		geographies := utils.ParseCSV(security.Geography)
+		for _, geo := range geographies {
+			allGeographies[geo] = true
+		}
+	}
+
+	// Second pass: assign securities to geography groups
 	for _, security := range securities {
 		geographies := utils.ParseCSV(security.Geography)
 		if len(geographies) == 0 {
-			geographies = []string{"OTHER"}
-		}
-		for _, geography := range geographies {
-			geographyGroups[geography] = append(geographyGroups[geography], security.ISIN)
+			// No geography assigned - add to ALL geography groups
+			for geo := range allGeographies {
+				geographyGroups[geo] = append(geographyGroups[geo], security.ISIN)
+			}
+		} else {
+			for _, geography := range geographies {
+				geographyGroups[geography] = append(geographyGroups[geography], security.ISIN)
+			}
 		}
 	}
 
@@ -253,14 +272,33 @@ func (cm *ConstraintsManager) buildSectorConstraints(
 
 	// Group securities by industry (use ISINs)
 	// Parse comma-separated industries so securities can belong to multiple groups
+	// Securities without industry are added to ALL industry groups (they're "diversified")
 	industryGroups := make(map[string][]string)
+
+	// First pass: collect all known industries from securities and targets
+	allIndustries := make(map[string]bool)
+	for ind := range normalizedIndustryTargets {
+		allIndustries[ind] = true
+	}
+	for _, security := range securities {
+		industries := utils.ParseCSV(security.Industry)
+		for _, ind := range industries {
+			allIndustries[ind] = true
+		}
+	}
+
+	// Second pass: assign securities to industry groups
 	for _, security := range securities {
 		industries := utils.ParseCSV(security.Industry)
 		if len(industries) == 0 {
-			industries = []string{"OTHER"}
-		}
-		for _, industry := range industries {
-			industryGroups[industry] = append(industryGroups[industry], security.ISIN)
+			// No industry assigned - add to ALL industry groups
+			for ind := range allIndustries {
+				industryGroups[ind] = append(industryGroups[ind], security.ISIN)
+			}
+		} else {
+			for _, industry := range industries {
+				industryGroups[industry] = append(industryGroups[industry], security.ISIN)
+			}
 		}
 	}
 

@@ -110,14 +110,18 @@ func (s *PortfolioService) GetPortfolioSummary() (PortfolioSummary, error) {
 	// Check for stale price data (warn only, don't block)
 	s.checkPriceStaleness(positions)
 
-	// Aggregate position values by geography and industry
-	geographyValues, industryValues, totalValue := s.aggregatePositionValues(positions)
-
 	// Get all geographies and industries from active securities in the universe
+	// This must happen BEFORE aggregation so we can split securities without
+	// geography/industry across ALL known categories
 	allStockGeographies, allStockIndustries, err := s.getAllSecurityGeographiesAndIndustries()
 	if err != nil {
 		return PortfolioSummary{}, fmt.Errorf("failed to get securities: %w", err)
 	}
+
+	// Aggregate position values by geography and industry
+	geographyValues, industryValues, totalValue := s.aggregatePositionValues(
+		positions, allStockGeographies, allStockIndustries,
+	)
 
 	// Get cash balance from CashManager
 	cashBalance := 0.0
@@ -217,11 +221,15 @@ func (s *PortfolioService) GetPortfolioSummary() (PortfolioSummary, error) {
 	}, nil
 }
 
-// aggregatePositionValues aggregates position values by geography and industry
-// Both geography and industry support comma-separated values for multiple assignments
-func (s *PortfolioService) aggregatePositionValues(positions []PositionWithSecurity) (
-	map[string]float64, map[string]float64, float64,
-) {
+// aggregatePositionValues aggregates position values by geography and industry.
+// Both geography and industry support comma-separated values for multiple assignments.
+// Securities without a geography are split equally across ALL known geographies.
+// Securities without an industry are split equally across ALL known industries.
+func (s *PortfolioService) aggregatePositionValues(
+	positions []PositionWithSecurity,
+	allGeographies map[string]bool,
+	allIndustries map[string]bool,
+) (map[string]float64, map[string]float64, float64) {
 	geographyValues := make(map[string]float64)
 	industryValues := make(map[string]float64)
 	totalValue := 0.0
@@ -235,8 +243,15 @@ func (s *PortfolioService) aggregatePositionValues(positions []PositionWithSecur
 		totalValue += eurValue
 
 		// Aggregate by geography (split if multiple geographies)
+		// If no geography assigned, split equally across ALL known geographies
 		geographies := utils.ParseCSV(pos.Geography)
-		if len(geographies) > 0 {
+		if len(geographies) == 0 && len(allGeographies) > 0 {
+			// No geography assigned - split equally across ALL geographies
+			splitValue := eurValue / float64(len(allGeographies))
+			for geo := range allGeographies {
+				geographyValues[geo] += splitValue
+			}
+		} else if len(geographies) > 0 {
 			splitValue := eurValue / float64(len(geographies))
 			for _, geo := range geographies {
 				geographyValues[geo] += splitValue
@@ -244,8 +259,15 @@ func (s *PortfolioService) aggregatePositionValues(positions []PositionWithSecur
 		}
 
 		// Aggregate by industry (split if multiple industries)
+		// If no industry assigned, split equally across ALL known industries
 		industries := utils.ParseCSV(pos.Industry)
-		if len(industries) > 0 {
+		if len(industries) == 0 && len(allIndustries) > 0 {
+			// No industry assigned - split equally across ALL industries
+			splitValue := eurValue / float64(len(allIndustries))
+			for ind := range allIndustries {
+				industryValues[ind] += splitValue
+			}
+		} else if len(industries) > 0 {
 			splitValue := eurValue / float64(len(industries))
 			for _, ind := range industries {
 				industryValues[ind] += splitValue
