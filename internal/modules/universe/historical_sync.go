@@ -26,12 +26,25 @@ type SecurityLookupInterface interface {
 }
 
 // HistoryDBInterface defines the contract for history database operations
-// Used by HistoricalSyncService and SecurityDeletionService
+// Used by services that need access to filtered, cached price data
 type HistoryDBInterface interface {
-	HasMonthlyData(isin string) (bool, error)
-	SyncHistoricalPrices(isin string, prices []DailyPrice) error
+	// Price read operations (filtered and cached)
+	GetDailyPrices(isin string, limit int) ([]DailyPrice, error)
 	GetRecentPrices(isin string, days int) ([]DailyPrice, error)
+	GetMonthlyPrices(isin string, limit int) ([]MonthlyPrice, error)
+	HasMonthlyData(isin string) (bool, error)
+
+	// Price write operations (raw data, invalidates cache)
+	SyncHistoricalPrices(isin string, prices []DailyPrice) error
 	DeletePricesForSecurity(isin string) error
+
+	// Exchange rate operations
+	UpsertExchangeRate(fromCurrency, toCurrency string, rate float64) error
+	GetLatestExchangeRate(fromCurrency, toCurrency string) (*ExchangeRate, error)
+
+	// Cache management
+	InvalidateCache(isin string)
+	InvalidateAllCaches()
 }
 
 // NewHistoricalSyncService creates a new historical sync service.

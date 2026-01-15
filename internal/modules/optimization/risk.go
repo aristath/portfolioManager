@@ -16,6 +16,7 @@ import (
 
 	"github.com/aristath/sentinel/internal/market_regime"
 	"github.com/aristath/sentinel/internal/modules/calculations"
+	"github.com/aristath/sentinel/internal/modules/universe"
 	"github.com/rs/zerolog"
 )
 
@@ -66,11 +67,11 @@ func hashRegimeAwareCovKey(isins []string, lookbackDays int, regimeScore float64
 
 // RiskModelBuilder builds covariance matrices and risk models for optimization.
 type RiskModelBuilder struct {
-	db         *sql.DB             // history.db
-	universeDB *sql.DB             // universe.db (for symbol -> ISIN lookup)
-	configDB   *sql.DB             // config.db (for market_indices table)
-	cache      *calculations.Cache // calculations.db (optional, for caching results)
-	log        zerolog.Logger
+	historyDBClient universe.HistoryDBInterface // Filtered and cached price access
+	universeDB      *sql.DB                     // universe.db (for symbol -> ISIN lookup)
+	configDB        *sql.DB                     // config.db (for market_indices table)
+	cache           *calculations.Cache         // calculations.db (optional, for caching results)
+	log             zerolog.Logger
 }
 
 type RegimeAwareRiskOptions struct {
@@ -88,12 +89,12 @@ type indexSpec struct {
 
 // NewRiskModelBuilder creates a new risk model builder.
 // configDB is optional (can be nil) - if provided, enables dynamic index lookup for regime-aware calculations.
-func NewRiskModelBuilder(db *sql.DB, universeDB *sql.DB, configDB *sql.DB, log zerolog.Logger) *RiskModelBuilder {
+func NewRiskModelBuilder(historyDBClient universe.HistoryDBInterface, universeDB *sql.DB, configDB *sql.DB, log zerolog.Logger) *RiskModelBuilder {
 	return &RiskModelBuilder{
-		db:         db,
-		universeDB: universeDB,
-		configDB:   configDB,
-		log:        log.With().Str("component", "risk_model").Logger(),
+		historyDBClient: historyDBClient,
+		universeDB:      universeDB,
+		configDB:        configDB,
+		log:             log.With().Str("component", "risk_model").Logger(),
 	}
 }
 
@@ -374,73 +375,43 @@ func (rb *RiskModelBuilder) BuildRegimeAwareCovarianceMatrix(
 	return covMatrix, assetReturns, correlations, nil
 }
 
-// fetchPriceHistory fetches historical prices from the database.
+// fetchPriceHistory fetches historical prices from the database using HistoryDB.
 // This function expects ISINs as input (daily_prices.isin column stores ISINs).
 func (rb *RiskModelBuilder) fetchPriceHistory(isins []string, days int) (TimeSeriesData, error) {
-	// Calculate start date as Unix timestamp (date column is INTEGER type)
+	// Calculate start date
 	startTime := time.Now().AddDate(0, 0, -days)
-	startDate := time.Date(startTime.Year(), startTime.Month(), startTime.Day(), 0, 0, 0, 0, time.UTC).Unix()
+	startDate := time.Date(startTime.Year(), startTime.Month(), startTime.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02")
 
 	rb.log.Debug().
-		Int64("start_date", startDate).
+		Str("start_date", startDate).
 		Int("num_isins", len(isins)).
-		Msg("Fetching price history from database")
+		Msg("Fetching price history from HistoryDB")
 
 	if len(isins) == 0 {
 		return TimeSeriesData{}, fmt.Errorf("no ISINs provided")
 	}
 
-	// Query to get price history for all ISINs
-	query := `
-		SELECT
-			isin,
-			date,
-			close
-		FROM daily_prices
-		WHERE isin IN (` + rb.buildPlaceholders(len(isins)) + `)
-			AND date >= ?
-		ORDER BY date ASC
-	`
-
-	// Build args: ISINs + startDate
-	args := make([]interface{}, 0, len(isins)+1)
-	for _, isin := range isins {
-		args = append(args, isin)
-	}
-	args = append(args, startDate)
-
-	rows, err := rb.db.Query(query, args...)
-	if err != nil {
-		return TimeSeriesData{}, fmt.Errorf("failed to query price history: %w", err)
-	}
-	defer rows.Close()
-
 	// Build time series data structure
-	// Map ISIN -> date -> price (from database)
+	// Map ISIN -> date -> price
 	pricesByISIN := make(map[string]map[string]float64)
 	dateSet := make(map[string]bool)
 
-	for rows.Next() {
-		var isin string
-		var dateUnix int64
-		var price float64
-
-		if err := rows.Scan(&isin, &dateUnix, &price); err != nil {
-			return TimeSeriesData{}, fmt.Errorf("failed to scan row: %w", err)
+	// Fetch prices for each ISIN using HistoryDB (filtered and cached)
+	for _, isin := range isins {
+		dailyPrices, err := rb.historyDBClient.GetDailyPrices(isin, 0) // 0 = no limit
+		if err != nil {
+			rb.log.Warn().Err(err).Str("isin", isin).Msg("Failed to get prices for ISIN")
+			continue
 		}
 
-		// Convert Unix timestamp to YYYY-MM-DD string format
-		date := time.Unix(dateUnix, 0).UTC().Format("2006-01-02")
-
-		if pricesByISIN[isin] == nil {
-			pricesByISIN[isin] = make(map[string]float64)
+		pricesByISIN[isin] = make(map[string]float64)
+		for _, p := range dailyPrices {
+			// Only include prices within the lookback window
+			if p.Date >= startDate {
+				pricesByISIN[isin][p.Date] = p.Close
+				dateSet[p.Date] = true
+			}
 		}
-		pricesByISIN[isin][date] = price
-		dateSet[date] = true
-	}
-
-	if err := rows.Err(); err != nil {
-		return TimeSeriesData{}, fmt.Errorf("error iterating rows: %w", err)
 	}
 
 	// Convert dateSet to sorted slice
@@ -449,15 +420,8 @@ func (rb *RiskModelBuilder) fetchPriceHistory(isins []string, days int) (TimeSer
 		dates = append(dates, date)
 	}
 
-	// Sort dates (they should already be sorted from ORDER BY, but ensure it)
-	// Simple bubble sort for date strings in YYYY-MM-DD format
-	for i := 0; i < len(dates)-1; i++ {
-		for j := i + 1; j < len(dates); j++ {
-			if dates[i] > dates[j] {
-				dates[i], dates[j] = dates[j], dates[i]
-			}
-		}
-	}
+	// Sort dates in ascending order
+	sort.Strings(dates)
 
 	// Build final data structure keyed by ISIN
 	data := make(map[string][]float64)
@@ -661,19 +625,6 @@ func BuildCorrelationMap(pairs []CorrelationPair) map[string]float64 {
 	}
 
 	return correlationMap
-}
-
-// buildPlaceholders builds SQL placeholders for IN clause.
-func (rb *RiskModelBuilder) buildPlaceholders(n int) string {
-	if n == 0 {
-		return ""
-	}
-
-	placeholders := "?"
-	for i := 1; i < n; i++ {
-		placeholders += ", ?"
-	}
-	return placeholders
 }
 
 // calculateSampleCovariance calculates the sample covariance matrix from returns.

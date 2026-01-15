@@ -8,30 +8,32 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/aristath/sentinel/internal/modules/settings"
+	"github.com/aristath/sentinel/internal/modules/universe"
 	"github.com/rs/zerolog"
 )
 
 // PortfolioDisplayCalculator calculates portfolio display state from metrics
 type PortfolioDisplayCalculator struct {
-	universeDB    *sql.DB
-	portfolioDB   *sql.DB
-	historyDB     *sql.DB
-	portfolioPerf *PortfolioPerformanceService
-	log           zerolog.Logger
+	universeDB      *sql.DB
+	portfolioDB     *sql.DB
+	historyDBClient universe.HistoryDBInterface
+	portfolioPerf   *PortfolioPerformanceService
+	log             zerolog.Logger
 }
 
 // NewPortfolioDisplayCalculator creates a new portfolio display calculator
 func NewPortfolioDisplayCalculator(
-	universeDB, portfolioDB, historyDB *sql.DB,
+	universeDB, portfolioDB *sql.DB,
+	historyDBClient universe.HistoryDBInterface,
 	portfolioPerf *PortfolioPerformanceService,
 	log zerolog.Logger,
 ) *PortfolioDisplayCalculator {
 	return &PortfolioDisplayCalculator{
-		universeDB:    universeDB,
-		portfolioDB:   portfolioDB,
-		historyDB:     historyDB,
-		portfolioPerf: portfolioPerf,
-		log:           log.With().Str("service", "portfolio_display_calculator").Logger(),
+		universeDB:      universeDB,
+		portfolioDB:     portfolioDB,
+		historyDBClient: historyDBClient,
+		portfolioPerf:   portfolioPerf,
+		log:             log.With().Str("service", "portfolio_display_calculator").Logger(),
 	}
 }
 
@@ -275,8 +277,8 @@ func (c *PortfolioDisplayCalculator) getSecurityPerformance(symbol string, targe
 		return 0, nil
 	}
 
-	// Create security performance service with consolidated database
-	securityPerf := NewSecurityPerformanceService(c.historyDB, c.log)
+	// Create security performance service with filtered price access
+	securityPerf := NewSecurityPerformanceService(c.historyDBClient, c.log)
 
 	// Calculate trailing 12mo CAGR using ISIN
 	cagr, err := securityPerf.CalculateTrailing12MoCAGR(isin.String)

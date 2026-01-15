@@ -371,7 +371,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	container.OpportunitiesService = opportunities.NewService(tagFilter, securityRepoAdapter, log)
 
 	// Risk builder (needed for sequences service)
-	container.RiskBuilder = optimization.NewRiskModelBuilder(container.HistoryDB.Conn(), container.UniverseDB.Conn(), container.ConfigDB.Conn(), log)
+	container.RiskBuilder = optimization.NewRiskModelBuilder(container.HistoryDBClient, container.UniverseDB.Conn(), container.ConfigDB.Conn(), log)
 
 	// Constraint enforcer for sequences service
 	// Uses security lookup to check per-security allow_buy/allow_sell constraints
@@ -597,7 +597,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	container.HealthCalculator = display.NewHealthCalculator(
 		container.UniverseDB.Conn(),
 		container.PortfolioDB.Conn(),
-		container.HistoryDB.Conn(),
+		container.HistoryDBClient,
 		container.ConfigDB.Conn(),
 		log,
 	)
@@ -642,7 +642,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	// Market index service for market-wide regime detection
 	container.MarketIndexService = market_regime.NewMarketIndexService(
 		container.UniverseDB.Conn(),
-		container.HistoryDB.Conn(),
+		container.HistoryDBClient,
 		container.BrokerClient,
 		log,
 	)
@@ -890,9 +890,9 @@ func (a *idleSecurityProviderAdapter) GetActiveSecurities() ([]calculations.Secu
 	return result, nil
 }
 
-// idlePriceProviderAdapter adapts universe.HistoryDB to calculations.PriceProvider
+// idlePriceProviderAdapter adapts universe.HistoryDBInterface to calculations.PriceProvider
 type idlePriceProviderAdapter struct {
-	historyDB *universe.HistoryDB
+	historyDB universe.HistoryDBInterface
 }
 
 func (a *idlePriceProviderAdapter) GetDailyPrices(isin string, days int) ([]float64, error) {

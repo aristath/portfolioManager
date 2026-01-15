@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aristath/sentinel/internal/modules/universe"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -32,22 +33,45 @@ func setupTestUniverseDB(t *testing.T) *sql.DB {
 }
 
 // setupTestHistoryDB creates an in-memory SQLite database for historical prices
-func setupTestHistoryDB(t *testing.T) *sql.DB {
+// and returns it wrapped as a HistoryDB with nil filter (tests handle their own data)
+func setupTestHistoryDB(t *testing.T) (*sql.DB, *universe.HistoryDB) {
 	db, err := sql.Open("sqlite3", ":memory:")
 	require.NoError(t, err)
 
-	// Create daily_prices table with unix timestamp for date (matches production schema)
+	// Create daily_prices table with full schema (matches production)
 	_, err = db.Exec(`
 		CREATE TABLE daily_prices (
 			isin TEXT NOT NULL,
 			date INTEGER NOT NULL,
+			open REAL,
+			high REAL,
+			low REAL,
 			close REAL NOT NULL,
+			volume INTEGER,
+			adjusted_close REAL,
 			PRIMARY KEY (isin, date)
 		)
 	`)
 	require.NoError(t, err)
 
-	return db
+	// Create monthly_prices table
+	_, err = db.Exec(`
+		CREATE TABLE monthly_prices (
+			isin TEXT NOT NULL,
+			year_month TEXT NOT NULL,
+			avg_close REAL,
+			avg_adj_close REAL,
+			source TEXT,
+			created_at INTEGER,
+			PRIMARY KEY (isin, year_month)
+		)
+	`)
+	require.NoError(t, err)
+
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+	historyDBClient := universe.NewHistoryDB(db, nil, log) // nil filter = no filtering for tests
+
+	return db, historyDBClient
 }
 
 func TestGetSparklinesAggregated_ExcludesIndices(t *testing.T) {
@@ -56,7 +80,7 @@ func TestGetSparklinesAggregated_ExcludesIndices(t *testing.T) {
 	universeDB := setupTestUniverseDB(t)
 	defer universeDB.Close()
 
-	historyDB := setupTestHistoryDB(t)
+	historyDB, historyDBClient := setupTestHistoryDB(t)
 	defer historyDB.Close()
 
 	// Insert regular securities
@@ -84,20 +108,20 @@ func TestGetSparklinesAggregated_ExcludesIndices(t *testing.T) {
 	week2 := now.AddDate(0, -5, 0).Unix() // 5 months ago
 
 	_, err = historyDB.Exec(`
-		INSERT INTO daily_prices (isin, date, close)
+		INSERT INTO daily_prices (isin, date, close, open, high, low)
 		VALUES
-			('US0378331005', ?, 150.0),
-			('US0378331005', ?, 155.0),
-			('US5949181045', ?, 300.0),
-			('US5949181045', ?, 310.0),
-			('INDEX-SP500.IDX', ?, 4500.0),
-			('INDEX-SP500.IDX', ?, 4550.0),
-			('INDEX-NASDAQ.IDX', ?, 14000.0),
-			('INDEX-NASDAQ.IDX', ?, 14100.0)
+			('US0378331005', ?, 150.0, 149.0, 151.0, 148.0),
+			('US0378331005', ?, 155.0, 154.0, 156.0, 153.0),
+			('US5949181045', ?, 300.0, 299.0, 301.0, 298.0),
+			('US5949181045', ?, 310.0, 309.0, 311.0, 308.0),
+			('INDEX-SP500.IDX', ?, 4500.0, 4490.0, 4510.0, 4480.0),
+			('INDEX-SP500.IDX', ?, 4550.0, 4540.0, 4560.0, 4530.0),
+			('INDEX-NASDAQ.IDX', ?, 14000.0, 13990.0, 14010.0, 13980.0),
+			('INDEX-NASDAQ.IDX', ?, 14100.0, 14090.0, 14110.0, 14080.0)
 	`, week1, week2, week1, week2, week1, week2, week1, week2)
 	require.NoError(t, err)
 
-	service := NewService(historyDB, nil, universeDB, log)
+	service := NewService(historyDBClient, nil, universeDB, log)
 
 	// Execute
 	sparklines, err := service.GetSparklinesAggregated("1Y")
@@ -117,7 +141,7 @@ func TestGetSparklinesAggregated_IncludesNullProductType(t *testing.T) {
 	universeDB := setupTestUniverseDB(t)
 	defer universeDB.Close()
 
-	historyDB := setupTestHistoryDB(t)
+	historyDB, historyDBClient := setupTestHistoryDB(t)
 	defer historyDB.Close()
 
 	// Insert security with NULL product_type (should be included)
@@ -141,14 +165,14 @@ func TestGetSparklinesAggregated_IncludesNullProductType(t *testing.T) {
 	recentDate := now.AddDate(0, -3, 0).Unix() // 3 months ago
 
 	_, err = historyDB.Exec(`
-		INSERT INTO daily_prices (isin, date, close)
+		INSERT INTO daily_prices (isin, date, close, open, high, low)
 		VALUES
-			('US0378331005', ?, 150.0),
-			('INDEX-SP500.IDX', ?, 4500.0)
+			('US0378331005', ?, 150.0, 149.0, 151.0, 148.0),
+			('INDEX-SP500.IDX', ?, 4500.0, 4490.0, 4510.0, 4480.0)
 	`, recentDate, recentDate)
 	require.NoError(t, err)
 
-	service := NewService(historyDB, nil, universeDB, log)
+	service := NewService(historyDBClient, nil, universeDB, log)
 
 	// Execute
 	sparklines, err := service.GetSparklinesAggregated("1Y")

@@ -84,6 +84,7 @@ func setupTestDB(t *testing.T) *sql.DB {
 			low REAL NOT NULL,
 			close REAL NOT NULL,
 			volume INTEGER,
+			adjusted_close REAL,
 			PRIMARY KEY (isin, date)
 		)
 	`)

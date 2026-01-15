@@ -14,13 +14,13 @@ import (
 
 // Handler handles historical data HTTP requests
 type Handler struct {
-	historyDB *universe.HistoryDB
+	historyDB universe.HistoryDBInterface
 	log       zerolog.Logger
 }
 
 // NewHandler creates a new historical data handler
 func NewHandler(
-	historyDB *universe.HistoryDB,
+	historyDB universe.HistoryDBInterface,
 	log zerolog.Logger,
 ) *Handler {
 	return &Handler{

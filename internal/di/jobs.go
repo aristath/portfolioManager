@@ -222,7 +222,7 @@ func RegisterJobs(container *Container, cfg *config.Config, displayManager *disp
 	// ==========================================
 	formulaStorage := symbolic_regression.NewFormulaStorage(container.ConfigDB.Conn(), log)
 	dataPrep := symbolic_regression.NewDataPrep(
-		container.HistoryDB.Conn(),
+		container.HistoryDBClient, // Use interface for filtered prices
 		container.PortfolioDB.Conn(),
 		container.ConfigDB.Conn(),
 		container.UniverseDB.Conn(),

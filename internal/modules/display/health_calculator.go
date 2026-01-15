@@ -6,6 +6,7 @@ import (
 	"math"
 
 	"github.com/aristath/sentinel/internal/modules/settings"
+	"github.com/aristath/sentinel/internal/modules/universe"
 	"github.com/rs/zerolog"
 )
 
@@ -23,36 +24,38 @@ type HealthUpdate struct {
 
 // HealthCalculator calculates combined health scores for securities
 type HealthCalculator struct {
-	universeDB    *sql.DB
-	portfolioDB   *sql.DB
-	historyDB     *sql.DB
-	configDB      *sql.DB
-	securityPerf  *SecurityPerformanceService
-	log           zerolog.Logger
-	scoreWeight   float64
-	perfWeight    float64
-	volWeight     float64
-	maxSecurities int
+	universeDB      *sql.DB
+	portfolioDB     *sql.DB
+	historyDBClient universe.HistoryDBInterface
+	configDB        *sql.DB
+	securityPerf    *SecurityPerformanceService
+	log             zerolog.Logger
+	scoreWeight     float64
+	perfWeight      float64
+	volWeight       float64
+	maxSecurities   int
 }
 
 // NewHealthCalculator creates a new health calculator
 func NewHealthCalculator(
-	universeDB, portfolioDB, historyDB, configDB *sql.DB,
+	universeDB, portfolioDB *sql.DB,
+	historyDBClient universe.HistoryDBInterface,
+	configDB *sql.DB,
 	log zerolog.Logger,
 ) *HealthCalculator {
-	securityPerf := NewSecurityPerformanceService(historyDB, log)
+	securityPerf := NewSecurityPerformanceService(historyDBClient, log)
 
 	return &HealthCalculator{
-		universeDB:    universeDB,
-		portfolioDB:   portfolioDB,
-		historyDB:     historyDB,
-		configDB:      configDB,
-		securityPerf:  securityPerf,
-		log:           log.With().Str("service", "health_calculator").Logger(),
-		scoreWeight:   0.4,
-		perfWeight:    0.4,
-		volWeight:     0.2,
-		maxSecurities: 20,
+		universeDB:      universeDB,
+		portfolioDB:     portfolioDB,
+		historyDBClient: historyDBClient,
+		configDB:        configDB,
+		securityPerf:    securityPerf,
+		log:             log.With().Str("service", "health_calculator").Logger(),
+		scoreWeight:     0.4,
+		perfWeight:      0.4,
+		volWeight:       0.2,
+		maxSecurities:   20,
 	}
 }
 

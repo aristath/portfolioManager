@@ -150,13 +150,27 @@ func (m *mockHistoryDBForDeletion) DeletePricesForSecurity(isin string) error {
 }
 
 // Implement remaining HistoryDBInterface methods as no-ops
-func (m *mockHistoryDBForDeletion) HasMonthlyData(isin string) (bool, error) { return false, nil }
-func (m *mockHistoryDBForDeletion) SyncHistoricalPrices(isin string, prices []DailyPrice) error {
-	return nil
+func (m *mockHistoryDBForDeletion) GetDailyPrices(isin string, limit int) ([]DailyPrice, error) {
+	return nil, nil
 }
 func (m *mockHistoryDBForDeletion) GetRecentPrices(isin string, days int) ([]DailyPrice, error) {
 	return nil, nil
 }
+func (m *mockHistoryDBForDeletion) GetMonthlyPrices(isin string, limit int) ([]MonthlyPrice, error) {
+	return nil, nil
+}
+func (m *mockHistoryDBForDeletion) HasMonthlyData(isin string) (bool, error) { return false, nil }
+func (m *mockHistoryDBForDeletion) SyncHistoricalPrices(isin string, prices []DailyPrice) error {
+	return nil
+}
+func (m *mockHistoryDBForDeletion) UpsertExchangeRate(fromCurrency, toCurrency string, rate float64) error {
+	return nil
+}
+func (m *mockHistoryDBForDeletion) GetLatestExchangeRate(fromCurrency, toCurrency string) (*ExchangeRate, error) {
+	return nil, nil
+}
+func (m *mockHistoryDBForDeletion) InvalidateCache(isin string) {}
+func (m *mockHistoryDBForDeletion) InvalidateAllCaches()        {}
 
 // Removed mockDismissedFilterRepoForDeletion - dismissed filter functionality removed
 

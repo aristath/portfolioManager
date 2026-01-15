@@ -17,6 +17,7 @@ import (
 	"github.com/aristath/sentinel/internal/modules/display"
 	"github.com/aristath/sentinel/internal/modules/market_hours"
 	"github.com/aristath/sentinel/internal/modules/settings"
+	"github.com/aristath/sentinel/internal/modules/universe"
 	"github.com/aristath/sentinel/internal/queue"
 	"github.com/aristath/sentinel/internal/scheduler"
 	"github.com/aristath/sentinel/internal/services"
@@ -85,6 +86,7 @@ func NewSystemHandlers(
 	log zerolog.Logger,
 	dataDir string,
 	portfolioDB, configDB, universeDB, historyDB *database.DB,
+	historyDBClient universe.HistoryDBInterface,
 	queueManager *queue.Manager,
 	displayManager *display.StateManager,
 	brokerClient domain.BrokerClient,
@@ -100,11 +102,11 @@ func NewSystemHandlers(
 		log,
 	)
 
-	// Create portfolio display calculator
+	// Create portfolio display calculator with filtered price access
 	portfolioDisplayCalc := display.NewPortfolioDisplayCalculator(
 		universeDB.Conn(),
 		portfolioDB.Conn(),
-		historyDB.Conn(),
+		historyDBClient,
 		portfolioPerf,
 		log,
 	)

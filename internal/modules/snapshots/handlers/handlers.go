@@ -19,7 +19,7 @@ import (
 // Handler handles snapshot HTTP requests
 type Handler struct {
 	positionRepo       *portfolio.PositionRepository
-	historyDB          *universe.HistoryDB
+	historyDB          universe.HistoryDBInterface
 	ledgerDB           *sql.DB
 	configDB           *sql.DB
 	cashManager        domain.CashManager
@@ -31,7 +31,7 @@ type Handler struct {
 // NewHandler creates a new snapshot handler
 func NewHandler(
 	positionRepo *portfolio.PositionRepository,
-	historyDB *universe.HistoryDB,
+	historyDB universe.HistoryDBInterface,
 	ledgerDB *sql.DB,
 	configDB *sql.DB,
 	cashManager domain.CashManager,

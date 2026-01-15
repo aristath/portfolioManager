@@ -3,9 +3,9 @@ package market_regime
 import (
 	"database/sql"
 	"fmt"
-	"time"
 
 	"github.com/aristath/sentinel/internal/domain"
+	"github.com/aristath/sentinel/internal/modules/universe"
 	"github.com/rs/zerolog"
 )
 
@@ -23,24 +23,24 @@ type MarketIndex struct {
 
 // MarketIndexService manages market index tracking for regime detection
 type MarketIndexService struct {
-	universeDB *sql.DB
-	historyDB  *sql.DB
-	tradernet  interface{} // Tradernet client (will be properly typed later)
-	log        zerolog.Logger
+	universeDB      *sql.DB
+	historyDBClient universe.HistoryDBInterface // Filtered and cached price access
+	tradernet       interface{}                 // Tradernet client (will be properly typed later)
+	log             zerolog.Logger
 }
 
 // NewMarketIndexService creates a new market index service
 func NewMarketIndexService(
 	universeDB *sql.DB,
-	historyDB *sql.DB,
+	historyDBClient universe.HistoryDBInterface,
 	tradernet interface{},
 	log zerolog.Logger,
 ) *MarketIndexService {
 	return &MarketIndexService{
-		universeDB: universeDB,
-		historyDB:  historyDB,
-		tradernet:  tradernet,
-		log:        log.With().Str("component", "market_index_service").Logger(),
+		universeDB:      universeDB,
+		historyDBClient: historyDBClient,
+		tradernet:       tradernet,
+		log:             log.With().Str("component", "market_index_service").Logger(),
 	}
 }
 
@@ -106,64 +106,24 @@ func (s *MarketIndexService) getIndexReturns(symbol string, days int) ([]float64
 		return nil, fmt.Errorf("no ISIN found for index %s", symbol)
 	}
 
-	// Query daily_prices using ISIN
-	query := `
-		SELECT date, close
-		FROM daily_prices
-		WHERE isin = ?
-		ORDER BY date DESC
-		LIMIT ?
-	`
-
-	rows, err := s.historyDB.Query(query, isin, days+1) // +1 to calculate returns
+	// Get filtered prices using HistoryDB (cached and filtered)
+	dailyPrices, err := s.historyDBClient.GetDailyPrices(isin, days+1) // +1 to calculate returns
 	if err != nil {
-		return nil, fmt.Errorf("failed to query prices: %w", err)
-	}
-	defer rows.Close()
-
-	var prices []struct {
-		Date  string
-		Close float64
+		return nil, fmt.Errorf("failed to get prices for %s: %w", symbol, err)
 	}
 
-	for rows.Next() {
-		var dateUnix int64
-		var close float64
-
-		if err := rows.Scan(&dateUnix, &close); err != nil {
-			return nil, fmt.Errorf("failed to scan price: %w", err)
-		}
-
-		// Convert Unix timestamp to YYYY-MM-DD string format
-		date := time.Unix(dateUnix, 0).UTC().Format("2006-01-02")
-
-		prices = append(prices, struct {
-			Date  string
-			Close float64
-		}{
-			Date:  date,
-			Close: close,
-		})
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating prices: %w", err)
-	}
-
-	if len(prices) < 2 {
+	if len(dailyPrices) < 2 {
 		return nil, fmt.Errorf("insufficient data for %s: need at least 2 days", symbol)
 	}
 
-	// Prices are ordered DESC (newest first), so:
-	// - prices[0] = newest
-	// - prices[len-1] = oldest
+	// dailyPrices comes in DESC order (newest first) from HistoryDB
 	// Calculate returns in chronological order (oldest to newest)
 	// Return = (newer - older) / older
-	returns := make([]float64, 0, len(prices)-1)
-	for i := len(prices) - 1; i > 0; i-- {
-		// prices[i] is older, prices[i-1] is newer
-		if prices[i].Close != 0 {
-			dailyReturn := (prices[i-1].Close - prices[i].Close) / prices[i].Close
+	returns := make([]float64, 0, len(dailyPrices)-1)
+	for i := len(dailyPrices) - 1; i > 0; i-- {
+		// dailyPrices[i] is older, dailyPrices[i-1] is newer
+		if dailyPrices[i].Close != 0 {
+			dailyReturn := (dailyPrices[i-1].Close - dailyPrices[i].Close) / dailyPrices[i].Close
 			returns = append(returns, dailyReturn)
 		}
 	}

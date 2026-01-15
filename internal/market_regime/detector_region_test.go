@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"testing"
 
+	"github.com/aristath/sentinel/internal/modules/universe"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -12,7 +13,7 @@ import (
 )
 
 // setupDetectorTestDBs sets up all databases needed for detector calculation tests
-func setupDetectorTestDBs(t *testing.T) (*sql.DB, *sql.DB, *sql.DB) {
+func setupDetectorTestDBs(t *testing.T) (*sql.DB, *sql.DB, *sql.DB, *universe.HistoryDB) {
 	// Universe DB - securities table
 	universeDB, err := sql.Open("sqlite3", ":memory:")
 	require.NoError(t, err)
@@ -44,7 +45,8 @@ func setupDetectorTestDBs(t *testing.T) (*sql.DB, *sql.DB, *sql.DB) {
 			high REAL,
 			low REAL,
 			close REAL NOT NULL,
-			volume INTEGER
+			volume INTEGER,
+			adjusted_close REAL
 		)
 	`)
 	require.NoError(t, err)
@@ -52,7 +54,11 @@ func setupDetectorTestDBs(t *testing.T) (*sql.DB, *sql.DB, *sql.DB) {
 	// Config DB - market_regime_history table
 	configDB := setupRegimeTestDB(t)
 
-	return universeDB, historyDB, configDB
+	// Create HistoryDB wrapper (nil filter for tests - no filtering)
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+	historyDBClient := universe.NewHistoryDB(historyDB, nil, log)
+
+	return universeDB, historyDB, configDB, historyDBClient
 }
 
 // insertTestIndex inserts a test index into the universe DB
@@ -72,10 +78,11 @@ func insertTestPrices(t *testing.T, historyDB *sql.DB, symbol string, prices []f
 
 	for i, price := range prices {
 		date := baseDate + int64(i)*86400 // Add one day per price
+		// Insert full OHLC data (use close for all OHLC since we only care about close for returns)
 		_, err := historyDB.Exec(`
-			INSERT INTO daily_prices (isin, date, close)
-			VALUES (?, ?, ?)
-		`, isin, date, price)
+			INSERT INTO daily_prices (isin, date, open, high, low, close)
+			VALUES (?, ?, ?, ?, ?, ?)
+		`, isin, date, price, price, price, price)
 		require.NoError(t, err)
 	}
 }
@@ -247,7 +254,7 @@ func TestMarketRegimeDetector_PartialDataUsesAvailableRegions(t *testing.T) {
 // ============================================================================
 
 func TestCalculateRegimeScoreForRegion_BullMarket(t *testing.T) {
-	universeDB, historyDB, configDB := setupDetectorTestDBs(t)
+	universeDB, historyDB, configDB, historyDBClient := setupDetectorTestDBs(t)
 	defer universeDB.Close()
 	defer historyDB.Close()
 	defer configDB.Close()
@@ -255,7 +262,7 @@ func TestCalculateRegimeScoreForRegion_BullMarket(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 
 	// Create services
-	indexService := NewMarketIndexService(universeDB, historyDB, nil, log)
+	indexService := NewMarketIndexService(universeDB, historyDBClient, nil, log)
 	persistence := NewRegimePersistence(configDB, log)
 	detector := NewMarketRegimeDetector(log)
 	detector.SetMarketIndexService(indexService)
@@ -282,7 +289,7 @@ func TestCalculateRegimeScoreForRegion_BullMarket(t *testing.T) {
 }
 
 func TestCalculateRegimeScoreForRegion_BearMarket(t *testing.T) {
-	universeDB, historyDB, configDB := setupDetectorTestDBs(t)
+	universeDB, historyDB, configDB, historyDBClient := setupDetectorTestDBs(t)
 	defer universeDB.Close()
 	defer historyDB.Close()
 	defer configDB.Close()
@@ -290,7 +297,7 @@ func TestCalculateRegimeScoreForRegion_BearMarket(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 
 	// Create services
-	indexService := NewMarketIndexService(universeDB, historyDB, nil, log)
+	indexService := NewMarketIndexService(universeDB, historyDBClient, nil, log)
 	persistence := NewRegimePersistence(configDB, log)
 	detector := NewMarketRegimeDetector(log)
 	detector.SetMarketIndexService(indexService)
@@ -312,7 +319,7 @@ func TestCalculateRegimeScoreForRegion_BearMarket(t *testing.T) {
 }
 
 func TestCalculateRegimeScoreForRegion_NoIndicesForRegion(t *testing.T) {
-	universeDB, historyDB, configDB := setupDetectorTestDBs(t)
+	universeDB, historyDB, configDB, historyDBClient := setupDetectorTestDBs(t)
 	defer universeDB.Close()
 	defer historyDB.Close()
 	defer configDB.Close()
@@ -320,7 +327,7 @@ func TestCalculateRegimeScoreForRegion_NoIndicesForRegion(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 
 	// Create services
-	indexService := NewMarketIndexService(universeDB, historyDB, nil, log)
+	indexService := NewMarketIndexService(universeDB, historyDBClient, nil, log)
 	persistence := NewRegimePersistence(configDB, log)
 	detector := NewMarketRegimeDetector(log)
 	detector.SetMarketIndexService(indexService)
@@ -349,7 +356,7 @@ func TestCalculateRegimeScoreForRegion_MissingIndexService(t *testing.T) {
 }
 
 func TestCalculateAllRegionScores(t *testing.T) {
-	universeDB, historyDB, configDB := setupDetectorTestDBs(t)
+	universeDB, historyDB, configDB, historyDBClient := setupDetectorTestDBs(t)
 	defer universeDB.Close()
 	defer historyDB.Close()
 	defer configDB.Close()
@@ -357,7 +364,7 @@ func TestCalculateAllRegionScores(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 
 	// Create services
-	indexService := NewMarketIndexService(universeDB, historyDB, nil, log)
+	indexService := NewMarketIndexService(universeDB, historyDBClient, nil, log)
 	persistence := NewRegimePersistence(configDB, log)
 	detector := NewMarketRegimeDetector(log)
 	detector.SetMarketIndexService(indexService)
@@ -398,7 +405,7 @@ func TestCalculateAllRegionScores(t *testing.T) {
 }
 
 func TestCalculateAllRegionScores_PartialFailure(t *testing.T) {
-	universeDB, historyDB, configDB := setupDetectorTestDBs(t)
+	universeDB, historyDB, configDB, historyDBClient := setupDetectorTestDBs(t)
 	defer universeDB.Close()
 	defer historyDB.Close()
 	defer configDB.Close()
@@ -406,7 +413,7 @@ func TestCalculateAllRegionScores_PartialFailure(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 
 	// Create services
-	indexService := NewMarketIndexService(universeDB, historyDB, nil, log)
+	indexService := NewMarketIndexService(universeDB, historyDBClient, nil, log)
 	persistence := NewRegimePersistence(configDB, log)
 	detector := NewMarketRegimeDetector(log)
 	detector.SetMarketIndexService(indexService)
@@ -435,7 +442,7 @@ func TestCalculateAllRegionScores_PartialFailure(t *testing.T) {
 // ============================================================================
 
 func TestPerRegionRegimeDetection_CompleteFlow(t *testing.T) {
-	universeDB, historyDB, configDB := setupDetectorTestDBs(t)
+	universeDB, historyDB, configDB, historyDBClient := setupDetectorTestDBs(t)
 	defer universeDB.Close()
 	defer historyDB.Close()
 	defer configDB.Close()
@@ -444,7 +451,7 @@ func TestPerRegionRegimeDetection_CompleteFlow(t *testing.T) {
 
 	// Step 1: Create services
 	indexSyncService := NewIndexSyncService(universeDB, configDB, log)
-	indexService := NewMarketIndexService(universeDB, historyDB, nil, log)
+	indexService := NewMarketIndexService(universeDB, historyDBClient, nil, log)
 	persistence := NewRegimePersistence(configDB, log)
 	detector := NewMarketRegimeDetector(log)
 	detector.SetMarketIndexService(indexService)

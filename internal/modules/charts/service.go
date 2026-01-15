@@ -4,11 +4,11 @@ package charts
 import (
 	"database/sql"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/modules/universe"
-	"github.com/aristath/sentinel/internal/utils"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
 )
@@ -21,24 +21,24 @@ type ChartDataPoint struct {
 
 // Service provides chart data operations
 type Service struct {
-	historyDB    *sql.DB // Consolidated history.db connection
-	securityRepo *universe.SecurityRepository
-	universeDB   *sql.DB // For querying securities (universe.db)
-	log          zerolog.Logger
+	historyDBClient universe.HistoryDBInterface // Filtered and cached price access
+	securityRepo    *universe.SecurityRepository
+	universeDB      *sql.DB // For querying securities (universe.db)
+	log             zerolog.Logger
 }
 
 // NewService creates a new charts service
 func NewService(
-	historyDB *sql.DB,
+	historyDBClient universe.HistoryDBInterface,
 	securityRepo *universe.SecurityRepository,
 	universeDB *sql.DB,
 	log zerolog.Logger,
 ) *Service {
 	return &Service{
-		historyDB:    historyDB,
-		securityRepo: securityRepo,
-		universeDB:   universeDB,
-		log:          log.With().Str("service", "charts").Logger(),
+		historyDBClient: historyDBClient,
+		securityRepo:    securityRepo,
+		universeDB:      universeDB,
+		log:             log.With().Str("service", "charts").Logger(),
 	}
 }
 
@@ -105,176 +105,106 @@ func (s *Service) GetSparklinesAggregated(period string) (map[string][]ChartData
 	return result, nil
 }
 
-// getAggregatedPrices fetches price data aggregated by week or month
+// getAggregatedPrices fetches filtered price data and aggregates by week or month
+// Uses HistoryDB for filtered prices, then aggregates in memory
 func (s *Service) getAggregatedPrices(isin string, startDate string, groupBy string) ([]ChartDataPoint, error) {
-	startUnix, err := utils.DateToUnix(startDate)
+	// Get all filtered prices from HistoryDB
+	dailyPrices, err := s.historyDBClient.GetDailyPrices(isin, 0) // 0 = no limit
 	if err != nil {
-		return nil, fmt.Errorf("invalid start_date: %w", err)
+		return nil, fmt.Errorf("failed to get daily prices: %w", err)
 	}
 
-	var query string
-	var args []interface{}
+	// Aggregate in memory
+	aggregated := make(map[string][]float64) // period -> close prices
 
-	if groupBy == "week" {
-		// Weekly aggregation: use strftime to group by ISO week
-		query = `
-			SELECT
-				strftime('%Y-W%W', date, 'unixepoch') as period,
-				AVG(close) as avg_close
-			FROM daily_prices
-			WHERE isin = ? AND date >= ?
-			GROUP BY period
-			ORDER BY MIN(date) ASC
-		`
-		args = []interface{}{isin, startUnix}
-	} else {
-		// Monthly aggregation: use existing monthly_prices table
-		query = `
-			SELECT
-				year_month as period,
-				avg_close
-			FROM monthly_prices
-			WHERE isin = ? AND year_month >= strftime('%Y-%m', ?, 'unixepoch')
-			ORDER BY year_month ASC
-		`
-		args = []interface{}{isin, startUnix}
+	for _, p := range dailyPrices {
+		// Skip if before start date
+		if p.Date < startDate {
+			continue
+		}
+
+		var period string
+		if groupBy == "week" {
+			// Parse date and format as YYYY-W## (ISO week)
+			t, err := time.Parse("2006-01-02", p.Date)
+			if err != nil {
+				continue
+			}
+			year, week := t.ISOWeek()
+			period = fmt.Sprintf("%d-W%02d", year, week)
+		} else {
+			// Monthly: extract YYYY-MM
+			if len(p.Date) >= 7 {
+				period = p.Date[:7] // "2024-01-15" -> "2024-01"
+			} else {
+				continue
+			}
+		}
+
+		aggregated[period] = append(aggregated[period], p.Close)
 	}
 
-	rows, err := s.historyDB.Query(query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query aggregated prices: %w", err)
+	// Calculate averages and sort by period
+	var periods []string
+	for period := range aggregated {
+		periods = append(periods, period)
 	}
-	defer rows.Close()
+	sort.Strings(periods)
 
 	var prices []ChartDataPoint
-	for rows.Next() {
-		var period string
-		var avgClose sql.NullFloat64
-
-		if err := rows.Scan(&period, &avgClose); err != nil {
-			s.log.Warn().Err(err).Msg("Failed to scan aggregated price row")
+	for _, period := range periods {
+		values := aggregated[period]
+		if len(values) == 0 {
 			continue
 		}
 
-		if !avgClose.Valid {
-			continue
+		var sum float64
+		for _, v := range values {
+			sum += v
 		}
+		avg := sum / float64(len(values))
 
 		prices = append(prices, ChartDataPoint{
-			Time:  period, // Format: "2024-W01" or "2024-01"
-			Value: avgClose.Float64,
+			Time:  period,
+			Value: avg,
 		})
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating aggregated prices: %w", err)
 	}
 
 	return prices, nil
 }
 
 // GetSecurityChart returns historical price data for a specific security
-// Faithful translation from Python: app/api/charts.py -> get_security_chart()
+// Uses filtered price data from HistoryDB to exclude anomalies
 func (s *Service) GetSecurityChart(isin string, dateRange string) ([]ChartDataPoint, error) {
 	// Validate ISIN is not empty
 	if isin == "" {
 		return nil, fmt.Errorf("ISIN cannot be empty")
 	}
 
-	// Parse date range
-	startDate := parseDateRange(dateRange)
-
-	// Get prices from database using ISIN directly
-	prices, err := s.getPricesFromDB(isin, startDate, "")
+	// Get filtered prices from HistoryDB (already cached and filtered)
+	dailyPrices, err := s.historyDBClient.GetDailyPrices(isin, 0) // 0 = no limit
 	if err != nil {
 		return nil, fmt.Errorf("failed to get prices: %w", err)
 	}
 
-	return prices, nil
-}
+	// Parse date range to get start date
+	startDate := parseDateRange(dateRange)
 
-// getPricesFromDB fetches price data from the consolidated history database using ISIN
-func (s *Service) getPricesFromDB(isin string, startDate string, endDate string) ([]ChartDataPoint, error) {
-	// Build query with ISIN filter
-	var query string
-	var args []interface{}
-
-	if startDate != "" && endDate != "" {
-		// Convert YYYY-MM-DD strings to Unix timestamps
-		startUnix, err := utils.DateToUnix(startDate)
-		if err != nil {
-			return nil, fmt.Errorf("invalid start_date format (expected YYYY-MM-DD): %w", err)
-		}
-		// End date should be end of day (23:59:59)
-		endTime, err := time.Parse("2006-01-02", endDate)
-		if err != nil {
-			return nil, fmt.Errorf("invalid end_date format (expected YYYY-MM-DD): %w", err)
-		}
-		endUnix := time.Date(endTime.Year(), endTime.Month(), endTime.Day(), 23, 59, 59, 0, time.UTC).Unix()
-
-		query = `
-			SELECT date, close
-			FROM daily_prices
-			WHERE isin = ? AND date >= ? AND date <= ?
-			ORDER BY date ASC
-		`
-		args = []interface{}{isin, startUnix, endUnix}
-	} else if startDate != "" {
-		// Convert YYYY-MM-DD string to Unix timestamp
-		startUnix, err := utils.DateToUnix(startDate)
-		if err != nil {
-			return nil, fmt.Errorf("invalid start_date format (expected YYYY-MM-DD): %w", err)
-		}
-
-		query = `
-			SELECT date, close
-			FROM daily_prices
-			WHERE isin = ? AND date >= ?
-			ORDER BY date ASC
-		`
-		args = []interface{}{isin, startUnix}
-	} else {
-		query = `
-			SELECT date, close
-			FROM daily_prices
-			WHERE isin = ?
-			ORDER BY date ASC
-		`
-		args = []interface{}{isin}
-	}
-
-	rows, err := s.historyDB.Query(query, args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query daily prices: %w", err)
-	}
-	defer rows.Close()
-
+	// Convert to chart points, filtering by date range
+	// dailyPrices comes in descending order (most recent first), we need ascending for charts
 	var prices []ChartDataPoint
-	for rows.Next() {
-		var dateUnix sql.NullInt64
-		var closePrice sql.NullFloat64
+	for i := len(dailyPrices) - 1; i >= 0; i-- {
+		p := dailyPrices[i]
 
-		if err := rows.Scan(&dateUnix, &closePrice); err != nil {
-			s.log.Warn().Err(err).Msg("Failed to scan price row")
+		// Apply date filter if specified
+		if startDate != "" && p.Date < startDate {
 			continue
 		}
-
-		// Skip rows with null prices or dates
-		if !closePrice.Valid || !dateUnix.Valid {
-			continue
-		}
-
-		// Convert Unix timestamp to YYYY-MM-DD string for JSON response
-		dateStr := utils.UnixToDate(dateUnix.Int64)
 
 		prices = append(prices, ChartDataPoint{
-			Time:  dateStr,
-			Value: closePrice.Float64,
+			Time:  p.Date,
+			Value: p.Close,
 		})
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating prices: %w", err)
 	}
 
 	return prices, nil

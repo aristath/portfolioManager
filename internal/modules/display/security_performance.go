@@ -1,77 +1,54 @@
 package display
 
 import (
-	"database/sql"
 	"fmt"
 	"math"
 	"time"
 
-	"github.com/aristath/sentinel/internal/utils"
+	"github.com/aristath/sentinel/internal/modules/universe"
 	"github.com/rs/zerolog"
 )
 
 // SecurityPerformanceService calculates individual security performance metrics for display
 type SecurityPerformanceService struct {
-	historyDB *sql.DB // Consolidated history.db database
-	log       zerolog.Logger
+	historyDBClient universe.HistoryDBInterface // Filtered and cached price access
+	log             zerolog.Logger
 }
 
 // NewSecurityPerformanceService creates a new security performance service
-func NewSecurityPerformanceService(historyDB *sql.DB, log zerolog.Logger) *SecurityPerformanceService {
+func NewSecurityPerformanceService(historyDBClient universe.HistoryDBInterface, log zerolog.Logger) *SecurityPerformanceService {
 	return &SecurityPerformanceService{
-		historyDB: historyDB,
-		log:       log.With().Str("service", "security_performance").Logger(),
+		historyDBClient: historyDBClient,
+		log:             log.With().Str("service", "security_performance").Logger(),
 	}
 }
 
 // CalculateTrailing12MoCAGR calculates trailing 12-month CAGR for a specific security using ISIN
-// Uses the consolidated history database
+// Uses filtered price data from HistoryDB to exclude anomalies
 func (s *SecurityPerformanceService) CalculateTrailing12MoCAGR(isin string) (*float64, error) {
-	endDateStr := time.Now().Format("2006-01-02")
 	startDateStr := time.Now().AddDate(-1, 0, 0).Format("2006-01-02")
 
-	// Convert YYYY-MM-DD strings to Unix timestamps
-	startUnix, err := utils.DateToUnix(startDateStr)
+	// Get filtered prices from HistoryDB (already cached and filtered)
+	dailyPrices, err := s.historyDBClient.GetDailyPrices(isin, 0) // 0 = no limit
 	if err != nil {
-		return nil, fmt.Errorf("invalid start_date: %w", err)
+		return nil, fmt.Errorf("failed to get price history for %s: %w", isin, err)
 	}
-	// End date should be end of day (23:59:59)
-	endTime, err := time.Parse("2006-01-02", endDateStr)
-	if err != nil {
-		return nil, fmt.Errorf("invalid end_date: %w", err)
-	}
-	endUnix := time.Date(endTime.Year(), endTime.Month(), endTime.Day(), 23, 59, 59, 0, time.UTC).Unix()
 
-	// Query price history for this security using ISIN
-	rows, err := s.historyDB.Query(`
-		SELECT date, close
-		FROM daily_prices
-		WHERE isin = ? AND date >= ? AND date <= ?
-		ORDER BY date ASC
-	`, isin, startUnix, endUnix)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query price history for %s: %w", isin, err)
-	}
-	defer rows.Close()
-
+	// Filter to last 12 months and collect prices in chronological order
+	// dailyPrices comes in descending order (most recent first)
 	var prices []struct {
 		Date  string
 		Close float64
 	}
 
-	for rows.Next() {
-		var p struct {
-			Date  string
-			Close float64
+	for i := len(dailyPrices) - 1; i >= 0; i-- {
+		p := dailyPrices[i]
+		if p.Date >= startDateStr {
+			prices = append(prices, struct {
+				Date  string
+				Close float64
+			}{Date: p.Date, Close: p.Close})
 		}
-		var dateUnix sql.NullInt64
-		if err := rows.Scan(&dateUnix, &p.Close); err != nil {
-			return nil, err
-		}
-		if dateUnix.Valid {
-			p.Date = utils.UnixToDate(dateUnix.Int64)
-		}
-		prices = append(prices, p)
 	}
 
 	if len(prices) < 2 {

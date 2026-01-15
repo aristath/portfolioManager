@@ -15,14 +15,14 @@ import (
 
 // Handler handles risk metrics HTTP requests
 type Handler struct {
-	historyDB    *universe.HistoryDB
+	historyDB    universe.HistoryDBInterface
 	positionRepo portfolio.PositionRepositoryInterface
 	log          zerolog.Logger
 }
 
 // NewHandler creates a new risk metrics handler
 func NewHandler(
-	historyDB *universe.HistoryDB,
+	historyDB universe.HistoryDBInterface,
 	positionRepo portfolio.PositionRepositoryInterface,
 	log zerolog.Logger,
 ) *Handler {

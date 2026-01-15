@@ -120,6 +120,7 @@ func New(cfg Config) *Server {
 		cfg.ConfigDB,
 		cfg.UniverseDB,
 		cfg.HistoryDB,
+		cfg.Container.HistoryDBClient,
 		cfg.Container.QueueManager,
 		cfg.DisplayManager,
 		tradernetClient,
@@ -558,7 +559,7 @@ func (s *Server) setupRoutes() {
 		// Charts module
 		chartsSecurityRepo := s.container.SecurityRepo
 		chartsService := charts.NewService(
-			s.historyDB.Conn(),
+			s.container.HistoryDBClient,
 			chartsSecurityRepo,
 			s.universeDB.Conn(),
 			s.log,

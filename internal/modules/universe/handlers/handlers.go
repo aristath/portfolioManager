@@ -123,7 +123,7 @@ type UniverseHandlers struct {
 	securityRepo            *universe.SecurityRepository
 	scoreRepo               *universe.ScoreRepository
 	securityScorer          *scorers.SecurityScorer
-	historyDB               *universe.HistoryDB
+	historyDB               universe.HistoryDBInterface
 	setupService            *universe.SecuritySetupService
 	deletionService         *universe.SecurityDeletionService
 	syncService             *universe.SyncService
@@ -138,7 +138,7 @@ func NewUniverseHandlers(
 	portfolioDB *sql.DB,
 	positionRepo *portfolio.PositionRepository,
 	securityScorer *scorers.SecurityScorer,
-	historyDB *universe.HistoryDB,
+	historyDB universe.HistoryDBInterface,
 	setupService *universe.SecuritySetupService,
 	deletionService *universe.SecurityDeletionService,
 	syncService *universe.SyncService,

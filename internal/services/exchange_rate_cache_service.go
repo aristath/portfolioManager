@@ -19,7 +19,7 @@ type SettingsServiceInterface interface {
 // Uses two-tier fallback: Tradernet API → Cached rates from history.db
 type ExchangeRateCacheService struct {
 	currencyExchangeService domain.CurrencyExchangeServiceInterface // Tradernet
-	historyDB               *universe.HistoryDB                     // Cache storage
+	historyDB               universe.HistoryDBInterface             // Cache storage
 	settingsService         SettingsServiceInterface                // Staleness config
 	log                     zerolog.Logger
 }
@@ -27,7 +27,7 @@ type ExchangeRateCacheService struct {
 // NewExchangeRateCacheService creates a new exchange rate cache service
 func NewExchangeRateCacheService(
 	currencyExchangeService domain.CurrencyExchangeServiceInterface,
-	historyDB *universe.HistoryDB,
+	historyDB universe.HistoryDBInterface,
 	settingsService SettingsServiceInterface,
 	log zerolog.Logger,
 ) *ExchangeRateCacheService {

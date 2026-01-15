@@ -39,12 +39,13 @@ func NewHistoryDB(db *sql.DB, priceFilter *PriceFilter, log zerolog.Logger) *His
 
 // DailyPrice represents a daily OHLCV price point
 type DailyPrice struct {
-	Date   string  `json:"date"`
-	Open   float64 `json:"open"`
-	High   float64 `json:"high"`
-	Low    float64 `json:"low"`
-	Close  float64 `json:"close"`
-	Volume *int64  `json:"volume,omitempty"`
+	Date          string   `json:"date"`
+	Open          float64  `json:"open"`
+	High          float64  `json:"high"`
+	Low           float64  `json:"low"`
+	Close         float64  `json:"close"`
+	AdjustedClose *float64 `json:"adjusted_close,omitempty"`
+	Volume        *int64   `json:"volume,omitempty"`
 }
 
 // MonthlyPrice represents a monthly average price
@@ -73,7 +74,17 @@ func (h *HistoryDB) GetDailyPrices(isin string, limit int) ([]DailyPrice, error)
 	// Cache the result
 	h.cacheMu.Lock()
 	h.priceCache[isin] = filtered
+	cacheSize := len(h.priceCache)
 	h.cacheMu.Unlock()
+
+	// Log cache growth periodically (every 10 ISINs cached)
+	if cacheSize%10 == 0 && cacheSize > 0 {
+		h.log.Debug().
+			Int("cached_isins", cacheSize).
+			Str("latest_isin", isin).
+			Int("prices_cached", len(filtered)).
+			Msg("Price cache status")
+	}
 
 	return h.applyLimit(filtered, limit), nil
 }
@@ -110,7 +121,7 @@ func (h *HistoryDB) GetRecentPrices(isin string, days int) ([]DailyPrice, error)
 // filters anomalies, then returns in descending order (most recent first)
 func (h *HistoryDB) fetchAndFilter(isin string) ([]DailyPrice, error) {
 	query := `
-		SELECT date, close, high, low, open, volume
+		SELECT date, close, high, low, open, volume, adjusted_close
 		FROM daily_prices
 		WHERE isin = ?
 		ORDER BY date ASC
@@ -127,8 +138,9 @@ func (h *HistoryDB) fetchAndFilter(isin string) ([]DailyPrice, error) {
 		var p DailyPrice
 		var volume sql.NullInt64
 		var dateUnix sql.NullInt64
+		var adjustedClose sql.NullFloat64
 
-		err := rows.Scan(&dateUnix, &p.Close, &p.High, &p.Low, &p.Open, &volume)
+		err := rows.Scan(&dateUnix, &p.Close, &p.High, &p.Low, &p.Open, &volume, &adjustedClose)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan daily price: %w", err)
 		}
@@ -139,6 +151,9 @@ func (h *HistoryDB) fetchAndFilter(isin string) ([]DailyPrice, error) {
 		}
 		if volume.Valid {
 			p.Volume = &volume.Int64
+		}
+		if adjustedClose.Valid {
+			p.AdjustedClose = &adjustedClose.Float64
 		}
 
 		rawPrices = append(rawPrices, p)
@@ -234,9 +249,10 @@ func (h *HistoryDB) HasMonthlyData(isin string) (bool, error) {
 }
 
 // SyncHistoricalPrices writes historical price data to the database
-// Stores raw data from Tradernet without validation - filtering happens on read
+// Stores raw daily data from Tradernet, then aggregates FILTERED data to monthly prices.
+// Daily prices are stored raw (filtering happens on read via GetDailyPrices).
+// Monthly prices are aggregated from filtered data to ensure CAGR calculations are accurate.
 //
-// Inserts/replaces daily prices and aggregates to monthly prices in a single transaction
 // The isin parameter is the ISIN (e.g., US0378331005), not the Tradernet symbol
 func (h *HistoryDB) SyncHistoricalPrices(isin string, prices []DailyPrice) error {
 	// Begin transaction
@@ -246,7 +262,7 @@ func (h *HistoryDB) SyncHistoricalPrices(isin string, prices []DailyPrice) error
 	}
 	defer tx.Rollback() // Will be no-op if Commit succeeds
 
-	// Insert/replace daily prices with ISIN
+	// Insert/replace daily prices with ISIN (raw data)
 	stmt, err := tx.Prepare(`
 		INSERT OR REPLACE INTO daily_prices
 		(isin, date, open, high, low, close, volume, adjusted_close)
@@ -287,23 +303,41 @@ func (h *HistoryDB) SyncHistoricalPrices(isin string, prices []DailyPrice) error
 		}
 	}
 
-	// Aggregate to monthly prices with ISIN filter
-	_, err = tx.Exec(`
+	// Aggregate FILTERED prices to monthly
+	// Sort prices chronologically for filtering (filter expects oldest first)
+	sortedPrices := make([]DailyPrice, len(prices))
+	copy(sortedPrices, prices)
+	sort.Slice(sortedPrices, func(i, j int) bool {
+		return sortedPrices[i].Date < sortedPrices[j].Date
+	})
+
+	// Filter anomalies before aggregation
+	var filteredPrices []DailyPrice
+	if h.priceFilter != nil {
+		filteredPrices = h.priceFilter.Filter(sortedPrices)
+	} else {
+		filteredPrices = sortedPrices
+	}
+
+	// Aggregate filtered prices by month
+	monthlyAggregates := h.aggregateByMonth(filteredPrices)
+
+	// Write monthly aggregates
+	monthlyStmt, err := tx.Prepare(`
 		INSERT OR REPLACE INTO monthly_prices
 		(isin, year_month, avg_close, avg_adj_close, source, created_at)
-		SELECT
-			? as isin,
-			strftime('%Y-%m', datetime(date, 'unixepoch')) as year_month,
-			AVG(close) as avg_close,
-			AVG(adjusted_close) as avg_adj_close,
-			'calculated',
-			strftime('%s', 'now')
-		FROM daily_prices
-		WHERE isin = ?
-		GROUP BY strftime('%Y-%m', datetime(date, 'unixepoch'))
-	`, isin, isin)
+		VALUES (?, ?, ?, ?, 'calculated', strftime('%s', 'now'))
+	`)
 	if err != nil {
-		return fmt.Errorf("failed to aggregate monthly prices: %w", err)
+		return fmt.Errorf("failed to prepare monthly statement: %w", err)
+	}
+	defer monthlyStmt.Close()
+
+	for yearMonth, avg := range monthlyAggregates {
+		_, err = monthlyStmt.Exec(isin, yearMonth, avg.avgClose, avg.avgAdjClose)
+		if err != nil {
+			return fmt.Errorf("failed to insert monthly price for %s: %w", yearMonth, err)
+		}
 	}
 
 	// Commit transaction
@@ -316,10 +350,61 @@ func (h *HistoryDB) SyncHistoricalPrices(isin string, prices []DailyPrice) error
 
 	h.log.Info().
 		Str("isin", isin).
-		Int("count", len(prices)).
+		Int("daily_count", len(prices)).
+		Int("filtered_count", len(filteredPrices)).
+		Int("monthly_count", len(monthlyAggregates)).
 		Msg("Synced historical prices")
 
 	return nil
+}
+
+// monthlyAggregate holds aggregated monthly price data
+type monthlyAggregate struct {
+	avgClose    float64
+	avgAdjClose float64
+}
+
+// aggregateByMonth groups filtered prices by year-month and calculates averages
+func (h *HistoryDB) aggregateByMonth(prices []DailyPrice) map[string]monthlyAggregate {
+	// Group prices by year-month
+	type monthData struct {
+		closeSum    float64
+		adjCloseSum float64
+		count       int
+	}
+	monthGroups := make(map[string]*monthData)
+
+	for _, p := range prices {
+		if len(p.Date) < 7 {
+			continue // Invalid date format
+		}
+		yearMonth := p.Date[:7] // "2024-01" from "2024-01-15"
+
+		if _, ok := monthGroups[yearMonth]; !ok {
+			monthGroups[yearMonth] = &monthData{}
+		}
+
+		monthGroups[yearMonth].closeSum += p.Close
+		if p.AdjustedClose != nil {
+			monthGroups[yearMonth].adjCloseSum += *p.AdjustedClose
+		} else {
+			monthGroups[yearMonth].adjCloseSum += p.Close
+		}
+		monthGroups[yearMonth].count++
+	}
+
+	// Calculate averages
+	result := make(map[string]monthlyAggregate)
+	for yearMonth, data := range monthGroups {
+		if data.count > 0 {
+			result[yearMonth] = monthlyAggregate{
+				avgClose:    data.closeSum / float64(data.count),
+				avgAdjClose: data.adjCloseSum / float64(data.count),
+			}
+		}
+	}
+
+	return result
 }
 
 // ExchangeRate represents a cached exchange rate

@@ -5,11 +5,79 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aristath/sentinel/internal/modules/universe"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	_ "modernc.org/sqlite"
 )
+
+// mockHistoryDB is a test mock implementing universe.HistoryDBInterface
+type mockHistoryDB struct {
+	prices map[string][]universe.DailyPrice // keyed by ISIN
+}
+
+func newMockHistoryDB() *mockHistoryDB {
+	return &mockHistoryDB{
+		prices: make(map[string][]universe.DailyPrice),
+	}
+}
+
+// AddPrice adds a test price to the mock
+func (m *mockHistoryDB) AddPrice(isin string, date string, close, adjustedClose float64) {
+	adj := adjustedClose
+	m.prices[isin] = append(m.prices[isin], universe.DailyPrice{
+		Date:          date,
+		Close:         close,
+		AdjustedClose: &adj,
+		Open:          close,
+		High:          close,
+		Low:           close,
+	})
+}
+
+func (m *mockHistoryDB) GetDailyPrices(isin string, limit int) ([]universe.DailyPrice, error) {
+	prices := m.prices[isin]
+	if limit > 0 && len(prices) > limit {
+		return prices[:limit], nil
+	}
+	return prices, nil
+}
+
+func (m *mockHistoryDB) GetRecentPrices(isin string, days int) ([]universe.DailyPrice, error) {
+	return m.GetDailyPrices(isin, days)
+}
+
+func (m *mockHistoryDB) GetMonthlyPrices(isin string, limit int) ([]universe.MonthlyPrice, error) {
+	return nil, nil
+}
+
+func (m *mockHistoryDB) HasMonthlyData(isin string) (bool, error) {
+	return false, nil
+}
+
+func (m *mockHistoryDB) SyncHistoricalPrices(isin string, prices []universe.DailyPrice) error {
+	return nil
+}
+
+func (m *mockHistoryDB) DeletePricesForSecurity(isin string) error {
+	delete(m.prices, isin)
+	return nil
+}
+
+func (m *mockHistoryDB) UpsertExchangeRate(fromCurrency, toCurrency string, rate float64) error {
+	return nil
+}
+
+func (m *mockHistoryDB) GetLatestExchangeRate(fromCurrency, toCurrency string) (*universe.ExchangeRate, error) {
+	return nil, nil
+}
+
+func (m *mockHistoryDB) InvalidateCache(isin string) {}
+func (m *mockHistoryDB) InvalidateAllCaches()        {}
+
+// Compile-time check that mockHistoryDB implements the interface
+var _ universe.HistoryDBInterface = (*mockHistoryDB)(nil)
 
 func setupTestDB(t *testing.T) (*sql.DB, func()) {
 	db, err := sql.Open("sqlite", ":memory:")
@@ -81,8 +149,8 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 }
 
 func TestDataPrep_ExtractTrainingExamples_MinimumHistory(t *testing.T) {
-	historyDB, cleanup := setupTestDB(t)
-	defer cleanup()
+	// Create mock for history DB with filtered prices
+	mockHistory := newMockHistoryDB()
 
 	portfolioDB, cleanup2 := setupTestDB(t)
 	defer cleanup2()
@@ -93,24 +161,17 @@ func TestDataPrep_ExtractTrainingExamples_MinimumHistory(t *testing.T) {
 	universeDB, cleanup4 := setupTestDB(t)
 	defer cleanup4()
 
-	defer cleanup2()
-	defer cleanup3()
-	defer cleanup4()
-
 	// Insert test data: security with 18 months of history (minimum required)
 	isin := "US0378331005"
 	symbol := "AAPL"
 
-	// Insert daily prices: 18 months = ~540 days (use ISIN)
+	// Add daily prices to mock: 18 months = ~540 days
 	baseDate := time.Date(2023, 1, 15, 0, 0, 0, 0, time.UTC)
 	for i := 0; i < 540; i++ {
 		date := baseDate.AddDate(0, 0, i)
-		dateUnix := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC).Unix()
-		_, err := historyDB.Exec(
-			"INSERT INTO daily_prices (isin, date, close, adjusted_close) VALUES (?, ?, ?, ?)",
-			isin, dateUnix, 100.0+float64(i)*0.1, 100.0+float64(i)*0.1,
-		)
-		require.NoError(t, err)
+		dateStr := date.Format("2006-01-02")
+		price := 100.0 + float64(i)*0.1
+		mockHistory.AddPrice(isin, dateStr, price, price)
 	}
 
 	// Insert score at training date (2023-07-15)
@@ -137,7 +198,7 @@ func TestDataPrep_ExtractTrainingExamples_MinimumHistory(t *testing.T) {
 	require.NoError(t, err)
 
 	log := zerolog.Nop()
-	prep := NewDataPrep(historyDB, portfolioDB, configDB, universeDB, log)
+	prep := NewDataPrep(mockHistory, portfolioDB, configDB, universeDB, log)
 
 	// Extract training examples for 6-month forward returns
 	examples, err := prep.ExtractTrainingExamples(
@@ -165,8 +226,8 @@ func TestDataPrep_ExtractTrainingExamples_MinimumHistory(t *testing.T) {
 }
 
 func TestDataPrep_ExtractTrainingExamples_InsufficientHistory(t *testing.T) {
-	historyDB, cleanup := setupTestDB(t)
-	defer cleanup()
+	// Create mock for history DB with filtered prices
+	mockHistory := newMockHistoryDB()
 
 	portfolioDB, cleanup2 := setupTestDB(t)
 	defer cleanup2()
@@ -177,24 +238,16 @@ func TestDataPrep_ExtractTrainingExamples_InsufficientHistory(t *testing.T) {
 	universeDB, cleanup4 := setupTestDB(t)
 	defer cleanup4()
 
-	defer cleanup2()
-	defer cleanup3()
-	defer cleanup4()
-
 	// Insert test data: security with only 3 months of history (insufficient)
 	isin := "US1234567890"
 	symbol := "NEWCO"
 
 	baseDate := time.Date(2023, 1, 15, 0, 0, 0, 0, time.UTC)
-	// Only 90 days (3 months) - insufficient for 6-month forward return (use ISIN)
+	// Only 90 days (3 months) - insufficient for 6-month forward return
 	for i := 0; i < 90; i++ {
 		date := baseDate.AddDate(0, 0, i)
-		dateUnix := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC).Unix()
-		_, err := historyDB.Exec(
-			"INSERT INTO daily_prices (isin, date, close, adjusted_close) VALUES (?, ?, ?, ?)",
-			isin, dateUnix, 50.0, 50.0,
-		)
-		require.NoError(t, err)
+		dateStr := date.Format("2006-01-02")
+		mockHistory.AddPrice(isin, dateStr, 50.0, 50.0)
 	}
 
 	_, err := universeDB.Exec(
@@ -204,7 +257,7 @@ func TestDataPrep_ExtractTrainingExamples_InsufficientHistory(t *testing.T) {
 	require.NoError(t, err)
 
 	log := zerolog.Nop()
-	prep := NewDataPrep(historyDB, portfolioDB, configDB, universeDB, log)
+	prep := NewDataPrep(mockHistory, portfolioDB, configDB, universeDB, log)
 
 	// Extract training examples
 	examples, err := prep.ExtractTrainingExamples(
@@ -220,8 +273,8 @@ func TestDataPrep_ExtractTrainingExamples_InsufficientHistory(t *testing.T) {
 }
 
 func TestDataPrep_ExtractTrainingExamples_TimeWindowed(t *testing.T) {
-	historyDB, cleanup := setupTestDB(t)
-	defer cleanup()
+	// Create mock for history DB with filtered prices
+	mockHistory := newMockHistoryDB()
 
 	portfolioDB, cleanup2 := setupTestDB(t)
 	defer cleanup2()
@@ -230,10 +283,6 @@ func TestDataPrep_ExtractTrainingExamples_TimeWindowed(t *testing.T) {
 	defer cleanup3()
 
 	universeDB, cleanup4 := setupTestDB(t)
-	defer cleanup4()
-
-	defer cleanup2()
-	defer cleanup3()
 	defer cleanup4()
 
 	// Create two securities with different history lengths
@@ -246,12 +295,8 @@ func TestDataPrep_ExtractTrainingExamples_TimeWindowed(t *testing.T) {
 	aaplStart := time.Date(2014, 1, 15, 0, 0, 0, 0, time.UTC)
 	for i := 0; i < 3650; i++ {
 		date := aaplStart.AddDate(0, 0, i)
-		dateUnix := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC).Unix()
-		_, err := historyDB.Exec(
-			"INSERT INTO daily_prices (isin, date, close, adjusted_close) VALUES (?, ?, ?, ?)",
-			aaplISIN, dateUnix, 100.0, 100.0,
-		)
-		require.NoError(t, err)
+		dateStr := date.Format("2006-01-02")
+		mockHistory.AddPrice(aaplISIN, dateStr, 100.0, 100.0)
 	}
 
 	_, err := universeDB.Exec(
@@ -293,12 +338,8 @@ func TestDataPrep_ExtractTrainingExamples_TimeWindowed(t *testing.T) {
 	newcoStart := time.Date(2022, 1, 15, 0, 0, 0, 0, time.UTC)
 	for i := 0; i < 730; i++ {
 		date := newcoStart.AddDate(0, 0, i)
-		dateUnix := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC).Unix()
-		_, err := historyDB.Exec(
-			"INSERT INTO daily_prices (isin, date, close, adjusted_close) VALUES (?, ?, ?, ?)",
-			newcoISIN, dateUnix, 50.0, 50.0,
-		)
-		require.NoError(t, err)
+		dateStr := date.Format("2006-01-02")
+		mockHistory.AddPrice(newcoISIN, dateStr, 50.0, 50.0)
 	}
 
 	_, err = universeDB.Exec(
@@ -317,7 +358,7 @@ func TestDataPrep_ExtractTrainingExamples_TimeWindowed(t *testing.T) {
 	require.NoError(t, err)
 
 	log := zerolog.Nop()
-	prep := NewDataPrep(historyDB, portfolioDB, configDB, universeDB, log)
+	prep := NewDataPrep(mockHistory, portfolioDB, configDB, universeDB, log)
 
 	// Test 1: Training date 2020-01-15 (before NEWCO exists)
 	examples2020, err := prep.ExtractTrainingExamples(
@@ -359,30 +400,17 @@ func TestDataPrep_ExtractTrainingExamples_TimeWindowed(t *testing.T) {
 }
 
 func TestDataPrep_CalculateTargetReturn(t *testing.T) {
-	historyDB, cleanup := setupTestDB(t)
-	defer cleanup()
-
-	log := zerolog.Nop()
-	prep := NewDataPrep(historyDB, nil, nil, nil, log)
+	// Create mock for history DB with filtered prices
+	mockHistory := newMockHistoryDB()
 
 	isin := "US0378331005" // AAPL ISIN
 
-	// Insert price data: $100 on 2023-01-15, $110 on 2023-07-15 (10% return)
-	startDate, _ := time.Parse("2006-01-02", "2023-01-15")
-	startDateUnix := time.Date(startDate.Year(), startDate.Month(), startDate.Day(), 0, 0, 0, 0, time.UTC).Unix()
-	_, err := historyDB.Exec(
-		"INSERT INTO daily_prices (isin, date, close, adjusted_close) VALUES (?, ?, ?, ?)",
-		isin, startDateUnix, 100.0, 100.0,
-	)
-	require.NoError(t, err)
+	// Add price data: $100 on 2023-01-15, $110 on 2023-07-15 (10% return)
+	mockHistory.AddPrice(isin, "2023-01-15", 100.0, 100.0)
+	mockHistory.AddPrice(isin, "2023-07-15", 110.0, 110.0)
 
-	endDate, _ := time.Parse("2006-01-02", "2023-07-15")
-	endDateUnix := time.Date(endDate.Year(), endDate.Month(), endDate.Day(), 0, 0, 0, 0, time.UTC).Unix()
-	_, err = historyDB.Exec(
-		"INSERT INTO daily_prices (isin, date, close, adjusted_close) VALUES (?, ?, ?, ?)",
-		isin, endDateUnix, 110.0, 110.0,
-	)
-	require.NoError(t, err)
+	log := zerolog.Nop()
+	prep := NewDataPrep(mockHistory, nil, nil, nil, log)
 
 	// Calculate 6-month return
 	returnVal, err := prep.calculateTargetReturn(isin, "2023-01-15", "2023-07-15")
@@ -393,11 +421,11 @@ func TestDataPrep_CalculateTargetReturn(t *testing.T) {
 }
 
 func TestDataPrep_CalculateTargetReturn_NoData(t *testing.T) {
-	historyDB, cleanup := setupTestDB(t)
-	defer cleanup()
+	// Create empty mock
+	mockHistory := newMockHistoryDB()
 
 	log := zerolog.Nop()
-	prep := NewDataPrep(historyDB, nil, nil, nil, log)
+	prep := NewDataPrep(mockHistory, nil, nil, nil, log)
 
 	// Try to calculate return for non-existent security
 	_, err := prep.calculateTargetReturn("NONEXISTENT", "2023-01-15", "2023-07-15")

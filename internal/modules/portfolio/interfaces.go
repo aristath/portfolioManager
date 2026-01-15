@@ -43,22 +43,5 @@ type PositionRepositoryInterface interface {
 // Compile-time check that PositionRepository implements PositionRepositoryInterface
 var _ PositionRepositoryInterface = (*PositionRepository)(nil)
 
-// HistoryRepositoryInterface defines the contract for history repository operations
-type HistoryRepositoryInterface interface {
-	// GetDailyRange retrieves daily price history within a date range
-	// startDate and endDate are in YYYY-MM-DD format
-	GetDailyRange(startDate, endDate string) ([]DailyPrice, error)
-
-	// GetLatestPrice retrieves the most recent price
-	GetLatestPrice() (*DailyPrice, error)
-
-	// GetLatestPriceWithStalenessCheck retrieves the most recent price and validates freshness
-	// Returns error if price is stale (older than maxAgeHours)
-	GetLatestPriceWithStalenessCheck(maxAgeHours float64) (*DailyPrice, error)
-}
-
-// Compile-time check that HistoryRepository implements HistoryRepositoryInterface
-var _ HistoryRepositoryInterface = (*HistoryRepository)(nil)
-
 // Note: TradernetClientInterface and CurrencyExchangeServiceInterface have been moved to domain/interfaces.go
 // They are now available as domain.TradernetClientInterface and domain.CurrencyExchangeServiceInterface

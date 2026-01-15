@@ -7,21 +7,22 @@ import (
 	"math"
 	"time"
 
+	"github.com/aristath/sentinel/internal/modules/universe"
 	"github.com/rs/zerolog"
 )
 
 // DataPrep extracts historical training examples for symbolic regression
 type DataPrep struct {
-	historyDB   *sql.DB // history.db - daily_prices, monthly_prices
-	portfolioDB *sql.DB // portfolio.db - scores, calculated_metrics
-	configDB    *sql.DB // config.db - market_regime_history
-	universeDB  *sql.DB // universe.db - securities
+	historyDB   universe.HistoryDBInterface // history.db - filtered daily prices
+	portfolioDB *sql.DB                     // portfolio.db - scores, calculated_metrics
+	configDB    *sql.DB                     // config.db - market_regime_history
+	universeDB  *sql.DB                     // universe.db - securities
 	log         zerolog.Logger
 }
 
 // NewDataPrep creates a new data preparation service
 func NewDataPrep(
-	historyDB *sql.DB,
+	historyDB universe.HistoryDBInterface,
 	portfolioDB *sql.DB,
 	configDB *sql.DB,
 	universeDB *sql.DB,
@@ -166,44 +167,66 @@ func (dp *DataPrep) getAllSecurities() ([]SecurityInfo, error) {
 }
 
 // hasSufficientHistory checks if security has data at both training and target dates
-// Parameter isin is the ISIN identifier (daily_prices table uses isin column)
+// Parameter isin is the ISIN identifier
 // Uses closest available date within ±5 days to handle weekends/holidays
 func (dp *DataPrep) hasSufficientHistory(isin string, trainingDate, targetDate time.Time) (bool, error) {
-	// Convert dates to Unix timestamps at midnight UTC
-	trainingUnix := time.Date(trainingDate.Year(), trainingDate.Month(), trainingDate.Day(), 0, 0, 0, 0, time.UTC).Unix()
-	targetUnix := time.Date(targetDate.Year(), targetDate.Month(), targetDate.Day(), 0, 0, 0, 0, time.UTC).Unix()
+	// Get all filtered prices for this security (uses cache)
+	prices, err := dp.historyDB.GetDailyPrices(isin, 0) // 0 = no limit
+	if err != nil {
+		return false, fmt.Errorf("failed to get prices: %w", err)
+	}
 
-	// ±5 days in seconds
-	fiveDaysSeconds := int64(5 * 24 * 60 * 60)
+	if len(prices) == 0 {
+		return false, nil
+	}
 
 	// Check if we have price data near training date (±5 days)
-	var count int
-	err := dp.historyDB.QueryRow(
-		`SELECT COUNT(*) FROM daily_prices
-		 WHERE isin = ? AND date >= ? AND date <= ?`,
-		isin, trainingUnix-fiveDaysSeconds, trainingUnix+fiveDaysSeconds,
-	).Scan(&count)
-	if err != nil {
-		return false, fmt.Errorf("failed to check training date price: %w", err)
-	}
-	if count == 0 {
+	trainingPrice := dp.findPriceNearDate(prices, trainingDate)
+	if trainingPrice == nil {
 		return false, nil
 	}
 
 	// Check if we have price data near target date (±5 days)
-	err = dp.historyDB.QueryRow(
-		`SELECT COUNT(*) FROM daily_prices
-		 WHERE isin = ? AND date >= ? AND date <= ?`,
-		isin, targetUnix-fiveDaysSeconds, targetUnix+fiveDaysSeconds,
-	).Scan(&count)
-	if err != nil {
-		return false, fmt.Errorf("failed to check target date price: %w", err)
-	}
-	if count == 0 {
+	targetPrice := dp.findPriceNearDate(prices, targetDate)
+	if targetPrice == nil {
 		return false, nil
 	}
 
 	return true, nil
+}
+
+// findPriceNearDate finds the closest price within ±5 days of the given date
+// Returns nil if no price found within the window
+func (dp *DataPrep) findPriceNearDate(prices []universe.DailyPrice, targetDate time.Time) *universe.DailyPrice {
+	targetStr := targetDate.Format("2006-01-02")
+
+	var bestMatch *universe.DailyPrice
+	var minDiff int64 = 6 * 24 * 60 * 60 // Start with > 5 days (in seconds)
+
+	for i := range prices {
+		priceDate, err := time.Parse("2006-01-02", prices[i].Date)
+		if err != nil {
+			continue
+		}
+
+		diff := targetDate.Unix() - priceDate.Unix()
+		if diff < 0 {
+			diff = -diff
+		}
+
+		// Within ±5 days and closer than previous best
+		if diff <= 5*24*60*60 && diff < minDiff {
+			minDiff = diff
+			bestMatch = &prices[i]
+
+			// Exact match - no need to continue
+			if prices[i].Date == targetStr {
+				break
+			}
+		}
+	}
+
+	return bestMatch
 }
 
 // extractInputs extracts all input features for a security at a given date
@@ -447,63 +470,66 @@ func convertCAGRScoreToCAGR(cagrScore float64) float64 {
 }
 
 // calculateTargetReturn calculates the actual return from startDate to endDate
-// Parameter isin is the ISIN identifier (daily_prices table uses isin column)
+// Parameter isin is the ISIN identifier
 // startDate and endDate are in YYYY-MM-DD format
 // Uses closest available date within ±5 days to handle weekends/holidays
+// Uses filtered prices via HistoryDBInterface for clean ML training data
 func (dp *DataPrep) calculateTargetReturn(isin, startDate, endDate string) (float64, error) {
-	// Convert YYYY-MM-DD to Unix timestamps at midnight UTC
+	// Parse dates
 	startTime, err := time.Parse("2006-01-02", startDate)
 	if err != nil {
 		return 0, fmt.Errorf("invalid start_date format (expected YYYY-MM-DD): %w", err)
 	}
-	startUnix := time.Date(startTime.Year(), startTime.Month(), startTime.Day(), 0, 0, 0, 0, time.UTC).Unix()
 
 	endTime, err := time.Parse("2006-01-02", endDate)
 	if err != nil {
 		return 0, fmt.Errorf("invalid end_date format (expected YYYY-MM-DD): %w", err)
 	}
-	endUnix := time.Date(endTime.Year(), endTime.Month(), endTime.Day(), 0, 0, 0, 0, time.UTC).Unix()
 
-	// ±5 days in seconds
-	fiveDaysSeconds := int64(5 * 24 * 60 * 60)
-
-	// Get price at start date (use closest available date within ±5 days)
-	var startPrice sql.NullFloat64
-	err = dp.historyDB.QueryRow(
-		`SELECT adjusted_close FROM daily_prices
-		 WHERE isin = ? AND date >= ? AND date <= ?
-		 ORDER BY ABS(date - ?) ASC
-		 LIMIT 1`,
-		isin, startUnix-fiveDaysSeconds, startUnix+fiveDaysSeconds, startUnix,
-	).Scan(&startPrice)
+	// Get all filtered prices for this security (uses cache)
+	prices, err := dp.historyDB.GetDailyPrices(isin, 0) // 0 = no limit
 	if err != nil {
-		return 0, fmt.Errorf("failed to get start price: %w", err)
+		return 0, fmt.Errorf("failed to get prices: %w", err)
 	}
-	if !startPrice.Valid || startPrice.Float64 <= 0 {
+
+	if len(prices) == 0 {
+		return 0, fmt.Errorf("no price data for %s", isin)
+	}
+
+	// Find price at start date (±5 days)
+	startPriceData := dp.findPriceNearDate(prices, startTime)
+	if startPriceData == nil {
+		return 0, fmt.Errorf("no price found near start date %s for %s", startDate, isin)
+	}
+
+	// Find price at end date (±5 days)
+	endPriceData := dp.findPriceNearDate(prices, endTime)
+	if endPriceData == nil {
+		return 0, fmt.Errorf("no price found near end date %s for %s", endDate, isin)
+	}
+
+	// Use adjusted close for return calculation (accounts for dividends/splits)
+	// Fall back to close if adjusted_close not available
+	startPrice := startPriceData.Close
+	if startPriceData.AdjustedClose != nil && *startPriceData.AdjustedClose > 0 {
+		startPrice = *startPriceData.AdjustedClose
+	}
+
+	endPrice := endPriceData.Close
+	if endPriceData.AdjustedClose != nil && *endPriceData.AdjustedClose > 0 {
+		endPrice = *endPriceData.AdjustedClose
+	}
+
+	if startPrice <= 0 {
 		return 0, fmt.Errorf("invalid start price for %s at %s", isin, startDate)
 	}
-
-	// Get price at end date (use closest available date within ±5 days)
-	var endPrice sql.NullFloat64
-	err = dp.historyDB.QueryRow(
-		`SELECT adjusted_close FROM daily_prices
-		 WHERE isin = ? AND date >= ? AND date <= ?
-		 ORDER BY ABS(date - ?) ASC
-		 LIMIT 1`,
-		isin, endUnix-fiveDaysSeconds, endUnix+fiveDaysSeconds, endUnix,
-	).Scan(&endPrice)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get end price: %w", err)
-	}
-	if !endPrice.Valid || endPrice.Float64 <= 0 {
+	if endPrice <= 0 {
 		return 0, fmt.Errorf("invalid end price for %s at %s", isin, endDate)
 	}
 
 	// Calculate return: (end - start) / start
-	returnVal := (endPrice.Float64 - startPrice.Float64) / startPrice.Float64
+	returnVal := (endPrice - startPrice) / startPrice
 
-	// Annualize if needed (for 6 months, multiply by 2; for 12 months, already annual)
-	// Actually, we'll keep it as simple return for now, can annualize later if needed
 	return returnVal, nil
 }
 

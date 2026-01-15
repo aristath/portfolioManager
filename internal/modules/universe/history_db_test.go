@@ -651,3 +651,68 @@ func TestHistoryDB_GetDailyPrices_LimitWorksWithCache(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, prices3, 2)
 }
+
+func TestSyncHistoricalPrices_MonthlyAggregationUsesFilteredData(t *testing.T) {
+	db, historyDB := setupHistoryDBWithFilter(t)
+	defer db.Close()
+
+	isin := "US0378331005"
+
+	// Include an anomaly (extreme high that should be filtered)
+	// High > Close × 100 threshold means High=50000 with Close=200 is an anomaly
+	// All prices have valid OHLC relationships (High >= Close, Low <= Close, etc.)
+	prices := []DailyPrice{
+		{Date: "2024-02-01", Open: 100.0, High: 105.0, Low: 95.0, Close: 100.0, Volume: intPtr(1000000)},
+		{Date: "2024-02-02", Open: 200.0, High: 50000.0, Low: 195.0, Close: 200.0, Volume: intPtr(1000000)}, // Anomaly: High (50000) > Close×100 (20000)
+		{Date: "2024-02-03", Open: 148.0, High: 155.0, Low: 145.0, Close: 150.0, Volume: intPtr(1000000)},   // Valid OHLC
+	}
+
+	err := historyDB.SyncHistoricalPrices(isin, prices)
+	require.NoError(t, err)
+
+	// Verify all 3 daily prices were stored (raw data)
+	var dailyCount int
+	err = db.QueryRow("SELECT COUNT(*) FROM daily_prices WHERE isin = ?", isin).Scan(&dailyCount)
+	require.NoError(t, err)
+	assert.Equal(t, 3, dailyCount, "All 3 daily prices should be stored (raw)")
+
+	// Verify monthly average for February
+	// If anomaly included: avg = (100 + 200 + 150) / 3 = 150
+	// With anomaly filtered: avg = (100 + 150) / 2 = 125
+	var febAvg float64
+	err = db.QueryRow("SELECT avg_close FROM monthly_prices WHERE isin = ? AND year_month = '2024-02'", isin).Scan(&febAvg)
+	require.NoError(t, err)
+	assert.InDelta(t, 125.0, febAvg, 0.01, "Monthly average should be from filtered data (125), not raw data (150)")
+}
+
+func TestSyncHistoricalPrices_MonthlyAggregationExcludesCrash(t *testing.T) {
+	db, historyDB := setupHistoryDBWithFilter(t)
+	defer db.Close()
+
+	isin := "US0378331005"
+
+	// First establish context with valid prices (needed for day-over-day crash detection)
+	contextPrices := []DailyPrice{
+		{Date: "2024-01-01", Open: 100.0, High: 105.0, Low: 95.0, Close: 100.0, Volume: intPtr(1000000)},
+	}
+	err := historyDB.SyncHistoricalPrices(isin, contextPrices)
+	require.NoError(t, err)
+
+	// Now sync prices that include a crash (>90% drop in one day)
+	prices := []DailyPrice{
+		{Date: "2024-01-01", Open: 100.0, High: 105.0, Low: 95.0, Close: 100.0, Volume: intPtr(1000000)},
+		{Date: "2024-01-02", Open: 100.0, High: 105.0, Low: 5.0, Close: 5.0, Volume: intPtr(1000000)}, // 95% crash - anomaly
+		{Date: "2024-01-03", Open: 100.0, High: 105.0, Low: 95.0, Close: 102.0, Volume: intPtr(1000000)},
+	}
+
+	err = historyDB.SyncHistoricalPrices(isin, prices)
+	require.NoError(t, err)
+
+	// Verify monthly average excludes the crash price
+	// If crash included: avg = (100 + 5 + 102) / 3 = 69
+	// With crash filtered: avg = (100 + 102) / 2 = 101
+	var janAvg float64
+	err = db.QueryRow("SELECT avg_close FROM monthly_prices WHERE isin = ? AND year_month = '2024-01'", isin).Scan(&janAvg)
+	require.NoError(t, err)
+	assert.InDelta(t, 101.0, janAvg, 0.01, "Monthly average should exclude crash anomaly")
+}

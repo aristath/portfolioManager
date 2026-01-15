@@ -6,13 +6,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aristath/sentinel/internal/modules/universe"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func setupMarketIndexTestDB(t *testing.T) (*sql.DB, *sql.DB) {
+func setupMarketIndexTestDB(t *testing.T) (*sql.DB, *sql.DB, *universe.HistoryDB) {
 	// Create temporary databases
 	universeFile, err := os.CreateTemp("", "test_universe_*.db")
 	require.NoError(t, err)
@@ -68,7 +69,11 @@ func setupMarketIndexTestDB(t *testing.T) (*sql.DB, *sql.DB) {
 		os.Remove(historyFile.Name())
 	})
 
-	return universeDB, historyDB
+	// Create HistoryDB wrapper (nil filter for tests - no filtering)
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+	historyDBClient := universe.NewHistoryDB(historyDB, nil, log)
+
+	return universeDB, historyDB, historyDBClient
 }
 
 // setupTestIndices creates valid Tradernet indices in the test database
@@ -120,8 +125,8 @@ func setupTestPrices(t *testing.T, historyDB *sql.DB, symbols []string, days int
 }
 
 func TestGetMarketReturns(t *testing.T) {
-	universeDB, historyDB := setupMarketIndexTestDB(t)
-	service := NewMarketIndexService(universeDB, historyDB, nil, zerolog.Nop())
+	universeDB, historyDB, historyDBClient := setupMarketIndexTestDB(t)
+	service := NewMarketIndexService(universeDB, historyDBClient, nil, zerolog.Nop())
 
 	// Setup indices with valid Tradernet symbols
 	setupTestIndices(t, universeDB)
@@ -173,8 +178,8 @@ func TestGetMarketReturns(t *testing.T) {
 }
 
 func TestGetMarketReturns_PartialRegionData(t *testing.T) {
-	universeDB, historyDB := setupMarketIndexTestDB(t)
-	service := NewMarketIndexService(universeDB, historyDB, nil, zerolog.Nop())
+	universeDB, historyDB, historyDBClient := setupMarketIndexTestDB(t)
+	service := NewMarketIndexService(universeDB, historyDBClient, nil, zerolog.Nop())
 
 	// Setup indices
 	setupTestIndices(t, universeDB)
@@ -194,8 +199,8 @@ func TestGetMarketReturns_PartialRegionData(t *testing.T) {
 }
 
 func TestGetReturnsForRegion(t *testing.T) {
-	universeDB, historyDB := setupMarketIndexTestDB(t)
-	service := NewMarketIndexService(universeDB, historyDB, nil, zerolog.Nop())
+	universeDB, historyDB, historyDBClient := setupMarketIndexTestDB(t)
+	service := NewMarketIndexService(universeDB, historyDBClient, nil, zerolog.Nop())
 
 	// Setup indices
 	setupTestIndices(t, universeDB)
@@ -250,8 +255,8 @@ func TestGetReturnsForRegion(t *testing.T) {
 }
 
 func TestGetReturnsForAllRegions(t *testing.T) {
-	universeDB, historyDB := setupMarketIndexTestDB(t)
-	service := NewMarketIndexService(universeDB, historyDB, nil, zerolog.Nop())
+	universeDB, historyDB, historyDBClient := setupMarketIndexTestDB(t)
+	service := NewMarketIndexService(universeDB, historyDBClient, nil, zerolog.Nop())
 
 	// Setup indices
 	setupTestIndices(t, universeDB)
@@ -278,8 +283,8 @@ func TestGetReturnsForAllRegions(t *testing.T) {
 }
 
 func TestGetPriceIndicesForRegion(t *testing.T) {
-	universeDB, historyDB := setupMarketIndexTestDB(t)
-	service := NewMarketIndexService(universeDB, historyDB, nil, zerolog.Nop())
+	universeDB, _, historyDBClient := setupMarketIndexTestDB(t)
+	service := NewMarketIndexService(universeDB, historyDBClient, nil, zerolog.Nop())
 
 	t.Run("Returns correct indices for each region", func(t *testing.T) {
 		usIndices := service.GetPriceIndicesForRegion(RegionUS)

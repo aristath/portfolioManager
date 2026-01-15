@@ -197,26 +197,3 @@ func TestRegimeTimeDecayWeights(t *testing.T) {
 		})
 	}
 }
-
-func TestBuildPlaceholders(t *testing.T) {
-	rb := &RiskModelBuilder{}
-
-	tests := []struct {
-		name     string
-		n        int
-		expected string
-	}{
-		{"zero", 0, ""},
-		{"one", 1, "?"},
-		{"two", 2, "?, ?"},
-		{"three", 3, "?, ?, ?"},
-		{"five", 5, "?, ?, ?, ?, ?"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := rb.buildPlaceholders(tt.n)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}

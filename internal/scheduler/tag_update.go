@@ -22,7 +22,7 @@ type TagUpdateJob struct {
 	scoreRepo       *universe.ScoreRepository
 	tagAssigner     *universe.TagAssigner
 	yieldCalculator *dividends.DividendYieldCalculator
-	historyDB       *universe.HistoryDB
+	historyDB       universe.HistoryDBInterface
 	portfolioDB     *sql.DB
 	positionRepo    *portfolio.PositionRepository
 }
@@ -34,7 +34,7 @@ type TagUpdateConfig struct {
 	ScoreRepo       *universe.ScoreRepository
 	TagAssigner     *universe.TagAssigner
 	YieldCalculator *dividends.DividendYieldCalculator
-	HistoryDB       *universe.HistoryDB
+	HistoryDB       universe.HistoryDBInterface
 	PortfolioDB     *sql.DB
 	PositionRepo    *portfolio.PositionRepository
 }
