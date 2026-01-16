@@ -69,15 +69,117 @@ func (a *eventEmitterAdapter) Emit(event string, data any) {
 	if a.manager == nil {
 		return
 	}
-	// Convert string event name to events.EventType
-	eventType := events.EventType(event)
-	// Convert data to map[string]interface{} for EventManager
-	details, ok := data.(map[string]interface{})
-	if !ok && data != nil {
-		// Wrap non-map data in a map
-		details = map[string]interface{}{"data": data}
+
+	// Map work event names to proper EventType constants
+	var eventType events.EventType
+	switch event {
+	case work.EventJobStarted:
+		eventType = events.JobStarted
+	case work.EventJobProgress:
+		eventType = events.JobProgress
+	case work.EventJobCompleted:
+		eventType = events.JobCompleted
+	case work.EventJobFailed:
+		eventType = events.JobFailed
+	default:
+		// Fallback for unknown events
+		eventType = events.EventType(event)
 	}
-	a.manager.Emit(eventType, "", details)
+
+	// Convert work event structs to JobStatusData format expected by frontend
+	var jobData *events.JobStatusData
+
+	switch event {
+	case work.EventJobStarted:
+		if startedEvent, ok := data.(work.WorkStartedEvent); ok {
+			jobData = &events.JobStatusData{
+				JobID:       startedEvent.WorkID,
+				JobType:     startedEvent.WorkType,
+				Status:      "started",
+				Description: getJobDescription(startedEvent.WorkType),
+				Timestamp:   time.Now(),
+			}
+		}
+	case work.EventJobProgress:
+		if progressEvent, ok := data.(work.ProgressEvent); ok {
+			jobData = &events.JobStatusData{
+				JobID:   progressEvent.WorkID,
+				JobType: progressEvent.WorkType,
+				Status:  "progress",
+				Progress: &events.JobProgressInfo{
+					Current: progressEvent.Current,
+					Total:   progressEvent.Total,
+					Message: progressEvent.Message,
+					Phase:   progressEvent.Phase,
+					Details: progressEvent.Details,
+				},
+				Description: getJobDescription(progressEvent.WorkType),
+				Timestamp:   time.Now(),
+			}
+		}
+	case work.EventJobCompleted:
+		if completedEvent, ok := data.(work.WorkCompletedEvent); ok {
+			jobData = &events.JobStatusData{
+				JobID:       completedEvent.WorkID,
+				JobType:     completedEvent.WorkType,
+				Status:      "completed",
+				Description: getJobDescription(completedEvent.WorkType),
+				Duration:    float64(completedEvent.Duration.Milliseconds()),
+				Timestamp:   time.Now(),
+			}
+		}
+	case work.EventJobFailed:
+		if failedEvent, ok := data.(work.WorkFailedEvent); ok {
+			jobData = &events.JobStatusData{
+				JobID:       failedEvent.WorkID,
+				JobType:     failedEvent.WorkType,
+				Status:      "failed",
+				Description: getJobDescription(failedEvent.WorkType),
+				Error:       failedEvent.Error,
+				Duration:    float64(failedEvent.Duration.Milliseconds()),
+				Timestamp:   time.Now(),
+			}
+		}
+	}
+
+	// Emit with properly formatted JobStatusData
+	if jobData != nil {
+		a.manager.EmitTyped(eventType, "", jobData)
+	}
+}
+
+// getJobDescription returns a human-readable description for a job type
+func getJobDescription(jobType string) string {
+	descriptions := map[string]string{
+		"sync:portfolio":         "Syncing portfolio positions",
+		"sync:trades":            "Syncing trades from broker",
+		"sync:cashflows":         "Syncing cash flows",
+		"sync:prices":            "Updating security prices",
+		"sync:exchange-rates":    "Updating exchange rates",
+		"sync:display":           "Updating LED display",
+		"sync:negative-balances": "Checking account balances",
+		"planner:weights":        "Calculating portfolio weights",
+		"planner:context":        "Building opportunity context",
+		"planner:plan":           "Creating trade plan",
+		"planner:store":          "Storing recommendations",
+		"trading:execute":        "Executing trade",
+		"trading:retry":          "Retrying failed trades",
+		"maintenance:backup":     "Creating backup",
+		"maintenance:r2-backup":  "Uploading backup to cloud",
+		"maintenance:vacuum":     "Optimizing databases",
+		"maintenance:health":     "Running health checks",
+		"maintenance:cleanup":    "Cleaning up old data",
+		"security:metadata":      "Syncing security metadata",
+		"security:history":       "Syncing historical prices",
+		"dividend:detection":     "Detecting unreinvested dividends",
+		"dividend:execution":     "Executing dividend trades",
+		"analysis:market-regime": "Analyzing market regime",
+		"deployment:check":       "Checking for system updates",
+	}
+	if desc, ok := descriptions[jobType]; ok {
+		return desc
+	}
+	return jobType
 }
 
 // InitializeWork creates and wires up all work processor components
