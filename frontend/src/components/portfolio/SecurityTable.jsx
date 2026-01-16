@@ -194,7 +194,6 @@ export function SecurityTable() {
     if (visibleColumns.value) count++;
     if (visibleColumns.score) count++;
     if (visibleColumns.mult) count++;
-    if (visibleColumns.rating) count++;
     if (visibleColumns.bs) count++;
     if (visibleColumns.priority) count++;
     return count;
@@ -296,13 +295,6 @@ export function SecurityTable() {
                 onClick={() => toggleColumnVisibility('mult')}
               >
                 Mult
-              </Menu.Item>
-              <Menu.Item
-                className="security-table__column-toggle"
-                leftSection={visibleColumns.rating ? <IconCheck size={14} /> : <span style={{ width: 14 }} />}
-                onClick={() => toggleColumnVisibility('rating')}
-              >
-                Rating
               </Menu.Item>
               <Menu.Item
                 className="security-table__column-toggle"
@@ -508,7 +500,6 @@ export function SecurityTable() {
                 </Table.Th>
               )}
               {visibleColumns.mult && <Table.Th className="security-table__th security-table__th--mult" ta="center">Mult</Table.Th>}
-              {visibleColumns.rating && <Table.Th className="security-table__th security-table__th--rating" ta="center">Rating</Table.Th>}
               {visibleColumns.bs && <Table.Th className="security-table__th security-table__th--bs" ta="center">B/S</Table.Th>}
               {visibleColumns.priority && (
                 <Table.Th className="security-table__th security-table__th--priority" ta="right">
@@ -679,24 +670,9 @@ export function SecurityTable() {
                       </Badge>
                     </Table.Td>
                   )}
-                  {/* Multiplier column - inline editing of priority multiplier */}
+                  {/* Multiplier column - visual icon-based multiplier control */}
                   {visibleColumns.mult && (
                     <Table.Td className="security-table__td security-table__td--mult" ta="center">
-                      <NumberInput
-                        className="security-table__mult-input"
-                        size="xs"
-                        value={security.priority_multiplier || 1}
-                        min={0.1}
-                        max={3}
-                        step={0.1}
-                        onChange={(val) => updateMultiplier(security.isin, val)}
-                        style={{ width: '60px' }}
-                      />
-                    </Table.Td>
-                  )}
-                  {/* Rating column - visual icon-based multiplier control */}
-                  {visibleColumns.rating && (
-                    <Table.Td className="security-table__td security-table__td--rating" ta="center">
                       <RatingIcon
                         isin={security.isin}
                         currentMultiplier={security.priority_multiplier || 1.0}

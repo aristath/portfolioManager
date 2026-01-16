@@ -522,7 +522,7 @@ export const api = {
    */
   setSecurityOverride: (isin, field, value) => fetchJSON(`/api/securities/${isin}/overrides/${field}`, {
     method: 'PUT',
-    body: JSON.stringify({ value }),
+    body: JSON.stringify({ value: String(value) }),
   }),
 
   /**

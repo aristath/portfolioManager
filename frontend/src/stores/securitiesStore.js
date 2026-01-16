@@ -31,8 +31,7 @@ const DEFAULT_VISIBLE_COLUMNS = {
   price: true,      // Current price
   value: true,      // Portfolio value
   score: true,      // Priority score
-  mult: true,       // Priority multiplier (numeric input)
-  rating: true,     // Priority rating (icon + slider)
+  mult: true,       // Priority multiplier (icon + slider)
   bs: true,         // Buy/sell signal
   priority: true,   // Priority ranking
 };
