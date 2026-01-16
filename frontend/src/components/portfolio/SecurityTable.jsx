@@ -20,6 +20,7 @@
  */
 import { Card, Table, TextInput, Select, Group, Button, Text, ActionIcon, Badge, NumberInput, Menu, SegmentedControl, Skeleton } from '@mantine/core';
 import { IconEdit, IconRefresh, IconTrash, IconColumns, IconCheck } from '@tabler/icons-react';
+import { notifications } from '@mantine/notifications';
 import { useSecuritiesStore } from '../../stores/securitiesStore';
 import { useAppStore } from '../../stores/appStore';
 import { usePortfolioStore } from '../../stores/portfolioStore';
@@ -27,7 +28,111 @@ import { SecuritySparkline } from '../charts/SecuritySparkline';
 import { RatingIcon } from './RatingIcon';
 import { formatCurrency, formatNumber } from '../../utils/formatters';
 import { getTagName, getTagColor } from '../../utils/tagNames';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import { api } from '../../api/client';
+
+/**
+ * Inline editable text cell component
+ *
+ * Displays text that becomes an input field when clicked. Saves on blur or Enter.
+ *
+ * @param {Object} props - Component props
+ * @param {string} props.value - Current value
+ * @param {string} props.isin - Security ISIN for API calls
+ * @param {string} props.field - Field name to update (e.g., 'geography', 'industry')
+ * @param {string} props.placeholder - Placeholder text when empty
+ * @param {Function} props.onSave - Callback after successful save
+ * @returns {JSX.Element} Inline editable cell
+ */
+function InlineEditCell({ value, isin, field, placeholder, onSave }) {
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState(value || '');
+  const [saving, setSaving] = useState(false);
+  const inputRef = useRef(null);
+
+  // Focus input when entering edit mode
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editing]);
+
+  // Update local state when prop changes
+  useEffect(() => {
+    if (!editing) {
+      setEditValue(value || '');
+    }
+  }, [value, editing]);
+
+  const handleSave = async () => {
+    // Skip save if value unchanged
+    if (editValue === (value || '')) {
+      setEditing(false);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await api.updateSecurity(isin, { [field]: editValue });
+      if (onSave) {
+        await onSave();
+      }
+      setEditing(false);
+    } catch (e) {
+      console.error(`Failed to update ${field}:`, e);
+      notifications.show({
+        title: 'Error',
+        message: `Failed to update ${field}: ${e.message}`,
+        color: 'red',
+      });
+      // Revert to original value on error
+      setEditValue(value || '');
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSave();
+    } else if (e.key === 'Escape') {
+      setEditValue(value || '');
+      setEditing(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <TextInput
+        ref={inputRef}
+        size="xs"
+        value={editValue}
+        onChange={(e) => setEditValue(e.target.value)}
+        onBlur={handleSave}
+        onKeyDown={handleKeyDown}
+        disabled={saving}
+        placeholder={placeholder}
+        style={{ width: '120px' }}
+      />
+    );
+  }
+
+  return (
+    <Text
+      size="sm"
+      c="dimmed"
+      truncate
+      style={{ maxWidth: '96px', cursor: 'pointer' }}
+      onClick={() => setEditing(true)}
+      title={`Click to edit ${field}`}
+    >
+      {value || '-'}
+    </Text>
+  );
+}
 
 /**
  * Security table component
@@ -60,6 +165,7 @@ export function SecurityTable() {
     toggleColumnVisibility,
     fetchSparklines,
     setSparklineTimeframe,
+    fetchSecurities,
   } = useSecuritiesStore();
   const [sparklinesLoading, setSparklinesLoading] = useState(true);
   const { openEditSecurityModal, openAddSecurityModal } = useAppStore();
@@ -585,9 +691,13 @@ export function SecurityTable() {
                   )}
                   {visibleColumns.geography && (
                     <Table.Td className="security-table__td security-table__td--geography">
-                      <Text className="security-table__geography" size="sm" c="dimmed" truncate style={{ maxWidth: '96px' }}>
-                        {security.geography || '-'}
-                      </Text>
+                      <InlineEditCell
+                        value={security.geography}
+                        isin={security.isin}
+                        field="geography"
+                        placeholder="e.g., EU, US"
+                        onSave={fetchSecurities}
+                      />
                     </Table.Td>
                   )}
                   {visibleColumns.exchange && (
@@ -599,9 +709,13 @@ export function SecurityTable() {
                   )}
                   {visibleColumns.sector && (
                     <Table.Td className="security-table__td security-table__td--sector">
-                      <Text className="security-table__sector" size="sm" c="dimmed" truncate style={{ maxWidth: '96px' }}>
-                        {security.industry || '-'}
-                      </Text>
+                      <InlineEditCell
+                        value={security.industry}
+                        isin={security.isin}
+                        field="industry"
+                        placeholder="e.g., Technology"
+                        onSave={fetchSecurities}
+                      />
                     </Table.Td>
                   )}
                   {/* Tags column - displays security tags with color coding */}
