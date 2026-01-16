@@ -758,6 +758,7 @@ func (h *SystemHandlers) returnMarketStatusFallback(w http.ResponseWriter) {
 		{"XMIL", "Milan"},
 		{"XAMS", "Amsterdam"},
 		{"XCSE", "Copenhagen"},
+		{"ASEX", "Athens"},
 		{"XHKG", "Hong Kong"},
 		{"XSHG", "Shanghai"},
 		{"XTSE", "Tokyo"},
