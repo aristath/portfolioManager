@@ -15,6 +15,21 @@ import { Group, Text, Button, Slider, Badge, Stack, Divider } from '@mantine/cor
 import { usePortfolioStore } from '../../stores/portfolioStore';
 
 /**
+ * Generates a consistent color for a geography name using hash-based HSL
+ *
+ * @param {string} name - Geography name
+ * @returns {string} HSL color string
+ */
+function getGeographyColor(name) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 70%, 50%)`;
+}
+
+/**
  * Formats weight value for display
  *
  * @param {number} weight - Weight value (0-1)
