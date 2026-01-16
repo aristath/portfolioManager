@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aristath/sentinel/internal/queue"
 	"github.com/aristath/sentinel/internal/reliability"
+	"github.com/aristath/sentinel/internal/work"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 )
@@ -21,7 +21,7 @@ import (
 type R2BackupHandlers struct {
 	r2BackupService *reliability.R2BackupService
 	restoreService  *reliability.RestoreService
-	queueManager    *queue.Manager
+	workProcessor   *work.Processor
 	log             zerolog.Logger
 }
 
@@ -57,13 +57,13 @@ func validateBackupFilename(filename string) (string, error) {
 func NewR2BackupHandlers(
 	r2BackupService *reliability.R2BackupService,
 	restoreService *reliability.RestoreService,
-	queueManager *queue.Manager,
+	workProcessor *work.Processor,
 	log zerolog.Logger,
 ) *R2BackupHandlers {
 	return &R2BackupHandlers{
 		r2BackupService: r2BackupService,
 		restoreService:  restoreService,
-		queueManager:    queueManager,
+		workProcessor:   workProcessor,
 		log:             log.With().Str("handler", "r2_backup").Logger(),
 	}
 }
@@ -114,30 +114,24 @@ func (h *R2BackupHandlers) HandleCreateBackup(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Enqueue backup job
-	job := &queue.Job{
-		ID:          fmt.Sprintf("manual-r2-backup-%d", time.Now().UnixNano()),
-		Type:        queue.JobTypeR2Backup,
-		Priority:    queue.PriorityMedium,
-		Payload:     map[string]interface{}{"manual": true},
-		CreatedAt:   time.Now(),
-		AvailableAt: time.Now(),
-		Retries:     0,
-		MaxRetries:  3,
-	}
-
-	if err := h.queueManager.Enqueue(job); err != nil {
-		h.log.Error().Err(err).Msg("Failed to enqueue R2 backup job")
-		http.Error(w, fmt.Sprintf("Failed to enqueue backup: %v", err), http.StatusInternalServerError)
+	// Execute R2 backup via Work Processor
+	if h.workProcessor == nil {
+		h.log.Error().Msg("Work processor not available")
+		http.Error(w, "Work processor not available", http.StatusInternalServerError)
 		return
 	}
 
-	h.log.Info().Str("job_id", job.ID).Msg("Manual R2 backup triggered")
+	if err := h.workProcessor.ExecuteNow("maintenance:r2-backup", ""); err != nil {
+		h.log.Error().Err(err).Msg("Failed to execute R2 backup")
+		http.Error(w, fmt.Sprintf("Failed to execute backup: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	h.log.Info().Msg("Manual R2 backup triggered")
 
 	h.writeJSON(w, map[string]string{
 		"status":  "success",
-		"message": "Backup job enqueued",
-		"job_id":  job.ID,
+		"message": "Backup executed",
 	})
 }
 

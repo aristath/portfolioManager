@@ -32,9 +32,7 @@ import (
 	"github.com/aristath/sentinel/internal/modules/settings"
 	"github.com/aristath/sentinel/internal/modules/trading"
 	"github.com/aristath/sentinel/internal/modules/universe"
-	"github.com/aristath/sentinel/internal/queue"
 	"github.com/aristath/sentinel/internal/reliability"
-	"github.com/aristath/sentinel/internal/scheduler"
 	"github.com/aristath/sentinel/internal/services"
 	"github.com/aristath/sentinel/internal/ticker"
 )
@@ -95,11 +93,8 @@ type Container struct {
 	HealthCalculator         *display.HealthCalculator
 	HealthUpdater            *display.HealthUpdater
 	ModeManager              *display.ModeManager
-	QueueManager             *queue.Manager
-	WorkerPool               *queue.WorkerPool
-	// NOTE: TimeScheduler removed - Work Processor handles all automatic scheduling
-	JobHistory                *queue.History
-	JobRegistry               *queue.Registry
+	// NOTE: QueueManager, WorkerPool, JobHistory, JobRegistry removed
+	// All job execution now goes through Work Processor at container.WorkComponents
 	NegativeBalanceRebalancer *rebalancing.NegativeBalanceRebalancer
 	OpportunitiesService      *opportunities.Service
 	RiskBuilder               *optimization.RiskModelBuilder
@@ -156,71 +151,4 @@ type Container struct {
 	EmergencyRebalance  func() error
 }
 
-// JobInstances holds references to all registered jobs for manual triggering
-// NOTE: All composite jobs removed - orchestration handled by Work Processor
-// Removed: SyncCycle, PlannerBatch, HealthCheck, DividendReinvest
-type JobInstances struct {
-	EventBasedTrading scheduler.Job
-	TagUpdate         scheduler.Job
-
-	// Individual sync jobs
-	SyncTrades            scheduler.Job
-	SyncCashFlows         scheduler.Job
-	SyncPortfolio         scheduler.Job
-	SyncPrices            scheduler.Job
-	SyncExchangeRates     scheduler.Job
-	CheckNegativeBalances scheduler.Job
-	UpdateDisplayTicker   scheduler.Job
-	RetryTrades           scheduler.Job
-
-	// Individual planning jobs
-	GeneratePortfolioHash   scheduler.Job
-	GetOptimizerWeights     scheduler.Job
-	BuildOpportunityContext scheduler.Job
-	CreateTradePlan         scheduler.Job
-	StoreRecommendations    scheduler.Job
-
-	// Individual dividend jobs
-	GetUnreinvestedDividends      scheduler.Job
-	GroupDividendsBySymbol        scheduler.Job
-	CheckDividendYields           scheduler.Job
-	CreateDividendRecommendations scheduler.Job
-	SetPendingBonuses             scheduler.Job
-	ExecuteDividendTrades         scheduler.Job
-
-	// Individual health check jobs
-	CheckCoreDatabases    scheduler.Job
-	CheckHistoryDatabases scheduler.Job
-	CheckWALCheckpoints   scheduler.Job
-
-	// Reliability jobs
-	HistoryCleanup     scheduler.Job
-	RecommendationGC   scheduler.Job
-	ClientDataCleanup  scheduler.Job
-	HourlyBackup       scheduler.Job
-	DailyBackup        scheduler.Job
-	DailyMaintenance   scheduler.Job
-	WeeklyBackup       scheduler.Job
-	WeeklyMaintenance  scheduler.Job
-	MonthlyBackup      scheduler.Job
-	MonthlyMaintenance scheduler.Job
-
-	// R2 Cloud Backup jobs
-	R2Backup         scheduler.Job
-	R2BackupRotation scheduler.Job
-
-	// Calculation cleanup job
-	CalculationCleanup scheduler.Job
-
-	// Symbolic Regression jobs
-	FormulaDiscovery scheduler.Job
-
-	// Adaptive Market job
-	AdaptiveMarketJob scheduler.Job
-
-	// Deployment job
-	Deployment scheduler.Job
-
-	// Tradernet metadata sync job
-	TradernetMetadataSync scheduler.Job
-}
+// NOTE: JobInstances removed - all jobs now handled by Work Processor (see work.go)

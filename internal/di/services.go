@@ -40,7 +40,6 @@ import (
 	"github.com/aristath/sentinel/internal/modules/settings"
 	"github.com/aristath/sentinel/internal/modules/trading"
 	"github.com/aristath/sentinel/internal/modules/universe"
-	"github.com/aristath/sentinel/internal/queue"
 	"github.com/aristath/sentinel/internal/reliability"
 	"github.com/aristath/sentinel/internal/services"
 	"github.com/aristath/sentinel/internal/ticker"
@@ -148,15 +147,8 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		// Don't fail startup - reconnect loop will handle it
 	}
 
-	// Queue system
-	memoryQueue := queue.NewMemoryQueue()
-	jobHistory := queue.NewHistory(container.CacheDB.Conn())
-	container.QueueManager = queue.NewManager(memoryQueue, jobHistory)
-	container.JobHistory = jobHistory
-	container.JobRegistry = queue.NewRegistry()
-	container.WorkerPool = queue.NewWorkerPool(container.QueueManager, container.JobRegistry, 2)
-	container.WorkerPool.SetLogger(log)
-	// NOTE: TimeScheduler removed - Work Processor handles all automatic scheduling
+	// NOTE: Queue system removed - Work Processor handles all job execution
+	// See work.go for the new event-driven work system
 
 	// Settings service (needed for trade safety and other services)
 	container.SettingsService = settings.NewService(container.SettingsRepo, log)

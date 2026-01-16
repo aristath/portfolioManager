@@ -16,13 +16,11 @@ import (
 // 2. Initialize repositories
 // 3. Initialize services
 // 4. Initialize work processor
-// 5. Register jobs (legacy - being phased out)
-// deploymentManager is optional (can be nil if deployment is disabled)
-func Wire(cfg *config.Config, log zerolog.Logger, displayManager *display.StateManager, deploymentManager interface{}) (*Container, *JobInstances, error) {
+func Wire(cfg *config.Config, log zerolog.Logger, displayManager *display.StateManager) (*Container, error) {
 	// Step 1: Initialize databases
 	container, err := InitializeDatabases(cfg, log)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to initialize databases: %w", err)
+		return nil, fmt.Errorf("failed to initialize databases: %w", err)
 	}
 
 	// Step 2: Initialize repositories
@@ -35,7 +33,7 @@ func Wire(cfg *config.Config, log zerolog.Logger, displayManager *display.StateM
 		container.HistoryDB.Close()
 		container.CacheDB.Close()
 		container.ClientDataDB.Close()
-		return nil, nil, fmt.Errorf("failed to initialize repositories: %w", err)
+		return nil, fmt.Errorf("failed to initialize repositories: %w", err)
 	}
 
 	// Step 3: Initialize services
@@ -48,7 +46,7 @@ func Wire(cfg *config.Config, log zerolog.Logger, displayManager *display.StateM
 		container.HistoryDB.Close()
 		container.CacheDB.Close()
 		container.ClientDataDB.Close()
-		return nil, nil, fmt.Errorf("failed to initialize services: %w", err)
+		return nil, fmt.Errorf("failed to initialize services: %w", err)
 	}
 
 	// Step 4: Initialize work processor (replaces queue-based jobs)
@@ -62,25 +60,11 @@ func Wire(cfg *config.Config, log zerolog.Logger, displayManager *display.StateM
 		container.HistoryDB.Close()
 		container.CacheDB.Close()
 		container.ClientDataDB.Close()
-		return nil, nil, fmt.Errorf("failed to initialize work processor: %w", err)
+		return nil, fmt.Errorf("failed to initialize work processor: %w", err)
 	}
 	container.WorkComponents = workComponents
 
-	// Step 5: Register jobs (pass deployment manager if available)
-	jobs, err := RegisterJobs(container, cfg, displayManager, deploymentManager, log)
-	if err != nil {
-		// Cleanup on error
-		container.UniverseDB.Close()
-		container.ConfigDB.Close()
-		container.LedgerDB.Close()
-		container.PortfolioDB.Close()
-		container.HistoryDB.Close()
-		container.CacheDB.Close()
-		container.ClientDataDB.Close()
-		return nil, nil, fmt.Errorf("failed to register jobs: %w", err)
-	}
-
 	log.Info().Msg("Dependency injection wiring completed successfully")
 
-	return container, jobs, nil
+	return container, nil
 }

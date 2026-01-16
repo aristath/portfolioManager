@@ -18,9 +18,8 @@ import (
 	"github.com/aristath/sentinel/internal/modules/market_hours"
 	"github.com/aristath/sentinel/internal/modules/settings"
 	"github.com/aristath/sentinel/internal/modules/universe"
-	"github.com/aristath/sentinel/internal/queue"
-	"github.com/aristath/sentinel/internal/scheduler"
 	"github.com/aristath/sentinel/internal/services"
+	"github.com/aristath/sentinel/internal/work"
 	"github.com/rs/zerolog"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/mem"
@@ -35,7 +34,7 @@ type SystemHandlers struct {
 	configDB                *database.DB
 	universeDB              *database.DB
 	historyDB               *database.DB
-	queueManager            *queue.Manager
+	workProcessor           *work.Processor
 	portfolioDisplayCalc    *display.PortfolioDisplayCalculator
 	displayManager          *display.StateManager
 	brokerClient            domain.BrokerClient
@@ -43,41 +42,6 @@ type SystemHandlers struct {
 	cashManager             domain.CashManager
 	marketHoursService      *market_hours.MarketHoursService
 	marketStatusWS          *tradernet.MarketStatusWebSocket
-	// Jobs (will be set after job registration in main.go)
-	// NOTE: All composite jobs removed - use Work Processor endpoints instead
-	eventBasedTradingJob scheduler.Job
-	tagUpdateJob         scheduler.Job
-
-	// Individual sync jobs
-	syncTradesJob            scheduler.Job
-	syncCashFlowsJob         scheduler.Job
-	syncPortfolioJob         scheduler.Job
-	syncPricesJob            scheduler.Job
-	checkNegativeBalancesJob scheduler.Job
-	updateDisplayTickerJob   scheduler.Job
-
-	// Individual planning jobs
-	generatePortfolioHashJob   scheduler.Job
-	getOptimizerWeightsJob     scheduler.Job
-	buildOpportunityContextJob scheduler.Job
-	createTradePlanJob         scheduler.Job
-	storeRecommendationsJob    scheduler.Job
-
-	// Individual dividend jobs
-	getUnreinvestedDividendsJob      scheduler.Job
-	groupDividendsBySymbolJob        scheduler.Job
-	checkDividendYieldsJob           scheduler.Job
-	createDividendRecommendationsJob scheduler.Job
-	setPendingBonusesJob             scheduler.Job
-	executeDividendTradesJob         scheduler.Job
-
-	// Individual health check jobs
-	checkCoreDatabasesJob    scheduler.Job
-	checkHistoryDatabasesJob scheduler.Job
-	checkWALCheckpointsJob   scheduler.Job
-
-	// Tradernet metadata sync job
-	tradernetMetadataSyncJob scheduler.Job
 }
 
 // NewSystemHandlers creates a new system handlers instance
@@ -86,7 +50,7 @@ func NewSystemHandlers(
 	dataDir string,
 	portfolioDB, configDB, universeDB, historyDB *database.DB,
 	historyDBClient universe.HistoryDBInterface,
-	queueManager *queue.Manager,
+	workProcessor *work.Processor,
 	displayManager *display.StateManager,
 	brokerClient domain.BrokerClient,
 	currencyExchangeService *services.CurrencyExchangeService,
@@ -118,7 +82,7 @@ func NewSystemHandlers(
 		configDB:                configDB,
 		universeDB:              universeDB,
 		historyDB:               historyDB,
-		queueManager:            queueManager,
+		workProcessor:           workProcessor,
 		portfolioDisplayCalc:    portfolioDisplayCalc,
 		displayManager:          displayManager,
 		marketHoursService:      marketHoursService,
@@ -129,92 +93,12 @@ func NewSystemHandlers(
 	}
 }
 
-// SetJobs registers job references for manual triggering
-// Called after jobs are registered in main.go
-// NOTE: All composite jobs removed - use Work Processor endpoints instead
-func (h *SystemHandlers) SetJobs(
-	eventBasedTrading scheduler.Job,
-	tagUpdate scheduler.Job,
-	// Individual sync jobs
-	syncTrades scheduler.Job,
-	syncCashFlows scheduler.Job,
-	syncPortfolio scheduler.Job,
-	syncPrices scheduler.Job,
-	checkNegativeBalances scheduler.Job,
-	updateDisplayTicker scheduler.Job,
-	// Individual planning jobs
-	generatePortfolioHash scheduler.Job,
-	getOptimizerWeights scheduler.Job,
-	buildOpportunityContext scheduler.Job,
-	createTradePlan scheduler.Job,
-	storeRecommendations scheduler.Job,
-	// Individual dividend jobs
-	getUnreinvestedDividends scheduler.Job,
-	groupDividendsBySymbol scheduler.Job,
-	checkDividendYields scheduler.Job,
-	createDividendRecommendations scheduler.Job,
-	setPendingBonuses scheduler.Job,
-	executeDividendTrades scheduler.Job,
-	// Individual health check jobs
-	checkCoreDatabases scheduler.Job,
-	checkHistoryDatabases scheduler.Job,
-	checkWALCheckpoints scheduler.Job,
-) {
-	h.eventBasedTradingJob = eventBasedTrading
-	h.tagUpdateJob = tagUpdate
-
-	// Individual sync jobs
-	h.syncTradesJob = syncTrades
-	h.syncCashFlowsJob = syncCashFlows
-	h.syncPortfolioJob = syncPortfolio
-	h.syncPricesJob = syncPrices
-	h.checkNegativeBalancesJob = checkNegativeBalances
-	h.updateDisplayTickerJob = updateDisplayTicker
-
-	// Individual planning jobs
-	h.generatePortfolioHashJob = generatePortfolioHash
-	h.getOptimizerWeightsJob = getOptimizerWeights
-	h.buildOpportunityContextJob = buildOpportunityContext
-	h.createTradePlanJob = createTradePlan
-	h.storeRecommendationsJob = storeRecommendations
-
-	// Individual dividend jobs
-	h.getUnreinvestedDividendsJob = getUnreinvestedDividends
-	h.groupDividendsBySymbolJob = groupDividendsBySymbol
-	h.checkDividendYieldsJob = checkDividendYields
-	h.createDividendRecommendationsJob = createDividendRecommendations
-	h.setPendingBonusesJob = setPendingBonuses
-	h.executeDividendTradesJob = executeDividendTrades
-
-	// Individual health check jobs
-	h.checkCoreDatabasesJob = checkCoreDatabases
-	h.checkHistoryDatabasesJob = checkHistoryDatabases
-	h.checkWALCheckpointsJob = checkWALCheckpoints
-}
-
-// SetTagUpdateJob sets the tag update job (called after job registration)
-func (h *SystemHandlers) SetTagUpdateJob(tagUpdate scheduler.Job) {
-	h.tagUpdateJob = tagUpdate
-}
-
-// SetTradernetMetadataSyncJob sets the Tradernet metadata sync job (called after job registration)
-func (h *SystemHandlers) SetTradernetMetadataSyncJob(job scheduler.Job) {
-	h.tradernetMetadataSyncJob = job
-}
-
-// enqueueJob is a helper to enqueue a job for manual execution
-func (h *SystemHandlers) enqueueJob(jobType queue.JobType, priority queue.Priority) error {
-	job := &queue.Job{
-		ID:          fmt.Sprintf("manual-%s-%d", jobType, time.Now().UnixNano()),
-		Type:        jobType,
-		Priority:    priority,
-		Payload:     map[string]interface{}{"manual": true},
-		CreatedAt:   time.Now(),
-		AvailableAt: time.Now(),
-		Retries:     0,
-		MaxRetries:  3,
+// executeWork is a helper to execute a work type via the Work Processor
+func (h *SystemHandlers) executeWork(workType string) error {
+	if h.workProcessor == nil {
+		return fmt.Errorf("work processor not available")
 	}
-	return h.queueManager.Enqueue(job)
+	return h.workProcessor.ExecuteNow(workType, "")
 }
 
 // SystemStatusResponse represents the system status response
@@ -716,35 +600,13 @@ func (h *SystemHandlers) RefreshCredentials() error {
 func (h *SystemHandlers) HandleJobsStatus(w http.ResponseWriter, r *http.Request) {
 	h.log.Debug().Msg("Getting jobs status")
 
-	var jobs []JobInfo
-	var lastRun, nextRun time.Time
-	lastRun = time.Now().Add(-5 * time.Minute) // Default
-	nextRun = time.Now().Add(5 * time.Minute)  // Default
-
-	// Get job history from queue manager
-	if h.queueManager != nil {
-		history, err := h.queueManager.GetJobHistory()
-		if err != nil {
-			h.log.Warn().Err(err).Msg("Failed to get job history")
-		} else {
-			for _, entry := range history {
-				jobs = append(jobs, JobInfo{
-					Name:    entry.JobType,
-					Status:  entry.Status,
-					LastRun: entry.LastRunAt.Format(time.RFC3339),
-				})
-				if entry.LastRunAt.After(lastRun) {
-					lastRun = entry.LastRunAt
-				}
-			}
-		}
-	}
-
+	// Job history is now tracked by the Work Processor's completion tracker
+	// Use GET /api/work/types to list available work types
 	response := JobsStatusResponse{
-		TotalJobs: len(jobs),
-		Jobs:      jobs,
-		LastRun:   lastRun.Format(time.RFC3339),
-		NextRun:   nextRun.Format(time.RFC3339),
+		TotalJobs: 0,
+		Jobs:      []JobInfo{},
+		LastRun:   time.Now().Add(-5 * time.Minute).Format(time.RFC3339),
+		NextRun:   time.Now().Add(5 * time.Minute).Format(time.RFC3339),
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1090,18 +952,9 @@ func (h *SystemHandlers) HandleTriggerEventBasedTrading(w http.ResponseWriter, r
 		return
 	}
 
-	if h.eventBasedTradingJob == nil {
-		h.log.Warn().Msg("Event-based trading job not registered yet")
-		h.writeJSON(w, map[string]string{
-			"status":  "error",
-			"message": "Event-based trading job not registered",
-		})
-		return
-	}
-
 	h.log.Info().Msg("Manual event-based trading triggered")
 
-	if err := h.enqueueJob(queue.JobTypeEventBasedTrading, queue.PriorityCritical); err != nil {
+	if err := h.executeWork("trading:execute"); err != nil {
 		h.log.Error().Err(err).Msg("Failed to trigger event-based trading")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1123,33 +976,15 @@ func (h *SystemHandlers) HandleSyncPortfolio(w http.ResponseWriter, r *http.Requ
 
 	h.log.Info().Msg("Manual portfolio sync triggered")
 
-	// Trigger the sync_cycle job which includes portfolio sync (Step 3)
-	// The sync_cycle job orchestrates: trades -> cash_flows -> portfolio -> exchange_rates -> balances -> prices -> dividends
-	if h.queueManager != nil {
-		job := &queue.Job{
-			ID:          fmt.Sprintf("sync_cycle-%d", time.Now().UnixNano()),
-			Type:        queue.JobTypeSyncCycle,
-			Priority:    queue.PriorityHigh,
-			Payload:     map[string]interface{}{"trigger": "manual_portfolio_sync"},
-			CreatedAt:   time.Now(),
-			AvailableAt: time.Now(),
-			MaxRetries:  1,
-		}
-		if err := h.queueManager.Enqueue(job); err != nil {
-			h.log.Error().Err(err).Msg("Failed to enqueue sync_cycle job")
-			http.Error(w, "Failed to trigger portfolio sync", http.StatusInternalServerError)
-			return
-		}
-		h.writeJSON(w, map[string]string{
-			"status":  "success",
-			"message": "Portfolio sync job enqueued",
-		})
+	if err := h.executeWork("sync:portfolio"); err != nil {
+		h.log.Error().Err(err).Msg("Failed to execute sync:portfolio work")
+		http.Error(w, "Failed to trigger portfolio sync", http.StatusInternalServerError)
 		return
 	}
 
 	h.writeJSON(w, map[string]string{
-		"status":  "error",
-		"message": "Queue manager not available",
+		"status":  "success",
+		"message": "Portfolio sync executed",
 	})
 }
 
@@ -1185,64 +1020,32 @@ func (h *SystemHandlers) HandleSyncRecommendations(w http.ResponseWriter, r *htt
 
 	h.log.Info().Msg("Manual recommendation sync triggered")
 
-	// Trigger the planner_batch job which generates fresh recommendations
-	// This clears caches and generates new recommendations via the planning module
-	if h.queueManager != nil {
-		job := &queue.Job{
-			ID:          fmt.Sprintf("planner_batch-%d", time.Now().UnixNano()),
-			Type:        queue.JobTypePlannerBatch,
-			Priority:    queue.PriorityHigh,
-			Payload:     map[string]interface{}{"trigger": "manual_recommendation_sync"},
-			CreatedAt:   time.Now(),
-			AvailableAt: time.Now(),
-			MaxRetries:  1,
-		}
-		if err := h.queueManager.Enqueue(job); err != nil {
-			h.log.Error().Err(err).Msg("Failed to enqueue planner_batch job")
-			http.Error(w, "Failed to trigger recommendation generation", http.StatusInternalServerError)
-			return
-		}
-		h.writeJSON(w, map[string]string{
-			"status":  "success",
-			"message": "Recommendation generation job enqueued",
-		})
+	// Execute the planner chain: weights -> context -> plan -> recommendations
+	if err := h.executeWork("planner:weights"); err != nil {
+		h.log.Error().Err(err).Msg("Failed to execute planner:weights work")
+		http.Error(w, "Failed to trigger recommendation generation", http.StatusInternalServerError)
 		return
 	}
 
 	h.writeJSON(w, map[string]string{
-		"status":  "error",
-		"message": "Queue manager not available",
+		"status":  "success",
+		"message": "Recommendation generation triggered (planner chain started)",
 	})
 }
 
 // HandleTriggerTagUpdate triggers the tag update job immediately
 // POST /api/jobs/tag-update
+// NOTE: Tag updates require a specific ISIN. Use POST /api/work/security:tags/{isin}/execute instead.
 func (h *SystemHandlers) HandleTriggerTagUpdate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	if h.tagUpdateJob == nil {
-		h.log.Warn().Msg("Tag update job not registered yet")
-		h.writeJSON(w, map[string]string{
-			"status":  "error",
-			"message": "Tag update job not registered",
-		})
-		return
-	}
-
-	h.log.Info().Msg("Manual tag update triggered")
-
-	if err := h.enqueueJob(queue.JobTypeTagUpdate, queue.PriorityMedium); err != nil {
-		h.log.Error().Err(err).Msg("Failed to trigger tag update")
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
+	// Tag update requires a subject (ISIN) - return deprecation message
 	h.writeJSON(w, map[string]string{
-		"status":  "success",
-		"message": "Tag update triggered successfully",
+		"status":  "deprecated",
+		"message": "Tag update requires a specific ISIN. Use Work Processor endpoint: POST /api/work/security:tags/{isin}/execute",
 	})
 }
 
@@ -1255,12 +1058,8 @@ func (h *SystemHandlers) HandleTriggerSyncTrades(w http.ResponseWriter, r *http.
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if h.syncTradesJob == nil {
-		h.writeJSON(w, map[string]string{"status": "error", "message": "Sync trades job not registered"})
-		return
-	}
 	h.log.Info().Msg("Manual sync trades triggered")
-	if err := h.enqueueJob(queue.JobTypeSyncTrades, queue.PriorityHigh); err != nil {
+	if err := h.executeWork("sync:trades"); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -1272,12 +1071,8 @@ func (h *SystemHandlers) HandleTriggerSyncCashFlows(w http.ResponseWriter, r *ht
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if h.syncCashFlowsJob == nil {
-		h.writeJSON(w, map[string]string{"status": "error", "message": "Sync cash flows job not registered"})
-		return
-	}
 	h.log.Info().Msg("Manual sync cash flows triggered")
-	if err := h.enqueueJob(queue.JobTypeSyncCashFlows, queue.PriorityHigh); err != nil {
+	if err := h.executeWork("sync:cashflows"); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -1289,12 +1084,8 @@ func (h *SystemHandlers) HandleTriggerSyncPortfolio(w http.ResponseWriter, r *ht
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if h.syncPortfolioJob == nil {
-		h.writeJSON(w, map[string]string{"status": "error", "message": "Sync portfolio job not registered"})
-		return
-	}
 	h.log.Info().Msg("Manual sync portfolio triggered")
-	if err := h.enqueueJob(queue.JobTypeSyncPortfolio, queue.PriorityHigh); err != nil {
+	if err := h.executeWork("sync:portfolio"); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -1306,12 +1097,8 @@ func (h *SystemHandlers) HandleTriggerSyncPrices(w http.ResponseWriter, r *http.
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if h.syncPricesJob == nil {
-		h.writeJSON(w, map[string]string{"status": "error", "message": "Sync prices job not registered"})
-		return
-	}
 	h.log.Info().Msg("Manual sync prices triggered")
-	if err := h.enqueueJob(queue.JobTypeSyncPrices, queue.PriorityHigh); err != nil {
+	if err := h.executeWork("sync:prices"); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -1323,12 +1110,8 @@ func (h *SystemHandlers) HandleTriggerCheckNegativeBalances(w http.ResponseWrite
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if h.checkNegativeBalancesJob == nil {
-		h.writeJSON(w, map[string]string{"status": "error", "message": "Check negative balances job not registered"})
-		return
-	}
 	h.log.Info().Msg("Manual check negative balances triggered")
-	if err := h.enqueueJob(queue.JobTypeCheckNegativeBalances, queue.PriorityCritical); err != nil {
+	if err := h.executeWork("sync:negative-balances"); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -1340,12 +1123,8 @@ func (h *SystemHandlers) HandleTriggerUpdateDisplayTicker(w http.ResponseWriter,
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if h.updateDisplayTickerJob == nil {
-		h.writeJSON(w, map[string]string{"status": "error", "message": "Update display ticker job not registered"})
-		return
-	}
 	h.log.Info().Msg("Manual update display ticker triggered")
-	if err := h.enqueueJob(queue.JobTypeUpdateDisplayTicker, queue.PriorityLow); err != nil {
+	if err := h.executeWork("sync:display"); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -1361,16 +1140,11 @@ func (h *SystemHandlers) HandleTriggerGeneratePortfolioHash(w http.ResponseWrite
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if h.generatePortfolioHashJob == nil {
-		h.writeJSON(w, map[string]string{"status": "error", "message": "Generate portfolio hash job not registered"})
-		return
-	}
-	h.log.Info().Msg("Manual generate portfolio hash triggered")
-	if err := h.enqueueJob(queue.JobTypeGeneratePortfolioHash, queue.PriorityMedium); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	h.writeJSON(w, map[string]string{"status": "success", "message": "Generate portfolio hash triggered successfully"})
+	// Portfolio hash generation is now internal to the planner workflow
+	h.writeJSON(w, map[string]string{
+		"status":  "deprecated",
+		"message": "Portfolio hash generation is now internal to planner workflow. Use POST /api/work/planner:weights/execute to start the planner chain.",
+	})
 }
 
 func (h *SystemHandlers) HandleTriggerGetOptimizerWeights(w http.ResponseWriter, r *http.Request) {
@@ -1378,12 +1152,8 @@ func (h *SystemHandlers) HandleTriggerGetOptimizerWeights(w http.ResponseWriter,
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if h.getOptimizerWeightsJob == nil {
-		h.writeJSON(w, map[string]string{"status": "error", "message": "Get optimizer weights job not registered"})
-		return
-	}
 	h.log.Info().Msg("Manual get optimizer weights triggered")
-	if err := h.enqueueJob(queue.JobTypeGetOptimizerWeights, queue.PriorityMedium); err != nil {
+	if err := h.executeWork("planner:weights"); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -1395,12 +1165,8 @@ func (h *SystemHandlers) HandleTriggerBuildOpportunityContext(w http.ResponseWri
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if h.buildOpportunityContextJob == nil {
-		h.writeJSON(w, map[string]string{"status": "error", "message": "Build opportunity context job not registered"})
-		return
-	}
 	h.log.Info().Msg("Manual build opportunity context triggered")
-	if err := h.enqueueJob(queue.JobTypeBuildOpportunityContext, queue.PriorityMedium); err != nil {
+	if err := h.executeWork("planner:context"); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -1412,12 +1178,8 @@ func (h *SystemHandlers) HandleTriggerCreateTradePlan(w http.ResponseWriter, r *
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if h.createTradePlanJob == nil {
-		h.writeJSON(w, map[string]string{"status": "error", "message": "Create trade plan job not registered"})
-		return
-	}
 	h.log.Info().Msg("Manual create trade plan triggered")
-	if err := h.enqueueJob(queue.JobTypeCreateTradePlan, queue.PriorityMedium); err != nil {
+	if err := h.executeWork("planner:plan"); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -1429,12 +1191,8 @@ func (h *SystemHandlers) HandleTriggerStoreRecommendations(w http.ResponseWriter
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if h.storeRecommendationsJob == nil {
-		h.writeJSON(w, map[string]string{"status": "error", "message": "Store recommendations job not registered"})
-		return
-	}
 	h.log.Info().Msg("Manual store recommendations triggered")
-	if err := h.enqueueJob(queue.JobTypeStoreRecommendations, queue.PriorityMedium); err != nil {
+	if err := h.executeWork("planner:recommendations"); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -1450,12 +1208,8 @@ func (h *SystemHandlers) HandleTriggerGetUnreinvestedDividends(w http.ResponseWr
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if h.getUnreinvestedDividendsJob == nil {
-		h.writeJSON(w, map[string]string{"status": "error", "message": "Get unreinvested dividends job not registered"})
-		return
-	}
 	h.log.Info().Msg("Manual get unreinvested dividends triggered")
-	if err := h.enqueueJob(queue.JobTypeGetUnreinvestedDividends, queue.PriorityMedium); err != nil {
+	if err := h.executeWork("dividend:detect"); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -1467,16 +1221,11 @@ func (h *SystemHandlers) HandleTriggerGroupDividendsBySymbol(w http.ResponseWrit
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if h.groupDividendsBySymbolJob == nil {
-		h.writeJSON(w, map[string]string{"status": "error", "message": "Group dividends by symbol job not registered"})
-		return
-	}
-	h.log.Info().Msg("Manual group dividends by symbol triggered")
-	if err := h.enqueueJob(queue.JobTypeGroupDividendsBySymbol, queue.PriorityMedium); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	h.writeJSON(w, map[string]string{"status": "success", "message": "Group dividends by symbol triggered successfully"})
+	// This is now part of dividend:analyze
+	h.writeJSON(w, map[string]string{
+		"status":  "deprecated",
+		"message": "Group dividends by symbol is now part of dividend analysis. Use POST /api/work/dividend:analyze/execute",
+	})
 }
 
 func (h *SystemHandlers) HandleTriggerCheckDividendYields(w http.ResponseWriter, r *http.Request) {
@@ -1484,16 +1233,11 @@ func (h *SystemHandlers) HandleTriggerCheckDividendYields(w http.ResponseWriter,
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if h.checkDividendYieldsJob == nil {
-		h.writeJSON(w, map[string]string{"status": "error", "message": "Check dividend yields job not registered"})
-		return
-	}
-	h.log.Info().Msg("Manual check dividend yields triggered")
-	if err := h.enqueueJob(queue.JobTypeCheckDividendYields, queue.PriorityMedium); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	h.writeJSON(w, map[string]string{"status": "success", "message": "Check dividend yields triggered successfully"})
+	// This is now part of dividend:analyze
+	h.writeJSON(w, map[string]string{
+		"status":  "deprecated",
+		"message": "Check dividend yields is now part of dividend analysis. Use POST /api/work/dividend:analyze/execute",
+	})
 }
 
 func (h *SystemHandlers) HandleTriggerCreateDividendRecommendations(w http.ResponseWriter, r *http.Request) {
@@ -1501,12 +1245,8 @@ func (h *SystemHandlers) HandleTriggerCreateDividendRecommendations(w http.Respo
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if h.createDividendRecommendationsJob == nil {
-		h.writeJSON(w, map[string]string{"status": "error", "message": "Create dividend recommendations job not registered"})
-		return
-	}
 	h.log.Info().Msg("Manual create dividend recommendations triggered")
-	if err := h.enqueueJob(queue.JobTypeCreateDividendRecommendations, queue.PriorityMedium); err != nil {
+	if err := h.executeWork("dividend:recommend"); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -1518,16 +1258,11 @@ func (h *SystemHandlers) HandleTriggerSetPendingBonuses(w http.ResponseWriter, r
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if h.setPendingBonusesJob == nil {
-		h.writeJSON(w, map[string]string{"status": "error", "message": "Set pending bonuses job not registered"})
-		return
-	}
-	h.log.Info().Msg("Manual set pending bonuses triggered")
-	if err := h.enqueueJob(queue.JobTypeSetPendingBonuses, queue.PriorityMedium); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	h.writeJSON(w, map[string]string{"status": "success", "message": "Set pending bonuses triggered successfully"})
+	// This is now internal to the dividend workflow
+	h.writeJSON(w, map[string]string{
+		"status":  "deprecated",
+		"message": "Set pending bonuses is now internal to dividend workflow. Use POST /api/work/dividend:detect/execute to start the chain.",
+	})
 }
 
 func (h *SystemHandlers) HandleTriggerExecuteDividendTrades(w http.ResponseWriter, r *http.Request) {
@@ -1535,12 +1270,8 @@ func (h *SystemHandlers) HandleTriggerExecuteDividendTrades(w http.ResponseWrite
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if h.executeDividendTradesJob == nil {
-		h.writeJSON(w, map[string]string{"status": "error", "message": "Execute dividend trades job not registered"})
-		return
-	}
 	h.log.Info().Msg("Manual execute dividend trades triggered")
-	if err := h.enqueueJob(queue.JobTypeExecuteDividendTrades, queue.PriorityHigh); err != nil {
+	if err := h.executeWork("dividend:execute"); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -1556,12 +1287,8 @@ func (h *SystemHandlers) HandleTriggerCheckCoreDatabases(w http.ResponseWriter, 
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if h.checkCoreDatabasesJob == nil {
-		h.writeJSON(w, map[string]string{"status": "error", "message": "Check core databases job not registered"})
-		return
-	}
 	h.log.Info().Msg("Manual check core databases triggered")
-	if err := h.enqueueJob(queue.JobTypeCheckCoreDatabases, queue.PriorityHigh); err != nil {
+	if err := h.executeWork("maintenance:health"); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -1573,12 +1300,8 @@ func (h *SystemHandlers) HandleTriggerCheckHistoryDatabases(w http.ResponseWrite
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if h.checkHistoryDatabasesJob == nil {
-		h.writeJSON(w, map[string]string{"status": "error", "message": "Check history databases job not registered"})
-		return
-	}
 	h.log.Info().Msg("Manual check history databases triggered")
-	if err := h.enqueueJob(queue.JobTypeCheckHistoryDatabases, queue.PriorityHigh); err != nil {
+	if err := h.executeWork("maintenance:health"); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -1590,12 +1313,8 @@ func (h *SystemHandlers) HandleTriggerCheckWALCheckpoints(w http.ResponseWriter,
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if h.checkWALCheckpointsJob == nil {
-		h.writeJSON(w, map[string]string{"status": "error", "message": "Check WAL checkpoints job not registered"})
-		return
-	}
 	h.log.Info().Msg("Manual check WAL checkpoints triggered")
-	if err := h.enqueueJob(queue.JobTypeCheckWALCheckpoints, queue.PriorityMedium); err != nil {
+	if err := h.executeWork("maintenance:cleanup:history"); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -1738,14 +1457,11 @@ func (h *SystemHandlers) HandleTriggerTradernetMetadataSync(w http.ResponseWrite
 		return
 	}
 
-	if h.tradernetMetadataSyncJob == nil {
-		h.writeJSON(w, map[string]string{"status": "error", "message": "Tradernet metadata sync job not registered"})
-		return
-	}
-
 	h.log.Info().Msg("Manual Tradernet metadata sync triggered")
 
-	if err := h.enqueueJob(queue.JobTypeTradernetMetadataSync, queue.PriorityMedium); err != nil {
+	// security:metadata syncs metadata for all active securities
+	// The Work Processor will iterate through all active ISINs
+	if err := h.executeWork("security:metadata"); err != nil {
 		h.log.Error().Err(err).Msg("Failed to trigger Tradernet metadata sync")
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

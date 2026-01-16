@@ -53,7 +53,7 @@ import (
 	tradinghandlers "github.com/aristath/sentinel/internal/modules/trading/handlers"
 	"github.com/aristath/sentinel/internal/modules/universe"
 	universehandlers "github.com/aristath/sentinel/internal/modules/universe/handlers"
-	"github.com/aristath/sentinel/internal/scheduler"
+	"github.com/aristath/sentinel/internal/work"
 	"github.com/aristath/sentinel/pkg/embedded"
 )
 
@@ -113,6 +113,12 @@ func New(cfg Config) *Server {
 	cashManagerForSystem := cfg.Container.CashManager
 	marketHoursService := cfg.Container.MarketHoursService
 
+	// Get work processor from container
+	var workProcessor *work.Processor
+	if cfg.Container.WorkComponents != nil {
+		workProcessor = cfg.Container.WorkComponents.Processor
+	}
+
 	systemHandlers := NewSystemHandlers(
 		cfg.Log,
 		dataDir,
@@ -121,7 +127,7 @@ func New(cfg Config) *Server {
 		cfg.UniverseDB,
 		cfg.HistoryDB,
 		cfg.Container.HistoryDBClient,
-		cfg.Container.QueueManager,
+		workProcessor,
 		cfg.DisplayManager,
 		tradernetClient,
 		currencyExchangeService,
@@ -136,7 +142,7 @@ func New(cfg Config) *Server {
 		r2BackupHandlers = NewR2BackupHandlers(
 			cfg.Container.R2BackupService,
 			cfg.Container.RestoreService,
-			cfg.Container.QueueManager,
+			workProcessor,
 			cfg.Log,
 		)
 	}
@@ -180,71 +186,8 @@ func New(cfg Config) *Server {
 	return s
 }
 
-// SetJobs registers job instances for manual triggering via API
-// NOTE: All composite jobs removed - use Work Processor endpoints instead
-func (s *Server) SetJobs(
-	eventBasedTrading scheduler.Job,
-	tagUpdate scheduler.Job,
-	// Individual sync jobs
-	syncTrades scheduler.Job,
-	syncCashFlows scheduler.Job,
-	syncPortfolio scheduler.Job,
-	syncPrices scheduler.Job,
-	checkNegativeBalances scheduler.Job,
-	updateDisplayTicker scheduler.Job,
-	// Individual planning jobs
-	generatePortfolioHash scheduler.Job,
-	getOptimizerWeights scheduler.Job,
-	buildOpportunityContext scheduler.Job,
-	createTradePlan scheduler.Job,
-	storeRecommendations scheduler.Job,
-	// Individual dividend jobs
-	getUnreinvestedDividends scheduler.Job,
-	groupDividendsBySymbol scheduler.Job,
-	checkDividendYields scheduler.Job,
-	createDividendRecommendations scheduler.Job,
-	setPendingBonuses scheduler.Job,
-	executeDividendTrades scheduler.Job,
-	// Individual health check jobs
-	checkCoreDatabases scheduler.Job,
-	checkHistoryDatabases scheduler.Job,
-	checkWALCheckpoints scheduler.Job,
-) {
-	s.systemHandlers.SetJobs(
-		eventBasedTrading,
-		tagUpdate,
-		syncTrades,
-		syncCashFlows,
-		syncPortfolio,
-		syncPrices,
-		checkNegativeBalances,
-		updateDisplayTicker,
-		generatePortfolioHash,
-		getOptimizerWeights,
-		buildOpportunityContext,
-		createTradePlan,
-		storeRecommendations,
-		getUnreinvestedDividends,
-		groupDividendsBySymbol,
-		checkDividendYields,
-		createDividendRecommendations,
-		setPendingBonuses,
-		executeDividendTrades,
-		checkCoreDatabases,
-		checkHistoryDatabases,
-		checkWALCheckpoints,
-	)
-}
-
-// SetTagUpdateJob sets the tag update job (called after job registration)
-func (s *Server) SetTagUpdateJob(tagUpdate scheduler.Job) {
-	s.systemHandlers.SetTagUpdateJob(tagUpdate)
-}
-
-// SetTradernetMetadataSyncJob sets the Tradernet metadata sync job (called after job registration)
-func (s *Server) SetTradernetMetadataSyncJob(job scheduler.Job) {
-	s.systemHandlers.SetTradernetMetadataSyncJob(job)
-}
+// NOTE: SetJobs, SetTagUpdateJob, SetTradernetMetadataSyncJob methods removed
+// All job triggering now goes through Work Processor endpoints at /api/work/*
 
 // setupMiddleware configures middleware
 func (s *Server) setupMiddleware(devMode bool) {

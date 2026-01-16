@@ -6,7 +6,6 @@ import (
 	planningdomain "github.com/aristath/sentinel/internal/modules/planning/domain"
 	"github.com/aristath/sentinel/internal/modules/planning/planner"
 	"github.com/aristath/sentinel/internal/modules/planning/progress"
-	"github.com/aristath/sentinel/internal/queue"
 	"github.com/rs/zerolog"
 )
 
@@ -100,16 +99,8 @@ func (j *CreateTradePlanJob) Run() error {
 		j.log.Debug().Msg("Using detailed progress callback for plan creation")
 		planResultInterface, err = j.plannerService.CreatePlanWithDetailedProgress(j.opportunityContext, config, j.detailedProgressCallback)
 	} else {
-		// Fallback to legacy progress callback from the job's progress reporter
-		var progressCallback progress.Callback
-		if r := j.GetProgressReporter(); r != nil {
-			if reporter, ok := r.(*queue.ProgressReporter); ok && reporter != nil {
-				progressCallback = func(current, total int, message string) {
-					reporter.Report(current, total, message)
-				}
-			}
-		}
-		planResultInterface, err = j.plannerService.CreatePlanWithRejections(j.opportunityContext, config, progressCallback)
+		// No progress callback when running through Work Processor
+		planResultInterface, err = j.plannerService.CreatePlanWithRejections(j.opportunityContext, config, nil)
 	}
 
 	if err != nil {

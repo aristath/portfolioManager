@@ -30,14 +30,10 @@ func TestContainer_CanSetDatabases(t *testing.T) {
 	assert.NotNil(t, container)
 }
 
-func TestJobInstances_Initialization(t *testing.T) {
-	instances := &JobInstances{}
+func TestContainer_HasWorkComponents(t *testing.T) {
+	container := &Container{}
 
-	// Test that JobInstances can be created
-	assert.NotNil(t, instances)
-
-	// All jobs should be nil initially
-	// NOTE: All composite jobs removed - Work Processor handles orchestration
-	assert.Nil(t, instances.EventBasedTrading)
-	assert.Nil(t, instances.TagUpdate)
+	// Test that WorkComponents field exists and is nil initially
+	assert.NotNil(t, container)
+	assert.Nil(t, container.WorkComponents)
 }

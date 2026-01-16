@@ -23,11 +23,10 @@ func TestWire(t *testing.T) {
 	// Create display manager
 	displayManager := display.NewStateManager(log)
 
-	// Wire everything (pass nil for deployment manager in tests)
-	container, jobs, err := Wire(cfg, log, displayManager, nil)
+	// Wire everything
+	container, err := Wire(cfg, log, displayManager)
 	require.NoError(t, err)
 	require.NotNil(t, container)
-	require.NotNil(t, jobs)
 
 	// Verify container is fully populated
 	assert.NotNil(t, container.UniverseDB)
@@ -35,21 +34,22 @@ func TestWire(t *testing.T) {
 	assert.NotNil(t, container.TradingService)
 	assert.NotNil(t, container.CashManager)
 
-	// Verify individual jobs are registered
-	// NOTE: All composite jobs removed - Work Processor handles orchestration
-	assert.NotNil(t, jobs.EventBasedTrading)
-	assert.NotNil(t, jobs.TagUpdate)
+	// Verify work processor is initialized
+	assert.NotNil(t, container.WorkComponents)
+	assert.NotNil(t, container.WorkComponents.Processor)
+	assert.NotNil(t, container.WorkComponents.Registry)
 
-	// Cleanup - stop background services first
+	// Cleanup - stop services and close databases
+	// Note: Don't stop the work processor since Run() was never called in this test
 	t.Cleanup(func() {
 		if container != nil {
-			// Stop background services first to prevent temp directory cleanup issues
-			if container.WorkerPool != nil {
-				container.WorkerPool.Stop()
+			// Stop WebSocket client if running
+			if container.MarketStatusWS != nil {
+				_ = container.MarketStatusWS.Stop()
 			}
-			// NOTE: TimeScheduler removed - Work Processor handles scheduling
+
 			// Give goroutines time to stop before closing databases
-			time.Sleep(50 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 
 			// Close databases
 			container.UniverseDB.Close()

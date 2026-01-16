@@ -11,9 +11,7 @@ import (
 	"github.com/aristath/sentinel/internal/deployment"
 	"github.com/aristath/sentinel/internal/di"
 	"github.com/aristath/sentinel/internal/modules/display"
-	"github.com/aristath/sentinel/internal/queue"
 	"github.com/aristath/sentinel/internal/reliability"
-	"github.com/aristath/sentinel/internal/scheduler"
 	"github.com/aristath/sentinel/internal/server"
 	"github.com/aristath/sentinel/pkg/logger"
 )
@@ -66,10 +64,9 @@ func main() {
 		log.Info().Msg("Restore completed successfully, proceeding with normal startup")
 	}
 
-	// Wire all dependencies using DI container (WITHOUT deployment manager first)
-	// This initializes databases and settings repository
-	// Pass nil for deployment manager - we'll create it after loading settings
-	container, jobs, err := di.Wire(cfg, log, displayManager, nil)
+	// Wire all dependencies using DI container
+	// This initializes databases, repositories, services, and work processor
+	container, err := di.Wire(cfg, log, displayManager)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to wire dependencies")
 	}
@@ -109,20 +106,7 @@ func main() {
 		version := getEnv("VERSION", "dev")
 		deploymentManager = deployment.NewManager(deployConfig, version, log)
 
-		// Register deployment job now that we have the manager
-		deploymentIntervalMinutes, err := container.SettingsRepo.GetFloat("job_auto_deploy_minutes", 5.0)
-		if err != nil {
-			log.Warn().Err(err).Msg("Failed to get deployment interval from settings, using default 5 minutes")
-			deploymentIntervalMinutes = 5.0
-		}
-		deploymentInterval := time.Duration(deploymentIntervalMinutes) * time.Minute
-		deploymentJob := scheduler.NewDeploymentJob(deploymentManager, deploymentInterval, true, log)
-		container.JobRegistry.Register(queue.JobTypeDeployment, queue.JobToHandler(deploymentJob))
-		jobs.Deployment = deploymentJob
-
-		log.Info().
-			Float64("interval_minutes", deploymentIntervalMinutes).
-			Msg("Deployment manager initialized and job registered")
+		log.Info().Msg("Deployment manager initialized (deployment work type registered in work.go)")
 	}
 
 	// Create deployment handlers if deployment is enabled
@@ -149,39 +133,8 @@ func main() {
 		Container:          container, // Pass container for handlers to use
 	})
 
-	// Wire up jobs for manual triggering via API
-	// NOTE: All composite jobs removed - use Work Processor endpoints instead
-	srv.SetJobs(
-		jobs.EventBasedTrading,
-		jobs.TagUpdate,
-		// Individual sync jobs
-		jobs.SyncTrades,
-		jobs.SyncCashFlows,
-		jobs.SyncPortfolio,
-		jobs.SyncPrices,
-		jobs.CheckNegativeBalances,
-		jobs.UpdateDisplayTicker,
-		// Individual planning jobs
-		jobs.GeneratePortfolioHash,
-		jobs.GetOptimizerWeights,
-		jobs.BuildOpportunityContext,
-		jobs.CreateTradePlan,
-		jobs.StoreRecommendations,
-		// Individual dividend jobs
-		jobs.GetUnreinvestedDividends,
-		jobs.GroupDividendsBySymbol,
-		jobs.CheckDividendYields,
-		jobs.CreateDividendRecommendations,
-		jobs.SetPendingBonuses,
-		jobs.ExecuteDividendTrades,
-		// Individual health check jobs
-		jobs.CheckCoreDatabases,
-		jobs.CheckHistoryDatabases,
-		jobs.CheckWALCheckpoints,
-	)
-
-	// Set Tradernet metadata sync job (for manual triggering)
-	srv.SetTradernetMetadataSyncJob(jobs.TradernetMetadataSync)
+	// NOTE: Individual job triggering is now done via Work Processor endpoints at /api/work/*
+	// All job execution goes through Work Processor (see work.go)
 
 	// Start server in goroutine
 	go func() {
@@ -201,14 +154,6 @@ func main() {
 	if container.WorkComponents != nil && container.WorkComponents.Processor != nil {
 		go container.WorkComponents.Processor.Run()
 		log.Info().Msg("Work processor started")
-	}
-
-	// Start worker pool for manual job execution via /api/jobs/* endpoints
-	// NOTE: Only manually-triggered jobs run through WorkerPool now
-	// (RegisterListeners disabled, TimeScheduler deleted)
-	if container.WorkerPool != nil {
-		container.WorkerPool.Start()
-		log.Info().Msg("Worker pool started (for manual job execution)")
 	}
 
 	// Start LED status monitors
@@ -249,12 +194,6 @@ func main() {
 		log.Info().Msg("Work processor stopped")
 	}
 
-	// Stop worker pool (for manual job execution)
-	if container.WorkerPool != nil {
-		container.WorkerPool.Stop()
-		log.Info().Msg("Worker pool stopped")
-	}
-
 	// Stop WebSocket client
 	if container.MarketStatusWS != nil {
 		if err := container.MarketStatusWS.Stop(); err != nil {
@@ -275,12 +214,10 @@ func main() {
 	log.Info().Msg("Server stopped")
 }
 
-// Note: registerJobs function has been moved to internal/di/jobs.go
-// JobInstances type has been moved to internal/di/types.go
-// All dependency wiring is now handled by di.Wire()
-// The entire registerJobs function (842 lines) has been extracted to:
+// All dependency wiring is handled by di.Wire()
+// The DI container initializes:
 //   - internal/di/databases.go (database initialization)
 //   - internal/di/repositories.go (repository creation)
-//   - internal/di/services.go (service creation - single source of truth)
-//   - internal/di/jobs.go (job registration)
+//   - internal/di/services.go (service creation)
+//   - internal/di/work.go (work processor registration)
 //   - internal/di/wire.go (main orchestration)
