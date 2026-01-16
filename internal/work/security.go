@@ -8,25 +8,25 @@ import (
 
 // SecurityHistorySyncServiceInterface defines the security history sync service interface
 type SecurityHistorySyncServiceInterface interface {
-	SyncSecurityHistory(isin string) error
+	SyncSecurityHistory(isin string) (string, error)
 	GetStaleSecurities() []string
 }
 
 // TechnicalCalculationServiceInterface defines the technical calculation service interface
 type TechnicalCalculationServiceInterface interface {
-	CalculateTechnicals(isin string) error
+	CalculateTechnicals(isin string) (string, error)
 	GetSecuritiesNeedingTechnicals() []string
 }
 
 // FormulaDiscoveryServiceInterface defines the formula discovery service interface
 type FormulaDiscoveryServiceInterface interface {
-	RunDiscovery(isin string) error
+	RunDiscovery(isin string) (string, error)
 	GetSecuritiesNeedingDiscovery() []string
 }
 
 // TagUpdateServiceInterface defines the tag update service interface
 type TagUpdateServiceInterface interface {
-	UpdateTags(isin string) error
+	UpdateTags(isin string) (string, error)
 	GetSecuritiesNeedingTagUpdate() []string
 }
 
@@ -63,10 +63,15 @@ func RegisterSecurityWorkTypes(registry *Registry, deps *SecurityDeps) {
 			return deps.HistorySyncService.GetStaleSecurities()
 		},
 		Execute: func(ctx context.Context, subject string, progress *ProgressReporter) error {
-
-			err := deps.HistorySyncService.SyncSecurityHistory(subject)
+			// Sync history and get symbol for progress reporting
+			symbol, err := deps.HistorySyncService.SyncSecurityHistory(subject)
 			if err != nil {
 				return fmt.Errorf("failed to sync security %s: %w", subject, err)
+			}
+
+			// Report progress with symbol
+			if progress != nil && symbol != "" {
+				progress.ReportPhase("completed", fmt.Sprintf("Synced: %s", symbol))
 			}
 
 			return nil
@@ -90,10 +95,15 @@ func RegisterSecurityWorkTypes(registry *Registry, deps *SecurityDeps) {
 			return deps.TechnicalService.GetSecuritiesNeedingTechnicals()
 		},
 		Execute: func(ctx context.Context, subject string, progress *ProgressReporter) error {
-
-			err := deps.TechnicalService.CalculateTechnicals(subject)
+			// Calculate technicals and get symbol for progress reporting
+			symbol, err := deps.TechnicalService.CalculateTechnicals(subject)
 			if err != nil {
 				return fmt.Errorf("failed to calculate technicals for %s: %w", subject, err)
+			}
+
+			// Report progress with symbol
+			if progress != nil && symbol != "" {
+				progress.ReportPhase("completed", fmt.Sprintf("Calculated: %s", symbol))
 			}
 
 			return nil
@@ -118,10 +128,15 @@ func RegisterSecurityWorkTypes(registry *Registry, deps *SecurityDeps) {
 			return deps.FormulaService.GetSecuritiesNeedingDiscovery()
 		},
 		Execute: func(ctx context.Context, subject string, progress *ProgressReporter) error {
-
-			err := deps.FormulaService.RunDiscovery(subject)
+			// Run formula discovery and get symbol for progress reporting
+			symbol, err := deps.FormulaService.RunDiscovery(subject)
 			if err != nil {
 				return fmt.Errorf("failed to run formula discovery for %s: %w", subject, err)
+			}
+
+			// Report progress with symbol
+			if progress != nil && symbol != "" {
+				progress.ReportPhase("completed", fmt.Sprintf("Discovered: %s", symbol))
 			}
 
 			return nil
@@ -145,10 +160,15 @@ func RegisterSecurityWorkTypes(registry *Registry, deps *SecurityDeps) {
 			return deps.TagService.GetSecuritiesNeedingTagUpdate()
 		},
 		Execute: func(ctx context.Context, subject string, progress *ProgressReporter) error {
-
-			err := deps.TagService.UpdateTags(subject)
+			// Update tags and get symbol for progress reporting
+			symbol, err := deps.TagService.UpdateTags(subject)
 			if err != nil {
 				return fmt.Errorf("failed to update tags for %s: %w", subject, err)
+			}
+
+			// Report progress with symbol
+			if progress != nil && symbol != "" {
+				progress.ReportPhase("completed", fmt.Sprintf("Updated: %s", symbol))
 			}
 
 			return nil

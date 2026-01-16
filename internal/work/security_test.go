@@ -15,9 +15,9 @@ type MockSecurityHistorySyncService struct {
 	mock.Mock
 }
 
-func (m *MockSecurityHistorySyncService) SyncSecurityHistory(isin string) error {
+func (m *MockSecurityHistorySyncService) SyncSecurityHistory(isin string) (string, error) {
 	args := m.Called(isin)
-	return args.Error(0)
+	return args.String(0), args.Error(1)
 }
 
 func (m *MockSecurityHistorySyncService) GetStaleSecurities() []string {
@@ -33,9 +33,9 @@ type MockTechnicalCalculationService struct {
 	mock.Mock
 }
 
-func (m *MockTechnicalCalculationService) CalculateTechnicals(isin string) error {
+func (m *MockTechnicalCalculationService) CalculateTechnicals(isin string) (string, error) {
 	args := m.Called(isin)
-	return args.Error(0)
+	return args.String(0), args.Error(1)
 }
 
 func (m *MockTechnicalCalculationService) GetSecuritiesNeedingTechnicals() []string {
@@ -51,9 +51,9 @@ type MockFormulaDiscoveryService struct {
 	mock.Mock
 }
 
-func (m *MockFormulaDiscoveryService) RunDiscovery(isin string) error {
+func (m *MockFormulaDiscoveryService) RunDiscovery(isin string) (string, error) {
 	args := m.Called(isin)
-	return args.Error(0)
+	return args.String(0), args.Error(1)
 }
 
 func (m *MockFormulaDiscoveryService) GetSecuritiesNeedingDiscovery() []string {
@@ -69,9 +69,9 @@ type MockTagUpdateService struct {
 	mock.Mock
 }
 
-func (m *MockTagUpdateService) UpdateTags(isin string) error {
+func (m *MockTagUpdateService) UpdateTags(isin string) (string, error) {
 	args := m.Called(isin)
-	return args.Error(0)
+	return args.String(0), args.Error(1)
 }
 
 func (m *MockTagUpdateService) GetSecuritiesNeedingTagUpdate() []string {
@@ -158,7 +158,7 @@ func TestSecuritySync_Execute(t *testing.T) {
 	registry := NewRegistry()
 
 	historySyncService := &MockSecurityHistorySyncService{}
-	historySyncService.On("SyncSecurityHistory", "NL0010273215").Return(nil)
+	historySyncService.On("SyncSecurityHistory", "NL0010273215").Return("ASML.EU", nil)
 	// GetStaleSecurities is called by FindSubjects, not Execute
 	historySyncService.On("GetStaleSecurities").Return([]string{"NL0010273215"}).Maybe()
 
@@ -209,7 +209,7 @@ func TestSecurityTechnical_Execute(t *testing.T) {
 	registry := NewRegistry()
 
 	technicalService := &MockTechnicalCalculationService{}
-	technicalService.On("CalculateTechnicals", "NL0010273215").Return(nil)
+	technicalService.On("CalculateTechnicals", "NL0010273215").Return("ASML.EU", nil)
 	// GetSecuritiesNeedingTechnicals is called by FindSubjects, not Execute
 	technicalService.On("GetSecuritiesNeedingTechnicals").Return([]string{"NL0010273215"}).Maybe()
 

@@ -878,13 +878,14 @@ type securityHistorySyncAdapter struct {
 	container *Container
 }
 
-func (a *securityHistorySyncAdapter) SyncSecurityHistory(isin string) error {
+func (a *securityHistorySyncAdapter) SyncSecurityHistory(isin string) (string, error) {
 	// Get security to get the symbol
 	sec, err := a.container.SecurityRepo.GetByISIN(isin)
 	if err != nil || sec == nil {
-		return err
+		return "", err
 	}
-	return a.container.HistoricalSyncService.SyncHistoricalPrices(sec.Symbol)
+	err = a.container.HistoricalSyncService.SyncHistoricalPrices(sec.Symbol)
+	return sec.Symbol, err
 }
 
 func (a *securityHistorySyncAdapter) GetStaleSecurities() []string {
@@ -905,9 +906,14 @@ type securityTechnicalAdapter struct {
 	container *Container
 }
 
-func (a *securityTechnicalAdapter) CalculateTechnicals(isin string) error {
+func (a *securityTechnicalAdapter) CalculateTechnicals(isin string) (string, error) {
 	// Technical calculations are done during historical sync
-	return nil
+	// Get security to return the symbol for progress reporting
+	sec, err := a.container.SecurityRepo.GetByISIN(isin)
+	if err != nil || sec == nil {
+		return "", err
+	}
+	return sec.Symbol, nil
 }
 
 func (a *securityTechnicalAdapter) GetSecuritiesNeedingTechnicals() []string {
@@ -919,9 +925,14 @@ type securityFormulaAdapter struct {
 	container *Container
 }
 
-func (a *securityFormulaAdapter) RunDiscovery(isin string) error {
+func (a *securityFormulaAdapter) RunDiscovery(isin string) (string, error) {
 	// Formula discovery - placeholder for now
-	return nil
+	// Get security to return the symbol for progress reporting
+	sec, err := a.container.SecurityRepo.GetByISIN(isin)
+	if err != nil || sec == nil {
+		return "", err
+	}
+	return sec.Symbol, nil
 }
 
 func (a *securityFormulaAdapter) GetSecuritiesNeedingDiscovery() []string {
@@ -932,10 +943,15 @@ type securityTagAdapter struct {
 	container *Container
 }
 
-func (a *securityTagAdapter) UpdateTags(isin string) error {
+func (a *securityTagAdapter) UpdateTags(isin string) (string, error) {
 	// Tag assignment requires full AssignTagsInput - for now this is a no-op
 	// Tags are assigned as part of the scoring workflow
-	return nil
+	// Get security to return the symbol for progress reporting
+	sec, err := a.container.SecurityRepo.GetByISIN(isin)
+	if err != nil || sec == nil {
+		return "", err
+	}
+	return sec.Symbol, nil
 }
 
 func (a *securityTagAdapter) GetSecuritiesNeedingTagUpdate() []string {
