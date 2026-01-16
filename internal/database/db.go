@@ -201,6 +201,7 @@ func buildConnectionString(path string, profile DatabaseProfile) string {
 	connStr += "&_pragma=foreign_keys(1)"          // Enable foreign key constraints (data integrity)
 	connStr += "&_pragma=wal_autocheckpoint(1000)" // Checkpoint every 1000 pages (WAL management)
 	connStr += "&_pragma=cache_size(-64000)"       // 64MB cache (negative = KB, positive = pages)
+	connStr += "&_pragma=busy_timeout(5000)"       // Wait up to 5 seconds if database is locked
 
 	return connStr
 }
