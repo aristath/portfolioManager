@@ -622,6 +622,17 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 			log,
 		)
 		log.Info().Msg("Display mode manager initialized")
+
+		// Apply display mode from settings (if configured)
+		if container.SettingsRepo != nil {
+			if mode, err := container.SettingsRepo.Get("display_mode"); err == nil && mode != nil && *mode != "" {
+				if err := container.ModeManager.SetMode(display.DisplayMode(*mode)); err != nil {
+					log.Warn().Err(err).Str("mode", *mode).Msg("Failed to set display mode from settings, using default")
+				} else {
+					log.Info().Str("mode", *mode).Msg("Applied display mode from settings")
+				}
+			}
+		}
 	}
 
 	// ==========================================
