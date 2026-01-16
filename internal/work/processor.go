@@ -263,6 +263,7 @@ func (p *Processor) executeItem(item *WorkItem, wt *WorkType) error {
 	if err != nil {
 		progress.emitFailed(err, duration, item.Retries)
 	} else {
+		p.completion.MarkCompleted(item)
 		progress.emitCompleted(duration)
 	}
 
