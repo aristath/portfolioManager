@@ -7,7 +7,6 @@ import (
 	"github.com/rs/zerolog"
 )
 
-
 // MetadataEnricher enriches security metadata from broker API
 type MetadataEnricher struct {
 	brokerClient domain.BrokerClient
