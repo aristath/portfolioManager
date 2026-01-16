@@ -267,8 +267,8 @@ func TestHandlers_RegisterRoutes(t *testing.T) {
 	})
 
 	// Verify routes exist
-	assert.True(t, routes["GET /api/work/types"], "GET /api/work/types should be registered")
-	assert.True(t, routes["POST /api/work/{workType}/execute"], "POST /api/work/{workType}/execute should be registered")
-	assert.True(t, routes["POST /api/work/{workType}/{subject}/execute"], "POST /api/work/{workType}/{subject}/execute should be registered")
-	assert.True(t, routes["POST /api/work/trigger"], "POST /api/work/trigger should be registered")
+	assert.True(t, routes["GET /work/types"], "GET /work/types should be registered")
+	assert.True(t, routes["POST /work/{workType}/execute"], "POST /work/{workType}/execute should be registered")
+	assert.True(t, routes["POST /work/{workType}/{subject}/execute"], "POST /work/{workType}/{subject}/execute should be registered")
+	assert.True(t, routes["POST /work/trigger"], "POST /work/trigger should be registered")
 }

@@ -23,7 +23,7 @@ func NewHandlers(processor *Processor, registry *Registry) *Handlers {
 
 // RegisterRoutes registers HTTP routes for work management
 func (h *Handlers) RegisterRoutes(r chi.Router) {
-	r.Route("/api/work", func(r chi.Router) {
+	r.Route("/work", func(r chi.Router) {
 		r.Get("/types", h.ListWorkTypes)
 		r.Post("/{workType}/execute", h.ExecuteWorkType)
 		r.Post("/{workType}/{subject}/execute", h.ExecuteWorkTypeWithSubject)
