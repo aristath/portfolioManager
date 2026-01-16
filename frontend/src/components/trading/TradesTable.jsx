@@ -1,7 +1,29 @@
+/**
+ * Trades Table Component
+ * 
+ * Displays recent trading activity including executed trades and pending orders.
+ * Shows trade details: date, symbol, name, side (BUY/SELL), quantity, price, and value.
+ * 
+ * Features:
+ * - Pending orders displayed first (highlighted in yellow)
+ * - Executed trades with execution date
+ * - Cash flow trades (currency pairs) highlighted differently
+ * - Color-coded side badges (green for BUY, red for SELL)
+ * - Responsive design (hides name/price columns on small screens)
+ * 
+ * Used in the Recent Trades view to monitor trading activity.
+ */
 import { Card, Table, Text, Badge, Group } from '@mantine/core';
 import { useTradesStore } from '../../stores/tradesStore';
 import { formatCurrency, formatDateTime } from '../../utils/formatters';
 
+/**
+ * Trades table component
+ * 
+ * Displays pending orders and executed trades in a table format.
+ * 
+ * @returns {JSX.Element} Trades table with pending orders and executed trades
+ */
 export function TradesTable() {
   const { trades, pendingOrders } = useTradesStore();
 
@@ -40,17 +62,19 @@ export function TradesTable() {
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody className="trades-table__tbody">
-              {/* Pending orders first */}
+              {/* Pending orders - shown first, highlighted in yellow */}
               {pendingOrders.map((order) => {
+                // Check if this is a cash flow trade (currency pair)
                 const isCash = order.symbol.includes('/');
                 return (
                   <Table.Tr
                     className={`trades-table__row trades-table__row--pending ${isCash ? 'trades-table__row--cash' : ''}`}
                     key={`pending-${order.order_id}`}
                     style={{
-                      backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                      backgroundColor: 'rgba(255, 193, 7, 0.1)',  // Yellow highlight for pending
                     }}
                   >
+                    {/* Status badge - PENDING */}
                     <Table.Td className="trades-table__td trades-table__td--status">
                       <Badge className="trades-table__status-badge" size="xs" color="yellow" variant="filled">
                         PENDING
@@ -106,17 +130,20 @@ export function TradesTable() {
                   </Table.Tr>
                 );
               })}
-              {/* Executed trades */}
+              {/* Executed trades - shown after pending orders */}
               {trades.map((trade) => {
+                // Check if this is a cash flow trade (currency pair)
                 const isCash = trade.symbol.includes('/');
                 return (
                   <Table.Tr
                     className={`trades-table__row trades-table__row--executed ${isCash ? 'trades-table__row--cash' : ''}`}
                     key={trade.id}
                     style={{
+                      // Cash trades have darker background
                       backgroundColor: isCash ? 'var(--mantine-color-dark-8)' : undefined,
                     }}
                   >
+                    {/* Execution date */}
                     <Table.Td className="trades-table__td trades-table__td--date">
                       <Text className="trades-table__date" size="sm" c="dimmed">
                         {formatDateTime(trade.executed_at)}

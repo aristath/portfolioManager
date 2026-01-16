@@ -1,7 +1,32 @@
+/**
+ * Job Footer Component
+ * 
+ * Provides a collapsible panel for manually triggering background jobs.
+ * Organized by category (Sync, Planning, Dividends, Health Check, Composite).
+ * 
+ * Features:
+ * - Collapsible panel (click title to expand/collapse)
+ * - Jobs organized by category
+ * - Loading states for each job button
+ * - Success/error messages that auto-dismiss after 5 seconds
+ * - Special handling for "hard-update" job (refreshes page on success)
+ * 
+ * Used for debugging and manual job execution during development/maintenance.
+ */
 import { Paper, Group, Button, Text, Stack, Divider, Title, Collapse } from '@mantine/core';
 import { api } from '../../api/client';
 import { useState } from 'react';
 
+/**
+ * Job categories with their associated jobs
+ * 
+ * Each job has:
+ * - id: Unique identifier
+ * - name: Display name
+ * - api: API method name to call (from api client)
+ * 
+ * @type {Array<Object>}
+ */
 const jobCategories = [
   {
     name: 'Sync Jobs',
@@ -58,19 +83,42 @@ const jobCategories = [
   },
 ];
 
+/**
+ * Job footer component
+ * 
+ * Provides manual job triggering interface for debugging and maintenance.
+ * 
+ * @returns {JSX.Element} Job footer with collapsible job trigger panel
+ */
 export function JobFooter() {
+  // Loading state per job (prevents double-triggering)
   const [loading, setLoading] = useState({});
+  // Success/error messages per job (auto-dismiss after 5 seconds)
   const [messages, setMessages] = useState({});
+  // Panel expanded/collapsed state
   const [opened, setOpened] = useState(false);
 
+  /**
+   * Triggers a background job via API
+   * 
+   * Handles loading state, success/error messages, and auto-dismiss.
+   * Special case: "hard-update" job refreshes the page on success.
+   * 
+   * @param {Object} job - Job object with id, name, and api method name
+   */
   const triggerJob = async (job) => {
+    // Prevent double-triggering if already loading
     if (loading[job.id]) return;
 
+    // Set loading state and clear any previous messages
     setLoading((prev) => ({ ...prev, [job.id]: true }));
     setMessages((prev) => ({ ...prev, [job.id]: null }));
 
     try {
+      // Call the API method for this job
       const result = await api[job.api]();
+      
+      // Set success/error message based on result
       setMessages((prev) => ({
         ...prev,
         [job.id]: {
@@ -79,14 +127,15 @@ export function JobFooter() {
         },
       }));
 
-      // For hard update, refresh page on success
+      // Special handling for hard-update: refresh page on success
       if (job.id === 'hard-update' && (result.status === 'success' || result.success)) {
         setTimeout(() => {
           window.location.reload();
-        }, 2000); // Wait 2 seconds to show success message
+        }, 2000); // Wait 2 seconds to show success message before reload
         return;
       }
 
+      // Auto-dismiss success/error messages after 5 seconds
       setTimeout(() => {
         setMessages((prev) => {
           const next = { ...prev };
@@ -95,6 +144,7 @@ export function JobFooter() {
         });
       }, 5000);
     } catch (error) {
+      // Handle API errors
       setMessages((prev) => ({
         ...prev,
         [job.id]: {
@@ -103,6 +153,7 @@ export function JobFooter() {
         },
       }));
 
+      // Auto-dismiss error messages after 5 seconds
       setTimeout(() => {
         setMessages((prev) => {
           const next = { ...prev };
@@ -111,6 +162,7 @@ export function JobFooter() {
         });
       }, 5000);
     } finally {
+      // Always clear loading state
       setLoading((prev) => {
         const next = { ...prev };
         delete next[job.id];
@@ -130,6 +182,7 @@ export function JobFooter() {
         border: '1px solid var(--mantine-color-dark-6)',
       }}
     >
+      {/* Collapsible title - click to expand/collapse */}
       <Title
         className="job-footer__title"
         order={4}
@@ -143,26 +196,34 @@ export function JobFooter() {
       >
         Manual Job Triggers
       </Title>
+      
+      {/* Collapsible content */}
       <Collapse className="job-footer__collapse" in={opened}>
         <Stack className="job-footer__categories" gap="lg">
           {jobCategories.map((category) => (
             <Stack className="job-footer__category" key={category.name} gap="xs">
+              {/* Category header */}
               <Text className="job-footer__category-name" size="sm" fw={600} c="dimmed" tt="uppercase" style={{ fontFamily: 'var(--mantine-font-family)' }}>
                 {category.name}
               </Text>
+              
+              {/* Job buttons for this category */}
               <Group className="job-footer__jobs" gap="xs" wrap="wrap">
                 {category.jobs.map((job) => (
                   <Stack className="job-footer__job" key={job.id} gap="xs" style={{ minWidth: '140px' }}>
+                    {/* Job trigger button */}
                     <Button
                       className="job-footer__job-btn"
                       size="xs"
                       variant="light"
                       onClick={() => triggerJob(job)}
-                      loading={loading[job.id]}
+                      loading={loading[job.id]}  // Shows loading spinner while job is running
                       fullWidth
                     >
                       {job.name}
                     </Button>
+                    
+                    {/* Success/error message (auto-dismisses after 5 seconds) */}
                     {messages[job.id] && (
                       <Text
                         className={`job-footer__job-message job-footer__job-message--${messages[job.id].type}`}
@@ -176,6 +237,8 @@ export function JobFooter() {
                   </Stack>
                 ))}
               </Group>
+              
+              {/* Divider between categories */}
               <Divider className="job-footer__divider" />
             </Stack>
           ))}

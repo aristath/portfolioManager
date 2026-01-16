@@ -1,3 +1,18 @@
+/**
+ * Edit Security Modal Component
+ * 
+ * Modal dialog for editing security properties in the investment universe.
+ * Supports field overrides (custom values that override defaults) with reset functionality.
+ * 
+ * Features:
+ * - Editable fields: symbol, name, geography, exchange, industry, product type, min lot, allow buy/sell
+ * - Override indicators showing which fields have custom values
+ * - Reset to default functionality for overridden fields
+ * - Field validation and whitelist enforcement
+ * - Success/error notifications
+ * 
+ * Used for customizing security metadata and trading permissions.
+ */
 import { Modal, TextInput, NumberInput, Switch, Button, Group, Stack, Select, ActionIcon, Tooltip, Badge } from '@mantine/core';
 import { IconRefresh } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
@@ -6,18 +21,26 @@ import { useSecuritiesStore } from '../../stores/securitiesStore';
 import { useState, useEffect } from 'react';
 import { api } from '../../api/client';
 
+/**
+ * Edit Security modal component
+ * 
+ * Provides a form to edit security properties with override support.
+ * 
+ * @returns {JSX.Element|null} Edit Security modal dialog or null if no security selected
+ */
 export function EditSecurityModal() {
   const { showEditSecurityModal, editingSecurity, closeEditSecurityModal } = useAppStore();
   const { fetchSecurities } = useSecuritiesStore();
   const [formData, setFormData] = useState(null);
-  const [overrides, setOverrides] = useState({});
+  const [overrides, setOverrides] = useState({});  // Fields that have custom overrides
   const [loading, setLoading] = useState(false);
-  const [resettingField, setResettingField] = useState(null);
+  const [resettingField, setResettingField] = useState(null);  // Field currently being reset
 
+  // Load security data and overrides when editing security changes
   useEffect(() => {
     if (editingSecurity) {
       setFormData({ ...editingSecurity });
-      // Fetch overrides for this security
+      // Fetch overrides for this security to show which fields are customized
       api.getSecurityOverrides(editingSecurity.isin)
         .then(setOverrides)
         .catch(err => {
@@ -27,13 +50,19 @@ export function EditSecurityModal() {
     }
   }, [editingSecurity]);
 
+  /**
+   * Resets a field to its default value by deleting the override
+   * 
+   * @param {string} field - Field name to reset
+   */
   const handleResetField = async (field) => {
     if (!formData?.isin) return;
 
     setResettingField(field);
     try {
+      // Delete the override
       await api.deleteSecurityOverride(formData.isin, field);
-      // Refresh overrides
+      // Refresh overrides list
       const newOverrides = await api.getSecurityOverrides(formData.isin);
       setOverrides(newOverrides);
       // Refresh security data to get default value
@@ -55,7 +84,15 @@ export function EditSecurityModal() {
     }
   };
 
-  // Helper to create field with override indicator
+  /**
+   * Override indicator component
+   * 
+   * Shows a "Customized" badge and reset button for fields that have overrides.
+   * 
+   * @param {Object} props - Component props
+   * @param {string} props.field - Field name to check for override
+   * @returns {JSX.Element|null} Override indicator or null if not overridden
+   */
   const OverrideIndicator = ({ field }) => {
     const isOverridden = field in overrides;
     if (!isOverridden) return null;
@@ -78,6 +115,12 @@ export function EditSecurityModal() {
     );
   };
 
+  /**
+   * Handles saving security changes
+   * 
+   * Only sends whitelisted editable fields to the backend.
+   * Filters out undefined/null values but preserves empty strings and false booleans.
+   */
   const handleSave = async () => {
     if (!formData || !formData.isin) return;
 
@@ -98,13 +141,16 @@ export function EditSecurityModal() {
         'allow_sell',
       ];
 
+      // Build update payload with only defined fields
       editableFields.forEach(field => {
         if (formData[field] !== undefined && formData[field] !== null) {
           updateData[field] = formData[field];
         }
       });
 
+      // Update security via API
       await api.updateSecurity(formData.isin, updateData);
+      // Refresh securities list
       await fetchSecurities();
       closeEditSecurityModal();
       notifications.show({

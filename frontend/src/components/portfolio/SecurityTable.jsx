@@ -1,3 +1,22 @@
+/**
+ * Security Table Component
+ * 
+ * Displays the investment universe (all securities) in a sortable, filterable table.
+ * Provides comprehensive security information and management capabilities.
+ * 
+ * Features:
+ * - Sortable columns (symbol, name, geography, exchange, sector, value, score, priority)
+ * - Filtering by geography, industry, search query, minimum score
+ * - Column visibility toggle (show/hide columns)
+ * - Sparkline charts (1Y or 5Y timeframe)
+ * - Inline multiplier editing
+ * - Security actions (edit, refresh score, remove)
+ * - Concentration alerts (visual indicators for over-concentration)
+ * - Tags display with color coding
+ * - Buy/Sell indicators
+ * 
+ * This is the main component for viewing and managing the investment universe.
+ */
 import { Card, Table, TextInput, Select, Group, Button, Text, ActionIcon, Badge, NumberInput, Menu, SegmentedControl, Skeleton } from '@mantine/core';
 import { IconEdit, IconRefresh, IconTrash, IconColumns, IconCheck } from '@tabler/icons-react';
 import { useSecuritiesStore } from '../../stores/securitiesStore';
@@ -8,6 +27,13 @@ import { formatCurrency } from '../../utils/formatters';
 import { getTagName, getTagColor } from '../../utils/tagNames';
 import { useEffect, useState } from 'react';
 
+/**
+ * Security table component
+ * 
+ * Displays all securities in the investment universe with filtering, sorting, and management features.
+ * 
+ * @returns {JSX.Element} Security table with filters, columns, and actions
+ */
 export function SecurityTable() {
   const {
     securities,
@@ -37,7 +63,7 @@ export function SecurityTable() {
   const { openEditSecurityModal, openAddSecurityModal } = useAppStore();
   const { alerts } = usePortfolioStore();
 
-  // Load column visibility on mount
+  // Load column visibility preferences on mount
   useEffect(() => {
     fetchColumnVisibility();
   }, [fetchColumnVisibility]);
@@ -52,22 +78,52 @@ export function SecurityTable() {
     loadSparklines();
   }, [fetchSparklines, sparklineTimeframe]);
 
+  // Get filtered and sorted securities
   const filteredSecurities = getFilteredSecurities();
+  
+  // Extract unique geographies and industries for filter dropdowns
   const geographies = [...new Set(securities.map(s => s.geography).filter(Boolean))].sort();
   const industries = [...new Set(securities.map(s => s.industry).filter(Boolean))].sort();
 
+  /**
+   * Handles column sorting
+   * 
+   * Toggles sort direction if clicking the same column, otherwise sets new sort field.
+   * 
+   * @param {string} field - Field name to sort by
+   */
   const handleSort = (field) => {
     if (sortBy === field) {
+      // Toggle direction if same field
       setSortBy(field, !sortDesc);
     } else {
+      // New field, default to descending
       setSortBy(field, true);
     }
   };
 
+  /**
+   * Gets concentration alert for a security (if position is over-concentrated)
+   * 
+   * @param {string} symbol - Security symbol
+   * @returns {Object|undefined} Alert object or undefined
+   */
   const getPositionAlert = (symbol) => {
     return alerts.find(a => a.type === 'security' && a.name === symbol);
   };
 
+  /**
+   * Gets badge color class for score value
+   * 
+   * Score ranges:
+   * - >= 0.7: green (high score)
+   * - >= 0.5: yellow (medium-high)
+   * - >= 0.3: orange (medium-low)
+   * - < 0.3: red (low score)
+   * 
+   * @param {number} score - Score value (0.0 to 1.0)
+   * @returns {Object} Badge props with color and variant
+   */
   const getScoreClass = (score) => {
     if (score >= 0.7) return { color: 'green', variant: 'light' };
     if (score >= 0.5) return { color: 'yellow', variant: 'light' };
@@ -75,6 +131,18 @@ export function SecurityTable() {
     return { color: 'red', variant: 'light' };
   };
 
+  /**
+   * Gets badge color class for priority score value
+   * 
+   * Priority ranges:
+   * - >= 80: green (high priority)
+   * - >= 60: yellow (medium-high)
+   * - >= 40: orange (medium-low)
+   * - < 40: red (low priority)
+   * 
+   * @param {number} score - Priority score (0-100)
+   * @returns {Object} Badge props with color and variant
+   */
   const getPriorityClass = (score) => {
     if (score >= 80) return { color: 'green', variant: 'light' };
     if (score >= 60) return { color: 'yellow', variant: 'light' };
@@ -82,17 +150,35 @@ export function SecurityTable() {
     return { color: 'red', variant: 'light' };
   };
 
+  /**
+   * Formats score as percentage string
+   * 
+   * @param {number|null|undefined} score - Score value (0.0 to 1.0)
+   * @returns {string} Formatted score (e.g., "85.5") or "-" for invalid values
+   */
   const formatScore = (score) => {
     if (score == null || isNaN(score)) return '-';
     return (score * 100).toFixed(1);
   };
 
+  /**
+   * Formats priority score as integer string
+   * 
+   * @param {number|null|undefined} priority - Priority score (0-100)
+   * @returns {string} Formatted priority (e.g., "85") or "-" for invalid values
+   */
   const formatPriority = (priority) => {
     if (priority == null || isNaN(priority)) return '-';
     return priority.toFixed(0);
   };
 
-  // Calculate visible column count for colSpan
+  /**
+   * Calculates the number of visible columns for colSpan in empty state
+   * 
+   * Symbol and Actions columns are always visible.
+   * 
+   * @returns {number} Count of visible columns
+   */
   const getVisibleColumnCount = () => {
     let count = 2; // Symbol and Actions are always visible
     if (visibleColumns.chart) count++;
@@ -113,11 +199,13 @@ export function SecurityTable() {
 
   return (
     <Card className="security-table" p="md">
+      {/* Header with title and action buttons */}
       <Group className="security-table__header" justify="space-between" mb="md">
         <Text className="security-table__title" size="xs" tt="uppercase" c="dimmed" fw={600}>
           Security Universe
         </Text>
         <Group className="security-table__header-actions" gap="xs">
+          {/* Column visibility menu */}
           <Menu width={200}>
             <Menu.Target>
               <ActionIcon className="security-table__columns-btn" variant="subtle" size="sm" title="Column visibility">
@@ -126,6 +214,7 @@ export function SecurityTable() {
             </Menu.Target>
             <Menu.Dropdown className="security-table__columns-dropdown">
               <Menu.Label>Show Columns</Menu.Label>
+              {/* Column toggle menu items - checkmark indicates visible column */}
               <Menu.Item
                 className="security-table__column-toggle"
                 leftSection={visibleColumns.chart ? <IconCheck size={14} /> : <span style={{ width: 14 }} />}
@@ -205,14 +294,16 @@ export function SecurityTable() {
               </Menu.Item>
             </Menu.Dropdown>
           </Menu>
+          {/* Add security button */}
           <Button className="security-table__add-btn" size="xs" onClick={openAddSecurityModal}>
             + Add Security
           </Button>
         </Group>
       </Group>
 
-      {/* Filter Bar */}
+      {/* Filter Bar - search, geography, industry, score, and sparkline timeframe */}
       <Group className="security-table__filters" gap="xs" mb="md" wrap="wrap">
+        {/* Search input - filters by symbol or name */}
         <TextInput
           className="security-table__search"
           placeholder="Search symbol or name..."
@@ -221,6 +312,7 @@ export function SecurityTable() {
           style={{ flex: 1, minWidth: '200px' }}
           size="xs"
         />
+        {/* Geography filter dropdown */}
         <Select
           className="security-table__geography-filter"
           placeholder="All Geographies"
@@ -230,6 +322,7 @@ export function SecurityTable() {
           size="xs"
           style={{ width: '150px' }}
         />
+        {/* Industry/sector filter dropdown */}
         <Select
           className="security-table__sector-filter"
           placeholder="All Sectors"
@@ -239,6 +332,7 @@ export function SecurityTable() {
           size="xs"
           style={{ width: '150px' }}
         />
+        {/* Minimum score filter */}
         <Select
           className="security-table__score-filter"
           placeholder="Any Score"
@@ -253,6 +347,7 @@ export function SecurityTable() {
           size="xs"
           style={{ width: '120px' }}
         />
+        {/* Sparkline timeframe selector (1Y or 5Y) */}
         <SegmentedControl
           className="security-table__timeframe"
           value={sparklineTimeframe}
@@ -265,18 +360,19 @@ export function SecurityTable() {
         />
       </Group>
 
-      {/* Results count */}
+      {/* Results count - shows filtered vs total */}
       {securities.length > 0 && (
         <Text className="security-table__count" size="xs" c="dimmed" mb="xs">
           {filteredSecurities.length} of {securities.length} securities
         </Text>
       )}
 
-      {/* Table */}
+      {/* Table with horizontal scroll support */}
       <div className="security-table__wrapper" style={{ overflowX: 'auto' }}>
         <Table className="security-table__table" highlightOnHover>
           <Table.Thead className="security-table__thead">
             <Table.Tr className="security-table__header-row">
+              {/* Symbol column - sticky on left, sortable */}
               <Table.Th className="security-table__th security-table__th--symbol" style={{ position: 'sticky', left: 0, backgroundColor: 'var(--mantine-color-body)', zIndex: 10 }}>
                 <Text
                   className="security-table__sort-label"
@@ -393,18 +489,22 @@ export function SecurityTable() {
                 </Table.Td>
               </Table.Tr>
             )}
+            {/* Table rows for each filtered security */}
             {filteredSecurities.map((security) => {
+              // Check for concentration alert for this security
               const alert = getPositionAlert(security.symbol);
               return (
                 <Table.Tr
                   className={`security-table__row ${alert ? `security-table__row--${alert.severity}` : ''}`}
                   key={security.symbol}
                   style={{
+                    // Left border indicates concentration alert (red for critical, yellow for warning)
                     borderLeft: alert
                       ? `4px solid ${alert.severity === 'critical' ? 'var(--mantine-color-red-5)' : 'var(--mantine-color-yellow-5)'}`
                       : undefined,
                   }}
                 >
+                  {/* Symbol column - sticky, clickable to open chart */}
                   <Table.Td className="security-table__td security-table__td--symbol" style={{ position: 'sticky', left: 0, backgroundColor: 'var(--mantine-color-body)', zIndex: 5 }}>
                     <Text
                       className="security-table__symbol-link"
@@ -412,12 +512,14 @@ export function SecurityTable() {
                       style={{ fontFamily: 'var(--mantine-font-family)', cursor: 'pointer' }}
                       c="blue"
                       onClick={() => {
+                        // Open security chart modal
                         useAppStore.getState().openSecurityChart(security.symbol, security.isin);
                       }}
                     >
                       {security.symbol}
                     </Text>
                   </Table.Td>
+                  {/* Sparkline chart column - shows price trend */}
                   {visibleColumns.chart && (
                     <Table.Td className="security-table__td security-table__td--chart">
                       {sparklinesLoading ? (
@@ -460,6 +562,7 @@ export function SecurityTable() {
                       </Text>
                     </Table.Td>
                   )}
+                  {/* Tags column - displays security tags with color coding */}
                   {visibleColumns.tags && (
                     <Table.Td className="security-table__td security-table__td--tags">
                       {security.tags && security.tags.length > 0 ? (
@@ -469,7 +572,7 @@ export function SecurityTable() {
                               className="security-table__tag"
                               key={tagId}
                               size="xs"
-                              {...getTagColor(tagId)}
+                              {...getTagColor(tagId)}  // Color based on tag category
                               title={tagId}
                             >
                               {getTagName(tagId)}
@@ -481,12 +584,14 @@ export function SecurityTable() {
                       )}
                     </Table.Td>
                   )}
+                  {/* Value column - position value with concentration alert indicator */}
                   {visibleColumns.value && (
                     <Table.Td className="security-table__td security-table__td--value" ta="right">
                       <Group className="security-table__value-group" gap="xs" justify="flex-end">
                         <Text className="security-table__value" size="sm" style={{ fontFamily: 'var(--mantine-font-family)' }}>
                           {security.position_value ? formatCurrency(security.position_value) : '-'}
                         </Text>
+                        {/* Concentration alert icon - red circle for critical, yellow warning for warning */}
                         {alert && (
                           <Text
                             className={`security-table__alert-icon security-table__alert-icon--${alert.severity}`}
@@ -507,6 +612,7 @@ export function SecurityTable() {
                       </Badge>
                     </Table.Td>
                   )}
+                  {/* Multiplier column - inline editing of priority multiplier */}
                   {visibleColumns.mult && (
                     <Table.Td className="security-table__td security-table__td--mult" ta="center">
                       <NumberInput
@@ -521,9 +627,11 @@ export function SecurityTable() {
                       />
                     </Table.Td>
                   )}
+                  {/* Buy/Sell indicators - shows which actions are allowed */}
                   {visibleColumns.bs && (
                     <Table.Td className="security-table__td security-table__td--bs" ta="center">
                       <Group className="security-table__bs-indicators" gap="xs" justify="center">
+                        {/* Green dot = buy enabled */}
                         {security.allow_buy && (
                           <div
                             className="security-table__bs-indicator security-table__bs-indicator--buy"
@@ -536,6 +644,7 @@ export function SecurityTable() {
                             title="Buy enabled"
                           />
                         )}
+                        {/* Red dot = sell enabled */}
                         {security.allow_sell && (
                           <div
                             className="security-table__bs-indicator security-table__bs-indicator--sell"
@@ -548,6 +657,7 @@ export function SecurityTable() {
                             title="Sell enabled"
                           />
                         )}
+                        {/* Dash if neither buy nor sell is enabled */}
                         {!security.allow_buy && !security.allow_sell && <Text c="dimmed">-</Text>}
                       </Group>
                     </Table.Td>
@@ -559,8 +669,10 @@ export function SecurityTable() {
                       </Badge>
                     </Table.Td>
                   )}
+                  {/* Actions column - edit, refresh score, remove */}
                   <Table.Td className="security-table__td security-table__td--actions" ta="center">
                     <Group className="security-table__actions" gap="xs" justify="center">
+                      {/* Edit security button */}
                       <ActionIcon
                         className="security-table__action-btn security-table__action-btn--edit"
                         size="sm"
@@ -570,6 +682,7 @@ export function SecurityTable() {
                       >
                         <IconEdit size={14} />
                       </ActionIcon>
+                      {/* Refresh score button - triggers score recalculation */}
                       <ActionIcon
                         className="security-table__action-btn security-table__action-btn--refresh"
                         size="sm"
@@ -579,6 +692,7 @@ export function SecurityTable() {
                       >
                         <IconRefresh size={14} />
                       </ActionIcon>
+                      {/* Remove security button - removes from investment universe */}
                       <ActionIcon
                         className="security-table__action-btn security-table__action-btn--remove"
                         size="sm"

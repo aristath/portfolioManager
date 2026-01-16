@@ -1,8 +1,26 @@
+/**
+ * Application Header Component
+ *
+ * Displays the main application header with:
+ * - Application branding (title and subtitle)
+ * - Tradernet connection status indicator
+ * - Trading mode toggle (Research/Live)
+ * - Settings button
+ *
+ * Provides quick access to key system status and controls.
+ */
 import { Button, Group } from '@mantine/core';
 import { IconSettings } from '@tabler/icons-react';
 import { useAppStore } from '../../stores/appStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 
+/**
+ * Application header component
+ *
+ * Shows branding, connection status, trading mode, and settings access.
+ *
+ * @returns {JSX.Element} Header component with branding and controls
+ */
 export function AppHeader() {
   const { tradernet, openSettingsModal } = useAppStore();
   const { tradingMode, toggleTradingMode } = useSettingsStore();
@@ -14,6 +32,7 @@ export function AppHeader() {
       backgroundColor: 'var(--mantine-color-dark-9)',
     }}>
       <Group className="app-header__content" justify="space-between" align="center">
+        {/* Application branding */}
         <div className="app-header__branding">
           <h1 className="app-header__title" style={{
             margin: 0,
@@ -34,9 +53,12 @@ export function AppHeader() {
             Automated Portfolio Management
           </p>
         </div>
+
+        {/* Header actions: connection status, trading mode, settings */}
         <Group className="app-header__actions" gap="md">
-          {/* Tradernet Connection */}
+          {/* Tradernet connection status indicator */}
           <Group className="app-header__connection" gap="xs">
+            {/* Status dot: green when connected, red when offline */}
             <div
               className={`app-header__indicator app-header__indicator--${tradernet.connected ? 'online' : 'offline'}`}
               style={{
@@ -50,7 +72,9 @@ export function AppHeader() {
               {tradernet.connected ? 'Tradernet' : 'Offline'}
             </span>
           </Group>
-          {/* Trading Mode Toggle */}
+
+          {/* Trading mode toggle button */}
+          {/* Research mode: simulated trades (yellow) | Live mode: real trades (green) */}
           <Button
             className="app-header__mode-toggle"
             variant="light"
@@ -60,6 +84,7 @@ export function AppHeader() {
             title={tradingMode === 'research' ? 'Research Mode: Trades are simulated' : 'Live Mode: Trades are executed'}
           >
             <Group className="app-header__mode-content" gap="xs">
+              {/* Mode indicator dot */}
               <div
                 className={`app-header__mode-indicator app-header__mode-indicator--${tradingMode}`}
                 style={{
@@ -74,6 +99,8 @@ export function AppHeader() {
               </span>
             </Group>
           </Button>
+
+          {/* Settings button */}
           <Button
             className="app-header__settings-btn"
             variant="subtle"

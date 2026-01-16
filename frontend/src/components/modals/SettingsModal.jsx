@@ -1,3 +1,17 @@
+/**
+ * Settings Modal Component
+ * 
+ * Comprehensive settings management modal with multiple tabs for different configuration areas.
+ * 
+ * Features:
+ * - Trading Settings: Frequency limits, limit order protection, scoring parameters, market regime detection
+ * - Display Settings: LED matrix display mode, ticker configuration, brightness
+ * - System Settings: Job scheduling, cache management, historical data sync, system restart, hardware management
+ * - Backup Settings: Cloudflare R2 backup configuration and management
+ * - Credentials: API keys for Tradernet, GitHub, and other services
+ * 
+ * All settings are stored in the settings database and take precedence over environment variables.
+ */
 import { useState, useEffect } from 'react';
 import { Modal, Tabs, Text, Button, NumberInput, Switch, Group, Stack, Paper, Divider, Alert, TextInput, PasswordInput, Select } from '@mantine/core';
 import { useAppStore } from '../../stores/appStore';
@@ -6,6 +20,13 @@ import { api } from '../../api/client';
 import { useNotifications } from '../../hooks/useNotifications';
 import { R2BackupModal } from './R2BackupModal';
 
+/**
+ * Settings modal component
+ * 
+ * Provides a comprehensive interface for managing all application settings.
+ * 
+ * @returns {JSX.Element} Settings modal with tabbed interface
+ */
 export function SettingsModal() {
   const { showSettingsModal, closeSettingsModal } = useAppStore();
   const { settings, fetchSettings, updateSetting } = useSettingsStore();
@@ -18,12 +39,19 @@ export function SettingsModal() {
   const [showR2BackupModal, setShowR2BackupModal] = useState(false);
   const [uploadingSketch, setUploadingSketch] = useState(false);
 
+  // Fetch settings when modal opens
   useEffect(() => {
     if (showSettingsModal) {
       fetchSettings();
     }
   }, [showSettingsModal, fetchSettings]);
 
+  /**
+   * Handles updating a setting value
+   * 
+   * @param {string} key - Setting key
+   * @param {*} value - Setting value
+   */
   const handleUpdateSetting = async (key, value) => {
     try {
       await updateSetting(key, value);
@@ -33,6 +61,9 @@ export function SettingsModal() {
     }
   };
 
+  /**
+   * Handles syncing historical data
+   */
   const handleSyncHistorical = async () => {
     setSyncingHistorical(true);
     try {
@@ -45,6 +76,9 @@ export function SettingsModal() {
     }
   };
 
+  /**
+   * Handles resetting application caches
+   */
   const handleResetCache = async () => {
     setLoading(true);
     try {
@@ -57,6 +91,9 @@ export function SettingsModal() {
     }
   };
 
+  /**
+   * Handles system restart
+   */
   const handleRestartSystem = async () => {
     if (!confirm('Are you sure you want to restart the system?')) return;
     setLoading(true);
@@ -70,10 +107,20 @@ export function SettingsModal() {
     }
   };
 
+  /**
+   * Gets a setting value with default fallback
+   * 
+   * @param {string} key - Setting key
+   * @param {*} defaultValue - Default value if setting not found
+   * @returns {*} Setting value or default
+   */
   const getSetting = (key, defaultValue = 0) => {
     return settings[key] ?? defaultValue;
   };
 
+  /**
+   * Tests R2 connection with current credentials
+   */
   const handleTestR2Connection = async () => {
     setTestingR2Connection(true);
     try {
@@ -90,6 +137,9 @@ export function SettingsModal() {
     }
   };
 
+  /**
+   * Creates a new R2 backup
+   */
   const handleBackupToR2 = async () => {
     setBackingUpToR2(true);
     try {
@@ -102,10 +152,16 @@ export function SettingsModal() {
     }
   };
 
+  /**
+   * Opens the R2 backup management modal
+   */
   const handleViewR2Backups = () => {
     setShowR2BackupModal(true);
   };
 
+  /**
+   * Handles uploading Arduino sketch to MCU
+   */
   const handleUploadSketch = async () => {
     setUploadingSketch(true);
     try {
@@ -141,9 +197,10 @@ export function SettingsModal() {
           <Tabs.Tab className="settings-modal__tab settings-modal__tab--credentials" value="credentials">Credentials</Tabs.Tab>
         </Tabs.List>
 
+        {/* Trading Settings Tab */}
         <Tabs.Panel className="settings-modal__panel settings-modal__panel--trading" value="trading" p="md">
           <Stack className="settings-modal__trading-content" gap="md">
-            {/* Trade Frequency Limits */}
+            {/* Trade Frequency Limits Section */}
             <Paper className="settings-modal__section settings-modal__section--frequency" p="md" withBorder>
               <Text className="settings-modal__section-title" size="sm" fw={500} mb="xs" tt="uppercase">Trade Frequency Limits</Text>
               <Text className="settings-modal__section-desc" size="xs" c="dimmed" mb="md">
@@ -207,7 +264,7 @@ export function SettingsModal() {
               </Stack>
             </Paper>
 
-            {/* Limit Order Protection */}
+            {/* Limit Order Protection Section */}
             <Paper className="settings-modal__section settings-modal__section--limit-order" p="md" withBorder>
               <Text className="settings-modal__section-title" size="sm" fw={500} mb="xs" tt="uppercase">Limit Order Protection</Text>
               <Stack className="settings-modal__section-content" gap="sm">
@@ -231,6 +288,7 @@ export function SettingsModal() {
                     <Text className="settings-modal__setting-unit" size="sm" c="dimmed">%</Text>
                   </Group>
                 </Group>
+                {/* Explanation of limit order buffer */}
                 <Alert className="settings-modal__alert" color="blue" variant="light" styles={{message: {fontSize: '12px'}}}>
                   <Text className="settings-modal__alert-text" size="xs">
                     <strong>Example:</strong> If current price is €30 and buffer is 5%, buy limit is €31.50.
@@ -240,7 +298,7 @@ export function SettingsModal() {
               </Stack>
             </Paper>
 
-            {/* Scoring Parameters */}
+            {/* Scoring Parameters Section */}
             <Paper className="settings-modal__section settings-modal__section--scoring" p="md" withBorder>
               <Text className="settings-modal__section-title" size="sm" fw={500} mb="xs" tt="uppercase">Scoring Parameters</Text>
               <Stack className="settings-modal__section-content" gap="sm">
@@ -265,7 +323,7 @@ export function SettingsModal() {
               </Stack>
             </Paper>
 
-            {/* Market Regime Detection */}
+            {/* Market Regime Detection Section */}
             <Paper className="settings-modal__section settings-modal__section--regime" p="md" withBorder>
               <Text className="settings-modal__section-title" size="sm" fw={500} mb="xs" tt="uppercase">Market Regime Detection</Text>
               <Text className="settings-modal__section-desc" size="xs" c="dimmed" mb="md">
@@ -352,9 +410,10 @@ export function SettingsModal() {
           </Stack>
         </Tabs.Panel>
 
+        {/* Display Settings Tab */}
         <Tabs.Panel className="settings-modal__panel settings-modal__panel--display" value="display" p="md">
           <Stack className="settings-modal__display-content" gap="md">
-            {/* Display Mode */}
+            {/* Display Mode Section */}
             <Paper className="settings-modal__section settings-modal__section--display-mode" p="md" withBorder>
               <Text className="settings-modal__section-title" size="sm" fw={500} mb="xs" tt="uppercase">Display Mode</Text>
               <Text className="settings-modal__section-desc" size="xs" c="dimmed" mb="md">
@@ -374,10 +433,11 @@ export function SettingsModal() {
               />
             </Paper>
 
-            {/* LED Matrix */}
+            {/* LED Matrix Section */}
             <Paper className="settings-modal__section settings-modal__section--led" p="md" withBorder>
               <Text className="settings-modal__section-title" size="sm" fw={500} mb="xs" tt="uppercase">LED Matrix</Text>
               <Stack className="settings-modal__section-content" gap="sm">
+                {/* Ticker speed setting */}
                 <Group className="settings-modal__setting-row" justify="space-between">
                   <div className="settings-modal__setting-label">
                     <Text className="settings-modal__setting-name" size="sm">Ticker Speed</Text>
@@ -397,6 +457,7 @@ export function SettingsModal() {
                     <Text className="settings-modal__setting-unit" size="sm" c="dimmed">ms</Text>
                   </Group>
                 </Group>
+                {/* Brightness setting */}
                 <Group className="settings-modal__setting-row" justify="space-between">
                   <div className="settings-modal__setting-label">
                     <Text className="settings-modal__setting-name" size="sm">Brightness</Text>
@@ -414,6 +475,7 @@ export function SettingsModal() {
                   />
                 </Group>
                 <Divider className="settings-modal__divider" />
+                {/* Ticker content options */}
                 <Text className="settings-modal__subsection-title" size="xs" fw={500} tt="uppercase" mb="xs">Ticker Content</Text>
                 <Stack className="settings-modal__ticker-options" gap="xs">
                   <Switch
@@ -459,9 +521,10 @@ export function SettingsModal() {
           </Stack>
         </Tabs.Panel>
 
+        {/* System Settings Tab */}
         <Tabs.Panel className="settings-modal__panel settings-modal__panel--system" value="system" p="md">
           <Stack className="settings-modal__system-content" gap="md">
-            {/* Job Scheduling */}
+            {/* Job Scheduling Section */}
             <Paper className="settings-modal__section settings-modal__section--scheduling" p="md" withBorder>
               <Text className="settings-modal__section-title" size="sm" fw={500} mb="xs" tt="uppercase">Job Scheduling</Text>
               <Text className="settings-modal__section-desc" size="xs" c="dimmed" mb="md">
@@ -531,10 +594,11 @@ export function SettingsModal() {
               </Stack>
             </Paper>
 
-            {/* System Actions */}
+            {/* System Actions Section */}
             <Paper className="settings-modal__section settings-modal__section--system-actions" p="md" withBorder>
               <Text className="settings-modal__section-title" size="sm" fw={500} mb="xs" tt="uppercase">System</Text>
               <Stack className="settings-modal__section-content" gap="sm">
+                {/* Cache reset action */}
                 <Group className="settings-modal__action-row" justify="space-between">
                   <Text className="settings-modal__action-label" size="sm">Caches</Text>
                   <Button
@@ -547,6 +611,7 @@ export function SettingsModal() {
                     Reset
                   </Button>
                 </Group>
+                {/* Historical data sync action */}
                 <Group className="settings-modal__action-row" justify="space-between">
                   <Text className="settings-modal__action-label" size="sm">Historical Data</Text>
                   <Button
@@ -559,6 +624,7 @@ export function SettingsModal() {
                     {syncingHistorical ? 'Syncing...' : 'Sync'}
                   </Button>
                 </Group>
+                {/* System restart action */}
                 <Group className="settings-modal__action-row" justify="space-between">
                   <Text className="settings-modal__action-label" size="sm">System</Text>
                   <Button
@@ -575,13 +641,14 @@ export function SettingsModal() {
               </Stack>
             </Paper>
 
-            {/* Hardware Actions */}
+            {/* Hardware Actions Section */}
             <Paper className="settings-modal__section settings-modal__section--hardware" p="md" withBorder>
               <Text className="settings-modal__section-title" size="sm" fw={500} mb="xs" tt="uppercase">Hardware</Text>
               <Text className="settings-modal__section-desc" size="xs" c="dimmed" mb="md">
                 Manage Arduino MCU hardware. These actions only work when running on Arduino hardware.
               </Text>
               <Stack className="settings-modal__section-content" gap="sm">
+                {/* Sketch upload action */}
                 <Group className="settings-modal__action-row" justify="space-between">
                   <div className="settings-modal__action-label">
                     <Text className="settings-modal__action-name" size="sm">LED Display Sketch</Text>
@@ -602,9 +669,10 @@ export function SettingsModal() {
           </Stack>
         </Tabs.Panel>
 
+        {/* Backup Settings Tab */}
         <Tabs.Panel className="settings-modal__panel settings-modal__panel--backup" value="backup" p="md">
           <Stack className="settings-modal__backup-content" gap="md">
-            {/* Cloudflare R2 Backup */}
+            {/* Cloudflare R2 Backup Section */}
             <Paper className="settings-modal__section settings-modal__section--r2" p="md" withBorder>
               <Text className="settings-modal__section-title" size="sm" fw={500} mb="xs" tt="uppercase">Cloudflare R2 Backup</Text>
               <Text className="settings-modal__section-desc" size="xs" c="dimmed" mb="md">
@@ -723,9 +791,10 @@ export function SettingsModal() {
           </Stack>
         </Tabs.Panel>
 
+        {/* Credentials Settings Tab */}
         <Tabs.Panel className="settings-modal__panel settings-modal__panel--credentials" value="credentials" p="md">
           <Stack className="settings-modal__credentials-content" gap="md">
-            {/* API Credentials */}
+            {/* API Credentials Section */}
             <Paper className="settings-modal__section settings-modal__section--api-credentials" p="md" withBorder>
               <Text className="settings-modal__section-title" size="sm" fw={500} mb="xs" tt="uppercase">API Credentials</Text>
               <Text className="settings-modal__section-desc" size="xs" c="dimmed" mb="md">

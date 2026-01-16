@@ -1,21 +1,51 @@
+/**
+ * Radar Chart Component
+ * 
+ * SVG-based radar/spider chart for displaying multi-dimensional data.
+ * Shows both target and current allocation percentages for comparison.
+ * 
+ * Features:
+ * - Circular radar chart with configurable number of axes
+ * - Target allocation (dashed blue line)
+ * - Current allocation (solid green line with filled area)
+ * - Grid circles (0%, 25%, 50%, 75%, 100%)
+ * - Radial lines from center to each axis
+ * - Tick marks and labels on 0° axis
+ * - Point labels (geography/industry names) outside chart
+ * - Legend showing Target vs Current
+ * - Auto-scaling based on data range
+ * - Catppuccin Mocha color scheme
+ * 
+ * Used by AllocationRadar component for geography and industry visualization.
+ */
 import { useEffect, useRef } from 'react';
 
 /**
- * Radar Chart Component
- * SVG-based radar chart that displays Target and Current datasets
+ * Radar chart component
+ * 
+ * Renders an SVG-based radar chart comparing target vs current allocation.
+ * 
+ * @param {Object} props - Component props
+ * @param {Array<string>} props.labels - Axis labels (geography/industry names)
+ * @param {Array<number>} props.targetData - Target allocation percentages (0-100)
+ * @param {Array<number>} props.currentData - Current allocation percentages (0-100)
+ * @param {number|null} props.maxValue - Maximum value for scaling (auto-calculated if null)
+ * @returns {JSX.Element} Radar chart SVG component
  */
 export function RadarChart({ labels = [], targetData = [], currentData = [], maxValue = null }) {
   const svgRef = useRef(null);
 
+  // Render SVG chart when data changes
   useEffect(() => {
     if (!svgRef.current) return;
 
-    // Validate data
+    // Validate data - clear chart if no labels
     if (!labels || labels.length === 0) {
       svgRef.current.innerHTML = '';
       return;
     }
 
+    // Validate data length matches
     if (targetData.length !== labels.length || currentData.length !== labels.length) {
       console.warn('RadarChart: Data length mismatch');
       return;
@@ -28,11 +58,11 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
       maxVal = allValues.length > 0 ? Math.max(...allValues) : 100;
     }
 
-    // Add 25% padding and round to nearest step of 25
+    // Add 25% padding and round to nearest step of 25 for clean tick marks
     const paddedMax = Math.ceil(maxVal * 1.25);
     const roundedMax = Math.ceil(paddedMax / 25) * 25;
 
-    // Constants
+    // Chart dimensions and constants
     const centerX = 250;
     const centerY = 250;
     const radius = 180;
@@ -44,7 +74,7 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
     // Create SVG namespace
     const svgNS = 'http://www.w3.org/2000/svg';
 
-    // Create groups
+    // Create SVG groups for organized rendering
     const gridGroup = document.createElementNS(svgNS, 'g');
     gridGroup.setAttribute('class', 'radar-chart__grid');
 
@@ -64,6 +94,7 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
     legendGroup.setAttribute('class', 'radar-chart__legend');
 
     // Draw grid circles (5 levels: 0%, 25%, 50%, 75%, 100%)
+    // These provide visual reference for allocation percentages
     for (let i = 0; i <= 4; i++) {
       const level = i / 4;
       const circleRadius = radius * level;
@@ -78,21 +109,23 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
       gridGroup.appendChild(circle);
     }
 
-    // Calculate angles and coordinates for each point
+    // Calculate angles and coordinates for each data point
+    // Angles start at -90° (top) and distribute evenly around circle
     const angles = [];
     const coordinates = [];
 
     for (let i = 0; i < numPoints; i++) {
-      const angle = (360 / numPoints) * i - 90;
+      const angle = (360 / numPoints) * i - 90;  // Start at top (-90°)
       const angleRad = (angle * Math.PI) / 180;
       angles.push(angleRad);
 
+      // Calculate endpoint coordinates for each axis
       const x = centerX + radius * Math.cos(angleRad);
       const y = centerY + radius * Math.sin(angleRad);
       coordinates.push({ x, y, angle: angleRad });
     }
 
-    // Draw radial lines from center to each point
+    // Draw radial lines from center to each axis endpoint
     coordinates.forEach(coord => {
       const line = document.createElementNS(svgNS, 'line');
       line.setAttribute('x1', centerX);
@@ -105,17 +138,18 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
       radialGroup.appendChild(line);
     });
 
-    // Draw tick marks and labels on top radial line (0°)
+    // Draw tick marks and labels on top radial line (0° axis)
+    // Shows percentage values at each grid level
     const tickLevels = [0, 0.25, 0.5, 0.75, 1.0];
     const tickLength = 5;
     const tickLabelOffset = 15;
 
     tickLevels.forEach((level) => {
       const tickRadius = radius * level;
-      const tickX = centerX + tickRadius;
+      const tickX = centerX + tickRadius;  // On 0° axis (right side)
       const tickY = centerY;
 
-      // Tick mark
+      // Tick mark (vertical line)
       const tick = document.createElementNS(svgNS, 'line');
       tick.setAttribute('x1', tickX);
       tick.setAttribute('y1', tickY - tickLength);
@@ -126,7 +160,7 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
       tick.setAttribute('class', 'radar-chart__tick');
       tickGroup.appendChild(tick);
 
-      // Tick label
+      // Tick label (percentage value)
       const tickValue = Math.round(roundedMax * level);
       const label = document.createElementNS(svgNS, 'text');
       label.setAttribute('x', tickX);
@@ -140,17 +174,21 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
       tickGroup.appendChild(label);
     });
 
-    // Calculate data point coordinates
+    // Calculate data point coordinates for target and current allocations
+    // Values are normalized to 0-1 range based on roundedMax
     const targetPoints = [];
     const currentPoints = [];
 
     coordinates.forEach((coord, i) => {
+      // Normalize values to 0-1 range (clamped)
       const targetValue = Math.max(0, Math.min(targetData[i] / roundedMax, 1));
       const currentValue = Math.max(0, Math.min(currentData[i] / roundedMax, 1));
 
+      // Calculate radius for each point based on normalized value
       const targetRadius = radius * targetValue;
       const currentRadius = radius * currentValue;
 
+      // Calculate x,y coordinates for each point
       targetPoints.push({
         x: centerX + targetRadius * Math.cos(coord.angle),
         y: centerY + targetRadius * Math.sin(coord.angle)
@@ -163,7 +201,9 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
     });
 
     // Draw Current dataset (filled polygon + solid polyline)
+    // Green color indicates current allocation
     if (currentPoints.length > 0) {
+      // Filled polygon for area visualization
       const currentPolygon = document.createElementNS(svgNS, 'polygon');
       const currentPolygonPoints = currentPoints.map(p => `${p.x},${p.y}`).join(' ');
       currentPolygon.setAttribute('points', currentPolygonPoints);
@@ -173,8 +213,9 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
       currentPolygon.setAttribute('class', 'radar-chart__current-polygon');
       dataGroup.appendChild(currentPolygon);
 
+      // Solid polyline connecting all points
       const currentPolyline = document.createElementNS(svgNS, 'polyline');
-      const currentPolylinePoints = [...currentPoints, currentPoints[0]].map(p => `${p.x},${p.y}`).join(' ');
+      const currentPolylinePoints = [...currentPoints, currentPoints[0]].map(p => `${p.x},${p.y}`).join(' ');  // Close polygon
       currentPolyline.setAttribute('points', currentPolylinePoints);
       currentPolyline.setAttribute('fill', 'none');
       currentPolyline.setAttribute('stroke', '#a6e3a1'); // Catppuccin Mocha Green
@@ -183,6 +224,7 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
       currentPolyline.setAttribute('class', 'radar-chart__current-line');
       dataGroup.appendChild(currentPolyline);
 
+      // Data point markers (circles)
       currentPoints.forEach(point => {
         const circle = document.createElementNS(svgNS, 'circle');
         circle.setAttribute('cx', point.x);
@@ -196,18 +238,20 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
     }
 
     // Draw Target dataset (dashed polyline)
+    // Blue dashed line indicates target allocation
     if (targetPoints.length > 0) {
       const targetPolyline = document.createElementNS(svgNS, 'polyline');
-      const targetPolylinePoints = [...targetPoints, targetPoints[0]].map(p => `${p.x},${p.y}`).join(' ');
+      const targetPolylinePoints = [...targetPoints, targetPoints[0]].map(p => `${p.x},${p.y}`).join(' ');  // Close polygon
       targetPolyline.setAttribute('points', targetPolylinePoints);
       targetPolyline.setAttribute('fill', 'none');
       targetPolyline.setAttribute('stroke', '#89b4fa'); // Catppuccin Mocha Blue
       targetPolyline.setAttribute('stroke-opacity', '0.8');
       targetPolyline.setAttribute('stroke-width', '2');
-      targetPolyline.setAttribute('stroke-dasharray', '5,5');
+      targetPolyline.setAttribute('stroke-dasharray', '5,5');  // Dashed line
       targetPolyline.setAttribute('class', 'radar-chart__target-line');
       dataGroup.appendChild(targetPolyline);
 
+      // Data point markers (circles)
       targetPoints.forEach(point => {
         const circle = document.createElementNS(svgNS, 'circle');
         circle.setAttribute('cx', point.x);
@@ -221,6 +265,7 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
     }
 
     // Draw point labels (geography/industry names) outside chart area
+    // Positioned along each axis, offset from the endpoint
     const labelOffset = 20;
     coordinates.forEach((coord, i) => {
       const labelX = coord.x + labelOffset * Math.cos(coord.angle);
@@ -229,6 +274,7 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
       const label = document.createElementNS(svgNS, 'text');
       label.setAttribute('x', labelX);
       label.setAttribute('y', labelY);
+      // Text anchor based on position (left/right/middle)
       label.setAttribute('text-anchor', coord.x > centerX ? 'start' : coord.x < centerX ? 'end' : 'middle');
       label.setAttribute('dominant-baseline', 'middle');
       label.setAttribute('fill', '#cdd6f4'); // Catppuccin Mocha Text
@@ -239,11 +285,12 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
       labelGroup.appendChild(label);
     });
 
-    // Draw legend at bottom
+    // Draw legend at bottom of chart
+    // Shows Target (dashed blue) and Current (solid green) line styles
     const legendY = 480;
     const legendX = centerX;
 
-    // Target legend item
+    // Target legend item (dashed blue line)
     const targetLegendLine = document.createElementNS(svgNS, 'line');
     targetLegendLine.setAttribute('x1', legendX - 60);
     targetLegendLine.setAttribute('y1', legendY);
@@ -252,7 +299,7 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
     targetLegendLine.setAttribute('stroke', '#89b4fa'); // Catppuccin Mocha Blue
     targetLegendLine.setAttribute('stroke-opacity', '0.8');
     targetLegendLine.setAttribute('stroke-width', '2');
-    targetLegendLine.setAttribute('stroke-dasharray', '5,5');
+    targetLegendLine.setAttribute('stroke-dasharray', '5,5');  // Dashed
     targetLegendLine.setAttribute('class', 'radar-chart__legend-line radar-chart__legend-line--target');
     legendGroup.appendChild(targetLegendLine);
 
@@ -261,13 +308,13 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
     targetLegendText.setAttribute('y', legendY);
     targetLegendText.setAttribute('dominant-baseline', 'middle');
     targetLegendText.setAttribute('fill', '#a6adc8'); // Catppuccin Mocha Subtext 0
-      targetLegendText.setAttribute('font-size', '10');
-      targetLegendText.setAttribute('font-family', 'JetBrains Mono, Fira Code, IBM Plex Mono, monospace');
+    targetLegendText.setAttribute('font-size', '10');
+    targetLegendText.setAttribute('font-family', 'JetBrains Mono, Fira Code, IBM Plex Mono, monospace');
     targetLegendText.setAttribute('class', 'radar-chart__legend-text radar-chart__legend-text--target');
     targetLegendText.textContent = 'Target';
     legendGroup.appendChild(targetLegendText);
 
-    // Current legend item
+    // Current legend item (solid green line)
     const currentLegendLine = document.createElementNS(svgNS, 'line');
     currentLegendLine.setAttribute('x1', legendX + 10);
     currentLegendLine.setAttribute('y1', legendY);
@@ -284,23 +331,24 @@ export function RadarChart({ labels = [], targetData = [], currentData = [], max
     currentLegendText.setAttribute('y', legendY);
     currentLegendText.setAttribute('dominant-baseline', 'middle');
     currentLegendText.setAttribute('fill', '#a6adc8'); // Catppuccin Mocha Subtext 0
-      currentLegendText.setAttribute('font-size', '10');
-      currentLegendText.setAttribute('font-family', 'JetBrains Mono, Fira Code, IBM Plex Mono, monospace');
+    currentLegendText.setAttribute('font-size', '10');
+    currentLegendText.setAttribute('font-family', 'JetBrains Mono, Fira Code, IBM Plex Mono, monospace');
     currentLegendText.setAttribute('class', 'radar-chart__legend-text radar-chart__legend-text--current');
     currentLegendText.textContent = 'Current';
     legendGroup.appendChild(currentLegendText);
 
-    // Append all groups to SVG
-    svgRef.current.appendChild(gridGroup);
-    svgRef.current.appendChild(radialGroup);
-    svgRef.current.appendChild(tickGroup);
-    svgRef.current.appendChild(dataGroup);
-    svgRef.current.appendChild(labelGroup);
-    svgRef.current.appendChild(legendGroup);
+    // Append all groups to SVG in render order (background to foreground)
+    svgRef.current.appendChild(gridGroup);      // Grid circles (background)
+    svgRef.current.appendChild(radialGroup);    // Radial lines
+    svgRef.current.appendChild(tickGroup);       // Tick marks and labels
+    svgRef.current.appendChild(dataGroup);      // Data polygons and lines
+    svgRef.current.appendChild(labelGroup);      // Point labels
+    svgRef.current.appendChild(legendGroup);    // Legend (foreground)
   }, [labels, targetData, currentData, maxValue]);
 
   return (
     <div className="radar-chart" style={{ position: 'relative', width: '100%', aspectRatio: '1' }}>
+      {/* SVG container with fixed viewBox for consistent scaling */}
       <svg
         className="radar-chart__svg"
         ref={svgRef}

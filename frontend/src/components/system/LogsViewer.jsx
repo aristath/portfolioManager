@@ -1,9 +1,34 @@
+/**
+ * Logs Viewer Component
+ * 
+ * Displays application logs with filtering, search, and auto-refresh capabilities.
+ * Used for debugging and monitoring system activity.
+ * 
+ * Features:
+ * - Level filtering (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+ * - Search functionality (debounced)
+ * - Line count control (50-1000 lines)
+ * - Errors-only filter
+ * - Auto-refresh with configurable interval
+ * - Auto-scroll to bottom
+ * - Color-coded log levels
+ * - Timestamp formatting
+ * 
+ * Used in the Logs view for system monitoring and debugging.
+ */
 import { Card, Select, TextInput, NumberInput, Checkbox, Button, Group, Stack, ScrollArea, Text, Code } from '@mantine/core';
 import { useLogsStore } from '../../stores/logsStore';
 import { useEffect, useRef, useState } from 'react';
 import { formatDateTime } from '../../utils/formatters';
 import { useDebouncedValue } from '@mantine/hooks';
 
+/**
+ * Logs viewer component
+ * 
+ * Displays application logs with filtering and search capabilities.
+ * 
+ * @returns {JSX.Element} Logs viewer with controls and log entries
+ */
 export function LogsViewer() {
   const {
     entries,
@@ -22,25 +47,30 @@ export function LogsViewer() {
     stopAutoRefresh,
   } = useLogsStore();
 
+  // Debounce search query to avoid excessive API calls
   const [debouncedSearch] = useDebouncedValue(searchQuery, 300);
   const [autoScroll, setAutoScroll] = useState(true);
   const scrollAreaRef = useRef(null);
 
+  // Fetch logs when filters change (debounced search, level, line count, errors-only)
   useEffect(() => {
     fetchLogs();
   }, [fetchLogs, debouncedSearch, filterLevel, lineCount, showErrorsOnly]);
 
+  // Manage auto-refresh lifecycle
   useEffect(() => {
     if (autoRefresh) {
       startAutoRefresh();
     } else {
       stopAutoRefresh();
     }
+    // Cleanup: stop auto-refresh on unmount
     return () => {
       stopAutoRefresh();
     };
   }, [autoRefresh, startAutoRefresh, stopAutoRefresh]);
 
+  // Auto-scroll to bottom when new entries arrive
   useEffect(() => {
     if (autoScroll && scrollAreaRef.current) {
       // Mantine ScrollArea exposes viewport property
@@ -51,6 +81,12 @@ export function LogsViewer() {
     }
   }, [entries, autoScroll]);
 
+  /**
+   * Gets color for log level
+   * 
+   * @param {string} level - Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+   * @returns {string} Mantine color name
+   */
   const getLevelColor = (level) => {
     switch (level?.toUpperCase()) {
       case 'DEBUG': return 'dimmed';
@@ -65,9 +101,10 @@ export function LogsViewer() {
   return (
     <Card className="logs-viewer" p="md" style={{ backgroundColor: 'var(--mantine-color-dark-7)', border: '1px solid var(--mantine-color-dark-6)' }}>
       <Stack className="logs-viewer__content" gap="md">
-        {/* Controls */}
+        {/* Controls panel */}
         <Card className="logs-viewer__controls" p="md" style={{ backgroundColor: 'var(--mantine-color-dark-8)', border: '1px solid var(--mantine-color-dark-6)' }}>
           <Group className="logs-viewer__filters" gap="md" wrap="wrap">
+            {/* Log level filter */}
             <Select
               className="logs-viewer__select logs-viewer__select--level"
               label="Level"
@@ -84,6 +121,7 @@ export function LogsViewer() {
               size="xs"
               style={{ width: '120px' }}
             />
+            {/* Search input - debounced */}
             <TextInput
               className="logs-viewer__search"
               label="Search"
@@ -93,6 +131,7 @@ export function LogsViewer() {
               size="xs"
               style={{ flex: 1, minWidth: '150px' }}
             />
+            {/* Line count control */}
             <NumberInput
               className="logs-viewer__lines-input"
               label="Lines"
@@ -104,7 +143,9 @@ export function LogsViewer() {
               size="xs"
               style={{ width: '100px' }}
             />
+            {/* Checkbox options */}
             <Stack className="logs-viewer__checkboxes" gap="xs" mt="xl">
+              {/* Show only errors */}
               <Checkbox
                 className="logs-viewer__checkbox logs-viewer__checkbox--errors"
                 label="Errors Only"
@@ -112,6 +153,7 @@ export function LogsViewer() {
                 onChange={(e) => setShowErrorsOnly(e.currentTarget.checked)}
                 size="xs"
               />
+              {/* Auto-refresh toggle */}
               <Checkbox
                 className="logs-viewer__checkbox logs-viewer__checkbox--auto-refresh"
                 label="Auto-refresh"
@@ -119,6 +161,7 @@ export function LogsViewer() {
                 onChange={(e) => setAutoRefresh(e.currentTarget.checked)}
                 size="xs"
               />
+              {/* Auto-scroll toggle */}
               <Checkbox
                 className="logs-viewer__checkbox logs-viewer__checkbox--auto-scroll"
                 label="Auto-scroll"
@@ -129,17 +172,19 @@ export function LogsViewer() {
             </Stack>
           </Group>
 
+          {/* Action buttons */}
           <Group className="logs-viewer__actions" gap="xs" mt="md">
             <Button className="logs-viewer__refresh-btn" size="xs" onClick={fetchLogs} loading={loading}>
               Refresh
             </Button>
+            {/* Line count display */}
             <Text className="logs-viewer__count" size="xs" c="dimmed">
               {entries.length} lines
             </Text>
           </Group>
         </Card>
 
-        {/* Log Entries */}
+        {/* Log Entries - scrollable area with auto-scroll support */}
         <ScrollArea className="logs-viewer__scroll-area" h={600} ref={scrollAreaRef}>
           <Code
             className="logs-viewer__code"
@@ -154,12 +199,13 @@ export function LogsViewer() {
             {entries.length === 0 ? (
               <Text className="logs-viewer__empty" c="dimmed" size="sm" style={{ fontFamily: 'var(--mantine-font-family)' }}>No log entries</Text>
             ) : (
+              // Render log entries with color-coded levels
               entries.map((entry, index) => (
                 <div className={`logs-viewer__entry logs-viewer__entry--${entry.level?.toLowerCase() || 'unknown'}`} key={index} style={{ marginBottom: '4px' }}>
                   <Text
                     className="logs-viewer__entry-text"
                     size="xs"
-                    c={getLevelColor(entry.level)}
+                    c={getLevelColor(entry.level)}  // Color based on log level
                     span
                     style={{ fontFamily: 'var(--mantine-font-family)' }}
                   >

@@ -1,3 +1,19 @@
+/**
+ * Planner Management Modal Component
+ * 
+ * Comprehensive modal for configuring the portfolio planning system.
+ * 
+ * Features:
+ * - Temperament Settings: Three sliders (Risk Tolerance, Aggression, Patience) that control 150+ parameters
+ * - General Settings: Batch processing, trade permissions
+ * - Planner Settings: Sequence selection, portfolio optimizer configuration
+ * - Transaction Costs: Fixed and variable cost settings
+ * - Opportunity Calculators: Enable/disable individual opportunity calculators
+ * - Filters: Post-generation filters and tag-based filtering
+ * 
+ * The temperament sliders are stored in global settings, while planner-specific
+ * configuration is stored in the planner config database.
+ */
 import { useState, useEffect, useCallback } from 'react';
 import { Modal, Tabs, Text, Button, Switch, NumberInput, Slider, Group, Stack, Paper, Alert, Loader, Divider } from '@mantine/core';
 import { IconInfoCircle } from '@tabler/icons-react';
@@ -5,6 +21,10 @@ import { useAppStore } from '../../stores/appStore';
 import { api } from '../../api/client';
 import { useNotifications } from '../../hooks/useNotifications';
 
+/**
+ * Default planner configuration values
+ * Used as fallback when loading configuration fails
+ */
 const DEFAULT_CONFIG = {
   enable_batch_generation: true,
   enable_diverse_selection: true,
@@ -32,13 +52,23 @@ const DEFAULT_CONFIG = {
   enable_tag_filtering: true,
 };
 
-// Default temperament settings (stored in global settings, not planner config)
+/**
+ * Default temperament settings (stored in global settings, not planner config)
+ * These three sliders control 150+ parameters across the system
+ */
 const DEFAULT_TEMPERAMENT = {
   risk_tolerance: 0.5,       // Conservative (0) to Risk-Taking (1)
   temperament_aggression: 0.5, // Passive (0) to Aggressive (1)
   temperament_patience: 0.5,   // Impatient (0) to Patient (1)
 };
 
+/**
+ * Planner management modal component
+ * 
+ * Provides comprehensive configuration interface for the portfolio planning system.
+ * 
+ * @returns {JSX.Element} Planner configuration modal with tabbed interface
+ */
 export function PlannerManagementModal() {
   const { showPlannerManagementModal, closePlannerManagementModal } = useAppStore();
   const { showNotification } = useNotifications();
@@ -49,6 +79,9 @@ export function PlannerManagementModal() {
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [temperament, setTemperament] = useState(DEFAULT_TEMPERAMENT);
 
+  /**
+   * Loads planner configuration and temperament settings from the backend
+   */
   const loadConfig = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -78,18 +111,22 @@ export function PlannerManagementModal() {
     }
   }, [showNotification]);
 
+  // Load configuration when modal opens
   useEffect(() => {
     if (showPlannerManagementModal) {
       loadConfig();
     }
   }, [showPlannerManagementModal, loadConfig]);
 
+  /**
+   * Saves planner configuration and temperament settings to the backend
+   */
   const handleSave = async () => {
     setSaving(true);
     setError(null);
 
     try {
-      // Save planner config and temperament settings
+      // Save planner config and temperament settings in parallel
       await Promise.all([
         api.updatePlannerConfig(config, 'ui', 'Updated via UI'),
         api.updateSetting('risk_tolerance', temperament.risk_tolerance),
@@ -106,18 +143,44 @@ export function PlannerManagementModal() {
     }
   };
 
+  /**
+   * Updates a planner configuration field
+   * 
+   * @param {string} field - Configuration field name
+   * @param {*} value - New value
+   */
   const updateConfig = (field, value) => {
     setConfig({ ...config, [field]: value });
   };
 
+  /**
+   * Updates a temperament setting
+   * 
+   * @param {string} field - Temperament field name
+   * @param {*} value - New value
+   */
   const updateTemperament = (field, value) => {
     setTemperament({ ...temperament, [field]: value });
   };
 
+  /**
+   * Gets a configuration value with default fallback
+   * 
+   * @param {string} field - Configuration field name
+   * @param {*} defaultValue - Default value if not found
+   * @returns {*} Configuration value or default
+   */
   const getConfigValue = (field, defaultValue) => {
     return config[field] ?? defaultValue;
   };
 
+  /**
+   * Gets a temperament value with default fallback
+   * 
+   * @param {string} field - Temperament field name
+   * @param {*} defaultValue - Default value if not found
+   * @returns {*} Temperament value or default
+   */
   const getTemperamentValue = (field, defaultValue) => {
     return temperament[field] ?? defaultValue;
   };
@@ -154,15 +217,17 @@ export function PlannerManagementModal() {
               <Tabs.Tab className="planner-modal__tab planner-modal__tab--filters" value="filters">Filters</Tabs.Tab>
             </Tabs.List>
 
-            {/* Temperament Tab */}
+            {/* Temperament Tab - Three sliders that control 150+ parameters */}
             <Tabs.Panel className="planner-modal__panel planner-modal__panel--temperament" value="temperament" p="md">
               <Stack className="planner-modal__temperament-content" gap="md">
+                {/* Info alert explaining temperament system */}
                 <Alert className="planner-modal__alert" color="blue" title="Investment Temperament" icon={<IconInfoCircle />}>
                   These three sliders control 150+ parameters across the system, defining how the planner behaves.
                   Move sliders to adjust your investment philosophy. Changes affect evaluation weights, thresholds,
                   hold periods, position sizing, and more.
                 </Alert>
 
+                {/* Risk Tolerance Slider */}
                 <Paper className="planner-modal__section planner-modal__section--risk" p="md" withBorder>
                   <Text className="planner-modal__section-title" size="sm" fw={500} mb="md" tt="uppercase">Risk Tolerance</Text>
                   <Text className="planner-modal__section-desc" size="xs" c="dimmed" mb="md">
@@ -196,6 +261,7 @@ export function PlannerManagementModal() {
                   </div>
                 </Paper>
 
+                {/* Aggression Slider */}
                 <Paper className="planner-modal__section planner-modal__section--aggression" p="md" withBorder>
                   <Text className="planner-modal__section-title" size="sm" fw={500} mb="md" tt="uppercase">Aggression</Text>
                   <Text className="planner-modal__section-desc" size="xs" c="dimmed" mb="md">
@@ -229,6 +295,7 @@ export function PlannerManagementModal() {
                   </div>
                 </Paper>
 
+                {/* Patience Slider */}
                 <Paper className="planner-modal__section planner-modal__section--patience" p="md" withBorder>
                   <Text className="planner-modal__section-title" size="sm" fw={500} mb="md" tt="uppercase">Patience</Text>
                   <Text className="planner-modal__section-desc" size="xs" c="dimmed" mb="md">
@@ -264,9 +331,10 @@ export function PlannerManagementModal() {
               </Stack>
             </Tabs.Panel>
 
-            {/* General Tab */}
+            {/* General Tab - Basic planner settings */}
             <Tabs.Panel className="planner-modal__panel planner-modal__panel--general" value="general" p="md">
               <Stack className="planner-modal__general-content" gap="md">
+                {/* Batch Processing Section */}
                 <Paper className="planner-modal__section planner-modal__section--batch" p="md" withBorder>
                   <Text className="planner-modal__section-title" size="sm" fw={500} mb="xs" tt="uppercase">Batch Processing</Text>
                   <Stack className="planner-modal__section-content" gap="sm">
@@ -280,6 +348,7 @@ export function PlannerManagementModal() {
                   </Stack>
                 </Paper>
 
+                {/* Trade Permissions Section */}
                 <Paper className="planner-modal__section planner-modal__section--permissions" p="md" withBorder>
                   <Text className="planner-modal__section-title" size="sm" fw={500} mb="xs" tt="uppercase">Trade Permissions</Text>
                   <Stack className="planner-modal__section-content" gap="sm">
@@ -300,9 +369,10 @@ export function PlannerManagementModal() {
               </Stack>
             </Tabs.Panel>
 
-            {/* Planner Settings Tab */}
+            {/* Planner Settings Tab - Sequence selection and optimizer configuration */}
             <Tabs.Panel className="planner-modal__panel planner-modal__panel--planner" value="planner" p="md">
               <Stack className="planner-modal__planner-content" gap="md">
+                {/* Sequence Selection Section */}
                 <Paper className="planner-modal__section planner-modal__section--sequence" p="md" withBorder>
                   <Text className="planner-modal__section-title" size="sm" fw={500} mb="xs" tt="uppercase">Sequence Selection</Text>
                   <Stack className="planner-modal__section-content" gap="md">
@@ -314,6 +384,7 @@ export function PlannerManagementModal() {
                       description="Select diverse sequences to avoid redundancy"
                     />
 
+                    {/* Diversity weight slider */}
                     <div className="planner-modal__slider-container">
                       <Group className="planner-modal__slider-labels" justify="space-between" mb="xs">
                         <Text className="planner-modal__setting-name" size="sm">Diversity Weight</Text>
@@ -335,9 +406,11 @@ export function PlannerManagementModal() {
                   </Stack>
                 </Paper>
 
+                {/* Portfolio Optimizer Section */}
                 <Paper className="planner-modal__section planner-modal__section--optimizer" p="md" withBorder>
                   <Text className="planner-modal__section-title" size="sm" fw={500} mb="xs" tt="uppercase">Portfolio Optimizer</Text>
                   <Stack className="planner-modal__section-content" gap="md">
+                    {/* Target return setting */}
                     <Group className="planner-modal__setting-row" justify="space-between">
                       <div className="planner-modal__setting-label">
                         <Text className="planner-modal__setting-name" size="sm">Target Return</Text>
@@ -357,6 +430,7 @@ export function PlannerManagementModal() {
                       </Group>
                     </Group>
 
+                    {/* Strategy blend slider (read-only, algorithm-controlled) */}
                     <div className="planner-modal__slider-container">
                       <Group className="planner-modal__slider-labels" justify="space-between" mb="xs">
                         <Text className="planner-modal__setting-name" size="sm">Strategy Blend</Text>
@@ -383,6 +457,7 @@ export function PlannerManagementModal() {
                       </Text>
                     </div>
 
+                    {/* Minimum cash reserve setting */}
                     <Group className="planner-modal__setting-row" justify="space-between">
                       <div className="planner-modal__setting-label">
                         <Text className="planner-modal__setting-name" size="sm">Min Cash Reserve</Text>
@@ -404,6 +479,7 @@ export function PlannerManagementModal() {
                   </Stack>
                 </Paper>
 
+                {/* Info alert about risk management settings */}
                 <Alert className="planner-modal__alert planner-modal__alert--info" color="gray" variant="light">
                   <Text className="planner-modal__alert-text" size="xs">
                     Risk management settings (hold periods, cooldowns, loss thresholds, sell percentages)
@@ -417,6 +493,7 @@ export function PlannerManagementModal() {
             {/* Transaction Costs Tab */}
             <Tabs.Panel className="planner-modal__panel planner-modal__panel--transaction" value="transaction" p="md">
               <Stack className="planner-modal__transaction-content" gap="md">
+                {/* Transaction Costs Section */}
                 <Paper className="planner-modal__section planner-modal__section--costs" p="md" withBorder>
                   <Text className="planner-modal__section-title" size="sm" fw={500} mb="xs" tt="uppercase">Transaction Costs</Text>
                   <Text className="planner-modal__section-desc" size="xs" c="dimmed" mb="md">
@@ -466,9 +543,10 @@ export function PlannerManagementModal() {
               </Stack>
             </Tabs.Panel>
 
-            {/* Opportunity Calculators Tab */}
+            {/* Opportunity Calculators Tab - Enable/disable individual calculators */}
             <Tabs.Panel className="planner-modal__panel planner-modal__panel--calculators" value="calculators" p="md">
               <Stack className="planner-modal__calculators-content" gap="md">
+                {/* Opportunity Calculators Section */}
                 <Paper className="planner-modal__section planner-modal__section--calculators" p="md" withBorder>
                   <Text className="planner-modal__section-title" size="sm" fw={500} mb="xs" tt="uppercase">Opportunity Calculators</Text>
                   <Text className="planner-modal__section-desc" size="xs" c="dimmed" mb="md">
@@ -516,9 +594,10 @@ export function PlannerManagementModal() {
               </Stack>
             </Tabs.Panel>
 
-            {/* Filters Tab */}
+            {/* Filters Tab - Post-generation filters and tag-based filtering */}
             <Tabs.Panel className="planner-modal__panel planner-modal__panel--filters" value="filters" p="md">
               <Stack className="planner-modal__filters-content" gap="md">
+                {/* Post-Generation Filters Section */}
                 <Paper className="planner-modal__section planner-modal__section--filters" p="md" withBorder>
                   <Text className="planner-modal__section-title" size="sm" fw={500} mb="xs" tt="uppercase">Post-Generation Filters</Text>
                   <Text className="planner-modal__section-desc" size="xs" c="dimmed" mb="md">
