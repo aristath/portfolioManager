@@ -5,6 +5,7 @@ import (
 	"github.com/aristath/sentinel/internal/clientdata"
 	"github.com/aristath/sentinel/internal/clients/tradernet"
 	"github.com/aristath/sentinel/internal/database"
+	"github.com/aristath/sentinel/internal/deployment"
 	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/events"
 	"github.com/aristath/sentinel/internal/market_regime"
@@ -136,6 +137,7 @@ type Container struct {
 	QuantumCalculator         *quantum.QuantumProbabilityCalculator
 	OpportunityContextBuilder *services.OpportunityContextBuilder
 	CalculationCache          *calculations.Cache
+	DeploymentManager         *deployment.Manager
 
 	// Work Processor (replaces IdleProcessor and queue-based jobs)
 	WorkComponents *WorkComponents

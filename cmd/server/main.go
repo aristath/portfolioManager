@@ -18,29 +18,12 @@ import (
 	"time"
 
 	"github.com/aristath/sentinel/internal/config"
-	"github.com/aristath/sentinel/internal/deployment"
 	"github.com/aristath/sentinel/internal/di"
 	"github.com/aristath/sentinel/internal/modules/display"
 	"github.com/aristath/sentinel/internal/reliability"
 	"github.com/aristath/sentinel/internal/server"
 	"github.com/aristath/sentinel/pkg/logger"
 )
-
-// getEnv retrieves an environment variable value, returning a fallback if the variable
-// is not set or is empty. This is used for configuration values that have sensible defaults.
-//
-// Parameters:
-//   - key: The environment variable name to look up
-//   - fallback: The default value to return if the variable is not set
-//
-// Returns:
-//   - The environment variable value if set and non-empty, otherwise the fallback value
-func getEnv(key, fallback string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return fallback
-}
 
 // main is the application entry point. It orchestrates the entire system startup sequence:
 // 1. Loads configuration from environment variables and settings database
@@ -113,11 +96,14 @@ func main() {
 	}
 
 	// Wire all dependencies using DI container
-	// This initializes databases, repositories, services, and work processor.
+	// This initializes databases, repositories, loads settings, creates deployment manager,
+	// initializes services, and wires the work processor - all in the correct order.
 	// The DI container follows clean architecture principles:
-	// - Databases are initialized first (7-database architecture)
+	// - Databases are initialized first (8-database architecture)
 	// - Repositories are created with database connections
-	// - Services are created with repository dependencies
+	// - Settings are loaded from database into config
+	// - Deployment manager created with settings-loaded config
+	// - Services are created with repository dependencies and settings
 	// - Work processor is registered with all job types
 	// - All dependencies are injected via constructor injection
 	container, err := di.Wire(cfg, log, displayManager)
@@ -130,7 +116,7 @@ func main() {
 	// This ensures market regime detection has access to index data for correlation analysis.
 
 	// Cleanup databases on exit
-	// All 7 databases must be properly closed to ensure WAL checkpoints are written
+	// All 8 databases must be properly closed to ensure WAL checkpoints are written
 	// and database integrity is maintained. Using defer ensures cleanup even on panic.
 	defer container.UniverseDB.Close()
 	defer container.ConfigDB.Close()
@@ -141,47 +127,13 @@ func main() {
 	defer container.ClientDataDB.Close()
 	defer container.CalculationsDB.Close()
 
-	// Update config from settings DB (credentials, etc.) - BEFORE creating deployment manager
-	// This ensures GitHub token and other credentials are loaded from settings.
-	// Settings database takes precedence over environment variables for runtime configuration.
-	// This allows users to update credentials via the UI without restarting the application.
-	if err := cfg.UpdateFromSettings(container.SettingsRepo); err != nil {
-		log.Warn().Err(err).Msg("Failed to update config from settings DB, using environment variables")
-	}
-
-	// Update broker client with credentials from settings DB
-	// The broker client was created before settings were loaded, so we need to update it.
-	// Broker credentials are stored in the settings database for security (not in .env file).
-	// This allows credential rotation without code changes or restarts.
-	if cfg.TradernetAPIKey != "" && cfg.TradernetAPISecret != "" {
-		container.BrokerClient.SetCredentials(cfg.TradernetAPIKey, cfg.TradernetAPISecret)
-		log.Info().Msg("Updated broker client credentials from settings database")
-	} else {
-		log.Warn().Msg("Tradernet credentials not configured - broker client will not be able to connect")
-	}
-
-	// NOW create deployment manager with settings-loaded config
-	// Deployment manager handles automated deployment of the system:
-	// - Monitors git repository for changes
-	// - Downloads pre-built binaries from GitHub Actions
-	// - Deploys Go services, frontend, display app, and sketch
-	// - Restarts services automatically
-	// Only created if deployment is enabled in configuration.
-	var deploymentManager *deployment.Manager
-	if cfg.Deployment != nil && cfg.Deployment.Enabled {
-		deployConfig := cfg.Deployment.ToDeploymentConfig(cfg.GitHubToken)
-		version := getEnv("VERSION", "dev")
-		deploymentManager = deployment.NewManager(deployConfig, version, log)
-
-		log.Info().Msg("Deployment manager initialized (deployment work type registered in work.go)")
-	}
-
 	// Create deployment handlers if deployment is enabled
+	// Deployment manager was created and wired during Wire() if enabled.
 	// Deployment handlers expose HTTP endpoints for triggering deployments,
 	// checking deployment status, and managing deployment configuration.
 	var deploymentHandlers *server.DeploymentHandlers
-	if deploymentManager != nil {
-		deploymentHandlers = server.NewDeploymentHandlers(deploymentManager, log)
+	if container.DeploymentManager != nil {
+		deploymentHandlers = server.NewDeploymentHandlers(container.DeploymentManager, log)
 	}
 
 	// Initialize HTTP server

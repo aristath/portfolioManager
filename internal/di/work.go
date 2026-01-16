@@ -970,13 +970,40 @@ type deploymentCheckAdapter struct {
 }
 
 func (a *deploymentCheckAdapter) CheckForDeployment() error {
-	// Deployment is handled externally - this is a no-op placeholder
+	// If deployment is disabled, skip
+	if a.container.DeploymentManager == nil {
+		return nil
+	}
+
+	// Call deployment manager's Deploy method
+	result, err := a.container.DeploymentManager.Deploy()
+	if err != nil {
+		return fmt.Errorf("deployment check failed: %w", err)
+	}
+
+	// Log result if deployment actually happened
+	// (Deploy() method already logs details, so no need to log "no changes")
+	_ = result // Avoid unused variable warning
+
 	return nil
 }
 
 func (a *deploymentCheckAdapter) GetCheckInterval() time.Duration {
-	// Default to 1 hour
-	return time.Hour
+	// If deployment is disabled, return a long interval (effectively disabled)
+	if a.container.DeploymentManager == nil {
+		return 24 * time.Hour
+	}
+
+	// Read interval from settings database
+	intervalMinutes, err := a.container.SettingsRepo.GetFloat("job_auto_deploy_minutes", 5.0)
+	if err != nil {
+		// GetFloat already logs parse errors, this handles DB errors
+		// Fall back to default 5 minutes
+		return 5 * time.Minute
+	}
+
+	// Convert minutes to duration
+	return time.Duration(intervalMinutes) * time.Minute
 }
 
 func registerDeploymentWork(registry *work.Registry, container *Container, log zerolog.Logger) {

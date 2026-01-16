@@ -23,7 +23,7 @@ func TestWire(t *testing.T) {
 	// Create display manager
 	displayManager := display.NewStateManager(log)
 
-	// Wire everything
+	// Wire everything (settings loading and deployment manager creation happen inside)
 	container, err := Wire(cfg, log, displayManager)
 	require.NoError(t, err)
 	require.NotNil(t, container)
