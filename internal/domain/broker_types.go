@@ -1,28 +1,55 @@
+/**
+ * Package domain provides broker-agnostic types for portfolio management.
+ *
+ * These types abstract away broker-specific implementations (Tradernet, IBKR, etc.).
+ * All broker adapters convert their native types to these domain types, ensuring
+ * business logic remains broker-agnostic.
+ *
+ * Broker Types:
+ * - BrokerPosition: Portfolio position
+ * - BrokerCashBalance: Cash balance
+ * - BrokerOrderResult: Order execution result
+ * - BrokerTrade: Executed trade
+ * - BrokerQuote: Security quote
+ * - BrokerPendingOrder: Pending order
+ * - BrokerSecurityInfo: Security metadata
+ * - BrokerCashFlow: Cash flow transaction
+ * - BrokerOHLCV: Historical price data
+ * - BrokerOrderBook: Market depth data
+ */
 package domain
 
-// Broker-agnostic types for portfolio management
-// These types abstract away broker-specific implementations (Tradernet, IBKR, etc.)
-
-// BrokerPosition represents a portfolio position (broker-agnostic)
+/**
+ * BrokerPosition represents a portfolio position (broker-agnostic).
+ *
+ * This type is used to represent positions retrieved from any broker.
+ * All position values are normalized to EUR for portfolio calculations.
+ */
 type BrokerPosition struct {
 	Symbol         string  // Security symbol
 	Quantity       float64 // Number of shares held
 	AvgPrice       float64 // Average purchase price
 	CurrentPrice   float64 // Current market price
 	MarketValue    float64 // Position value in position currency
-	MarketValueEUR float64 // Position value in EUR
+	MarketValueEUR float64 // Position value in EUR (normalized)
 	UnrealizedPnL  float64 // Unrealized profit/loss
 	Currency       string  // Position currency
 	CurrencyRate   float64 // Exchange rate to EUR
 }
 
-// BrokerCashBalance represents cash balance in a currency (broker-agnostic)
+/**
+ * BrokerCashBalance represents cash balance in a currency (broker-agnostic).
+ */
 type BrokerCashBalance struct {
 	Currency string  // Currency code (EUR, USD, etc.)
 	Amount   float64 // Cash amount
 }
 
-// BrokerOrderResult represents the result of placing an order (broker-agnostic)
+/**
+ * BrokerOrderResult represents the result of placing an order (broker-agnostic).
+ *
+ * Returned when an order is successfully placed with the broker.
+ */
 type BrokerOrderResult struct {
 	OrderID  string  // Order confirmation ID
 	Symbol   string  // Security symbol
@@ -31,7 +58,11 @@ type BrokerOrderResult struct {
 	Price    float64 // Execution price
 }
 
-// BrokerTrade represents an executed trade (broker-agnostic)
+/**
+ * BrokerTrade represents an executed trade (broker-agnostic).
+ *
+ * This represents a completed trade transaction from the broker.
+ */
 type BrokerTrade struct {
 	OrderID    string  // Order ID
 	Symbol     string  // Security symbol
@@ -41,7 +72,11 @@ type BrokerTrade struct {
 	ExecutedAt string  // Execution timestamp
 }
 
-// BrokerQuote represents a security quote (broker-agnostic)
+/**
+ * BrokerQuote represents a security quote (broker-agnostic).
+ *
+ * Contains current market price and change information.
+ */
 type BrokerQuote struct {
 	Symbol    string  // Security symbol
 	Price     float64 // Current price
@@ -51,7 +86,11 @@ type BrokerQuote struct {
 	Timestamp string  // Quote timestamp
 }
 
-// BrokerPendingOrder represents a pending order (broker-agnostic)
+/**
+ * BrokerPendingOrder represents a pending order (broker-agnostic).
+ *
+ * Represents an order that has been placed but not yet executed.
+ */
 type BrokerPendingOrder struct {
 	OrderID  string  // Pending order ID
 	Symbol   string  // Security symbol
@@ -61,7 +100,12 @@ type BrokerPendingOrder struct {
 	Currency string  // Currency
 }
 
-// BrokerSecurityInfo represents security lookup result (broker-agnostic)
+/**
+ * BrokerSecurityInfo represents security lookup result (broker-agnostic).
+ *
+ * Contains metadata about a security retrieved from broker lookup operations.
+ * All fields are nullable to handle cases where broker doesn't provide the information.
+ */
 type BrokerSecurityInfo struct {
 	Symbol        string  // Security symbol
 	Name          *string // Company name (nullable)
@@ -76,16 +120,21 @@ type BrokerSecurityInfo struct {
 	LotSize       *int    // Minimum lot size (nullable)
 }
 
-// BrokerCashMovement represents cash withdrawal history (broker-agnostic)
+/**
+ * BrokerCashMovement represents cash withdrawal history (broker-agnostic).
+ */
 type BrokerCashMovement struct {
 	TotalWithdrawals float64                  // Total withdrawals amount
 	Withdrawals      []map[string]interface{} // List of withdrawal records (flexible schema)
 	Note             string                   // Additional notes
 }
 
-// BrokerCashFlow represents a single cash flow transaction in the account.
-// Cash flows include deposits, withdrawals, dividends, interest, fees, taxes, etc.
-// This is distinct from trades, which exchange cash for securities.
+/**
+ * BrokerCashFlow represents a single cash flow transaction in the account.
+ *
+ * Cash flows include deposits, withdrawals, dividends, interest, fees, taxes, etc.
+ * This is distinct from trades, which exchange cash for securities.
+ */
 type BrokerCashFlow struct {
 	ID            string                 // Unique transaction identifier
 	TransactionID string                 // Alternative/external transaction reference ID
@@ -100,13 +149,20 @@ type BrokerCashFlow struct {
 	Params        map[string]interface{} // Additional transaction parameters (flexible schema for broker-specific data)
 }
 
-// BrokerHealthResult represents broker connection health status (broker-agnostic)
+/**
+ * BrokerHealthResult represents broker connection health status (broker-agnostic).
+ */
 type BrokerHealthResult struct {
 	Connected bool   // Whether broker is connected
 	Timestamp string // Timestamp of health check
 }
 
-// BrokerOHLCV represents a single OHLCV candlestick data point (broker-agnostic)
+/**
+ * BrokerOHLCV represents a single OHLCV candlestick data point (broker-agnostic).
+ *
+ * OHLCV = Open, High, Low, Close, Volume
+ * Used for historical price data and charting.
+ */
 type BrokerOHLCV struct {
 	Timestamp int64   // Unix timestamp in seconds
 	Open      float64 // Opening price
@@ -116,7 +172,11 @@ type BrokerOHLCV struct {
 	Volume    int64   // Trading volume
 }
 
-// BrokerOrderBook represents real-time market depth (bid/ask orders at different price levels)
+/**
+ * BrokerOrderBook represents real-time market depth (bid/ask orders at different price levels).
+ *
+ * Contains the order book showing buy and sell orders at various price levels.
+ */
 type BrokerOrderBook struct {
 	Symbol    string           // Security symbol (e.g., "AAPL.US")
 	Bids      []OrderBookLevel // Bid orders (buy side), sorted descending by price
@@ -124,7 +184,11 @@ type BrokerOrderBook struct {
 	Timestamp string           // Timestamp when order book was fetched
 }
 
-// OrderBookLevel represents a single price level in the order book
+/**
+ * OrderBookLevel represents a single price level in the order book.
+ *
+ * Each level represents the total quantity available at a specific price.
+ */
 type OrderBookLevel struct {
 	Price    float64 // Price at this level
 	Quantity float64 // Total quantity available at this price

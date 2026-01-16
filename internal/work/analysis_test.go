@@ -39,7 +39,6 @@ func TestRegisterAnalysisWorkTypes(t *testing.T) {
 	require.NotNil(t, wt)
 
 	assert.Equal(t, "analysis:market-regime", wt.ID)
-	assert.Equal(t, PriorityMedium, wt.Priority)
 	assert.Equal(t, AllMarketsClosed, wt.MarketTiming)
 	assert.Equal(t, 24*time.Hour, wt.Interval)
 }

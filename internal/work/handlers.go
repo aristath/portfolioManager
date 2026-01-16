@@ -33,13 +33,12 @@ func (h *Handlers) RegisterRoutes(r chi.Router) {
 
 // ListWorkTypes returns all registered work types
 func (h *Handlers) ListWorkTypes(w http.ResponseWriter, r *http.Request) {
-	types := h.registry.ByPriority()
+	types := h.registry.All()
 
 	response := make([]map[string]any, 0, len(types))
 	for _, wt := range types {
 		response = append(response, map[string]any{
 			"id":            wt.ID,
-			"priority":      wt.Priority.String(),
 			"market_timing": wt.MarketTiming.String(),
 			"depends_on":    wt.DependsOn,
 		})

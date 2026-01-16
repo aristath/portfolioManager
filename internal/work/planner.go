@@ -54,7 +54,6 @@ func RegisterPlannerWorkTypes(registry *Registry, deps *PlannerDeps) {
 	// planner:weights - Calculate optimizer weights
 	registry.Register(&WorkType{
 		ID:           "planner:weights",
-		Priority:     PriorityCritical,
 		MarketTiming: AnyTime,
 		FindSubjects: func() []string {
 			if deps.Cache.Has("optimizer_weights") {
@@ -78,7 +77,6 @@ func RegisterPlannerWorkTypes(registry *Registry, deps *PlannerDeps) {
 	registry.Register(&WorkType{
 		ID:           "planner:context",
 		DependsOn:    []string{"planner:weights"},
-		Priority:     PriorityCritical,
 		MarketTiming: AnyTime,
 		FindSubjects: func() []string {
 			if deps.Cache.Has("opportunity_context") {
@@ -102,7 +100,6 @@ func RegisterPlannerWorkTypes(registry *Registry, deps *PlannerDeps) {
 	registry.Register(&WorkType{
 		ID:           "planner:plan",
 		DependsOn:    []string{"planner:context"},
-		Priority:     PriorityCritical,
 		MarketTiming: AnyTime,
 		FindSubjects: func() []string {
 			if deps.Cache.Has("trade_plan") {
@@ -133,7 +130,6 @@ func RegisterPlannerWorkTypes(registry *Registry, deps *PlannerDeps) {
 	registry.Register(&WorkType{
 		ID:           "planner:recommendations",
 		DependsOn:    []string{"planner:plan"},
-		Priority:     PriorityCritical,
 		MarketTiming: AnyTime,
 		FindSubjects: func() []string {
 			// This runs whenever there's a trade plan to store

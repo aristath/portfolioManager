@@ -57,7 +57,6 @@ func RegisterSecurityWorkTypes(registry *Registry, deps *SecurityDeps) {
 	// Rationale: Ensures complete daily data is available before fetching.
 	registry.Register(&WorkType{
 		ID:           "security:sync",
-		Priority:     PriorityMedium,
 		MarketTiming: AfterMarketClose,
 		Interval:     24 * time.Hour, // Hardcoded - matches data provider refresh
 		FindSubjects: func() []string {
@@ -85,7 +84,6 @@ func RegisterSecurityWorkTypes(registry *Registry, deps *SecurityDeps) {
 	registry.Register(&WorkType{
 		ID:           "security:technical",
 		DependsOn:    []string{"security:sync"},
-		Priority:     PriorityMedium,
 		MarketTiming: AfterMarketClose,
 		Interval:     24 * time.Hour, // Hardcoded - daily technicals are optimal
 		FindSubjects: func() []string {
@@ -114,7 +112,6 @@ func RegisterSecurityWorkTypes(registry *Registry, deps *SecurityDeps) {
 	registry.Register(&WorkType{
 		ID:           "security:formula",
 		DependsOn:    []string{"security:technical"},
-		Priority:     PriorityLow,
 		MarketTiming: AfterMarketClose,
 		Interval:     30 * 24 * time.Hour, // Hardcoded - monthly for expensive computation
 		FindSubjects: func() []string {
@@ -142,7 +139,6 @@ func RegisterSecurityWorkTypes(registry *Registry, deps *SecurityDeps) {
 	registry.Register(&WorkType{
 		ID:           "security:tags",
 		DependsOn:    []string{"security:sync"},
-		Priority:     PriorityLow,
 		MarketTiming: AfterMarketClose,
 		Interval:     7 * 24 * time.Hour, // Hardcoded - weekly tag updates are optimal
 		FindSubjects: func() []string {
@@ -170,7 +166,6 @@ func RegisterSecurityWorkTypes(registry *Registry, deps *SecurityDeps) {
 	// Rationale: Metadata sync is independent of market hours and can run anytime.
 	registry.Register(&WorkType{
 		ID:           "security:metadata",
-		Priority:     PriorityLow,
 		MarketTiming: AnyTime,
 		Interval:     24 * time.Hour, // Hardcoded - daily metadata sync is optimal
 		FindSubjects: func() []string {

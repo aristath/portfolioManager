@@ -289,6 +289,7 @@ func TestSyncWorkTypes_MarketTiming(t *testing.T) {
 }
 
 func TestSyncWorkTypes_Priority(t *testing.T) {
+	t.Skip("Priority removed in favor of FIFO registration order")
 	registry := NewRegistry()
 	deps := &SyncDeps{
 		PortfolioService:       &MockPortfolioSyncService{},
@@ -306,13 +307,11 @@ func TestSyncWorkTypes_Priority(t *testing.T) {
 	// sync:portfolio should be High priority
 	portfolioWt := registry.Get("sync:portfolio")
 	require.NotNil(t, portfolioWt)
-	assert.Equal(t, PriorityHigh, portfolioWt.Priority)
 
 	// Other sync types should be Medium priority
 	mediumTypes := []string{"sync:prices", "sync:rates"}
 	for _, id := range mediumTypes {
 		wt := registry.Get(id)
 		require.NotNil(t, wt)
-		assert.Equal(t, PriorityMedium, wt.Priority, "work type %s should be medium priority", id)
 	}
 }

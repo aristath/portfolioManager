@@ -1,3 +1,8 @@
+/**
+ * Package services provides core business services shared across multiple modules.
+ *
+ * This file contains PriceConversionService which handles currency conversion for price data.
+ */
 package services
 
 import (
@@ -6,13 +11,24 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// PriceConversionService handles currency conversion for price data
+/**
+ * PriceConversionService handles currency conversion for price data.
+ *
+ * Converts prices from securities' native currencies to EUR for portfolio calculations.
+ * This ensures all prices are in a consistent currency (EUR) for comparison and aggregation.
+ */
 type PriceConversionService struct {
-	exchangeService domain.CurrencyExchangeServiceInterface
-	log             zerolog.Logger
+	exchangeService domain.CurrencyExchangeServiceInterface // Currency exchange service
+	log             zerolog.Logger                          // Structured logger
 }
 
-// NewPriceConversionService creates a new price conversion service
+/**
+ * NewPriceConversionService creates a new price conversion service.
+ *
+ * @param exchangeService - Currency exchange service for rate fetching
+ * @param log - Structured logger
+ * @returns *PriceConversionService - New price conversion service instance
+ */
 func NewPriceConversionService(
 	exchangeService domain.CurrencyExchangeServiceInterface,
 	log zerolog.Logger,
@@ -23,13 +39,28 @@ func NewPriceConversionService(
 	}
 }
 
-// ConvertPricesToEUR converts a map of prices from native currencies to EUR
-//
-// Parameters:
-// - prices: map[symbol]price in native currency
-// - securities: securities with currency information
-//
-// Returns: map[symbol]price in EUR
+/**
+ * ConvertPricesToEUR converts a map of prices from native currencies to EUR.
+ *
+ * This function:
+ * 1. Builds a currency lookup map from securities
+ * 2. For each price, determines the security's native currency
+ * 3. Converts non-EUR prices to EUR using exchange rates
+ * 4. Returns all prices in EUR for consistent portfolio calculations
+ *
+ * Prices already in EUR are passed through unchanged. If exchange service is unavailable
+ * or conversion fails, the native price is used (with warning logged).
+ *
+ * Parameters:
+ * - prices: map[symbol]price in native currency
+ * - securities: securities with currency information
+ *
+ * Returns: map[symbol]price in EUR
+ *
+ * @param prices - Map of symbol to price in native currency
+ * @param securities - List of securities with currency information
+ * @returns map[string]float64 - Map of symbol to price in EUR
+ */
 func (s *PriceConversionService) ConvertPricesToEUR(
 	prices map[string]float64,
 	securities []universe.Security,
@@ -38,12 +69,12 @@ func (s *PriceConversionService) ConvertPricesToEUR(
 		return prices
 	}
 
-	// Build currency lookup map
+	// Build currency lookup map from securities
 	currencyMap := make(map[string]string)
 	for _, security := range securities {
 		currency := security.Currency
 		if currency == "" {
-			currency = "EUR" // Default to EUR
+			currency = "EUR" // Default to EUR if currency not specified
 		}
 		currencyMap[security.Symbol] = currency
 	}
@@ -55,19 +86,19 @@ func (s *PriceConversionService) ConvertPricesToEUR(
 	for symbol, nativePrice := range prices {
 		currency, hasCurrency := currencyMap[symbol]
 		if !hasCurrency {
-			// No currency info, assume EUR
+			// No currency info, assume EUR (pass through)
 			convertedPrices[symbol] = nativePrice
 			skippedCount++
 			continue
 		}
 
 		if currency == "EUR" || currency == "" {
-			// Already in EUR
+			// Already in EUR, pass through unchanged
 			convertedPrices[symbol] = nativePrice
 			continue
 		}
 
-		// Convert to EUR
+		// Convert to EUR using exchange service
 		if s.exchangeService == nil {
 			s.log.Warn().
 				Str("symbol", symbol).

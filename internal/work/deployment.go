@@ -22,7 +22,6 @@ func RegisterDeploymentWorkTypes(registry *Registry, deps *DeploymentDeps) {
 	// deployment:check - Check for new deployments
 	registry.Register(&WorkType{
 		ID:           "deployment:check",
-		Priority:     PriorityLow,
 		MarketTiming: AnyTime,
 		Interval:     deps.DeploymentService.GetCheckInterval(),
 		FindSubjects: func() []string {

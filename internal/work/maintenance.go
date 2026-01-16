@@ -58,7 +58,6 @@ func RegisterMaintenanceWorkTypes(registry *Registry, deps *MaintenanceDeps) {
 	//            Uses BackedUpToday() check to prevent duplicate backups if app restarts.
 	registry.Register(&WorkType{
 		ID:           "maintenance:backup",
-		Priority:     PriorityLow,
 		MarketTiming: AllMarketsClosed,
 		Interval:     24 * time.Hour, // Hardcoded - daily backups are optimal
 		FindSubjects: func() []string {
@@ -88,7 +87,6 @@ func RegisterMaintenanceWorkTypes(registry *Registry, deps *MaintenanceDeps) {
 	registry.Register(&WorkType{
 		ID:           "maintenance:r2-backup",
 		DependsOn:    []string{"maintenance:backup"},
-		Priority:     PriorityLow,
 		MarketTiming: AllMarketsClosed,
 		Interval:     24 * time.Hour, // Hardcoded - daily cloud backups are optimal
 		FindSubjects: func() []string {
@@ -115,7 +113,6 @@ func RegisterMaintenanceWorkTypes(registry *Registry, deps *MaintenanceDeps) {
 	registry.Register(&WorkType{
 		ID:           "maintenance:r2-rotation",
 		DependsOn:    []string{"maintenance:r2-backup"},
-		Priority:     PriorityLow,
 		MarketTiming: AllMarketsClosed,
 		Interval:     24 * time.Hour, // Hardcoded - daily rotation is optimal
 		FindSubjects: func() []string {
@@ -142,7 +139,6 @@ func RegisterMaintenanceWorkTypes(registry *Registry, deps *MaintenanceDeps) {
 	registry.Register(&WorkType{
 		ID:           "maintenance:vacuum",
 		DependsOn:    []string{"maintenance:backup"},
-		Priority:     PriorityLow,
 		MarketTiming: AllMarketsClosed,
 		Interval:     24 * time.Hour, // Hardcoded - daily vacuum is optimal
 		FindSubjects: func() []string {
@@ -168,7 +164,6 @@ func RegisterMaintenanceWorkTypes(registry *Registry, deps *MaintenanceDeps) {
 	// Rationale: Health checks can be I/O intensive; run during off-hours.
 	registry.Register(&WorkType{
 		ID:           "maintenance:health",
-		Priority:     PriorityLow,
 		MarketTiming: AllMarketsClosed,
 		Interval:     24 * time.Hour, // Hardcoded - daily health checks are optimal
 		FindSubjects: func() []string {
@@ -194,7 +189,6 @@ func RegisterMaintenanceWorkTypes(registry *Registry, deps *MaintenanceDeps) {
 	// Rationale: Cleanup operations during off-hours minimize impact on queries.
 	registry.Register(&WorkType{
 		ID:           "maintenance:cleanup:history",
-		Priority:     PriorityLow,
 		MarketTiming: AllMarketsClosed,
 		Interval:     24 * time.Hour, // Hardcoded - daily cleanup is optimal
 		FindSubjects: func() []string {
@@ -220,7 +214,6 @@ func RegisterMaintenanceWorkTypes(registry *Registry, deps *MaintenanceDeps) {
 	// Rationale: Cache cleanup during off-hours avoids cache misses during trading.
 	registry.Register(&WorkType{
 		ID:           "maintenance:cleanup:cache",
-		Priority:     PriorityLow,
 		MarketTiming: AllMarketsClosed,
 		Interval:     24 * time.Hour, // Hardcoded - daily cleanup is optimal
 		FindSubjects: func() []string {
@@ -247,7 +240,6 @@ func RegisterMaintenanceWorkTypes(registry *Registry, deps *MaintenanceDeps) {
 	// Rationale: Lightweight operation, can run during market hours without impact.
 	registry.Register(&WorkType{
 		ID:           "maintenance:cleanup:recommendations",
-		Priority:     PriorityLow,
 		MarketTiming: AnyTime,
 		Interval:     1 * time.Hour, // Hardcoded - hourly GC is optimal
 		FindSubjects: func() []string {
@@ -273,7 +265,6 @@ func RegisterMaintenanceWorkTypes(registry *Registry, deps *MaintenanceDeps) {
 	// Rationale: Cleanup during off-hours ensures fresh data ready for market open.
 	registry.Register(&WorkType{
 		ID:           "maintenance:cleanup:client-data",
-		Priority:     PriorityLow,
 		MarketTiming: AllMarketsClosed,
 		Interval:     24 * time.Hour, // Hardcoded - daily cleanup is optimal
 		FindSubjects: func() []string {

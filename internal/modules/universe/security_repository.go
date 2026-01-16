@@ -9,13 +9,21 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// SecurityRepository handles security database operations
+// SecurityRepository handles security database operations for the investment universe.
+// It provides CRUD operations for securities stored in universe.db using a JSON storage schema
+// (migration 038). All security data is stored as JSON in the 'data' column, with only
+// isin, symbol, and last_synced as separate columns.
+//
+// The repository automatically merges user-configurable overrides (allow_buy, allow_sell,
+// min_lot, priority_multiplier) from the security_overrides table when an OverrideRepository
+// is provided. It also manages security tags via the TagRepository.
+//
 // Faithful translation from Python: app/modules/universe/database/security_repository.py
 type SecurityRepository struct {
-	universeDB   *sql.DB // universe.db - securities table
-	tagRepo      *TagRepository
-	overrideRepo OverrideRepositoryInterface
-	log          zerolog.Logger
+	universeDB   *sql.DB                     // universe.db - securities table
+	tagRepo      *TagRepository              // Repository for managing security tags
+	overrideRepo OverrideRepositoryInterface // Repository for user-configurable overrides (optional)
+	log          zerolog.Logger              // Structured logger
 }
 
 // securitiesColumns is the list of columns for the securities table (JSON storage schema)
@@ -24,7 +32,16 @@ type SecurityRepository struct {
 // Note: allow_buy, allow_sell, min_lot, priority_multiplier are stored in security_overrides table
 const securitiesColumns = `isin, symbol, data, last_synced`
 
-// NewSecurityRepository creates a new security repository (backward compatible, no override support)
+// NewSecurityRepository creates a new security repository without override support.
+// This is a backward-compatible constructor for code that doesn't need override merging.
+// For new code, prefer NewSecurityRepositoryWithOverrides to enable user-configurable overrides.
+//
+// Parameters:
+//   - universeDB: Database connection to universe.db
+//   - log: Structured logger
+//
+// Returns:
+//   - *SecurityRepository: Repository instance without override support
 func NewSecurityRepository(universeDB *sql.DB, log zerolog.Logger) *SecurityRepository {
 	return &SecurityRepository{
 		universeDB:   universeDB,
@@ -34,7 +51,17 @@ func NewSecurityRepository(universeDB *sql.DB, log zerolog.Logger) *SecurityRepo
 	}
 }
 
-// NewSecurityRepositoryWithOverrides creates a new security repository with override support
+// NewSecurityRepositoryWithOverrides creates a new security repository with override support.
+// This is the recommended constructor as it enables automatic merging of user-configurable
+// overrides (allow_buy, allow_sell, min_lot, priority_multiplier) from security_overrides table.
+//
+// Parameters:
+//   - universeDB: Database connection to universe.db
+//   - overrideRepo: Repository for fetching security overrides (can be nil to disable)
+//   - log: Structured logger
+//
+// Returns:
+//   - *SecurityRepository: Repository instance with override support
 func NewSecurityRepositoryWithOverrides(universeDB *sql.DB, overrideRepo OverrideRepositoryInterface, log zerolog.Logger) *SecurityRepository {
 	return &SecurityRepository{
 		universeDB:   universeDB,
@@ -44,11 +71,22 @@ func NewSecurityRepositoryWithOverrides(universeDB *sql.DB, overrideRepo Overrid
 	}
 }
 
-// GetBySymbol returns a security by symbol
+// GetBySymbol returns a security by symbol (case-insensitive lookup).
+// The symbol is normalized to uppercase and trimmed before querying.
+// If an override repository is configured, user overrides are automatically merged.
+//
+// Parameters:
+//   - symbol: Security symbol (e.g., "AAPL", "MSFT")
+//
+// Returns:
+//   - *Security: Security object if found, nil if not found
+//   - error: Error if query fails
+//
 // Faithful translation of Python: async def get_by_symbol(self, symbol: str) -> Optional[Security]
 func (r *SecurityRepository) GetBySymbol(symbol string) (*Security, error) {
 	query := "SELECT " + securitiesColumns + " FROM securities WHERE symbol = ?"
 
+	// Normalize symbol to uppercase and trim whitespace for consistent lookup
 	rows, err := r.universeDB.Query(query, strings.ToUpper(strings.TrimSpace(symbol)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query security by symbol: %w", err)
@@ -59,12 +97,14 @@ func (r *SecurityRepository) GetBySymbol(symbol string) (*Security, error) {
 		return nil, nil // Security not found
 	}
 
+	// Scan database row into Security struct (includes JSON parsing and tag loading)
 	security, err := r.scanSecurity(rows)
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan security: %w", err)
 	}
 
 	// Apply overrides if override repository is available
+	// Overrides include user-configurable fields like allow_buy, allow_sell, min_lot, priority_multiplier
 	if r.overrideRepo != nil && security.ISIN != "" {
 		overrides, err := r.overrideRepo.GetOverrides(security.ISIN)
 		if err != nil {
@@ -77,11 +117,23 @@ func (r *SecurityRepository) GetBySymbol(symbol string) (*Security, error) {
 	return &security, nil
 }
 
-// GetByISIN returns a security by ISIN
+// GetByISIN returns a security by ISIN (International Securities Identification Number).
+// ISIN is the primary key for securities after migration 031. The ISIN is normalized to
+// uppercase and trimmed before querying. If an override repository is configured,
+// user overrides are automatically merged.
+//
+// Parameters:
+//   - isin: Security ISIN (e.g., "US0378331005" for AAPL)
+//
+// Returns:
+//   - *Security: Security object if found, nil if not found
+//   - error: Error if query fails
+//
 // Faithful translation of Python: async def get_by_isin(self, isin: str) -> Optional[Security]
 func (r *SecurityRepository) GetByISIN(isin string) (*Security, error) {
 	query := "SELECT " + securitiesColumns + " FROM securities WHERE isin = ?"
 
+	// Normalize ISIN to uppercase and trim whitespace (ISIN is case-insensitive)
 	normalizedISIN := strings.ToUpper(strings.TrimSpace(isin))
 	rows, err := r.universeDB.Query(query, normalizedISIN)
 	if err != nil {
@@ -93,12 +145,14 @@ func (r *SecurityRepository) GetByISIN(isin string) (*Security, error) {
 		return nil, nil // Security not found
 	}
 
+	// Scan database row into Security struct (includes JSON parsing and tag loading)
 	security, err := r.scanSecurity(rows)
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan security: %w", err)
 	}
 
 	// Apply overrides if override repository is available
+	// Overrides include user-configurable fields like allow_buy, allow_sell, min_lot, priority_multiplier
 	if r.overrideRepo != nil {
 		overrides, err := r.overrideRepo.GetOverrides(normalizedISIN)
 		if err != nil {
@@ -111,16 +165,29 @@ func (r *SecurityRepository) GetByISIN(isin string) (*Security, error) {
 	return &security, nil
 }
 
-// GetByIdentifier returns a security by symbol or ISIN (smart lookup)
+// GetByIdentifier returns a security by symbol or ISIN (smart lookup).
+// This method automatically detects whether the identifier is an ISIN or symbol:
+// - If identifier is 12 characters and starts with 2 letters, tries ISIN lookup first
+// - Otherwise, falls back to symbol lookup
+// This is useful for user input where the format may be ambiguous.
+//
+// Parameters:
+//   - identifier: Security symbol or ISIN
+//
+// Returns:
+//   - *Security: Security object if found, nil if not found
+//   - error: Error if query fails
+//
 // Faithful translation of Python: async def get_by_identifier(self, identifier: str) -> Optional[Security]
 func (r *SecurityRepository) GetByIdentifier(identifier string) (*Security, error) {
 	identifier = strings.ToUpper(strings.TrimSpace(identifier))
 
 	// Check if it looks like an ISIN (12 chars, starts with 2 letters)
+	// ISIN format: 2-letter country code + 9 alphanumeric + 1 check digit
 	if len(identifier) == 12 && len(identifier) >= 2 {
 		firstTwo := identifier[:2]
 		if (firstTwo[0] >= 'A' && firstTwo[0] <= 'Z') && (firstTwo[1] >= 'A' && firstTwo[1] <= 'Z') {
-			// Try ISIN lookup first
+			// Try ISIN lookup first (more specific, less ambiguous)
 			sec, err := r.GetByISIN(identifier)
 			if err != nil {
 				return nil, err
@@ -131,7 +198,7 @@ func (r *SecurityRepository) GetByIdentifier(identifier string) (*Security, erro
 		}
 	}
 
-	// Fall back to symbol lookup
+	// Fall back to symbol lookup (broader match, may match multiple if symbol changes)
 	return r.GetBySymbol(identifier)
 }
 

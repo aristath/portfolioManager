@@ -1,3 +1,9 @@
+/**
+ * Package services provides core business services shared across multiple modules.
+ *
+ * This file contains OpportunityContextBuilder which builds complete opportunity
+ * context objects for opportunity calculators, planning, and rebalancing.
+ */
 package services
 
 import (
@@ -11,29 +17,52 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// OpportunityContextBuilder builds complete OpportunityContext with all required data.
-// This is the single source of truth for context building across all consumers.
-//
-// It consolidates logic from:
-// - scheduler/build_opportunity_context.go (most complete - scoring, weights, risk metrics)
-// - opportunities/handlers/handlers.go (cooloff from trades and pending orders)
-// - rebalancing/service.go (partial implementation)
+/**
+ * OpportunityContextBuilder builds complete OpportunityContext with all required data.
+ *
+ * This is the single source of truth for context building across all consumers.
+ *
+ * It consolidates logic from:
+ * - scheduler/build_opportunity_context.go (most complete - scoring, weights, risk metrics)
+ * - opportunities/handlers/handlers.go (cooloff from trades and pending orders)
+ * - rebalancing/service.go (partial implementation)
+ *
+ * The builder fetches all required data (positions, securities, scores, cash, etc.)
+ * and constructs a comprehensive context object that opportunity calculators,
+ * planning, and rebalancing services can use.
+ */
 type OpportunityContextBuilder struct {
-	positionRepo           PositionRepository
-	securityRepo           SecurityRepository
-	allocRepo              AllocationRepository
-	tradeRepo              TradeRepository
-	scoresRepo             ScoresRepository
-	settingsRepo           SettingsRepository
-	regimeRepo             RegimeRepository
-	cashManager            CashManager
-	priceClient            PriceClient
-	priceConversionService PriceConversionServiceInterface
-	brokerClient           BrokerClient
-	log                    zerolog.Logger
+	positionRepo           PositionRepository              // Position repository
+	securityRepo           SecurityRepository              // Security repository
+	allocRepo              AllocationRepository            // Allocation repository
+	tradeRepo              TradeRepository                 // Trade repository
+	scoresRepo             ScoresRepository                // Scores repository
+	settingsRepo           SettingsRepository              // Settings repository
+	regimeRepo             RegimeRepository                // Regime repository
+	cashManager            CashManager                     // Cash manager
+	priceClient            PriceClient                     // Price client for current prices
+	priceConversionService PriceConversionServiceInterface // Price conversion service
+	brokerClient           BrokerClient                    // Broker client for pending orders
+	log                    zerolog.Logger                  // Structured logger
 }
 
-// NewOpportunityContextBuilder creates a new builder with all dependencies.
+/**
+ * NewOpportunityContextBuilder creates a new builder with all dependencies.
+ *
+ * @param positionRepo - Position repository
+ * @param securityRepo - Security repository
+ * @param allocRepo - Allocation repository
+ * @param tradeRepo - Trade repository
+ * @param scoresRepo - Scores repository
+ * @param settingsRepo - Settings repository
+ * @param regimeRepo - Regime repository
+ * @param cashManager - Cash manager
+ * @param priceClient - Price client for current prices
+ * @param priceConversionService - Price conversion service
+ * @param brokerClient - Broker client for pending orders
+ * @param log - Structured logger
+ * @returns *OpportunityContextBuilder - New opportunity context builder instance
+ */
 func NewOpportunityContextBuilder(
 	positionRepo PositionRepository,
 	securityRepo SecurityRepository,
@@ -64,13 +93,32 @@ func NewOpportunityContextBuilder(
 	}
 }
 
-// Build creates a complete OpportunityContext with all fields populated.
-//
-// Parameters:
-//   - optimizerWeights: ISIN-keyed target weights from optimizer (e.g., {"NL0010273215": 0.05})
-//     Pass nil to use allocation targets from database instead
-//
-// Returns error if critical data cannot be loaded.
+/**
+ * Build creates a complete OpportunityContext with all fields populated.
+ *
+ * This method fetches all required data from repositories and builds a comprehensive
+ * context object that includes:
+ * - Positions and securities
+ * - Allocation targets and current allocations
+ * - Cash balances (including virtual test cash in research mode)
+ * - Security scores (total, CAGR, quality, stability)
+ * - Risk metrics (Sharpe, max drawdown)
+ * - Value trap data (opportunity scores, momentum, volatility)
+ * - Regime score
+ * - Cooloff data (recently traded securities, pending orders)
+ * - Current prices
+ * - Target weights (from optimizer or allocation targets)
+ *
+ * Parameters:
+ *   - optimizerWeights: ISIN-keyed target weights from optimizer (e.g., {"NL0010273215": 0.05})
+ *     Pass nil to use allocation targets from database instead
+ *
+ * Returns error if critical data cannot be loaded.
+ *
+ * @param optimizerWeights - Optional optimizer weights (nil to use allocation targets)
+ * @returns *planningdomain.OpportunityContext - Complete opportunity context
+ * @returns error - Error if context building fails
+ */
 func (b *OpportunityContextBuilder) Build(optimizerWeights map[string]float64) (*planningdomain.OpportunityContext, error) {
 	b.log.Debug().Msg("Building opportunity context")
 
@@ -104,7 +152,7 @@ func (b *OpportunityContextBuilder) Build(optimizerWeights map[string]float64) (
 		}
 	}
 
-	// Step 5: Add virtual test cash if configured
+	// Step 5: Add virtual test cash if configured (research mode)
 	if b.settingsRepo != nil {
 		virtualCash, err := b.settingsRepo.GetVirtualTestCash()
 		if err == nil && virtualCash > 0 {

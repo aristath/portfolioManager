@@ -48,7 +48,6 @@ func RegisterDividendWorkTypes(registry *Registry, deps *DividendDeps) {
 	// dividend:detect - Find unreinvested dividends
 	registry.Register(&WorkType{
 		ID:           "dividend:detect",
-		Priority:     PriorityHigh,
 		MarketTiming: AnyTime,
 		FindSubjects: func() []string {
 			if deps.DetectionService.HasPendingDividends() {
@@ -72,7 +71,6 @@ func RegisterDividendWorkTypes(registry *Registry, deps *DividendDeps) {
 	registry.Register(&WorkType{
 		ID:           "dividend:analyze",
 		DependsOn:    []string{"dividend:detect"},
-		Priority:     PriorityHigh,
 		MarketTiming: AnyTime,
 		FindSubjects: func() []string {
 			if deps.Cache.Has("detected_dividends") && !deps.Cache.Has("dividend_analysis") {
@@ -101,7 +99,6 @@ func RegisterDividendWorkTypes(registry *Registry, deps *DividendDeps) {
 	registry.Register(&WorkType{
 		ID:           "dividend:recommend",
 		DependsOn:    []string{"dividend:analyze"},
-		Priority:     PriorityHigh,
 		MarketTiming: AnyTime,
 		FindSubjects: func() []string {
 			if deps.Cache.Has("dividend_analysis") && !deps.Cache.Has("dividend_recommendations") {
@@ -130,7 +127,6 @@ func RegisterDividendWorkTypes(registry *Registry, deps *DividendDeps) {
 	registry.Register(&WorkType{
 		ID:           "dividend:execute",
 		DependsOn:    []string{"dividend:recommend"},
-		Priority:     PriorityHigh,
 		MarketTiming: AnyTime,
 		FindSubjects: func() []string {
 			if deps.Cache.Has("dividend_recommendations") {

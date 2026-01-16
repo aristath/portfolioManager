@@ -29,7 +29,6 @@ func RegisterTradingWorkTypes(registry *Registry, deps *TradingDeps) {
 	// trading:execute - Execute pending recommendations
 	registry.Register(&WorkType{
 		ID:           "trading:execute",
-		Priority:     PriorityCritical,
 		MarketTiming: DuringMarketOpen,
 		FindSubjects: func() []string {
 			if deps.ExecutionService.HasPendingTrades() {
@@ -59,7 +58,6 @@ func RegisterTradingWorkTypes(registry *Registry, deps *TradingDeps) {
 	// Rationale: Can only execute trades during market hours.
 	registry.Register(&WorkType{
 		ID:           "trading:retry",
-		Priority:     PriorityMedium,
 		MarketTiming: DuringMarketOpen,
 		Interval:     1 * time.Hour, // Hardcoded - optimal for error recovery
 		FindSubjects: func() []string {

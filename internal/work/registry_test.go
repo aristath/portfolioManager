@@ -20,8 +20,7 @@ func TestRegistry_Register(t *testing.T) {
 	r := NewRegistry()
 
 	wt := &WorkType{
-		ID:       "test:work",
-		Priority: PriorityMedium,
+		ID: "test:work",
 	}
 
 	r.Register(wt)
@@ -34,12 +33,10 @@ func TestRegistry_RegisterOverwrites(t *testing.T) {
 	r := NewRegistry()
 
 	wt1 := &WorkType{
-		ID:       "test:work",
-		Priority: PriorityLow,
+		ID: "test:work",
 	}
 	wt2 := &WorkType{
-		ID:       "test:work",
-		Priority: PriorityHigh,
+		ID: "test:work",
 	}
 
 	r.Register(wt1)
@@ -47,7 +44,7 @@ func TestRegistry_RegisterOverwrites(t *testing.T) {
 
 	assert.Equal(t, 1, r.Count())
 	got := r.Get("test:work")
-	assert.Equal(t, PriorityHigh, got.Priority)
+	assert.NotNil(t, got)
 }
 
 func TestRegistry_Get(t *testing.T) {
@@ -55,7 +52,6 @@ func TestRegistry_Get(t *testing.T) {
 
 	wt := &WorkType{
 		ID:           "security:sync",
-		Priority:     PriorityMedium,
 		MarketTiming: AfterMarketClose,
 	}
 	r.Register(wt)
@@ -107,46 +103,11 @@ func TestRegistry_IDs(t *testing.T) {
 }
 
 func TestRegistry_ByPriority(t *testing.T) {
-	r := NewRegistry()
-
-	// Register work types with different priorities
-	r.Register(&WorkType{ID: "maintenance:backup", Priority: PriorityLow})
-	r.Register(&WorkType{ID: "security:sync", Priority: PriorityMedium})
-	r.Register(&WorkType{ID: "planner:weights", Priority: PriorityCritical})
-	r.Register(&WorkType{ID: "sync:portfolio", Priority: PriorityHigh})
-	r.Register(&WorkType{ID: "trading:execute", Priority: PriorityCritical})
-
-	ordered := r.ByPriority()
-
-	require.Len(t, ordered, 5)
-
-	// Critical priority first (alphabetically within same priority)
-	assert.Equal(t, "planner:weights", ordered[0].ID)
-	assert.Equal(t, "trading:execute", ordered[1].ID)
-
-	// High priority next
-	assert.Equal(t, "sync:portfolio", ordered[2].ID)
-
-	// Medium priority
-	assert.Equal(t, "security:sync", ordered[3].ID)
-
-	// Low priority last
-	assert.Equal(t, "maintenance:backup", ordered[4].ID)
+	t.Skip("Priority ordering removed in favor of FIFO registration order")
 }
 
 func TestRegistry_ByPriority_ReturnsACopy(t *testing.T) {
-	r := NewRegistry()
-
-	r.Register(&WorkType{ID: "test:work", Priority: PriorityMedium})
-
-	ordered1 := r.ByPriority()
-	ordered2 := r.ByPriority()
-
-	// Modify one slice
-	ordered1[0] = nil
-
-	// The other should be unaffected
-	assert.NotNil(t, ordered2[0])
+	t.Skip("Priority ordering removed in favor of FIFO registration order - see TestRegistry_All_ReturnsCopy")
 }
 
 func TestRegistry_GetDependencies(t *testing.T) {
@@ -232,7 +193,7 @@ func TestRegistry_ConcurrentAccess(t *testing.T) {
 				_ = r.Has("initial:b")
 				_ = r.Count()
 				_ = r.IDs()
-				_ = r.ByPriority()
+				_ = r.All()
 			}
 		}()
 	}
@@ -262,8 +223,7 @@ func TestRegistry_FullWorkflowExample(t *testing.T) {
 
 	// Register a planner chain with dependencies
 	r.Register(&WorkType{
-		ID:       "planner:weights",
-		Priority: PriorityCritical,
+		ID: "planner:weights",
 		FindSubjects: func() []string {
 			return []string{""} // Global work
 		},
@@ -274,7 +234,6 @@ func TestRegistry_FullWorkflowExample(t *testing.T) {
 
 	r.Register(&WorkType{
 		ID:        "planner:context",
-		Priority:  PriorityCritical,
 		DependsOn: []string{"planner:weights"},
 		FindSubjects: func() []string {
 			return []string{""}
@@ -286,7 +245,6 @@ func TestRegistry_FullWorkflowExample(t *testing.T) {
 
 	r.Register(&WorkType{
 		ID:        "planner:plan",
-		Priority:  PriorityCritical,
 		DependsOn: []string{"planner:context"},
 		FindSubjects: func() []string {
 			return []string{""}
@@ -312,4 +270,35 @@ func TestRegistry_FullWorkflowExample(t *testing.T) {
 	weightsDependents := r.GetDependents("planner:weights")
 	require.Len(t, weightsDependents, 1)
 	assert.Equal(t, "planner:context", weightsDependents[0].ID)
+}
+
+// Phase 1 Tests: Registration Order (FIFO Queue Implementation)
+
+func TestRegistry_All_RegistrationOrder(t *testing.T) {
+	registry := NewRegistry()
+
+	// Register in specific order
+	registry.Register(&WorkType{ID: "first"})
+	registry.Register(&WorkType{ID: "second"})
+	registry.Register(&WorkType{ID: "third"})
+
+	all := registry.All()
+
+	assert.Equal(t, 3, len(all))
+	assert.Equal(t, "first", all[0].ID)
+	assert.Equal(t, "second", all[1].ID)
+	assert.Equal(t, "third", all[2].ID)
+}
+
+func TestRegistry_All_ReturnsCopy(t *testing.T) {
+	registry := NewRegistry()
+	registry.Register(&WorkType{ID: "test"})
+
+	all1 := registry.All()
+	all2 := registry.All()
+
+	// Should be different slices (copies) - verify by modifying one
+	assert.Equal(t, len(all1), len(all2))
+	all1[0] = nil
+	assert.NotNil(t, all2[0], "Modifying one slice should not affect the other")
 }

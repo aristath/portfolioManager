@@ -29,28 +29,12 @@ func TestMarketTimingString(t *testing.T) {
 }
 
 func TestPriorityString(t *testing.T) {
-	tests := []struct {
-		priority Priority
-		expected string
-	}{
-		{PriorityLow, "Low"},
-		{PriorityMedium, "Medium"},
-		{PriorityHigh, "High"},
-		{PriorityCritical, "Critical"},
-		{Priority(99), "Unknown"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.expected, func(t *testing.T) {
-			assert.Equal(t, tt.expected, tt.priority.String())
-		})
-	}
+	t.Skip("Priority type removed - FIFO ordering now used instead")
 }
 
 func TestNewWorkItem_GlobalWork(t *testing.T) {
 	wt := &WorkType{
-		ID:       "planner:weights",
-		Priority: PriorityCritical,
+		ID: "planner:weights",
 	}
 
 	item := NewWorkItem(wt, "")
@@ -66,7 +50,6 @@ func TestNewWorkItem_PerSecurityWork(t *testing.T) {
 	wt := &WorkType{
 		ID:           "security:sync",
 		MarketTiming: AfterMarketClose,
-		Priority:     PriorityMedium,
 	}
 
 	item := NewWorkItem(wt, "NL0010273215")
@@ -160,8 +143,7 @@ func TestWorkTypeExecution(t *testing.T) {
 	executedSubject := ""
 
 	wt := &WorkType{
-		ID:       "test:work",
-		Priority: PriorityMedium,
+		ID: "test:work",
 		Execute: func(ctx context.Context, subject string, progress *ProgressReporter) error {
 			executed = true
 			executedSubject = subject
@@ -170,7 +152,6 @@ func TestWorkTypeExecution(t *testing.T) {
 	}
 
 	assert.Equal(t, "test:work", wt.ID)
-	assert.Equal(t, PriorityMedium, wt.Priority)
 	err := wt.Execute(context.Background(), "test-subject", nil)
 
 	require.NoError(t, err)

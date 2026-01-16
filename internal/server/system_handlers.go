@@ -178,7 +178,6 @@ type JobsStatusResponse struct {
 // WorkTypeStatus represents the status of a work type
 type WorkTypeStatus struct {
 	ID           string   `json:"id"`
-	Priority     string   `json:"priority"`
 	MarketTiming string   `json:"market_timing"`
 	Interval     string   `json:"interval"`           // e.g., "5m", "1h", "24h", "0" for on-demand
 	LastRun      *string  `json:"last_run,omitempty"` // RFC3339 or null
@@ -619,7 +618,7 @@ func (h *SystemHandlers) HandleJobsStatus(w http.ResponseWriter, r *http.Request
 	registry := h.workProcessor.GetRegistry()
 	completion := h.workProcessor.GetCompletion()
 
-	workTypes := registry.ByPriority()
+	workTypes := registry.All()
 	workTypeStatuses := make([]WorkTypeStatus, 0, len(workTypes))
 
 	for _, wt := range workTypes {
@@ -628,7 +627,6 @@ func (h *SystemHandlers) HandleJobsStatus(w http.ResponseWriter, r *http.Request
 
 		status := WorkTypeStatus{
 			ID:           wt.ID,
-			Priority:     wt.Priority.String(),
 			MarketTiming: wt.MarketTiming.String(),
 			Interval:     formatInterval(wt.Interval),
 			DependsOn:    wt.DependsOn,

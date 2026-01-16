@@ -13,6 +13,12 @@ import (
 // This ensures interval-based work runs even when no events fire.
 const PeriodicTriggerInterval = 1 * time.Minute
 
+// queuedWork represents an item in the work queue
+type queuedWork struct {
+	TypeID  string
+	Subject string
+}
+
 // Processor is the main work processor that executes work items.
 // It processes one work item at a time, respecting dependencies and market timing.
 type Processor struct {
@@ -28,7 +34,12 @@ type Processor struct {
 	stopped    chan struct{}
 	retryQueue []*WorkItem
 	inFlight   map[string]bool // Track currently executing work
-	mu         sync.Mutex
+
+	// FIFO queue fields
+	workQueue   []*queuedWork   // FIFO queue of pending work
+	queuedItems map[string]bool // Prevents duplicates ("typeID:subject" → true)
+
+	mu sync.Mutex
 }
 
 // NewProcessor creates a new work processor.
@@ -40,16 +51,18 @@ func NewProcessor(registry *Registry, completion *CompletionTracker, market *Mar
 // This is primarily used for testing.
 func NewProcessorWithTimeout(registry *Registry, completion *CompletionTracker, market *MarketTimingChecker, timeout time.Duration) *Processor {
 	return &Processor{
-		registry:   registry,
-		completion: completion,
-		market:     market,
-		timeout:    timeout,
-		trigger:    make(chan struct{}, 1),
-		done:       make(chan struct{}, 1),
-		stop:       make(chan struct{}),
-		stopped:    make(chan struct{}),
-		retryQueue: make([]*WorkItem, 0),
-		inFlight:   make(map[string]bool),
+		registry:    registry,
+		completion:  completion,
+		market:      market,
+		timeout:     timeout,
+		trigger:     make(chan struct{}, 1),
+		done:        make(chan struct{}, 1),
+		stop:        make(chan struct{}),
+		stopped:     make(chan struct{}),
+		retryQueue:  make([]*WorkItem, 0),
+		inFlight:    make(map[string]bool),
+		workQueue:   make([]*queuedWork, 0),
+		queuedItems: make(map[string]bool),
 	}
 }
 
@@ -57,6 +70,14 @@ func NewProcessorWithTimeout(registry *Registry, completion *CompletionTracker, 
 // This should be called before Run() to enable progress events.
 func (p *Processor) SetEventEmitter(emitter EventEmitter) {
 	p.eventEmitter = emitter
+}
+
+// makeQueueKey creates unique key for tracking queued items
+func makeQueueKey(typeID, subject string) string {
+	if subject == "" {
+		return typeID
+	}
+	return typeID + ":" + subject
 }
 
 // Run starts the processor loop. This blocks until Stop() is called.
@@ -72,11 +93,18 @@ func (p *Processor) Run() {
 		case <-p.stop:
 			return
 		case <-p.trigger:
+			p.populateQueue()
 			p.processOne()
 		case <-p.done:
 			p.processOne() // Previous work done, immediately check for next
 		case <-ticker.C:
-			p.processOne() // Periodic fallback for interval-based work
+			// Clear and repopulate queue every minute (failsafe)
+			p.mu.Lock()
+			p.workQueue = nil
+			p.queuedItems = make(map[string]bool)
+			p.mu.Unlock()
+			p.populateQueue()
+			p.processOne()
 		}
 	}
 }
@@ -194,9 +222,10 @@ func (p *Processor) processOne() {
 	}()
 }
 
-// findNextWork finds the next work item to execute.
-func (p *Processor) findNextWork() (*WorkItem, *WorkType) {
-	workTypes := p.registry.ByPriority()
+// populateQueue scans all work types and adds eligible work to queue.
+// Does NOT check dependencies - those are resolved at execution time.
+func (p *Processor) populateQueue() {
+	workTypes := p.registry.All() // Registration order
 
 	for _, wt := range workTypes {
 		subjects := wt.FindSubjects()
@@ -205,6 +234,17 @@ func (p *Processor) findNextWork() (*WorkItem, *WorkType) {
 		}
 
 		for _, subject := range subjects {
+			key := makeQueueKey(wt.ID, subject)
+
+			// Check if already queued (needs lock for read)
+			p.mu.Lock()
+			alreadyQueued := p.queuedItems[key]
+			p.mu.Unlock()
+
+			if alreadyQueued {
+				continue
+			}
+
 			// Check market timing
 			if !p.market.CanExecute(wt.MarketTiming, subject) {
 				continue
@@ -215,13 +255,138 @@ func (p *Processor) findNextWork() (*WorkItem, *WorkType) {
 				continue
 			}
 
-			// Check dependencies
-			if !p.dependenciesMet(wt, subject) {
-				continue
+			// Add to queue (needs lock for write)
+			p.mu.Lock()
+			// Double-check in case another goroutine added it
+			if !p.queuedItems[key] {
+				p.workQueue = append(p.workQueue, &queuedWork{
+					TypeID:  wt.ID,
+					Subject: subject,
+				})
+				p.queuedItems[key] = true
 			}
-
-			return NewWorkItem(wt, subject), wt
+			p.mu.Unlock()
 		}
+	}
+}
+
+// resolveDependencies ensures all dependencies are satisfied.
+// If dependency not completed:
+// - If in queue: move to front
+// - If not in queue: add to front recursively
+// Returns true if dependencies were added/moved (retry needed)
+func (p *Processor) resolveDependencies(wt *WorkType, subject string, visited map[string]bool) bool {
+	if len(wt.DependsOn) == 0 {
+		return false // No dependencies
+	}
+
+	needsResolution := false
+
+	for _, depID := range wt.DependsOn {
+		// Check if already completed
+		_, exists := p.completion.GetCompletion(depID, subject)
+		if exists {
+			continue
+		}
+
+		// Circular dependency detection
+		depKey := makeQueueKey(depID, subject)
+		if visited[depKey] {
+			log.Warn().
+				Str("work", wt.ID).
+				Str("dependency", depID).
+				Str("subject", subject).
+				Msg("Circular dependency detected, skipping")
+			continue
+		}
+		visited[depKey] = true
+
+		// Get dependency work type
+		depWT := p.registry.Get(depID)
+		if depWT == nil {
+			log.Warn().
+				Str("work", wt.ID).
+				Str("dependency", depID).
+				Msg("Unknown dependency, skipping")
+			continue
+		}
+
+		// If dependency in queue, move to front
+		if p.queuedItems[depKey] {
+			p.moveToFront(depID, subject)
+			needsResolution = true
+			continue
+		}
+
+		// Check if dependency can run now
+		if !p.market.CanExecute(depWT.MarketTiming, subject) {
+			log.Debug().
+				Str("work", wt.ID).
+				Str("dependency", depID).
+				Msg("Dependency blocked by market timing")
+			needsResolution = true
+			continue
+		}
+
+		// Recursively resolve dependency's dependencies
+		if p.resolveDependencies(depWT, subject, visited) {
+			needsResolution = true
+		}
+
+		// Add dependency to front
+		p.workQueue = append([]*queuedWork{{TypeID: depID, Subject: subject}}, p.workQueue...)
+		p.queuedItems[depKey] = true
+		needsResolution = true
+	}
+
+	return needsResolution
+}
+
+// moveToFront moves queued item to front of queue
+func (p *Processor) moveToFront(typeID, subject string) {
+	for i, qw := range p.workQueue {
+		if qw.TypeID == typeID && qw.Subject == subject {
+			// Remove from current position
+			p.workQueue = append(p.workQueue[:i], p.workQueue[i+1:]...)
+			// Add to front
+			p.workQueue = append([]*queuedWork{{TypeID: typeID, Subject: subject}}, p.workQueue...)
+			return
+		}
+	}
+}
+
+// findNextWork gets next work item from FIFO queue.
+// Performs dependency resolution at execution time.
+func (p *Processor) findNextWork() (*WorkItem, *WorkType) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	// Try each queued item until we find one with satisfied dependencies
+	for len(p.workQueue) > 0 {
+		// Pop from front (FIFO)
+		qw := p.workQueue[0]
+		p.workQueue = p.workQueue[1:]
+
+		key := makeQueueKey(qw.TypeID, qw.Subject)
+		delete(p.queuedItems, key)
+
+		// Get work type
+		wt := p.registry.Get(qw.TypeID)
+		if wt == nil {
+			continue
+		}
+
+		// Resolve dependencies at execution time
+		visited := make(map[string]bool)
+		if p.resolveDependencies(wt, qw.Subject, visited) {
+			// Dependencies were added/moved - re-queue this item at end
+			p.workQueue = append(p.workQueue, qw)
+			p.queuedItems[key] = true
+			continue
+		}
+
+		// All dependencies satisfied - execute!
+		return NewWorkItem(wt, qw.Subject), wt
 	}
 
 	return nil, nil

@@ -1,3 +1,6 @@
+// Package universe provides repository implementations for managing the investment universe.
+// This file implements the OverrideRepository, which handles user-configurable security overrides
+// using an EAV (Entity-Attribute-Value) pattern for flexible field customization.
 package universe
 
 import (
@@ -8,14 +11,32 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// OverrideRepository handles security override database operations
-// Uses EAV (Entity-Attribute-Value) pattern for flexible field overrides
+// OverrideRepository handles security override database operations.
+// It uses an EAV (Entity-Attribute-Value) pattern where each override is stored as a row
+// in the security_overrides table with columns: isin, field, value.
+//
+// Supported override fields:
+//   - allow_buy: Boolean string ("true"/"false") - whether security can be bought
+//   - allow_sell: Boolean string ("true"/"false") - whether security can be sold
+//   - min_lot: Integer string - minimum lot size for trading
+//   - priority_multiplier: Float string - multiplier for priority scoring
+//
+// Overrides are automatically merged into Security objects by SecurityRepository when
+// an OverrideRepository is provided.
 type OverrideRepository struct {
 	universeDB *sql.DB // universe.db - security_overrides table
 	log        zerolog.Logger
 }
 
-// NewOverrideRepository creates a new override repository
+// NewOverrideRepository creates a new override repository.
+// The repository manages user-configurable security overrides stored in the security_overrides table.
+//
+// Parameters:
+//   - universeDB: Database connection to universe.db
+//   - log: Structured logger
+//
+// Returns:
+//   - *OverrideRepository: Initialized repository instance
 func NewOverrideRepository(universeDB *sql.DB, log zerolog.Logger) *OverrideRepository {
 	return &OverrideRepository{
 		universeDB: universeDB,
@@ -23,14 +44,24 @@ func NewOverrideRepository(universeDB *sql.DB, log zerolog.Logger) *OverrideRepo
 	}
 }
 
-// SetOverride sets or updates an override for a security field
-// If value is empty, the override is deleted (falls back to default)
+// SetOverride sets or updates an override for a security field.
+// If value is empty, the override is deleted (falls back to default value).
+// Uses INSERT OR REPLACE to handle both insert and update in a single operation.
+//
+// Parameters:
+//   - isin: Security ISIN (primary key)
+//   - field: Override field name (e.g., "allow_buy", "min_lot", "priority_multiplier")
+//   - value: Override value as string (will be parsed by ApplyOverrides function)
+//
+// Returns:
+//   - error: Error if database operation fails
 func (r *OverrideRepository) SetOverride(isin, field, value string) error {
 	if isin == "" || field == "" {
 		return fmt.Errorf("isin and field cannot be empty")
 	}
 
-	// If value is empty, delete the override
+	// If value is empty, delete the override (revert to default)
+	// This allows users to "unset" an override by passing an empty string
 	if value == "" {
 		return r.DeleteOverride(isin, field)
 	}
@@ -38,6 +69,7 @@ func (r *OverrideRepository) SetOverride(isin, field, value string) error {
 	now := time.Now().Unix()
 
 	// Use INSERT OR REPLACE to handle both insert and update
+	// ON CONFLICT clause updates existing override if (isin, field) combination already exists
 	query := `
 		INSERT INTO security_overrides (isin, field, value, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?)
@@ -60,7 +92,15 @@ func (r *OverrideRepository) SetOverride(isin, field, value string) error {
 	return nil
 }
 
-// GetOverrides returns all overrides for a security as a map of field -> value
+// GetOverrides returns all overrides for a security as a map of field -> value.
+// This is used by SecurityRepository to merge overrides into Security objects.
+//
+// Parameters:
+//   - isin: Security ISIN
+//
+// Returns:
+//   - map[string]string: Map of field name to override value (empty map if no overrides)
+//   - error: Error if query fails
 func (r *OverrideRepository) GetOverrides(isin string) (map[string]string, error) {
 	overrides := make(map[string]string)
 
@@ -87,9 +127,14 @@ func (r *OverrideRepository) GetOverrides(isin string) (map[string]string, error
 	return overrides, nil
 }
 
-// GetAllOverrides returns all overrides for all securities
-// Returns a map of ISIN -> field -> value
-// Used for efficient batch reads when loading multiple securities
+// GetAllOverrides returns all overrides for all securities.
+// Returns a nested map: ISIN -> field -> value.
+// This is used for efficient batch reads when loading multiple securities,
+// avoiding N+1 query problems by fetching all overrides in a single query.
+//
+// Returns:
+//   - map[string]map[string]string: Nested map of ISIN to field to value
+//   - error: Error if query fails
 func (r *OverrideRepository) GetAllOverrides() (map[string]map[string]string, error) {
 	allOverrides := make(map[string]map[string]string)
 
@@ -107,6 +152,7 @@ func (r *OverrideRepository) GetAllOverrides() (map[string]map[string]string, er
 			return nil, fmt.Errorf("failed to scan override: %w", err)
 		}
 
+		// Initialize inner map if this is the first override for this ISIN
 		if allOverrides[isin] == nil {
 			allOverrides[isin] = make(map[string]string)
 		}
@@ -120,8 +166,16 @@ func (r *OverrideRepository) GetAllOverrides() (map[string]map[string]string, er
 	return allOverrides, nil
 }
 
-// DeleteOverride removes an override for a specific field
-// Idempotent - does not error if override doesn't exist
+// DeleteOverride removes an override for a specific field.
+// This reverts the field to its default value. The operation is idempotent -
+// it does not error if the override doesn't exist.
+//
+// Parameters:
+//   - isin: Security ISIN
+//   - field: Override field name to delete
+//
+// Returns:
+//   - error: Error if database operation fails
 func (r *OverrideRepository) DeleteOverride(isin, field string) error {
 	query := "DELETE FROM security_overrides WHERE isin = ? AND field = ?"
 
@@ -138,7 +192,15 @@ func (r *OverrideRepository) DeleteOverride(isin, field string) error {
 	return nil
 }
 
-// DeleteAllOverrides removes all overrides for a security
+// DeleteAllOverrides removes all overrides for a security.
+// This reverts all user-configurable fields to their default values.
+// Useful when resetting a security to its original configuration.
+//
+// Parameters:
+//   - isin: Security ISIN
+//
+// Returns:
+//   - error: Error if database operation fails
 func (r *OverrideRepository) DeleteAllOverrides(isin string) error {
 	query := "DELETE FROM security_overrides WHERE isin = ?"
 

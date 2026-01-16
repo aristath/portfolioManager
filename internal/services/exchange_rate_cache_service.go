@@ -1,3 +1,9 @@
+/**
+ * Package services provides core business services shared across multiple modules.
+ *
+ * This file contains ExchangeRateCacheService which provides cached exchange rates
+ * with a two-tier fallback system.
+ */
 package services
 
 import (
@@ -9,22 +15,42 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// SettingsServiceInterface defines the contract for settings operations
+/**
+ * SettingsServiceInterface defines the contract for settings operations.
+ *
+ * Used to access settings without creating a direct dependency on the settings package.
+ */
 type SettingsServiceInterface interface {
 	Get(key string) (interface{}, error)
 	Set(key string, value interface{}) (bool, error)
 }
 
-// ExchangeRateCacheService provides cached exchange rates with fallback
-// Uses two-tier fallback: Tradernet API → Cached rates from history.db
+/**
+ * ExchangeRateCacheService provides cached exchange rates with fallback.
+ *
+ * Uses two-tier fallback:
+ * 1. Tradernet API (primary) - fetches fresh rates from broker
+ * 2. Cached rates from history.db (secondary) - used when API is unavailable
+ *
+ * Fresh rates from Tradernet are automatically cached in history.db for future use.
+ * Cached rates are checked for staleness (configurable via settings).
+ */
 type ExchangeRateCacheService struct {
-	currencyExchangeService domain.CurrencyExchangeServiceInterface // Tradernet
-	historyDB               universe.HistoryDBInterface             // Cache storage
+	currencyExchangeService domain.CurrencyExchangeServiceInterface // Tradernet (primary source)
+	historyDB               universe.HistoryDBInterface             // Cache storage (secondary source)
 	settingsService         SettingsServiceInterface                // Staleness config
-	log                     zerolog.Logger
+	log                     zerolog.Logger                          // Structured logger
 }
 
-// NewExchangeRateCacheService creates a new exchange rate cache service
+/**
+ * NewExchangeRateCacheService creates a new exchange rate cache service.
+ *
+ * @param currencyExchangeService - Currency exchange service (Tradernet)
+ * @param historyDB - History database for caching rates
+ * @param settingsService - Settings service for staleness configuration
+ * @param log - Structured logger
+ * @returns *ExchangeRateCacheService - New exchange rate cache service instance
+ */
 func NewExchangeRateCacheService(
 	currencyExchangeService domain.CurrencyExchangeServiceInterface,
 	historyDB universe.HistoryDBInterface,
@@ -39,15 +65,26 @@ func NewExchangeRateCacheService(
 	}
 }
 
-// GetRate returns exchange rate with 2-tier fallback:
-// 1. Try Tradernet (primary - uses broker's FX instruments)
-// 2. Try cached rate from DB
+/**
+ * GetRate returns exchange rate with 2-tier fallback.
+ *
+ * Fallback Strategy:
+ * 1. Try Tradernet (primary - uses broker's FX instruments)
+ *    - If successful, caches the rate in history.db for future use
+ * 2. Try cached rate from DB (secondary - used when API is unavailable)
+ *    - Checks staleness and logs warning if rate is old
+ *
+ * @param fromCurrency - Source currency
+ * @param toCurrency - Target currency
+ * @returns float64 - Exchange rate (1.0 if same currency)
+ * @returns error - Error if no rate is available from either source
+ */
 func (s *ExchangeRateCacheService) GetRate(fromCurrency, toCurrency string) (float64, error) {
 	if fromCurrency == toCurrency {
 		return 1.0, nil
 	}
 
-	// Tier 1: Try Tradernet
+	// Tier 1: Try Tradernet (primary source)
 	if s.currencyExchangeService != nil {
 		rate, err := s.currencyExchangeService.GetRate(fromCurrency, toCurrency)
 		if err == nil && rate > 0 {
@@ -58,7 +95,7 @@ func (s *ExchangeRateCacheService) GetRate(fromCurrency, toCurrency string) (flo
 				Str("source", "tradernet").
 				Msg("Got rate from Tradernet")
 
-			// Cache the fresh rate
+			// Cache the fresh rate in history.db for future use
 			if s.historyDB != nil {
 				if err := s.historyDB.UpsertExchangeRate(fromCurrency, toCurrency, rate); err != nil {
 					s.log.Warn().Err(err).Msg("Failed to cache rate")
@@ -70,7 +107,7 @@ func (s *ExchangeRateCacheService) GetRate(fromCurrency, toCurrency string) (flo
 		s.log.Warn().Err(err).Msg("Tradernet rate fetch failed, trying cache")
 	}
 
-	// Tier 2: Try cached rate from DB
+	// Tier 2: Try cached rate from DB (fallback when API unavailable)
 	rate, err := s.GetCachedRate(fromCurrency, toCurrency)
 	if err == nil && rate > 0 {
 		s.log.Warn().
@@ -85,8 +122,17 @@ func (s *ExchangeRateCacheService) GetRate(fromCurrency, toCurrency string) (flo
 	return 0, fmt.Errorf("no rate available for %s/%s", fromCurrency, toCurrency)
 }
 
-// GetCachedRate fetches rate from database only
-// Checks staleness and logs warning if rate is old
+/**
+ * GetCachedRate fetches rate from database only.
+ *
+ * Checks staleness and logs warning if rate is old.
+ * Used as fallback when Tradernet API is unavailable.
+ *
+ * @param fromCurrency - Source currency
+ * @param toCurrency - Target currency
+ * @returns float64 - Cached exchange rate
+ * @returns error - Error if cached rate not found or retrieval fails
+ */
 func (s *ExchangeRateCacheService) GetCachedRate(fromCurrency, toCurrency string) (float64, error) {
 	if s.historyDB == nil {
 		return 0, fmt.Errorf("history DB not available")
@@ -100,7 +146,7 @@ func (s *ExchangeRateCacheService) GetCachedRate(fromCurrency, toCurrency string
 		return 0, fmt.Errorf("no cached rate found")
 	}
 
-	// Check staleness
+	// Check staleness (configurable via settings, default 48 hours)
 	maxAgeHours := 48.0
 	if s.settingsService != nil {
 		if val, err := s.settingsService.Get("max_exchange_rate_age_hours"); err == nil {
@@ -122,9 +168,16 @@ func (s *ExchangeRateCacheService) GetCachedRate(fromCurrency, toCurrency string
 	return er.Rate, nil
 }
 
-// SyncRates fetches and caches rates for all currency pairs
-// Returns error only if ALL rate fetches fail
-// Partial success is OK - logged as warnings
+/**
+ * SyncRates fetches and caches rates for all currency pairs.
+ *
+ * Syncs exchange rates for all supported currencies (EUR, USD, GBP, HKD).
+ * Returns error only if ALL rate fetches fail. Partial success is OK - logged as warnings.
+ *
+ * This is typically called by background jobs to keep exchange rates fresh.
+ *
+ * @returns error - Error only if all rate fetches fail (partial success is OK)
+ */
 func (s *ExchangeRateCacheService) SyncRates() error {
 	currencies := []string{"EUR", "USD", "GBP", "HKD"}
 

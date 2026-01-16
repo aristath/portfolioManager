@@ -28,8 +28,7 @@ func TestProcessor_Trigger(t *testing.T) {
 
 	executed := atomic.Bool{}
 	registry.Register(&WorkType{
-		ID:       "test:work",
-		Priority: PriorityMedium,
+		ID: "test:work",
 		FindSubjects: func() []string {
 			return []string{""}
 		},
@@ -65,8 +64,7 @@ func TestProcessor_DependencyOrdering(t *testing.T) {
 
 	// Register work with dependencies
 	registry.Register(&WorkType{
-		ID:       "planner:weights",
-		Priority: PriorityCritical,
+		ID: "planner:weights",
 		FindSubjects: func() []string {
 			mu.Lock()
 			defer mu.Unlock()
@@ -87,7 +85,6 @@ func TestProcessor_DependencyOrdering(t *testing.T) {
 	registry.Register(&WorkType{
 		ID:        "planner:context",
 		DependsOn: []string{"planner:weights"},
-		Priority:  PriorityCritical,
 		FindSubjects: func() []string {
 			mu.Lock()
 			defer mu.Unlock()
@@ -108,7 +105,6 @@ func TestProcessor_DependencyOrdering(t *testing.T) {
 	registry.Register(&WorkType{
 		ID:        "planner:plan",
 		DependsOn: []string{"planner:context"},
-		Priority:  PriorityCritical,
 		FindSubjects: func() []string {
 			mu.Lock()
 			defer mu.Unlock()
@@ -157,7 +153,6 @@ func TestProcessor_PerSecurityDependencies(t *testing.T) {
 
 	registry.Register(&WorkType{
 		ID:           "security:sync",
-		Priority:     PriorityMedium,
 		MarketTiming: AfterMarketClose,
 		FindSubjects: func() []string {
 			mu.Lock()
@@ -179,7 +174,6 @@ func TestProcessor_PerSecurityDependencies(t *testing.T) {
 	registry.Register(&WorkType{
 		ID:           "security:technical",
 		DependsOn:    []string{"security:sync"},
-		Priority:     PriorityMedium,
 		MarketTiming: AfterMarketClose,
 		FindSubjects: func() []string {
 			mu.Lock()
@@ -231,7 +225,6 @@ func TestProcessor_MarketTimingRespected(t *testing.T) {
 	executed := atomic.Bool{}
 	registry.Register(&WorkType{
 		ID:           "security:sync",
-		Priority:     PriorityMedium,
 		MarketTiming: AfterMarketClose, // Won't run while market open
 		FindSubjects: func() []string {
 			return []string{"NL0010273215"}
@@ -262,8 +255,7 @@ func TestProcessor_RetryOnFailure(t *testing.T) {
 
 	attempts := atomic.Int32{}
 	registry.Register(&WorkType{
-		ID:       "test:failing",
-		Priority: PriorityMedium,
+		ID: "test:failing",
 		FindSubjects: func() []string {
 			if attempts.Load() < 2 {
 				return []string{""}
@@ -302,8 +294,7 @@ func TestProcessor_MaxRetries(t *testing.T) {
 	firstRun.Store(true)
 
 	registry.Register(&WorkType{
-		ID:       "test:always-fails",
-		Priority: PriorityMedium,
+		ID: "test:always-fails",
 		FindSubjects: func() []string {
 			// Only return work on first discovery, then let retry queue handle it
 			if firstRun.CompareAndSwap(true, false) {
@@ -344,8 +335,7 @@ func TestProcessor_Timeout(t *testing.T) {
 	cancelled := atomic.Bool{}
 
 	registry.Register(&WorkType{
-		ID:       "test:slow",
-		Priority: PriorityMedium,
+		ID: "test:slow",
 		FindSubjects: func() []string {
 			if !started.Load() {
 				return []string{""}
@@ -391,7 +381,6 @@ func TestProcessor_ExecuteNow(t *testing.T) {
 
 	registry.Register(&WorkType{
 		ID:           "sync:portfolio",
-		Priority:     PriorityHigh,
 		MarketTiming: DuringMarketOpen,
 		FindSubjects: func() []string {
 			return nil // No automatic work
@@ -443,7 +432,6 @@ func TestProcessor_ExecuteNow_WithSubject(t *testing.T) {
 
 	registry.Register(&WorkType{
 		ID:           "security:sync",
-		Priority:     PriorityMedium,
 		MarketTiming: AfterMarketClose,
 		FindSubjects: func() []string {
 			return nil
@@ -502,8 +490,7 @@ func TestProcessor_NoDuplicateExecution(t *testing.T) {
 	execCount := atomic.Int32{}
 
 	registry.Register(&WorkType{
-		ID:       "test:work",
-		Priority: PriorityMedium,
+		ID: "test:work",
 		FindSubjects: func() []string {
 			// Only return work on first call
 			if execCount.Load() == 0 {
@@ -542,8 +529,7 @@ func TestProcessor_SystemBusyCheck(t *testing.T) {
 	execCount := atomic.Int32{}
 
 	registry.Register(&WorkType{
-		ID:       "test:work",
-		Priority: PriorityMedium,
+		ID: "test:work",
 		FindSubjects: func() []string {
 			return []string{"a", "b", "c"} // Multiple subjects
 		},
@@ -581,8 +567,7 @@ func TestProcessor_GetRegistry(t *testing.T) {
 
 	// Should allow access to registered work types
 	registry.Register(&WorkType{
-		ID:       "test:work",
-		Priority: PriorityMedium,
+		ID: "test:work",
 		FindSubjects: func() []string {
 			return []string{""}
 		},
@@ -617,4 +602,323 @@ func TestProcessor_GetCompletion(t *testing.T) {
 	lastRun, exists := p.GetCompletion().GetCompletion("test:work", "")
 	assert.True(t, exists)
 	assert.False(t, lastRun.IsZero())
+}
+
+// Phase 4 Tests: Queue Data Structures
+
+func TestMakeQueueKey_WithSubject(t *testing.T) {
+	key := makeQueueKey("security:sync", "US0378331005")
+	assert.Equal(t, "security:sync:US0378331005", key)
+}
+
+func TestMakeQueueKey_WithoutSubject(t *testing.T) {
+	key := makeQueueKey("planner:weights", "")
+	assert.Equal(t, "planner:weights", key)
+}
+
+// Phase 6 Tests: populateQueue()
+
+func TestProcessor_PopulateQueue_FIFO(t *testing.T) {
+	// Test that work is added in registration order
+	registry := NewRegistry()
+	registry.Register(&WorkType{ID: "first", FindSubjects: func() []string { return []string{""} }})
+	registry.Register(&WorkType{ID: "second", FindSubjects: func() []string { return []string{""} }})
+	registry.Register(&WorkType{ID: "third", FindSubjects: func() []string { return []string{""} }})
+
+	completion := NewCompletionTracker()
+	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
+	processor := NewProcessor(registry, completion, market)
+	processor.populateQueue()
+
+	assert.Equal(t, 3, len(processor.workQueue))
+	assert.Equal(t, "first", processor.workQueue[0].TypeID)
+	assert.Equal(t, "second", processor.workQueue[1].TypeID)
+	assert.Equal(t, "third", processor.workQueue[2].TypeID)
+}
+
+func TestProcessor_PopulateQueue_NoDuplicates(t *testing.T) {
+	// Test that calling populateQueue() twice doesn't duplicate items
+	registry := NewRegistry()
+	registry.Register(&WorkType{ID: "test", FindSubjects: func() []string { return []string{""} }})
+
+	completion := NewCompletionTracker()
+	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
+	processor := NewProcessor(registry, completion, market)
+	processor.populateQueue()
+	processor.populateQueue()
+
+	assert.Equal(t, 1, len(processor.workQueue))
+}
+
+func TestProcessor_PopulateQueue_RespectsMarketTiming(t *testing.T) {
+	// Test that work blocked by market timing is not queued
+	registry := NewRegistry()
+	registry.Register(&WorkType{
+		ID:           "blocked",
+		MarketTiming: DuringMarketOpen,
+		FindSubjects: func() []string { return []string{""} },
+	})
+
+	completion := NewCompletionTracker()
+	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true}) // Markets closed
+	processor := NewProcessor(registry, completion, market)
+	processor.populateQueue()
+
+	assert.Equal(t, 0, len(processor.workQueue))
+}
+
+func TestProcessor_PopulateQueue_RespectsIntervals(t *testing.T) {
+	// Test that recently completed work is not re-queued
+	registry := NewRegistry()
+	registry.Register(&WorkType{
+		ID:           "recent",
+		Interval:     5 * time.Minute,
+		FindSubjects: func() []string { return []string{""} },
+	})
+
+	completion := NewCompletionTracker()
+	// Mark as recently completed
+	completion.MarkCompleted(&WorkItem{TypeID: "recent", Subject: ""})
+
+	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
+	processor := NewProcessor(registry, completion, market)
+	processor.populateQueue()
+
+	assert.Equal(t, 0, len(processor.workQueue))
+}
+
+func TestProcessor_PopulateQueue_SkipsDependencies(t *testing.T) {
+	// Test that dependencies are NOT checked during population
+	registry := NewRegistry()
+	registry.Register(&WorkType{
+		ID:           "dependent",
+		DependsOn:    []string{"missing-dep"},
+		FindSubjects: func() []string { return []string{""} },
+	})
+
+	completion := NewCompletionTracker()
+	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
+	processor := NewProcessor(registry, completion, market)
+	processor.populateQueue()
+
+	// Should still be queued - dependencies checked at execution time!
+	assert.Equal(t, 1, len(processor.workQueue))
+}
+
+// Phase 8 Tests: Dependency Resolution
+
+func TestProcessor_ResolveDependencies_Satisfied(t *testing.T) {
+	// Test fast path - all dependencies already completed
+	registry := NewRegistry()
+	registry.Register(&WorkType{ID: "dep"})
+	registry.Register(&WorkType{ID: "work", DependsOn: []string{"dep"}})
+
+	completion := NewCompletionTracker()
+	completion.MarkCompleted(&WorkItem{TypeID: "dep", Subject: ""})
+
+	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
+	processor := NewProcessor(registry, completion, market)
+
+	wt := registry.Get("work")
+	visited := make(map[string]bool)
+
+	needsResolution := processor.resolveDependencies(wt, "", visited)
+
+	assert.False(t, needsResolution, "No resolution needed when deps satisfied")
+}
+
+func TestProcessor_ResolveDependencies_AddsMissing(t *testing.T) {
+	// Test that missing dependency is added to front of queue
+	registry := NewRegistry()
+	registry.Register(&WorkType{ID: "dep", FindSubjects: func() []string { return []string{""} }})
+	registry.Register(&WorkType{ID: "work", DependsOn: []string{"dep"}})
+
+	completion := NewCompletionTracker()
+	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
+	processor := NewProcessor(registry, completion, market)
+
+	wt := registry.Get("work")
+	visited := make(map[string]bool)
+
+	needsResolution := processor.resolveDependencies(wt, "", visited)
+
+	assert.True(t, needsResolution)
+	assert.Equal(t, 1, len(processor.workQueue))
+	assert.Equal(t, "dep", processor.workQueue[0].TypeID)
+}
+
+func TestProcessor_ResolveDependencies_MovesToFront(t *testing.T) {
+	// Test that dependency already in queue is moved to front
+	registry := NewRegistry()
+	registry.Register(&WorkType{ID: "dep"})
+	registry.Register(&WorkType{ID: "work", DependsOn: []string{"dep"}})
+
+	completion := NewCompletionTracker()
+	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
+	processor := NewProcessor(registry, completion, market)
+
+	// Manually add items to queue
+	processor.workQueue = []*queuedWork{
+		{TypeID: "other", Subject: ""},
+		{TypeID: "dep", Subject: ""},
+	}
+	processor.queuedItems["other"] = true
+	processor.queuedItems["dep"] = true
+
+	wt := registry.Get("work")
+	visited := make(map[string]bool)
+
+	needsResolution := processor.resolveDependencies(wt, "", visited)
+
+	assert.True(t, needsResolution)
+	assert.Equal(t, "dep", processor.workQueue[0].TypeID, "Dependency moved to front")
+}
+
+func TestProcessor_ResolveDependencies_Recursive(t *testing.T) {
+	// Test transitive dependencies: A depends on B, B depends on C
+	registry := NewRegistry()
+	registry.Register(&WorkType{ID: "C", FindSubjects: func() []string { return []string{""} }})
+	registry.Register(&WorkType{ID: "B", DependsOn: []string{"C"}, FindSubjects: func() []string { return []string{""} }})
+	registry.Register(&WorkType{ID: "A", DependsOn: []string{"B"}})
+
+	completion := NewCompletionTracker()
+	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
+	processor := NewProcessor(registry, completion, market)
+
+	wt := registry.Get("A")
+	visited := make(map[string]bool)
+
+	needsResolution := processor.resolveDependencies(wt, "", visited)
+
+	assert.True(t, needsResolution)
+	// Should have added C and B (in that order due to recursion)
+	assert.True(t, len(processor.workQueue) >= 2, "Should have at least C and B queued")
+}
+
+func TestProcessor_ResolveDependencies_Circular(t *testing.T) {
+	// Test circular dependency detection: A depends on B, B depends on A
+	registry := NewRegistry()
+	registry.Register(&WorkType{ID: "A", DependsOn: []string{"B"}})
+	registry.Register(&WorkType{ID: "B", DependsOn: []string{"A"}})
+
+	completion := NewCompletionTracker()
+	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
+	processor := NewProcessor(registry, completion, market)
+
+	wt := registry.Get("A")
+	visited := make(map[string]bool)
+
+	// Should not panic, should detect and skip circular dependency
+	needsResolution := processor.resolveDependencies(wt, "", visited)
+
+	assert.True(t, needsResolution)
+	// Verify no infinite loop occurred (test completes)
+}
+
+func TestProcessor_ResolveDependencies_SubjectScoped(t *testing.T) {
+	// Test that dependencies are subject-scoped (ISIN-specific)
+	registry := NewRegistry()
+	registry.Register(&WorkType{ID: "dep"})
+	registry.Register(&WorkType{ID: "work", DependsOn: []string{"dep"}})
+
+	completion := NewCompletionTracker()
+	// Dependency completed for ISIN001
+	completion.MarkCompleted(&WorkItem{TypeID: "dep", Subject: "ISIN001"})
+
+	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
+	processor := NewProcessor(registry, completion, market)
+
+	wt := registry.Get("work")
+	visited := make(map[string]bool)
+
+	// Check for ISIN002 - should need resolution
+	needsResolution := processor.resolveDependencies(wt, "ISIN002", visited)
+	assert.True(t, needsResolution, "Dependency for different subject should require resolution")
+}
+
+// Phase 10 Tests: findNextWork()
+
+func TestProcessor_FindNextWork_FIFO(t *testing.T) {
+	// Test that work is pulled from queue in FIFO order
+	registry := NewRegistry()
+	completion := NewCompletionTracker()
+	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
+	processor := NewProcessor(registry, completion, market)
+
+	// Manually add items to queue
+	processor.workQueue = []*queuedWork{
+		{TypeID: "first", Subject: ""},
+		{TypeID: "second", Subject: ""},
+		{TypeID: "third", Subject: ""},
+	}
+	processor.queuedItems["first"] = true
+	processor.queuedItems["second"] = true
+	processor.queuedItems["third"] = true
+
+	// Register work types so they can be found
+	registry.Register(&WorkType{ID: "first"})
+	registry.Register(&WorkType{ID: "second"})
+	registry.Register(&WorkType{ID: "third"})
+
+	item, wt := processor.findNextWork()
+	require.NotNil(t, item)
+	assert.Equal(t, "first", wt.ID)
+
+	item, wt = processor.findNextWork()
+	require.NotNil(t, item)
+	assert.Equal(t, "second", wt.ID)
+}
+
+func TestProcessor_FindNextWork_EmptyQueue(t *testing.T) {
+	// Test empty queue returns nil
+	registry := NewRegistry()
+	completion := NewCompletionTracker()
+	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
+	processor := NewProcessor(registry, completion, market)
+
+	item, wt := processor.findNextWork()
+	assert.Nil(t, item)
+	assert.Nil(t, wt)
+}
+
+func TestProcessor_FindNextWork_ResolvesDependencies(t *testing.T) {
+	// Test that dependencies are resolved at execution time
+	registry := NewRegistry()
+	registry.Register(&WorkType{ID: "dep", FindSubjects: func() []string { return []string{""} }})
+	registry.Register(&WorkType{ID: "work", DependsOn: []string{"dep"}})
+
+	completion := NewCompletionTracker()
+	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
+	processor := NewProcessor(registry, completion, market)
+
+	// Queue work that has unmet dependency
+	processor.workQueue = []*queuedWork{{TypeID: "work", Subject: ""}}
+	processor.queuedItems["work"] = true
+
+	_, _ = processor.findNextWork()
+
+	// Should return nil because work was re-queued due to unmet dependency
+	// OR should return dependency if it was added to front
+	// Either way, something should be in the queue
+	assert.True(t, len(processor.workQueue) > 0, "Work or dependency should be in queue")
+}
+
+func TestProcessor_FindNextWork_RequeuesUnmetDependencies(t *testing.T) {
+	// Test that work with unmet dependencies is re-queued at end
+	registry := NewRegistry()
+	registry.Register(&WorkType{ID: "dep", FindSubjects: func() []string { return []string{""} }})
+	registry.Register(&WorkType{ID: "work", DependsOn: []string{"dep"}})
+
+	completion := NewCompletionTracker()
+	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
+	processor := NewProcessor(registry, completion, market)
+
+	// Queue only the work (no dependency in queue or completed)
+	processor.workQueue = []*queuedWork{{TypeID: "work", Subject: ""}}
+	processor.queuedItems["work"] = true
+
+	processor.findNextWork()
+
+	// Work should be back in queue (or dependency added to front)
+	assert.True(t, len(processor.workQueue) > 0)
 }

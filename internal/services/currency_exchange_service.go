@@ -1,9 +1,18 @@
-// Package services provides core business services shared across multiple modules.
-//
-// Shared services handle cross-cutting business functionality that doesn't belong
-// to a specific domain but is essential for the system to function.
-//
-// See services/README.md for architecture documentation and usage patterns.
+/**
+ * Package services provides core business services shared across multiple modules.
+ *
+ * Shared services handle cross-cutting business functionality that doesn't belong
+ * to a specific domain but is essential for the system to function.
+ *
+ * Services in this package:
+ * - CurrencyExchangeService: Currency conversion via broker FX pairs
+ * - ExchangeRateCacheService: Exchange rate caching (Tradernet + DB)
+ * - PriceConversionService: Price conversion to EUR
+ * - TradeExecutionService: Trade execution orchestration
+ * - OpportunityContextBuilder: Unified context building for opportunities, planning, rebalancing
+ *
+ * See services/README.md for architecture documentation and usage patterns.
+ */
 package services
 
 import (
@@ -15,28 +24,40 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// ConversionStep represents a single step in a currency conversion path
+/**
+ * ConversionStep represents a single step in a currency conversion path.
+ *
+ * Multi-step conversions (e.g., GBP -> HKD) require routing via EUR.
+ */
 type ConversionStep struct {
-	FromCurrency string
-	ToCurrency   string
-	Symbol       string
+	FromCurrency string // Source currency
+	ToCurrency   string // Target currency
+	Symbol       string // FX pair symbol (e.g., "EURUSD_T0.ITS")
 	Action       string // "BUY" or "SELL"
 }
 
-// ExchangeRate holds exchange rate information
+/**
+ * ExchangeRate holds exchange rate information.
+ *
+ * Contains bid/ask spreads for FX pairs.
+ */
 type ExchangeRate struct {
-	FromCurrency string
-	ToCurrency   string
-	Rate         float64
-	Bid          float64
-	Ask          float64
-	Symbol       string
+	FromCurrency string  // Source currency
+	ToCurrency   string  // Target currency
+	Rate         float64 // Exchange rate
+	Bid          float64 // Bid price
+	Ask          float64 // Ask price
+	Symbol       string  // FX pair symbol
 }
 
-// cacheEntry holds a cached exchange rate with expiration time
+/**
+ * cacheEntry holds a cached exchange rate with expiration time.
+ *
+ * Used for in-memory caching of FX rates to reduce API calls.
+ */
 type cacheEntry struct {
-	rate      float64
-	expiresAt time.Time
+	rate      float64   // Cached exchange rate
+	expiresAt time.Time // Cache expiration timestamp
 }
 
 const (
@@ -46,26 +67,35 @@ const (
 	cacheTTL = 5 * time.Minute
 )
 
-// CurrencyExchangeService handles currency conversions via broker FX pairs
-//
-// Supports direct conversions between EUR, USD, HKD, and GBP.
-// For pairs without direct instruments (GBP<->HKD), routes via EUR.
-//
-// Uses in-memory caching to reduce API calls and prevent rate limiting.
-//
-// Faithful translation from Python: app/shared/services/currency_exchange_service.py
+/**
+ * CurrencyExchangeService handles currency conversions via broker FX pairs.
+ *
+ * Supports direct conversions between EUR, USD, HKD, and GBP.
+ * For pairs without direct instruments (GBP<->HKD), routes via EUR.
+ *
+ * Uses in-memory caching to reduce API calls and prevent rate limiting.
+ * Cache entries expire after 5 minutes to ensure rate freshness.
+ *
+ * Faithful translation from Python: app/shared/services/currency_exchange_service.py
+ */
 type CurrencyExchangeService struct {
-	brokerClient domain.BrokerClient
-	log          zerolog.Logger
-	cache        map[string]cacheEntry // key: "FROM:TO"
-	cacheMu      sync.RWMutex          // Protects cache map
+	brokerClient domain.BrokerClient   // Broker client for FX rate fetching
+	log          zerolog.Logger        // Structured logger
+	cache        map[string]cacheEntry // In-memory cache: key: "FROM:TO"
+	cacheMu      sync.RWMutex          // Protects cache map (read-write mutex)
 }
 
-// DirectPairs contains direct currency pairs available on broker
-// Format: (from_currency, to_currency) -> (symbol, action)
+/**
+ * DirectPairs contains direct currency pairs available on broker.
+ *
+ * Format: (from_currency, to_currency) -> (symbol, action)
+ *
+ * These are the FX pairs that can be traded directly on the broker.
+ * Pairs not in this map require multi-step conversion (e.g., GBP <-> HKD via EUR).
+ */
 var DirectPairs = map[string]struct {
-	Symbol string
-	Action string
+	Symbol string // FX pair symbol (e.g., "EURUSD_T0.ITS")
+	Action string // "BUY" or "SELL"
 }{
 	// EUR <-> USD (ITS_MONEY market)
 	"EUR:USD": {"EURUSD_T0.ITS", "BUY"},  // Fixed: was SELL
@@ -84,7 +114,13 @@ var DirectPairs = map[string]struct {
 	"HKD:USD": {"HKD/USD", "SELL"},
 }
 
-// NewCurrencyExchangeService creates a new currency exchange service
+/**
+ * NewCurrencyExchangeService creates a new currency exchange service.
+ *
+ * @param brokerClient - Broker client for FX rate fetching
+ * @param log - Structured logger
+ * @returns *CurrencyExchangeService - New currency exchange service instance
+ */
 func NewCurrencyExchangeService(brokerClient domain.BrokerClient, log zerolog.Logger) *CurrencyExchangeService {
 	return &CurrencyExchangeService{
 		brokerClient: brokerClient,
@@ -93,12 +129,27 @@ func NewCurrencyExchangeService(brokerClient domain.BrokerClient, log zerolog.Lo
 	}
 }
 
-// getCacheKey generates a cache key from currency pair
+/**
+ * getCacheKey generates a cache key from currency pair.
+ *
+ * @param fromCurrency - Source currency
+ * @param toCurrency - Target currency
+ * @returns string - Cache key in format "FROM:TO"
+ */
 func (s *CurrencyExchangeService) getCacheKey(fromCurrency, toCurrency string) string {
 	return fromCurrency + ":" + toCurrency
 }
 
-// getFromCache retrieves a rate from cache if valid (not expired)
+/**
+ * getFromCache retrieves a rate from cache if valid (not expired).
+ *
+ * Uses read lock for concurrent access. Returns false if cache miss or expired.
+ *
+ * @param fromCurrency - Source currency
+ * @param toCurrency - Target currency
+ * @returns float64 - Cached exchange rate (0 if not found)
+ * @returns bool - True if cache hit and valid, false otherwise
+ */
 func (s *CurrencyExchangeService) getFromCache(fromCurrency, toCurrency string) (float64, bool) {
 	key := s.getCacheKey(fromCurrency, toCurrency)
 
@@ -123,7 +174,15 @@ func (s *CurrencyExchangeService) getFromCache(fromCurrency, toCurrency string) 
 	return entry.rate, true
 }
 
-// storeInCache stores a rate in cache with expiration time
+/**
+ * storeInCache stores a rate in cache with expiration time.
+ *
+ * Uses write lock for thread-safe cache updates. Cache entries expire after cacheTTL.
+ *
+ * @param fromCurrency - Source currency
+ * @param toCurrency - Target currency
+ * @param rate - Exchange rate to cache
+ */
 func (s *CurrencyExchangeService) storeInCache(fromCurrency, toCurrency string, rate float64) {
 	key := s.getCacheKey(fromCurrency, toCurrency)
 
@@ -141,7 +200,18 @@ func (s *CurrencyExchangeService) storeInCache(fromCurrency, toCurrency string, 
 	}
 }
 
-// GetConversionPath returns the conversion path between two currencies
+/**
+ * GetConversionPath returns the conversion path between two currencies.
+ *
+ * Returns a list of conversion steps needed to convert from one currency to another.
+ * For direct pairs, returns a single step. For indirect pairs (e.g., GBP <-> HKD),
+ * returns multiple steps routing via EUR.
+ *
+ * @param fromCurrency - Source currency
+ * @param toCurrency - Target currency
+ * @returns []ConversionStep - List of conversion steps (empty if same currency)
+ * @returns error - Error if no conversion path exists
+ */
 func (s *CurrencyExchangeService) GetConversionPath(fromCurrency, toCurrency string) ([]ConversionStep, error) {
 	if fromCurrency == toCurrency {
 		return []ConversionStep{}, nil
@@ -160,7 +230,7 @@ func (s *CurrencyExchangeService) GetConversionPath(fromCurrency, toCurrency str
 		}, nil
 	}
 
-	// GBP <-> HKD requires routing via EUR
+	// GBP <-> HKD requires routing via EUR (no direct pair available)
 	if (fromCurrency == "GBP" && toCurrency == "HKD") || (fromCurrency == "HKD" && toCurrency == "GBP") {
 		steps := []ConversionStep{}
 
@@ -194,17 +264,25 @@ func (s *CurrencyExchangeService) GetConversionPath(fromCurrency, toCurrency str
 	return nil, fmt.Errorf("no conversion path from %s to %s", fromCurrency, toCurrency)
 }
 
-// GetRate returns the current exchange rate between two currencies
-//
-// # Returns how many units of toCurrency per 1 fromCurrency
-//
-// Uses in-memory cache to reduce API calls. Cache entries expire after 5 minutes.
+/**
+ * GetRate returns the current exchange rate between two currencies.
+ *
+ * Returns how many units of toCurrency per 1 fromCurrency.
+ *
+ * Uses in-memory cache to reduce API calls. Cache entries expire after 5 minutes.
+ * For indirect pairs (e.g., GBP <-> HKD), calculates rate via conversion path.
+ *
+ * @param fromCurrency - Source currency
+ * @param toCurrency - Target currency
+ * @returns float64 - Exchange rate (1.0 if same currency)
+ * @returns error - Error if rate retrieval fails
+ */
 func (s *CurrencyExchangeService) GetRate(fromCurrency, toCurrency string) (float64, error) {
 	if fromCurrency == toCurrency {
 		return 1.0, nil
 	}
 
-	// Check cache first
+	// Check cache first (reduces API calls)
 	if cachedRate, ok := s.getFromCache(fromCurrency, toCurrency); ok {
 		s.log.Debug().
 			Str("from", fromCurrency).
@@ -224,6 +302,7 @@ func (s *CurrencyExchangeService) GetRate(fromCurrency, toCurrency string) (floa
 
 	if !hasDirectPair && !hasInversePair {
 		// Try to get rate via path (multi-step conversion)
+		// For example, GBP -> HKD via EUR
 		return s.getRateViaPath(fromCurrency, toCurrency)
 	}
 
@@ -243,13 +322,23 @@ func (s *CurrencyExchangeService) GetRate(fromCurrency, toCurrency string) (floa
 		return 0, fmt.Errorf("invalid rate: %f", rate)
 	}
 
-	// Store in cache for future requests
+	// Store in cache for future requests (reduces API calls)
 	s.storeInCache(fromCurrency, toCurrency, rate)
 
 	return rate, nil
 }
 
-// getRateViaPath gets exchange rate via conversion path
+/**
+ * getRateViaPath gets exchange rate via conversion path.
+ *
+ * For multi-step conversions (e.g., GBP -> HKD via EUR), calculates the rate
+ * by multiplying the rates of each step. Each step benefits from caching.
+ *
+ * @param fromCurrency - Source currency
+ * @param toCurrency - Target currency
+ * @returns float64 - Exchange rate via conversion path
+ * @returns error - Error if path calculation fails
+ */
 func (s *CurrencyExchangeService) getRateViaPath(fromCurrency, toCurrency string) (float64, error) {
 	path, err := s.GetConversionPath(fromCurrency, toCurrency)
 	if err != nil {
@@ -261,6 +350,7 @@ func (s *CurrencyExchangeService) getRateViaPath(fromCurrency, toCurrency string
 		return s.GetRate(path[0].FromCurrency, path[0].ToCurrency)
 	} else if len(path) == 2 {
 		// Multi-step: multiply rates (both calls to GetRate will use cache)
+		// Example: GBP -> EUR -> HKD: rate = (GBP/EUR) * (EUR/HKD)
 		rate1, err := s.GetRate(path[0].FromCurrency, path[0].ToCurrency)
 		if err != nil {
 			return 0, err
@@ -275,7 +365,17 @@ func (s *CurrencyExchangeService) getRateViaPath(fromCurrency, toCurrency string
 	return 0, fmt.Errorf("no conversion path found")
 }
 
-// Exchange executes a currency exchange
+/**
+ * Exchange executes a currency exchange.
+ *
+ * Places orders with the broker to convert from one currency to another.
+ * Supports both single-step and multi-step conversions.
+ *
+ * @param fromCurrency - Source currency
+ * @param toCurrency - Target currency
+ * @param amount - Amount to exchange
+ * @returns error - Error if exchange fails
+ */
 func (s *CurrencyExchangeService) Exchange(fromCurrency, toCurrency string, amount float64) error {
 	if !s.validateExchangeRequest(fromCurrency, toCurrency, amount) {
 		return fmt.Errorf("invalid exchange request")
@@ -295,7 +395,14 @@ func (s *CurrencyExchangeService) Exchange(fromCurrency, toCurrency string, amou
 	}
 }
 
-// validateExchangeRequest validates exchange request parameters
+/**
+ * validateExchangeRequest validates exchange request parameters.
+ *
+ * @param fromCurrency - Source currency
+ * @param toCurrency - Target currency
+ * @param amount - Exchange amount
+ * @returns bool - True if valid, false otherwise
+ */
 func (s *CurrencyExchangeService) validateExchangeRequest(fromCurrency, toCurrency string, amount float64) bool {
 	if fromCurrency == toCurrency {
 		s.log.Warn().Str("currency", fromCurrency).Msg("Same currency exchange requested")
@@ -315,7 +422,16 @@ func (s *CurrencyExchangeService) validateExchangeRequest(fromCurrency, toCurren
 	return true
 }
 
-// executeMultiStepConversion executes multi-step currency conversion
+/**
+ * executeMultiStepConversion executes multi-step currency conversion.
+ *
+ * Executes each step in sequence, updating the amount for the next step
+ * based on the exchange rate.
+ *
+ * @param path - Conversion path (list of steps)
+ * @param amount - Initial amount to convert
+ * @returns error - Error if any step fails
+ */
 func (s *CurrencyExchangeService) executeMultiStepConversion(path []ConversionStep, amount float64) error {
 	currentAmount := amount
 
@@ -329,7 +445,7 @@ func (s *CurrencyExchangeService) executeMultiStepConversion(path []ConversionSt
 			return err
 		}
 
-		// Update amount for next step
+		// Update amount for next step based on exchange rate
 		rate, err := s.GetRate(step.FromCurrency, step.ToCurrency)
 		if err == nil {
 			currentAmount = currentAmount * rate
@@ -339,7 +455,17 @@ func (s *CurrencyExchangeService) executeMultiStepConversion(path []ConversionSt
 	return nil
 }
 
-// executeStep executes a single conversion step
+/**
+ * executeStep executes a single conversion step.
+ *
+ * Places a market order with the broker to execute the FX conversion.
+ * FX pairs are highly liquid with tight spreads, so market orders are used
+ * (no limit price needed).
+ *
+ * @param step - Conversion step to execute
+ * @param amount - Amount to convert
+ * @returns error - Error if order placement fails
+ */
 func (s *CurrencyExchangeService) executeStep(step ConversionStep, amount float64) error {
 	s.log.Info().
 		Str("action", step.Action).
@@ -355,9 +481,18 @@ func (s *CurrencyExchangeService) executeStep(step ConversionStep, amount float6
 	return err
 }
 
-// EnsureBalance ensures we have at least minAmount in the target currency
-//
-// If insufficient balance, converts from sourceCurrency.
+/**
+ * EnsureBalance ensures we have at least minAmount in the target currency.
+ *
+ * If insufficient balance, converts from sourceCurrency automatically.
+ * This is used by trade execution to ensure sufficient cash in the trade currency.
+ *
+ * @param currency - Target currency
+ * @param minAmount - Minimum required balance
+ * @param sourceCurrency - Source currency to convert from if needed
+ * @returns bool - True if balance is sufficient or conversion successful, false otherwise
+ * @returns error - Error if balance check or conversion fails
+ */
 func (s *CurrencyExchangeService) EnsureBalance(currency string, minAmount float64, sourceCurrency string) (bool, error) {
 	if currency == sourceCurrency {
 		return true, nil
@@ -374,6 +509,7 @@ func (s *CurrencyExchangeService) EnsureBalance(currency string, minAmount float
 	}
 
 	// Block conversion if source balance is negative
+	// Negative balances indicate an error state that should not be compounded
 	if sourceBalance < 0 {
 		s.log.Error().
 			Str("source_currency", sourceCurrency).
@@ -395,7 +531,18 @@ func (s *CurrencyExchangeService) EnsureBalance(currency string, minAmount float
 	return s.convertForBalance(currency, sourceCurrency, needed, sourceBalance)
 }
 
-// getBalances returns current and source currency balances
+/**
+ * getBalances returns current and source currency balances.
+ *
+ * Retrieves cash balances from the broker and extracts balances for the
+ * target and source currencies. Logs warnings if negative balances are detected.
+ *
+ * @param currency - Target currency
+ * @param sourceCurrency - Source currency
+ * @returns float64 - Current balance in target currency
+ * @returns float64 - Source balance in source currency
+ * @returns error - Error if balance retrieval fails
+ */
 func (s *CurrencyExchangeService) getBalances(currency, sourceCurrency string) (float64, float64, error) {
 	balances, err := s.brokerClient.GetCashBalances()
 	if err != nil {
@@ -427,7 +574,19 @@ func (s *CurrencyExchangeService) getBalances(currency, sourceCurrency string) (
 	return currentBalance, sourceBalance, nil
 }
 
-// convertForBalance converts source currency to target currency to meet balance requirement
+/**
+ * convertForBalance converts source currency to target currency to meet balance requirement.
+ *
+ * Calculates the amount needed in source currency (with 2% buffer) and executes
+ * the conversion if sufficient source balance is available.
+ *
+ * @param currency - Target currency
+ * @param sourceCurrency - Source currency
+ * @param needed - Amount needed in target currency
+ * @param sourceBalance - Available balance in source currency
+ * @returns bool - True if conversion successful, false if insufficient source balance
+ * @returns error - Error if conversion fails
+ */
 func (s *CurrencyExchangeService) convertForBalance(currency, sourceCurrency string, needed, sourceBalance float64) (bool, error) {
 	// Safety check: block conversion if source balance is negative
 	if sourceBalance < 0 {
@@ -438,7 +597,7 @@ func (s *CurrencyExchangeService) convertForBalance(currency, sourceCurrency str
 		return false, fmt.Errorf("source balance is negative")
 	}
 
-	// Add 2% buffer
+	// Add 2% buffer to account for exchange rate fluctuations and fees
 	neededWithBuffer := needed * 1.02
 
 	rate, err := s.GetRate(sourceCurrency, currency)
@@ -447,6 +606,7 @@ func (s *CurrencyExchangeService) convertForBalance(currency, sourceCurrency str
 		return false, err
 	}
 
+	// Calculate how much source currency is needed
 	sourceAmountNeeded := neededWithBuffer / rate
 
 	if sourceBalance < sourceAmountNeeded {
@@ -474,7 +634,13 @@ func (s *CurrencyExchangeService) convertForBalance(currency, sourceCurrency str
 	return true, nil
 }
 
-// GetAvailableCurrencies returns list of currencies that can be exchanged
+/**
+ * GetAvailableCurrencies returns list of currencies that can be exchanged.
+ *
+ * Extracts all currencies from DirectPairs map (EUR, USD, GBP, HKD).
+ *
+ * @returns []string - List of available currency codes
+ */
 func (s *CurrencyExchangeService) GetAvailableCurrencies() []string {
 	currencies := make(map[string]bool)
 	for key := range DirectPairs {

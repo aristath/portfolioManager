@@ -1,6 +1,7 @@
 package work
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -8,16 +9,21 @@ import (
 
 // MockMarketChecker is a mock implementation for testing
 type MockMarketChecker struct {
+	mu               sync.RWMutex
 	isOpen           bool
 	isSecurityOpen   map[string]bool
 	allMarketsClosed bool
 }
 
 func (m *MockMarketChecker) IsAnyMarketOpen() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.isOpen
 }
 
 func (m *MockMarketChecker) IsSecurityMarketOpen(isin string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	if m.isSecurityOpen == nil {
 		return m.isOpen
 	}
@@ -29,7 +35,33 @@ func (m *MockMarketChecker) IsSecurityMarketOpen(isin string) bool {
 }
 
 func (m *MockMarketChecker) AreAllMarketsClosed() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.allMarketsClosed
+}
+
+// SetMarketOpen sets the market open status (thread-safe)
+func (m *MockMarketChecker) SetMarketOpen(open bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.isOpen = open
+}
+
+// SetAllMarketsClosed sets all markets closed status (thread-safe)
+func (m *MockMarketChecker) SetAllMarketsClosed(closed bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.allMarketsClosed = closed
+}
+
+// SetSecurityMarketOpen sets a specific security's market open status (thread-safe)
+func (m *MockMarketChecker) SetSecurityMarketOpen(isin string, open bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.isSecurityOpen == nil {
+		m.isSecurityOpen = make(map[string]bool)
+	}
+	m.isSecurityOpen[isin] = open
 }
 
 func TestMarketTimingChecker_CanExecute_AnyTime(t *testing.T) {

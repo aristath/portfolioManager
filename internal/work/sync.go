@@ -71,7 +71,6 @@ func RegisterSyncWorkTypes(registry *Registry, deps *SyncDeps) {
 	//            Paused when markets closed to conserve broker API quota.
 	registry.Register(&WorkType{
 		ID:           "sync:portfolio",
-		Priority:     PriorityHigh,
 		MarketTiming: DuringMarketOpen,
 		Interval:     5 * time.Minute, // Hardcoded - operationally optimized
 		FindSubjects: func() []string {
@@ -96,7 +95,6 @@ func RegisterSyncWorkTypes(registry *Registry, deps *SyncDeps) {
 	registry.Register(&WorkType{
 		ID:           "sync:trades",
 		DependsOn:    []string{"sync:portfolio"},
-		Priority:     PriorityHigh,
 		MarketTiming: DuringMarketOpen,
 		FindSubjects: func() []string {
 			return []string{""}
@@ -116,7 +114,6 @@ func RegisterSyncWorkTypes(registry *Registry, deps *SyncDeps) {
 	registry.Register(&WorkType{
 		ID:           "sync:cashflows",
 		DependsOn:    []string{"sync:portfolio"},
-		Priority:     PriorityHigh,
 		MarketTiming: DuringMarketOpen,
 		FindSubjects: func() []string {
 			return []string{""}
@@ -136,7 +133,6 @@ func RegisterSyncWorkTypes(registry *Registry, deps *SyncDeps) {
 	registry.Register(&WorkType{
 		ID:           "sync:prices",
 		DependsOn:    []string{"sync:portfolio"},
-		Priority:     PriorityMedium,
 		MarketTiming: DuringMarketOpen,
 		FindSubjects: func() []string {
 			return []string{""}
@@ -162,7 +158,6 @@ func RegisterSyncWorkTypes(registry *Registry, deps *SyncDeps) {
 	// Rationale: Exchange rates are independent of market hours. Can run anytime.
 	registry.Register(&WorkType{
 		ID:           "sync:rates",
-		Priority:     PriorityMedium,
 		MarketTiming: AnyTime,
 		Interval:     1 * time.Hour, // Hardcoded - operationally optimized
 		FindSubjects: func() []string {
@@ -183,7 +178,6 @@ func RegisterSyncWorkTypes(registry *Registry, deps *SyncDeps) {
 	registry.Register(&WorkType{
 		ID:           "sync:display",
 		DependsOn:    []string{"sync:prices"},
-		Priority:     PriorityLow,
 		MarketTiming: AnyTime,
 		FindSubjects: func() []string {
 			return []string{""}
@@ -203,7 +197,6 @@ func RegisterSyncWorkTypes(registry *Registry, deps *SyncDeps) {
 	registry.Register(&WorkType{
 		ID:           "sync:negative-balances",
 		DependsOn:    []string{"sync:portfolio"},
-		Priority:     PriorityHigh,
 		MarketTiming: AnyTime,
 		FindSubjects: func() []string {
 			return []string{""}

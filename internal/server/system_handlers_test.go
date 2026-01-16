@@ -31,7 +31,6 @@ func TestSystemHandlers_HandleJobsStatus(t *testing.T) {
 				// Register multiple work types
 				registry.Register(&work.WorkType{
 					ID:           "sync:portfolio",
-					Priority:     work.PriorityHigh,
 					MarketTiming: work.AnyTime,
 					Interval:     5 * time.Minute,
 					DependsOn:    []string{},
@@ -45,7 +44,6 @@ func TestSystemHandlers_HandleJobsStatus(t *testing.T) {
 
 				registry.Register(&work.WorkType{
 					ID:           "planner:weights",
-					Priority:     work.PriorityCritical,
 					MarketTiming: work.AnyTime,
 					Interval:     0, // On-demand
 					DependsOn:    []string{},
@@ -62,9 +60,9 @@ func TestSystemHandlers_HandleJobsStatus(t *testing.T) {
 			expectedCount: 2,
 			validate: func(t *testing.T, response JobsStatusResponse) {
 				assert.Len(t, response.WorkTypes, 2)
-				// Should be ordered by priority (Critical first)
-				assert.Equal(t, "planner:weights", response.WorkTypes[0].ID)
-				assert.Equal(t, "sync:portfolio", response.WorkTypes[1].ID)
+				// Should be ordered by registration order (FIFO)
+				assert.Equal(t, "sync:portfolio", response.WorkTypes[0].ID)
+				assert.Equal(t, "planner:weights", response.WorkTypes[1].ID)
 			},
 		},
 		{
@@ -76,7 +74,6 @@ func TestSystemHandlers_HandleJobsStatus(t *testing.T) {
 
 				registry.Register(&work.WorkType{
 					ID:           "sync:portfolio",
-					Priority:     work.PriorityHigh,
 					MarketTiming: work.AnyTime,
 					Interval:     5 * time.Minute,
 					DependsOn:    []string{},
@@ -115,7 +112,6 @@ func TestSystemHandlers_HandleJobsStatus(t *testing.T) {
 
 				registry.Register(&work.WorkType{
 					ID:           "sync:portfolio",
-					Priority:     work.PriorityHigh,
 					MarketTiming: work.AnyTime,
 					Interval:     5 * time.Minute,
 					DependsOn:    []string{},
@@ -159,7 +155,6 @@ func TestSystemHandlers_HandleJobsStatus(t *testing.T) {
 
 				registry.Register(&work.WorkType{
 					ID:           "sync:portfolio",
-					Priority:     work.PriorityHigh,
 					MarketTiming: work.AnyTime,
 					Interval:     5 * time.Minute,
 					DependsOn:    []string{},
@@ -191,7 +186,6 @@ func TestSystemHandlers_HandleJobsStatus(t *testing.T) {
 
 				registry.Register(&work.WorkType{
 					ID:           "planner:weights",
-					Priority:     work.PriorityCritical,
 					MarketTiming: work.AnyTime,
 					Interval:     0, // On-demand
 					DependsOn:    []string{},
@@ -245,7 +239,6 @@ func TestSystemHandlers_HandleJobsStatus(t *testing.T) {
 
 				registry.Register(&work.WorkType{
 					ID:           "planner:context",
-					Priority:     work.PriorityCritical,
 					MarketTiming: work.DuringMarketOpen,
 					Interval:     10 * time.Minute,
 					DependsOn:    []string{"planner:weights"},
@@ -264,7 +257,6 @@ func TestSystemHandlers_HandleJobsStatus(t *testing.T) {
 				require.Len(t, response.WorkTypes, 1)
 				wt := response.WorkTypes[0]
 				assert.Equal(t, "planner:context", wt.ID)
-				assert.Equal(t, "Critical", wt.Priority)
 				assert.Equal(t, "DuringMarketOpen", wt.MarketTiming)
 				assert.Equal(t, "10m", wt.Interval)
 				assert.Equal(t, []string{"planner:weights"}, wt.DependsOn)

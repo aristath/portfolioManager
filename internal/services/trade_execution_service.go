@@ -1,9 +1,11 @@
-// Package services provides core business services shared across multiple modules.
-//
-// This package contains TradeExecutionService which orchestrates trade execution
-// across multiple modules (portfolio, trading, cash flows).
-//
-// See services/README.md for architecture documentation and usage patterns.
+/**
+ * Package services provides core business services shared across multiple modules.
+ *
+ * This package contains TradeExecutionService which orchestrates trade execution
+ * across multiple modules (portfolio, trading, cash flows).
+ *
+ * See services/README.md for architecture documentation and usage patterns.
+ */
 package services
 
 import (
@@ -25,7 +27,11 @@ import (
 // have been moved to domain/interfaces.go. Use domain.CashManager, domain.CurrencyExchangeServiceInterface,
 // and domain.BrokerClient instead.
 
-// TradeRepositoryInterface defines the interface for trade persistence
+/**
+ * TradeRepositoryInterface defines the interface for trade persistence.
+ *
+ * Used to abstract trade repository operations for dependency injection.
+ */
 type TradeRepositoryInterface interface {
 	Create(trade trading.Trade) error
 	CreatePendingRetry(retry trading.PendingRetry) error
@@ -34,59 +40,96 @@ type TradeRepositoryInterface interface {
 	IncrementRetryAttempt(id int64) error
 }
 
-// PlannerConfigRepoInterface defines the interface for planner configuration
+/**
+ * PlannerConfigRepoInterface defines the interface for planner configuration.
+ *
+ * Used to access planner configuration (transaction costs, etc.) without creating
+ * a direct dependency on the planning repository.
+ */
 type PlannerConfigRepoInterface interface {
 	GetDefaultConfig() (*planningdomain.PlannerConfiguration, error)
 }
 
-// TradeRecommendation represents a simplified trade recommendation for execution
-// Minimal implementation for emergency rebalancing
+/**
+ * TradeRecommendation represents a simplified trade recommendation for execution.
+ *
+ * Minimal implementation for emergency rebalancing and trade execution.
+ */
 type TradeRecommendation struct {
-	ISIN           string // Primary identifier for internal operations
-	Symbol         string // For broker API calls
-	Side           string // "BUY" or "SELL"
-	Quantity       float64
-	EstimatedPrice float64
-	Currency       string
-	Reason         string
+	ISIN           string  // Primary identifier for internal operations
+	Symbol         string  // For broker API calls
+	Side           string  // "BUY" or "SELL"
+	Quantity       float64 // Trade quantity
+	EstimatedPrice float64 // Estimated execution price
+	Currency       string  // Trade currency
+	Reason         string  // Reason for trade (e.g., "rebalancing", "opportunity")
 }
 
-// MarketHoursChecker provides market hours validation
+/**
+ * MarketHoursChecker provides market hours validation.
+ *
+ * Used to check if markets are open before executing trades.
+ */
 type MarketHoursChecker interface {
 	IsMarketOpen(exchangeName string, t time.Time) bool
 }
 
-// TradeExecutionService executes trade recommendations with comprehensive safety validation:
-// - Market hours checking (pre-trade)
-// - Balance validation (with auto-conversion)
-// - Duplicate order detection
-// - Trade frequency limits
-//
-// Uses market orders for simplicity and reliability - no limit price calculation needed.
+/**
+ * TradeExecutionService executes trade recommendations with comprehensive safety validation.
+ *
+ * Safety Validations:
+ * - Market hours checking (pre-trade)
+ * - Balance validation (with auto-conversion)
+ * - Duplicate order detection
+ * - Trade frequency limits
+ *
+ * Uses market orders for simplicity and reliability - no limit price calculation needed.
+ * Market orders execute immediately at the current market price.
+ */
 type TradeExecutionService struct {
-	brokerClient      domain.BrokerClient
-	tradeRepo         TradeRepositoryInterface
-	positionRepo      *portfolio.PositionRepository
-	cashManager       domain.CashManager
-	exchangeService   domain.CurrencyExchangeServiceInterface
-	eventManager      *events.Manager
-	settingsService   SettingsServiceInterface     // For configuration (fees, etc.)
-	plannerConfigRepo PlannerConfigRepoInterface   // For transaction costs from planner config
-	historyDB         *sql.DB                      // For storing updated prices
-	securityRepo      *universe.SecurityRepository // For ISIN lookup
-	marketHours       MarketHoursChecker           // For market hours validation
-	lastTradeTime     map[string]time.Time         // Track last trade time per symbol for cooldown
-	log               zerolog.Logger
+	brokerClient      domain.BrokerClient                     // Broker client for order placement
+	tradeRepo         TradeRepositoryInterface                // Trade repository for persistence
+	positionRepo      *portfolio.PositionRepository           // Position repository for position updates
+	cashManager       domain.CashManager                      // Cash manager for balance updates
+	exchangeService   domain.CurrencyExchangeServiceInterface // Currency exchange for auto-conversion
+	eventManager      *events.Manager                         // Event manager for publishing trade events
+	settingsService   SettingsServiceInterface                // For configuration (fees, etc.)
+	plannerConfigRepo PlannerConfigRepoInterface              // For transaction costs from planner config
+	historyDB         *sql.DB                                 // For storing updated prices
+	securityRepo      *universe.SecurityRepository            // For ISIN lookup
+	marketHours       MarketHoursChecker                      // For market hours validation
+	lastTradeTime     map[string]time.Time                    // Track last trade time per symbol for cooldown
+	log               zerolog.Logger                          // Structured logger
 }
 
-// ExecuteResult represents the result of executing a trade
+/**
+ * ExecuteResult represents the result of executing a trade.
+ *
+ * Used to report execution status for each trade recommendation.
+ */
 type ExecuteResult struct {
-	Symbol string  `json:"symbol"`
-	Status string  `json:"status"` // "success", "blocked", "error"
-	Error  *string `json:"error,omitempty"`
+	Symbol string  `json:"symbol"`          // Security symbol
+	Status string  `json:"status"`          // "success", "blocked", "error"
+	Error  *string `json:"error,omitempty"` // Error message if status is "error"
 }
 
-// NewTradeExecutionService creates a new trade execution service
+/**
+ * NewTradeExecutionService creates a new trade execution service.
+ *
+ * @param brokerClient - Broker client for order placement
+ * @param tradeRepo - Trade repository for persistence
+ * @param positionRepo - Position repository for position updates
+ * @param cashManager - Cash manager for balance updates
+ * @param exchangeService - Currency exchange service for auto-conversion
+ * @param eventManager - Event manager for publishing trade events
+ * @param settingsService - Settings service for configuration
+ * @param plannerConfigRepo - Planner config repository for transaction costs
+ * @param historyDB - History database for storing updated prices
+ * @param securityRepo - Security repository for ISIN lookup
+ * @param marketHours - Market hours checker for validation
+ * @param log - Structured logger
+ * @returns *TradeExecutionService - New trade execution service instance
+ */
 func NewTradeExecutionService(
 	brokerClient domain.BrokerClient,
 	tradeRepo TradeRepositoryInterface,
@@ -118,10 +161,15 @@ func NewTradeExecutionService(
 	}
 }
 
-// ExecuteTrades executes a list of trade recommendations
-//
-// Simplified version for emergency rebalancing. Bypasses most validations.
-// Returns list of execution results.
+/**
+ * ExecuteTrades executes a list of trade recommendations.
+ *
+ * Simplified version for emergency rebalancing. Bypasses most validations.
+ * Returns list of execution results for each recommendation.
+ *
+ * @param recommendations - List of trade recommendations to execute
+ * @returns []ExecuteResult - List of execution results (one per recommendation)
+ */
 func (s *TradeExecutionService) ExecuteTrades(recommendations []TradeRecommendation) []ExecuteResult {
 	results := make([]ExecuteResult, 0, len(recommendations))
 
@@ -147,8 +195,15 @@ func (s *TradeExecutionService) ExecuteTrades(recommendations []TradeRecommendat
 	return results
 }
 
-// ExecuteTrade executes a single holistic step from a plan.
-// This implements the TradeExecutor interface from the planning module.
+/**
+ * ExecuteTrade executes a single holistic step from a plan.
+ *
+ * This implements the TradeExecutor interface from the planning module.
+ * Converts HolisticStep to TradeRecommendation and executes it.
+ *
+ * @param step - Holistic step from planning module
+ * @returns error - Error if execution fails
+ */
 func (s *TradeExecutionService) ExecuteTrade(step *planningdomain.HolisticStep) error {
 	if step == nil {
 		return fmt.Errorf("step cannot be nil")

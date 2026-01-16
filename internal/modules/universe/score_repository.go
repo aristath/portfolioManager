@@ -1,3 +1,7 @@
+// Package universe provides repository implementations for managing the investment universe.
+// This file implements the ScoreRepository, which handles security scoring data stored
+// in portfolio.db. Scores include quality, opportunity, analyst, allocation fit, and
+// various technical metrics.
 package universe
 
 import (
@@ -10,16 +14,26 @@ import (
 )
 
 // ScoreSecurityProvider provides read-only access to securities for ISIN lookups.
+// This interface is used by ScoreRepository to resolve symbols to ISINs when
+// GetBySymbol is called. It breaks the circular dependency between ScoreRepository
+// and SecurityRepository.
 type ScoreSecurityProvider interface {
 	GetISINBySymbol(symbol string) (string, error)
 }
 
-// ScoreRepository handles score database operations
+// ScoreRepository handles score database operations for securities.
+// Scores are stored in portfolio.db and include various metrics like quality score,
+// opportunity score, analyst score, technical indicators (RSI, EMA200), and more.
+// After migration 030, ISIN is the primary key (replacing symbol).
+//
+// The repository can optionally use a ScoreSecurityProvider to resolve symbols to ISINs
+// for backward compatibility with code that queries by symbol.
+//
 // Faithful translation from Python: app/repositories/score.py
 type ScoreRepository struct {
-	portfolioDB      *sql.DB // portfolio.db - scores table
-	securityProvider ScoreSecurityProvider
-	log              zerolog.Logger
+	portfolioDB      *sql.DB               // portfolio.db - scores table
+	securityProvider ScoreSecurityProvider // Optional provider for symbol -> ISIN lookup
+	log              zerolog.Logger        // Structured logger
 }
 
 // scoresColumns is the list of columns for the scores table
@@ -31,7 +45,16 @@ volatility, cagr_score, consistency_score, history_years, technical_score, stabi
 sharpe_score, drawdown_score, dividend_bonus, financial_strength_score,
 rsi, ema_200, below_52w_high_pct, last_updated`
 
-// NewScoreRepository creates a new score repository
+// NewScoreRepository creates a new score repository without security provider.
+// This constructor is for backward compatibility. For new code, prefer
+// NewScoreRepositoryWithUniverse to enable GetBySymbol functionality.
+//
+// Parameters:
+//   - portfolioDB: Database connection to portfolio.db
+//   - log: Structured logger
+//
+// Returns:
+//   - *ScoreRepository: Repository instance without security provider
 func NewScoreRepository(portfolioDB *sql.DB, log zerolog.Logger) *ScoreRepository {
 	return &ScoreRepository{
 		portfolioDB: portfolioDB,
@@ -39,8 +62,17 @@ func NewScoreRepository(portfolioDB *sql.DB, log zerolog.Logger) *ScoreRepositor
 	}
 }
 
-// NewScoreRepositoryWithUniverse creates a new score repository with security provider
-// This is needed for GetBySymbol to lookup ISIN from symbol
+// NewScoreRepositoryWithUniverse creates a new score repository with security provider.
+// This enables GetBySymbol functionality by allowing symbol -> ISIN lookup.
+// This is the recommended constructor for code that needs to query scores by symbol.
+//
+// Parameters:
+//   - portfolioDB: Database connection to portfolio.db
+//   - securityProvider: Provider for symbol -> ISIN lookup (can be SecurityRepository adapter)
+//   - log: Structured logger
+//
+// Returns:
+//   - *ScoreRepository: Repository instance with security provider
 func NewScoreRepositoryWithUniverse(portfolioDB *sql.DB, securityProvider ScoreSecurityProvider, log zerolog.Logger) *ScoreRepository {
 	return &ScoreRepository{
 		portfolioDB:      portfolioDB,
@@ -49,10 +81,19 @@ func NewScoreRepositoryWithUniverse(portfolioDB *sql.DB, securityProvider ScoreS
 	}
 }
 
-// GetByISIN returns a score by ISIN (primary method)
+// GetByISIN returns a score by ISIN (primary method).
+// ISIN is the primary key for scores after migration 030.
+//
+// Parameters:
+//   - isin: Security ISIN
+//
+// Returns:
+//   - *SecurityScore: Score object if found, nil if not found
+//   - error: Error if query fails
 func (r *ScoreRepository) GetByISIN(isin string) (*SecurityScore, error) {
 	query := "SELECT " + scoresColumns + " FROM scores WHERE isin = ?"
 
+	// Normalize ISIN to uppercase and trim whitespace
 	rows, err := r.portfolioDB.Query(query, strings.ToUpper(strings.TrimSpace(isin)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query score by ISIN: %w", err)
@@ -71,14 +112,23 @@ func (r *ScoreRepository) GetByISIN(isin string) (*SecurityScore, error) {
 	return &score, nil
 }
 
-// GetBySymbol returns a score by symbol (helper method - looks up ISIN first)
-// This requires securityProvider to lookup ISIN from symbol
+// GetBySymbol returns a score by symbol (helper method - looks up ISIN first).
+// This method requires a securityProvider to resolve symbol -> ISIN.
+// If securityProvider is not configured, returns an error directing the caller
+// to use GetByISIN directly or use NewScoreRepositoryWithUniverse.
+//
+// Parameters:
+//   - symbol: Security symbol
+//
+// Returns:
+//   - *SecurityScore: Score object if found, nil if security not found
+//   - error: Error if securityProvider is missing or query fails
 func (r *ScoreRepository) GetBySymbol(symbol string) (*SecurityScore, error) {
 	if r.securityProvider == nil {
 		return nil, fmt.Errorf("GetBySymbol requires securityProvider - use NewScoreRepositoryWithUniverse or GetByISIN directly")
 	}
 
-	// Lookup ISIN from security provider
+	// Lookup ISIN from security provider (normalize symbol first)
 	isin, err := r.securityProvider.GetISINBySymbol(strings.ToUpper(strings.TrimSpace(symbol)))
 	if err != nil {
 		return nil, nil // Security not found, so no score
@@ -88,11 +138,7 @@ func (r *ScoreRepository) GetBySymbol(symbol string) (*SecurityScore, error) {
 		return nil, nil // No ISIN found, so no score
 	}
 
-	if isin == "" {
-		return nil, nil // No ISIN found
-	}
-
-	// Query score by ISIN
+	// Query score by ISIN (primary key)
 	return r.GetByISIN(isin)
 }
 

@@ -28,8 +28,7 @@ func TestIntegration_PlannerChainExecutesInOrder(t *testing.T) {
 
 	// Register planner work types with dependencies
 	registry.Register(&WorkType{
-		ID:       "planner:weights",
-		Priority: PriorityCritical,
+		ID: "planner:weights",
 		FindSubjects: func() []string {
 			mu.Lock()
 			defer mu.Unlock()
@@ -50,7 +49,6 @@ func TestIntegration_PlannerChainExecutesInOrder(t *testing.T) {
 	registry.Register(&WorkType{
 		ID:        "planner:context",
 		DependsOn: []string{"planner:weights"},
-		Priority:  PriorityCritical,
 		FindSubjects: func() []string {
 			mu.Lock()
 			defer mu.Unlock()
@@ -71,7 +69,6 @@ func TestIntegration_PlannerChainExecutesInOrder(t *testing.T) {
 	registry.Register(&WorkType{
 		ID:        "planner:plan",
 		DependsOn: []string{"planner:context"},
-		Priority:  PriorityCritical,
 		FindSubjects: func() []string {
 			mu.Lock()
 			defer mu.Unlock()
@@ -92,7 +89,6 @@ func TestIntegration_PlannerChainExecutesInOrder(t *testing.T) {
 	registry.Register(&WorkType{
 		ID:        "planner:recommendations",
 		DependsOn: []string{"planner:plan"},
-		Priority:  PriorityCritical,
 		FindSubjects: func() []string {
 			mu.Lock()
 			defer mu.Unlock()
@@ -147,7 +143,6 @@ func TestIntegration_SyncCycleWithDependencies(t *testing.T) {
 	// sync:portfolio - no dependencies
 	registry.Register(&WorkType{
 		ID:           "sync:portfolio",
-		Priority:     PriorityHigh,
 		MarketTiming: DuringMarketOpen,
 		FindSubjects: func() []string {
 			mu.Lock()
@@ -170,7 +165,6 @@ func TestIntegration_SyncCycleWithDependencies(t *testing.T) {
 	registry.Register(&WorkType{
 		ID:           "sync:trades",
 		DependsOn:    []string{"sync:portfolio"},
-		Priority:     PriorityHigh,
 		MarketTiming: DuringMarketOpen,
 		FindSubjects: func() []string {
 			mu.Lock()
@@ -193,7 +187,6 @@ func TestIntegration_SyncCycleWithDependencies(t *testing.T) {
 	registry.Register(&WorkType{
 		ID:           "sync:prices",
 		DependsOn:    []string{"sync:portfolio"},
-		Priority:     PriorityMedium,
 		MarketTiming: DuringMarketOpen,
 		FindSubjects: func() []string {
 			mu.Lock()
@@ -216,7 +209,6 @@ func TestIntegration_SyncCycleWithDependencies(t *testing.T) {
 	registry.Register(&WorkType{
 		ID:           "sync:display",
 		DependsOn:    []string{"sync:prices"},
-		Priority:     PriorityMedium,
 		MarketTiming: AnyTime,
 		FindSubjects: func() []string {
 			mu.Lock()
@@ -282,7 +274,6 @@ func TestIntegration_PerSecurityWorkRespectsMarketTiming(t *testing.T) {
 
 	registry.Register(&WorkType{
 		ID:           "security:sync",
-		Priority:     PriorityMedium,
 		MarketTiming: AfterMarketClose, // Only run when market closed
 		FindSubjects: func() []string {
 			return []string{"NL0010273215"}
@@ -305,8 +296,8 @@ func TestIntegration_PerSecurityWorkRespectsMarketTiming(t *testing.T) {
 	assert.False(t, executed.Load(), "security work should not run while market is open")
 
 	// Now close the market
-	mockMarket.isOpen = false
-	mockMarket.isSecurityOpen["NL0010273215"] = false
+	mockMarket.SetMarketOpen(false)
+	mockMarket.SetSecurityMarketOpen("NL0010273215", false)
 
 	p.Trigger()
 	time.Sleep(200 * time.Millisecond)
@@ -332,7 +323,6 @@ func TestIntegration_MaintenanceOnlyDuringAllMarketsClosed(t *testing.T) {
 
 	registry.Register(&WorkType{
 		ID:           "maintenance:backup",
-		Priority:     PriorityLow,
 		MarketTiming: AllMarketsClosed, // Only run when ALL markets closed
 		FindSubjects: func() []string {
 			return []string{""}
@@ -355,8 +345,8 @@ func TestIntegration_MaintenanceOnlyDuringAllMarketsClosed(t *testing.T) {
 	assert.False(t, executed.Load(), "maintenance should not run while any market is open")
 
 	// Now close all markets
-	mockMarket.isOpen = false
-	mockMarket.allMarketsClosed = true
+	mockMarket.SetMarketOpen(false)
+	mockMarket.SetAllMarketsClosed(true)
 
 	p.Trigger()
 	time.Sleep(200 * time.Millisecond)
@@ -382,7 +372,6 @@ func TestIntegration_ManualTriggerBypassesTimingChecks(t *testing.T) {
 
 	registry.Register(&WorkType{
 		ID:           "maintenance:backup",
-		Priority:     PriorityLow,
 		MarketTiming: AllMarketsClosed, // Normally only runs when all closed
 		FindSubjects: func() []string {
 			return nil // No automatic work
@@ -430,7 +419,6 @@ func TestIntegration_DividendWorkflowChain(t *testing.T) {
 		registry.Register(&WorkType{
 			ID:        stepID,
 			DependsOn: stepDeps,
-			Priority:  PriorityHigh,
 			FindSubjects: func() []string {
 				mu.Lock()
 				defer mu.Unlock()
@@ -478,7 +466,6 @@ func TestIntegration_IntervalStalenessCheck(t *testing.T) {
 
 	registry.Register(&WorkType{
 		ID:       "sync:rates",
-		Priority: PriorityMedium,
 		Interval: time.Hour, // Only run once per hour
 		FindSubjects: func() []string {
 			return []string{""}
@@ -524,7 +511,6 @@ func TestIntegration_CompletionTrackerPersistsDuringSession(t *testing.T) {
 
 	registry.Register(&WorkType{
 		ID:       "planner:weights",
-		Priority: PriorityCritical,
 		Interval: time.Hour,
 		FindSubjects: func() []string {
 			return []string{""}
@@ -556,71 +542,7 @@ func TestIntegration_CompletionTrackerPersistsDuringSession(t *testing.T) {
 }
 
 func TestIntegration_PriorityOrdering(t *testing.T) {
-	// Test that higher priority work runs before lower priority work.
-
-	registry := NewRegistry()
-	completion := NewCompletionTracker()
-	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-
-	var executionOrder []string
-	var mu sync.Mutex
-	executed := make(map[string]bool)
-
-	// Register work types with different priorities
-	for _, wt := range []struct {
-		id       string
-		priority Priority
-	}{
-		{"maintenance:backup", PriorityLow},
-		{"security:sync", PriorityMedium},
-		{"sync:portfolio", PriorityHigh},
-		{"trading:execute", PriorityCritical},
-	} {
-		wtID := wt.id
-		wtPriority := wt.priority
-		registry.Register(&WorkType{
-			ID:       wtID,
-			Priority: wtPriority,
-			FindSubjects: func() []string {
-				mu.Lock()
-				defer mu.Unlock()
-				if executed[wtID] {
-					return nil
-				}
-				return []string{""}
-			},
-			Execute: func(ctx context.Context, subject string, progress *ProgressReporter) error {
-				mu.Lock()
-				executionOrder = append(executionOrder, wtID)
-				executed[wtID] = true
-				mu.Unlock()
-				return nil
-			},
-		})
-	}
-
-	p := NewProcessor(registry, completion, market)
-
-	go p.Run()
-	defer p.Stop()
-
-	p.Trigger()
-	time.Sleep(800 * time.Millisecond)
-
-	mu.Lock()
-	defer mu.Unlock()
-
-	require.Len(t, executionOrder, 4, "all 4 work types should execute")
-
-	// Higher priority should execute first
-	tradingIdx := indexOf(executionOrder, "trading:execute")
-	syncIdx := indexOf(executionOrder, "sync:portfolio")
-	securityIdx := indexOf(executionOrder, "security:sync")
-	maintenanceIdx := indexOf(executionOrder, "maintenance:backup")
-
-	assert.Less(t, tradingIdx, syncIdx, "critical should run before high")
-	assert.Less(t, syncIdx, securityIdx, "high should run before medium")
-	assert.Less(t, securityIdx, maintenanceIdx, "medium should run before low")
+	t.Skip("Priority ordering removed in favor of FIFO registration order")
 }
 
 func TestIntegration_PerSecurityDependencySameSubject(t *testing.T) {
@@ -639,7 +561,6 @@ func TestIntegration_PerSecurityDependencySameSubject(t *testing.T) {
 	// security:sync - syncs AAPL and GOOGL
 	registry.Register(&WorkType{
 		ID:           "security:sync",
-		Priority:     PriorityMedium,
 		MarketTiming: AfterMarketClose,
 		FindSubjects: func() []string {
 			mu.Lock()
@@ -667,7 +588,6 @@ func TestIntegration_PerSecurityDependencySameSubject(t *testing.T) {
 	registry.Register(&WorkType{
 		ID:           "security:technical",
 		DependsOn:    []string{"security:sync"},
-		Priority:     PriorityMedium,
 		MarketTiming: AfterMarketClose,
 		FindSubjects: func() []string {
 			mu.Lock()

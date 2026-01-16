@@ -5,12 +5,11 @@ import (
 	"sync"
 )
 
-// Registry holds all registered work types and provides lookup by ID and priority ordering.
+// Registry holds all registered work types and provides lookup by ID and registration ordering.
 type Registry struct {
 	types   map[string]*WorkType
-	ordered []*WorkType // Ordered by priority (highest first)
+	ordered []*WorkType // Ordered by registration time (FIFO)
 	mu      sync.RWMutex
-	reorder bool // Flag to indicate ordering needs refresh
 }
 
 // NewRegistry creates a new work type registry.
@@ -27,8 +26,18 @@ func (r *Registry) Register(wt *WorkType) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	// If replacing existing work type, remove old one from ordered slice
+	if _, exists := r.types[wt.ID]; exists {
+		for i, existing := range r.ordered {
+			if existing.ID == wt.ID {
+				r.ordered = append(r.ordered[:i], r.ordered[i+1:]...)
+				break
+			}
+		}
+	}
+
 	r.types[wt.ID] = wt
-	r.reorder = true
+	r.ordered = append(r.ordered, wt) // Simple append for FIFO
 }
 
 // Get returns a work type by ID, or nil if not found.
@@ -48,38 +57,15 @@ func (r *Registry) Has(id string) bool {
 	return exists
 }
 
-// ByPriority returns all work types ordered by priority (highest first).
-// Within the same priority, work types are ordered alphabetically by ID.
-func (r *Registry) ByPriority() []*WorkType {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if r.reorder {
-		r.refreshOrder()
-		r.reorder = false
-	}
+// All returns all work types in registration order (FIFO).
+func (r *Registry) All() []*WorkType {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 
 	// Return a copy to prevent external modification
 	result := make([]*WorkType, len(r.ordered))
 	copy(result, r.ordered)
 	return result
-}
-
-// refreshOrder rebuilds the ordered slice based on priority.
-// Must be called with lock held.
-func (r *Registry) refreshOrder() {
-	r.ordered = make([]*WorkType, 0, len(r.types))
-	for _, wt := range r.types {
-		r.ordered = append(r.ordered, wt)
-	}
-
-	// Sort by priority (descending), then by ID (ascending) for deterministic order
-	sort.Slice(r.ordered, func(i, j int) bool {
-		if r.ordered[i].Priority != r.ordered[j].Priority {
-			return r.ordered[i].Priority > r.ordered[j].Priority
-		}
-		return r.ordered[i].ID < r.ordered[j].ID
-	})
 }
 
 // Count returns the number of registered work types.
@@ -96,7 +82,14 @@ func (r *Registry) Remove(id string) {
 	defer r.mu.Unlock()
 
 	delete(r.types, id)
-	r.reorder = true
+
+	// Remove from ordered slice
+	for i, wt := range r.ordered {
+		if wt.ID == id {
+			r.ordered = append(r.ordered[:i], r.ordered[i+1:]...)
+			break
+		}
+	}
 }
 
 // IDs returns all registered work type IDs.

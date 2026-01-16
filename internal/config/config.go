@@ -1,4 +1,18 @@
-// Package config provides configuration management functionality.
+/**
+ * Package config provides configuration management functionality.
+ *
+ * This package handles loading configuration from environment variables (.env file)
+ * and updating configuration from the settings database. Settings database values
+ * take precedence over environment variables.
+ *
+ * Configuration Loading Order:
+ * 1. Load from .env file (if exists)
+ * 2. Load from environment variables
+ * 3. Update from settings database (takes precedence)
+ *
+ * This allows credentials and other sensitive settings to be managed via the
+ * Settings UI instead of requiring .env file changes.
+ */
 package config
 
 import (
@@ -13,42 +27,61 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// Config holds application configuration
+/**
+ * Config holds application configuration.
+ *
+ * Configuration is loaded from environment variables and can be updated
+ * from the settings database. Settings database values take precedence.
+ */
 type Config struct {
-	DataDir             string // Base directory for all databases (defaults to "/home/arduino/data", always absolute)
-	EvaluatorServiceURL string
-	TradernetAPIKey     string
-	TradernetAPISecret  string
-	GitHubToken         string // GitHub personal access token for artifact downloads
-	LogLevel            string
-	Port                int
-	DevMode             bool
-	Deployment          *DeploymentConfig
+	DataDir             string            // Base directory for all databases (defaults to "/home/arduino/data", always absolute)
+	EvaluatorServiceURL string            // Evaluator service URL (legacy - not used in current architecture)
+	TradernetAPIKey     string            // Tradernet API key (can be overridden by settings DB)
+	TradernetAPISecret  string            // Tradernet API secret (can be overridden by settings DB)
+	GitHubToken         string            // GitHub personal access token for artifact downloads (can be overridden by settings DB)
+	LogLevel            string            // Log level (debug, info, warn, error)
+	Port                int               // HTTP server port (default: 8001)
+	DevMode             bool              // Development mode flag
+	Deployment          *DeploymentConfig // Deployment automation configuration (optional)
 }
 
-// DeploymentConfig holds deployment automation configuration (config package version)
+/**
+ * DeploymentConfig holds deployment automation configuration (config package version).
+ *
+ * This configuration is used for automated deployment from GitHub Actions artifacts.
+ * The deployment system monitors GitHub Actions for new builds and automatically
+ * deploys them to the Arduino Uno Q device.
+ */
 type DeploymentConfig struct {
-	Enabled                bool
-	DeployDir              string
-	APIPort                int
-	APIHost                string
-	LockTimeout            int // in seconds
-	HealthCheckTimeout     int // in seconds
-	HealthCheckMaxAttempts int
-	GitBranch              string
-	TraderBinaryName       string
-	TraderServiceName      string
-	DockerComposePath      string
+	Enabled                bool   // Enable deployment automation
+	DeployDir              string // Directory for deployment files
+	APIPort                int    // API port for deployment endpoints
+	APIHost                string // API host for deployment endpoints
+	LockTimeout            int    // Lock timeout in seconds (prevents concurrent deployments)
+	HealthCheckTimeout     int    // Health check timeout in seconds
+	HealthCheckMaxAttempts int    // Maximum health check attempts before rollback
+	GitBranch              string // Git branch to deploy from
+	TraderBinaryName       string // Binary name for the Sentinel service
+	TraderServiceName      string // Systemd service name
+	DockerComposePath      string // Docker Compose file path (if using Docker)
 	// GitHub artifact deployment settings
-	UseGitHubArtifacts bool   // Use GitHub Actions artifacts instead of building on-device
-	GitHubWorkflowName string // e.g., "build-go.yml"
-	GitHubArtifactName string // e.g., "sentinel-arm64"
+	UseGitHubArtifacts bool   // Use GitHub Actions artifacts instead of building on-device (always true)
+	GitHubWorkflowName string // GitHub Actions workflow name (e.g., "build-go.yml")
+	GitHubArtifactName string // GitHub Actions artifact name (e.g., "sentinel-arm64")
 	GitHubBranch       string // Branch to check for builds (defaults to GitBranch if empty)
 	GitHubRepo         string // GitHub repository in format "owner/repo" (e.g., "aristath/sentinel")
 }
 
-// ToDeploymentConfig converts config.DeploymentConfig to deployment.DeploymentConfig
-// githubToken is passed separately since it comes from Config.GitHubToken (not DeploymentConfig)
+/**
+ * ToDeploymentConfig converts config.DeploymentConfig to deployment.DeploymentConfig.
+ *
+ * This adapter function converts the config package's DeploymentConfig to the
+ * deployment package's DeploymentConfig format. The githubToken is passed separately
+ * since it comes from Config.GitHubToken (not DeploymentConfig).
+ *
+ * @param githubToken - GitHub personal access token for artifact downloads
+ * @returns *deployment.DeploymentConfig - Deployment configuration for deployment package
+ */
 func (c *DeploymentConfig) ToDeploymentConfig(githubToken string) *deployment.DeploymentConfig {
 	// Determine GitHub branch (use GitHubBranch if set, otherwise GitBranch)
 	githubBranch := c.GitHubBranch
@@ -81,9 +114,25 @@ func (c *DeploymentConfig) ToDeploymentConfig(githubToken string) *deployment.De
 	}
 }
 
-// Load reads configuration from environment variables
+/**
+ * Load reads configuration from environment variables.
+ *
+ * This function:
+ * 1. Loads .env file if it exists (via godotenv)
+ * 2. Reads environment variables with defaults
+ * 3. Resolves data directory to absolute path
+ * 4. Creates data directory if it doesn't exist
+ * 5. Validates configuration
+ *
+ * Note: Configuration can be updated later from settings database via UpdateFromSettings().
+ * Settings database values take precedence over environment variables.
+ *
+ * @returns *Config - Loaded configuration
+ * @returns error - Error if configuration loading fails
+ */
 func Load() (*Config, error) {
 	// Load .env file if it exists
+	// godotenv.Load() returns an error if .env doesn't exist, which is fine
 	_ = godotenv.Load()
 
 	// Determine data directory with fallback logic
@@ -93,17 +142,19 @@ func Load() (*Config, error) {
 	// 4. Ensure directory exists
 	dataDir := getEnv("TRADER_DATA_DIR", "")
 	if dataDir == "" {
-		// Default fallback to absolute path
+		// Default fallback to absolute path (Arduino Uno Q default)
 		dataDir = "/home/arduino/data"
 	}
 
 	// Always resolve to absolute path
+	// This ensures consistent path handling across different working directories
 	absDataDir, err := filepath.Abs(dataDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve data directory path: %w", err)
 	}
 
 	// Ensure directory exists
+	// Creates directory with 0755 permissions (rwxr-xr-x)
 	if err := os.MkdirAll(absDataDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create data directory: %w", err)
 	}
@@ -112,7 +163,7 @@ func Load() (*Config, error) {
 		DataDir:             absDataDir,
 		Port:                getEnvAsInt("GO_PORT", 8001), // Default 8001 (Python uses 8000)
 		DevMode:             getEnvAsBool("DEV_MODE", false),
-		EvaluatorServiceURL: getEnv("EVALUATOR_SERVICE_URL", "http://localhost:9000"), // Evaluator-go microservice on 9000
+		EvaluatorServiceURL: getEnv("EVALUATOR_SERVICE_URL", "http://localhost:9000"), // Evaluator-go microservice on 9000 (legacy)
 		TradernetAPIKey:     getEnv("TRADERNET_API_KEY", ""),
 		TradernetAPISecret:  getEnv("TRADERNET_API_SECRET", ""),
 		GitHubToken:         getEnv("GITHUB_TOKEN", ""), // GitHub token for deployment
@@ -128,11 +179,24 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
-// UpdateFromSettings updates configuration from settings database
-// This should be called after the config database is initialized
-// Settings DB values take precedence over environment variables
+/**
+ * UpdateFromSettings updates configuration from settings database.
+ *
+ * This should be called after the config database is initialized (in di.Wire()).
+ * Settings database values take precedence over environment variables.
+ *
+ * This allows credentials and other sensitive settings to be managed via the
+ * Settings UI instead of requiring .env file changes or environment variable updates.
+ *
+ * If a settings database value is empty, the environment variable value is kept
+ * as a fallback.
+ *
+ * @param settingsRepo - Settings repository (must be initialized)
+ * @returns error - Error if settings retrieval fails
+ */
 func (c *Config) UpdateFromSettings(settingsRepo *settings.Repository) error {
 	// Try to get credentials from settings DB
+	// Tradernet API key
 	apiKey, err := settingsRepo.Get("tradernet_api_key")
 	if err != nil {
 		return fmt.Errorf("failed to get tradernet_api_key from settings: %w", err)
@@ -143,6 +207,7 @@ func (c *Config) UpdateFromSettings(settingsRepo *settings.Repository) error {
 	}
 	// If settings DB value is empty, keep the env var value (if any) as fallback
 
+	// Tradernet API secret
 	apiSecret, err := settingsRepo.Get("tradernet_api_secret")
 	if err != nil {
 		return fmt.Errorf("failed to get tradernet_api_secret from settings: %w", err)
@@ -154,6 +219,7 @@ func (c *Config) UpdateFromSettings(settingsRepo *settings.Repository) error {
 	// If settings DB value is empty, keep the env var value (if any) as fallback
 
 	// Get GitHub token from settings DB
+	// GitHub token is used for downloading artifacts from GitHub Actions
 	githubToken, err := settingsRepo.Get("github_token")
 	if err != nil {
 		return fmt.Errorf("failed to get github_token from settings: %w", err)
@@ -167,10 +233,17 @@ func (c *Config) UpdateFromSettings(settingsRepo *settings.Repository) error {
 	return nil
 }
 
-// Validate checks if required configuration is present
+/**
+ * Validate checks if required configuration is present.
+ *
+ * Currently, all configuration is optional (Tradernet credentials can be set
+ * via Settings UI, and research mode doesn't require broker connection).
+ *
+ * @returns error - Error if validation fails (currently always returns nil)
+ */
 func (c *Config) Validate() error {
-
 	// Note: Tradernet credentials optional for research mode
+	// Credentials can be set via Settings UI, so validation is not strict
 	// if c.TradernetAPIKey == "" || c.TradernetAPISecret == "" {
 	//     return fmt.Errorf("Tradernet API credentials required")
 	// }
@@ -178,7 +251,17 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// Helper functions
+// ==========================================
+// Helper Functions
+// ==========================================
+
+/**
+ * getEnv retrieves an environment variable with a default value.
+ *
+ * @param key - Environment variable name
+ * @param defaultValue - Default value if environment variable is not set
+ * @returns string - Environment variable value or default
+ */
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
@@ -186,6 +269,13 @@ func getEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
+/**
+ * getEnvAsInt retrieves an environment variable as an integer with a default value.
+ *
+ * @param key - Environment variable name
+ * @param defaultValue - Default value if environment variable is not set or invalid
+ * @returns int - Environment variable value as integer or default
+ */
 func getEnvAsInt(key string, defaultValue int) int {
 	if value := os.Getenv(key); value != "" {
 		if intVal, err := strconv.Atoi(value); err == nil {
@@ -195,6 +285,13 @@ func getEnvAsInt(key string, defaultValue int) int {
 	return defaultValue
 }
 
+/**
+ * getEnvAsBool retrieves an environment variable as a boolean with a default value.
+ *
+ * @param key - Environment variable name
+ * @param defaultValue - Default value if environment variable is not set or invalid
+ * @returns bool - Environment variable value as boolean or default
+ */
 func getEnvAsBool(key string, defaultValue bool) bool {
 	if value := os.Getenv(key); value != "" {
 		if boolVal, err := strconv.ParseBool(value); err == nil {
@@ -204,7 +301,14 @@ func getEnvAsBool(key string, defaultValue bool) bool {
 	return defaultValue
 }
 
-// loadDeploymentConfig loads deployment configuration with hardcoded defaults
+/**
+ * loadDeploymentConfig loads deployment configuration with hardcoded defaults.
+ *
+ * Deployment is enabled by default and uses GitHub Actions artifacts for deployment.
+ * This saves 1GB+ disk space by not requiring Go toolchain on the device.
+ *
+ * @returns *DeploymentConfig - Deployment configuration with defaults
+ */
 func loadDeploymentConfig() *DeploymentConfig {
 	return &DeploymentConfig{
 		Enabled:                true, // Enabled by default

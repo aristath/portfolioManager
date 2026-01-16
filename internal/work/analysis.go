@@ -31,7 +31,6 @@ func RegisterAnalysisWorkTypes(registry *Registry, deps *AnalysisDeps) {
 	//            to ensure complete data for analysis.
 	registry.Register(&WorkType{
 		ID:           "analysis:market-regime",
-		Priority:     PriorityMedium,
 		MarketTiming: AllMarketsClosed,
 		Interval:     24 * time.Hour, // Hardcoded - daily regime analysis is optimal
 		FindSubjects: func() []string {

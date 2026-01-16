@@ -45,36 +45,6 @@ func (mt MarketTiming) String() string {
 	}
 }
 
-// Priority defines the execution priority of work types.
-type Priority int
-
-const (
-	// PriorityLow is for non-urgent work (maintenance, deployment).
-	PriorityLow Priority = iota
-	// PriorityMedium is for regular background work (security calculations, analysis).
-	PriorityMedium
-	// PriorityHigh is for important work (sync, dividends).
-	PriorityHigh
-	// PriorityCritical is for urgent work (trading, planning).
-	PriorityCritical
-)
-
-// String returns a human-readable name for the priority.
-func (p Priority) String() string {
-	switch p {
-	case PriorityLow:
-		return "Low"
-	case PriorityMedium:
-		return "Medium"
-	case PriorityHigh:
-		return "High"
-	case PriorityCritical:
-		return "Critical"
-	default:
-		return "Unknown"
-	}
-}
-
 // WorkType defines a type of work that can be executed.
 // Work types are registered once and can generate multiple work items.
 type WorkType struct {
@@ -90,9 +60,6 @@ type WorkType struct {
 
 	// Interval is the minimum time between runs (0 = on-demand only).
 	Interval time.Duration
-
-	// Priority determines execution order when multiple work items are eligible.
-	Priority Priority
 
 	// FindSubjects returns subjects (ISINs) that need this work.
 	// Returns []string{""} for global work, nil if no work needed.

@@ -31,7 +31,6 @@ func TestHandlers_ListWorkTypes(t *testing.T) {
 	registry := NewRegistry()
 	registry.Register(&WorkType{
 		ID:           "test:work1",
-		Priority:     PriorityHigh,
 		MarketTiming: AnyTime,
 		DependsOn:    []string{"test:dep"},
 		FindSubjects: func() []string { return nil },
@@ -39,7 +38,6 @@ func TestHandlers_ListWorkTypes(t *testing.T) {
 	})
 	registry.Register(&WorkType{
 		ID:           "test:work2",
-		Priority:     PriorityMedium,
 		MarketTiming: AfterMarketClose,
 		FindSubjects: func() []string { return nil },
 		Execute:      func(ctx context.Context, subject string, progress *ProgressReporter) error { return nil },
@@ -81,7 +79,6 @@ func TestHandlers_ExecuteWorkType(t *testing.T) {
 	registry := NewRegistry()
 	registry.Register(&WorkType{
 		ID:           "test:global",
-		Priority:     PriorityMedium,
 		MarketTiming: AnyTime,
 		FindSubjects: func() []string { return []string{""} },
 		Execute: func(ctx context.Context, subject string, progress *ProgressReporter) error {
@@ -146,7 +143,6 @@ func TestHandlers_ExecuteWorkTypeWithSubject(t *testing.T) {
 	registry := NewRegistry()
 	registry.Register(&WorkType{
 		ID:           "test:per-security",
-		Priority:     PriorityMedium,
 		MarketTiming: AnyTime,
 		FindSubjects: func() []string { return []string{"NL0010273215"} },
 		Execute: func(ctx context.Context, subject string, progress *ProgressReporter) error {
@@ -188,7 +184,6 @@ func TestHandlers_ExecuteWorkType_DependenciesNotMet(t *testing.T) {
 	registry := NewRegistry()
 	registry.Register(&WorkType{
 		ID:           "test:dep",
-		Priority:     PriorityHigh,
 		MarketTiming: AnyTime,
 		FindSubjects: func() []string { return []string{""} },
 		Execute:      func(ctx context.Context, subject string, progress *ProgressReporter) error { return nil },
@@ -196,7 +191,6 @@ func TestHandlers_ExecuteWorkType_DependenciesNotMet(t *testing.T) {
 	registry.Register(&WorkType{
 		ID:           "test:dependent",
 		DependsOn:    []string{"test:dep"},
-		Priority:     PriorityMedium,
 		MarketTiming: AnyTime,
 		FindSubjects: func() []string { return []string{""} },
 		Execute:      func(ctx context.Context, subject string, progress *ProgressReporter) error { return nil },

@@ -1,4 +1,30 @@
-// Package di provides dependency injection for service implementations.
+/**
+ * Package di provides dependency injection for service implementations.
+ *
+ * This package initializes all business logic services in the correct dependency order.
+ * Services are the SINGLE SOURCE OF TRUTH for all service creation - all services
+ * must be created here to ensure proper dependency injection and initialization order.
+ *
+ * Initialization Sequence:
+ * 1. Clients (broker, market status WebSocket)
+ * 2. Basic Services (currency exchange, market hours, event system)
+ * 3. Cash Manager (cash-as-balances architecture)
+ * 4. Trading Services (trade safety, trading, trade execution)
+ * 5. Universe Services (historical sync, symbol resolver, security setup)
+ * 6. Portfolio Service (portfolio management)
+ * 7. Cash Flows Services (dividends, deposits)
+ * 8. Remaining Universe Services (sync, universe, tag assigner)
+ * 9. Planning Services (opportunities, sequences, evaluation, planner)
+ * 10. Optimization Services (risk builder, constraints, returns, Kelly, CVaR, BL, optimizer)
+ * 11. Calculation Cache and Analytics
+ * 12. Rebalancing Services
+ * 13. Ticker and Display Services
+ * 14. Adaptive Market Services (market regime detection)
+ * 15. Reliability Services (backup, health checks, R2)
+ * 16. Concentration Alert Service
+ * 17. Quantum Calculator
+ * 18. Callbacks (for jobs)
+ */
 package di
 
 import (
@@ -46,21 +72,65 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// securitySetupServiceAdapter adapts universe.SecuritySetupService to portfolio.SecuritySetupServiceInterface
-// This is needed because Go doesn't support return type covariance in interfaces
+/**
+ * securitySetupServiceAdapter adapts universe.SecuritySetupService to portfolio.SecuritySetupServiceInterface.
+ *
+ * This adapter is needed because Go doesn't support return type covariance in interfaces.
+ * The portfolio package expects a different interface signature than what universe provides.
+ *
+ * Note: User-configurable fields (min_lot, allow_buy, allow_sell) are set via security_overrides
+ * after security creation, not during the AddSecurityByIdentifier call.
+ */
 type securitySetupServiceAdapter struct {
 	service *universe.SecuritySetupService
 }
 
-// AddSecurityByIdentifier implements portfolio.SecuritySetupServiceInterface
-// Note: User-configurable fields (min_lot, allow_buy, allow_sell) are set via security_overrides after creation
+/**
+ * AddSecurityByIdentifier implements portfolio.SecuritySetupServiceInterface.
+ *
+ * Delegates to the underlying universe.SecuritySetupService.
+ *
+ * @param identifier - Security identifier (ISIN or symbol)
+ * @returns interface{} - Created security (type assertion needed by caller)
+ * @returns error - Error if security creation fails
+ */
 func (a *securitySetupServiceAdapter) AddSecurityByIdentifier(identifier string) (interface{}, error) {
 	return a.service.AddSecurityByIdentifier(identifier)
 }
 
-// InitializeServices creates all services and stores them in the container
-// This is the SINGLE SOURCE OF TRUTH for all service creation
-// Services are created in dependency order to ensure all dependencies exist
+/**
+ * InitializeServices creates all services and stores them in the container.
+ *
+ * This is the SINGLE SOURCE OF TRUTH for all service creation.
+ * Services are created in dependency order to ensure all dependencies exist
+ * before they are needed.
+ *
+ * The initialization is organized into logical steps:
+ * - Step 1: Clients (external API integrations)
+ * - Step 2: Basic Services (foundational services)
+ * - Step 3: Cash Manager (cash-as-balances architecture)
+ * - Step 4: Trading Services (trade validation and execution)
+ * - Step 5: Universe Services (security management)
+ * - Step 6: Portfolio Service (portfolio management)
+ * - Step 7: Cash Flows Services (dividends, deposits)
+ * - Step 8: Remaining Universe Services (sync, tagging)
+ * - Step 9: Planning Services (opportunity identification, sequence generation, evaluation)
+ * - Step 10: Optimization Services (risk models, constraints, portfolio optimization)
+ * - Step 11: Calculation Cache and Analytics
+ * - Step 12: Rebalancing Services
+ * - Step 13: Ticker and Display Services
+ * - Step 14: Adaptive Market Services (market regime detection)
+ * - Step 15: Reliability Services (backup, health checks)
+ * - Step 16: Concentration Alert Service
+ * - Step 17: Quantum Calculator
+ * - Step 18: Callbacks (for jobs)
+ *
+ * @param container - Container to store service instances (must not be nil)
+ * @param cfg - Application configuration (with settings loaded from database)
+ * @param displayManager - LED display state manager (can be nil in tests)
+ * @param log - Structured logger instance
+ * @returns error - Error if service initialization fails
+ */
 func InitializeServices(container *Container, cfg *config.Config, displayManager *display.StateManager, log zerolog.Logger) error {
 	if container == nil {
 		return fmt.Errorf("container cannot be nil")
@@ -69,8 +139,11 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	// ==========================================
 	// STEP 1: Initialize Clients
 	// ==========================================
+	// External API clients must be initialized first as they are dependencies
+	// for many services (currency exchange, price fetching, trade execution)
 
 	// Broker client (Tradernet adapter) - single external data source
+	// Tradernet is the only external data source for prices, quotes, and trade execution
 	container.BrokerClient = tradernet.NewTradernetBrokerAdapter(cfg.TradernetAPIKey, cfg.TradernetAPISecret, log)
 	log.Info().Msg("Broker client initialized (Tradernet adapter)")
 
@@ -94,7 +167,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 			displayEnabled = true
 			log.Info().Str("url", displayURL).Msg("Arduino hardware detected, enabling display service")
 		} else {
-			// Allow manual override via settings
+			// Allow manual override via settings (for testing/development)
 			if container.SettingsRepo != nil {
 				if enabled, err := container.SettingsRepo.Get("display_enabled"); err == nil && enabled != nil && *enabled == "true" {
 					displayEnabled = true
@@ -115,25 +188,33 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	// ==========================================
 	// STEP 2: Initialize Basic Services
 	// ==========================================
+	// Foundational services that other services depend on
 
 	// Currency exchange service
+	// Fetches exchange rates from Tradernet API
 	container.CurrencyExchangeService = services.NewCurrencyExchangeService(container.BrokerClient, log)
 
 	// Market hours service
+	// Provides market hours and holiday information for all exchanges
 	container.MarketHoursService = market_hours.NewMarketHoursService()
 
 	// Market state detector (for market-aware scheduling)
+	// Detects whether markets are open/closed for work processor scheduling
 	container.MarketStateDetector = market_regime.NewMarketStateDetector(
 		container.SecurityRepo,
 		container.MarketHoursService,
 		log,
 	)
 
-	// Event system (new bus-based architecture)
+	// Event system (bus-based architecture)
+	// EventBus provides pub/sub for system-wide events
+	// EventManager wraps the bus with additional functionality
 	container.EventBus = events.NewBus(log)
 	container.EventManager = events.NewManager(container.EventBus, log)
 
 	// Market status WebSocket client
+	// Connects to Tradernet WebSocket for real-time market status updates
+	// Publishes events to EventBus when market status changes
 	container.MarketStatusWS = tradernet.NewMarketStatusWebSocket(
 		"wss://wss.tradernet.com/",
 		"", // Empty string for demo mode (SID not required)
@@ -142,15 +223,19 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	)
 
 	// Start WebSocket connection (non-blocking, will auto-retry)
+	// Connection failures don't fail startup - reconnect loop handles retries
 	if err := container.MarketStatusWS.Start(); err != nil {
 		log.Warn().Err(err).Msg("Market status WebSocket connection failed, will auto-retry")
 		// Don't fail startup - reconnect loop will handle it
 	}
 
 	// Settings service (needed for trade safety and other services)
+	// Provides access to application settings with temperament-aware adjustments
 	container.SettingsService = settings.NewService(container.SettingsRepo, log)
 
 	// Exchange rate cache service (Tradernet + DB cache)
+	// Primary: Fetches from Tradernet API
+	// Secondary: Falls back to DB cache if API unavailable
 	container.ExchangeRateCacheService = services.NewExchangeRateCacheService(
 		container.CurrencyExchangeService, // Tradernet (primary)
 		container.HistoryDBClient,         // DB cache (secondary)
@@ -159,6 +244,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	)
 
 	// Price conversion service (converts native currency prices to EUR)
+	// Converts prices from security's native currency to EUR for portfolio calculations
 	container.PriceConversionService = services.NewPriceConversionService(
 		container.CurrencyExchangeService,
 		log,
@@ -167,8 +253,10 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	// ==========================================
 	// STEP 3: Initialize Cash Manager
 	// ==========================================
+	// Cash manager implements cash-as-balances architecture
 
 	// Cash manager (cash-as-balances architecture)
+	// Manages cash balances with dual-write to both CashRepo and PositionRepo
 	// This implements domain.CashManager interface
 	cashManager := cash_flows.NewCashManagerWithDualWrite(container.CashRepo, container.PositionRepo, log)
 	container.CashManager = cashManager // Store as interface
@@ -176,8 +264,10 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	// ==========================================
 	// STEP 4: Initialize Trading Services
 	// ==========================================
+	// Trading services handle trade validation, execution, and safety checks
 
 	// Trade safety service with all validation layers
+	// Validates trades against frequency limits, cooloff periods, market hours, etc.
 	container.TradeSafetyService = trading.NewTradeSafetyService(
 		container.TradeRepo,
 		container.PositionRepo,
@@ -188,6 +278,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	)
 
 	// Trading service
+	// Orchestrates trading operations (validation, execution, event publishing)
 	container.TradingService = trading.NewTradingService(
 		container.TradeRepo,
 		container.BrokerClient,
@@ -197,6 +288,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	)
 
 	// Trade execution service - uses market orders for simplicity
+	// Executes trades via broker API, updates positions, manages cash, publishes events
 	container.TradeExecutionService = services.NewTradeExecutionService(
 		container.BrokerClient,
 		container.TradeRepo,
@@ -215,18 +307,21 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	// ==========================================
 	// STEP 5: Initialize Universe Services
 	// ==========================================
+	// Universe services manage the investment universe (securities, historical data, symbol resolution)
 
 	// Historical sync service (uses Tradernet as primary source for historical data)
+	// Fetches historical prices from Tradernet API and stores in history.db
 	// Stores raw data - filtering happens on read via HistoryDB's PriceFilter
 	container.HistoricalSyncService = universe.NewHistoricalSyncService(
-		container.BrokerClient, // Changed from YahooClient - Tradernet is now single source of truth
+		container.BrokerClient, // Tradernet is now single source of truth
 		container.SecurityRepo,
 		container.HistoryDBClient,
-		time.Second*2, // Rate limit delay
+		time.Second*2, // Rate limit delay between API calls
 		log,
 	)
 
 	// Symbol resolver
+	// Resolves security identifiers (ISIN, symbol) to security objects
 	container.SymbolResolver = universe.NewSymbolResolver(
 		container.BrokerClient,
 		container.SecurityRepo,
@@ -234,6 +329,8 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	)
 
 	// Security setup service (scoreCalculator will be set later)
+	// Auto-adds missing securities when referenced in trades/positions
+	// scoreCalculator will be wired later after SecurityScorer is created
 	container.SetupService = universe.NewSecuritySetupService(
 		container.SymbolResolver,
 		container.SecurityRepo,
@@ -245,6 +342,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	)
 
 	// Security deletion service
+	// Handles security deletion with cleanup of related data (positions, scores, history)
 	container.SecurityDeletionService = universe.NewSecurityDeletionService(
 		container.SecurityRepo,
 		container.PositionRepo,
@@ -255,13 +353,17 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	)
 
 	// Create adapter for SecuritySetupService to match portfolio.SecuritySetupServiceInterface
+	// This bridges the interface mismatch between universe and portfolio packages
 	setupServiceAdapter := &securitySetupServiceAdapter{service: container.SetupService}
 
 	// ==========================================
 	// STEP 6: Initialize Portfolio Service
 	// ==========================================
+	// Portfolio service manages portfolio state and operations
 
 	// Portfolio service (with SecuritySetupService adapter for auto-adding missing securities)
+	// Manages portfolio state, positions, and provides portfolio-level operations
+	// Auto-adds missing securities via SecuritySetupService adapter
 	portfolioSecurityProvider := NewSecurityProviderAdapter(container.SecurityRepo)
 	container.PortfolioService = portfolio.NewPortfolioService(
 		container.PositionRepo,
@@ -280,14 +382,18 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	// ==========================================
 	// STEP 7: Initialize Cash Flows Services
 	// ==========================================
+	// Cash flows services handle dividends, deposits, and cash flow processing
 
 	// Dividend service implementation (adapter - uses existing dividendRepo)
+	// Provides dividend-related operations (create, get, list)
 	container.DividendService = cash_flows.NewDividendServiceImpl(container.DividendRepo, log)
 
 	// Dividend creator
+	// Creates dividend transactions from broker data
 	container.DividendCreator = cash_flows.NewDividendCreator(container.DividendService, log)
 
 	// Dividend yield calculator (uses ledger.db dividend transactions for yield calculation)
+	// Calculates dividend yield based on dividend history and position values
 	// Adapter for PositionRepo to implement PositionValueProvider interface
 	positionValueAdapter := &positionValueProviderAdapter{positionRepo: container.PositionRepo}
 	container.DividendYieldCalculator = dividends.NewDividendYieldCalculator(
@@ -297,12 +403,15 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	)
 
 	// Deposit processor (uses CashManager)
+	// Processes deposit transactions and updates cash balances
 	container.DepositProcessor = cash_flows.NewDepositProcessor(cashManager, log)
 
 	// Tradernet adapter (adapts tradernet.Client to cash_flows.TradernetClient)
+	// Bridges interface mismatch between broker client and cash flows service
 	tradernetAdapter := cash_flows.NewTradernetAdapter(container.BrokerClient)
 
 	// Cash flows sync job (created but not stored - used by service)
+	// Syncs cash flows (deposits, dividends) from broker API
 	syncJob := cash_flows.NewSyncJob(
 		container.CashFlowsRepo,
 		container.DepositProcessor,
@@ -314,13 +423,17 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	)
 
 	// Cash flows service
+	// Orchestrates cash flow operations (sync, processing)
 	container.CashFlowsService = cash_flows.NewCashFlowsService(syncJob, log)
 
 	// ==========================================
 	// STEP 8: Initialize Remaining Universe Services
 	// ==========================================
+	// Additional universe services (sync, tagging, scoring)
 
 	// Sync service (scoreCalculator will be set later)
+	// Syncs security data (prices, scores) from broker API
+	// scoreCalculator will be wired later after SecurityScorer is created
 	container.SyncService = universe.NewSyncService(
 		container.SecurityRepo,
 		container.HistoricalSyncService,
@@ -332,6 +445,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	)
 
 	// Universe service with cleanup coordination
+	// Manages security universe with cleanup of orphaned data
 	container.UniverseService = universe.NewUniverseService(
 		container.SecurityRepo,
 		container.HistoryDB,
@@ -341,29 +455,38 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	)
 
 	// Tag assigner for auto-tagging securities
+	// Automatically assigns tags to securities based on their characteristics
+	// (e.g., high-quality, value-opportunity, dividend-income)
 	container.TagAssigner = universe.NewTagAssigner(log)
 	// Wire settings service for temperament-aware tag thresholds
+	// Tag thresholds adjust based on user's investment temperament
 	tagSettingsAdapterInstance := &tagSettingsAdapter{service: container.SettingsService}
 	container.TagAssigner.SetSettingsService(tagSettingsAdapterInstance)
 
 	// Security scorer (used by handlers)
+	// Calculates security scores (total score, component scores)
 	container.SecurityScorer = scorers.NewSecurityScorer()
 
 	// ==========================================
-	// STEP 8: Initialize Planning Services
+	// STEP 9: Initialize Planning Services
 	// ==========================================
+	// Planning services handle opportunity identification, sequence generation, and evaluation
 
 	// Opportunities service (with unified calculators - tag-based optimization controlled by config)
+	// Identifies trading opportunities using various calculators (profit-taking, averaging-down, etc.)
+	// Tag-based filtering can be enabled/disabled via planner config
 	// After removing domain.Security: universe.SecurityRepository directly implements opportunities.SecurityRepository
 	tagFilter := opportunities.NewTagBasedFilter(container.SecurityRepo, log)
 	container.OpportunitiesService = opportunities.NewService(tagFilter, container.SecurityRepo, log)
 
 	// Risk builder (needed for sequences service)
+	// Builds risk models (covariance matrices) for portfolio optimization
 	// Use TradingSecurityProviderAdapter for ISIN lookups
 	optimizationSecurityProvider := NewTradingSecurityProviderAdapter(container.SecurityRepo)
 	container.RiskBuilder = optimization.NewRiskModelBuilder(container.HistoryDBClient, optimizationSecurityProvider, container.ConfigDB.Conn(), log)
 
 	// Constraint enforcer for sequences service
+	// Enforces per-security constraints (allow_buy, allow_sell) during sequence generation
 	// Uses security lookup to check per-security allow_buy/allow_sell constraints
 	securityLookup := func(symbol, isin string) (*universe.Security, bool) {
 		if isin != "" {
@@ -383,14 +506,19 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	sequencesEnforcer := planningconstraints.NewEnforcer(log, securityLookup)
 
 	// Sequences service
+	// Generates trade sequences (ordered lists of trades) for portfolio optimization
 	container.SequencesService = sequences.NewService(log, container.RiskBuilder, sequencesEnforcer)
 
 	// Evaluation service (4 workers)
+	// Evaluates trade sequences using in-process worker pool
+	// Calculates portfolio scores, transaction costs, and other metrics
 	container.EvaluationService = planningevaluation.NewService(4, log)
 	// Wire settings service for temperament-aware scoring
+	// Evaluation weights adjust based on user's investment temperament
 	container.EvaluationService.SetSettingsService(container.SettingsService)
 
 	// Planner service (core planner)
+	// Core planning logic: generates opportunities, creates sequences, evaluates them
 	container.PlannerService = planningplanner.NewPlanner(
 		container.OpportunitiesService,
 		container.SequencesService,
@@ -402,6 +530,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	)
 
 	// Planning service
+	// High-level planning orchestration (wraps PlannerService)
 	container.PlanningService = planning.NewService(
 		container.OpportunitiesService,
 		container.SequencesService,
@@ -413,6 +542,8 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	)
 
 	// State hash service (calculates unified state hash for change detection)
+	// Calculates a hash of the entire portfolio state (positions, scores, cash, settings, allocation)
+	// Used to detect when portfolio state changes and trigger re-planning
 	container.StateHashService = planninghash.NewStateHashService(
 		container.PositionRepo,
 		container.SecurityRepo,
@@ -428,6 +559,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	log.Info().Msg("State hash service initialized")
 
 	// State monitor (monitors unified state hash and emits events on changes)
+	// Periodically checks state hash and emits PORTFOLIO_CHANGED events when state changes
 	// NOTE: Not started here - will be started in main.go after all services initialized
 	container.StateMonitor = planningstatemonitor.NewStateMonitor(
 		container.StateHashService,
@@ -437,6 +569,8 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	log.Info().Msg("State monitor initialized (not started yet)")
 
 	// Opportunity Context Builder - unified context building for opportunities, planning, and rebalancing
+	// Builds comprehensive context objects for opportunity calculators, planning, and rebalancing
+	// Context includes positions, securities, allocation, recent trades, scores, settings, regime, cash, prices
 	container.OpportunityContextBuilder = services.NewOpportunityContextBuilder(
 		&ocbPositionRepoAdapter{repo: container.PositionRepo},
 		&ocbSecurityRepoAdapter{repo: container.SecurityRepo},
@@ -454,13 +588,16 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	log.Info().Msg("Opportunity context builder initialized")
 
 	// ==========================================
-	// STEP 9: Initialize Optimization Services
+	// STEP 10: Initialize Optimization Services
 	// ==========================================
+	// Optimization services handle portfolio optimization (HRP, Mean-Variance, Black-Litterman)
 
 	// Constraints manager
+	// Manages portfolio constraints (allocation limits, concentration limits, etc.)
 	container.ConstraintsMgr = optimization.NewConstraintsManager(log)
 
 	// Returns calculator
+	// Calculates expected returns for securities based on historical data
 	container.ReturnsCalc = optimization.NewReturnsCalculator(
 		container.PortfolioDB.Conn(),
 		optimizationSecurityProvider,
@@ -468,6 +605,8 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	)
 
 	// Kelly Position Sizer
+	// Calculates optimal position sizes using Kelly Criterion
+	// Default parameters will be overridden by temperament settings
 	container.KellySizer = optimization.NewKellyPositionSizer(
 		0.02,  // riskFreeRate: 2%
 		0.5,   // fixedFractional: 0.5 (half-Kelly) - default, will be overridden by temperament
@@ -478,10 +617,12 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		container.RegimeDetector,
 	)
 	// Wire settings service for temperament-aware Kelly parameters
+	// Kelly sizing adjusts based on user's risk tolerance and aggression
 	kellySettingsAdapterInstance := &kellySettingsAdapter{service: container.SettingsService}
 	container.KellySizer.SetSettingsService(kellySettingsAdapterInstance)
 
 	// CVaR Calculator
+	// Calculates Conditional Value at Risk (expected shortfall)
 	container.CVaRCalculator = optimization.NewCVaRCalculator(
 		container.RiskBuilder,
 		container.RegimeDetector,
@@ -489,9 +630,11 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	)
 
 	// View Generator (for Black-Litterman)
+	// Generates market views for Black-Litterman optimization
 	container.ViewGenerator = optimization.NewViewGenerator(log)
 
 	// Black-Litterman Optimizer
+	// Implements Black-Litterman portfolio optimization (combines market equilibrium with views)
 	container.BlackLittermanOptimizer = optimization.NewBlackLittermanOptimizer(
 		container.ViewGenerator,
 		container.RiskBuilder,
@@ -499,6 +642,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	)
 
 	// Optimizer service
+	// Main portfolio optimization service (HRP, Mean-Variance, Black-Litterman)
 	container.OptimizerService = optimization.NewOptimizerService(
 		container.ConstraintsMgr,
 		container.ReturnsCalc,
@@ -507,38 +651,51 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	)
 
 	// Wire Kelly Sizer into OptimizerService
+	// Optimizer uses Kelly sizing for position size recommendations
 	container.OptimizerService.SetKellySizer(container.KellySizer)
 
 	// Wire CVaR Calculator into OptimizerService
+	// Optimizer uses CVaR for risk-adjusted optimization
 	container.OptimizerService.SetCVaRCalculator(container.CVaRCalculator)
 
 	// Wire Settings Service into OptimizerService (for CVaR threshold configuration)
+	// CVaR thresholds adjust based on user's risk tolerance
 	container.OptimizerService.SetSettingsService(container.SettingsService)
 
 	// Wire Black-Litterman Optimizer into OptimizerService
+	// Optimizer can use Black-Litterman for view-based optimization
 	container.OptimizerService.SetBlackLittermanOptimizer(container.BlackLittermanOptimizer)
 
 	// ==========================================
-	// STEP 9.5: Initialize Calculation Cache and Idle Processor
+	// STEP 11: Initialize Calculation Cache and Analytics
 	// ==========================================
+	// Calculation cache stores expensive computation results (risk models, optimizer results)
 
 	// Calculation cache (for technical indicators and optimizer results)
+	// Caches expensive computation results (risk models, HRP allocations, MV allocations)
+	// Reduces computation time for repeated calculations
 	container.CalculationCache = calculations.NewCache(container.CalculationsDB.Conn())
 
 	// Wire cache into RiskBuilder for optimizer caching
+	// Risk models (covariance matrices) are expensive to compute - cache them
 	container.RiskBuilder.SetCache(container.CalculationCache)
 
 	// Wire cache into OptimizerService for HRP and MV caching
+	// Optimizer results (HRP allocations, MV allocations) are cached
 	container.OptimizerService.SetCache(container.CalculationCache)
 
 	// Factor Exposure Tracker
+	// Tracks portfolio exposure to various risk factors (sector, geography, etc.)
 	container.FactorExposureTracker = analytics.NewFactorExposureTracker(log)
 
 	// ==========================================
-	// STEP 10: Initialize Rebalancing Services
+	// STEP 12: Initialize Rebalancing Services
 	// ==========================================
+	// Rebalancing services handle portfolio rebalancing and negative balance correction
 
 	// Negative balance rebalancer
+	// Handles emergency rebalancing when negative balances are detected
+	// Sells positions to correct negative cash balances
 	container.NegativeBalanceRebalancer = rebalancing.NewNegativeBalanceRebalancer(
 		log,
 		cashManager,
@@ -552,6 +709,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	)
 
 	// Rebalancing service
+	// Orchestrates portfolio rebalancing based on allocation targets and triggers
 	triggerChecker := rebalancing.NewTriggerChecker(log)
 	container.RebalancingService = rebalancing.NewService(
 		triggerChecker,
@@ -570,10 +728,12 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	)
 
 	// ==========================================
-	// STEP 11: Initialize Ticker Service
+	// STEP 13: Initialize Ticker and Display Services
 	// ==========================================
+	// Display services handle LED ticker text generation and portfolio health visualization
 
 	// Ticker content service (generates ticker text)
+	// Generates scrolling text for LED display (portfolio value, cash, next actions)
 	container.TickerContentService = ticker.NewTickerContentService(
 		container.PortfolioDB.Conn(),
 		container.ConfigDB.Conn(),
@@ -584,6 +744,8 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	log.Info().Msg("Ticker content service initialized")
 
 	// Health calculator (calculates portfolio health scores)
+	// Calculates health scores for each security in the portfolio
+	// Health scores are used for LED display visualization
 	container.HealthCalculator = display.NewHealthCalculator(
 		container.PortfolioDB.Conn(),
 		container.HistoryDBClient,
@@ -593,6 +755,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	log.Info().Msg("Health calculator initialized")
 
 	// Health updater (periodically sends health scores to display)
+	// Sends portfolio health data to LED display for animated visualization
 	displayURL := "http://localhost:7000"
 	if envURL := os.Getenv("DISPLAY_URL"); envURL != "" {
 		displayURL = envURL
@@ -614,6 +777,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	log.Info().Dur("interval", updateInterval).Msg("Health updater initialized")
 
 	// Mode manager (switches between display modes)
+	// Manages LED display modes: TEXT (ticker), HEALTH (animated visualization), STATS (pixel count)
 	if displayManager != nil {
 		container.ModeManager = display.NewModeManager(
 			displayManager,
@@ -624,6 +788,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		log.Info().Msg("Display mode manager initialized")
 
 		// Apply display mode from settings (if configured)
+		// Display mode can be set via Settings UI
 		if container.SettingsRepo != nil {
 			if mode, err := container.SettingsRepo.Get("display_mode"); err == nil && mode != nil && *mode != "" {
 				if err := container.ModeManager.SetMode(display.DisplayMode(*mode)); err != nil {
@@ -636,10 +801,12 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	}
 
 	// ==========================================
-	// STEP 12: Initialize Adaptive Market Services
+	// STEP 14: Initialize Adaptive Market Services
 	// ==========================================
+	// Adaptive market services handle market regime detection and adaptive behavior
 
 	// Market index service for market-wide regime detection
+	// Manages market indices (SPY, QQQ, etc.) for regime detection
 	// Use TradingSecurityProviderAdapter for ISIN lookups
 	marketIndexSecurityProvider := NewTradingSecurityProviderAdapter(container.SecurityRepo)
 	container.MarketIndexService = market_regime.NewMarketIndexService(
@@ -650,9 +817,11 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	)
 
 	// Index repository for per-region market indices
+	// Stores market index configuration (which indices to track per region)
 	container.IndexRepository = market_regime.NewIndexRepository(container.ConfigDB.Conn(), log)
 
 	// Index sync service - ensures indices exist in both config DB and universe DB
+	// Syncs index definitions to both databases (idempotent operation)
 	container.IndexSyncService = market_regime.NewIndexSyncService(
 		container.SecurityRepo,
 		container.OverrideRepo,
@@ -662,6 +831,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 
 	// Sync known indices to both databases (idempotent - safe to run on every startup)
 	// This ensures indices are in market_indices (config) AND securities (universe) tables
+	// Market regime detection needs indices in both places
 	if err := container.IndexSyncService.SyncAll(); err != nil {
 		log.Warn().Err(err).Msg("Failed to sync market indices to databases (will use fallback)")
 		// Don't fail startup - fallback to hardcoded indices will work
@@ -670,6 +840,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	// Sync historical prices for indices (needed for regime calculation)
 	// This fetches price data from broker API for all PRICE indices
 	// First run: fetches 10 years of data; subsequent runs: fetches 1 year of updates
+	// Regime detection requires historical price data to calculate moving averages
 	if container.HistoricalSyncService != nil {
 		if err := container.IndexSyncService.SyncHistoricalPricesForIndices(container.HistoricalSyncService); err != nil {
 			log.Warn().Err(err).Msg("Failed to sync historical prices for indices (regime calculation may be limited)")
@@ -678,14 +849,17 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	}
 
 	// Regime persistence for smoothing and history
+	// Stores regime history and provides smoothing to prevent regime oscillation
 	container.RegimePersistence = market_regime.NewRegimePersistence(container.ConfigDB.Conn(), log)
 
 	// Market regime detector
+	// Detects market regime (bull, bear, sideways) based on index moving averages
 	container.RegimeDetector = market_regime.NewMarketRegimeDetector(log)
 	container.RegimeDetector.SetMarketIndexService(container.MarketIndexService)
 	container.RegimeDetector.SetRegimePersistence(container.RegimePersistence)
 
 	// Adaptive market service
+	// Implements Adaptive Market Hypothesis - adjusts behavior based on market regime
 	container.AdaptiveMarketService = adaptation.NewAdaptiveMarketService(
 		container.RegimeDetector,
 		nil, // performanceTracker - optional
@@ -695,14 +869,17 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	)
 
 	// Regime score provider adapter
+	// Provides current regime score (0-1) for adaptive services
 	container.RegimeScoreProvider = market_regime.NewRegimeScoreProviderAdapter(container.RegimePersistence)
 
 	// Wire up adaptive services to integration points
+	// OptimizerService uses adaptive service for regime-aware optimization
 	container.OptimizerService.SetAdaptiveService(container.AdaptiveMarketService)
 	container.OptimizerService.SetRegimeScoreProvider(container.RegimeScoreProvider)
 	log.Info().Msg("Adaptive service wired to OptimizerService")
 
 	// TagAssigner: adaptive quality gates
+	// Quality gate thresholds adjust based on market regime
 	// Create adapter to bridge type mismatch
 	tagAssignerAdapter := &qualityGatesAdapter{service: container.AdaptiveMarketService}
 	container.TagAssigner.SetAdaptiveService(tagAssignerAdapter)
@@ -710,16 +887,19 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	log.Info().Msg("Adaptive service wired to TagAssigner")
 
 	// SecurityScorer: adaptive weights and per-region regime scores
+	// Scoring weights adjust based on market regime
 	// AdaptiveMarketService implements scorers.AdaptiveWeightsProvider interface directly
 	container.SecurityScorer.SetAdaptiveService(container.AdaptiveMarketService)
 	container.SecurityScorer.SetRegimeScoreProvider(container.RegimeScoreProvider)
 	log.Info().Msg("Adaptive service and regime score provider wired to SecurityScorer")
 
 	// ==========================================
-	// STEP 13: Initialize Reliability Services
+	// STEP 15: Initialize Reliability Services
 	// ==========================================
+	// Reliability services handle backups, health checks, and data integrity
 
 	// Create all database references map for reliability services
+	// Health services monitor database integrity and file size
 	databases := map[string]*database.DB{
 		"universe":  container.UniverseDB,
 		"config":    container.ConfigDB,
@@ -730,6 +910,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	}
 
 	// Initialize health services for each database
+	// Health services check database integrity, file size, and corruption
 	dataDir := cfg.DataDir
 	container.HealthServices = make(map[string]*reliability.DatabaseHealthService)
 	container.HealthServices["universe"] = reliability.NewDatabaseHealthService(container.UniverseDB, "universe", dataDir+"/universe.db", log)
@@ -740,10 +921,12 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	container.HealthServices["cache"] = reliability.NewDatabaseHealthService(container.CacheDB, "cache", dataDir+"/cache.db", log)
 
 	// Initialize backup service
+	// Creates local backups of all databases
 	backupDir := dataDir + "/backups"
 	container.BackupService = reliability.NewBackupService(databases, dataDir, backupDir, log)
 
 	// Initialize R2 cloud backup services (optional - only if credentials are configured)
+	// R2 backup provides cloud storage for database backups
 	r2AccountID := ""
 	r2AccessKeyID := ""
 	r2SecretAccessKey := ""
@@ -765,6 +948,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	}
 
 	// Only initialize R2 services if all credentials are provided
+	// R2 backup is optional - system works without it
 	if r2AccountID != "" && r2AccessKeyID != "" && r2SecretAccessKey != "" && r2BucketName != "" {
 		r2Client, err := reliability.NewR2Client(r2AccountID, r2AccessKeyID, r2SecretAccessKey, r2BucketName, log)
 		if err != nil {
@@ -785,8 +969,9 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	}
 
 	// ==========================================
-	// STEP 14: Initialize Concentration Alert Service
+	// STEP 16: Initialize Concentration Alert Service
 	// ==========================================
+	// Concentration alert service detects portfolio concentration breaches
 
 	container.ConcentrationAlertService = allocation.NewConcentrationAlertService(
 		container.PortfolioDB.Conn(),
@@ -794,16 +979,19 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	)
 
 	// ==========================================
-	// STEP 14.5: Initialize Quantum Calculator
+	// STEP 17: Initialize Quantum Calculator
 	// ==========================================
+	// Quantum calculator provides quantum probability calculations for bubble/trap detection
 
 	container.QuantumCalculator = quantum.NewQuantumProbabilityCalculator()
 
 	// ==========================================
-	// STEP 15: Initialize Callbacks (for jobs)
+	// STEP 18: Initialize Callbacks (for jobs)
 	// ==========================================
+	// Callbacks are functions that jobs can call to trigger actions
 
 	// Display ticker update callback (called by sync cycle)
+	// Updates LED ticker text with current portfolio information
 	container.UpdateDisplayTicker = func() error {
 		text, err := container.TickerContentService.GenerateTickerText()
 		if err != nil {
@@ -821,6 +1009,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	}
 
 	// Emergency rebalance callback (called when negative balance detected)
+	// Triggers emergency rebalancing to correct negative cash balances
 	container.EmergencyRebalance = func() error {
 		log.Warn().Msg("EMERGENCY: Executing negative balance rebalancing")
 
@@ -841,6 +1030,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	// ==========================================
 	// Note: IdleProcessor has been replaced by the Work Processor
 	// See InitializeWork() in work.go for the new event-driven job system
+	// Work Processor provides event-driven execution, dependency resolution, and market-aware scheduling
 
 	log.Info().Msg("All services initialized")
 

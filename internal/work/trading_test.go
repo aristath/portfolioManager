@@ -214,6 +214,7 @@ func TestTradingWorkTypes_MarketTiming(t *testing.T) {
 }
 
 func TestTradingWorkTypes_Priority(t *testing.T) {
+	t.Skip("Priority removed in favor of FIFO registration order")
 	registry := NewRegistry()
 
 	deps := &TradingDeps{
@@ -226,12 +227,10 @@ func TestTradingWorkTypes_Priority(t *testing.T) {
 	// Execute should be Critical
 	execute := registry.Get("trading:execute")
 	require.NotNil(t, execute)
-	assert.Equal(t, PriorityCritical, execute.Priority)
 
 	// Retry should be Medium
 	retry := registry.Get("trading:retry")
 	require.NotNil(t, retry)
-	assert.Equal(t, PriorityMedium, retry.Priority)
 }
 
 func TestTradingWorkTypes_NoDependencies(t *testing.T) {

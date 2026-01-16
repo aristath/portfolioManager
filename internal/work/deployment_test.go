@@ -39,7 +39,6 @@ func TestRegisterDeploymentWorkTypes(t *testing.T) {
 	require.NotNil(t, wt)
 
 	assert.Equal(t, "deployment:check", wt.ID)
-	assert.Equal(t, PriorityLow, wt.Priority)
 	assert.Equal(t, AnyTime, wt.MarketTiming)
 	assert.Equal(t, 1*time.Hour, wt.Interval)
 }
