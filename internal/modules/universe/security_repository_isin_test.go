@@ -91,7 +91,7 @@ func TestGetByISIN_PrimaryMethod(t *testing.T) {
 	// Insert test data
 	_, err := db.Exec(`
 		INSERT INTO securities (isin, symbol, data, last_synced)
-		VALUES ('US0378331005', 'AAPL.US', json_object('name', 'Apple Inc.'), NULL)
+		VALUES ('US0378331005', 'AAPL.US', '{"name": "Apple Inc."}', NULL)
 	`)
 	require.NoError(t, err)
 
@@ -131,7 +131,7 @@ func TestGetBySymbol_HelperMethod_LooksUpISINFirst(t *testing.T) {
 	// Insert test data
 	_, err := db.Exec(`
 		INSERT INTO securities (isin, symbol, data, last_synced)
-		VALUES ('US0378331005', 'AAPL.US', json_object('name', 'Apple Inc.'), NULL)
+		VALUES ('US0378331005', 'AAPL.US', '{"name": "Apple Inc."}', NULL)
 	`)
 	require.NoError(t, err)
 
@@ -155,7 +155,7 @@ func TestUpdate_ByISIN(t *testing.T) {
 	// Insert test data
 	_, err := db.Exec(`
 		INSERT INTO securities (isin, symbol, data, last_synced)
-		VALUES ('US0378331005', 'AAPL.US', json_object('name', 'Apple Inc.', 'geography', 'US'), NULL)
+		VALUES ('US0378331005', 'AAPL.US', '{"name": "Apple Inc.", "attributes": {"CntryOfRisk": "US"}}', NULL)
 	`)
 	require.NoError(t, err)
 
@@ -184,7 +184,7 @@ func TestDelete_ByISIN(t *testing.T) {
 	// Insert test data
 	_, err := db.Exec(`
 		INSERT INTO securities (isin, symbol, data, last_synced)
-		VALUES ('US0378331005', 'AAPL.US', json_object('name', 'Apple Inc.'), NULL)
+		VALUES ('US0378331005', 'AAPL.US', '{"name": "Apple Inc."}', NULL)
 	`)
 	require.NoError(t, err)
 
@@ -217,13 +217,15 @@ func TestCreate_WithISINAsPrimaryKey(t *testing.T) {
 	err := repo.Create(security)
 	require.NoError(t, err)
 
-	// Verify creation
+	// Verify creation - only ISIN and Symbol are stored directly
+	// Other fields (Name, etc.) are empty until metadata sync runs
 	created, err := repo.GetByISIN("US0378331005")
 	require.NoError(t, err)
 	require.NotNil(t, created)
 	assert.Equal(t, "US0378331005", created.ISIN)
 	assert.Equal(t, "AAPL.US", created.Symbol)
-	assert.Equal(t, "Apple Inc.", created.Name)
+	// Name is empty until metadata sync populates it with raw Tradernet data
+	assert.Equal(t, "", created.Name)
 }
 
 func TestGetBySymbol_FallbackToSymbolLookup(t *testing.T) {
@@ -236,7 +238,7 @@ func TestGetBySymbol_FallbackToSymbolLookup(t *testing.T) {
 	// Insert test data
 	_, err := db.Exec(`
 		INSERT INTO securities (isin, symbol, data, last_synced)
-		VALUES ('US0378331005', 'AAPL.US', json_object('name', 'Apple Inc.'), NULL)
+		VALUES ('US0378331005', 'AAPL.US', '{"name": "Apple Inc."}', NULL)
 	`)
 	require.NoError(t, err)
 
@@ -260,7 +262,7 @@ func TestGetByIdentifier_PrioritizesISIN(t *testing.T) {
 	// Insert test data
 	_, err := db.Exec(`
 		INSERT INTO securities (isin, symbol, data, last_synced)
-		VALUES ('US0378331005', 'AAPL.US', json_object('name', 'Apple Inc.'), NULL)
+		VALUES ('US0378331005', 'AAPL.US', '{"name": "Apple Inc."}', NULL)
 	`)
 	require.NoError(t, err)
 

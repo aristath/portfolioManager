@@ -167,6 +167,14 @@ func (m *mockBrokerClientForTest) GetSecurityMetadata(symbol string) (*BrokerSec
 	return nil, nil
 }
 
+// GetSecurityMetadataRaw implements BrokerClient
+func (m *mockBrokerClientForTest) GetSecurityMetadataRaw(symbol string) (interface{}, error) {
+	if m.returnError {
+		return nil, errors.New("mock error")
+	}
+	return nil, nil
+}
+
 // Compile-time check that mockBrokerClientForTest implements BrokerClient
 var _ BrokerClient = (*mockBrokerClientForTest)(nil)
 

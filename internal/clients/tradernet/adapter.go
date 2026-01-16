@@ -135,6 +135,12 @@ func (a *TradernetBrokerAdapter) GetSecurityMetadata(symbol string) (*domain.Bro
 	return &results[0], nil
 }
 
+// GetSecurityMetadataRaw implements domain.BrokerClient
+// Returns raw API response without transformation for metadata storage
+func (a *TradernetBrokerAdapter) GetSecurityMetadataRaw(symbol string) (interface{}, error) {
+	return a.client.GetSecurityMetadataRaw(symbol)
+}
+
 // GetFXRates implements domain.BrokerClient
 func (a *TradernetBrokerAdapter) GetFXRates(baseCurrency string, currencies []string) (map[string]float64, error) {
 	rates, err := a.client.GetFXRates(baseCurrency, currencies)

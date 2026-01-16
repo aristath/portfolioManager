@@ -62,19 +62,19 @@ func insertTestSecurities(t *testing.T, db *sql.DB) {
 	// Insert regular securities (EQUITY, ETF)
 	_, err := db.Exec(`
 		INSERT INTO securities (isin, symbol, data, last_synced) VALUES
-		('US0378331005', 'AAPL.US', json_object('name', 'Apple Inc.', 'product_type', 'EQUITY', 'market_code', 'FIX', 'fullExchangeName', 'NASDAQ'), NULL),
-		('US5949181045', 'MSFT.US', json_object('name', 'Microsoft Corp', 'product_type', 'EQUITY', 'market_code', 'FIX', 'fullExchangeName', 'NASDAQ'), NULL),
-		('IE00B3XXRP09', 'VUSA.EU', json_object('name', 'Vanguard S&P 500 ETF', 'product_type', 'ETF', 'market_code', 'EU', 'fullExchangeName', 'LSE'), NULL),
-		('US0000000001', 'NULL_TYPE.US', json_object('name', 'Security with NULL type', 'market_code', 'FIX', 'fullExchangeName', 'NYSE'), NULL)
+		('US0378331005', 'AAPL.US', '{"name": "Apple Inc.", "type": "EQUITY", "mkt_name": "FIX", "codesub_nm": "NASDAQ"}', NULL),
+		('US5949181045', 'MSFT.US', '{"name": "Microsoft Corp", "type": "EQUITY", "mkt_name": "FIX", "codesub_nm": "NASDAQ"}', NULL),
+		('IE00B3XXRP09', 'VUSA.EU', '{"name": "Vanguard S&P 500 ETF", "type": "ETF", "mkt_name": "EU", "codesub_nm": "LSE"}', NULL),
+		('US0000000001', 'NULL_TYPE.US', '{"name": "Security with NULL type", "mkt_name": "FIX", "codesub_nm": "NYSE"}', NULL)
 	`)
 	require.NoError(t, err)
 
 	// Insert market indices (should be excluded from tradable queries)
 	_, err = db.Exec(`
 		INSERT INTO securities (isin, symbol, data, last_synced) VALUES
-		('INDEX-SP500.IDX', 'SP500.IDX', json_object('name', 'S&P 500', 'product_type', 'INDEX', 'market_code', 'FIX'), NULL),
-		('INDEX-NASDAQ.IDX', 'NASDAQ.IDX', json_object('name', 'NASDAQ Composite', 'product_type', 'INDEX', 'market_code', 'FIX'), NULL),
-		('INDEX-DAX.IDX', 'DAX.IDX', json_object('name', 'DAX (Germany)', 'product_type', 'INDEX', 'market_code', 'EU'), NULL)
+		('INDEX-SP500.IDX', 'SP500.IDX', '{"name": "S&P 500", "type": "INDEX", "mkt_name": "FIX"}', NULL),
+		('INDEX-NASDAQ.IDX', 'NASDAQ.IDX', '{"name": "NASDAQ Composite", "type": "INDEX", "mkt_name": "FIX"}', NULL),
+		('INDEX-DAX.IDX', 'DAX.IDX', '{"name": "DAX (Germany)", "type": "INDEX", "mkt_name": "EU"}', NULL)
 	`)
 	require.NoError(t, err)
 }

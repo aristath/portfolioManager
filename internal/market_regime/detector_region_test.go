@@ -39,13 +39,43 @@ func (m *mockSecurityRepo) Exists(isin string) (bool, error) {
 }
 
 func (m *mockSecurityRepo) Create(sec universe.Security) error {
-	_, err := m.db.Exec(`INSERT INTO securities (isin, symbol, name, product_type, market_code, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
-		sec.ISIN, sec.Symbol, sec.Name, sec.ProductType, sec.MarketCode, 0, 0)
+	// Store minimal placeholder JSON (like real SecurityRepository)
+	jsonData := "{}"
+	_, err := m.db.Exec(`INSERT INTO securities (isin, symbol, data, last_synced) VALUES (?, ?, ?, ?)`,
+		sec.ISIN, sec.Symbol, jsonData, nil)
 	return err
 }
 
 func (m *mockSecurityRepo) Update(isin string, updates map[string]any) error {
-	return nil // Not needed for these tests
+	// Build JSON from updates (simplified version for tests)
+	jsonData := "{"
+	first := true
+	for key, value := range updates {
+		if !first {
+			jsonData += ","
+		}
+		first = false
+
+		// Map Go field names to Tradernet field names
+		var jsonKey string
+		switch key {
+		case "name":
+			jsonKey = "name"
+		case "product_type":
+			jsonKey = "type"
+		case "market_code":
+			jsonKey = "mkt_name"
+		default:
+			jsonKey = key
+		}
+
+		// Simple string escaping for test purposes
+		jsonData += `"` + jsonKey + `":"` + value.(string) + `"`
+	}
+	jsonData += "}"
+
+	_, err := m.db.Exec(`UPDATE securities SET data = ? WHERE isin = ?`, jsonData, isin)
+	return err
 }
 
 // Implement remaining interface methods as no-ops (not used in these tests)
@@ -127,21 +157,29 @@ func (m *mockOverrideRepo) GetAllSecuritiesWithOverrides() (map[string]map[strin
 
 // setupDetectorTestDBs sets up all databases needed for detector calculation tests
 func setupDetectorTestDBs(t *testing.T) (*sql.DB, *sql.DB, *sql.DB, *universe.HistoryDB) {
-	// Universe DB - securities table
+	// Universe DB - securities table with JSON storage (migration 038 schema)
 	universeDB, err := sql.Open("sqlite3", ":memory:")
 	require.NoError(t, err)
 	_, err = universeDB.Exec(`
 		CREATE TABLE securities (
 			isin TEXT PRIMARY KEY,
 			symbol TEXT NOT NULL,
-			name TEXT NOT NULL,
-			product_type TEXT,
-			market_code TEXT,
-			active INTEGER DEFAULT 1,
-			allow_buy INTEGER DEFAULT 1,
-			allow_sell INTEGER DEFAULT 1,
+			data TEXT NOT NULL,
+			last_synced INTEGER
+		) STRICT
+	`)
+	require.NoError(t, err)
+
+	// Create security_overrides table
+	_, err = universeDB.Exec(`
+		CREATE TABLE security_overrides (
+			isin TEXT NOT NULL,
+			field TEXT NOT NULL,
+			value TEXT NOT NULL,
 			created_at INTEGER NOT NULL,
-			updated_at INTEGER NOT NULL
+			updated_at INTEGER NOT NULL,
+			PRIMARY KEY (isin, field),
+			FOREIGN KEY (isin) REFERENCES securities(isin) ON DELETE CASCADE
 		)
 	`)
 	require.NoError(t, err)
@@ -177,10 +215,21 @@ func setupDetectorTestDBs(t *testing.T) (*sql.DB, *sql.DB, *sql.DB, *universe.Hi
 // insertTestIndex inserts a test index into the universe DB
 func insertTestIndex(t *testing.T, universeDB *sql.DB, symbol, name, marketCode string) {
 	isin := "INDEX-" + symbol
+	// Create JSON data with raw Tradernet field names
+	jsonData := `{"name":"` + name + `","type":"INDEX","mkt_name":"` + marketCode + `"}`
 	_, err := universeDB.Exec(`
-		INSERT INTO securities (isin, symbol, name, product_type, market_code, active, allow_buy, allow_sell, created_at, updated_at)
-		VALUES (?, ?, ?, 'INDEX', ?, 1, 0, 0, 1704067200, 1704067200)
-	`, isin, symbol, name, marketCode)
+		INSERT INTO securities (isin, symbol, data, last_synced)
+		VALUES (?, ?, ?, 1704067200)
+	`, isin, symbol, jsonData)
+	require.NoError(t, err)
+
+	// Set allow_buy and allow_sell overrides
+	_, err = universeDB.Exec(`
+		INSERT INTO security_overrides (isin, field, value, created_at, updated_at)
+		VALUES
+			(?, 'allow_buy', 'false', 1704067200, 1704067200),
+			(?, 'allow_sell', 'false', 1704067200, 1704067200)
+	`, isin, isin)
 	require.NoError(t, err)
 }
 
@@ -578,7 +627,7 @@ func TestPerRegionRegimeDetection_CompleteFlow(t *testing.T) {
 
 	// Verify indices exist
 	var indexCount int
-	err = universeDB.QueryRow(`SELECT COUNT(*) FROM securities WHERE product_type = 'INDEX'`).Scan(&indexCount)
+	err = universeDB.QueryRow(`SELECT COUNT(*) FROM securities WHERE json_extract(data, '$.type') = 'INDEX'`).Scan(&indexCount)
 	require.NoError(t, err)
 	assert.Greater(t, indexCount, 0, "Should have synced indices to securities table")
 

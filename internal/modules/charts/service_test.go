@@ -87,8 +87,8 @@ func TestGetSparklinesAggregated_ExcludesIndices(t *testing.T) {
 	_, err := universeDB.Exec(`
 		INSERT INTO securities (isin, symbol, data, last_synced)
 		VALUES
-			('US0378331005', 'AAPL', json_object('name', 'Apple Inc.', 'product_type', 'EQUITY'), NULL),
-			('US5949181045', 'MSFT', json_object('name', 'Microsoft Corp', 'product_type', 'EQUITY'), NULL)
+			('US0378331005', 'AAPL', json_object('name', 'Apple Inc.', 'type', 'EQUITY'), NULL),
+			('US5949181045', 'MSFT', json_object('name', 'Microsoft Corp', 'type', 'EQUITY'), NULL)
 	`)
 	require.NoError(t, err)
 
@@ -96,8 +96,8 @@ func TestGetSparklinesAggregated_ExcludesIndices(t *testing.T) {
 	_, err = universeDB.Exec(`
 		INSERT INTO securities (isin, symbol, data, last_synced)
 		VALUES
-			('INDEX-SP500.IDX', 'SP500.IDX', json_object('name', 'S&P 500', 'product_type', 'INDEX'), NULL),
-			('INDEX-NASDAQ.IDX', 'NASDAQ.IDX', json_object('name', 'NASDAQ Composite', 'product_type', 'INDEX'), NULL)
+			('INDEX-SP500.IDX', 'SP500.IDX', json_object('name', 'S&P 500', 'type', 'INDEX'), NULL),
+			('INDEX-NASDAQ.IDX', 'NASDAQ.IDX', json_object('name', 'NASDAQ Composite', 'type', 'INDEX'), NULL)
 	`)
 	require.NoError(t, err)
 
@@ -154,11 +154,11 @@ func TestGetSparklinesAggregated_IncludesNullProductType(t *testing.T) {
 	`)
 	require.NoError(t, err)
 
-	// Insert index (should be excluded)
+	// Insert index (should be excluded) with raw Tradernet format (type, not product_type)
 	_, err = universeDB.Exec(`
 		INSERT INTO securities (isin, symbol, data, last_synced)
 		VALUES
-			('INDEX-SP500.IDX', 'SP500.IDX', json_object('name', 'S&P 500', 'product_type', 'INDEX'), NULL)
+			('INDEX-SP500.IDX', 'SP500.IDX', json_object('name', 'S&P 500', 'type', 'INDEX'), NULL)
 	`)
 	require.NoError(t, err)
 

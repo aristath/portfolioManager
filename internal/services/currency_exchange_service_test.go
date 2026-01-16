@@ -238,6 +238,10 @@ func (m *mockBrokerClientCurrencyTest) GetSecurityMetadata(symbol string) (*doma
 	return nil, nil
 }
 
+func (m *mockBrokerClientCurrencyTest) GetSecurityMetadataRaw(symbol string) (interface{}, error) {
+	return nil, nil
+}
+
 // TestExecuteStep_MarketOrder tests that FX conversions use market orders
 func TestExecuteStep_MarketOrder(t *testing.T) {
 	log := logger.New(logger.Config{Level: "error", Pretty: false})
@@ -502,5 +506,9 @@ func (m *mockBrokerClientCurrencyTestNotConnected) SetCredentials(apiKey, apiSec
 }
 
 func (m *mockBrokerClientCurrencyTestNotConnected) GetSecurityMetadata(symbol string) (*domain.BrokerSecurityInfo, error) {
+	return nil, nil
+}
+
+func (m *mockBrokerClientCurrencyTestNotConnected) GetSecurityMetadataRaw(symbol string) (interface{}, error) {
 	return nil, nil
 }

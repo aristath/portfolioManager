@@ -2,7 +2,9 @@ package universe
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -209,8 +211,8 @@ func (r *SecurityRepository) GetByIdentifier(identifier string) (*Security, erro
 func (r *SecurityRepository) GetAllActive() ([]Security, error) {
 	// Filter out indices using JSON extraction
 	query := `SELECT ` + securitiesColumns + ` FROM securities
-		WHERE json_extract(data, '$.product_type') IS NULL
-		OR json_extract(data, '$.product_type') != ?`
+		WHERE json_extract(data, '$.type') IS NULL
+		OR json_extract(data, '$.type') != ?`
 
 	rows, err := r.universeDB.Query(query, string(ProductTypeIndex))
 	if err != nil {
@@ -250,11 +252,11 @@ func (r *SecurityRepository) GetAllActive() ([]Security, error) {
 
 // GetDistinctExchanges returns a list of distinct exchange names from active tradable securities (excludes indices)
 func (r *SecurityRepository) GetDistinctExchanges() ([]string, error) {
-	query := `SELECT DISTINCT json_extract(data, '$.fullExchangeName') as fullExchangeName
+	query := `SELECT DISTINCT json_extract(data, '$.codesub_nm') as fullExchangeName
 		FROM securities
-		WHERE json_extract(data, '$.fullExchangeName') IS NOT NULL
-		AND json_extract(data, '$.fullExchangeName') != ''
-		AND (json_extract(data, '$.product_type') IS NULL OR json_extract(data, '$.product_type') != ?)
+		WHERE json_extract(data, '$.codesub_nm') IS NOT NULL
+		AND json_extract(data, '$.codesub_nm') != ''
+		AND (json_extract(data, '$.type') IS NULL OR json_extract(data, '$.type') != ?)
 		ORDER BY fullExchangeName`
 
 	rows, err := r.universeDB.Query(query, string(ProductTypeIndex))
@@ -287,8 +289,8 @@ func (r *SecurityRepository) GetDistinctExchanges() ([]string, error) {
 func (r *SecurityRepository) GetAllActiveTradable() ([]Security, error) {
 	// Filter out indices using JSON extraction
 	query := `SELECT ` + securitiesColumns + ` FROM securities
-		WHERE json_extract(data, '$.product_type') IS NULL
-		OR json_extract(data, '$.product_type') != ?`
+		WHERE json_extract(data, '$.type') IS NULL
+		OR json_extract(data, '$.type') != ?`
 
 	rows, err := r.universeDB.Query(query, string(ProductTypeIndex))
 	if err != nil {
@@ -370,9 +372,10 @@ func (r *SecurityRepository) GetAll() ([]Security, error) {
 // GetByMarketCode returns all active tradable securities with the specified market code (excludes indices)
 // Used for per-region regime detection and grouping securities by market
 func (r *SecurityRepository) GetByMarketCode(marketCode string) ([]Security, error) {
+	// Use raw Tradernet field names: mkt_name for market_code, type for product_type
 	query := `SELECT ` + securitiesColumns + ` FROM securities
-		WHERE json_extract(data, '$.market_code') = ?
-		AND (json_extract(data, '$.product_type') IS NULL OR json_extract(data, '$.product_type') != ?)`
+		WHERE json_extract(data, '$.mkt_name') = ?
+		AND (json_extract(data, '$.type') IS NULL OR json_extract(data, '$.type') != ?)`
 
 	rows, err := r.universeDB.Query(query, marketCode, string(ProductTypeIndex))
 	if err != nil {
@@ -422,11 +425,9 @@ func (r *SecurityRepository) Create(security Security) error {
 	security.Symbol = strings.ToUpper(strings.TrimSpace(security.Symbol))
 	security.ISIN = strings.ToUpper(strings.TrimSpace(security.ISIN))
 
-	// Serialize security data to JSON
-	jsonData, err := SecurityToJSON(&security)
-	if err != nil {
-		return fmt.Errorf("failed to serialize security to JSON: %w", err)
-	}
+	// Store minimal placeholder JSON - metadata sync will populate with raw Tradernet data
+	// IMPORTANT: Only raw Tradernet API responses belong in the data column
+	jsonData := "{}"
 
 	// Begin transaction
 	tx, err := r.universeDB.Begin()
@@ -495,69 +496,67 @@ func (r *SecurityRepository) Update(isin string, updates map[string]any) error {
 		return fmt.Errorf("failed to read security: %w", err)
 	}
 
-	// Parse current JSON
-	data, err := ParseSecurityJSON(jsonData)
-	if err != nil {
+	// Parse current raw JSON
+	var rawData map[string]interface{}
+	if err := json.Unmarshal([]byte(jsonData), &rawData); err != nil {
 		return fmt.Errorf("failed to parse existing JSON: %w", err)
 	}
 
-	// Apply updates to JSON fields
-	if val, ok := updates["name"]; ok {
-		if strVal, ok := val.(string); ok {
-			data.Name = strVal
-		}
+	// Ensure nested maps exist
+	if _, ok := rawData["attributes"]; !ok {
+		rawData["attributes"] = make(map[string]interface{})
 	}
-	if val, ok := updates["product_type"]; ok {
-		if strVal, ok := val.(string); ok {
-			data.ProductType = strVal
-		}
+	if _, ok := rawData["quotes"]; !ok {
+		rawData["quotes"] = make(map[string]interface{})
 	}
-	if val, ok := updates["industry"]; ok {
-		if strVal, ok := val.(string); ok {
-			data.Industry = strVal
-		}
+
+	// Map of Security field names to Tradernet paths for updates
+	updateMapping := map[string]string{
+		"name":                 "name",
+		"product_type":         "type",
+		"industry":             "sector_code",
+		"geography":            "attributes.CntryOfRisk",
+		"full_exchange_name":   "codesub_nm",
+		"market_code":          "mkt_name",
+		"currency":             "face_curr_c",
+		"min_lot":              "quotes.x_lot",
+		"min_portfolio_target": "", // Not in Tradernet, ignore
+		"max_portfolio_target": "", // Not in Tradernet, ignore
 	}
-	if val, ok := updates["geography"]; ok {
-		if strVal, ok := val.(string); ok {
-			data.Geography = strVal
+
+	// Apply updates to raw JSON using field mapping
+	for field, value := range updates {
+		path, exists := updateMapping[field]
+		if !exists || path == "" {
+			// Skip fields not in Tradernet format
+			continue
 		}
-	}
-	if val, ok := updates["fullExchangeName"]; ok {
-		if strVal, ok := val.(string); ok {
-			data.FullExchangeName = strVal
-		}
-	}
-	if val, ok := updates["market_code"]; ok {
-		if strVal, ok := val.(string); ok {
-			data.MarketCode = strVal
-		}
-	}
-	if val, ok := updates["currency"]; ok {
-		if strVal, ok := val.(string); ok {
-			data.Currency = strVal
-		}
-	}
-	if val, ok := updates["min_lot"]; ok {
-		if intVal, ok := val.(int); ok {
-			data.MinLot = intVal
-		}
-	}
-	if val, ok := updates["min_portfolio_target"]; ok {
-		if floatVal, ok := val.(float64); ok {
-			data.MinPortfolioTarget = floatVal
-		}
-	}
-	if val, ok := updates["max_portfolio_target"]; ok {
-		if floatVal, ok := val.(float64); ok {
-			data.MaxPortfolioTarget = floatVal
+
+		// Handle nested paths
+		parts := strings.Split(path, ".")
+		if len(parts) == 1 {
+			// Top-level field
+			rawData[parts[0]] = value
+		} else if len(parts) == 2 {
+			// Nested field (e.g., attributes.CntryOfRisk)
+			parent, ok := rawData[parts[0]].(map[string]interface{})
+			if !ok {
+				r.log.Warn().
+					Str("field", field).
+					Str("parent", parts[0]).
+					Msg("Parent is not a map, skipping nested field update")
+				continue
+			}
+			parent[parts[1]] = value
 		}
 	}
 
 	// Serialize back to JSON
-	updatedJSON, err := SerializeSecurityJSON(data)
+	jsonBytes, err := json.Marshal(rawData)
 	if err != nil {
 		return fmt.Errorf("failed to serialize updated JSON: %w", err)
 	}
+	updatedJSON := string(jsonBytes)
 
 	// Build UPDATE statement
 	var setClauses []string
@@ -695,8 +694,8 @@ func (r *SecurityRepository) HardDelete(isin string) error {
 func (r *SecurityRepository) GetWithScores(portfolioDB *sql.DB) ([]SecurityWithScore, error) {
 	// Fetch securities from universe.db (exclude indices)
 	query := `SELECT ` + securitiesColumns + ` FROM securities
-		WHERE json_extract(data, '$.product_type') IS NULL
-		OR json_extract(data, '$.product_type') != ?`
+		WHERE json_extract(data, '$.type') IS NULL
+		OR json_extract(data, '$.type') != ?`
 	securityRows, err := r.universeDB.Query(query, string(ProductTypeIndex))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query securities: %w", err)
@@ -1259,7 +1258,7 @@ func (r *SecurityRepository) GetByTags(tagIDs []string) ([]Security, error) {
 		FROM securities s
 		INNER JOIN security_tags st ON s.isin = st.isin
 		WHERE st.tag_id IN (%s)
-		AND (json_extract(s.data, '$.product_type') IS NULL OR json_extract(s.data, '$.product_type') != ?)
+		AND (json_extract(s.data, '$.type') IS NULL OR json_extract(s.data, '$.type') != ?)
 		ORDER BY s.symbol ASC
 	`, placeholders)
 
@@ -1369,7 +1368,7 @@ func (r *SecurityRepository) GetPositionsByTags(positionSymbols []string, tagIDs
 		INNER JOIN security_tags st ON s.isin = st.isin
 		WHERE s.symbol IN (%s)
 		AND st.tag_id IN (%s)
-		AND (json_extract(s.data, '$.product_type') IS NULL OR json_extract(s.data, '$.product_type') != ?)
+		AND (json_extract(s.data, '$.type') IS NULL OR json_extract(s.data, '$.type') != ?)
 		ORDER BY s.symbol ASC
 	`, symbolPlaceholders, tagPlaceholders)
 
@@ -1638,8 +1637,8 @@ func (r *SecurityRepository) GetBySymbols(symbols []string) ([]Security, error) 
 func (r *SecurityRepository) GetTradable() ([]Security, error) {
 	// After migration: no active column, use JSON extraction for product_type
 	query := `SELECT ` + securitiesColumns + ` FROM securities
-		WHERE json_extract(data, '$.product_type') IS NULL
-		OR json_extract(data, '$.product_type') != ?`
+		WHERE json_extract(data, '$.type') IS NULL
+		OR json_extract(data, '$.type') != ?`
 
 	rows, err := r.universeDB.Query(query, string(ProductTypeIndex))
 	if err != nil {
@@ -1680,7 +1679,7 @@ func (r *SecurityRepository) GetTradable() ([]Security, error) {
 // GetByGeography returns securities filtered by geography
 func (r *SecurityRepository) GetByGeography(geography string) ([]Security, error) {
 	query := `SELECT ` + securitiesColumns + ` FROM securities
-		WHERE json_extract(data, '$.geography') = ?`
+		WHERE json_extract(data, '$.attributes.CntryOfRisk') = ?`
 
 	rows, err := r.universeDB.Query(query, geography)
 	if err != nil {
@@ -1721,7 +1720,7 @@ func (r *SecurityRepository) GetByGeography(geography string) ([]Security, error
 // GetByIndustry returns securities filtered by industry
 func (r *SecurityRepository) GetByIndustry(industry string) ([]Security, error) {
 	query := `SELECT ` + securitiesColumns + ` FROM securities
-		WHERE json_extract(data, '$.industry') = ?`
+		WHERE json_extract(data, '$.sector_code') = ?`
 
 	rows, err := r.universeDB.Query(query, industry)
 	if err != nil {
@@ -1761,12 +1760,12 @@ func (r *SecurityRepository) GetByIndustry(industry string) ([]Security, error) 
 
 // GetDistinctGeographies returns a list of distinct geographies from active securities (excludes indices)
 func (r *SecurityRepository) GetDistinctGeographies() ([]string, error) {
-	query := `SELECT DISTINCT json_extract(data, '$.geography') as geography
+	query := `SELECT DISTINCT json_extract(data, '$.attributes.CntryOfRisk') as geography
 		FROM securities
-		WHERE json_extract(data, '$.geography') IS NOT NULL
-		AND json_extract(data, '$.geography') != ''
-		AND json_extract(data, '$.geography') != '0'
-		AND (json_extract(data, '$.product_type') IS NULL OR json_extract(data, '$.product_type') != ?)
+		WHERE json_extract(data, '$.attributes.CntryOfRisk') IS NOT NULL
+		AND json_extract(data, '$.attributes.CntryOfRisk') != ''
+		AND json_extract(data, '$.attributes.CntryOfRisk') != '0'
+		AND (json_extract(data, '$.type') IS NULL OR json_extract(data, '$.type') != ?)
 		ORDER BY geography`
 
 	rows, err := r.universeDB.Query(query, string(ProductTypeIndex))
@@ -1793,11 +1792,11 @@ func (r *SecurityRepository) GetDistinctGeographies() ([]string, error) {
 
 // GetDistinctIndustries returns a list of distinct industries from active securities (excludes indices)
 func (r *SecurityRepository) GetDistinctIndustries() ([]string, error) {
-	query := `SELECT DISTINCT json_extract(data, '$.industry') as industry
+	query := `SELECT DISTINCT json_extract(data, '$.sector_code') as industry
 		FROM securities
-		WHERE json_extract(data, '$.industry') IS NOT NULL
-		AND json_extract(data, '$.industry') != ''
-		AND (json_extract(data, '$.product_type') IS NULL OR json_extract(data, '$.product_type') != ?)
+		WHERE json_extract(data, '$.sector_code') IS NOT NULL
+		AND json_extract(data, '$.sector_code') != ''
+		AND (json_extract(data, '$.type') IS NULL OR json_extract(data, '$.type') != ?)
 		ORDER BY industry`
 
 	rows, err := r.universeDB.Query(query, string(ProductTypeIndex))
@@ -1825,15 +1824,15 @@ func (r *SecurityRepository) GetDistinctIndustries() ([]string, error) {
 // GetGeographiesAndIndustries returns a map of geography → list of industries
 func (r *SecurityRepository) GetGeographiesAndIndustries() (map[string][]string, error) {
 	query := `SELECT DISTINCT
-		json_extract(data, '$.geography') as geography,
-		json_extract(data, '$.industry') as industry
+		json_extract(data, '$.attributes.CntryOfRisk') as geography,
+		json_extract(data, '$.sector_code') as industry
 		FROM securities
-		WHERE json_extract(data, '$.geography') IS NOT NULL
-		AND json_extract(data, '$.geography') != ''
-		AND json_extract(data, '$.geography') != '0'
-		AND json_extract(data, '$.industry') IS NOT NULL
-		AND json_extract(data, '$.industry') != ''
-		AND (json_extract(data, '$.product_type') IS NULL OR json_extract(data, '$.product_type') != ?)
+		WHERE json_extract(data, '$.attributes.CntryOfRisk') IS NOT NULL
+		AND json_extract(data, '$.attributes.CntryOfRisk') != ''
+		AND json_extract(data, '$.attributes.CntryOfRisk') != '0'
+		AND json_extract(data, '$.sector_code') IS NOT NULL
+		AND json_extract(data, '$.sector_code') != ''
+		AND (json_extract(data, '$.type') IS NULL OR json_extract(data, '$.type') != ?)
 		ORDER BY geography, industry`
 
 	rows, err := r.universeDB.Query(query, string(ProductTypeIndex))
@@ -1863,13 +1862,12 @@ func (r *SecurityRepository) GetGeographiesAndIndustries() (map[string][]string,
 }
 
 // GetSecuritiesForOptimization returns minimal data needed for portfolio optimization
+// Portfolio targets come from overrides, not Tradernet data
 func (r *SecurityRepository) GetSecuritiesForOptimization() ([]SecurityOptimizationData, error) {
 	query := `SELECT isin, symbol,
-		json_extract(data, '$.product_type') as product_type,
-		json_extract(data, '$.geography') as geography,
-		json_extract(data, '$.industry') as industry,
-		json_extract(data, '$.min_portfolio_target') as min_portfolio_target,
-		json_extract(data, '$.max_portfolio_target') as max_portfolio_target
+		json_extract(data, '$.type') as product_type,
+		json_extract(data, '$.attributes.CntryOfRisk') as geography,
+		json_extract(data, '$.sector_code') as industry
 		FROM securities`
 
 	rows, err := r.universeDB.Query(query)
@@ -1882,9 +1880,8 @@ func (r *SecurityRepository) GetSecuritiesForOptimization() ([]SecurityOptimizat
 	for rows.Next() {
 		var data SecurityOptimizationData
 		var productType, geography, industry sql.NullString
-		var minTarget, maxTarget sql.NullFloat64
 
-		err := rows.Scan(&data.ISIN, &data.Symbol, &productType, &geography, &industry, &minTarget, &maxTarget)
+		err := rows.Scan(&data.ISIN, &data.Symbol, &productType, &geography, &industry)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan optimization data: %w", err)
 		}
@@ -1898,12 +1895,6 @@ func (r *SecurityRepository) GetSecuritiesForOptimization() ([]SecurityOptimizat
 		if industry.Valid {
 			data.Industry = industry.String
 		}
-		if minTarget.Valid {
-			data.MinPortfolioTarget = minTarget.Float64
-		}
-		if maxTarget.Valid {
-			data.MaxPortfolioTarget = maxTarget.Float64
-		}
 
 		result = append(result, data)
 	}
@@ -1912,14 +1903,37 @@ func (r *SecurityRepository) GetSecuritiesForOptimization() ([]SecurityOptimizat
 		return nil, fmt.Errorf("error iterating optimization data: %w", err)
 	}
 
+	// Apply overrides for portfolio targets
+	if r.overrideRepo != nil && len(result) > 0 {
+		allOverrides, err := r.overrideRepo.GetAllOverrides()
+		if err != nil {
+			r.log.Warn().Err(err).Msg("Failed to fetch overrides for optimization data")
+		} else {
+			for i := range result {
+				if overrides, exists := allOverrides[result[i].ISIN]; exists {
+					if minTarget, ok := overrides["min_portfolio_target"]; ok && minTarget != "" {
+						if val, err := strconv.ParseFloat(minTarget, 64); err == nil {
+							result[i].MinPortfolioTarget = val
+						}
+					}
+					if maxTarget, ok := overrides["max_portfolio_target"]; ok && maxTarget != "" {
+						if val, err := strconv.ParseFloat(maxTarget, 64); err == nil {
+							result[i].MaxPortfolioTarget = val
+						}
+					}
+				}
+			}
+		}
+	}
+
 	return result, nil
 }
 
 // GetSecuritiesForCharts returns minimal data needed for chart generation
 func (r *SecurityRepository) GetSecuritiesForCharts() ([]SecurityChartData, error) {
 	query := `SELECT isin, symbol FROM securities
-		WHERE json_extract(data, '$.product_type') IS NULL
-		OR json_extract(data, '$.product_type') != ?`
+		WHERE json_extract(data, '$.type') IS NULL
+		OR json_extract(data, '$.type') != ?`
 
 	rows, err := r.universeDB.Query(query, string(ProductTypeIndex))
 	if err != nil {
@@ -1970,8 +1984,8 @@ func (r *SecurityRepository) ExistsBySymbol(symbol string) (bool, error) {
 func (r *SecurityRepository) CountTradable() (int, error) {
 	var count int
 	query := `SELECT COUNT(*) FROM securities
-		WHERE json_extract(data, '$.product_type') IS NULL
-		OR json_extract(data, '$.product_type') != ?`
+		WHERE json_extract(data, '$.type') IS NULL
+		OR json_extract(data, '$.type') != ?`
 	err := r.universeDB.QueryRow(query, string(ProductTypeIndex)).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count tradable securities: %w", err)

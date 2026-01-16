@@ -80,7 +80,7 @@ func setupTestDBWithOverrides(t *testing.T) *sql.DB {
 func insertSecurityWithoutOverrideColumns(t *testing.T, db *sql.DB, isin, symbol, name string) {
 	_, err := db.Exec(`
 		INSERT INTO securities (isin, symbol, data, last_synced)
-		VALUES (?, ?, json_object('name', ?), NULL)
+		VALUES (?, ?, json('{"name": "' || ? || '"}'), NULL)
 	`, isin, symbol, name)
 	require.NoError(t, err)
 }
@@ -342,7 +342,7 @@ func TestSecurityRepository_GetByISIN_GeographyOverride(t *testing.T) {
 	// Insert security with geography from Tradernet
 	_, err := db.Exec(`
 		INSERT INTO securities (isin, symbol, data, last_synced)
-		VALUES (?, ?, json_object('name', ?, 'geography', ?), NULL)
+		VALUES (?, ?, json('{"name": "' || ? || '", "attributes": {"CntryOfRisk": "' || ? || '"}}'), NULL)
 	`, "IE00B3RBWM25", "VWCE.EU", "Vanguard FTSE All-World", "EU")
 	require.NoError(t, err)
 

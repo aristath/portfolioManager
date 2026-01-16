@@ -170,6 +170,11 @@ func (m *MockTradernetClient) GetSecurityMetadata(symbol string) (*domain.Broker
 	return args.Get(0).(*domain.BrokerSecurityInfo), args.Error(1)
 }
 
+func (m *MockTradernetClient) GetSecurityMetadataRaw(symbol string) (interface{}, error) {
+	args := m.Called(symbol)
+	return args.Get(0), args.Error(1)
+}
+
 // MockPositionRepository is a mock position repository for testing
 type MockPositionRepository struct {
 	mock.Mock

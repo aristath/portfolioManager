@@ -84,6 +84,9 @@ func (m *syncTestBrokerClient) SetCredentials(apiKey, apiSecret string)         
 func (m *syncTestBrokerClient) GetSecurityMetadata(symbol string) (*domain.BrokerSecurityInfo, error) {
 	return nil, nil
 }
+func (m *syncTestBrokerClient) GetSecurityMetadataRaw(symbol string) (interface{}, error) {
+	return map[string]interface{}{"securities": []interface{}{map[string]interface{}{"ticker": symbol}}}, nil
+}
 
 // MockDB is a mock database for testing
 type MockDB struct {

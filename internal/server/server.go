@@ -428,6 +428,7 @@ func (s *Server) setupRoutes() {
 			s.container.ModeManager,
 			s.container.HealthCalculator,
 			s.container.HealthUpdater,
+			s.container.SettingsService,
 			s.log,
 		)
 		displayHandler.RegisterRoutes(r)

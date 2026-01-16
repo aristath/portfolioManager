@@ -291,6 +291,25 @@ func (c *Client) GetSecurityMetadata(symbol string) (*SecurityInfo, error) {
 	return &securities[0], nil
 }
 
+// GetSecurityMetadataRaw returns raw security metadata without transformation
+// Returns the complete getAllSecurities API response for metadata storage
+func (c *Client) GetSecurityMetadataRaw(symbol string) (interface{}, error) {
+	if c.sdkClient == nil {
+		return nil, fmt.Errorf("SDK client not initialized")
+	}
+
+	c.log.Debug().Str("symbol", symbol).Msg("GetSecurityMetadataRaw: calling SDK GetAllSecurities")
+
+	result, err := c.sdkClient.GetAllSecurities(symbol, 1, 0)
+	if err != nil {
+		c.log.Error().Err(err).Msg("GetSecurityMetadataRaw: SDK GetAllSecurities failed")
+		return nil, fmt.Errorf("failed to get security metadata: %w", err)
+	}
+
+	// Return raw result without transformation
+	return result, nil
+}
+
 // Trade represents an executed trade
 type Trade struct {
 	OrderID    string  `json:"order_id"`

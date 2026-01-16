@@ -189,6 +189,18 @@ type BrokerClient interface {
 	GetSecurityMetadata(symbol string) (*BrokerSecurityInfo, error)
 
 	/**
+	 * GetSecurityMetadataRaw gets raw security metadata from broker API without transformation.
+	 *
+	 * Returns the raw response from getAllSecurities API as-is, preserving all original field names
+	 * and structure. This is used by the metadata sync system to store complete raw data.
+	 *
+	 * @param symbol - Security symbol
+	 * @returns interface{} - Raw API response (map[string]interface{} with "securities" array)
+	 * @returns error - Error if retrieval fails
+	 */
+	GetSecurityMetadataRaw(symbol string) (interface{}, error)
+
+	/**
 	 * GetFXRates retrieves currency exchange rates for today's date.
 	 *
 	 * Returns a map of currency codes to exchange rates relative to baseCurrency.

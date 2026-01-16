@@ -67,7 +67,7 @@ func TestIndexSyncService_SyncIndicesToSecurities(t *testing.T) {
 
 	// Verify indices were created
 	var count int
-	err = universeDB.QueryRow(`SELECT COUNT(*) FROM securities WHERE json_extract(data, '$.product_type') = 'INDEX'`).Scan(&count)
+	err = universeDB.QueryRow(`SELECT COUNT(*) FROM securities WHERE json_extract(data, '$.type') = 'INDEX'`).Scan(&count)
 	require.NoError(t, err)
 
 	// Should have all known indices
@@ -79,8 +79,8 @@ func TestIndexSyncService_SyncIndicesToSecurities(t *testing.T) {
 	err = universeDB.QueryRow(`
 		SELECT isin, symbol,
 		       json_extract(data, '$.name') as name,
-		       json_extract(data, '$.product_type') as product_type,
-		       json_extract(data, '$.market_code') as market_code
+		       json_extract(data, '$.type') as product_type,
+		       json_extract(data, '$.mkt_name') as market_code
 		FROM securities WHERE symbol = 'SP500.IDX'
 	`).Scan(&isin, &symbol, &name, &productType, &marketCode)
 	require.NoError(t, err)
@@ -124,7 +124,7 @@ func TestIndexSyncService_Idempotent(t *testing.T) {
 
 	// Verify no duplicates
 	var count int
-	err = universeDB.QueryRow(`SELECT COUNT(*) FROM securities WHERE json_extract(data, '$.product_type') = 'INDEX'`).Scan(&count)
+	err = universeDB.QueryRow(`SELECT COUNT(*) FROM securities WHERE json_extract(data, '$.type') = 'INDEX'`).Scan(&count)
 	require.NoError(t, err)
 
 	knownCount := len(GetKnownIndices())
@@ -218,7 +218,7 @@ func TestIndexSyncService_SyncAll(t *testing.T) {
 
 	// Verify indices in securities table
 	var secCount int
-	err = universeDB.QueryRow(`SELECT COUNT(*) FROM securities WHERE json_extract(data, '$.product_type') = 'INDEX'`).Scan(&secCount)
+	err = universeDB.QueryRow(`SELECT COUNT(*) FROM securities WHERE json_extract(data, '$.type') = 'INDEX'`).Scan(&secCount)
 	require.NoError(t, err)
 	assert.Greater(t, secCount, 0, "Should have indices in securities table")
 
@@ -243,19 +243,19 @@ func TestIndexSyncService_RegionMapping(t *testing.T) {
 
 	// Verify US indices have FIX market code
 	var usMarketCode string
-	err = universeDB.QueryRow(`SELECT json_extract(data, '$.market_code') FROM securities WHERE symbol = 'SP500.IDX'`).Scan(&usMarketCode)
+	err = universeDB.QueryRow(`SELECT json_extract(data, '$.mkt_name') FROM securities WHERE symbol = 'SP500.IDX'`).Scan(&usMarketCode)
 	require.NoError(t, err)
 	assert.Equal(t, "FIX", usMarketCode)
 
 	// Verify EU indices have EU market code
 	var euMarketCode string
-	err = universeDB.QueryRow(`SELECT json_extract(data, '$.market_code') FROM securities WHERE symbol = 'DAX.IDX'`).Scan(&euMarketCode)
+	err = universeDB.QueryRow(`SELECT json_extract(data, '$.mkt_name') FROM securities WHERE symbol = 'DAX.IDX'`).Scan(&euMarketCode)
 	require.NoError(t, err)
 	assert.Equal(t, "EU", euMarketCode)
 
 	// Verify Asia indices have HKEX market code
 	var asiaMarketCode string
-	err = universeDB.QueryRow(`SELECT json_extract(data, '$.market_code') FROM securities WHERE symbol = 'HSI.IDX'`).Scan(&asiaMarketCode)
+	err = universeDB.QueryRow(`SELECT json_extract(data, '$.mkt_name') FROM securities WHERE symbol = 'HSI.IDX'`).Scan(&asiaMarketCode)
 	require.NoError(t, err)
 	assert.Equal(t, "HKEX", asiaMarketCode)
 }

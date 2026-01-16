@@ -265,6 +265,9 @@ func (m *mockBrokerClientForDeletion) SetCredentials(apiKey, apiSecret string) {
 func (m *mockBrokerClientForDeletion) GetSecurityMetadata(symbol string) (*domain.BrokerSecurityInfo, error) {
 	return nil, nil
 }
+func (m *mockBrokerClientForDeletion) GetSecurityMetadataRaw(symbol string) (interface{}, error) {
+	return map[string]interface{}{"securities": []interface{}{map[string]interface{}{"ticker": symbol}}}, nil
+}
 
 func TestSecurityDeletionService_HardDelete(t *testing.T) {
 	log := zerolog.Nop()

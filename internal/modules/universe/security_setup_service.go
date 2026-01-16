@@ -102,7 +102,7 @@ func (s *SecuritySetupService) CreateSecurity(
 		return nil, fmt.Errorf("security already exists: %s", existing.Symbol)
 	}
 
-	// Metadata will be populated by metadata enricher after creation
+	// Metadata will be populated by metadata sync after creation (security:metadata work type)
 	var country, fullExchangeName, industry *string
 	var productType ProductType
 
@@ -321,7 +321,7 @@ func (s *SecuritySetupService) AddSecurityByIdentifier(
 		return nil, fmt.Errorf("ISIN is required but could not be obtained from Tradernet API for symbol: %s. Please ensure the security exists in Tradernet and has an ISIN", tradernetSymbol)
 	}
 
-	// Metadata (country, exchange, industry) will be populated by metadata enricher after creation
+	// Metadata (country, exchange, industry) will be populated by metadata sync after creation (security:metadata work type)
 	var country, fullExchangeName, industry *string
 	var productType = ProductTypeUnknown
 

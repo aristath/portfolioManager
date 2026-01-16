@@ -1,17 +1,19 @@
 package universe
 
 import (
+	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/aristath/sentinel/internal/domain"
 	"github.com/rs/zerolog"
 )
 
 // MetadataSyncService syncs Tradernet metadata for securities.
-// It uses the MetadataEnricher to fetch and apply metadata from the broker API.
+// Stores raw Tradernet API response in the data column for field mapping on read.
 type MetadataSyncService struct {
 	securityRepo *SecurityRepository
-	enricher     *MetadataEnricher
+	brokerClient domain.BrokerClient
 	log          zerolog.Logger
 }
 
@@ -23,15 +25,14 @@ func NewMetadataSyncService(
 ) *MetadataSyncService {
 	return &MetadataSyncService{
 		securityRepo: securityRepo,
-		enricher:     NewMetadataEnricher(brokerClient, log),
+		brokerClient: brokerClient,
 		log:          log.With().Str("service", "metadata_sync").Logger(),
 	}
 }
 
 // SyncMetadata syncs Tradernet metadata for a security identified by ISIN.
-// Uses the MetadataEnricher which:
-// - Always overwrites: geography (CntryOfRisk), industry (raw sector code), min_lot (quotes.x_lot)
-// - Only fills if empty: name, currency, fullExchangeName, market_code
+// Stores raw Tradernet API response (securities[0]) in the data column.
+// Field mapping is applied on read via SecurityFromJSON.
 func (s *MetadataSyncService) SyncMetadata(isin string) error {
 	// Get security by ISIN
 	security, err := s.securityRepo.GetByISIN(isin)
@@ -43,23 +44,43 @@ func (s *MetadataSyncService) SyncMetadata(isin string) error {
 		return nil
 	}
 
-	// Enrich metadata from broker
-	if err := s.enricher.Enrich(security); err != nil {
-		return fmt.Errorf("failed to enrich metadata for %s: %w", isin, err)
+	// Call Tradernet API to get raw response
+	rawResponse, err := s.brokerClient.GetSecurityMetadataRaw(security.Symbol)
+	if err != nil {
+		return fmt.Errorf("failed to fetch metadata for %s: %w", isin, err)
+	}
+	if rawResponse == nil {
+		s.log.Debug().Str("isin", isin).Str("symbol", security.Symbol).Msg("No metadata returned from broker")
+		return nil
 	}
 
-	// Build update map with enriched fields
+	// Extract securities[0] from raw response
+	responseMap, ok := rawResponse.(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("unexpected response format for %s: expected map", isin)
+	}
+
+	securities, ok := responseMap["securities"].([]interface{})
+	if !ok || len(securities) == 0 {
+		s.log.Debug().Str("isin", isin).Str("symbol", security.Symbol).Msg("No securities in response")
+		return nil
+	}
+
+	// Get first security object
+	securityData := securities[0]
+
+	// Marshal to JSON
+	jsonBytes, err := json.Marshal(securityData)
+	if err != nil {
+		return fmt.Errorf("failed to marshal security data for %s: %w", isin, err)
+	}
+
+	// Store raw data with last_synced timestamp
 	updates := map[string]any{
-		"geography":        security.Geography,
-		"industry":         security.Industry,
-		"min_lot":          security.MinLot,
-		"name":             security.Name,
-		"currency":         security.Currency,
-		"fullExchangeName": security.FullExchangeName,
-		"market_code":      security.MarketCode,
+		"data":        string(jsonBytes),
+		"last_synced": time.Now().Unix(),
 	}
 
-	// Update security in database
 	if err := s.securityRepo.Update(isin, updates); err != nil {
 		return fmt.Errorf("failed to update security %s: %w", isin, err)
 	}
@@ -67,10 +88,8 @@ func (s *MetadataSyncService) SyncMetadata(isin string) error {
 	s.log.Debug().
 		Str("isin", isin).
 		Str("symbol", security.Symbol).
-		Str("geography", security.Geography).
-		Str("industry", security.Industry).
-		Int("min_lot", security.MinLot).
-		Msg("Synced metadata for security")
+		Int("data_size", len(jsonBytes)).
+		Msg("Synced raw metadata for security")
 
 	return nil
 }

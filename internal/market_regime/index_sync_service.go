@@ -60,15 +60,23 @@ func (s *IndexSyncService) SyncIndicesToSecurities() error {
 
 		// Create index in securities table using repository
 		security := universe.Security{
-			ISIN:        isin,
-			Symbol:      idx.Symbol,
-			Name:        idx.Name,
-			ProductType: string(domain.ProductTypeIndex),
-			MarketCode:  idx.MarketCode,
+			ISIN:   isin,
+			Symbol: idx.Symbol,
 		}
 		err = s.securityRepo.Create(security)
 		if err != nil {
 			return fmt.Errorf("failed to create index %s in securities: %w", idx.Symbol, err)
+		}
+
+		// Update with index metadata (Create stores empty JSON {}, Update populates it)
+		updates := map[string]any{
+			"name":         idx.Name,
+			"product_type": string(domain.ProductTypeIndex),
+			"market_code":  idx.MarketCode,
+		}
+		err = s.securityRepo.Update(isin, updates)
+		if err != nil {
+			return fmt.Errorf("failed to update index metadata for %s: %w", idx.Symbol, err)
 		}
 
 		// Set allow_buy=false and allow_sell=false for indices via security_overrides
@@ -240,15 +248,23 @@ func (s *IndexSyncService) EnsureIndexExists(symbol string) (string, error) {
 	} else {
 		// Create new index
 		security := universe.Security{
-			ISIN:        isin,
-			Symbol:      symbol,
-			Name:        foundIdx.Name,
-			ProductType: string(domain.ProductTypeIndex),
-			MarketCode:  foundIdx.MarketCode,
+			ISIN:   isin,
+			Symbol: symbol,
 		}
 		err = s.securityRepo.Create(security)
 		if err != nil {
 			return "", fmt.Errorf("failed to create index %s: %w", symbol, err)
+		}
+
+		// Update with index metadata (Create stores empty JSON {}, Update populates it)
+		updates := map[string]any{
+			"name":         foundIdx.Name,
+			"product_type": string(domain.ProductTypeIndex),
+			"market_code":  foundIdx.MarketCode,
+		}
+		err = s.securityRepo.Update(isin, updates)
+		if err != nil {
+			return "", fmt.Errorf("failed to update index metadata for %s: %w", symbol, err)
 		}
 	}
 

@@ -224,9 +224,9 @@ func TestDataPrep_ExtractTrainingExamples_MinimumHistory(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// Insert security (JSON storage - migration 038)
+	// Insert security (JSON storage - migration 038) with raw Tradernet format
 	_, err = universeDB.Exec(
-		"INSERT INTO securities (isin, symbol, data, last_synced) VALUES (?, ?, json_object('name', ?, 'product_type', 'EQUITY'), NULL)",
+		"INSERT INTO securities (isin, symbol, data, last_synced) VALUES (?, ?, json_object('name', ?, 'type', 'EQUITY'), NULL)",
 		isin, symbol, symbol+" Inc",
 	)
 	require.NoError(t, err)

@@ -20,6 +20,8 @@ import (
 //   - allow_sell: Boolean string ("true"/"false") - whether security can be sold
 //   - min_lot: Integer string - minimum lot size for trading
 //   - priority_multiplier: Float string - multiplier for priority scoring
+//   - min_portfolio_target: Float string - minimum target allocation percentage (0-100)
+//   - max_portfolio_target: Float string - maximum target allocation percentage (0-100)
 //
 // Overrides are automatically merged into Security objects by SecurityRepository when
 // an OverrideRepository is provided.

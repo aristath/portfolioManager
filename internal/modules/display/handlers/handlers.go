@@ -3,6 +3,7 @@ package handlers
 
 import (
 	"github.com/aristath/sentinel/internal/modules/display"
+	"github.com/aristath/sentinel/internal/modules/settings"
 )
 
 import (
@@ -14,11 +15,12 @@ import (
 
 // Handlers provides HTTP handlers for display module
 type Handlers struct {
-	stateManager  *display.StateManager
-	modeManager   *display.ModeManager
-	healthCalc    *display.HealthCalculator
-	healthUpdater *display.HealthUpdater
-	log           zerolog.Logger
+	stateManager    *display.StateManager
+	modeManager     *display.ModeManager
+	healthCalc      *display.HealthCalculator
+	healthUpdater   *display.HealthUpdater
+	settingsService *settings.Service
+	log             zerolog.Logger
 }
 
 // NewHandlers creates a new display handlers instance
@@ -27,14 +29,16 @@ func NewHandlers(
 	modeManager *display.ModeManager,
 	healthCalc *display.HealthCalculator,
 	healthUpdater *display.HealthUpdater,
+	settingsService *settings.Service,
 	log zerolog.Logger,
 ) *Handlers {
 	return &Handlers{
-		stateManager:  stateManager,
-		modeManager:   modeManager,
-		healthCalc:    healthCalc,
-		healthUpdater: healthUpdater,
-		log:           log.With().Str("module", "display_handlers").Logger(),
+		stateManager:    stateManager,
+		modeManager:     modeManager,
+		healthCalc:      healthCalc,
+		healthUpdater:   healthUpdater,
+		settingsService: settingsService,
+		log:             log.With().Str("module", "display_handlers").Logger(),
 	}
 }
 
@@ -138,6 +142,14 @@ func (h *Handlers) HandleSetMode(w http.ResponseWriter, r *http.Request) {
 		h.log.Error().Err(err).Str("mode", req.Mode).Msg("Failed to set display mode")
 		http.Error(w, "Failed to set mode", http.StatusInternalServerError)
 		return
+	}
+
+	// Persist the mode change to settings database
+	if _, err := h.settingsService.Set("display_mode", req.Mode); err != nil {
+		h.log.Warn().Err(err).Str("mode", req.Mode).Msg("Failed to persist display mode to settings")
+		// Don't fail the request - the mode was already applied successfully
+	} else {
+		h.log.Debug().Str("mode", req.Mode).Msg("Display mode persisted to settings")
 	}
 
 	h.log.Info().Str("mode", req.Mode).Msg("Display mode changed")

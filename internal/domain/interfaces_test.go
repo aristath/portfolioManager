@@ -123,6 +123,12 @@ func (m *mockBrokerClient) GetSecurityMetadata(symbol string) (*BrokerSecurityIn
 	return nil, nil
 }
 
+func (m *mockBrokerClient) GetSecurityMetadataRaw(symbol string) (interface{}, error) {
+	return map[string]interface{}{
+		"securities": []interface{}{map[string]interface{}{"ticker": symbol}},
+	}, nil
+}
+
 type mockCurrencyExchangeService struct{}
 
 func (m *mockCurrencyExchangeService) GetRate(fromCurrency, toCurrency string) (float64, error) {

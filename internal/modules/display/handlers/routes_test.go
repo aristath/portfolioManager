@@ -20,7 +20,7 @@ func TestRegisterRoutes(t *testing.T) {
 	healthUpdater := &display.HealthUpdater{}
 
 	// Create handler - we're only testing that RegisterRoutes works, not handler execution
-	handler := NewHandlers(stateManager, modeManager, healthCalc, healthUpdater, zerolog.Nop())
+	handler := NewHandlers(stateManager, modeManager, healthCalc, healthUpdater, nil, zerolog.Nop())
 
 	// Create router and register routes - this should not panic
 	router := chi.NewRouter()
@@ -79,7 +79,7 @@ func TestRegisterRoutes_RoutePrefix(t *testing.T) {
 	healthCalc := &display.HealthCalculator{}
 	healthUpdater := &display.HealthUpdater{}
 
-	handler := NewHandlers(stateManager, modeManager, healthCalc, healthUpdater, zerolog.Nop())
+	handler := NewHandlers(stateManager, modeManager, healthCalc, healthUpdater, nil, zerolog.Nop())
 
 	router := chi.NewRouter()
 	handler.RegisterRoutes(router)

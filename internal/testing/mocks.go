@@ -1544,6 +1544,23 @@ func (m *MockTradernetClient) GetSecurityMetadata(symbol string) (*domain.Broker
 	return nil, nil
 }
 
+// GetSecurityMetadataRaw retrieves raw security metadata (mock implementation)
+func (m *MockTradernetClient) GetSecurityMetadataRaw(symbol string) (interface{}, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.err != nil {
+		return nil, m.err
+	}
+	return map[string]interface{}{
+		"securities": []interface{}{
+			map[string]interface{}{
+				"ticker": symbol,
+				"name":   "Mock Security",
+			},
+		},
+	}, nil
+}
+
 // Verify interface implementation
 
 // MockBrokerClient is a thread-safe mock implementation of domain.BrokerClient for testing
@@ -1818,6 +1835,23 @@ func (m *MockBrokerClient) GetSecurityMetadata(symbol string) (*domain.BrokerSec
 		return &m.securities[0], nil
 	}
 	return nil, nil
+}
+
+// GetSecurityMetadataRaw implements domain.BrokerClient
+func (m *MockBrokerClient) GetSecurityMetadataRaw(symbol string) (interface{}, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.err != nil {
+		return nil, m.err
+	}
+	return map[string]interface{}{
+		"securities": []interface{}{
+			map[string]interface{}{
+				"ticker": symbol,
+				"name":   "Mock Security",
+			},
+		},
+	}, nil
 }
 
 // GetFXRates implements domain.BrokerClient

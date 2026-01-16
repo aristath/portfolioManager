@@ -93,6 +93,10 @@ func (m *mockTradernetClient) GetSecurityMetadata(symbol string) (*domain.Broker
 	return nil, nil
 }
 
+func (m *mockTradernetClient) GetSecurityMetadataRaw(symbol string) (interface{}, error) {
+	return nil, nil
+}
+
 // Mock Trade Repository for testing
 
 type mockTradeRepository struct {

@@ -76,11 +76,12 @@ func TestCreate_WithMarketCode(t *testing.T) {
 	err := repo.Create(security)
 	require.NoError(t, err)
 
-	// Verify creation
+	// Verify creation - only ISIN and Symbol are stored directly
+	// MarketCode is empty until metadata sync populates it with raw Tradernet data
 	created, err := repo.GetByISIN("US0378331005")
 	require.NoError(t, err)
 	require.NotNil(t, created)
-	assert.Equal(t, "FIX", created.MarketCode)
+	assert.Equal(t, "", created.MarketCode) // Empty until metadata sync runs
 }
 
 func TestGetByISIN_ReturnsMarketCode(t *testing.T) {
@@ -90,10 +91,10 @@ func TestGetByISIN_ReturnsMarketCode(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)
 	repo := NewSecurityRepository(db, log)
 
-	// Insert test data with market_code
+	// Insert test data with market_code (raw Tradernet format)
 	_, err := db.Exec(`
 		INSERT INTO securities (isin, symbol, data, last_synced)
-		VALUES ('US0378331005', 'AAPL.US', json_object('name', 'Apple Inc.', 'market_code', 'FIX'), NULL)
+		VALUES ('US0378331005', 'AAPL.US', '{"name": "Apple Inc.", "mkt_name": "FIX"}', NULL)
 	`)
 	require.NoError(t, err)
 
@@ -116,7 +117,7 @@ func TestUpdate_MarketCode(t *testing.T) {
 	// Insert test data
 	_, err := db.Exec(`
 		INSERT INTO securities (isin, symbol, data, last_synced)
-		VALUES ('US0378331005', 'AAPL.US', json_object('name', 'Apple Inc.', 'market_code', 'FIX'), NULL)
+		VALUES ('US0378331005', 'AAPL.US', '{"name": "Apple Inc.", "mkt_name": "FIX"}', NULL)
 	`)
 	require.NoError(t, err)
 
@@ -143,10 +144,10 @@ func TestGetByMarketCode(t *testing.T) {
 	// Insert test data with different market codes
 	_, err := db.Exec(`
 		INSERT INTO securities (isin, symbol, data, last_synced) VALUES
-		('US0378331005', 'AAPL.US', json_object('name', 'Apple Inc.', 'market_code', 'FIX'), NULL),
-		('US5949181045', 'MSFT.US', json_object('name', 'Microsoft', 'market_code', 'FIX'), NULL),
-		('DE0007164600', 'SAP.EU', json_object('name', 'SAP SE', 'market_code', 'EU'), NULL),
-		('HK0000069689', 'BYD.AS', json_object('name', 'BYD Company', 'market_code', 'HKEX'), NULL)
+		('US0378331005', 'AAPL.US', '{"name": "Apple Inc.", "mkt_name": "FIX"}', NULL),
+		('US5949181045', 'MSFT.US', '{"name": "Microsoft", "mkt_name": "FIX"}', NULL),
+		('DE0007164600', 'SAP.EU', '{"name": "SAP SE", "mkt_name": "EU"}', NULL),
+		('HK0000069689', 'BYD.AS', '{"name": "BYD Company", "mkt_name": "HKEX"}', NULL)
 	`)
 	require.NoError(t, err)
 
@@ -186,7 +187,7 @@ func TestGetAllActive_IncludesMarketCode(t *testing.T) {
 	// Insert test data
 	_, err := db.Exec(`
 		INSERT INTO securities (isin, symbol, data, last_synced)
-		VALUES ('US0378331005', 'AAPL.US', json_object('name', 'Apple Inc.', 'market_code', 'FIX'), NULL)
+		VALUES ('US0378331005', 'AAPL.US', '{"name": "Apple Inc.", "mkt_name": "FIX"}', NULL)
 	`)
 	require.NoError(t, err)
 
