@@ -13,7 +13,7 @@ func TestAllMappingsExist(t *testing.T) {
 		"evaluation_quality_weight",
 		"evaluation_risk_adjusted_weight",
 		"evaluation_diversification_weight",
-		"evaluation_regime_weight",
+		"evaluation_improvement_weight",
 
 		// Category 2: Profit taking (3)
 		"profit_taking_min_gain_threshold",
@@ -521,7 +521,7 @@ func TestEvaluationWeightsNormalize(t *testing.T) {
 		"evaluation_quality_weight",
 		"evaluation_risk_adjusted_weight",
 		"evaluation_diversification_weight",
-		"evaluation_regime_weight",
+		"evaluation_improvement_weight",
 	}
 
 	temperamentValues := []float64{0.0, 0.25, 0.5, 0.75, 1.0}
@@ -639,7 +639,7 @@ func TestMappingCount(t *testing.T) {
 // TestFixedParametersDontChange verifies fixed params return base regardless of temperament
 func TestFixedParametersDontChange(t *testing.T) {
 	fixedParams := []string{
-		"evaluation_regime_weight",       // Always 0.10, narrowest range
+		"evaluation_improvement_weight",  // Always 0.10, narrowest range
 		"boost_medium_risk",              // Neutral for medium risk
 		"tag_dividend_total_return_cagr", // Minimum growth always
 	}

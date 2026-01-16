@@ -84,8 +84,8 @@ var temperamentMappings = map[string]TemperamentMapping{
 		AbsoluteMin: 0.08,
 		AbsoluteMax: 0.22,
 	},
-	"evaluation_regime_weight": {
-		Parameter:   "evaluation_regime_weight",
+	"evaluation_improvement_weight": {
+		Parameter:   "evaluation_improvement_weight",
 		Temperament: "fixed", // Always matters - narrowest range
 		Inverse:     false,
 		Min:         0.08,
