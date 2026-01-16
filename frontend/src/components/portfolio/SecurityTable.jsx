@@ -1,20 +1,21 @@
 /**
  * Security Table Component
- * 
+ *
  * Displays the investment universe (all securities) in a sortable, filterable table.
  * Provides comprehensive security information and management capabilities.
- * 
+ *
  * Features:
  * - Sortable columns (symbol, name, geography, exchange, sector, value, score, priority)
  * - Filtering by geography, industry, search query, minimum score
  * - Column visibility toggle (show/hide columns)
  * - Sparkline charts (1Y or 5Y timeframe)
- * - Inline multiplier editing
+ * - Inline multiplier editing (numeric input)
+ * - Icon-based rating slider (visual multiplier control with 0.2-3.0 range)
  * - Security actions (edit, refresh score, remove)
  * - Concentration alerts (visual indicators for over-concentration)
  * - Tags display with color coding
  * - Buy/Sell indicators
- * 
+ *
  * This is the main component for viewing and managing the investment universe.
  */
 import { Card, Table, TextInput, Select, Group, Button, Text, ActionIcon, Badge, NumberInput, Menu, SegmentedControl, Skeleton } from '@mantine/core';
@@ -23,15 +24,16 @@ import { useSecuritiesStore } from '../../stores/securitiesStore';
 import { useAppStore } from '../../stores/appStore';
 import { usePortfolioStore } from '../../stores/portfolioStore';
 import { SecuritySparkline } from '../charts/SecuritySparkline';
+import { RatingIcon } from './RatingIcon';
 import { formatCurrency } from '../../utils/formatters';
 import { getTagName, getTagColor } from '../../utils/tagNames';
 import { useEffect, useState } from 'react';
 
 /**
  * Security table component
- * 
+ *
  * Displays all securities in the investment universe with filtering, sorting, and management features.
- * 
+ *
  * @returns {JSX.Element} Security table with filters, columns, and actions
  */
 export function SecurityTable() {
@@ -80,16 +82,16 @@ export function SecurityTable() {
 
   // Get filtered and sorted securities
   const filteredSecurities = getFilteredSecurities();
-  
+
   // Extract unique geographies and industries for filter dropdowns
   const geographies = [...new Set(securities.map(s => s.geography).filter(Boolean))].sort();
   const industries = [...new Set(securities.map(s => s.industry).filter(Boolean))].sort();
 
   /**
    * Handles column sorting
-   * 
+   *
    * Toggles sort direction if clicking the same column, otherwise sets new sort field.
-   * 
+   *
    * @param {string} field - Field name to sort by
    */
   const handleSort = (field) => {
@@ -104,7 +106,7 @@ export function SecurityTable() {
 
   /**
    * Gets concentration alert for a security (if position is over-concentrated)
-   * 
+   *
    * @param {string} symbol - Security symbol
    * @returns {Object|undefined} Alert object or undefined
    */
@@ -114,13 +116,13 @@ export function SecurityTable() {
 
   /**
    * Gets badge color class for score value
-   * 
+   *
    * Score ranges:
    * - >= 0.7: green (high score)
    * - >= 0.5: yellow (medium-high)
    * - >= 0.3: orange (medium-low)
    * - < 0.3: red (low score)
-   * 
+   *
    * @param {number} score - Score value (0.0 to 1.0)
    * @returns {Object} Badge props with color and variant
    */
@@ -133,13 +135,13 @@ export function SecurityTable() {
 
   /**
    * Gets badge color class for priority score value
-   * 
+   *
    * Priority ranges:
    * - >= 80: green (high priority)
    * - >= 60: yellow (medium-high)
    * - >= 40: orange (medium-low)
    * - < 40: red (low priority)
-   * 
+   *
    * @param {number} score - Priority score (0-100)
    * @returns {Object} Badge props with color and variant
    */
@@ -152,7 +154,7 @@ export function SecurityTable() {
 
   /**
    * Formats score as percentage string
-   * 
+   *
    * @param {number|null|undefined} score - Score value (0.0 to 1.0)
    * @returns {string} Formatted score (e.g., "85.5") or "-" for invalid values
    */
@@ -163,7 +165,7 @@ export function SecurityTable() {
 
   /**
    * Formats priority score as integer string
-   * 
+   *
    * @param {number|null|undefined} priority - Priority score (0-100)
    * @returns {string} Formatted priority (e.g., "85") or "-" for invalid values
    */
@@ -174,9 +176,9 @@ export function SecurityTable() {
 
   /**
    * Calculates the number of visible columns for colSpan in empty state
-   * 
+   *
    * Symbol and Actions columns are always visible.
-   * 
+   *
    * @returns {number} Count of visible columns
    */
   const getVisibleColumnCount = () => {
@@ -190,6 +192,7 @@ export function SecurityTable() {
     if (visibleColumns.value) count++;
     if (visibleColumns.score) count++;
     if (visibleColumns.mult) count++;
+    if (visibleColumns.rating) count++;
     if (visibleColumns.bs) count++;
     if (visibleColumns.priority) count++;
     return count;
@@ -277,6 +280,13 @@ export function SecurityTable() {
                 onClick={() => toggleColumnVisibility('mult')}
               >
                 Mult
+              </Menu.Item>
+              <Menu.Item
+                className="security-table__column-toggle"
+                leftSection={visibleColumns.rating ? <IconCheck size={14} /> : <span style={{ width: 14 }} />}
+                onClick={() => toggleColumnVisibility('rating')}
+              >
+                Rating
               </Menu.Item>
               <Menu.Item
                 className="security-table__column-toggle"
@@ -458,6 +468,7 @@ export function SecurityTable() {
                 </Table.Th>
               )}
               {visibleColumns.mult && <Table.Th className="security-table__th security-table__th--mult" ta="center">Mult</Table.Th>}
+              {visibleColumns.rating && <Table.Th className="security-table__th security-table__th--rating" ta="center">Rating</Table.Th>}
               {visibleColumns.bs && <Table.Th className="security-table__th security-table__th--bs" ta="center">B/S</Table.Th>}
               {visibleColumns.priority && (
                 <Table.Th className="security-table__th security-table__th--priority" ta="right">
@@ -624,6 +635,15 @@ export function SecurityTable() {
                         step={0.1}
                         onChange={(val) => updateMultiplier(security.isin, val)}
                         style={{ width: '60px' }}
+                      />
+                    </Table.Td>
+                  )}
+                  {/* Rating column - visual icon-based multiplier control */}
+                  {visibleColumns.rating && (
+                    <Table.Td className="security-table__td security-table__td--rating" ta="center">
+                      <RatingIcon
+                        isin={security.isin}
+                        currentMultiplier={security.priority_multiplier || 1.0}
                       />
                     </Table.Td>
                   )}

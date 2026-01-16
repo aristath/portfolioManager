@@ -29,7 +29,8 @@ const DEFAULT_VISIBLE_COLUMNS = {
   tags: true,       // Security tags
   value: true,      // Portfolio value
   score: true,      // Priority score
-  mult: true,       // Priority multiplier
+  mult: true,       // Priority multiplier (numeric input)
+  rating: true,     // Priority rating (icon + slider)
   bs: true,         // Buy/sell signal
   priority: true,   // Priority ranking
 };
@@ -373,6 +374,36 @@ export const useSecuritiesStore = create((set, get) => ({
       notifications.show({
         title: 'Error',
         message: 'Failed to update multiplier',
+        color: 'red',
+      });
+    }
+  },
+
+  /**
+   * Sets the priority multiplier via override system
+   *
+   * Uses the override API to set/delete multiplier. When multiplier is 1.0 (default),
+   * the override is deleted. Otherwise, the override is created/updated.
+   *
+   * @param {string} isin - Security ISIN identifier
+   * @param {number} multiplier - New multiplier value (0.2 to 3.0)
+   */
+  setMultiplier: async (isin, multiplier) => {
+    try {
+      // If setting to default (1.0), delete the override
+      if (Math.abs(multiplier - 1.0) < 0.01) {
+        await api.deleteSecurityOverride(isin, 'priority_multiplier');
+      } else {
+        // Otherwise, set the override
+        await api.setSecurityOverride(isin, 'priority_multiplier', multiplier);
+      }
+      // Refresh securities list to reflect changes
+      await get().fetchSecurities();
+    } catch (e) {
+      console.error('Failed to set multiplier:', e);
+      notifications.show({
+        title: 'Error',
+        message: 'Failed to update priority multiplier',
         color: 'red',
       });
     }
