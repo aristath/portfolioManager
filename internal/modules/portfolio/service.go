@@ -59,6 +59,7 @@ type PortfolioService struct {
 	allocRepo                domain.AllocationTargetProvider
 	cashManager              domain.CashManager // Interface to break circular dependency
 	universeDB               *sql.DB            // For querying securities (universe.db)
+	securityProvider         SecurityProvider   // Optional: for override support
 	brokerClient             domain.BrokerClient
 	currencyExchangeService  domain.CurrencyExchangeServiceInterface
 	exchangeRateCacheService ExchangeRateCacheServiceInterface // For cached exchange rates
@@ -73,6 +74,7 @@ func NewPortfolioService(
 	allocRepo domain.AllocationTargetProvider,
 	cashManager domain.CashManager,
 	universeDB *sql.DB,
+	securityProvider SecurityProvider,
 	brokerClient domain.BrokerClient,
 	currencyExchangeService domain.CurrencyExchangeServiceInterface,
 	exchangeRateCacheService ExchangeRateCacheServiceInterface,
@@ -85,6 +87,7 @@ func NewPortfolioService(
 		allocRepo:                allocRepo,
 		cashManager:              cashManager,
 		universeDB:               universeDB,
+		securityProvider:         securityProvider,
 		brokerClient:             brokerClient,
 		currencyExchangeService:  currencyExchangeService,
 		exchangeRateCacheService: exchangeRateCacheService,
@@ -504,40 +507,65 @@ func (s *PortfolioService) buildIndustryAllocations(
 // getAllSecurityGeographiesAndIndustries gets all geographies and industries from active tradable securities (excludes indices)
 // Both geography and industry fields can contain comma-separated values
 func (s *PortfolioService) getAllSecurityGeographiesAndIndustries() (map[string]bool, map[string]bool, error) {
-	query := "SELECT geography, industry FROM securities WHERE active = 1 AND (product_type IS NULL OR product_type != ?)"
-
-	rows, err := s.universeDB.Query(query, string(domain.ProductTypeIndex))
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to query securities: %w", err)
-	}
-	defer rows.Close()
-
 	geographies := make(map[string]bool)
 	industries := make(map[string]bool)
 
-	for rows.Next() {
-		var geography, industry sql.NullString
-		if err := rows.Scan(&geography, &industry); err != nil {
-			return nil, nil, fmt.Errorf("failed to scan security: %w", err)
+	if s.securityProvider != nil {
+		// Use SecurityProvider (respects overrides)
+		securities, err := s.securityProvider.GetAllActiveTradable()
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to get securities: %w", err)
 		}
 
-		if geography.Valid && geography.String != "" {
-			geos := utils.ParseCSV(geography.String)
-			for _, geo := range geos {
-				geographies[geo] = true
+		for _, sec := range securities {
+			if sec.Geography != "" {
+				geos := utils.ParseCSV(sec.Geography)
+				for _, geo := range geos {
+					geographies[geo] = true
+				}
+			}
+			if sec.Industry != "" {
+				inds := utils.ParseCSV(sec.Industry)
+				for _, ind := range inds {
+					industries[ind] = true
+				}
+			}
+		}
+	} else {
+		// Fallback to direct query (no overrides)
+		s.log.Warn().Msg("SecurityProvider not available, using direct query (overrides not applied)")
+		query := "SELECT geography, industry FROM securities WHERE active = 1 AND (product_type IS NULL OR product_type != ?)"
+
+		rows, err := s.universeDB.Query(query, string(domain.ProductTypeIndex))
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to query securities: %w", err)
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var geography, industry sql.NullString
+			if err := rows.Scan(&geography, &industry); err != nil {
+				return nil, nil, fmt.Errorf("failed to scan security: %w", err)
+			}
+
+			if geography.Valid && geography.String != "" {
+				geos := utils.ParseCSV(geography.String)
+				for _, geo := range geos {
+					geographies[geo] = true
+				}
+			}
+
+			if industry.Valid && industry.String != "" {
+				inds := utils.ParseCSV(industry.String)
+				for _, ind := range inds {
+					industries[ind] = true
+				}
 			}
 		}
 
-		if industry.Valid && industry.String != "" {
-			inds := utils.ParseCSV(industry.String)
-			for _, ind := range inds {
-				industries[ind] = true
-			}
+		if err := rows.Err(); err != nil {
+			return nil, nil, fmt.Errorf("error iterating securities: %w", err)
 		}
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, nil, fmt.Errorf("error iterating securities: %w", err)
 	}
 
 	return geographies, industries, nil

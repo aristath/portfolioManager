@@ -56,7 +56,7 @@ func TestGetAvailableIndustries_SingleValues(t *testing.T) {
 	insertTestSecurity(t, db, "US0000000002", "XOM", "Exxon", "US", "Energy", 1)
 	insertTestSecurity(t, db, "US0000000003", "JPM", "JPMorgan", "US", "Finance", 1)
 
-	repo := NewRepository(nil, zerolog.Nop())
+	repo := NewRepository(nil, nil, zerolog.Nop())
 	repo.SetUniverseDB(db)
 
 	industries, err := repo.GetAvailableIndustries()
@@ -74,7 +74,7 @@ func TestGetAvailableIndustries_CommaSeparatedValues(t *testing.T) {
 	insertTestSecurity(t, db, "US0000000001", "GE", "General Electric", "US", "Industrial, Technology, Energy", 1)
 	insertTestSecurity(t, db, "US0000000002", "AMZN", "Amazon", "US", "Technology, Consumer Discretionary", 1)
 
-	repo := NewRepository(nil, zerolog.Nop())
+	repo := NewRepository(nil, nil, zerolog.Nop())
 	repo.SetUniverseDB(db)
 
 	industries, err := repo.GetAvailableIndustries()
@@ -94,7 +94,7 @@ func TestGetAvailableIndustries_MixedValues(t *testing.T) {
 	insertTestSecurity(t, db, "US0000000002", "GE", "General Electric", "US", "Industrial, Technology", 1)
 	insertTestSecurity(t, db, "US0000000003", "XOM", "Exxon", "US", "Energy", 1)
 
-	repo := NewRepository(nil, zerolog.Nop())
+	repo := NewRepository(nil, nil, zerolog.Nop())
 	repo.SetUniverseDB(db)
 
 	industries, err := repo.GetAvailableIndustries()
@@ -112,7 +112,7 @@ func TestGetAvailableIndustries_SkipsInactiveSecurities(t *testing.T) {
 	insertTestSecurity(t, db, "US0000000001", "AAPL", "Apple", "US", "Technology", 1)
 	insertTestSecurity(t, db, "US0000000002", "XOM", "Exxon", "US", "Energy", 0) // Inactive
 
-	repo := NewRepository(nil, zerolog.Nop())
+	repo := NewRepository(nil, nil, zerolog.Nop())
 	repo.SetUniverseDB(db)
 
 	industries, err := repo.GetAvailableIndustries()
@@ -131,7 +131,7 @@ func TestGetAvailableIndustries_EmptyAndNull(t *testing.T) {
 	insertTestSecurity(t, db, "US0000000002", "XYZ", "XYZ Corp", "US", "", 1)    // Empty industry
 	insertTestSecurity(t, db, "US0000000003", "ABC", "ABC Corp", "US", "   ", 1) // Whitespace only
 
-	repo := NewRepository(nil, zerolog.Nop())
+	repo := NewRepository(nil, nil, zerolog.Nop())
 	repo.SetUniverseDB(db)
 
 	industries, err := repo.GetAvailableIndustries()
@@ -150,7 +150,7 @@ func TestGetAvailableGeographies_SingleValues(t *testing.T) {
 	insertTestSecurity(t, db, "DE0000000001", "SAP", "SAP", "Germany", "Technology", 1)
 	insertTestSecurity(t, db, "JP0000000001", "SONY", "Sony", "Japan", "Technology", 1)
 
-	repo := NewRepository(nil, zerolog.Nop())
+	repo := NewRepository(nil, nil, zerolog.Nop())
 	repo.SetUniverseDB(db)
 
 	geographies, err := repo.GetAvailableGeographies()
@@ -168,7 +168,7 @@ func TestGetAvailableGeographies_CommaSeparatedValues(t *testing.T) {
 	insertTestSecurity(t, db, "US0000000001", "VT", "Vanguard Total World", "US, Europe, Asia Pacific", "ETF", 1)
 	insertTestSecurity(t, db, "US0000000002", "VEA", "Vanguard Developed Markets", "Europe, Japan, Australia", "ETF", 1)
 
-	repo := NewRepository(nil, zerolog.Nop())
+	repo := NewRepository(nil, nil, zerolog.Nop())
 	repo.SetUniverseDB(db)
 
 	geographies, err := repo.GetAvailableGeographies()
@@ -187,7 +187,7 @@ func TestGetAvailableGeographies_MixedValues(t *testing.T) {
 	insertTestSecurity(t, db, "US0000000002", "VT", "Vanguard Total World", "United States, Europe", "ETF", 1)
 	insertTestSecurity(t, db, "DE0000000001", "SAP", "SAP", "Europe", "Technology", 1)
 
-	repo := NewRepository(nil, zerolog.Nop())
+	repo := NewRepository(nil, nil, zerolog.Nop())
 	repo.SetUniverseDB(db)
 
 	geographies, err := repo.GetAvailableGeographies()
@@ -205,7 +205,7 @@ func TestGetAvailableGeographies_SkipsInactiveSecurities(t *testing.T) {
 	insertTestSecurity(t, db, "US0000000001", "AAPL", "Apple", "United States", "Technology", 1)
 	insertTestSecurity(t, db, "JP0000000001", "SONY", "Sony", "Japan", "Technology", 0) // Inactive
 
-	repo := NewRepository(nil, zerolog.Nop())
+	repo := NewRepository(nil, nil, zerolog.Nop())
 	repo.SetUniverseDB(db)
 
 	geographies, err := repo.GetAvailableGeographies()
@@ -217,28 +217,28 @@ func TestGetAvailableGeographies_SkipsInactiveSecurities(t *testing.T) {
 }
 
 func TestGetAvailableIndustries_NoUniverseDB(t *testing.T) {
-	repo := NewRepository(nil, zerolog.Nop())
+	repo := NewRepository(nil, nil, zerolog.Nop())
 	// Don't set universeDB
 
 	_, err := repo.GetAvailableIndustries()
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "universe database not configured")
+	assert.Contains(t, err.Error(), "neither security provider nor universe database configured")
 }
 
 func TestGetAvailableGeographies_NoUniverseDB(t *testing.T) {
-	repo := NewRepository(nil, zerolog.Nop())
+	repo := NewRepository(nil, nil, zerolog.Nop())
 	// Don't set universeDB
 
 	_, err := repo.GetAvailableGeographies()
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "universe database not configured")
+	assert.Contains(t, err.Error(), "neither security provider nor universe database configured")
 }
 
 func TestGetAvailableIndustries_EmptyDatabase(t *testing.T) {
 	db := setupTestUniverseDB(t)
 	defer db.Close()
 
-	repo := NewRepository(nil, zerolog.Nop())
+	repo := NewRepository(nil, nil, zerolog.Nop())
 	repo.SetUniverseDB(db)
 
 	industries, err := repo.GetAvailableIndustries()
@@ -251,7 +251,7 @@ func TestGetAvailableGeographies_EmptyDatabase(t *testing.T) {
 	db := setupTestUniverseDB(t)
 	defer db.Close()
 
-	repo := NewRepository(nil, zerolog.Nop())
+	repo := NewRepository(nil, nil, zerolog.Nop())
 	repo.SetUniverseDB(db)
 
 	geographies, err := repo.GetAvailableGeographies()
@@ -271,7 +271,7 @@ func TestGetAvailableIndustries_ExcludesIndices(t *testing.T) {
 	// Insert market index (should be excluded)
 	insertTestSecurityWithType(t, db, "INDEX-SP500.IDX", "SP500.IDX", "S&P 500", "INDEX", "US", "Index", 1)
 
-	repo := NewRepository(nil, zerolog.Nop())
+	repo := NewRepository(nil, nil, zerolog.Nop())
 	repo.SetUniverseDB(db)
 
 	industries, err := repo.GetAvailableIndustries()
@@ -294,7 +294,7 @@ func TestGetAvailableGeographies_ExcludesIndices(t *testing.T) {
 	insertTestSecurityWithType(t, db, "INDEX-SP500.IDX", "SP500.IDX", "S&P 500", "INDEX", "United States", "Index", 1)
 	insertTestSecurityWithType(t, db, "INDEX-DAX.IDX", "DAX.IDX", "DAX", "INDEX", "Germany", "Index", 1)
 
-	repo := NewRepository(nil, zerolog.Nop())
+	repo := NewRepository(nil, nil, zerolog.Nop())
 	repo.SetUniverseDB(db)
 
 	geographies, err := repo.GetAvailableGeographies()
@@ -317,7 +317,7 @@ func TestGetAvailableIndustries_IncludesNullProductType(t *testing.T) {
 	// Insert index (should be excluded)
 	insertTestSecurityWithType(t, db, "INDEX-SP500.IDX", "SP500.IDX", "S&P 500", "INDEX", "US", "Index", 1)
 
-	repo := NewRepository(nil, zerolog.Nop())
+	repo := NewRepository(nil, nil, zerolog.Nop())
 	repo.SetUniverseDB(db)
 
 	industries, err := repo.GetAvailableIndustries()

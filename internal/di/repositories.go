@@ -23,13 +23,6 @@ func InitializeRepositories(container *Container, log zerolog.Logger) error {
 		return fmt.Errorf("container cannot be nil")
 	}
 
-	// Position repository (needs portfolioDB and universeDB)
-	container.PositionRepo = portfolio.NewPositionRepository(
-		container.PortfolioDB.Conn(),
-		container.UniverseDB.Conn(),
-		log,
-	)
-
 	// Override repository (needs universeDB) - must be created before SecurityRepository
 	container.OverrideRepo = universe.NewOverrideRepository(
 		container.UniverseDB.Conn(),
@@ -40,6 +33,17 @@ func InitializeRepositories(container *Container, log zerolog.Logger) error {
 	container.SecurityRepo = universe.NewSecurityRepositoryWithOverrides(
 		container.UniverseDB.Conn(),
 		container.OverrideRepo,
+		log,
+	)
+
+	// Security provider adapter (wraps SecurityRepo for PositionRepo)
+	securityProvider := NewSecurityProviderAdapter(container.SecurityRepo)
+
+	// Position repository (needs portfolioDB, universeDB, and securityProvider)
+	container.PositionRepo = portfolio.NewPositionRepository(
+		container.PortfolioDB.Conn(),
+		container.UniverseDB.Conn(),
+		securityProvider,
 		log,
 	)
 
@@ -69,11 +73,14 @@ func InitializeRepositories(container *Container, log zerolog.Logger) error {
 		log,
 	)
 
-	// Allocation repository (needs configDB)
+	// Allocation repository (needs configDB and securityProvider)
+	allocSecurityProvider := NewAllocationSecurityProviderAdapter(container.SecurityRepo)
 	container.AllocRepo = allocation.NewRepository(
 		container.ConfigDB.Conn(),
+		allocSecurityProvider,
 		log,
 	)
+	container.AllocRepo.SetUniverseDB(container.UniverseDB.Conn())
 
 	// Settings repository (needs configDB)
 	container.SettingsRepo = settings.NewRepository(

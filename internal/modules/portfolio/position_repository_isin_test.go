@@ -64,7 +64,7 @@ func TestPositionRepository_GetByISIN_PrimaryMethod(t *testing.T) {
 	defer universeDB.Close()
 
 	log := zerolog.New(nil).Level(zerolog.Disabled)
-	repo := NewPositionRepository(portfolioDB, universeDB, log)
+	repo := NewPositionRepository(portfolioDB, universeDB, nil, log)
 
 	// Insert test data
 	_, err := portfolioDB.Exec(`
@@ -90,7 +90,7 @@ func TestPositionRepository_GetByISIN_NotFound(t *testing.T) {
 	defer universeDB.Close()
 
 	log := zerolog.New(nil).Level(zerolog.Disabled)
-	repo := NewPositionRepository(portfolioDB, universeDB, log)
+	repo := NewPositionRepository(portfolioDB, universeDB, nil, log)
 
 	// Execute
 	position, err := repo.GetByISIN("US0000000000")
@@ -120,7 +120,7 @@ func TestPositionRepository_GetBySymbol_HelperMethod(t *testing.T) {
 	require.NoError(t, err)
 
 	log := zerolog.New(nil).Level(zerolog.Disabled)
-	repo := NewPositionRepository(portfolioDB, universeDB, log)
+	repo := NewPositionRepository(portfolioDB, universeDB, nil, log)
 
 	// GetBySymbol should lookup ISIN first, then query by ISIN
 	position, err := repo.GetBySymbol("AAPL.US")
@@ -143,7 +143,7 @@ func TestPositionRepository_Delete_ByISIN(t *testing.T) {
 	require.NoError(t, err)
 
 	log := zerolog.New(nil).Level(zerolog.Disabled)
-	repo := NewPositionRepository(portfolioDB, universeDB, log)
+	repo := NewPositionRepository(portfolioDB, universeDB, nil, log)
 
 	// Execute - Delete should use ISIN
 	err = repo.Delete("US0378331005")
@@ -168,7 +168,7 @@ func TestPositionRepository_UpdatePrice_ByISIN(t *testing.T) {
 	require.NoError(t, err)
 
 	log := zerolog.New(nil).Level(zerolog.Disabled)
-	repo := NewPositionRepository(portfolioDB, universeDB, log)
+	repo := NewPositionRepository(portfolioDB, universeDB, nil, log)
 
 	// Execute - UpdatePrice should use ISIN
 	err = repo.UpdatePrice("US0378331005", 160.0, 1.0)

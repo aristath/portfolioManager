@@ -11,20 +11,36 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// SecurityInfo represents security information needed for allocation
+type SecurityInfo struct {
+	ISIN      string
+	Symbol    string
+	Name      string
+	Geography string
+	Industry  string
+}
+
+// SecurityProvider defines the contract for getting security information
+type SecurityProvider interface {
+	GetAllActiveTradable() ([]SecurityInfo, error)
+}
+
 // Repository handles allocation target database operations
 // Database: config.db (allocation_targets table), universe.db (securities table for lookups)
 type Repository struct {
-	db         *sql.DB // config.db
-	universeDB *sql.DB // universe.db (optional, for GetAvailableGeographies/Industries)
-	log        zerolog.Logger
+	db               *sql.DB          // config.db
+	universeDB       *sql.DB          // universe.db (optional, for GetAvailableGeographies/Industries)
+	securityProvider SecurityProvider // Optional: for override support
+	log              zerolog.Logger
 }
 
 // NewRepository creates a new allocation repository
 // db parameter should be config.db connection
-func NewRepository(db *sql.DB, log zerolog.Logger) *Repository {
+func NewRepository(db *sql.DB, securityProvider SecurityProvider, log zerolog.Logger) *Repository {
 	return &Repository{
-		db:  db,
-		log: log.With().Str("repo", "allocation").Logger(),
+		db:               db,
+		securityProvider: securityProvider,
+		log:              log.With().Str("repo", "allocation").Logger(),
 	}
 }
 
@@ -191,37 +207,55 @@ func (r *Repository) Delete(targetType, name string) error {
 // GetAvailableGeographies returns distinct geographies from active tradable securities (excludes indices).
 // Parses comma-separated geography values and returns unique, sorted individual geographies.
 func (r *Repository) GetAvailableGeographies() ([]string, error) {
-	if r.universeDB == nil {
-		return nil, fmt.Errorf("universe database not configured")
-	}
-
-	query := "SELECT geography FROM securities WHERE active = 1 AND geography IS NOT NULL AND geography != '' AND (product_type IS NULL OR product_type != ?)"
-	rows, err := r.universeDB.Query(query, string(domain.ProductTypeIndex))
-	if err != nil {
-		return nil, fmt.Errorf("failed to query geographies: %w", err)
-	}
-	defer rows.Close()
-
 	seen := make(map[string]bool)
-	var result []string
-	for rows.Next() {
-		var geoRaw string
-		if err := rows.Scan(&geoRaw); err != nil {
-			return nil, fmt.Errorf("failed to scan geography: %w", err)
+
+	if r.securityProvider != nil {
+		// Use SecurityProvider (respects overrides)
+		securities, err := r.securityProvider.GetAllActiveTradable()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get securities: %w", err)
 		}
-		// Parse comma-separated values and deduplicate
-		for _, geo := range utils.ParseCSV(geoRaw) {
-			if !seen[geo] {
-				seen[geo] = true
-				result = append(result, geo)
+
+		for _, sec := range securities {
+			if sec.Geography != "" {
+				geos := utils.ParseCSV(sec.Geography)
+				for _, geo := range geos {
+					seen[geo] = true
+				}
 			}
 		}
+	} else if r.universeDB != nil {
+		// Fallback to direct query (no overrides)
+		r.log.Warn().Msg("SecurityProvider not available, using direct query (overrides not applied)")
+		query := "SELECT geography FROM securities WHERE active = 1 AND geography IS NOT NULL AND geography != '' AND (product_type IS NULL OR product_type != ?)"
+		rows, err := r.universeDB.Query(query, string(domain.ProductTypeIndex))
+		if err != nil {
+			return nil, fmt.Errorf("failed to query geographies: %w", err)
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var geoRaw string
+			if err := rows.Scan(&geoRaw); err != nil {
+				return nil, fmt.Errorf("failed to scan geography: %w", err)
+			}
+			for _, geo := range utils.ParseCSV(geoRaw) {
+				seen[geo] = true
+			}
+		}
+
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+	} else {
+		return nil, fmt.Errorf("neither security provider nor universe database configured")
 	}
 
-	if err := rows.Err(); err != nil {
-		return nil, err
+	// Convert to sorted slice
+	var result []string
+	for geo := range seen {
+		result = append(result, geo)
 	}
-
 	sort.Strings(result)
 	return result, nil
 }
@@ -229,37 +263,55 @@ func (r *Repository) GetAvailableGeographies() ([]string, error) {
 // GetAvailableIndustries returns distinct industries from active tradable securities (excludes indices).
 // Parses comma-separated industry values and returns unique, sorted individual industries.
 func (r *Repository) GetAvailableIndustries() ([]string, error) {
-	if r.universeDB == nil {
-		return nil, fmt.Errorf("universe database not configured")
-	}
-
-	query := "SELECT industry FROM securities WHERE active = 1 AND industry IS NOT NULL AND industry != '' AND (product_type IS NULL OR product_type != ?)"
-	rows, err := r.universeDB.Query(query, string(domain.ProductTypeIndex))
-	if err != nil {
-		return nil, fmt.Errorf("failed to query industries: %w", err)
-	}
-	defer rows.Close()
-
 	seen := make(map[string]bool)
-	var result []string
-	for rows.Next() {
-		var industryRaw string
-		if err := rows.Scan(&industryRaw); err != nil {
-			return nil, fmt.Errorf("failed to scan industry: %w", err)
+
+	if r.securityProvider != nil {
+		// Use SecurityProvider (respects overrides)
+		securities, err := r.securityProvider.GetAllActiveTradable()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get securities: %w", err)
 		}
-		// Parse comma-separated values and deduplicate
-		for _, industry := range utils.ParseCSV(industryRaw) {
-			if !seen[industry] {
-				seen[industry] = true
-				result = append(result, industry)
+
+		for _, sec := range securities {
+			if sec.Industry != "" {
+				inds := utils.ParseCSV(sec.Industry)
+				for _, ind := range inds {
+					seen[ind] = true
+				}
 			}
 		}
+	} else if r.universeDB != nil {
+		// Fallback to direct query (no overrides)
+		r.log.Warn().Msg("SecurityProvider not available, using direct query (overrides not applied)")
+		query := "SELECT industry FROM securities WHERE active = 1 AND industry IS NOT NULL AND industry != '' AND (product_type IS NULL OR product_type != ?)"
+		rows, err := r.universeDB.Query(query, string(domain.ProductTypeIndex))
+		if err != nil {
+			return nil, fmt.Errorf("failed to query industries: %w", err)
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var industryRaw string
+			if err := rows.Scan(&industryRaw); err != nil {
+				return nil, fmt.Errorf("failed to scan industry: %w", err)
+			}
+			for _, industry := range utils.ParseCSV(industryRaw) {
+				seen[industry] = true
+			}
+		}
+
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+	} else {
+		return nil, fmt.Errorf("neither security provider nor universe database configured")
 	}
 
-	if err := rows.Err(); err != nil {
-		return nil, err
+	// Convert to sorted slice
+	var result []string
+	for industry := range seen {
+		result = append(result, industry)
 	}
-
 	sort.Strings(result)
 	return result, nil
 }

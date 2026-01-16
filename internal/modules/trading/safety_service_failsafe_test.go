@@ -118,7 +118,7 @@ func TestValidateTrade_SoftFailSafe_AllowsWhenMarketHoursUnavailable(t *testing.
 	// Create repositories
 	tradeRepo := NewTradeRepository(ledgerDB.Conn(), universeDB.Conn(), log)
 	securityRepo := universe.NewSecurityRepository(universeDB.Conn(), log)
-	positionRepo := portfolio.NewPositionRepository(portfolioDB.Conn(), universeDB.Conn(), log)
+	positionRepo := portfolio.NewPositionRepository(portfolioDB.Conn(), universeDB.Conn(), nil, log)
 	settingsService := settings.NewService(settings.NewRepository(configDB.Conn(), log), log)
 
 	// Set trading mode to "live" so we can test market hours fail-safe
@@ -183,7 +183,7 @@ func TestValidateTrade_HardFailSafe_BlocksWhenTradeRepoUnavailable(t *testing.T)
 
 	// Create repositories
 	securityRepo := universe.NewSecurityRepository(universeDB.Conn(), log)
-	positionRepo := portfolio.NewPositionRepository(portfolioDB.Conn(), universeDB.Conn(), log)
+	positionRepo := portfolio.NewPositionRepository(portfolioDB.Conn(), universeDB.Conn(), nil, log)
 	settingsService := settings.NewService(settings.NewRepository(configDB.Conn(), log), log)
 
 	// Set trading mode to "live" so we can test trade repo fail-safe
@@ -251,7 +251,7 @@ func TestValidateTrade_WithMarketHoursService(t *testing.T) {
 	// Create repositories
 	tradeRepo := NewTradeRepository(ledgerDB.Conn(), universeDB.Conn(), log)
 	securityRepo := universe.NewSecurityRepository(universeDB.Conn(), log)
-	positionRepo := portfolio.NewPositionRepository(portfolioDB.Conn(), universeDB.Conn(), log)
+	positionRepo := portfolio.NewPositionRepository(portfolioDB.Conn(), universeDB.Conn(), nil, log)
 	settingsService := settings.NewService(settings.NewRepository(configDB.Conn(), log), log)
 	marketHoursService := market_hours.NewMarketHoursService()
 
@@ -320,7 +320,7 @@ func TestValidateTrade_BlocksInsufficientQuantity(t *testing.T) {
 	// Create repositories
 	tradeRepo := NewTradeRepository(ledgerDB.Conn(), universeDB.Conn(), log)
 	securityRepo := universe.NewSecurityRepository(universeDB.Conn(), log)
-	positionRepo := portfolio.NewPositionRepository(portfolioDB.Conn(), universeDB.Conn(), log)
+	positionRepo := portfolio.NewPositionRepository(portfolioDB.Conn(), universeDB.Conn(), nil, log)
 	settingsService := settings.NewService(settings.NewRepository(configDB.Conn(), log), log)
 
 	// Set trading mode to "live" so we can test position validation
@@ -388,7 +388,7 @@ func TestValidateTrade_AllowsValidQuantity(t *testing.T) {
 	// Create repositories
 	tradeRepo := NewTradeRepository(ledgerDB.Conn(), universeDB.Conn(), log)
 	securityRepo := universe.NewSecurityRepository(universeDB.Conn(), log)
-	positionRepo := portfolio.NewPositionRepository(portfolioDB.Conn(), universeDB.Conn(), log)
+	positionRepo := portfolio.NewPositionRepository(portfolioDB.Conn(), universeDB.Conn(), nil, log)
 	settingsService := settings.NewService(settings.NewRepository(configDB.Conn(), log), log)
 
 	// Set trading mode to "live" so we can test position validation

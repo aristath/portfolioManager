@@ -9,20 +9,45 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// SecurityInfo represents security information needed for positions
+type SecurityInfo struct {
+	ISIN             string
+	Symbol           string
+	Name             string
+	Geography        string
+	FullExchangeName string
+	Industry         string
+	Currency         string
+	AllowSell        bool
+}
+
+// SecurityProvider defines the contract for getting security information
+// Defined here to avoid import cycle with universe package
+type SecurityProvider interface {
+	GetAllActive() ([]SecurityInfo, error)
+	GetAllActiveTradable() ([]SecurityInfo, error)
+}
+
 // PositionRepository handles position database operations
 // Faithful translation from Python: app/modules/portfolio/database/position_repository.py
 type PositionRepository struct {
-	portfolioDB *sql.DB // portfolio.db - positions
-	universeDB  *sql.DB // universe.db - securities
-	log         zerolog.Logger
+	portfolioDB      *sql.DB          // portfolio.db - positions
+	universeDB       *sql.DB          // universe.db - securities
+	securityProvider SecurityProvider // Optional: for override support
+	log              zerolog.Logger
 }
 
 // NewPositionRepository creates a new position repository
-func NewPositionRepository(portfolioDB, universeDB *sql.DB, log zerolog.Logger) *PositionRepository {
+func NewPositionRepository(
+	portfolioDB, universeDB *sql.DB,
+	securityProvider SecurityProvider,
+	log zerolog.Logger,
+) *PositionRepository {
 	return &PositionRepository{
-		portfolioDB: portfolioDB,
-		universeDB:  universeDB,
-		log:         log.With().Str("repo", "position").Logger(),
+		portfolioDB:      portfolioDB,
+		universeDB:       universeDB,
+		securityProvider: securityProvider,
+		log:              log.With().Str("repo", "position").Logger(),
 	}
 }
 
@@ -97,50 +122,69 @@ func (r *PositionRepository) GetWithSecurityInfo() ([]PositionWithSecurity, erro
 		return []PositionWithSecurity{}, nil
 	}
 
-	// Get securities from universe.db (by ISIN)
-	// Note: Cash securities should not exist in universe.db after migration
-	// Note: allow_sell is now in security_overrides table, defaults to true
-	securityRows, err := r.universeDB.Query(`
-		SELECT isin, symbol, name, geography, fullExchangeName, industry, currency
-		FROM securities
-		WHERE active = 1
-	`)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query securities: %w", err)
-	}
-	defer securityRows.Close()
-
-	// Read securities into map (keyed by ISIN)
-	// Note: allow_sell is now stored in security_overrides table (defaults to true)
-	type SecurityInfo struct {
-		ISIN             string
-		Symbol           string
-		Name             string
-		Geography        sql.NullString
-		FullExchangeName sql.NullString
-		Industry         sql.NullString
-		Currency         sql.NullString
-	}
-
-	securitiesByISIN := make(map[string]SecurityInfo)
-	for securityRows.Next() {
-		var sec SecurityInfo
-		if err := securityRows.Scan(
-			&sec.ISIN,
-			&sec.Symbol,
-			&sec.Name,
-			&sec.Geography,
-			&sec.FullExchangeName,
-			&sec.Industry,
-			&sec.Currency,
-		); err != nil {
-			return nil, fmt.Errorf("failed to scan security: %w", err)
+	// Get securities with overrides applied
+	var securities []SecurityInfo
+	if r.securityProvider != nil {
+		// Use SecurityProvider (respects overrides)
+		securities, err = r.securityProvider.GetAllActive()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get securities with overrides: %w", err)
 		}
-		securitiesByISIN[sec.ISIN] = sec
+	} else {
+		// Fallback to direct query (no overrides)
+		r.log.Warn().Msg("SecurityProvider not available, using direct query (overrides not applied)")
+		securityRows, err := r.universeDB.Query(`
+			SELECT isin, symbol, name, geography, fullExchangeName, industry, currency
+			FROM securities
+			WHERE active = 1
+		`)
+		if err != nil {
+			return nil, fmt.Errorf("failed to query securities: %w", err)
+		}
+		defer securityRows.Close()
+
+		for securityRows.Next() {
+			var sec SecurityInfo
+			var geography, fullExchangeName, industry, currency sql.NullString
+			if err := securityRows.Scan(
+				&sec.ISIN,
+				&sec.Symbol,
+				&sec.Name,
+				&geography,
+				&fullExchangeName,
+				&industry,
+				&currency,
+			); err != nil {
+				return nil, fmt.Errorf("failed to scan security: %w", err)
+			}
+
+			// Convert nullable fields
+			if geography.Valid {
+				sec.Geography = geography.String
+			}
+			if fullExchangeName.Valid {
+				sec.FullExchangeName = fullExchangeName.String
+			}
+			if industry.Valid {
+				sec.Industry = industry.String
+			}
+			if currency.Valid {
+				sec.Currency = currency.String
+			}
+			sec.AllowSell = true // Default when no overrides
+
+			securities = append(securities, sec)
+		}
+
+		if err := securityRows.Err(); err != nil {
+			return nil, fmt.Errorf("error iterating securities: %w", err)
+		}
 	}
 
-	if err := securityRows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating securities: %w", err)
+	// Build lookup map
+	securitiesByISIN := make(map[string]SecurityInfo)
+	for _, sec := range securities {
+		securitiesByISIN[sec.ISIN] = sec
 	}
 
 	// Merge position and security data
@@ -160,17 +204,11 @@ func (r *PositionRepository) GetWithSecurityInfo() ([]PositionWithSecurity, erro
 		}
 
 		if found {
-			merged.StockName = sec.Name
-			merged.AllowSell = true // Default: allow_sell is now in security_overrides, defaults to true
-			if sec.Geography.Valid {
-				merged.Geography = sec.Geography.String
-			}
-			if sec.FullExchangeName.Valid {
-				merged.FullExchangeName = sec.FullExchangeName.String
-			}
-			if sec.Industry.Valid {
-				merged.Industry = sec.Industry.String
-			}
+			merged.StockName = sec.Name      // Respects name overrides
+			merged.AllowSell = sec.AllowSell // Respects allow_sell overrides
+			merged.Geography = sec.Geography // Respects geography overrides
+			merged.Industry = sec.Industry   // Respects industry overrides
+			merged.FullExchangeName = sec.FullExchangeName
 		} else {
 			// Fallback: use symbol as name if security not found
 			merged.StockName = pos.Symbol

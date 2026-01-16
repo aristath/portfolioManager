@@ -262,11 +262,13 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	// ==========================================
 
 	// Portfolio service (with SecuritySetupService adapter for auto-adding missing securities)
+	portfolioSecurityProvider := NewSecurityProviderAdapter(container.SecurityRepo)
 	container.PortfolioService = portfolio.NewPortfolioService(
 		container.PositionRepo,
 		container.AllocRepo,
 		cashManager, // Use concrete type
 		container.UniverseDB.Conn(),
+		portfolioSecurityProvider,
 		container.BrokerClient,
 		container.CurrencyExchangeService,
 		container.ExchangeRateCacheService,
