@@ -763,9 +763,10 @@ func (r *SecurityRepository) GetWithScores(portfolioDB *sql.DB) ([]SecurityWithS
 		}
 	}
 
-	// Filter out indices AFTER applying overrides (so product_type overrides take effect)
+	// Filter out indices AFTER applying overrides
+	// Exclude both: product_type=INDEX overrides AND *.IDX symbols (index convention)
 	for isin, sws := range securitiesMap {
-		if sws.ProductType == string(ProductTypeIndex) {
+		if sws.ProductType == string(ProductTypeIndex) || strings.HasSuffix(sws.Symbol, ".IDX") {
 			delete(securitiesMap, isin)
 		}
 	}
