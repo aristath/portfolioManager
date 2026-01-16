@@ -90,7 +90,14 @@ echo ""
 log_info "[2/9] Running pre-migration checks..."
 
 # Check for inactive securities with positions
-INACTIVE_WITH_POS=$(sqlite3 "$DB" "SELECT COUNT(*) FROM securities s JOIN positions p ON s.isin = p.isin WHERE s.active = 0 AND p.quantity != 0;")
+# Need to attach portfolio.db to check positions
+INACTIVE_WITH_POS=$(sqlite3 "$DB" "
+    ATTACH DATABASE 'data/portfolio.db' AS portfolio;
+    SELECT COUNT(*)
+    FROM securities s
+    JOIN portfolio.positions p ON s.isin = p.isin
+    WHERE s.active = 0 AND p.quantity != 0;
+")
 check_result "$INACTIVE_WITH_POS" "0" "Found inactive securities with positions - cannot proceed"
 log_success "No inactive securities with positions"
 
@@ -114,7 +121,12 @@ log_success "JSON functions verified"
 # Step 3: Delete inactive securities
 echo ""
 log_info "[3/9] Deleting inactive securities..."
-run_query "DELETE FROM securities WHERE active = 0 AND isin NOT IN (SELECT DISTINCT isin FROM positions WHERE quantity != 0);"
+sqlite3 "$DB" "
+    ATTACH DATABASE 'data/portfolio.db' AS portfolio;
+    DELETE FROM securities
+    WHERE active = 0
+    AND isin NOT IN (SELECT DISTINCT isin FROM portfolio.positions WHERE quantity != 0);
+"
 REMAINING_INACTIVE=$(sqlite3 "$DB" "SELECT COUNT(*) FROM securities WHERE active = 0;")
 check_result "$REMAINING_INACTIVE" "0" "Failed to delete all inactive securities"
 log_success "Inactive securities deleted"
@@ -206,7 +218,15 @@ ORPHAN_OVERRIDES=$(sqlite3 "$DB" "SELECT COUNT(*) FROM security_overrides o LEFT
 check_result "$ORPHAN_OVERRIDES" "0" "Found orphaned security overrides"
 log_success "No orphaned security overrides"
 
-ORPHAN_POSITIONS=$(sqlite3 "$DB" "SELECT COUNT(*) FROM positions p LEFT JOIN securities s ON p.isin = s.isin WHERE s.isin IS NULL AND p.quantity > 0;")
+ORPHAN_POSITIONS=$(sqlite3 "$DB" "
+    ATTACH DATABASE 'data/portfolio.db' AS portfolio;
+    SELECT COUNT(*)
+    FROM portfolio.positions p
+    LEFT JOIN securities s ON p.isin = s.isin
+    WHERE s.isin IS NULL
+    AND p.quantity > 0
+    AND p.isin NOT LIKE 'CASH:%';
+")
 check_result "$ORPHAN_POSITIONS" "0" "Found orphaned positions"
 log_success "No orphaned positions"
 
