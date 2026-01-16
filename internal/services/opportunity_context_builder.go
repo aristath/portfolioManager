@@ -199,7 +199,7 @@ func (b *OpportunityContextBuilder) buildContext(
 
 	// Use optimizer weights if provided, otherwise fall back to allocations
 	targetWeights := optimizerWeights
-	if targetWeights == nil || len(targetWeights) == 0 {
+	if len(targetWeights) == 0 {
 		targetWeights = allocations
 	}
 
