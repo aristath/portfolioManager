@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/aristath/sentinel/internal/modules/planning"
 	"github.com/aristath/sentinel/internal/modules/planning/domain"
@@ -10,14 +11,20 @@ import (
 )
 
 type RecommendationsHandler struct {
-	service *planning.Service
-	log     zerolog.Logger
+	service            *planning.Service
+	recommendationRepo planning.RecommendationRepositoryInterface
+	log                zerolog.Logger
 }
 
-func NewRecommendationsHandler(service *planning.Service, log zerolog.Logger) *RecommendationsHandler {
+func NewRecommendationsHandler(
+	service *planning.Service,
+	recommendationRepo planning.RecommendationRepositoryInterface,
+	log zerolog.Logger,
+) *RecommendationsHandler {
 	return &RecommendationsHandler{
-		service: service,
-		log:     log.With().Str("handler", "recommendations").Logger(),
+		service:            service,
+		recommendationRepo: recommendationRepo,
+		log:                log.With().Str("handler", "recommendations").Logger(),
 	}
 }
 
@@ -31,11 +38,56 @@ type RecommendationsResponse struct {
 }
 
 func (h *RecommendationsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
+	switch r.Method {
+	case http.MethodGet:
+		h.handleGet(w, r)
+	case http.MethodPost:
+		h.handlePost(w, r)
+	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
+	}
+}
+
+func (h *RecommendationsHandler) handleGet(w http.ResponseWriter, r *http.Request) {
+	// Parse query parameters
+	planView := r.URL.Query().Get("plan") == "true"
+	limit := 0
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+			limit = l
+		}
 	}
 
+	if planView {
+		// Return formatted plan view
+		plan, err := h.recommendationRepo.GetRecommendationsAsPlan(nil, 0)
+		if err != nil {
+			h.log.Error().Err(err).Msg("Failed to get recommendations as plan")
+			http.Error(w, "Failed to retrieve recommendations", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(plan)
+	} else {
+		// Return raw recommendations list
+		recommendations, err := h.recommendationRepo.GetPendingRecommendations(limit)
+		if err != nil {
+			h.log.Error().Err(err).Msg("Failed to get pending recommendations")
+			http.Error(w, "Failed to retrieve recommendations", http.StatusInternalServerError)
+			return
+		}
+
+		response := map[string]interface{}{
+			"recommendations": recommendations,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}
+}
+
+func (h *RecommendationsHandler) handlePost(w http.ResponseWriter, r *http.Request) {
 	var req RecommendationsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)

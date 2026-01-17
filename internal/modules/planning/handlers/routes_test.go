@@ -21,6 +21,7 @@ func TestRegisterRoutes(t *testing.T) {
 	planningService := &planning.Service{}
 	configRepo := &repository.ConfigRepository{}
 	plannerRepo := repository.NewInMemoryPlannerRepository(zerolog.Nop())
+	recommendationRepo := planning.NewInMemoryRecommendationRepository(zerolog.Nop())
 	validator := config.NewValidator()
 	eventBroadcaster := NewEventBroadcaster(zerolog.Nop())
 
@@ -29,6 +30,7 @@ func TestRegisterRoutes(t *testing.T) {
 		planningService,
 		configRepo,
 		plannerRepo,
+		recommendationRepo,
 		validator,
 		eventBroadcaster,
 		nil, // eventManager
@@ -98,6 +100,7 @@ func TestRegisterRoutes_RoutePrefix(t *testing.T) {
 	planningService := &planning.Service{}
 	configRepo := &repository.ConfigRepository{}
 	plannerRepo := repository.NewInMemoryPlannerRepository(zerolog.Nop())
+	recommendationRepo := planning.NewInMemoryRecommendationRepository(zerolog.Nop())
 	validator := config.NewValidator()
 	eventBroadcaster := NewEventBroadcaster(zerolog.Nop())
 
@@ -105,6 +108,7 @@ func TestRegisterRoutes_RoutePrefix(t *testing.T) {
 		planningService,
 		configRepo,
 		plannerRepo,
+		recommendationRepo,
 		validator,
 		eventBroadcaster,
 		nil, // eventManager

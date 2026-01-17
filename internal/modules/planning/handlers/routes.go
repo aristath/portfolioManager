@@ -22,6 +22,7 @@ func NewHandler(
 	planningService *planning.Service,
 	configRepo *repository.ConfigRepository,
 	plannerRepo repository.PlannerRepositoryInterface,
+	recommendationRepo planning.RecommendationRepositoryInterface,
 	validator *config.Validator,
 	eventBroadcaster *EventBroadcaster,
 	eventManager *events.Manager,
@@ -29,7 +30,7 @@ func NewHandler(
 	log zerolog.Logger,
 ) *Handler {
 	return &Handler{
-		recommendationsHandler: NewRecommendationsHandler(planningService, log),
+		recommendationsHandler: NewRecommendationsHandler(planningService, recommendationRepo, log),
 		configHandler:          NewConfigHandler(configRepo, validator, eventManager, log),
 		executeHandler:         NewExecuteHandler(plannerRepo, tradeExecutor, log),
 		streamHandler:          NewStreamHandler(eventBroadcaster, log),
