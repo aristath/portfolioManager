@@ -321,7 +321,7 @@ func (m *Manager) HardUpdate() (*DeploymentResult, error) {
 		mu.Lock()
 		result.ServicesDeployed = append(result.ServicesDeployed, deployment)
 		if !deployment.Success {
-			deploymentErrors[deployment.ServiceName] = fmt.Errorf(deployment.Error)
+			deploymentErrors[deployment.ServiceName] = fmt.Errorf("%s", deployment.Error)
 		}
 		mu.Unlock()
 	}()
@@ -406,7 +406,7 @@ func (m *Manager) deployServices(result *DeploymentResult, runID string) map[str
 		mu.Lock()
 		result.ServicesDeployed = append(result.ServicesDeployed, deployment)
 		if !deployment.Success {
-			errors[deployment.ServiceName] = fmt.Errorf(deployment.Error)
+			errors[deployment.ServiceName] = fmt.Errorf("%s", deployment.Error)
 		}
 		mu.Unlock()
 	}()

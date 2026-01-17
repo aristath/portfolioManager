@@ -98,11 +98,8 @@ func (p *Processor) Run() {
 		case <-p.done:
 			p.processOne() // Previous work done, immediately check for next
 		case <-ticker.C:
-			// Clear and repopulate queue every minute (failsafe)
-			p.mu.Lock()
-			p.workQueue = nil
-			p.queuedItems = make(map[string]bool)
-			p.mu.Unlock()
+			// Periodic check for new eligible work (failsafe)
+			// populateQueue() already prevents duplicates via queuedItems map
 			p.populateQueue()
 			p.processOne()
 		}

@@ -269,23 +269,13 @@ func TestSyncWorkTypes_MarketTiming(t *testing.T) {
 
 	RegisterSyncWorkTypes(registry, deps)
 
-	// Most sync work should run during market open
-	duringMarketOpenTypes := []string{"sync:portfolio", "sync:trades", "sync:cashflows", "sync:prices"}
-	for _, id := range duringMarketOpenTypes {
+	// All sync work types run AnyTime (Tradernet returns cached data when markets closed)
+	anyTimeTypes := []string{"sync:portfolio", "sync:trades", "sync:cashflows", "sync:prices", "sync:rates", "sync:display"}
+	for _, id := range anyTimeTypes {
 		wt := registry.Get(id)
 		require.NotNil(t, wt, "work type %s should exist", id)
-		assert.Equal(t, DuringMarketOpen, wt.MarketTiming, "work type %s should be DuringMarketOpen", id)
+		assert.Equal(t, AnyTime, wt.MarketTiming, "work type %s should be AnyTime", id)
 	}
-
-	// sync:rates should be AnyTime
-	ratesWt := registry.Get("sync:rates")
-	require.NotNil(t, ratesWt)
-	assert.Equal(t, AnyTime, ratesWt.MarketTiming)
-
-	// sync:display should be AnyTime (updates after prices)
-	displayWt := registry.Get("sync:display")
-	require.NotNil(t, displayWt)
-	assert.Equal(t, AnyTime, displayWt.MarketTiming)
 }
 
 func TestSyncWorkTypes_Priority(t *testing.T) {
