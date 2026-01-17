@@ -17,7 +17,7 @@ func TestNewHandlers(t *testing.T) {
 	registry := NewRegistry()
 	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{})
-	processor := NewProcessor(registry, completion, market)
+	processor := NewProcessor(registry, completion, market, nil)
 
 	handlers := NewHandlers(processor, registry)
 
@@ -45,7 +45,7 @@ func TestHandlers_ListWorkTypes(t *testing.T) {
 
 	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{})
-	processor := NewProcessor(registry, completion, market)
+	processor := NewProcessor(registry, completion, market, nil)
 	handlers := NewHandlers(processor, registry)
 
 	// Create request
@@ -89,7 +89,7 @@ func TestHandlers_ExecuteWorkType(t *testing.T) {
 
 	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{})
-	processor := NewProcessorWithTimeout(registry, completion, market, 1*time.Second)
+	processor := NewProcessorWithTimeout(registry, completion, market, nil, 1*time.Second)
 	handlers := NewHandlers(processor, registry)
 
 	// Create router to extract URL params
@@ -119,7 +119,7 @@ func TestHandlers_ExecuteWorkType_NotFound(t *testing.T) {
 	registry := NewRegistry()
 	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{})
-	processor := NewProcessor(registry, completion, market)
+	processor := NewProcessor(registry, completion, market, nil)
 	handlers := NewHandlers(processor, registry)
 
 	// Create router
@@ -153,7 +153,7 @@ func TestHandlers_ExecuteWorkTypeWithSubject(t *testing.T) {
 
 	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{})
-	processor := NewProcessorWithTimeout(registry, completion, market, 1*time.Second)
+	processor := NewProcessorWithTimeout(registry, completion, market, nil, 1*time.Second)
 	handlers := NewHandlers(processor, registry)
 
 	// Create router
@@ -198,7 +198,7 @@ func TestHandlers_ExecuteWorkType_DependenciesNotMet(t *testing.T) {
 
 	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{})
-	processor := NewProcessor(registry, completion, market)
+	processor := NewProcessor(registry, completion, market, nil)
 	handlers := NewHandlers(processor, registry)
 
 	// Create router
@@ -222,7 +222,7 @@ func TestHandlers_TriggerProcessor(t *testing.T) {
 	registry := NewRegistry()
 	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{})
-	processor := NewProcessor(registry, completion, market)
+	processor := NewProcessor(registry, completion, market, nil)
 	handlers := NewHandlers(processor, registry)
 
 	// Create request
@@ -246,7 +246,7 @@ func TestHandlers_RegisterRoutes(t *testing.T) {
 	registry := NewRegistry()
 	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{})
-	processor := NewProcessor(registry, completion, market)
+	processor := NewProcessor(registry, completion, market, nil)
 	handlers := NewHandlers(processor, registry)
 
 	// Create router

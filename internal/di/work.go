@@ -188,7 +188,8 @@ func InitializeWork(container *Container, log zerolog.Logger) (*WorkComponents, 
 	registry := work.NewRegistry()
 	completion := work.NewCompletionTracker()
 	market := work.NewMarketTimingChecker(&marketHoursAdapter{container: container})
-	processor := work.NewProcessor(registry, completion, market)
+	cache := work.NewCache(container.CacheDB.Conn())
+	processor := work.NewProcessor(registry, completion, market, cache)
 
 	// Wire event emitter for progress reporting
 	if container.EventManager != nil {

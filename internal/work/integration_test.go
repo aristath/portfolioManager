@@ -106,7 +106,7 @@ func TestIntegration_PlannerChainExecutesInOrder(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market)
+	p := NewProcessor(registry, completion, market, nil)
 
 	go p.Run()
 	defer p.Stop()
@@ -227,7 +227,7 @@ func TestIntegration_SyncCycleWithDependencies(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market)
+	p := NewProcessor(registry, completion, market, nil)
 
 	go p.Run()
 	defer p.Stop()
@@ -284,7 +284,7 @@ func TestIntegration_PerSecurityWorkRespectsMarketTiming(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market)
+	p := NewProcessor(registry, completion, market, nil)
 
 	go p.Run()
 	defer p.Stop()
@@ -333,7 +333,7 @@ func TestIntegration_MaintenanceOnlyDuringAllMarketsClosed(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market)
+	p := NewProcessor(registry, completion, market, nil)
 
 	go p.Run()
 	defer p.Stop()
@@ -382,7 +382,7 @@ func TestIntegration_ManualTriggerBypassesTimingChecks(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market)
+	p := NewProcessor(registry, completion, market, nil)
 
 	go p.Run()
 	defer p.Stop()
@@ -437,7 +437,7 @@ func TestIntegration_DividendWorkflowChain(t *testing.T) {
 		})
 	}
 
-	p := NewProcessor(registry, completion, market)
+	p := NewProcessor(registry, completion, market, nil)
 
 	go p.Run()
 	defer p.Stop()
@@ -476,7 +476,7 @@ func TestIntegration_IntervalStalenessCheck(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market)
+	p := NewProcessor(registry, completion, market, nil)
 
 	go p.Run()
 	defer p.Stop()
@@ -522,7 +522,7 @@ func TestIntegration_CompletionTrackerPersistsDuringSession(t *testing.T) {
 	})
 
 	// First processor run
-	p1 := NewProcessor(registry, completion, market)
+	p1 := NewProcessor(registry, completion, market, nil)
 	go p1.Run()
 	p1.Trigger()
 	time.Sleep(200 * time.Millisecond)
@@ -531,7 +531,7 @@ func TestIntegration_CompletionTrackerPersistsDuringSession(t *testing.T) {
 	assert.Equal(t, int32(1), execCount.Load())
 
 	// Second processor run with same completion tracker
-	p2 := NewProcessor(registry, completion, market)
+	p2 := NewProcessor(registry, completion, market, nil)
 	go p2.Run()
 	p2.Trigger()
 	time.Sleep(200 * time.Millisecond)
@@ -611,7 +611,7 @@ func TestIntegration_PerSecurityDependencySameSubject(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market)
+	p := NewProcessor(registry, completion, market, nil)
 
 	go p.Run()
 	defer p.Stop()

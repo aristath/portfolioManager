@@ -25,6 +25,7 @@ type Processor struct {
 	registry     *Registry
 	completion   *CompletionTracker
 	market       *MarketTimingChecker
+	cache        *Cache
 	eventEmitter EventEmitter
 	timeout      time.Duration
 
@@ -43,17 +44,18 @@ type Processor struct {
 }
 
 // NewProcessor creates a new work processor.
-func NewProcessor(registry *Registry, completion *CompletionTracker, market *MarketTimingChecker) *Processor {
-	return NewProcessorWithTimeout(registry, completion, market, WorkTimeout)
+func NewProcessor(registry *Registry, completion *CompletionTracker, market *MarketTimingChecker, cache *Cache) *Processor {
+	return NewProcessorWithTimeout(registry, completion, market, cache, WorkTimeout)
 }
 
 // NewProcessorWithTimeout creates a new work processor with a custom timeout.
 // This is primarily used for testing.
-func NewProcessorWithTimeout(registry *Registry, completion *CompletionTracker, market *MarketTimingChecker, timeout time.Duration) *Processor {
+func NewProcessorWithTimeout(registry *Registry, completion *CompletionTracker, market *MarketTimingChecker, cache *Cache, timeout time.Duration) *Processor {
 	return &Processor{
 		registry:    registry,
 		completion:  completion,
 		market:      market,
+		cache:       cache,
 		timeout:     timeout,
 		trigger:     make(chan struct{}, 1),
 		done:        make(chan struct{}, 1),
@@ -404,6 +406,15 @@ func (p *Processor) dependenciesMet(wt *WorkType, subject string) bool {
 
 // executeItem executes a work item synchronously.
 func (p *Processor) executeItem(item *WorkItem, wt *WorkType) error {
+	// Check cache expiration before executing
+	if p.cache != nil {
+		expiresAt := p.cache.GetExpiresAt(item.ID)
+		if time.Now().Unix() < expiresAt {
+			// Cache not expired, skip execution
+			return nil
+		}
+	}
+
 	startTime := time.Now()
 
 	// Create progress reporter
@@ -423,6 +434,14 @@ func (p *Processor) executeItem(item *WorkItem, wt *WorkType) error {
 	} else {
 		p.completion.MarkCompleted(item)
 		progress.emitCompleted(duration)
+
+		// Update cache with new expiration
+		if p.cache != nil && wt.Interval > 0 {
+			expiresAt := time.Now().Add(wt.Interval).Unix()
+			if err := p.cache.Set(item.ID, expiresAt); err != nil {
+				log.Warn().Err(err).Str("work", item.ID).Msg("Failed to update cache")
+			}
+		}
 	}
 
 	return err

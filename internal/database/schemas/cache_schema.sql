@@ -9,12 +9,12 @@
 -- REMOVED: cache_data table
 -- Generic cache table was unused in the codebase
 
--- Job execution history (tracks last run time per job type)
--- Used by time-based scheduler to determine if jobs should run
-CREATE TABLE IF NOT EXISTS job_history (
-    job_type TEXT PRIMARY KEY,
-    last_run_at INTEGER NOT NULL,    -- Unix timestamp (seconds since epoch)
-    last_status TEXT NOT NULL DEFAULT 'success'
-) STRICT;
+-- REMOVED: job_history table
+-- Job execution history was unused in the codebase
 
-CREATE INDEX IF NOT EXISTS idx_job_history_last_run ON job_history(last_run_at);
+-- Generic cache table for key-value storage with expiration
+CREATE TABLE IF NOT EXISTS cache (
+    key TEXT PRIMARY KEY,
+    value TEXT,
+    expires_at INTEGER  -- Unix timestamp (seconds since epoch)
+) STRICT;

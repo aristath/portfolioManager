@@ -55,7 +55,7 @@ func TestSystemHandlers_HandleJobsStatus(t *testing.T) {
 					},
 				})
 
-				return work.NewProcessor(registry, completion, market)
+				return work.NewProcessor(registry, completion, market, nil)
 			},
 			expectedCount: 2,
 			validate: func(t *testing.T, response JobsStatusResponse) {
@@ -93,7 +93,7 @@ func TestSystemHandlers_HandleJobsStatus(t *testing.T) {
 				}
 				completion.MarkCompletedAt(item, time.Date(2026, 1, 16, 10, 0, 0, 0, time.UTC))
 
-				return work.NewProcessor(registry, completion, market)
+				return work.NewProcessor(registry, completion, market, nil)
 			},
 			expectedCount: 1,
 			validate: func(t *testing.T, response JobsStatusResponse) {
@@ -131,7 +131,7 @@ func TestSystemHandlers_HandleJobsStatus(t *testing.T) {
 				}
 				completion.MarkCompletedAt(item, time.Now().Add(-2*time.Minute))
 
-				return work.NewProcessor(registry, completion, market)
+				return work.NewProcessor(registry, completion, market, nil)
 			},
 			expectedCount: 1,
 			validate: func(t *testing.T, response JobsStatusResponse) {
@@ -166,7 +166,7 @@ func TestSystemHandlers_HandleJobsStatus(t *testing.T) {
 					},
 				})
 
-				return work.NewProcessor(registry, completion, market)
+				return work.NewProcessor(registry, completion, market, nil)
 			},
 			expectedCount: 1,
 			validate: func(t *testing.T, response JobsStatusResponse) {
@@ -205,7 +205,7 @@ func TestSystemHandlers_HandleJobsStatus(t *testing.T) {
 				}
 				completion.MarkCompletedAt(item, time.Now().Add(-1*time.Hour))
 
-				return work.NewProcessor(registry, completion, market)
+				return work.NewProcessor(registry, completion, market, nil)
 			},
 			expectedCount: 1,
 			validate: func(t *testing.T, response JobsStatusResponse) {
@@ -223,7 +223,7 @@ func TestSystemHandlers_HandleJobsStatus(t *testing.T) {
 				registry := work.NewRegistry()
 				completion := work.NewCompletionTracker()
 				market := work.NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-				return work.NewProcessor(registry, completion, market)
+				return work.NewProcessor(registry, completion, market, nil)
 			},
 			expectedCount: 0,
 			validate: func(t *testing.T, response JobsStatusResponse) {
@@ -250,7 +250,7 @@ func TestSystemHandlers_HandleJobsStatus(t *testing.T) {
 					},
 				})
 
-				return work.NewProcessor(registry, completion, market)
+				return work.NewProcessor(registry, completion, market, nil)
 			},
 			expectedCount: 1,
 			validate: func(t *testing.T, response JobsStatusResponse) {

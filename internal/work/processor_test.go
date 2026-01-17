@@ -16,7 +16,7 @@ func TestNewProcessor(t *testing.T) {
 	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{})
 
-	p := NewProcessor(registry, completion, market)
+	p := NewProcessor(registry, completion, market, nil)
 
 	require.NotNil(t, p)
 }
@@ -38,7 +38,7 @@ func TestProcessor_Trigger(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market)
+	p := NewProcessor(registry, completion, market, nil)
 
 	// Start processor
 	go p.Run()
@@ -122,7 +122,7 @@ func TestProcessor_DependencyOrdering(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market)
+	p := NewProcessor(registry, completion, market, nil)
 
 	go p.Run()
 	defer p.Stop()
@@ -192,7 +192,7 @@ func TestProcessor_PerSecurityDependencies(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market)
+	p := NewProcessor(registry, completion, market, nil)
 
 	go p.Run()
 	defer p.Stop()
@@ -235,7 +235,7 @@ func TestProcessor_MarketTimingRespected(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market)
+	p := NewProcessor(registry, completion, market, nil)
 
 	go p.Run()
 	defer p.Stop()
@@ -271,7 +271,7 @@ func TestProcessor_RetryOnFailure(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market)
+	p := NewProcessor(registry, completion, market, nil)
 
 	go p.Run()
 	defer p.Stop()
@@ -308,7 +308,7 @@ func TestProcessor_MaxRetries(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market)
+	p := NewProcessor(registry, completion, market, nil)
 
 	go p.Run()
 	defer p.Stop()
@@ -351,7 +351,7 @@ func TestProcessor_Timeout(t *testing.T) {
 	})
 
 	// Create processor with short timeout for testing
-	p := NewProcessorWithTimeout(registry, completion, market, 100*time.Millisecond)
+	p := NewProcessorWithTimeout(registry, completion, market, nil, 100*time.Millisecond)
 
 	go p.Run()
 	defer p.Stop()
@@ -394,7 +394,7 @@ func TestProcessor_ExecuteNow(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market)
+	p := NewProcessor(registry, completion, market, nil)
 
 	go p.Run()
 	defer p.Stop()
@@ -415,7 +415,7 @@ func TestProcessor_ExecuteNow_UnknownWorkType(t *testing.T) {
 	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{})
 
-	p := NewProcessor(registry, completion, market)
+	p := NewProcessor(registry, completion, market, nil)
 
 	err := p.ExecuteNow("unknown:work", "")
 
@@ -444,7 +444,7 @@ func TestProcessor_ExecuteNow_WithSubject(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market)
+	p := NewProcessor(registry, completion, market, nil)
 
 	go p.Run()
 	defer p.Stop()
@@ -463,7 +463,7 @@ func TestProcessor_Stop(t *testing.T) {
 	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{})
 
-	p := NewProcessor(registry, completion, market)
+	p := NewProcessor(registry, completion, market, nil)
 
 	go p.Run()
 
@@ -505,7 +505,7 @@ func TestProcessor_NoDuplicateExecution(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market)
+	p := NewProcessor(registry, completion, market, nil)
 
 	go p.Run()
 	defer p.Stop()
@@ -540,7 +540,7 @@ func TestProcessor_SystemBusyCheck(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market)
+	p := NewProcessor(registry, completion, market, nil)
 
 	go p.Run()
 	defer p.Stop()
@@ -560,7 +560,7 @@ func TestProcessor_GetRegistry(t *testing.T) {
 	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{})
 
-	p := NewProcessor(registry, completion, market)
+	p := NewProcessor(registry, completion, market, nil)
 
 	// Should return the same registry instance
 	assert.Equal(t, registry, p.GetRegistry())
@@ -586,7 +586,7 @@ func TestProcessor_GetCompletion(t *testing.T) {
 	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{})
 
-	p := NewProcessor(registry, completion, market)
+	p := NewProcessor(registry, completion, market, nil)
 
 	// Should return the same completion tracker instance
 	assert.Equal(t, completion, p.GetCompletion())
@@ -627,7 +627,7 @@ func TestProcessor_PopulateQueue_FIFO(t *testing.T) {
 
 	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-	processor := NewProcessor(registry, completion, market)
+	processor := NewProcessor(registry, completion, market, nil)
 	processor.populateQueue()
 
 	assert.Equal(t, 3, len(processor.workQueue))
@@ -643,7 +643,7 @@ func TestProcessor_PopulateQueue_NoDuplicates(t *testing.T) {
 
 	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-	processor := NewProcessor(registry, completion, market)
+	processor := NewProcessor(registry, completion, market, nil)
 	processor.populateQueue()
 	processor.populateQueue()
 
@@ -661,7 +661,7 @@ func TestProcessor_PopulateQueue_RespectsMarketTiming(t *testing.T) {
 
 	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true}) // Markets closed
-	processor := NewProcessor(registry, completion, market)
+	processor := NewProcessor(registry, completion, market, nil)
 	processor.populateQueue()
 
 	assert.Equal(t, 0, len(processor.workQueue))
@@ -681,7 +681,7 @@ func TestProcessor_PopulateQueue_RespectsIntervals(t *testing.T) {
 	completion.MarkCompleted(&WorkItem{TypeID: "recent", Subject: ""})
 
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-	processor := NewProcessor(registry, completion, market)
+	processor := NewProcessor(registry, completion, market, nil)
 	processor.populateQueue()
 
 	assert.Equal(t, 0, len(processor.workQueue))
@@ -698,7 +698,7 @@ func TestProcessor_PopulateQueue_SkipsDependencies(t *testing.T) {
 
 	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-	processor := NewProcessor(registry, completion, market)
+	processor := NewProcessor(registry, completion, market, nil)
 	processor.populateQueue()
 
 	// Should still be queued - dependencies checked at execution time!
@@ -717,7 +717,7 @@ func TestProcessor_ResolveDependencies_Satisfied(t *testing.T) {
 	completion.MarkCompleted(&WorkItem{TypeID: "dep", Subject: ""})
 
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-	processor := NewProcessor(registry, completion, market)
+	processor := NewProcessor(registry, completion, market, nil)
 
 	wt := registry.Get("work")
 	visited := make(map[string]bool)
@@ -735,7 +735,7 @@ func TestProcessor_ResolveDependencies_AddsMissing(t *testing.T) {
 
 	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-	processor := NewProcessor(registry, completion, market)
+	processor := NewProcessor(registry, completion, market, nil)
 
 	wt := registry.Get("work")
 	visited := make(map[string]bool)
@@ -755,7 +755,7 @@ func TestProcessor_ResolveDependencies_MovesToFront(t *testing.T) {
 
 	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-	processor := NewProcessor(registry, completion, market)
+	processor := NewProcessor(registry, completion, market, nil)
 
 	// Manually add items to queue
 	processor.workQueue = []*queuedWork{
@@ -783,7 +783,7 @@ func TestProcessor_ResolveDependencies_Recursive(t *testing.T) {
 
 	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-	processor := NewProcessor(registry, completion, market)
+	processor := NewProcessor(registry, completion, market, nil)
 
 	wt := registry.Get("A")
 	visited := make(map[string]bool)
@@ -803,7 +803,7 @@ func TestProcessor_ResolveDependencies_Circular(t *testing.T) {
 
 	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-	processor := NewProcessor(registry, completion, market)
+	processor := NewProcessor(registry, completion, market, nil)
 
 	wt := registry.Get("A")
 	visited := make(map[string]bool)
@@ -826,7 +826,7 @@ func TestProcessor_ResolveDependencies_SubjectScoped(t *testing.T) {
 	completion.MarkCompleted(&WorkItem{TypeID: "dep", Subject: "ISIN001"})
 
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-	processor := NewProcessor(registry, completion, market)
+	processor := NewProcessor(registry, completion, market, nil)
 
 	wt := registry.Get("work")
 	visited := make(map[string]bool)
@@ -843,7 +843,7 @@ func TestProcessor_FindNextWork_FIFO(t *testing.T) {
 	registry := NewRegistry()
 	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-	processor := NewProcessor(registry, completion, market)
+	processor := NewProcessor(registry, completion, market, nil)
 
 	// Manually add items to queue
 	processor.workQueue = []*queuedWork{
@@ -874,7 +874,7 @@ func TestProcessor_FindNextWork_EmptyQueue(t *testing.T) {
 	registry := NewRegistry()
 	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-	processor := NewProcessor(registry, completion, market)
+	processor := NewProcessor(registry, completion, market, nil)
 
 	item, wt := processor.findNextWork()
 	assert.Nil(t, item)
@@ -889,7 +889,7 @@ func TestProcessor_FindNextWork_ResolvesDependencies(t *testing.T) {
 
 	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-	processor := NewProcessor(registry, completion, market)
+	processor := NewProcessor(registry, completion, market, nil)
 
 	// Queue work that has unmet dependency
 	processor.workQueue = []*queuedWork{{TypeID: "work", Subject: ""}}
@@ -911,7 +911,7 @@ func TestProcessor_FindNextWork_RequeuesUnmetDependencies(t *testing.T) {
 
 	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-	processor := NewProcessor(registry, completion, market)
+	processor := NewProcessor(registry, completion, market, nil)
 
 	// Queue only the work (no dependency in queue or completed)
 	processor.workQueue = []*queuedWork{{TypeID: "work", Subject: ""}}
