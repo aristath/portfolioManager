@@ -17,6 +17,7 @@ var SecurityDefaults = map[string]interface{}{
 
 // ApplyDefaults applies default values for fields that were removed from the securities table
 // This should be called after scanning a security from the database
+// MinLot is only defaulted if it's 0 (not set from API data)
 func ApplyDefaults(security *Security) {
 	if security == nil {
 		return
@@ -25,7 +26,10 @@ func ApplyDefaults(security *Security) {
 	// Apply defaults
 	security.AllowBuy = true
 	security.AllowSell = true
-	security.MinLot = 1
+	// Only set MinLot to default if not already set from JSON data
+	if security.MinLot == 0 {
+		security.MinLot = 1
+	}
 	security.PriorityMultiplier = 1.0
 }
 
