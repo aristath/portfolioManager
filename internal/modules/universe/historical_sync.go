@@ -12,11 +12,10 @@ import (
 // Uses Tradernet as the single source for historical price data.
 // Stores raw data without validation - filtering happens on read via HistoryDB.
 type HistoricalSyncService struct {
-	brokerClient   domain.BrokerClient
-	securityRepo   SecurityLookupInterface
-	historyDB      HistoryDBInterface
-	rateLimitDelay time.Duration // API rate limit delay
-	log            zerolog.Logger
+	brokerClient domain.BrokerClient
+	securityRepo SecurityLookupInterface
+	historyDB    HistoryDBInterface
+	log          zerolog.Logger
 }
 
 // SecurityLookupInterface defines minimal security lookup for HistoricalSyncService
@@ -54,15 +53,13 @@ func NewHistoricalSyncService(
 	brokerClient domain.BrokerClient,
 	securityRepo SecurityLookupInterface,
 	historyDB HistoryDBInterface,
-	rateLimitDelay time.Duration,
 	log zerolog.Logger,
 ) *HistoricalSyncService {
 	return &HistoricalSyncService{
-		brokerClient:   brokerClient,
-		securityRepo:   securityRepo,
-		historyDB:      historyDB,
-		rateLimitDelay: rateLimitDelay,
-		log:            log.With().Str("service", "historical_sync").Logger(),
+		brokerClient: brokerClient,
+		securityRepo: securityRepo,
+		historyDB:    historyDB,
+		log:          log.With().Str("service", "historical_sync").Logger(),
 	}
 }
 
@@ -155,14 +152,7 @@ func (s *HistoricalSyncService) SyncHistoricalPrices(symbol string) error {
 		return fmt.Errorf("failed to sync historical prices to database: %w", err)
 	}
 
-	// Rate limit delay to avoid overwhelming the API
-	if s.rateLimitDelay > 0 {
-		s.log.Debug().
-			Str("symbol", symbol).
-			Dur("delay", s.rateLimitDelay).
-			Msg("Rate limit delay")
-		time.Sleep(s.rateLimitDelay)
-	}
+	// SDK client handles rate limiting globally (1.5s between ALL requests)
 
 	s.log.Info().
 		Str("symbol", symbol).

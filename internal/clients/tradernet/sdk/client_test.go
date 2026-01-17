@@ -2,9 +2,14 @@ package sdk
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"runtime"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -217,4 +222,128 @@ func TestPlainRequest(t *testing.T) {
 	assert.NotNil(t, result)
 	assert.Equal(t, "GET", capturedMethod, "plainRequest should use GET method")
 	assert.Contains(t, capturedURL, "findSymbol", "URL should contain command")
+}
+
+// TestSetCredentialsConcurrent tests thread safety of concurrent credential updates
+func TestSetCredentialsConcurrent(t *testing.T) {
+	log := zerolog.New(os.Stdout).Level(zerolog.Disabled)
+
+	// Create a test server that responds quickly
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		response := map[string]interface{}{
+			"result": map[string]interface{}{"status": "ok"},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	client := NewClient("initial_public", "initial_private", log)
+	client.baseURL = server.URL
+	defer client.Close()
+
+	var wg sync.WaitGroup
+
+	// 100 concurrent credential updates
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			client.SetCredentials(
+				fmt.Sprintf("public_%d", n),
+				fmt.Sprintf("private_%d", n),
+			)
+		}(i)
+	}
+
+	// 10 concurrent API requests (tests concurrent access to credentials)
+	// Reduced from 100 to avoid test timeout with 1.5s rate limiting
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			// These requests will succeed with the test server
+			_, _ = client.authorizedRequest("test_cmd", map[string]string{"test": "param"})
+		}()
+	}
+
+	wg.Wait()
+	// Test passes if no data race detected (run with -race flag)
+}
+
+// TestSetCredentialsNoGoroutineLeak tests that SetCredentials doesn't leak goroutines
+func TestSetCredentialsNoGoroutineLeak(t *testing.T) {
+	log := zerolog.New(os.Stdout).Level(zerolog.Disabled)
+	before := runtime.NumGoroutine()
+
+	client := NewClient("public", "private", log)
+
+	// Update credentials 20 times (old implementation would leak 20 goroutines)
+	for i := 0; i < 20; i++ {
+		client.SetCredentials(
+			fmt.Sprintf("public_%d", i),
+			fmt.Sprintf("private_%d", i),
+		)
+	}
+
+	client.Close()
+	time.Sleep(200 * time.Millisecond) // Allow goroutines to exit
+
+	after := runtime.NumGoroutine()
+
+	// Should be same or fewer (allow +1 for test goroutine tolerance)
+	if after > before+1 {
+		t.Errorf("Goroutine leak detected: before=%d, after=%d, leaked=%d",
+			before, after, after-before)
+	}
+}
+
+// TestSetCredentialsIdempotent tests that updating with same credentials is a no-op
+func TestSetCredentialsIdempotent(t *testing.T) {
+	log := zerolog.New(os.Stdout).Level(zerolog.Disabled)
+	client := NewClient("test_public", "test_private", log)
+	defer client.Close()
+
+	// Update with same credentials should be no-op
+	client.SetCredentials("test_public", "test_private")
+	client.SetCredentials("test_public", "test_private")
+
+	// Update with different credentials should work
+	client.SetCredentials("new_public", "new_private")
+}
+
+// TestSetCredentialsPreservesQueue tests that credential updates don't drop queued requests
+func TestSetCredentialsPreservesQueue(t *testing.T) {
+	log := zerolog.New(os.Stdout).Level(zerolog.Disabled)
+
+	// Create a test server that responds quickly
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		response := map[string]interface{}{
+			"result": map[string]interface{}{"status": "ok"},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	client := NewClient("public", "private", log)
+	client.baseURL = server.URL
+	defer client.Close()
+
+	// Queue 10 requests (will be processed slowly due to rate limiting)
+	// Reduced from 50 to avoid test timeout
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _ = client.authorizedRequest("test", map[string]string{})
+		}()
+	}
+
+	// While requests are queued/processing, update credentials
+	client.SetCredentials("new_public", "new_private")
+
+	// All requests should complete (not dropped)
+	wg.Wait()
 }

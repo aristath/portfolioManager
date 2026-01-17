@@ -2,7 +2,6 @@ package universe
 
 import (
 	"testing"
-	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -15,12 +14,10 @@ func TestHistoricalSyncServiceCreation(t *testing.T) {
 		nil, // brokerClient
 		nil, // securityRepo
 		nil, // historyDB
-		1*time.Second,
 		log,
 	)
 
 	assert.NotNil(t, service)
-	assert.Equal(t, 1*time.Second, service.rateLimitDelay)
 }
 
 func TestHistoricalSyncService_SyncWithoutClients(t *testing.T) {
@@ -30,7 +27,6 @@ func TestHistoricalSyncService_SyncWithoutClients(t *testing.T) {
 		nil, // brokerClient
 		nil, // securityRepo
 		nil, // historyDB
-		0,   // no rate limit for tests
 		log,
 	)
 

@@ -316,7 +316,6 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		container.BrokerClient, // Tradernet is now single source of truth
 		container.SecurityRepo,
 		container.HistoryDBClient,
-		time.Second*2, // Rate limit delay between API calls
 		log,
 	)
 

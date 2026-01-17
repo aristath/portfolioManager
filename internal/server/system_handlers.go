@@ -539,23 +539,6 @@ func (h *SystemHandlers) HandleTradernetStatus(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Get credentials from settings database to ensure we use the latest values
-	settingsRepo := settings.NewRepository(h.configDB.Conn(), h.log)
-	apiKey, err := settingsRepo.Get("tradernet_api_key")
-	if err != nil {
-		h.log.Warn().Err(err).Msg("Failed to get tradernet_api_key from settings")
-	}
-	apiSecret, err := settingsRepo.Get("tradernet_api_secret")
-	if err != nil {
-		h.log.Warn().Err(err).Msg("Failed to get tradernet_api_secret from settings")
-	}
-
-	// Update client credentials if available
-	if apiKey != nil && apiSecret != nil && *apiKey != "" && *apiSecret != "" {
-		h.brokerClient.SetCredentials(*apiKey, *apiSecret)
-		h.log.Debug().Msg("Updated Tradernet client credentials from settings")
-	}
-
 	healthResult, err := h.brokerClient.HealthCheck()
 	if err != nil {
 		h.log.Error().Err(err).Msg("Failed to check Tradernet health")
@@ -568,11 +551,7 @@ func (h *SystemHandlers) HandleTradernetStatus(w http.ResponseWriter, r *http.Re
 	response.Connected = healthResult.Connected
 	response.LastCheck = healthResult.Timestamp
 	if !healthResult.Connected {
-		if apiKey == nil || apiSecret == nil || *apiKey == "" || *apiSecret == "" {
-			response.Message = "Tradernet API credentials not configured"
-		} else {
-			response.Message = "Tradernet service is not connected - check credentials"
-		}
+		response.Message = "Tradernet service is not connected - check credentials"
 	} else {
 		response.Message = "Tradernet service is connected"
 	}

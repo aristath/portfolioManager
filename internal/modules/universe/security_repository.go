@@ -305,7 +305,7 @@ func (r *SecurityRepository) GetDistinctExchanges() ([]string, error) {
 		AND (json_extract(data, '$.type') IS NULL OR UPPER(json_extract(data, '$.type')) != ?)
 		ORDER BY fullExchangeName`
 
-	rows, err := r.universeDB.Query(query)
+	rows, err := r.universeDB.Query(query, string(ProductTypeIndex))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query distinct exchanges: %w", err)
 	}

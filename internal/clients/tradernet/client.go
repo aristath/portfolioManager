@@ -49,13 +49,18 @@ func NewClientWithSDK(sdkClient SDKClient, log zerolog.Logger) *Client {
 	}
 }
 
-// SetCredentials sets the API credentials for the client
-// This will recreate the SDK client with new credentials
+// SetCredentials updates the API credentials thread-safely
+// This delegates to the SDK client's thread-safe implementation
 func (c *Client) SetCredentials(apiKey, apiSecret string) {
 	c.apiKey = apiKey
 	c.apiSecret = apiSecret
-	// Always recreate SDK client with new credentials (even if empty - SDK will validate)
-	c.sdkClient = sdk.NewClient(apiKey, apiSecret, c.log)
+
+	if c.sdkClient != nil {
+		c.sdkClient.SetCredentials(apiKey, apiSecret)
+		c.log.Info().Msg("Wrapper client credentials updated")
+	} else {
+		c.log.Warn().Msg("SDK client is nil, cannot update credentials")
+	}
 }
 
 // PlaceOrderRequest is the request for placing an order

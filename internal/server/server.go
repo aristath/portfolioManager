@@ -514,6 +514,7 @@ func (s *Server) setupRoutes() {
 		settingsService := s.container.SettingsService
 		settingsHandler := settingshandlers.NewHandler(settingsService, s.container.EventManager, s.log)
 		settingsHandler.SetDisplayModeSwitcher(s.container.ModeManager)
+		settingsHandler.SetCredentialRefresher(s.systemHandlers)
 		settingsHandler.RegisterRoutes(r)
 
 		// R2 Cloud Backup routes (optional - only if R2 configured)

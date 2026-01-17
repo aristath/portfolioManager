@@ -104,6 +104,10 @@ func (m *mockSDKClient) Close() {
 	// No-op for mock
 }
 
+func (m *mockSDKClient) SetCredentials(publicKey, privateKey string) {
+	// No-op for mock
+}
+
 // TestClient_GetPortfolio tests GetPortfolio() using SDK
 func TestClient_GetPortfolio(t *testing.T) {
 	log := zerolog.New(nil).Level(zerolog.Disabled)

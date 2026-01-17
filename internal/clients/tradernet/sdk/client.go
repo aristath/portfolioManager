@@ -36,6 +36,7 @@ type requestResult struct {
 
 // Client represents the Tradernet SDK client
 type Client struct {
+	mu           sync.RWMutex // Protects publicKey and privateKey
 	publicKey    string
 	privateKey   string
 	baseURL      string
@@ -64,6 +65,22 @@ func NewClient(publicKey, privateKey string, log zerolog.Logger) *Client {
 	go c.worker()
 
 	return c
+}
+
+// SetCredentials updates API credentials thread-safely
+// This allows credentials to be refreshed without recreating the client
+func (c *Client) SetCredentials(publicKey, privateKey string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Only update if credentials actually changed
+	if c.publicKey == publicKey && c.privateKey == privateKey {
+		return
+	}
+
+	c.publicKey = publicKey
+	c.privateKey = privateKey
+	c.log.Info().Msg("SDK client credentials updated")
 }
 
 // authorizedRequest makes an authenticated request to the Tradernet API
@@ -196,7 +213,8 @@ func (c *Client) worker() {
 func (c *Client) Close() {
 	c.once.Do(func() {
 		close(c.stopChan)
-		close(c.requestQueue)
+		// Don't close requestQueue - let worker drain it
+		// This prevents race conditions with concurrent authorizedRequest calls
 		<-c.workerDone
 	})
 }
@@ -204,8 +222,14 @@ func (c *Client) Close() {
 // authorizedRequestInternal makes an authenticated request without rate limiting
 // This is the internal implementation extracted from authorizedRequest
 func (c *Client) authorizedRequestInternal(cmd string, params interface{}) (interface{}, error) {
+	// Read credentials with RLock (allows concurrent reads)
+	c.mu.RLock()
+	publicKey := c.publicKey
+	privateKey := c.privateKey
+	c.mu.RUnlock()
+
 	// CRITICAL: Validate credentials (matches Python SDK behavior)
-	if c.publicKey == "" || c.privateKey == "" {
+	if publicKey == "" || privateKey == "" {
 		return nil, fmt.Errorf("keypair is not valid")
 	}
 
@@ -222,7 +246,7 @@ func (c *Client) authorizedRequestInternal(cmd string, params interface{}) (inte
 	message := payload + timestamp
 
 	// Step 4: Generate signature
-	signature := sign(c.privateKey, message)
+	signature := sign(privateKey, message)
 
 	// Step 5: Build URL
 	requestURL := fmt.Sprintf("%s/api/%s", c.baseURL, cmd)
@@ -236,7 +260,7 @@ func (c *Client) authorizedRequestInternal(cmd string, params interface{}) (inte
 	// Step 7: Set headers
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; TradernetSDK/2.0)")
-	req.Header.Set("X-NtApi-PublicKey", c.publicKey)
+	req.Header.Set("X-NtApi-PublicKey", publicKey)
 	req.Header.Set("X-NtApi-Timestamp", timestamp)
 	req.Header.Set("X-NtApi-Sig", signature)
 
