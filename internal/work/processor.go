@@ -320,10 +320,6 @@ func (p *Processor) resolveDependencies(wt *WorkType, subject string, visited ma
 
 		// Check if dependency can run now
 		if !p.market.CanExecute(depWT.MarketTiming, subject) {
-			log.Debug().
-				Str("work", wt.ID).
-				Str("dependency", depID).
-				Msg("Dependency blocked by market timing")
 			needsResolution = true
 			continue
 		}

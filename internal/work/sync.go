@@ -71,7 +71,7 @@ func RegisterSyncWorkTypes(registry *Registry, deps *SyncDeps) {
 	//            Paused when markets closed to conserve broker API quota.
 	registry.Register(&WorkType{
 		ID:           "sync:portfolio",
-		MarketTiming: DuringMarketOpen,
+		MarketTiming: AnyTime,
 		Interval:     5 * time.Minute, // Hardcoded - operationally optimized
 		FindSubjects: func() []string {
 			// Always return work, interval check handles frequency
@@ -95,7 +95,7 @@ func RegisterSyncWorkTypes(registry *Registry, deps *SyncDeps) {
 	registry.Register(&WorkType{
 		ID:           "sync:trades",
 		DependsOn:    []string{"sync:portfolio"},
-		MarketTiming: DuringMarketOpen,
+		MarketTiming: AnyTime,
 		FindSubjects: func() []string {
 			return []string{""}
 		},
@@ -114,7 +114,7 @@ func RegisterSyncWorkTypes(registry *Registry, deps *SyncDeps) {
 	registry.Register(&WorkType{
 		ID:           "sync:cashflows",
 		DependsOn:    []string{"sync:portfolio"},
-		MarketTiming: DuringMarketOpen,
+		MarketTiming: AnyTime,
 		FindSubjects: func() []string {
 			return []string{""}
 		},
@@ -133,7 +133,7 @@ func RegisterSyncWorkTypes(registry *Registry, deps *SyncDeps) {
 	registry.Register(&WorkType{
 		ID:           "sync:prices",
 		DependsOn:    []string{"sync:portfolio"},
-		MarketTiming: DuringMarketOpen,
+		MarketTiming: AnyTime,
 		FindSubjects: func() []string {
 			return []string{""}
 		},
