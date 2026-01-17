@@ -428,6 +428,9 @@ func (p *Processor) executeItem(item *WorkItem, wt *WorkType) error {
 				log.Warn().Err(err).Str("work", item.ID).Msg("Failed to update cache")
 			}
 		}
+
+		// Enqueue dependent work (forward propagation)
+		p.enqueueDependents(wt.ID, item.Subject)
 	}
 
 	return err
@@ -470,4 +473,82 @@ func (p *Processor) popRetryQueue() (*WorkItem, *WorkType) {
 // This allows external access to registered work types for status reporting.
 func (p *Processor) GetRegistry() *Registry {
 	return p.registry
+}
+
+// enqueueWork adds work to the queue if not already queued and eligible.
+// Respects market timing and interval expiration.
+func (p *Processor) enqueueWork(wt *WorkType, subject string) {
+	key := makeQueueKey(wt.ID, subject)
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	// Check if already queued
+	if p.queuedItems[key] {
+		return // Already in queue
+	}
+
+	// Check market timing
+	if !p.market.CanExecute(wt.MarketTiming, subject) {
+		return // Market timing prevents execution
+	}
+
+	// Check interval staleness (if applicable)
+	if wt.Interval > 0 && p.cache != nil {
+		expiresAt := p.cache.GetExpiresAt(key)
+		if time.Now().Unix() < expiresAt {
+			return // Not expired yet
+		}
+	}
+
+	// Add to queue
+	p.workQueue = append(p.workQueue, &queuedWork{
+		TypeID:  wt.ID,
+		Subject: subject,
+	})
+	p.queuedItems[key] = true
+
+	log.Debug().
+		Str("work", wt.ID).
+		Str("subject", subject).
+		Msg("Enqueued dependent work")
+}
+
+// enqueueDependents enqueues dependent work after a work item completes.
+// Implements forward propagation: when X completes, enqueue dependents or their missing dependencies.
+func (p *Processor) enqueueDependents(completedWorkID, subject string) {
+	// Find all work types that depend on the completed work
+	dependents := p.registry.GetDependents(completedWorkID)
+
+	for _, dependent := range dependents {
+		// Check ALL of dependent's dependencies
+		allMet := true
+		missingDeps := make([]string, 0)
+
+		for _, depID := range dependent.DependsOn {
+			if p.cache == nil {
+				// Test mode - skip cache check
+				continue
+			}
+
+			if p.cache.GetExpiresAt(makeQueueKey(depID, subject)) == 0 {
+				// This dependency not completed
+				allMet = false
+				missingDeps = append(missingDeps, depID)
+			}
+		}
+
+		if allMet {
+			// ALL dependencies met → enqueue this dependent
+			p.enqueueWork(dependent, subject)
+		} else {
+			// Some dependencies missing → enqueue the missing ones
+			for _, missingDepID := range missingDeps {
+				missingWT := p.registry.Get(missingDepID)
+				if missingWT != nil {
+					p.enqueueWork(missingWT, subject)
+				}
+			}
+		}
+	}
 }
