@@ -73,6 +73,51 @@ func NewSecurityRepositoryWithOverrides(universeDB *sql.DB, overrideRepo Overrid
 	}
 }
 
+// filterIndices removes index securities from a slice.
+// Indices are identified by:
+// 1. ProductType == "INDEX"
+// 2. Symbol suffix ".IDX" (naming convention for market indices)
+//
+// Indices are used internally for market regime detection but should not
+// appear in tradable security lists, allocation targets, or the universe UI.
+func filterIndices(securities []Security) []Security {
+	filtered := make([]Security, 0, len(securities))
+	for _, sec := range securities {
+		// Skip if ProductType is INDEX or symbol ends with .IDX
+		if sec.ProductType == string(ProductTypeIndex) || strings.HasSuffix(sec.Symbol, ".IDX") {
+			continue
+		}
+		filtered = append(filtered, sec)
+	}
+	return filtered
+}
+
+// filterOptimizationIndices removes index securities from optimization data.
+func filterOptimizationIndices(securities []SecurityOptimizationData) []SecurityOptimizationData {
+	filtered := make([]SecurityOptimizationData, 0, len(securities))
+	for _, sec := range securities {
+		// Skip if ProductType is INDEX or symbol ends with .IDX
+		if sec.ProductType == string(ProductTypeIndex) || strings.HasSuffix(sec.Symbol, ".IDX") {
+			continue
+		}
+		filtered = append(filtered, sec)
+	}
+	return filtered
+}
+
+// filterChartIndices removes index securities from chart data.
+func filterChartIndices(securities []SecurityChartData) []SecurityChartData {
+	filtered := make([]SecurityChartData, 0, len(securities))
+	for _, sec := range securities {
+		// Skip if symbol ends with .IDX
+		if strings.HasSuffix(sec.Symbol, ".IDX") {
+			continue
+		}
+		filtered = append(filtered, sec)
+	}
+	return filtered
+}
+
 // GetBySymbol returns a security by symbol (case-insensitive lookup).
 // The symbol is normalized to uppercase and trimmed before querying.
 // If an override repository is configured, user overrides are automatically merged.
@@ -209,12 +254,10 @@ func (r *SecurityRepository) GetByIdentifier(identifier string) (*Security, erro
 // GetAllActive returns all active securities (excludes indices)
 // After migration 038: All securities in table are active (no soft delete)
 func (r *SecurityRepository) GetAllActive() ([]Security, error) {
-	// Filter out indices using JSON extraction
-	query := `SELECT ` + securitiesColumns + ` FROM securities
-		WHERE json_extract(data, '$.type') IS NULL
-		OR UPPER(json_extract(data, '$.type')) != ?`
+	// Load all securities (filter indices after applying overrides)
+	query := `SELECT ` + securitiesColumns + ` FROM securities`
 
-	rows, err := r.universeDB.Query(query, string(ProductTypeIndex))
+	rows, err := r.universeDB.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query active securities: %w", err)
 	}
@@ -247,6 +290,9 @@ func (r *SecurityRepository) GetAllActive() ([]Security, error) {
 		}
 	}
 
+	// Filter out indices AFTER applying overrides
+	securities = filterIndices(securities)
+
 	return securities, nil
 }
 
@@ -259,7 +305,7 @@ func (r *SecurityRepository) GetDistinctExchanges() ([]string, error) {
 		AND (json_extract(data, '$.type') IS NULL OR UPPER(json_extract(data, '$.type')) != ?)
 		ORDER BY fullExchangeName`
 
-	rows, err := r.universeDB.Query(query, string(ProductTypeIndex))
+	rows, err := r.universeDB.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query distinct exchanges: %w", err)
 	}
@@ -289,10 +335,9 @@ func (r *SecurityRepository) GetDistinctExchanges() ([]string, error) {
 func (r *SecurityRepository) GetAllActiveTradable() ([]Security, error) {
 	// Filter out indices using JSON extraction
 	query := `SELECT ` + securitiesColumns + ` FROM securities
-		WHERE json_extract(data, '$.type') IS NULL
-		OR UPPER(json_extract(data, '$.type')) != ?`
+		`
 
-	rows, err := r.universeDB.Query(query, string(ProductTypeIndex))
+	rows, err := r.universeDB.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query tradable securities: %w", err)
 	}
@@ -324,6 +369,9 @@ func (r *SecurityRepository) GetAllActiveTradable() ([]Security, error) {
 			}
 		}
 	}
+
+	// Filter out indices AFTER applying overrides
+	securities = filterIndices(securities)
 
 	return securities, nil
 }
@@ -365,6 +413,9 @@ func (r *SecurityRepository) GetAll() ([]Security, error) {
 			}
 		}
 	}
+
+	// Filter out indices AFTER applying overrides
+	securities = filterIndices(securities)
 
 	return securities, nil
 }
@@ -409,6 +460,9 @@ func (r *SecurityRepository) GetByMarketCode(marketCode string) ([]Security, err
 			}
 		}
 	}
+
+	// Filter out indices AFTER applying overrides
+	securities = filterIndices(securities)
 
 	return securities, nil
 }
@@ -1577,6 +1631,9 @@ func (r *SecurityRepository) GetByISINs(isins []string) ([]Security, error) {
 		}
 	}
 
+	// Filter out indices AFTER applying overrides
+	securities = filterIndices(securities)
+
 	return securities, nil
 }
 
@@ -1635,6 +1692,9 @@ func (r *SecurityRepository) GetBySymbols(symbols []string) ([]Security, error) 
 		}
 	}
 
+	// Filter out indices AFTER applying overrides
+	securities = filterIndices(securities)
+
 	return securities, nil
 }
 
@@ -1643,10 +1703,9 @@ func (r *SecurityRepository) GetBySymbols(symbols []string) ([]Security, error) 
 func (r *SecurityRepository) GetTradable() ([]Security, error) {
 	// After migration: no active column, use JSON extraction for product_type
 	query := `SELECT ` + securitiesColumns + ` FROM securities
-		WHERE json_extract(data, '$.type') IS NULL
-		OR UPPER(json_extract(data, '$.type')) != ?`
+		`
 
-	rows, err := r.universeDB.Query(query, string(ProductTypeIndex))
+	rows, err := r.universeDB.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query tradable securities: %w", err)
 	}
@@ -1678,6 +1737,9 @@ func (r *SecurityRepository) GetTradable() ([]Security, error) {
 			}
 		}
 	}
+
+	// Filter out indices AFTER applying overrides
+	securities = filterIndices(securities)
 
 	return securities, nil
 }
@@ -1720,6 +1782,9 @@ func (r *SecurityRepository) GetByGeography(geography string) ([]Security, error
 		}
 	}
 
+	// Filter out indices AFTER applying overrides
+	securities = filterIndices(securities)
+
 	return securities, nil
 }
 
@@ -1761,6 +1826,9 @@ func (r *SecurityRepository) GetByIndustry(industry string) ([]Security, error) 
 		}
 	}
 
+	// Filter out indices AFTER applying overrides
+	securities = filterIndices(securities)
+
 	return securities, nil
 }
 
@@ -1774,7 +1842,7 @@ func (r *SecurityRepository) GetDistinctGeographies() ([]string, error) {
 		AND (json_extract(data, '$.type') IS NULL OR UPPER(json_extract(data, '$.type')) != ?)
 		ORDER BY geography`
 
-	rows, err := r.universeDB.Query(query, string(ProductTypeIndex))
+	rows, err := r.universeDB.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query distinct geographies: %w", err)
 	}
@@ -1805,7 +1873,7 @@ func (r *SecurityRepository) GetDistinctIndustries() ([]string, error) {
 		AND (json_extract(data, '$.type') IS NULL OR UPPER(json_extract(data, '$.type')) != ?)
 		ORDER BY industry`
 
-	rows, err := r.universeDB.Query(query, string(ProductTypeIndex))
+	rows, err := r.universeDB.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query distinct industries: %w", err)
 	}
@@ -1841,7 +1909,7 @@ func (r *SecurityRepository) GetGeographiesAndIndustries() (map[string][]string,
 		AND (json_extract(data, '$.type') IS NULL OR UPPER(json_extract(data, '$.type')) != ?)
 		ORDER BY geography, industry`
 
-	rows, err := r.universeDB.Query(query, string(ProductTypeIndex))
+	rows, err := r.universeDB.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query geographies and industries: %w", err)
 	}
@@ -1932,16 +2000,18 @@ func (r *SecurityRepository) GetSecuritiesForOptimization() ([]SecurityOptimizat
 		}
 	}
 
+	// Filter out indices (indices should not be in allocation targets)
+	result = filterOptimizationIndices(result)
+
 	return result, nil
 }
 
 // GetSecuritiesForCharts returns minimal data needed for chart generation
 func (r *SecurityRepository) GetSecuritiesForCharts() ([]SecurityChartData, error) {
 	query := `SELECT isin, symbol FROM securities
-		WHERE json_extract(data, '$.type') IS NULL
-		OR UPPER(json_extract(data, '$.type')) != ?`
+		`
 
-	rows, err := r.universeDB.Query(query, string(ProductTypeIndex))
+	rows, err := r.universeDB.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query securities for charts: %w", err)
 	}
@@ -1960,6 +2030,9 @@ func (r *SecurityRepository) GetSecuritiesForCharts() ([]SecurityChartData, erro
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating chart data: %w", err)
 	}
+
+	// Filter out indices (charts are only for tradable securities)
+	result = filterChartIndices(result)
 
 	return result, nil
 }
@@ -1990,8 +2063,7 @@ func (r *SecurityRepository) ExistsBySymbol(symbol string) (bool, error) {
 func (r *SecurityRepository) CountTradable() (int, error) {
 	var count int
 	query := `SELECT COUNT(*) FROM securities
-		WHERE json_extract(data, '$.type') IS NULL
-		OR UPPER(json_extract(data, '$.type')) != ?`
+		`
 	err := r.universeDB.QueryRow(query, string(ProductTypeIndex)).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count tradable securities: %w", err)
