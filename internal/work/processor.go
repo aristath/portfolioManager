@@ -23,7 +23,6 @@ type queuedWork struct {
 // It processes one work item at a time, respecting dependencies and market timing.
 type Processor struct {
 	registry     *Registry
-	completion   *CompletionTracker
 	market       *MarketTimingChecker
 	cache        *Cache
 	eventEmitter EventEmitter
@@ -44,16 +43,15 @@ type Processor struct {
 }
 
 // NewProcessor creates a new work processor.
-func NewProcessor(registry *Registry, completion *CompletionTracker, market *MarketTimingChecker, cache *Cache) *Processor {
-	return NewProcessorWithTimeout(registry, completion, market, cache, WorkTimeout)
+func NewProcessor(registry *Registry, market *MarketTimingChecker, cache *Cache) *Processor {
+	return NewProcessorWithTimeout(registry, market, cache, WorkTimeout)
 }
 
 // NewProcessorWithTimeout creates a new work processor with a custom timeout.
 // This is primarily used for testing.
-func NewProcessorWithTimeout(registry *Registry, completion *CompletionTracker, market *MarketTimingChecker, cache *Cache, timeout time.Duration) *Processor {
+func NewProcessorWithTimeout(registry *Registry, market *MarketTimingChecker, cache *Cache, timeout time.Duration) *Processor {
 	return &Processor{
 		registry:    registry,
-		completion:  completion,
 		market:      market,
 		cache:       cache,
 		timeout:     timeout,
@@ -223,9 +221,12 @@ func (p *Processor) populateQueue() {
 				continue
 			}
 
-			// Check interval staleness
-			if wt.Interval > 0 && !p.completion.IsStale(wt.ID, subject, wt.Interval) {
-				continue
+			// Check interval staleness via cache
+			if wt.Interval > 0 && p.cache != nil {
+				expiresAt := p.cache.GetExpiresAt(makeQueueKey(wt.ID, subject))
+				if time.Now().Unix() < expiresAt {
+					continue // Not expired yet
+				}
 			}
 
 			// Add to queue (needs lock for write)
@@ -256,10 +257,9 @@ func (p *Processor) resolveDependencies(wt *WorkType, subject string, visited ma
 	needsResolution := false
 
 	for _, depID := range wt.DependsOn {
-		// Check if already completed
-		_, exists := p.completion.GetCompletion(depID, subject)
-		if exists {
-			continue
+		// Check if dependency completed (cache entry exists)
+		if p.cache != nil && p.cache.GetExpiresAt(makeQueueKey(depID, subject)) != 0 {
+			continue // Dependency completed
 		}
 
 		// Circular dependency detection
@@ -369,9 +369,9 @@ func (p *Processor) dependenciesMet(wt *WorkType, subject string) bool {
 	}
 
 	for _, depID := range wt.DependsOn {
-		_, exists := p.completion.GetCompletion(depID, subject)
-		if !exists {
-			return false
+		// Check if dependency completed (cache entry exists)
+		if p.cache == nil || p.cache.GetExpiresAt(makeQueueKey(depID, subject)) == 0 {
+			return false // Dependency not completed
 		}
 	}
 
@@ -406,7 +406,6 @@ func (p *Processor) executeItem(item *WorkItem, wt *WorkType) error {
 	if err != nil {
 		progress.emitFailed(err, duration, item.Retries)
 	} else {
-		p.completion.MarkCompleted(item)
 		progress.emitCompleted(duration)
 
 		// Update cache with new expiration
@@ -458,10 +457,4 @@ func (p *Processor) popRetryQueue() (*WorkItem, *WorkType) {
 // This allows external access to registered work types for status reporting.
 func (p *Processor) GetRegistry() *Registry {
 	return p.registry
-}
-
-// GetCompletion returns the completion tracker.
-// This allows external access to completion history for status reporting.
-func (p *Processor) GetCompletion() *CompletionTracker {
-	return p.completion
 }

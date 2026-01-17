@@ -604,36 +604,16 @@ func (h *SystemHandlers) HandleJobsStatus(w http.ResponseWriter, r *http.Request
 	}
 
 	registry := h.workProcessor.GetRegistry()
-	completion := h.workProcessor.GetCompletion()
 
 	workTypes := registry.All()
 	workTypeStatuses := make([]WorkTypeStatus, 0, len(workTypes))
 
 	for _, wt := range workTypes {
-		// Get last completion time (for global work, subject is empty)
-		lastRun, hasLastRun := completion.GetCompletion(wt.ID, "")
-
 		status := WorkTypeStatus{
 			ID:           wt.ID,
 			MarketTiming: wt.MarketTiming.String(),
 			Interval:     formatInterval(wt.Interval),
 			DependsOn:    wt.DependsOn,
-		}
-
-		// Set last run time if available
-		if hasLastRun {
-			lastRunStr := lastRun.Format(time.RFC3339)
-			status.LastRun = &lastRunStr
-		}
-
-		// Calculate next run time
-		// For on-demand work (interval = 0), next run is null
-		// For interval-based work with no last run, next run is null
-		// For interval-based work with last run, next run = last run + interval
-		if wt.Interval > 0 && hasLastRun {
-			nextRun := lastRun.Add(wt.Interval)
-			nextRunStr := nextRun.Format(time.RFC3339)
-			status.NextRun = &nextRunStr
 		}
 
 		workTypeStatuses = append(workTypeStatuses, status)

@@ -35,3 +35,15 @@ func (c *Cache) Set(key string, expiresAt int64) error {
 	`, key, expiresAt)
 	return err
 }
+
+// Delete removes a cache entry.
+func (c *Cache) Delete(key string) error {
+	_, err := c.db.Exec("DELETE FROM cache WHERE key = ?", key)
+	return err
+}
+
+// DeleteByPrefix removes all cache entries matching a prefix.
+func (c *Cache) DeleteByPrefix(prefix string) error {
+	_, err := c.db.Exec("DELETE FROM cache WHERE key LIKE ?", prefix+"%")
+	return err
+}

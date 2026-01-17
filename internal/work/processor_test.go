@@ -13,17 +13,15 @@ import (
 
 func TestNewProcessor(t *testing.T) {
 	registry := NewRegistry()
-	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{})
 
-	p := NewProcessor(registry, completion, market, nil)
+	p := NewProcessor(registry, market, nil)
 
 	require.NotNil(t, p)
 }
 
 func TestProcessor_Trigger(t *testing.T) {
 	registry := NewRegistry()
-	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
 
 	executed := atomic.Bool{}
@@ -38,7 +36,7 @@ func TestProcessor_Trigger(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market, nil)
+	p := NewProcessor(registry, market, nil)
 
 	// Start processor
 	go p.Run()
@@ -55,7 +53,6 @@ func TestProcessor_Trigger(t *testing.T) {
 
 func TestProcessor_DependencyOrdering(t *testing.T) {
 	registry := NewRegistry()
-	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
 
 	var executionOrder []string
@@ -122,7 +119,7 @@ func TestProcessor_DependencyOrdering(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market, nil)
+	p := NewProcessor(registry, market, nil)
 
 	go p.Run()
 	defer p.Stop()
@@ -144,7 +141,6 @@ func TestProcessor_DependencyOrdering(t *testing.T) {
 
 func TestProcessor_PerSecurityDependencies(t *testing.T) {
 	registry := NewRegistry()
-	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
 
 	var executionOrder []string
@@ -192,7 +188,7 @@ func TestProcessor_PerSecurityDependencies(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market, nil)
+	p := NewProcessor(registry, market, nil)
 
 	go p.Run()
 	defer p.Stop()
@@ -212,7 +208,6 @@ func TestProcessor_PerSecurityDependencies(t *testing.T) {
 
 func TestProcessor_MarketTimingRespected(t *testing.T) {
 	registry := NewRegistry()
-	completion := NewCompletionTracker()
 
 	// Market is open
 	mockMarket := &MockMarketChecker{
@@ -235,7 +230,7 @@ func TestProcessor_MarketTimingRespected(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market, nil)
+	p := NewProcessor(registry, market, nil)
 
 	go p.Run()
 	defer p.Stop()
@@ -250,7 +245,6 @@ func TestProcessor_MarketTimingRespected(t *testing.T) {
 
 func TestProcessor_RetryOnFailure(t *testing.T) {
 	registry := NewRegistry()
-	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
 
 	attempts := atomic.Int32{}
@@ -271,7 +265,7 @@ func TestProcessor_RetryOnFailure(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market, nil)
+	p := NewProcessor(registry, market, nil)
 
 	go p.Run()
 	defer p.Stop()
@@ -286,7 +280,6 @@ func TestProcessor_RetryOnFailure(t *testing.T) {
 
 func TestProcessor_MaxRetries(t *testing.T) {
 	registry := NewRegistry()
-	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
 
 	attempts := atomic.Int32{}
@@ -308,7 +301,7 @@ func TestProcessor_MaxRetries(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market, nil)
+	p := NewProcessor(registry, market, nil)
 
 	go p.Run()
 	defer p.Stop()
@@ -328,7 +321,6 @@ func TestProcessor_Timeout(t *testing.T) {
 	}
 
 	registry := NewRegistry()
-	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
 
 	started := atomic.Bool{}
@@ -351,7 +343,7 @@ func TestProcessor_Timeout(t *testing.T) {
 	})
 
 	// Create processor with short timeout for testing
-	p := NewProcessorWithTimeout(registry, completion, market, nil, 100*time.Millisecond)
+	p := NewProcessorWithTimeout(registry, market, nil, 100*time.Millisecond)
 
 	go p.Run()
 	defer p.Stop()
@@ -366,7 +358,6 @@ func TestProcessor_Timeout(t *testing.T) {
 
 func TestProcessor_ExecuteNow(t *testing.T) {
 	registry := NewRegistry()
-	completion := NewCompletionTracker()
 
 	// Market is closed, but ExecuteNow should bypass timing
 	mockMarket := &MockMarketChecker{
@@ -394,7 +385,7 @@ func TestProcessor_ExecuteNow(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market, nil)
+	p := NewProcessor(registry, market, nil)
 
 	go p.Run()
 	defer p.Stop()
@@ -412,10 +403,9 @@ func TestProcessor_ExecuteNow(t *testing.T) {
 
 func TestProcessor_ExecuteNow_UnknownWorkType(t *testing.T) {
 	registry := NewRegistry()
-	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{})
 
-	p := NewProcessor(registry, completion, market, nil)
+	p := NewProcessor(registry, market, nil)
 
 	err := p.ExecuteNow("unknown:work", "")
 
@@ -424,7 +414,6 @@ func TestProcessor_ExecuteNow_UnknownWorkType(t *testing.T) {
 
 func TestProcessor_ExecuteNow_WithSubject(t *testing.T) {
 	registry := NewRegistry()
-	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
 
 	executedSubject := ""
@@ -444,7 +433,7 @@ func TestProcessor_ExecuteNow_WithSubject(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market, nil)
+	p := NewProcessor(registry, market, nil)
 
 	go p.Run()
 	defer p.Stop()
@@ -460,10 +449,9 @@ func TestProcessor_ExecuteNow_WithSubject(t *testing.T) {
 
 func TestProcessor_Stop(t *testing.T) {
 	registry := NewRegistry()
-	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{})
 
-	p := NewProcessor(registry, completion, market, nil)
+	p := NewProcessor(registry, market, nil)
 
 	go p.Run()
 
@@ -484,7 +472,6 @@ func TestProcessor_Stop(t *testing.T) {
 
 func TestProcessor_NoDuplicateExecution(t *testing.T) {
 	registry := NewRegistry()
-	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
 
 	execCount := atomic.Int32{}
@@ -505,7 +492,7 @@ func TestProcessor_NoDuplicateExecution(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market, nil)
+	p := NewProcessor(registry, market, nil)
 
 	go p.Run()
 	defer p.Stop()
@@ -523,7 +510,6 @@ func TestProcessor_NoDuplicateExecution(t *testing.T) {
 
 func TestProcessor_SystemBusyCheck(t *testing.T) {
 	registry := NewRegistry()
-	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
 
 	execCount := atomic.Int32{}
@@ -540,7 +526,7 @@ func TestProcessor_SystemBusyCheck(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market, nil)
+	p := NewProcessor(registry, market, nil)
 
 	go p.Run()
 	defer p.Stop()
@@ -557,10 +543,9 @@ func TestProcessor_SystemBusyCheck(t *testing.T) {
 
 func TestProcessor_GetRegistry(t *testing.T) {
 	registry := NewRegistry()
-	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{})
 
-	p := NewProcessor(registry, completion, market, nil)
+	p := NewProcessor(registry, market, nil)
 
 	// Should return the same registry instance
 	assert.Equal(t, registry, p.GetRegistry())
@@ -579,29 +564,6 @@ func TestProcessor_GetRegistry(t *testing.T) {
 	wt := p.GetRegistry().Get("test:work")
 	require.NotNil(t, wt)
 	assert.Equal(t, "test:work", wt.ID)
-}
-
-func TestProcessor_GetCompletion(t *testing.T) {
-	registry := NewRegistry()
-	completion := NewCompletionTracker()
-	market := NewMarketTimingChecker(&MockMarketChecker{})
-
-	p := NewProcessor(registry, completion, market, nil)
-
-	// Should return the same completion tracker instance
-	assert.Equal(t, completion, p.GetCompletion())
-
-	// Should allow access to completion history
-	item := &WorkItem{
-		ID:      "test:work",
-		TypeID:  "test:work",
-		Subject: "",
-	}
-	p.GetCompletion().MarkCompleted(item)
-
-	lastRun, exists := p.GetCompletion().GetCompletion("test:work", "")
-	assert.True(t, exists)
-	assert.False(t, lastRun.IsZero())
 }
 
 // Phase 4 Tests: Queue Data Structures
@@ -625,9 +587,8 @@ func TestProcessor_PopulateQueue_FIFO(t *testing.T) {
 	registry.Register(&WorkType{ID: "second", FindSubjects: func() []string { return []string{""} }})
 	registry.Register(&WorkType{ID: "third", FindSubjects: func() []string { return []string{""} }})
 
-	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-	processor := NewProcessor(registry, completion, market, nil)
+	processor := NewProcessor(registry, market, nil)
 	processor.populateQueue()
 
 	assert.Equal(t, 3, len(processor.workQueue))
@@ -641,9 +602,8 @@ func TestProcessor_PopulateQueue_NoDuplicates(t *testing.T) {
 	registry := NewRegistry()
 	registry.Register(&WorkType{ID: "test", FindSubjects: func() []string { return []string{""} }})
 
-	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-	processor := NewProcessor(registry, completion, market, nil)
+	processor := NewProcessor(registry, market, nil)
 	processor.populateQueue()
 	processor.populateQueue()
 
@@ -659,9 +619,8 @@ func TestProcessor_PopulateQueue_RespectsMarketTiming(t *testing.T) {
 		FindSubjects: func() []string { return []string{""} },
 	})
 
-	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true}) // Markets closed
-	processor := NewProcessor(registry, completion, market, nil)
+	processor := NewProcessor(registry, market, nil)
 	processor.populateQueue()
 
 	assert.Equal(t, 0, len(processor.workQueue))
@@ -676,12 +635,11 @@ func TestProcessor_PopulateQueue_RespectsIntervals(t *testing.T) {
 		FindSubjects: func() []string { return []string{""} },
 	})
 
-	completion := NewCompletionTracker()
 	// Mark as recently completed
-	completion.MarkCompleted(&WorkItem{TypeID: "recent", Subject: ""})
+	// completion.MarkCompleted(&WorkItem{TypeID: "recent", Subject: ""})
 
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-	processor := NewProcessor(registry, completion, market, nil)
+	processor := NewProcessor(registry, market, nil)
 	processor.populateQueue()
 
 	assert.Equal(t, 0, len(processor.workQueue))
@@ -696,9 +654,8 @@ func TestProcessor_PopulateQueue_SkipsDependencies(t *testing.T) {
 		FindSubjects: func() []string { return []string{""} },
 	})
 
-	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-	processor := NewProcessor(registry, completion, market, nil)
+	processor := NewProcessor(registry, market, nil)
 	processor.populateQueue()
 
 	// Should still be queued - dependencies checked at execution time!
@@ -713,11 +670,10 @@ func TestProcessor_ResolveDependencies_Satisfied(t *testing.T) {
 	registry.Register(&WorkType{ID: "dep"})
 	registry.Register(&WorkType{ID: "work", DependsOn: []string{"dep"}})
 
-	completion := NewCompletionTracker()
-	completion.MarkCompleted(&WorkItem{TypeID: "dep", Subject: ""})
+	// completion.MarkCompleted(&WorkItem{TypeID: "dep", Subject: ""})
 
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-	processor := NewProcessor(registry, completion, market, nil)
+	processor := NewProcessor(registry, market, nil)
 
 	wt := registry.Get("work")
 	visited := make(map[string]bool)
@@ -733,9 +689,8 @@ func TestProcessor_ResolveDependencies_AddsMissing(t *testing.T) {
 	registry.Register(&WorkType{ID: "dep", FindSubjects: func() []string { return []string{""} }})
 	registry.Register(&WorkType{ID: "work", DependsOn: []string{"dep"}})
 
-	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-	processor := NewProcessor(registry, completion, market, nil)
+	processor := NewProcessor(registry, market, nil)
 
 	wt := registry.Get("work")
 	visited := make(map[string]bool)
@@ -753,9 +708,8 @@ func TestProcessor_ResolveDependencies_MovesToFront(t *testing.T) {
 	registry.Register(&WorkType{ID: "dep"})
 	registry.Register(&WorkType{ID: "work", DependsOn: []string{"dep"}})
 
-	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-	processor := NewProcessor(registry, completion, market, nil)
+	processor := NewProcessor(registry, market, nil)
 
 	// Manually add items to queue
 	processor.workQueue = []*queuedWork{
@@ -781,9 +735,8 @@ func TestProcessor_ResolveDependencies_Recursive(t *testing.T) {
 	registry.Register(&WorkType{ID: "B", DependsOn: []string{"C"}, FindSubjects: func() []string { return []string{""} }})
 	registry.Register(&WorkType{ID: "A", DependsOn: []string{"B"}})
 
-	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-	processor := NewProcessor(registry, completion, market, nil)
+	processor := NewProcessor(registry, market, nil)
 
 	wt := registry.Get("A")
 	visited := make(map[string]bool)
@@ -801,9 +754,8 @@ func TestProcessor_ResolveDependencies_Circular(t *testing.T) {
 	registry.Register(&WorkType{ID: "A", DependsOn: []string{"B"}})
 	registry.Register(&WorkType{ID: "B", DependsOn: []string{"A"}})
 
-	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-	processor := NewProcessor(registry, completion, market, nil)
+	processor := NewProcessor(registry, market, nil)
 
 	wt := registry.Get("A")
 	visited := make(map[string]bool)
@@ -821,12 +773,11 @@ func TestProcessor_ResolveDependencies_SubjectScoped(t *testing.T) {
 	registry.Register(&WorkType{ID: "dep"})
 	registry.Register(&WorkType{ID: "work", DependsOn: []string{"dep"}})
 
-	completion := NewCompletionTracker()
 	// Dependency completed for ISIN001
-	completion.MarkCompleted(&WorkItem{TypeID: "dep", Subject: "ISIN001"})
+	// completion.MarkCompleted(&WorkItem{TypeID: "dep", Subject: "ISIN001"})
 
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-	processor := NewProcessor(registry, completion, market, nil)
+	processor := NewProcessor(registry, market, nil)
 
 	wt := registry.Get("work")
 	visited := make(map[string]bool)
@@ -841,9 +792,8 @@ func TestProcessor_ResolveDependencies_SubjectScoped(t *testing.T) {
 func TestProcessor_FindNextWork_FIFO(t *testing.T) {
 	// Test that work is pulled from queue in FIFO order
 	registry := NewRegistry()
-	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-	processor := NewProcessor(registry, completion, market, nil)
+	processor := NewProcessor(registry, market, nil)
 
 	// Manually add items to queue
 	processor.workQueue = []*queuedWork{
@@ -872,9 +822,8 @@ func TestProcessor_FindNextWork_FIFO(t *testing.T) {
 func TestProcessor_FindNextWork_EmptyQueue(t *testing.T) {
 	// Test empty queue returns nil
 	registry := NewRegistry()
-	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-	processor := NewProcessor(registry, completion, market, nil)
+	processor := NewProcessor(registry, market, nil)
 
 	item, wt := processor.findNextWork()
 	assert.Nil(t, item)
@@ -887,9 +836,8 @@ func TestProcessor_FindNextWork_ResolvesDependencies(t *testing.T) {
 	registry.Register(&WorkType{ID: "dep", FindSubjects: func() []string { return []string{""} }})
 	registry.Register(&WorkType{ID: "work", DependsOn: []string{"dep"}})
 
-	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-	processor := NewProcessor(registry, completion, market, nil)
+	processor := NewProcessor(registry, market, nil)
 
 	// Queue work that has unmet dependency
 	processor.workQueue = []*queuedWork{{TypeID: "work", Subject: ""}}
@@ -909,9 +857,8 @@ func TestProcessor_FindNextWork_RequeuesUnmetDependencies(t *testing.T) {
 	registry.Register(&WorkType{ID: "dep", FindSubjects: func() []string { return []string{""} }})
 	registry.Register(&WorkType{ID: "work", DependsOn: []string{"dep"}})
 
-	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-	processor := NewProcessor(registry, completion, market, nil)
+	processor := NewProcessor(registry, market, nil)
 
 	// Queue only the work (no dependency in queue or completed)
 	processor.workQueue = []*queuedWork{{TypeID: "work", Subject: ""}}

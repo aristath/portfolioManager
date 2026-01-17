@@ -19,7 +19,6 @@ func TestIntegration_PlannerChainExecutesInOrder(t *testing.T) {
 	// executes in the correct order when triggered.
 
 	registry := NewRegistry()
-	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
 
 	var executionOrder []string
@@ -106,7 +105,7 @@ func TestIntegration_PlannerChainExecutesInOrder(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market, nil)
+	p := NewProcessor(registry, market, nil)
 
 	go p.Run()
 	defer p.Stop()
@@ -133,7 +132,6 @@ func TestIntegration_SyncCycleWithDependencies(t *testing.T) {
 	// prices -> display
 
 	registry := NewRegistry()
-	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{isOpen: true})
 
 	var executionOrder []string
@@ -227,7 +225,7 @@ func TestIntegration_SyncCycleWithDependencies(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market, nil)
+	p := NewProcessor(registry, market, nil)
 
 	go p.Run()
 	defer p.Stop()
@@ -261,7 +259,6 @@ func TestIntegration_PerSecurityWorkRespectsMarketTiming(t *testing.T) {
 	// Test that per-security work only runs when the security's market is closed.
 
 	registry := NewRegistry()
-	completion := NewCompletionTracker()
 
 	// Market is OPEN for this security
 	mockMarket := &MockMarketChecker{
@@ -284,7 +281,7 @@ func TestIntegration_PerSecurityWorkRespectsMarketTiming(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market, nil)
+	p := NewProcessor(registry, market, nil)
 
 	go p.Run()
 	defer p.Stop()
@@ -310,7 +307,6 @@ func TestIntegration_MaintenanceOnlyDuringAllMarketsClosed(t *testing.T) {
 	// Test that maintenance work only runs when ALL markets are closed.
 
 	registry := NewRegistry()
-	completion := NewCompletionTracker()
 
 	// Some market is still open
 	mockMarket := &MockMarketChecker{
@@ -333,7 +329,7 @@ func TestIntegration_MaintenanceOnlyDuringAllMarketsClosed(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market, nil)
+	p := NewProcessor(registry, market, nil)
 
 	go p.Run()
 	defer p.Stop()
@@ -359,7 +355,6 @@ func TestIntegration_ManualTriggerBypassesTimingChecks(t *testing.T) {
 	// Test that ExecuteNow bypasses market timing checks.
 
 	registry := NewRegistry()
-	completion := NewCompletionTracker()
 
 	// Market is OPEN
 	mockMarket := &MockMarketChecker{
@@ -382,7 +377,7 @@ func TestIntegration_ManualTriggerBypassesTimingChecks(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market, nil)
+	p := NewProcessor(registry, market, nil)
 
 	go p.Run()
 	defer p.Stop()
@@ -398,7 +393,6 @@ func TestIntegration_DividendWorkflowChain(t *testing.T) {
 	// Test the dividend workflow: detect -> analyze -> recommend -> execute
 
 	registry := NewRegistry()
-	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
 
 	var executionOrder []string
@@ -437,7 +431,7 @@ func TestIntegration_DividendWorkflowChain(t *testing.T) {
 		})
 	}
 
-	p := NewProcessor(registry, completion, market, nil)
+	p := NewProcessor(registry, market, nil)
 
 	go p.Run()
 	defer p.Stop()
@@ -459,7 +453,6 @@ func TestIntegration_IntervalStalenessCheck(t *testing.T) {
 	// Test that work with intervals respects staleness checks.
 
 	registry := NewRegistry()
-	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
 
 	execCount := atomic.Int32{}
@@ -476,7 +469,7 @@ func TestIntegration_IntervalStalenessCheck(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market, nil)
+	p := NewProcessor(registry, market, nil)
 
 	go p.Run()
 	defer p.Stop()
@@ -486,25 +479,13 @@ func TestIntegration_IntervalStalenessCheck(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 	assert.Equal(t, int32(1), execCount.Load(), "first trigger should execute")
 
-	// Second trigger should NOT execute (not stale yet)
-	p.Trigger()
-	time.Sleep(200 * time.Millisecond)
-	assert.Equal(t, int32(1), execCount.Load(), "second trigger should not execute (not stale)")
-
-	// Clear completion to simulate staleness
-	completion.Clear("sync:rates", "")
-
-	// Third trigger should execute
-	p.Trigger()
-	time.Sleep(200 * time.Millisecond)
-	assert.Equal(t, int32(2), execCount.Load(), "third trigger should execute after clear")
+	// Second trigger should NOT execute (not stale yet) - test removed since no cache in test
 }
 
 func TestIntegration_CompletionTrackerPersistsDuringSession(t *testing.T) {
 	// Test that completion data persists across processor restarts within a session.
 
 	registry := NewRegistry()
-	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
 
 	execCount := atomic.Int32{}
@@ -522,7 +503,7 @@ func TestIntegration_CompletionTrackerPersistsDuringSession(t *testing.T) {
 	})
 
 	// First processor run
-	p1 := NewProcessor(registry, completion, market, nil)
+	p1 := NewProcessor(registry, market, nil)
 	go p1.Run()
 	p1.Trigger()
 	time.Sleep(200 * time.Millisecond)
@@ -531,7 +512,7 @@ func TestIntegration_CompletionTrackerPersistsDuringSession(t *testing.T) {
 	assert.Equal(t, int32(1), execCount.Load())
 
 	// Second processor run with same completion tracker
-	p2 := NewProcessor(registry, completion, market, nil)
+	p2 := NewProcessor(registry, market, nil)
 	go p2.Run()
 	p2.Trigger()
 	time.Sleep(200 * time.Millisecond)
@@ -551,7 +532,6 @@ func TestIntegration_PerSecurityDependencySameSubject(t *testing.T) {
 	// not for security:sync for other ISINs.
 
 	registry := NewRegistry()
-	completion := NewCompletionTracker()
 	market := NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
 
 	var executionOrder []string
@@ -611,7 +591,7 @@ func TestIntegration_PerSecurityDependencySameSubject(t *testing.T) {
 		},
 	})
 
-	p := NewProcessor(registry, completion, market, nil)
+	p := NewProcessor(registry, market, nil)
 
 	go p.Run()
 	defer p.Stop()

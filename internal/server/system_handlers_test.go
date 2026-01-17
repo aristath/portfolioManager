@@ -25,7 +25,6 @@ func TestSystemHandlers_HandleJobsStatus(t *testing.T) {
 			name: "returns all work types from registry",
 			setupProcessor: func() *work.Processor {
 				registry := work.NewRegistry()
-				completion := work.NewCompletionTracker()
 				market := work.NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
 
 				// Register multiple work types
@@ -55,7 +54,7 @@ func TestSystemHandlers_HandleJobsStatus(t *testing.T) {
 					},
 				})
 
-				return work.NewProcessor(registry, completion, market, nil)
+				return work.NewProcessor(registry, market, nil)
 			},
 			expectedCount: 2,
 			validate: func(t *testing.T, response JobsStatusResponse) {
@@ -63,167 +62,16 @@ func TestSystemHandlers_HandleJobsStatus(t *testing.T) {
 				// Should be ordered by registration order (FIFO)
 				assert.Equal(t, "sync:portfolio", response.WorkTypes[0].ID)
 				assert.Equal(t, "planner:weights", response.WorkTypes[1].ID)
-			},
-		},
-		{
-			name: "includes last run time from completion tracker",
-			setupProcessor: func() *work.Processor {
-				registry := work.NewRegistry()
-				completion := work.NewCompletionTracker()
-				market := work.NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-
-				registry.Register(&work.WorkType{
-					ID:           "sync:portfolio",
-					MarketTiming: work.AnyTime,
-					Interval:     5 * time.Minute,
-					DependsOn:    []string{},
-					FindSubjects: func() []string {
-						return []string{""}
-					},
-					Execute: func(ctx context.Context, subject string, progress *work.ProgressReporter) error {
-						return nil
-					},
-				})
-
-				// Mark as completed
-				item := &work.WorkItem{
-					ID:      "sync:portfolio",
-					TypeID:  "sync:portfolio",
-					Subject: "",
-				}
-				completion.MarkCompletedAt(item, time.Date(2026, 1, 16, 10, 0, 0, 0, time.UTC))
-
-				return work.NewProcessor(registry, completion, market, nil)
-			},
-			expectedCount: 1,
-			validate: func(t *testing.T, response JobsStatusResponse) {
-				require.Len(t, response.WorkTypes, 1)
-				wt := response.WorkTypes[0]
-				assert.NotNil(t, wt.LastRun)
-				assert.Equal(t, "2026-01-16T10:00:00Z", *wt.LastRun)
-			},
-		},
-		{
-			name: "calculates next run time correctly based on intervals",
-			setupProcessor: func() *work.Processor {
-				registry := work.NewRegistry()
-				completion := work.NewCompletionTracker()
-				market := work.NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-
-				registry.Register(&work.WorkType{
-					ID:           "sync:portfolio",
-					MarketTiming: work.AnyTime,
-					Interval:     5 * time.Minute,
-					DependsOn:    []string{},
-					FindSubjects: func() []string {
-						return []string{""}
-					},
-					Execute: func(ctx context.Context, subject string, progress *work.ProgressReporter) error {
-						return nil
-					},
-				})
-
-				// Mark as completed 2 minutes ago
-				item := &work.WorkItem{
-					ID:      "sync:portfolio",
-					TypeID:  "sync:portfolio",
-					Subject: "",
-				}
-				completion.MarkCompletedAt(item, time.Now().Add(-2*time.Minute))
-
-				return work.NewProcessor(registry, completion, market, nil)
-			},
-			expectedCount: 1,
-			validate: func(t *testing.T, response JobsStatusResponse) {
-				require.Len(t, response.WorkTypes, 1)
-				wt := response.WorkTypes[0]
-				assert.NotNil(t, wt.NextRun)
-				// Next run should be approximately 3 minutes from now (5 min interval - 2 min elapsed)
-				nextRun, err := time.Parse(time.RFC3339, *wt.NextRun)
-				require.NoError(t, err)
-				expectedNextRun := time.Now().Add(3 * time.Minute)
-				// Allow 5 second tolerance
-				assert.InDelta(t, expectedNextRun.Unix(), nextRun.Unix(), 5)
-			},
-		},
-		{
-			name: "handles work types with no completion history",
-			setupProcessor: func() *work.Processor {
-				registry := work.NewRegistry()
-				completion := work.NewCompletionTracker()
-				market := work.NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-
-				registry.Register(&work.WorkType{
-					ID:           "sync:portfolio",
-					MarketTiming: work.AnyTime,
-					Interval:     5 * time.Minute,
-					DependsOn:    []string{},
-					FindSubjects: func() []string {
-						return []string{""}
-					},
-					Execute: func(ctx context.Context, subject string, progress *work.ProgressReporter) error {
-						return nil
-					},
-				})
-
-				return work.NewProcessor(registry, completion, market, nil)
-			},
-			expectedCount: 1,
-			validate: func(t *testing.T, response JobsStatusResponse) {
-				require.Len(t, response.WorkTypes, 1)
-				wt := response.WorkTypes[0]
-				assert.Nil(t, wt.LastRun)
-				// Next run should be null for work with interval but no last run
-				assert.Nil(t, wt.NextRun)
-			},
-		},
-		{
-			name: "handles zero-interval on-demand work types",
-			setupProcessor: func() *work.Processor {
-				registry := work.NewRegistry()
-				completion := work.NewCompletionTracker()
-				market := work.NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-
-				registry.Register(&work.WorkType{
-					ID:           "planner:weights",
-					MarketTiming: work.AnyTime,
-					Interval:     0, // On-demand
-					DependsOn:    []string{},
-					FindSubjects: func() []string {
-						return []string{""}
-					},
-					Execute: func(ctx context.Context, subject string, progress *work.ProgressReporter) error {
-						return nil
-					},
-				})
-
-				// Mark as completed
-				item := &work.WorkItem{
-					ID:      "planner:weights",
-					TypeID:  "planner:weights",
-					Subject: "",
-				}
-				completion.MarkCompletedAt(item, time.Now().Add(-1*time.Hour))
-
-				return work.NewProcessor(registry, completion, market, nil)
-			},
-			expectedCount: 1,
-			validate: func(t *testing.T, response JobsStatusResponse) {
-				require.Len(t, response.WorkTypes, 1)
-				wt := response.WorkTypes[0]
-				assert.Equal(t, "0", wt.Interval)
-				assert.NotNil(t, wt.LastRun)
-				// Next run should be null for on-demand work
-				assert.Nil(t, wt.NextRun)
+				assert.Equal(t, "5m", response.WorkTypes[0].Interval)
+				assert.Equal(t, "0", response.WorkTypes[1].Interval)
 			},
 		},
 		{
 			name: "works with empty registry",
 			setupProcessor: func() *work.Processor {
 				registry := work.NewRegistry()
-				completion := work.NewCompletionTracker()
 				market := work.NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
-				return work.NewProcessor(registry, completion, market, nil)
+				return work.NewProcessor(registry, market, nil)
 			},
 			expectedCount: 0,
 			validate: func(t *testing.T, response JobsStatusResponse) {
@@ -234,7 +82,6 @@ func TestSystemHandlers_HandleJobsStatus(t *testing.T) {
 			name: "includes all work type metadata",
 			setupProcessor: func() *work.Processor {
 				registry := work.NewRegistry()
-				completion := work.NewCompletionTracker()
 				market := work.NewMarketTimingChecker(&MockMarketChecker{allMarketsClosed: true})
 
 				registry.Register(&work.WorkType{
@@ -250,7 +97,7 @@ func TestSystemHandlers_HandleJobsStatus(t *testing.T) {
 					},
 				})
 
-				return work.NewProcessor(registry, completion, market, nil)
+				return work.NewProcessor(registry, market, nil)
 			},
 			expectedCount: 1,
 			validate: func(t *testing.T, response JobsStatusResponse) {

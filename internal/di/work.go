@@ -20,11 +20,10 @@ import (
 
 // WorkComponents holds all work processor components
 type WorkComponents struct {
-	Registry   *work.Registry
-	Completion *work.CompletionTracker
-	Market     *work.MarketTimingChecker
-	Processor  *work.Processor
-	Handlers   *work.Handlers
+	Registry  *work.Registry
+	Market    *work.MarketTimingChecker
+	Processor *work.Processor
+	Handlers  *work.Handlers
 }
 
 // marketHoursAdapter adapts MarketHoursService to work.MarketChecker interface
@@ -186,10 +185,9 @@ func getJobDescription(jobType string) string {
 func InitializeWork(container *Container, log zerolog.Logger) (*WorkComponents, error) {
 	// Create core components
 	registry := work.NewRegistry()
-	completion := work.NewCompletionTracker()
 	market := work.NewMarketTimingChecker(&marketHoursAdapter{container: container})
 	cache := work.NewCache(container.CacheDB.Conn())
-	processor := work.NewProcessor(registry, completion, market, cache)
+	processor := work.NewProcessor(registry, market, cache)
 
 	// Wire event emitter for progress reporting
 	if container.EventManager != nil {
@@ -226,16 +224,15 @@ func InitializeWork(container *Container, log zerolog.Logger) (*WorkComponents, 
 	registerDeploymentWork(registry, container, log)
 
 	// Register triggers
-	registerTriggers(container, processor, completion, workCache)
+	registerTriggers(container, processor, cache, workCache, log)
 
 	log.Info().Int("work_types", registry.Count()).Msg("Work processor initialized")
 
 	return &WorkComponents{
-		Registry:   registry,
-		Completion: completion,
-		Market:     market,
-		Processor:  processor,
-		Handlers:   handlers,
+		Registry:  registry,
+		Market:    market,
+		Processor: processor,
+		Handlers:  handlers,
 	}, nil
 }
 
@@ -843,7 +840,7 @@ func registerTradingWork(registry *work.Registry, container *Container, log zero
 }
 
 // Register event triggers
-func registerTriggers(container *Container, processor *work.Processor, completion *work.CompletionTracker, cache *workCache) {
+func registerTriggers(container *Container, processor *work.Processor, workCache *work.Cache, cache *workCache, log zerolog.Logger) {
 	bus := container.EventBus
 
 	// StateChanged -> Clear planner cache and trigger
@@ -852,7 +849,9 @@ func registerTriggers(container *Container, processor *work.Processor, completio
 		cache.DeletePrefix("optimizer_weights")
 		cache.DeletePrefix("opportunity_context")
 		cache.DeletePrefix("trade_plan")
-		completion.ClearByPrefix("planner:")
+		if err := workCache.DeleteByPrefix("planner:"); err != nil {
+			log.Warn().Err(err).Msg("Failed to clear planner work cache")
+		}
 		processor.Trigger()
 	})
 
@@ -869,7 +868,9 @@ func registerTriggers(container *Container, processor *work.Processor, completio
 	// DividendDetected -> Clear dividend cache and trigger
 	bus.Subscribe(events.DividendDetected, func(e *events.Event) {
 		cache.DeletePrefix("dividend:")
-		completion.ClearByPrefix("dividend:")
+		if err := workCache.DeleteByPrefix("dividend:"); err != nil {
+			log.Warn().Err(err).Msg("Failed to clear dividend work cache")
+		}
 		processor.Trigger()
 	})
 }
