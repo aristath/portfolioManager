@@ -43,6 +43,7 @@ type SystemHandlers struct {
 	cashManager             domain.CashManager
 	marketHoursService      *market_hours.MarketHoursService
 	marketStatusWS          *tradernet.MarketStatusWebSocket
+	metadataSyncService     MetadataSyncService
 }
 
 // systemHandlersSecurityProviderAdapter adapts SecurityRepository to SecurityProvider interface for display module
@@ -53,6 +54,12 @@ type systemHandlersSecurityProviderAdapter struct {
 // GetISINBySymbol returns ISIN for a given symbol
 func (a *systemHandlersSecurityProviderAdapter) GetISINBySymbol(symbol string) (string, error) {
 	return a.repo.GetISINBySymbol(symbol)
+}
+
+// MetadataSyncService defines the interface for metadata sync service
+type MetadataSyncService interface {
+	GetAllActiveISINs() []string
+	SyncMetadataBatch(isins []string) (int, error)
 }
 
 // NewSystemHandlers creates a new system handlers instance
@@ -69,6 +76,7 @@ func NewSystemHandlers(
 	cashManager domain.CashManager,
 	marketHoursService *market_hours.MarketHoursService,
 	marketStatusWS *tradernet.MarketStatusWebSocket,
+	metadataSyncService MetadataSyncService,
 ) *SystemHandlers {
 	// Create portfolio performance service
 	portfolioPerf := display.NewPortfolioPerformanceService(
@@ -106,6 +114,7 @@ func NewSystemHandlers(
 		brokerClient:            brokerClient,
 		currencyExchangeService: currencyExchangeService,
 		cashManager:             cashManager,
+		metadataSyncService:     metadataSyncService,
 	}
 }
 
@@ -1391,4 +1400,53 @@ func (h *SystemHandlers) HandleTriggerTradernetMetadataSync(w http.ResponseWrite
 	}
 
 	h.writeJSON(w, map[string]string{"status": "success", "message": "Tradernet metadata sync triggered successfully"})
+}
+
+// HandleBatchMetadataSync triggers batch metadata sync for all active securities
+// POST /api/system/batch-metadata-sync
+func (h *SystemHandlers) HandleBatchMetadataSync(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if h.metadataSyncService == nil {
+		http.Error(w, "Metadata sync service not available", http.StatusServiceUnavailable)
+		return
+	}
+
+	h.log.Info().Msg("Triggering batch metadata sync (manual trigger)")
+
+	// Get all active ISINs
+	isins := h.metadataSyncService.GetAllActiveISINs()
+	if len(isins) == 0 {
+		h.writeJSON(w, map[string]interface{}{
+			"status":  "success",
+			"message": "No active ISINs to sync",
+			"total":   0,
+			"synced":  0,
+		})
+		return
+	}
+
+	// Run batch sync
+	successCount, err := h.metadataSyncService.SyncMetadataBatch(isins)
+	if err != nil {
+		h.log.Error().Err(err).Int("total", len(isins)).Msg("Batch metadata sync failed")
+		http.Error(w, fmt.Sprintf("Batch sync failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	h.log.Info().
+		Int("total", len(isins)).
+		Int("synced", successCount).
+		Msg("Batch metadata sync completed")
+
+	h.writeJSON(w, map[string]interface{}{
+		"status":  "success",
+		"message": "Batch metadata sync completed",
+		"total":   len(isins),
+		"synced":  successCount,
+		"failed":  len(isins) - successCount,
+	})
 }

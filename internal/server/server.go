@@ -135,6 +135,7 @@ func New(cfg Config) *Server {
 		cashManagerForSystem,
 		marketHoursService,
 		cfg.Container.MarketStatusWS,
+		cfg.Container.MetadataSyncService,
 	)
 
 	// Initialize R2 backup handlers if R2 is configured
@@ -335,6 +336,9 @@ func (s *Server) setupRoutes() {
 
 				// Tradernet metadata sync job
 				r.Post("/tradernet-metadata-sync", systemHandlers.HandleTriggerTradernetMetadataSync)
+
+				// Batch metadata sync (all securities in single API call)
+				r.Post("/batch-metadata-sync", systemHandlers.HandleBatchMetadataSync)
 			})
 		})
 
