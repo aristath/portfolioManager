@@ -315,6 +315,37 @@ func (c *Client) GetSecurityMetadataRaw(symbol string) (interface{}, error) {
 	return result, nil
 }
 
+// GetSecurityMetadataBatch retrieves metadata for multiple securities in a single batch API call.
+// This method avoids 429 rate limit errors by using a single request for all symbols.
+//
+// Parameters:
+//   - symbols: Array of ticker symbols to fetch (e.g., ["AAPL.US", "MSFT.US", ...])
+//
+// Returns:
+//   - Raw API response with structure: {"securities": [...], "total": N}
+//
+// Usage:
+//   - Called by MetadataSyncService.SyncMetadataBatch for efficient bulk sync
+//   - Delegates to SDK GetAllSecuritiesBatch which handles chunking
+func (c *Client) GetSecurityMetadataBatch(symbols []string) (interface{}, error) {
+	if c.sdkClient == nil {
+		return nil, fmt.Errorf("SDK client not initialized")
+	}
+
+	c.log.Debug().
+		Strs("symbols", symbols).
+		Int("count", len(symbols)).
+		Msg("GetSecurityMetadataBatch: calling SDK GetAllSecuritiesBatch")
+
+	result, err := c.sdkClient.GetAllSecuritiesBatch(symbols, 0, 0)
+	if err != nil {
+		c.log.Error().Err(err).Msg("GetSecurityMetadataBatch: SDK failed")
+		return nil, fmt.Errorf("failed to get batch security metadata: %w", err)
+	}
+
+	return result, nil
+}
+
 // Trade represents an executed trade
 type Trade struct {
 	OrderID    string  `json:"order_id"`

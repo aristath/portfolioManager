@@ -973,19 +973,13 @@ func (a *metadataSyncAdapter) GetAllActiveISINs() []string {
 }
 
 func registerSecurityWork(registry *work.Registry, container *Container, log zerolog.Logger) {
-	// Create metadata sync service
-	metadataSyncService := universe.NewMetadataSyncService(
-		container.SecurityRepo,
-		container.BrokerClient,
-		log,
-	)
-
+	// Use container's MetadataSyncService (shared with scheduled batch job)
 	deps := &work.SecurityDeps{
 		HistorySyncService:  &securityHistorySyncAdapter{container: container},
 		TechnicalService:    &securityTechnicalAdapter{container: container},
 		FormulaService:      &securityFormulaAdapter{container: container},
 		TagService:          &securityTagAdapter{container: container},
-		MetadataSyncService: &metadataSyncAdapter{service: metadataSyncService},
+		MetadataSyncService: &metadataSyncAdapter{service: container.MetadataSyncService},
 	}
 
 	work.RegisterSecurityWorkTypes(registry, deps)

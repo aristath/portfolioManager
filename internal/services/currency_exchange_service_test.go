@@ -242,6 +242,14 @@ func (m *mockBrokerClientCurrencyTest) GetSecurityMetadataRaw(symbol string) (in
 	return nil, nil
 }
 
+func (m *mockBrokerClientCurrencyTest) GetSecurityMetadataBatch(symbols []string) (interface{}, error) {
+	securities := make([]interface{}, len(symbols))
+	for i, symbol := range symbols {
+		securities[i] = map[string]interface{}{"ticker": symbol, "name": "Mock Security"}
+	}
+	return map[string]interface{}{"securities": securities, "total": len(symbols)}, nil
+}
+
 // TestExecuteStep_MarketOrder tests that FX conversions use market orders
 func TestExecuteStep_MarketOrder(t *testing.T) {
 	log := logger.New(logger.Config{Level: "error", Pretty: false})
@@ -511,4 +519,12 @@ func (m *mockBrokerClientCurrencyTestNotConnected) GetSecurityMetadata(symbol st
 
 func (m *mockBrokerClientCurrencyTestNotConnected) GetSecurityMetadataRaw(symbol string) (interface{}, error) {
 	return nil, nil
+}
+
+func (m *mockBrokerClientCurrencyTestNotConnected) GetSecurityMetadataBatch(symbols []string) (interface{}, error) {
+	securities := make([]interface{}, len(symbols))
+	for i, symbol := range symbols {
+		securities[i] = map[string]interface{}{"ticker": symbol, "name": "Mock Security"}
+	}
+	return map[string]interface{}{"securities": securities, "total": len(symbols)}, nil
 }

@@ -129,6 +129,17 @@ func (m *mockBrokerClient) GetSecurityMetadataRaw(symbol string) (interface{}, e
 	}, nil
 }
 
+func (m *mockBrokerClient) GetSecurityMetadataBatch(symbols []string) (interface{}, error) {
+	securities := make([]interface{}, len(symbols))
+	for i, symbol := range symbols {
+		securities[i] = map[string]interface{}{"ticker": symbol}
+	}
+	return map[string]interface{}{
+		"securities": securities,
+		"total":      len(symbols),
+	}, nil
+}
+
 type mockCurrencyExchangeService struct{}
 
 func (m *mockCurrencyExchangeService) GetRate(fromCurrency, toCurrency string) (float64, error) {

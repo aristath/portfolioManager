@@ -269,6 +269,17 @@ func (m *mockBrokerClientForDeletion) GetSecurityMetadataRaw(symbol string) (int
 	return map[string]interface{}{"securities": []interface{}{map[string]interface{}{"ticker": symbol}}}, nil
 }
 
+func (m *mockBrokerClientForDeletion) GetSecurityMetadataBatch(symbols []string) (interface{}, error) {
+	securities := make([]interface{}, len(symbols))
+	for i, symbol := range symbols {
+		securities[i] = map[string]interface{}{"ticker": symbol}
+	}
+	return map[string]interface{}{
+		"securities": securities,
+		"total":      len(symbols),
+	}, nil
+}
+
 func TestSecurityDeletionService_HardDelete(t *testing.T) {
 	log := zerolog.Nop()
 

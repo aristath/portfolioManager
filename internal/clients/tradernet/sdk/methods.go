@@ -450,6 +450,93 @@ func (c *Client) GetAllSecurities(ticker string, take, skip int) (interface{}, e
 	return c.authorizedRequest("getAllSecurities", params)
 }
 
+// GetAllSecuritiesBatch retrieves metadata for multiple securities in a single API call.
+// Uses the "in" operator to batch securities efficiently, avoiding rate limit errors.
+//
+// Parameters:
+//   - tickers: Array of ticker symbols to fetch (e.g., ["AAPL.US", "MSFT.US", ...])
+//   - take: Number of results to return per security (default 10)
+//   - skip: Number of results to skip for pagination
+//
+// Implementation:
+//   - Handles empty arrays without making API calls
+//   - Chunks requests at 50 securities per call (conservative for API limits)
+//   - Aggregates results from all chunks into single response
+//
+// Returns:
+//   - Map with structure: {"securities": [...], "total": N}
+//   - Empty arrays return: {"securities": [], "total": 0}
+//
+// API Reference: getAllSecurities command with "in" operator
+func (c *Client) GetAllSecuritiesBatch(tickers []string, take, skip int) (interface{}, error) {
+	// Handle empty input
+	if len(tickers) == 0 {
+		return map[string]interface{}{"securities": []interface{}{}, "total": 0}, nil
+	}
+
+	// Chunking at 50 securities per request (conservative for rate limits)
+	const maxBatchSize = 50
+	var allSecurities []interface{}
+	totalCount := 0
+
+	for chunk := 0; chunk < len(tickers); chunk += maxBatchSize {
+		end := chunk + maxBatchSize
+		if end > len(tickers) {
+			end = len(tickers)
+		}
+
+		chunkTickers := tickers[chunk:end]
+		tickerValue := strings.Join(chunkTickers, ",")
+
+		// Set take to chunk size to get all results for this chunk
+		// If user provided a take value, use it; otherwise use chunk size
+		chunkTake := take
+		if chunkTake == 0 {
+			chunkTake = len(chunkTickers)
+		}
+
+		params := map[string]interface{}{
+			"take": chunkTake,
+			"skip": skip,
+			"filter": map[string]interface{}{
+				"filters": []map[string]interface{}{
+					{
+						"field":    "ticker",
+						"operator": "in",
+						"value":    tickerValue,
+					},
+				},
+			},
+		}
+
+		result, err := c.authorizedRequest("getAllSecurities", params)
+		if err != nil {
+			return nil, fmt.Errorf("batch request failed for chunk %d-%d: %w", chunk, end, err)
+		}
+
+		resultMap, ok := result.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("unexpected response format for chunk %d-%d", chunk, end)
+		}
+
+		securities, ok := resultMap["securities"].([]interface{})
+		if !ok {
+			return nil, fmt.Errorf("missing securities array in chunk %d-%d", chunk, end)
+		}
+
+		allSecurities = append(allSecurities, securities...)
+
+		if total, ok := resultMap["total"].(float64); ok {
+			totalCount += int(total)
+		}
+	}
+
+	return map[string]interface{}{
+		"securities": allSecurities,
+		"total":      totalCount,
+	}, nil
+}
+
 // SecurityInfo gets security information
 // This matches the Python SDK's security_info() method exactly
 // CRITICAL: Boolean stays boolean (NOT converted to int!)

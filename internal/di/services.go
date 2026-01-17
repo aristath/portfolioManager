@@ -67,6 +67,7 @@ import (
 	"github.com/aristath/sentinel/internal/modules/trading"
 	"github.com/aristath/sentinel/internal/modules/universe"
 	"github.com/aristath/sentinel/internal/reliability"
+	"github.com/aristath/sentinel/internal/scheduler"
 	"github.com/aristath/sentinel/internal/services"
 	"github.com/aristath/sentinel/internal/ticker"
 	"github.com/rs/zerolog"
@@ -350,6 +351,26 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		container.BrokerClient,
 		log,
 	)
+
+	// Metadata sync service (batch + individual)
+	// Syncs security metadata from broker API (supports batch operations to avoid 429 rate limits)
+	// Used by both the scheduled batch job (3 AM) and work processor (individual retries)
+	container.MetadataSyncService = universe.NewMetadataSyncService(
+		container.SecurityRepo,
+		container.BrokerClient,
+		log,
+	)
+
+	// Scheduler for time-based jobs (robfig/cron)
+	// Manages cron-based job execution with proper concurrency control
+	container.Scheduler = scheduler.New(log)
+
+	// Daily batch metadata sync job (runs at 3 AM)
+	// Uses MetadataSyncService to sync all security metadata in a single batch API call
+	metadataSyncJob := scheduler.NewMetadataSyncJob(container.MetadataSyncService, log)
+	if err := container.Scheduler.AddJob("0 0 3 * * *", metadataSyncJob); err != nil {
+		return fmt.Errorf("failed to register metadata sync job: %w", err)
+	}
 
 	// Create adapter for SecuritySetupService to match portfolio.SecuritySetupServiceInterface
 	// This bridges the interface mismatch between universe and portfolio packages

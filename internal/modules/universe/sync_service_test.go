@@ -87,6 +87,13 @@ func (m *syncTestBrokerClient) GetSecurityMetadata(symbol string) (*domain.Broke
 func (m *syncTestBrokerClient) GetSecurityMetadataRaw(symbol string) (interface{}, error) {
 	return map[string]interface{}{"securities": []interface{}{map[string]interface{}{"ticker": symbol}}}, nil
 }
+func (m *syncTestBrokerClient) GetSecurityMetadataBatch(symbols []string) (interface{}, error) {
+	securities := make([]interface{}, len(symbols))
+	for i, symbol := range symbols {
+		securities[i] = map[string]interface{}{"ticker": symbol, "name": "Mock Security"}
+	}
+	return map[string]interface{}{"securities": securities, "total": len(symbols)}, nil
+}
 
 // MockDB is a mock database for testing
 type MockDB struct {

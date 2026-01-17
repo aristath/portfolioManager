@@ -175,6 +175,20 @@ func (m *mockBrokerClientForTest) GetSecurityMetadataRaw(symbol string) (interfa
 	return nil, nil
 }
 
+func (m *mockBrokerClientForTest) GetSecurityMetadataBatch(symbols []string) (interface{}, error) {
+	if m.returnError {
+		return nil, errors.New("mock error")
+	}
+	securities := make([]interface{}, len(symbols))
+	for i, symbol := range symbols {
+		securities[i] = map[string]interface{}{"ticker": symbol}
+	}
+	return map[string]interface{}{
+		"securities": securities,
+		"total":      len(symbols),
+	}, nil
+}
+
 // Compile-time check that mockBrokerClientForTest implements BrokerClient
 var _ BrokerClient = (*mockBrokerClientForTest)(nil)
 

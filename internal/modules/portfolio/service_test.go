@@ -175,6 +175,14 @@ func (m *MockTradernetClient) GetSecurityMetadataRaw(symbol string) (interface{}
 	return args.Get(0), args.Error(1)
 }
 
+func (m *MockTradernetClient) GetSecurityMetadataBatch(symbols []string) (interface{}, error) {
+	securities := make([]interface{}, len(symbols))
+	for i, symbol := range symbols {
+		securities[i] = map[string]interface{}{"ticker": symbol, "name": "Mock Security"}
+	}
+	return map[string]interface{}{"securities": securities, "total": len(symbols)}, nil
+}
+
 // MockPositionRepository is a mock position repository for testing
 type MockPositionRepository struct {
 	mock.Mock

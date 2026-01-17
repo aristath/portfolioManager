@@ -92,3 +92,95 @@ func TestClient_GetFXRates_TransformerError(t *testing.T) {
 	assert.Nil(t, rates)
 	assert.Contains(t, err.Error(), "failed to transform rates")
 }
+
+// ============================================================================
+// Batch Metadata Tests (TDD - Tests written before implementation)
+// ============================================================================
+
+// TestGetSecurityMetadataBatch_Success tests successful batch metadata retrieval
+func TestGetSecurityMetadataBatch_Success(t *testing.T) {
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+
+	mockSDK := &mockSDKClient{
+		getAllSecuritiesBatchResult: map[string]interface{}{
+			"securities": []interface{}{
+				map[string]interface{}{"ticker": "AAPL.US", "name": "Apple Inc."},
+				map[string]interface{}{"ticker": "MSFT.US", "name": "Microsoft Corp."},
+				map[string]interface{}{"ticker": "GOOGL.US", "name": "Alphabet Inc."},
+			},
+			"total": 3,
+		},
+	}
+
+	client := &Client{
+		sdkClient: mockSDK,
+		log:       log,
+	}
+
+	symbols := []string{"AAPL.US", "MSFT.US", "GOOGL.US"}
+	result, err := client.GetSecurityMetadataBatch(symbols)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+
+	resultMap, ok := result.(map[string]interface{})
+	assert.True(t, ok)
+
+	securities, ok := resultMap["securities"].([]interface{})
+	assert.True(t, ok)
+	assert.Len(t, securities, 3)
+
+	total, ok := resultMap["total"].(int)
+	assert.True(t, ok)
+	assert.Equal(t, 3, total)
+}
+
+// TestGetSecurityMetadataBatch_SDKError tests error handling when SDK fails
+func TestGetSecurityMetadataBatch_SDKError(t *testing.T) {
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+
+	mockSDK := &mockSDKClient{
+		getAllSecuritiesBatchError: errors.New("SDK batch error"),
+	}
+
+	client := &Client{
+		sdkClient: mockSDK,
+		log:       log,
+	}
+
+	symbols := []string{"AAPL.US", "MSFT.US"}
+	result, err := client.GetSecurityMetadataBatch(symbols)
+
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "failed to get batch security metadata")
+}
+
+// TestGetSecurityMetadataBatch_EmptySymbols tests with empty symbol array
+func TestGetSecurityMetadataBatch_EmptySymbols(t *testing.T) {
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+
+	mockSDK := &mockSDKClient{
+		getAllSecuritiesBatchResult: map[string]interface{}{
+			"securities": []interface{}{},
+			"total":      0,
+		},
+	}
+
+	client := &Client{
+		sdkClient: mockSDK,
+		log:       log,
+	}
+
+	result, err := client.GetSecurityMetadataBatch([]string{})
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+
+	resultMap, ok := result.(map[string]interface{})
+	assert.True(t, ok)
+
+	securities, ok := resultMap["securities"].([]interface{})
+	assert.True(t, ok)
+	assert.Empty(t, securities)
+}

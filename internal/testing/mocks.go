@@ -1561,6 +1561,26 @@ func (m *MockTradernetClient) GetSecurityMetadataRaw(symbol string) (interface{}
 	}, nil
 }
 
+// GetSecurityMetadataBatch implements domain.BrokerClient
+func (m *MockTradernetClient) GetSecurityMetadataBatch(symbols []string) (interface{}, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.err != nil {
+		return nil, m.err
+	}
+	securities := make([]interface{}, len(symbols))
+	for i, symbol := range symbols {
+		securities[i] = map[string]interface{}{
+			"ticker": symbol,
+			"name":   "Mock Security",
+		}
+	}
+	return map[string]interface{}{
+		"securities": securities,
+		"total":      len(symbols),
+	}, nil
+}
+
 // Verify interface implementation
 
 // MockBrokerClient is a thread-safe mock implementation of domain.BrokerClient for testing
@@ -1851,6 +1871,26 @@ func (m *MockBrokerClient) GetSecurityMetadataRaw(symbol string) (interface{}, e
 				"name":   "Mock Security",
 			},
 		},
+	}, nil
+}
+
+// GetSecurityMetadataBatch implements domain.BrokerClient
+func (m *MockBrokerClient) GetSecurityMetadataBatch(symbols []string) (interface{}, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.err != nil {
+		return nil, m.err
+	}
+	securities := make([]interface{}, len(symbols))
+	for i, symbol := range symbols {
+		securities[i] = map[string]interface{}{
+			"ticker": symbol,
+			"name":   "Mock Security",
+		}
+	}
+	return map[string]interface{}{
+		"securities": securities,
+		"total":      len(symbols),
 	}, nil
 }
 

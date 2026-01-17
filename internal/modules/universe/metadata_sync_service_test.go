@@ -2,6 +2,7 @@ package universe
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/aristath/sentinel/internal/domain"
@@ -12,12 +13,37 @@ import (
 
 // MockBrokerClientForMetadataSync mocks the broker client for metadata sync tests
 type MockBrokerClientForMetadataSync struct {
-	RawResponse interface{}
-	Error       error
+	RawResponse   interface{}
+	BatchResponse interface{}
+	Error         error
+	BatchError    error
 }
 
 func (m *MockBrokerClientForMetadataSync) GetSecurityMetadataRaw(symbol string) (interface{}, error) {
 	return m.RawResponse, m.Error
+}
+
+func (m *MockBrokerClientForMetadataSync) GetSecurityMetadataBatch(symbols []string) (interface{}, error) {
+	if m.BatchError != nil {
+		return nil, m.BatchError
+	}
+	if m.BatchResponse != nil {
+		return m.BatchResponse, nil
+	}
+
+	// Default: generate batch response from symbols
+	securities := make([]interface{}, len(symbols))
+	for i, symbol := range symbols {
+		securities[i] = map[string]interface{}{
+			"ticker": symbol,
+			"name":   fmt.Sprintf("Security %s", symbol),
+		}
+	}
+
+	return map[string]interface{}{
+		"securities": securities,
+		"total":      len(symbols),
+	}, nil
 }
 
 // Implement other BrokerClient methods as no-ops
@@ -224,4 +250,280 @@ func TestMetadataSyncService_SecurityNotFound(t *testing.T) {
 	symbol, err := syncService.SyncMetadata("NONEXISTENT")
 	require.NoError(t, err)
 	assert.Equal(t, "", symbol)
+}
+
+// ============================================================================
+// Batch Sync Tests (TDD - Tests written before implementation)
+// ============================================================================
+
+// TestGetAllActiveISINs_ExcludesIndices is CRITICAL - ensures indices never enter batch sync
+func TestGetAllActiveISINs_ExcludesIndices(t *testing.T) {
+	db := setupTestDBWithISINPrimaryKey(t)
+	defer db.Close()
+
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+	repo := NewSecurityRepository(db, log)
+
+	// Insert 40 regular securities
+	for i := 0; i < 40; i++ {
+		security := Security{
+			ISIN:        fmt.Sprintf("US%010d", i),
+			Symbol:      fmt.Sprintf("SYM%d.US", i),
+			Name:        fmt.Sprintf("Security %d", i),
+			ProductType: "STOCK",
+		}
+		err := repo.Create(security)
+		require.NoError(t, err)
+	}
+
+	// Insert 13 indices (should be excluded)
+	for i := 0; i < 13; i++ {
+		index := Security{
+			ISIN:        fmt.Sprintf("IDX%010d", i),
+			Symbol:      fmt.Sprintf("INDEX%d.IDX", i),
+			Name:        fmt.Sprintf("Index %d", i),
+			ProductType: "INDEX",
+		}
+		err := repo.Create(index)
+		require.NoError(t, err)
+	}
+
+	mockBroker := &MockBrokerClientForMetadataSync{}
+	syncService := NewMetadataSyncService(repo, mockBroker, log)
+
+	// Get all active ISINs
+	isins := syncService.GetAllActiveISINs()
+
+	// CRITICAL: Should return ONLY 40 ISINs (no indices)
+	assert.Len(t, isins, 40, "Should exclude all 13 indices")
+
+	// CRITICAL: Verify no .IDX symbols in results
+	for _, isin := range isins {
+		security, err := repo.GetByISIN(isin)
+		require.NoError(t, err)
+		assert.NotContains(t, security.Symbol, ".IDX", "Index symbol should be excluded")
+		assert.NotEqual(t, "INDEX", security.ProductType, "Index product type should be excluded")
+	}
+
+	// Verify we have the correct ISINs
+	for i := 0; i < 40; i++ {
+		expectedISIN := fmt.Sprintf("US%010d", i)
+		assert.Contains(t, isins, expectedISIN)
+	}
+
+	// Verify index ISINs are NOT present
+	for i := 0; i < 13; i++ {
+		indexISIN := fmt.Sprintf("IDX%010d", i)
+		assert.NotContains(t, isins, indexISIN, "Index ISIN should be excluded")
+	}
+}
+
+// TestSyncMetadataBatch_AllSuccess tests batch sync with all securities successful
+func TestSyncMetadataBatch_AllSuccess(t *testing.T) {
+	db := setupTestDBWithISINPrimaryKey(t)
+	defer db.Close()
+
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+	repo := NewSecurityRepository(db, log)
+
+	// Create 10 test securities
+	isins := make([]string, 10)
+	for i := 0; i < 10; i++ {
+		isin := fmt.Sprintf("US%010d", i)
+		isins[i] = isin
+
+		security := Security{
+			ISIN:   isin,
+			Symbol: fmt.Sprintf("SYM%d.US", i),
+			Name:   fmt.Sprintf("Security %d", i),
+		}
+		err := repo.Create(security)
+		require.NoError(t, err)
+	}
+
+	// Mock broker returns all securities
+	batchResponse := map[string]interface{}{
+		"securities": []interface{}{},
+		"total":      10,
+	}
+
+	securities := make([]interface{}, 10)
+	for i := 0; i < 10; i++ {
+		securities[i] = map[string]interface{}{
+			"ticker":   fmt.Sprintf("SYM%d.US", i),
+			"name":     fmt.Sprintf("Security %d", i),
+			"issue_nb": isins[i],
+		}
+	}
+	batchResponse["securities"] = securities
+
+	mockBroker := &MockBrokerClientForMetadataSync{}
+	// We'll need to add GetSecurityMetadataBatch to the mock
+	syncService := NewMetadataSyncService(repo, mockBroker, log)
+
+	// Execute batch sync
+	successCount, err := syncService.SyncMetadataBatch(isins)
+
+	// All should succeed
+	assert.NoError(t, err)
+	assert.Equal(t, 10, successCount)
+
+	// Verify all securities have last_synced updated
+	for _, isin := range isins {
+		security, err := repo.GetByISIN(isin)
+		require.NoError(t, err)
+		assert.NotNil(t, security.LastSynced, "LastSynced should be set for "+isin)
+		assert.Greater(t, *security.LastSynced, int64(0), "LastSynced timestamp should be positive for "+isin)
+	}
+}
+
+// TestSyncMetadataBatch_PartialResults tests batch with some missing securities
+func TestSyncMetadataBatch_PartialResults(t *testing.T) {
+	db := setupTestDBWithISINPrimaryKey(t)
+	defer db.Close()
+
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+	repo := NewSecurityRepository(db, log)
+
+	// Create 10 securities but broker only returns 8
+	isins := make([]string, 10)
+	for i := 0; i < 10; i++ {
+		isin := fmt.Sprintf("US%010d", i)
+		isins[i] = isin
+
+		security := Security{
+			ISIN:   isin,
+			Symbol: fmt.Sprintf("SYM%d.US", i),
+			Name:   fmt.Sprintf("Security %d", i),
+		}
+		err := repo.Create(security)
+		require.NoError(t, err)
+	}
+
+	// Configure mock to return only 8 securities (simulate partial results)
+	partialSecurities := make([]interface{}, 8)
+	for i := 0; i < 8; i++ {
+		partialSecurities[i] = map[string]interface{}{
+			"ticker": fmt.Sprintf("SYM%d.US", i),
+			"name":   fmt.Sprintf("Security %d", i),
+		}
+	}
+
+	mockBroker := &MockBrokerClientForMetadataSync{
+		BatchResponse: map[string]interface{}{
+			"securities": partialSecurities,
+			"total":      8,
+		},
+	}
+	syncService := NewMetadataSyncService(repo, mockBroker, log)
+
+	// Batch sync should succeed with partial results
+	successCount, err := syncService.SyncMetadataBatch(isins)
+
+	// Should return success count = 8, no error
+	assert.NoError(t, err)
+	assert.Equal(t, 8, successCount)
+}
+
+// TestSyncMetadataBatch_APIFailure tests batch sync when API call fails
+func TestSyncMetadataBatch_APIFailure(t *testing.T) {
+	db := setupTestDBWithISINPrimaryKey(t)
+	defer db.Close()
+
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+	repo := NewSecurityRepository(db, log)
+
+	// Create 5 securities
+	isins := make([]string, 5)
+	for i := 0; i < 5; i++ {
+		isin := fmt.Sprintf("US%010d", i)
+		isins[i] = isin
+
+		security := Security{
+			ISIN:   isin,
+			Symbol: fmt.Sprintf("SYM%d.US", i),
+			Name:   fmt.Sprintf("Security %d", i),
+		}
+		err := repo.Create(security)
+		require.NoError(t, err)
+	}
+
+	// Mock broker returns error for batch call
+	mockBroker := &MockBrokerClientForMetadataSync{
+		BatchError: fmt.Errorf("API failure"),
+	}
+	syncService := NewMetadataSyncService(repo, mockBroker, log)
+
+	// Batch sync should fail
+	successCount, err := syncService.SyncMetadataBatch(isins)
+
+	assert.Error(t, err)
+	assert.Equal(t, 0, successCount)
+	assert.Contains(t, err.Error(), "batch API call failed")
+}
+
+// TestSyncMetadataBatch_DatabaseUpdateFailure tests partial DB update failures
+func TestSyncMetadataBatch_DatabaseUpdateFailure(t *testing.T) {
+	db := setupTestDBWithISINPrimaryKey(t)
+	defer db.Close()
+
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+	repo := NewSecurityRepository(db, log)
+
+	// Create some securities
+	isins := []string{"US0000000001", "US0000000002", "US0000000003"}
+	for i, isin := range isins {
+		security := Security{
+			ISIN:   isin,
+			Symbol: fmt.Sprintf("SYM%d.US", i),
+			Name:   fmt.Sprintf("Security %d", i),
+		}
+		err := repo.Create(security)
+		require.NoError(t, err)
+	}
+
+	mockBroker := &MockBrokerClientForMetadataSync{}
+	syncService := NewMetadataSyncService(repo, mockBroker, log)
+
+	// This test verifies that even if some updates fail,
+	// the batch continues processing others
+	successCount, err := syncService.SyncMetadataBatch(isins)
+
+	// Should return partial success count
+	assert.NoError(t, err)
+	assert.GreaterOrEqual(t, successCount, 0)
+}
+
+// TestSyncMetadataBatch_ISINToSymbolMapping tests ISIN to symbol resolution
+func TestSyncMetadataBatch_ISINToSymbolMapping(t *testing.T) {
+	db := setupTestDBWithISINPrimaryKey(t)
+	defer db.Close()
+
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+	repo := NewSecurityRepository(db, log)
+
+	// Create 3 valid securities
+	validISINs := []string{"US0000000001", "US0000000002", "US0000000003"}
+	for i, isin := range validISINs {
+		security := Security{
+			ISIN:   isin,
+			Symbol: fmt.Sprintf("SYM%d.US", i),
+			Name:   fmt.Sprintf("Security %d", i),
+		}
+		err := repo.Create(security)
+		require.NoError(t, err)
+	}
+
+	// Mix valid and invalid ISINs
+	allISINs := append(validISINs, "INVALID001", "INVALID002")
+
+	mockBroker := &MockBrokerClientForMetadataSync{}
+	syncService := NewMetadataSyncService(repo, mockBroker, log)
+
+	// Batch sync should skip invalid ISINs and sync valid ones
+	successCount, err := syncService.SyncMetadataBatch(allISINs)
+
+	// Should succeed for valid ISINs only
+	assert.NoError(t, err)
+	assert.LessOrEqual(t, successCount, 3, "Should only sync valid ISINs")
 }

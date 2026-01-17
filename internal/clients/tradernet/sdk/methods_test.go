@@ -314,3 +314,268 @@ func TestGetCrossRatesForDate_ErrorHandling(t *testing.T) {
 	assert.True(t, ok, "Response should have errMsg key")
 	assert.Equal(t, "Bad parameters", errMsg, "Error message should be 'Bad parameters'")
 }
+
+// ============================================================================
+// Batch Methods Tests (TDD - Tests written before implementation)
+// ============================================================================
+
+// TestGetAllSecuritiesBatch_MultipleSecurities tests batch method with 10 securities
+func TestGetAllSecuritiesBatch_MultipleSecurities(t *testing.T) {
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+
+	var capturedBody map[string]interface{}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Capture request body
+		var body map[string]interface{}
+		json.NewDecoder(r.Body).Decode(&body)
+		capturedBody = body
+
+		// Return mock response with 10 securities
+		response := map[string]interface{}{
+			"securities": []interface{}{
+				map[string]interface{}{"ticker": "AAPL.US", "name": "Apple Inc."},
+				map[string]interface{}{"ticker": "MSFT.US", "name": "Microsoft Corp."},
+				map[string]interface{}{"ticker": "GOOGL.US", "name": "Alphabet Inc."},
+				map[string]interface{}{"ticker": "AMZN.US", "name": "Amazon.com Inc."},
+				map[string]interface{}{"ticker": "TSLA.US", "name": "Tesla Inc."},
+				map[string]interface{}{"ticker": "META.US", "name": "Meta Platforms Inc."},
+				map[string]interface{}{"ticker": "NVDA.US", "name": "NVIDIA Corp."},
+				map[string]interface{}{"ticker": "AMD.US", "name": "Advanced Micro Devices Inc."},
+				map[string]interface{}{"ticker": "NFLX.US", "name": "Netflix Inc."},
+				map[string]interface{}{"ticker": "INTC.US", "name": "Intel Corp."},
+			},
+			"total": 10,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	client := NewClient("test_public", "test_private", log)
+	client.baseURL = server.URL
+	defer client.Close()
+
+	tickers := []string{"AAPL.US", "MSFT.US", "GOOGL.US", "AMZN.US", "TSLA.US", "META.US", "NVDA.US", "AMD.US", "NFLX.US", "INTC.US"}
+	result, err := client.GetAllSecuritiesBatch(tickers, 0, 0)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+
+	// Verify response structure
+	resultMap, ok := result.(map[string]interface{})
+	assert.True(t, ok)
+
+	securities, ok := resultMap["securities"].([]interface{})
+	assert.True(t, ok)
+	assert.Len(t, securities, 10)
+
+	total, ok := resultMap["total"].(int)
+	assert.True(t, ok)
+	assert.Equal(t, 10, total)
+
+	// Verify "in" operator used with comma-separated values
+	filter, ok := capturedBody["filter"].(map[string]interface{})
+	assert.True(t, ok)
+
+	filters, ok := filter["filters"].([]interface{})
+	assert.True(t, ok)
+	assert.Len(t, filters, 1)
+
+	filterSpec, ok := filters[0].(map[string]interface{})
+	assert.True(t, ok)
+	assert.Equal(t, "ticker", filterSpec["field"])
+	assert.Equal(t, "in", filterSpec["operator"])
+	assert.Contains(t, filterSpec["value"], "AAPL.US")
+	assert.Contains(t, filterSpec["value"], "MSFT.US")
+}
+
+// TestGetAllSecuritiesBatch_LargeBatch tests batch with 40 securities (real-world scenario)
+func TestGetAllSecuritiesBatch_LargeBatch(t *testing.T) {
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+
+	var requestCount int
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+
+		// Generate mock securities
+		securities := make([]interface{}, 40)
+		for i := 0; i < 40; i++ {
+			securities[i] = map[string]interface{}{
+				"ticker": "SYM" + string(rune(i)),
+				"name":   "Security " + string(rune(i)),
+			}
+		}
+
+		response := map[string]interface{}{
+			"securities": securities,
+			"total":      40,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	client := NewClient("test_public", "test_private", log)
+	client.baseURL = server.URL
+	defer client.Close()
+
+	// Create array of 40 tickers
+	tickers := make([]string, 40)
+	for i := 0; i < 40; i++ {
+		tickers[i] = "SYM" + string(rune(i))
+	}
+
+	result, err := client.GetAllSecuritiesBatch(tickers, 0, 0)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+
+	// Should only make 1 API call (no chunking needed for 40 securities)
+	assert.Equal(t, 1, requestCount)
+
+	resultMap, ok := result.(map[string]interface{})
+	assert.True(t, ok)
+
+	securities, ok := resultMap["securities"].([]interface{})
+	assert.True(t, ok)
+	assert.Len(t, securities, 40)
+}
+
+// TestGetAllSecuritiesBatch_Chunking tests batch with 75 securities (exceeds chunk size)
+func TestGetAllSecuritiesBatch_Chunking(t *testing.T) {
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+
+	var requestCount int
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+
+		var body map[string]interface{}
+		json.NewDecoder(r.Body).Decode(&body)
+
+		// Determine chunk size by counting tickers in filter
+		filter, _ := body["filter"].(map[string]interface{})
+		filters, _ := filter["filters"].([]interface{})
+		filterSpec, _ := filters[0].(map[string]interface{})
+		tickerValue, _ := filterSpec["value"].(string)
+
+		// Count commas to determine number of tickers
+		chunkSize := len(tickerValue) - len(tickerValue) + 1
+		for _, c := range tickerValue {
+			if c == ',' {
+				chunkSize++
+			}
+		}
+
+		// Generate appropriate number of securities
+		securities := make([]interface{}, chunkSize)
+		for i := 0; i < chunkSize; i++ {
+			securities[i] = map[string]interface{}{
+				"ticker": "SYM" + string(rune(i)),
+				"name":   "Security " + string(rune(i)),
+			}
+		}
+
+		response := map[string]interface{}{
+			"securities": securities,
+			"total":      chunkSize,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	client := NewClient("test_public", "test_private", log)
+	client.baseURL = server.URL
+	defer client.Close()
+
+	// Create array of 75 tickers (exceeds chunk size of 50)
+	tickers := make([]string, 75)
+	for i := 0; i < 75; i++ {
+		tickers[i] = "SYM" + string(rune(i))
+	}
+
+	result, err := client.GetAllSecuritiesBatch(tickers, 0, 0)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+
+	// Should make 2 API calls (chunk 1: 50, chunk 2: 25)
+	assert.Equal(t, 2, requestCount)
+
+	resultMap, ok := result.(map[string]interface{})
+	assert.True(t, ok)
+
+	securities, ok := resultMap["securities"].([]interface{})
+	assert.True(t, ok)
+
+	// Should aggregate results from both chunks
+	assert.GreaterOrEqual(t, len(securities), 75)
+}
+
+// TestGetAllSecuritiesBatch_EmptyArray tests batch with empty input
+func TestGetAllSecuritiesBatch_EmptyArray(t *testing.T) {
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+
+	var requestCount int
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestCount++
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{})
+	}))
+	defer server.Close()
+
+	client := NewClient("test_public", "test_private", log)
+	client.baseURL = server.URL
+	defer client.Close()
+
+	result, err := client.GetAllSecuritiesBatch([]string{}, 0, 0)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+
+	// Should NOT make API call for empty array
+	assert.Equal(t, 0, requestCount)
+
+	// Should return empty result
+	resultMap, ok := result.(map[string]interface{})
+	assert.True(t, ok)
+
+	securities, ok := resultMap["securities"].([]interface{})
+	assert.True(t, ok)
+	assert.Empty(t, securities)
+
+	total, ok := resultMap["total"].(int)
+	assert.True(t, ok)
+	assert.Equal(t, 0, total)
+}
+
+// TestGetAllSecuritiesBatch_APIError tests batch with API error
+func TestGetAllSecuritiesBatch_APIError(t *testing.T) {
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		response := map[string]interface{}{
+			"errMsg": "Internal server error",
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	}))
+	defer server.Close()
+
+	client := NewClient("test_public", "test_private", log)
+	client.baseURL = server.URL
+	defer client.Close()
+
+	tickers := []string{"AAPL.US", "MSFT.US", "GOOGL.US"}
+	result, err := client.GetAllSecuritiesBatch(tickers, 0, 0)
+
+	// Should return error with context
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "batch request failed")
+}

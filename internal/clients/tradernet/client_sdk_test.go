@@ -11,35 +11,37 @@ import (
 
 // mockSDKClient is a mock implementation of SDKClient for testing
 type mockSDKClient struct {
-	accountSummaryResult       interface{}
-	accountSummaryError        error
-	buyResult                  interface{}
-	buyError                   error
-	sellResult                 interface{}
-	sellError                  error
-	getPlacedResult            interface{}
-	getPlacedError             error
-	getClientCpsHistoryResult  interface{}
-	getClientCpsHistoryError   error
-	corporateActionsResult     interface{}
-	corporateActionsError      error
-	getTradesHistoryResult     interface{}
-	getTradesHistoryError      error
-	findSymbolResult           interface{}
-	findSymbolError            error
-	getAllSecuritiesResult     interface{}
-	getAllSecuritiesError      error
-	getQuotesResult            interface{}
-	getQuotesError             error
-	getLevel1QuoteResult       interface{}
-	getLevel1QuoteError        error
-	getCandlesResult           interface{}
-	getCandlesError            error
-	getCrossRatesForDateResult interface{}
-	getCrossRatesForDateError  error
-	userInfoResult             interface{}
-	userInfoError              error
-	lastLimitPrice             float64 // Track limit price passed to Buy/Sell
+	accountSummaryResult        interface{}
+	accountSummaryError         error
+	buyResult                   interface{}
+	buyError                    error
+	sellResult                  interface{}
+	sellError                   error
+	getPlacedResult             interface{}
+	getPlacedError              error
+	getClientCpsHistoryResult   interface{}
+	getClientCpsHistoryError    error
+	corporateActionsResult      interface{}
+	corporateActionsError       error
+	getTradesHistoryResult      interface{}
+	getTradesHistoryError       error
+	findSymbolResult            interface{}
+	findSymbolError             error
+	getAllSecuritiesResult      interface{}
+	getAllSecuritiesError       error
+	getAllSecuritiesBatchResult interface{}
+	getAllSecuritiesBatchError  error
+	getQuotesResult             interface{}
+	getQuotesError              error
+	getLevel1QuoteResult        interface{}
+	getLevel1QuoteError         error
+	getCandlesResult            interface{}
+	getCandlesError             error
+	getCrossRatesForDateResult  interface{}
+	getCrossRatesForDateError   error
+	userInfoResult              interface{}
+	userInfoError               error
+	lastLimitPrice              float64 // Track limit price passed to Buy/Sell
 }
 
 func (m *mockSDKClient) AccountSummary() (interface{}, error) {
@@ -78,6 +80,10 @@ func (m *mockSDKClient) FindSymbol(symbol string, exchange *string) (interface{}
 
 func (m *mockSDKClient) GetAllSecurities(ticker string, take, skip int) (interface{}, error) {
 	return m.getAllSecuritiesResult, m.getAllSecuritiesError
+}
+
+func (m *mockSDKClient) GetAllSecuritiesBatch(tickers []string, take, skip int) (interface{}, error) {
+	return m.getAllSecuritiesBatchResult, m.getAllSecuritiesBatchError
 }
 
 func (m *mockSDKClient) GetQuotes(symbols []string) (interface{}, error) {

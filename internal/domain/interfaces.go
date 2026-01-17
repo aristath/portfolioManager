@@ -201,6 +201,18 @@ type BrokerClient interface {
 	GetSecurityMetadataRaw(symbol string) (interface{}, error)
 
 	/**
+	 * GetSecurityMetadataBatch gets raw security metadata for multiple symbols in a single batch API call.
+	 *
+	 * This method avoids rate limit errors (429) by fetching metadata for all symbols at once
+	 * instead of making individual requests. Used for efficient bulk metadata sync.
+	 *
+	 * @param symbols - Array of security symbols to fetch
+	 * @returns interface{} - Raw API response with structure: {"securities": [...], "total": N}
+	 * @returns error - Error if batch retrieval fails
+	 */
+	GetSecurityMetadataBatch(symbols []string) (interface{}, error)
+
+	/**
 	 * GetFXRates retrieves currency exchange rates for today's date.
 	 *
 	 * Returns a map of currency codes to exchange rates relative to baseCurrency.
