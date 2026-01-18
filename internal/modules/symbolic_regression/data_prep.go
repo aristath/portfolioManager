@@ -149,6 +149,9 @@ type SecurityInfo struct {
 
 // getAllSecurities retrieves all securities from security provider
 func (dp *DataPrep) getAllSecurities() ([]SecurityInfo, error) {
+	if dp.securityProvider == nil {
+		return nil, fmt.Errorf("securityProvider is required but not provided")
+	}
 	return dp.securityProvider.GetAll()
 }
 
@@ -224,8 +227,10 @@ func (dp *DataPrep) extractInputs(isin string, date time.Time) (*TrainingInputs,
 	// Extract scores (use most recent score before or at date)
 	// Note: stability_score column now stores stability score (internal price-based calculation)
 	// analyst_score is no longer used (external analyst data removed)
-	var totalScore, longTerm, stability, dividends, opportunity, shortTerm, technicals, diversification sql.NullFloat64
-	err := dp.portfolioDB.QueryRow(`
+	var totalScore, longTerm, stability sql.NullFloat64
+	if dp.portfolioDB != nil {
+		var dividends, opportunity, shortTerm, technicals, diversification sql.NullFloat64
+		err := dp.portfolioDB.QueryRow(`
 		SELECT
 			total_score,
 			cagr_score,
@@ -235,49 +240,54 @@ func (dp *DataPrep) extractInputs(isin string, date time.Time) (*TrainingInputs,
 			drawdown_score,
 			technical_score,
 			allocation_fit_score
-		FROM scores
-		WHERE isin = ? AND last_updated <= ?
-		ORDER BY last_updated DESC
-		LIMIT 1
-	`, isin, date.Format("2006-01-02")).Scan(
-		&totalScore, &longTerm, &stability, &dividends, &opportunity,
-		&shortTerm, &technicals, &diversification,
-	)
-	if err != nil && err != sql.ErrNoRows {
-		return nil, fmt.Errorf("failed to query scores: %w", err)
-	}
+	FROM scores
+	WHERE isin = ? AND last_updated <= ?
+	ORDER BY last_updated DESC
+	LIMIT 1
+		`, isin, time.Date(date.Year(), date.Month(), date.Day(), 23, 59, 59, 0, time.UTC).Unix()).Scan(
+			&totalScore, &longTerm, &stability, &dividends, &opportunity,
+			&shortTerm, &technicals, &diversification,
+		)
+		if err != nil && err != sql.ErrNoRows {
+			return nil, fmt.Errorf("failed to query scores: %w", err)
+		}
 
-	if totalScore.Valid {
-		inputs.TotalScore = totalScore.Float64
-	}
-	if longTerm.Valid {
-		inputs.LongTermScore = longTerm.Float64
-	}
-	if stability.Valid {
-		inputs.StabilityScore = stability.Float64
-	}
-	if dividends.Valid {
-		inputs.DividendsScore = dividends.Float64
-	}
-	if opportunity.Valid {
-		inputs.OpportunityScore = opportunity.Float64
-	}
-	if shortTerm.Valid {
-		inputs.ShortTermScore = shortTerm.Float64
-	}
-	if technicals.Valid {
-		inputs.TechnicalsScore = technicals.Float64
-	}
-	if diversification.Valid {
-		inputs.DiversificationScore = diversification.Float64
+		if totalScore.Valid {
+			inputs.TotalScore = totalScore.Float64
+		}
+		if longTerm.Valid {
+			inputs.LongTermScore = longTerm.Float64
+		}
+		if stability.Valid {
+			inputs.StabilityScore = stability.Float64
+		}
+		if dividends.Valid {
+			inputs.DividendsScore = dividends.Float64
+		}
+		if opportunity.Valid {
+			inputs.OpportunityScore = opportunity.Float64
+		}
+		if shortTerm.Valid {
+			inputs.ShortTermScore = shortTerm.Float64
+		}
+		if technicals.Valid {
+			inputs.TechnicalsScore = technicals.Float64
+		}
+		if diversification.Valid {
+			inputs.DiversificationScore = diversification.Float64
+		}
 	}
 
 	// Extract metrics from calculated_metrics (need symbol, not isin)
 	// Get symbol from security provider
-	symbol, err := dp.securityProvider.GetSymbolByISIN(isin)
-	if err != nil {
-		dp.log.Debug().Str("isin", isin).Err(err).Msg("Failed to get symbol, skipping metrics")
-		symbol = "" // Will cause metrics extraction to fail gracefully
+	var symbol string
+	var err error
+	if dp.securityProvider != nil {
+		symbol, err = dp.securityProvider.GetSymbolByISIN(isin)
+		if err != nil {
+			dp.log.Debug().Str("isin", isin).Err(err).Msg("Failed to get symbol, skipping metrics")
+			symbol = "" // Will cause metrics extraction to fail gracefully
+		}
 	}
 
 	metrics, err := dp.extractMetrics(symbol, date)
@@ -313,23 +323,34 @@ func (dp *DataPrep) extractInputs(isin string, date time.Time) (*TrainingInputs,
 	}
 
 	// Extract regime score (use most recent before or at date)
-	var regimeScore sql.NullFloat64
-	err = dp.configDB.QueryRow(`
-		SELECT smoothed_score
-		FROM market_regime_history
-		WHERE recorded_at <= ?
-		ORDER BY recorded_at DESC
-		LIMIT 1
-	`, date.Format("2006-01-02")).Scan(&regimeScore)
-	if err != nil && err != sql.ErrNoRows {
-		return nil, fmt.Errorf("failed to query regime score: %w", err)
-	}
-	if regimeScore.Valid {
-		inputs.RegimeScore = regimeScore.Float64
+	// Uses GLOBAL region for consistency with RegimePersistence.GetEntryAtOrBeforeDate
+	var regimeScore float64
+	if dp.configDB != nil {
+		// Convert date to Unix timestamp for query (end of day to include entire day)
+		// Consistent with other date queries and RegimePersistence.GetEntryAtOrBeforeDateForRegion
+		dateUnix := time.Date(date.Year(), date.Month(), date.Day(), 23, 59, 59, 0, time.UTC).Unix()
+
+		var smoothedScore sql.NullFloat64
+		err := dp.configDB.QueryRow(
+			`SELECT smoothed_score FROM market_regime_history
+			WHERE region = 'GLOBAL' AND recorded_at <= ?
+			ORDER BY recorded_at DESC LIMIT 1`,
+			dateUnix,
+		).Scan(&smoothedScore)
+		if err != nil && err != sql.ErrNoRows {
+			return nil, fmt.Errorf("failed to query regime score: %w", err)
+		}
+		if smoothedScore.Valid {
+			regimeScore = smoothedScore.Float64
+		} else {
+			// Default to neutral if no regime data
+			regimeScore = 0.0
+		}
 	} else {
-		// Default to neutral if no regime data
-		inputs.RegimeScore = 0.0
+		// Default to neutral if configDB not available
+		regimeScore = 0.0
 	}
+	inputs.RegimeScore = regimeScore
 
 	// Use defaults for missing values
 	if inputs.TotalScore == 0 && !totalScore.Valid {
@@ -354,6 +375,10 @@ func (dp *DataPrep) extractMetrics(symbol string, date time.Time) (map[string]fl
 	}
 
 	// Lookup ISIN from symbol via security provider
+	if dp.securityProvider == nil {
+		return make(map[string]float64), nil // No security provider - cannot lookup ISIN
+	}
+
 	isin, err := dp.securityProvider.GetISINBySymbol(symbol)
 	if err != nil {
 		// Symbol not found or no ISIN - return empty map gracefully
@@ -365,6 +390,12 @@ func (dp *DataPrep) extractMetrics(symbol string, date time.Time) (map[string]fl
 	}
 
 	// Query metrics from scores table directly by ISIN (PRIMARY KEY - fastest)
+	if dp.portfolioDB == nil {
+		// No portfolio DB - return empty metrics
+		// This should not happen in production, but handle gracefully for testing
+		return make(map[string]float64), nil
+	}
+
 	query := `
 		SELECT
 			cagr_score,
@@ -374,12 +405,13 @@ func (dp *DataPrep) extractMetrics(symbol string, date time.Time) (map[string]fl
 			drawdown_score,
 			sharpe_score
 		FROM scores
-		WHERE isin = ? AND last_updated <= ?
-		ORDER BY last_updated DESC
-		LIMIT 1
+	WHERE isin = ? AND last_updated <= ?
+	ORDER BY last_updated DESC
+	LIMIT 1
 	`
 
-	rows, err := dp.portfolioDB.Query(query, isin, date.Format("2006-01-02"))
+	dateUnix := time.Date(date.Year(), date.Month(), date.Day(), 23, 59, 59, 0, time.UTC).Unix()
+	rows, err := dp.portfolioDB.Query(query, isin, dateUnix)
 	if err != nil {
 		// Table might not exist or no data - return empty map gracefully
 		dp.log.Debug().Str("symbol", symbol).Err(err).Msg("Failed to query metrics from scores table")
@@ -421,6 +453,12 @@ func (dp *DataPrep) extractMetrics(symbol string, date time.Time) (map[string]fl
 			// sharpe_score is normalized, approximate as ratio
 			metrics["SHARPE_RATIO"] = sharpeScore.Float64 * 2.0 // Rough approximation
 		}
+	}
+
+	// Check for iteration errors (e.g., database errors during row iteration)
+	if err := rows.Err(); err != nil {
+		dp.log.Debug().Str("symbol", symbol).Err(err).Msg("Error iterating metrics rows")
+		return metrics, nil // Return partial results on error
 	}
 
 	return metrics, nil

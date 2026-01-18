@@ -22,7 +22,6 @@ func TestRegisterRoutes(t *testing.T) {
 	securityRepo := &universe.SecurityRepository{}
 	scoreRepo := &universe.ScoreRepository{}
 	var overrideRepo *universe.OverrideRepository = nil
-	var portfolioDB *sql.DB = nil
 	var positionRepo *portfolio.PositionRepository = nil
 	securityScorer := &scorers.SecurityScorer{}
 	historyDB := &universe.HistoryDB{}
@@ -33,6 +32,7 @@ func TestRegisterRoutes(t *testing.T) {
 	eventManager := &events.Manager{}
 
 	// Create handler - we're only testing that RegisterRoutes works, not handler execution
+	var portfolioDB *sql.DB = nil
 	handler := NewUniverseHandlers(
 		securityRepo,
 		scoreRepo,
@@ -109,7 +109,6 @@ func TestRegisterRoutes_RoutePrefix(t *testing.T) {
 	securityRepo := &universe.SecurityRepository{}
 	scoreRepo := &universe.ScoreRepository{}
 	var overrideRepo *universe.OverrideRepository = nil
-	var portfolioDB *sql.DB = nil
 	var positionRepo *portfolio.PositionRepository = nil
 	securityScorer := &scorers.SecurityScorer{}
 	historyDB := &universe.HistoryDB{}
@@ -119,6 +118,7 @@ func TestRegisterRoutes_RoutePrefix(t *testing.T) {
 	var currencyExchangeService domain.CurrencyExchangeServiceInterface = nil
 	eventManager := &events.Manager{}
 
+	var portfolioDB *sql.DB = nil
 	handler := NewUniverseHandlers(
 		securityRepo,
 		scoreRepo,

@@ -95,7 +95,7 @@ func (p *testSecurityProvider) GetAllActive() ([]portfolio.SecurityInfo, error) 
 			FullExchangeName: sec.FullExchangeName,
 			Industry:         sec.Industry,
 			Currency:         sec.Currency,
-			AllowSell:        true, // Default to true for tests
+			AllowSell:        true, // default for tests
 		})
 	}
 	return result, nil
@@ -117,7 +117,7 @@ func (p *testSecurityProvider) GetAllActiveTradable() ([]portfolio.SecurityInfo,
 			FullExchangeName: sec.FullExchangeName,
 			Industry:         sec.Industry,
 			Currency:         sec.Currency,
-			AllowSell:        true, // Default to true for tests
+			AllowSell:        true, // default for tests
 		})
 	}
 	return result, nil

@@ -161,6 +161,7 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 		CREATE TABLE IF NOT EXISTS market_regime_history (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			recorded_at INTEGER NOT NULL,
+			region TEXT NOT NULL DEFAULT 'GLOBAL',
 			raw_score REAL NOT NULL,
 			smoothed_score REAL NOT NULL,
 			discrete_regime TEXT NOT NULL DEFAULT 'n/a'
@@ -217,10 +218,10 @@ func TestDataPrep_ExtractTrainingExamples_MinimumHistory(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// Insert regime score
+	// Insert regime score (GLOBAL region for consistency)
 	_, err = configDB.Exec(
-		"INSERT INTO market_regime_history (recorded_at, raw_score, smoothed_score) VALUES (?, ?, ?)",
-		trainingDate.Format("2006-01-02"), 0.3, 0.3,
+		"INSERT INTO market_regime_history (recorded_at, region, raw_score, smoothed_score) VALUES (?, ?, ?, ?)",
+		trainingDateUnix, "GLOBAL", 0.3, 0.3,
 	)
 	require.NoError(t, err)
 
@@ -352,12 +353,12 @@ func TestDataPrep_ExtractTrainingExamples_TimeWindowed(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	// Insert regime scores (before both test dates)
+	// Insert regime scores (before both test dates) - GLOBAL region for consistency
 	regimeDate1, _ := time.Parse("2006-01-02", "2019-12-01")
 	regimeDate1Unix := time.Date(regimeDate1.Year(), regimeDate1.Month(), regimeDate1.Day(), 0, 0, 0, 0, time.UTC).Unix()
 	_, err = configDB.Exec(
-		"INSERT INTO market_regime_history (recorded_at, raw_score, smoothed_score) VALUES (?, ?, ?)",
-		regimeDate1Unix, 0.3, 0.3,
+		"INSERT INTO market_regime_history (recorded_at, region, raw_score, smoothed_score) VALUES (?, ?, ?, ?)",
+		regimeDate1Unix, "GLOBAL", 0.3, 0.3,
 	)
 	require.NoError(t, err)
 
@@ -365,8 +366,8 @@ func TestDataPrep_ExtractTrainingExamples_TimeWindowed(t *testing.T) {
 	regimeDate2, _ := time.Parse("2006-01-02", "2022-01-01")
 	regimeDate2Unix := time.Date(regimeDate2.Year(), regimeDate2.Month(), regimeDate2.Day(), 0, 0, 0, 0, time.UTC).Unix()
 	_, err = configDB.Exec(
-		"INSERT INTO market_regime_history (recorded_at, raw_score, smoothed_score) VALUES (?, ?, ?)",
-		regimeDate2Unix, 0.2, 0.2,
+		"INSERT INTO market_regime_history (recorded_at, region, raw_score, smoothed_score) VALUES (?, ?, ?, ?)",
+		regimeDate2Unix, "GLOBAL", 0.2, 0.2,
 	)
 	require.NoError(t, err)
 

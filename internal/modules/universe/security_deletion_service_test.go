@@ -117,6 +117,16 @@ func (m *mockPositionRepoForDeletion) GetByISIN(isin string) (*portfolio.Positio
 	return m.position, m.getErr
 }
 
+func (m *mockPositionRepoForDeletion) GetPositionQuantity(isin string) (float64, error) {
+	if m.getErr != nil {
+		return 0, m.getErr
+	}
+	if m.position == nil {
+		return 0, nil
+	}
+	return m.position.Quantity, nil
+}
+
 func (m *mockPositionRepoForDeletion) Delete(isin string) error {
 	if m.deleteErr != nil {
 		return m.deleteErr

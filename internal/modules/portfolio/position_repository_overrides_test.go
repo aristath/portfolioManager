@@ -65,24 +65,33 @@ func (p *testSecurityProvider) GetAllActive() ([]SecurityInfo, error) {
 			AllowSell:        true, // default
 		}
 
+		// Apply overrides
+		overrides, err := p.getOverrides(sec.ISIN)
+		if err != nil {
+			p.log.Warn().Str("isin", sec.ISIN).Err(err).Msg("Failed to fetch overrides")
+		} else if len(overrides) > 0 {
+			if name, ok := overrides["name"]; ok && name != "" {
+				sec.Name = name
+			}
+			if geography, ok := overrides["geography"]; ok && geography != "" {
+				sec.Geography = geography
+			}
+			if industry, ok := overrides["industry"]; ok && industry != "" {
+				sec.Industry = industry
+			}
+			if currency, ok := overrides["currency"]; ok && currency != "" {
+				sec.Currency = currency
+			}
+			if allowSell, ok := overrides["allow_sell"]; ok && allowSell == "false" {
+				sec.AllowSell = false
+			}
+		}
+
 		securities = append(securities, sec)
 	}
 
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating securities: %w", err)
-	}
-
-	// Apply overrides
-	for i := range securities {
-		overrides, err := p.getOverrides(securities[i].ISIN)
-		if err != nil {
-			p.log.Warn().Str("isin", securities[i].ISIN).Err(err).Msg("Failed to fetch overrides")
-			continue
-		}
-
-		if len(overrides) > 0 {
-			p.applyOverrides(&securities[i], overrides)
-		}
 	}
 
 	return securities, nil
@@ -132,24 +141,33 @@ func (p *testSecurityProvider) GetAllActiveTradable() ([]SecurityInfo, error) {
 			AllowSell:        true, // default
 		}
 
+		// Apply overrides
+		overrides, err := p.getOverrides(sec.ISIN)
+		if err != nil {
+			p.log.Warn().Str("isin", sec.ISIN).Err(err).Msg("Failed to fetch overrides")
+		} else if len(overrides) > 0 {
+			if name, ok := overrides["name"]; ok && name != "" {
+				sec.Name = name
+			}
+			if geography, ok := overrides["geography"]; ok && geography != "" {
+				sec.Geography = geography
+			}
+			if industry, ok := overrides["industry"]; ok && industry != "" {
+				sec.Industry = industry
+			}
+			if currency, ok := overrides["currency"]; ok && currency != "" {
+				sec.Currency = currency
+			}
+			if allowSell, ok := overrides["allow_sell"]; ok && allowSell == "false" {
+				sec.AllowSell = false
+			}
+		}
+
 		securities = append(securities, sec)
 	}
 
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating securities: %w", err)
-	}
-
-	// Apply overrides
-	for i := range securities {
-		overrides, err := p.getOverrides(securities[i].ISIN)
-		if err != nil {
-			p.log.Warn().Str("isin", securities[i].ISIN).Err(err).Msg("Failed to fetch overrides")
-			continue
-		}
-
-		if len(overrides) > 0 {
-			p.applyOverrides(&securities[i], overrides)
-		}
 	}
 
 	return securities, nil
@@ -188,23 +206,6 @@ func (p *testSecurityProvider) getOverrides(isin string) (map[string]string, err
 	}
 
 	return overrides, nil
-}
-
-func (p *testSecurityProvider) applyOverrides(sec *SecurityInfo, overrides map[string]string) {
-	for field, value := range overrides {
-		switch field {
-		case "name":
-			sec.Name = value
-		case "geography":
-			sec.Geography = value
-		case "industry":
-			sec.Industry = value
-		case "currency":
-			sec.Currency = value
-		case "allow_sell":
-			sec.AllowSell = value == "true" || value == "1"
-		}
-	}
 }
 
 // setupTestDBWithOverrides creates test databases with security_overrides table

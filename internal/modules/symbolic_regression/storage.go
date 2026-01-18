@@ -268,6 +268,11 @@ func (fs *FormulaStorage) GetAllFormulas(
 		formulas = append(formulas, &formula)
 	}
 
+	// Check for iteration errors (e.g., database errors during row iteration)
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating formulas: %w", err)
+	}
+
 	return formulas, nil
 }
 
@@ -339,6 +344,11 @@ func (fs *FormulaStorage) GetFormulasByRegimeRange(regimeMin, regimeMax float64)
 		}
 
 		formulas = append(formulas, &formula)
+	}
+
+	// Check for iteration errors (e.g., database errors during row iteration)
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating formulas by regime: %w", err)
 	}
 
 	return formulas, nil
