@@ -9,6 +9,7 @@ package di
 import (
 	"github.com/aristath/sentinel/internal/market_regime"
 	"github.com/aristath/sentinel/internal/modules/adaptation"
+	symbolic_regression "github.com/aristath/sentinel/internal/modules/symbolic_regression"
 	"github.com/rs/zerolog"
 )
 
@@ -100,6 +101,17 @@ func initializeAdaptiveMarketServices(container *Container, log zerolog.Logger) 
 	// AdaptiveMarketService implements scorers.AdaptiveWeightsProvider interface directly
 	container.SecurityScorer.SetAdaptiveService(container.AdaptiveMarketService)
 	container.SecurityScorer.SetRegimeScoreProvider(container.RegimeScoreProvider)
+
+	// Wire formula storage for discovered scoring formulas
+	// SecurityScorer can use discovered formulas for improved scoring accuracy
+	// FormulaStorage is stateless (wraps DB), so sharing instance is optional but cleaner
+	// ReturnsCalculator already creates its own, but we wire shared instance to SecurityScorer here
+	if container.PortfolioDB != nil {
+		formulaStorage := symbolic_regression.NewFormulaStorage(container.PortfolioDB.Conn(), log)
+		container.SecurityScorer.SetFormulaStorage(formulaStorage)
+		log.Info().Msg("Formula storage wired to SecurityScorer")
+	}
+
 	log.Info().Msg("Adaptive service and regime score provider wired to SecurityScorer")
 
 	return nil

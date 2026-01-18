@@ -20,6 +20,7 @@ import (
 	"github.com/aristath/sentinel/internal/modules/analytics"
 	"github.com/aristath/sentinel/internal/modules/calculations"
 	"github.com/aristath/sentinel/internal/modules/cash_flows"
+	"github.com/aristath/sentinel/internal/modules/config"
 	"github.com/aristath/sentinel/internal/modules/display"
 	"github.com/aristath/sentinel/internal/modules/dividends"
 	"github.com/aristath/sentinel/internal/modules/market_hours"
@@ -88,6 +89,7 @@ type Container struct {
 	TradeRepo          *trading.TradeRepository                   // Trade transactions
 	AllocRepo          *allocation.Repository                     // Allocation targets (geography, industry)
 	SettingsRepo       *settings.Repository                       // Application settings
+	MarketIndexRepo    *config.MarketIndexRepository              // Market indices configuration
 	CashFlowsRepo      *cash_flows.Repository                     // Cash flow transactions
 	RecommendationRepo planning.RecommendationRepositoryInterface // Planning recommendations (interface - can be DB or in-memory)
 	PlannerConfigRepo  planningrepo.ConfigRepositoryInterface     // Planner configuration (with settings overrides)

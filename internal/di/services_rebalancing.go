@@ -44,7 +44,7 @@ func initializeRebalancingServices(container *Container, cashManager *cash_flows
 		container.PlannerConfigRepo,
 		container.RecommendationRepo,
 		container.OpportunityContextBuilder,
-		container.ConfigDB.Conn(),
+		container.SettingsRepo,
 		log,
 	)
 

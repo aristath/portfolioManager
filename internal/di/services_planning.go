@@ -32,8 +32,9 @@ func initializePlanningServices(container *Container, log zerolog.Logger) error 
 	// Risk builder (needed for sequences service)
 	// Builds risk models (covariance matrices) for portfolio optimization
 	// Use TradingSecurityProviderAdapter for ISIN lookups
+	// Market index repository provides enabled indices for regime-aware calculations
 	optimizationSecurityProvider := NewTradingSecurityProviderAdapter(container.SecurityRepo)
-	container.RiskBuilder = optimization.NewRiskModelBuilder(container.HistoryDBClient, optimizationSecurityProvider, container.ConfigDB.Conn(), log)
+	container.RiskBuilder = optimization.NewRiskModelBuilder(container.HistoryDBClient, optimizationSecurityProvider, container.MarketIndexRepo, log)
 
 	// Constraint enforcer for sequences service
 	// Enforces per-security constraints (allow_buy, allow_sell) during sequence generation

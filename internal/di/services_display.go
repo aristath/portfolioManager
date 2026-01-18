@@ -36,7 +36,7 @@ func initializeDisplayServices(container *Container, cashManager *cash_flows.Cas
 	container.HealthCalculator = display.NewHealthCalculator(
 		container.PortfolioDB.Conn(),
 		container.HistoryDBClient,
-		container.ConfigDB.Conn(),
+		container.SettingsRepo,
 		log,
 	)
 	log.Info().Msg("Health calculator initialized")
