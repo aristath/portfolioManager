@@ -7,7 +7,6 @@ import (
 	"math"
 
 	coreevaluation "github.com/aristath/sentinel/internal/evaluation"
-	coremodels "github.com/aristath/sentinel/internal/evaluation/models"
 )
 
 // =============================================================================
@@ -30,77 +29,6 @@ const (
 )
 
 // =============================================================================
-// TYPE CONVERSION UTILITIES
-// =============================================================================
-
-// convertToCorePorfolioContext converts local PortfolioContext to core models.PortfolioContext
-func convertToCorePortfolioContext(ctx PortfolioContext) coremodels.PortfolioContext {
-	return coremodels.PortfolioContext{
-		GeographyWeights:       ctx.GeographyWeights,
-		IndustryWeights:        ctx.IndustryWeights,
-		Positions:              ctx.Positions,
-		SecurityGeographies:    ctx.SecurityGeographies,
-		SecurityIndustries:     ctx.SecurityIndustries,
-		SecurityScores:         ctx.SecurityScores,
-		SecurityDividends:      ctx.SecurityDividends,
-		PositionAvgPrices:      ctx.PositionAvgPrices,
-		CurrentPrices:          ctx.CurrentPrices,
-		TotalValue:             ctx.TotalValue,
-		SecurityCAGRs:          ctx.SecurityCAGRs,
-		SecurityVolatility:     ctx.SecurityVolatility,
-		SecuritySharpe:         ctx.SecuritySharpe,
-		SecuritySortino:        ctx.SecuritySortino,
-		SecurityMaxDrawdown:    ctx.SecurityMaxDrawdown,
-		MarketRegimeScore:      ctx.MarketRegimeScore,
-		OptimizerTargetWeights: ctx.OptimizerTargetWeights,
-	}
-}
-
-// convertToCoreSequence converts local ActionCandidate slice to core models
-func convertToCoreSequence(sequence []ActionCandidate) []coremodels.ActionCandidate {
-	result := make([]coremodels.ActionCandidate, len(sequence))
-	for i, action := range sequence {
-		result[i] = coremodels.ActionCandidate{
-			Side:     coremodels.TradeSide(action.Side),
-			ISIN:     action.ISIN,
-			Symbol:   action.Symbol,
-			Name:     action.Name,
-			Currency: action.Currency,
-			Reason:   action.Reason,
-			Tags:     action.Tags,
-			Quantity: action.Quantity,
-			Price:    action.Price,
-			ValueEUR: action.ValueEUR,
-			Priority: action.Priority,
-		}
-	}
-	return result
-}
-
-// convertFromCorePortfolioContext converts core models.PortfolioContext to local PortfolioContext
-func convertFromCorePortfolioContext(ctx coremodels.PortfolioContext) PortfolioContext {
-	return PortfolioContext{
-		GeographyWeights:       ctx.GeographyWeights,
-		IndustryWeights:        ctx.IndustryWeights,
-		Positions:              ctx.Positions,
-		SecurityGeographies:    ctx.SecurityGeographies,
-		SecurityIndustries:     ctx.SecurityIndustries,
-		SecurityScores:         ctx.SecurityScores,
-		SecurityDividends:      ctx.SecurityDividends,
-		PositionAvgPrices:      ctx.PositionAvgPrices,
-		CurrentPrices:          ctx.CurrentPrices,
-		TotalValue:             ctx.TotalValue,
-		SecurityCAGRs:          ctx.SecurityCAGRs,
-		SecurityVolatility:     ctx.SecurityVolatility,
-		SecuritySharpe:         ctx.SecuritySharpe,
-		SecuritySortino:        ctx.SecuritySortino,
-		SecurityMaxDrawdown:    ctx.SecurityMaxDrawdown,
-		MarketRegimeScore:      ctx.MarketRegimeScore,
-		OptimizerTargetWeights: ctx.OptimizerTargetWeights,
-	}
-}
-
-// =============================================================================
 // MAIN EVALUATION FUNCTIONS - Delegate to core evaluation
 // =============================================================================
 
@@ -117,8 +45,7 @@ func CalculateTransactionCost(
 	transactionCostFixed float64,
 	transactionCostPercent float64,
 ) float64 {
-	coreSequence := convertToCoreSequence(sequence)
-	return coreevaluation.CalculateTransactionCost(coreSequence, transactionCostFixed, transactionCostPercent)
+	return coreevaluation.CalculateTransactionCost(sequence, transactionCostFixed, transactionCostPercent)
 }
 
 // CalculateTransactionCostEnhanced calculates total transaction cost with all components.
@@ -131,9 +58,8 @@ func CalculateTransactionCostEnhanced(
 	slippagePercent float64,
 	marketImpactPercent float64,
 ) float64 {
-	coreSequence := convertToCoreSequence(sequence)
 	return coreevaluation.CalculateTransactionCostEnhanced(
-		coreSequence,
+		sequence,
 		transactionCostFixed,
 		transactionCostPercent,
 		spreadCostPercent,
@@ -153,13 +79,10 @@ func EvaluateEndState(
 	transactionCostPercent float64,
 	costPenaltyFactor float64,
 ) float64 {
-	coreStartContext := convertToCorePortfolioContext(startContext)
-	coreEndContext := convertToCorePortfolioContext(endContext)
-	coreSequence := convertToCoreSequence(sequence)
 	return coreevaluation.EvaluateEndState(
-		coreStartContext,
-		coreEndContext,
-		coreSequence,
+		startContext,
+		endContext,
+		sequence,
 		transactionCostFixed,
 		transactionCostPercent,
 		costPenaltyFactor,
@@ -170,8 +93,7 @@ func EvaluateEndState(
 // CalculateDiversificationScore calculates diversification score for a portfolio.
 // Delegates to core evaluation package.
 func CalculateDiversificationScore(ctx PortfolioContext) float64 {
-	coreContext := convertToCorePortfolioContext(ctx)
-	return coreevaluation.CalculateDiversificationScore(coreContext)
+	return coreevaluation.CalculateDiversificationScore(ctx)
 }
 
 // EvaluateSequence evaluates a complete sequence: simulate + score.
@@ -180,67 +102,7 @@ func EvaluateSequence(
 	sequence []ActionCandidate,
 	context EvaluationContext,
 ) SequenceEvaluationResult {
-	// Convert to core types
-	coreSequence := convertToCoreSequence(sequence)
-	coreContext := coremodels.EvaluationContext{
-		PortfolioContext:       convertToCorePortfolioContext(context.PortfolioContext),
-		CurrentPrices:          context.CurrentPrices,
-		PriceAdjustments:       context.PriceAdjustments,
-		AvailableCashEUR:       context.AvailableCashEUR,
-		TotalPortfolioValueEUR: context.TotalPortfolioValueEUR,
-		TransactionCostFixed:   context.TransactionCostFixed,
-		TransactionCostPercent: context.TransactionCostPercent,
-		CostPenaltyFactor:      context.CostPenaltyFactor,
-	}
-
-	// Convert securities
-	coreSecurities := make([]coremodels.Security, len(context.Securities))
-	for i, sec := range context.Securities {
-		coreSecurities[i] = coremodels.Security{
-			ISIN:      sec.ISIN,
-			Symbol:    sec.Symbol,
-			Name:      sec.Name,
-			Geography: sec.Geography,
-			Industry:  sec.Industry,
-			Currency:  sec.Currency,
-		}
-	}
-	coreContext.Securities = coreSecurities
-
-	// Convert positions
-	corePositions := make([]coremodels.Position, len(context.Positions))
-	for i, pos := range context.Positions {
-		corePositions[i] = coremodels.Position{
-			Symbol:         pos.Symbol,
-			Currency:       pos.Currency,
-			Quantity:       pos.Quantity,
-			AvgPrice:       pos.AvgPrice,
-			CurrencyRate:   pos.CurrencyRate,
-			CurrentPrice:   pos.CurrentPrice,
-			MarketValueEUR: pos.MarketValueEUR,
-		}
-	}
-	coreContext.Positions = corePositions
-
-	// Build stocks by symbol map
-	stocksBySymbol := make(map[string]coremodels.Security)
-	for _, sec := range coreSecurities {
-		stocksBySymbol[sec.Symbol] = sec
-	}
-	coreContext.StocksBySymbol = stocksBySymbol
-
-	// Call core evaluation
-	coreResult := coreevaluation.EvaluateSequence(coreSequence, coreContext)
-
-	// Convert result back
-	return SequenceEvaluationResult{
-		EndPortfolio:     convertFromCorePortfolioContext(coreResult.EndPortfolio),
-		Sequence:         sequence,
-		Score:            coreResult.Score,
-		EndCashEUR:       coreResult.EndCashEUR,
-		TransactionCosts: coreResult.TransactionCosts,
-		Feasible:         coreResult.Feasible,
-	}
+	return coreevaluation.EvaluateSequence(sequence, context)
 }
 
 // =============================================================================
@@ -290,9 +152,8 @@ func calculateOptimizerAlignment(ctx PortfolioContext, totalValue float64) float
 
 // calculatePortfolioQualityScore is exposed for testing
 func calculatePortfolioQualityScore(ctx PortfolioContext) float64 {
-	coreContext := convertToCorePortfolioContext(ctx)
 	// Use same context for start and end to get base quality score
-	return coreevaluation.EvaluateEndState(coreContext, coreContext, nil, 0, 0, 0, nil)
+	return coreevaluation.EvaluateEndState(ctx, ctx, nil, 0, 0, 0, nil)
 }
 
 // calculateRiskAdjustedScore is exposed for testing - returns neutral if no data
