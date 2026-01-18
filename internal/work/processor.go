@@ -428,9 +428,9 @@ func (p *Processor) executeItem(item *WorkItem, wt *WorkType) error {
 				// Interval-based work: cache until interval expires
 				expiresAt = time.Now().Add(wt.Interval).Unix()
 			} else {
-				// Non-interval work: cache with far-future expiration for dependency tracking
-				// Use 1 year to effectively mark as "completed indefinitely"
-				expiresAt = time.Now().Add(365 * 24 * time.Hour).Unix()
+				// Non-interval work: cache with short expiration for dependency tracking
+				// Use 10 minutes to allow re-execution while maintaining dependency tracking
+				expiresAt = time.Now().Add(10 * time.Minute).Unix()
 			}
 
 			if err := p.cache.Set(item.ID, expiresAt); err != nil {
