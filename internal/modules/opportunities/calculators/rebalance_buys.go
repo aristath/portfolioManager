@@ -196,7 +196,7 @@ func (c *RebalanceBuysCalculator) Calculate(
 
 		c.log.Debug().Str("symbol", symbol).Str("matched_geo", matchedGeo).Float64("underweight", underweight).Msg("PASSED geography filter")
 
-		// Get security score (ISIN lookup)
+		// Get security score (ISIN lookup) - used for prioritization, not filtering
 		score := 0.5 // Default neutral score
 		if ctx.SecurityScores != nil {
 			if s, ok := ctx.SecurityScores[isin]; ok { // ISIN key ✅
@@ -204,13 +204,10 @@ func (c *RebalanceBuysCalculator) Calculate(
 			}
 		}
 
-		// Filter by minimum score
-		if score < minScore {
-			exclusions.Add(isin, symbol, securityName, fmt.Sprintf("score %.2f below minimum %.2f", score, minScore))
-			continue
-		}
-
 		// Quality gate checks - CRITICAL protection against bad trades
+		// When tag filtering is enabled, rely on tags (quality-gate-fail, below-minimum-return, bubble-risk)
+		// Tags encode explicit quality judgments from 7-path quality gates, minimum return requirements, and bubble detection.
+		// Only use score threshold as fallback when tag filtering is disabled.
 		if config.EnableTagFiltering && c.securityRepo != nil {
 			// Tag-based quality checks (when enabled)
 			securityTags, err := c.securityRepo.GetTagsForSecurity(symbol)
@@ -248,6 +245,11 @@ func (c *RebalanceBuysCalculator) Calculate(
 			}
 		} else {
 			// Score-based fallback when tag filtering is disabled
+			// Filter by minimum score threshold when tags are not available
+			if score < minScore {
+				exclusions.Add(isin, symbol, securityName, fmt.Sprintf("score %.2f below minimum %.2f", score, minScore))
+				continue
+			}
 			qualityCheck := CheckQualityGates(ctx, isin, true, config) // ISIN parameter ✅
 			if qualityCheck.IsEnsembleValueTrap {
 				c.log.Debug().

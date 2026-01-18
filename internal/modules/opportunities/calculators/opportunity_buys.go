@@ -161,13 +161,20 @@ func (c *OpportunityBuysCalculator) Calculate(
 		isin := security.ISIN
 		securityName := security.Name
 
-		// Get score by ISIN
+		// Get score by ISIN - used for prioritization, not filtering when tags are available
 		score, ok := ctx.SecurityScores[isin] // ISIN key ✅
 		if !ok {
-			exclusions.Add(isin, symbol, securityName, "no score available")
-			continue
+			// Only require score when tag filtering is disabled (fallback)
+			if !config.EnableTagFiltering {
+				exclusions.Add(isin, symbol, securityName, "no score available")
+				continue
+			}
+			score = 0.5 // Default neutral score for prioritization
 		}
-		if score < minScore {
+		// Only apply score threshold when tag filtering is disabled
+		// When tag filtering is enabled, rely on tags (quality-gate-fail, below-minimum-return, bubble-risk)
+		// Tags encode explicit quality judgments from 7-path quality gates, minimum return requirements, and bubble detection.
+		if !config.EnableTagFiltering && score < minScore {
 			exclusions.Add(isin, symbol, securityName, fmt.Sprintf("score %.2f below minimum %.2f", score, minScore))
 			continue
 		}
