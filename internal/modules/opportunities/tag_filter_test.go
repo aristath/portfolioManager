@@ -126,9 +126,11 @@ func TestTagBasedFilter_GetOpportunityCandidates_WithCash(t *testing.T) {
 	// Assert
 	assert.NoError(t, err)
 	assert.NotEmpty(t, candidates)
-	// Should include securities with quality-gate-pass, high-quality, value-opportunity, or high-total-return
+	// With exclusion-based filtering: all securities WITHOUT exclusion tags should be included
+	// AAPL, MSFT, and GOOGL have no exclusion tags, so all should be included
 	assert.Contains(t, candidates, "AAPL")
 	assert.Contains(t, candidates, "MSFT")
+	assert.Contains(t, candidates, "GOOGL") // Should be included - no exclusion tags
 }
 
 func TestTagBasedFilter_GetOpportunityCandidates_NoCash(t *testing.T) {
@@ -184,7 +186,8 @@ func TestTagBasedFilter_GetOpportunityCandidates_NoCash(t *testing.T) {
 
 	// Assert
 	assert.NoError(t, err)
-	// Should still find quality candidates
+	// With exclusion-based filtering: all securities WITHOUT exclusion tags should be included
+	// Both AAPL and MSFT have no exclusion tags, so both should be included
 	assert.Contains(t, candidates, "AAPL")
 	assert.Contains(t, candidates, "MSFT")
 }
@@ -408,4 +411,67 @@ func TestTagBasedFilter_isMarketVolatile_NotVolatile(t *testing.T) {
 
 	// Assert
 	assert.False(t, isVolatile, "Market should not be volatile with only 2 securities having volatility-spike tag")
+}
+
+func TestTagBasedFilter_GetOpportunityCandidates_ExcludesBadTags(t *testing.T) {
+	// Setup
+	db := setupTagFilterTestDB(t)
+	defer db.Close()
+
+	log := zerolog.New(nil).Level(zerolog.Disabled)
+	universeRepo := universe.NewSecurityRepository(db, log)
+	filter := NewTagBasedFilter(universeRepo, log)
+
+	now := time.Now().Unix()
+
+	// Insert test securities
+	_, err := db.Exec(`
+		INSERT INTO securities (isin, symbol, data, last_synced)
+		VALUES
+			('US0378331005', 'AAPL', json_object('name', 'Apple Inc'), NULL),
+			('US5949181045', 'MSFT', json_object('name', 'Microsoft Corp'), NULL),
+			('US02079K3059', 'GOOGL', json_object('name', 'Alphabet Inc'), NULL)
+	`)
+	require.NoError(t, err)
+
+	// Insert exclusion tags (bad tags that should be excluded)
+	_, err = db.Exec(`
+		INSERT INTO tags (id, name, created_at, updated_at)
+		VALUES
+			('quality-gate-fail', 'Quality Gate Fail', ?, ?),
+			('bubble-risk', 'Bubble Risk', ?, ?),
+			('below-minimum-return', 'Below Minimum Return', ?, ?)
+	`, now, now, now, now, now, now)
+	require.NoError(t, err)
+
+	// Insert security tags - AAPL has exclusion tag, MSFT and GOOGL don't
+	_, err = db.Exec(`
+		INSERT INTO security_tags (isin, tag_id, created_at, updated_at)
+		VALUES
+			('US0378331005', 'quality-gate-fail', ?, ?),
+			('US5949181045', 'high-quality', ?, ?)
+	`, now, now, now, now)
+	require.NoError(t, err)
+
+	// Create opportunity context
+	ctx := planningdomain.NewOpportunityContext(
+		&scoringdomain.PortfolioContext{},
+		[]planningdomain.EnrichedPosition{},
+		[]universe.Security{},
+		2000.0,
+		10000.0,
+		map[string]float64{},
+	)
+
+	// Execute
+	candidates, err := filter.GetOpportunityCandidates(ctx, nil)
+
+	// Assert
+	assert.NoError(t, err)
+	assert.NotEmpty(t, candidates)
+	// AAPL should be EXCLUDED (has quality-gate-fail exclusion tag)
+	assert.NotContains(t, candidates, "AAPL", "AAPL should be excluded due to quality-gate-fail tag")
+	// MSFT and GOOGL should be INCLUDED (no exclusion tags)
+	assert.Contains(t, candidates, "MSFT", "MSFT should be included - no exclusion tags")
+	assert.Contains(t, candidates, "GOOGL", "GOOGL should be included - no exclusion tags")
 }

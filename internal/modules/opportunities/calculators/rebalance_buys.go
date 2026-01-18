@@ -151,10 +151,11 @@ func (c *RebalanceBuysCalculator) Calculate(
 		}
 
 		// Skip if tag-based pre-filtering is enabled and symbol not in candidate set
+		// (excluded due to bad tags like quality-gate-fail, bubble-risk, etc.)
 		if config.EnableTagFiltering && candidateMap != nil {
 			if !candidateMap[symbol] {
-				c.log.Debug().Str("symbol", symbol).Str("geography", security.Geography).Msg("FILTER: no matching opportunity tags")
-				exclusions.Add(isin, symbol, securityName, "no matching opportunity tags")
+				c.log.Debug().Str("symbol", symbol).Str("geography", security.Geography).Msg("FILTER: excluded by tag filter")
+				exclusions.Add(isin, symbol, securityName, "excluded by tag filter (bad tags)")
 				continue
 			}
 		}

@@ -115,8 +115,9 @@ func (c *AveragingDownCalculator) Calculate(
 		securityName := position.SecurityName
 
 		// Skip if not in tag-filtered candidates (when tag filtering enabled)
+		// (excluded due to bad tags like quality-gate-fail, bubble-risk, etc.)
 		if candidateMap != nil && !candidateMap[symbol] {
-			exclusions.Add(isin, symbol, securityName, "no matching opportunity tags")
+			exclusions.Add(isin, symbol, securityName, "excluded by tag filter (bad tags)")
 			continue
 		}
 

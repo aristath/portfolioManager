@@ -23,22 +23,24 @@ func NewTagBasedFilter(securityRepo SecurityRepository, log zerolog.Logger) *Tag
 	}
 }
 
-// GetOpportunityCandidates uses tags to quickly identify buying opportunity candidates.
-// Returns a list of security symbols that match the selected opportunity tags.
+// GetOpportunityCandidates uses exclusion-based tag filtering to identify buying opportunity candidates.
+// Returns all active securities EXCEPT those with exclusion tags (bad tags).
+// This is more inclusive than inclusion-based filtering and aligns with "tag what's wrong, not what's right" philosophy.
 // If config is provided and EnableTagFiltering is false, returns all active securities.
 func (f *TagBasedFilter) GetOpportunityCandidates(ctx *domain.OpportunityContext, config *domain.PlannerConfiguration) ([]string, error) {
 	if ctx == nil {
 		return nil, nil
 	}
 
+	// Get all active securities first
+	allSecurities, err := f.securityRepo.GetAllActive()
+	if err != nil {
+		return nil, err
+	}
+
 	// If tag filtering is disabled, return all active securities
 	if config != nil && !config.EnableTagFiltering {
 		f.log.Debug().Msg("Tag filtering disabled, returning all active securities")
-		allSecurities, err := f.securityRepo.GetAllActive()
-		if err != nil {
-			return nil, err
-		}
-
 		symbols := make([]string, 0, len(allSecurities))
 		for _, sec := range allSecurities {
 			if sec.Symbol != "" {
@@ -53,31 +55,55 @@ func (f *TagBasedFilter) GetOpportunityCandidates(ctx *domain.OpportunityContext
 		return symbols, nil
 	}
 
-	tags := f.selectOpportunityTags(ctx, config)
-	if len(tags) == 0 {
-		f.log.Debug().Msg("No opportunity tags selected")
-		return []string{}, nil
+	// Get exclusion tags (bad tags to exclude)
+	exclusionTags := f.selectExclusionTags(ctx, config)
+	if len(exclusionTags) == 0 {
+		// No exclusions - return all active securities
+		symbols := make([]string, 0, len(allSecurities))
+		for _, sec := range allSecurities {
+			if sec.Symbol != "" {
+				symbols = append(symbols, sec.Symbol)
+			}
+		}
+
+		f.log.Debug().
+			Int("candidates", len(symbols)).
+			Msg("Tag-based pre-filtering complete (no exclusions)")
+
+		return symbols, nil
 	}
 
 	f.log.Debug().
-		Strs("tags", tags).
-		Msg("Selecting opportunity candidates by tags")
+		Strs("exclusion_tags", exclusionTags).
+		Msg("Excluding securities with bad tags")
 
-	candidates, err := f.securityRepo.GetByTags(tags)
+	// Get securities with exclusion tags
+	excludedSecurities, err := f.securityRepo.GetByTags(exclusionTags)
 	if err != nil {
 		return nil, err
 	}
 
-	symbols := make([]string, 0, len(candidates))
-	for _, c := range candidates {
-		if c.Symbol != "" {
-			symbols = append(symbols, c.Symbol)
+	// Build map of excluded symbols for fast lookup
+	excludedSymbols := make(map[string]bool)
+	for _, sec := range excludedSecurities {
+		if sec.Symbol != "" {
+			excludedSymbols[sec.Symbol] = true
+		}
+	}
+
+	// Filter out excluded securities
+	symbols := make([]string, 0, len(allSecurities))
+	for _, sec := range allSecurities {
+		if sec.Symbol != "" && !excludedSymbols[sec.Symbol] {
+			symbols = append(symbols, sec.Symbol)
 		}
 	}
 
 	f.log.Debug().
 		Int("candidates", len(symbols)).
-		Msg("Tag-based pre-filtering complete")
+		Int("excluded", len(excludedSymbols)).
+		Int("total_active", len(allSecurities)).
+		Msg("Tag-based pre-filtering complete (exclusion-based)")
 
 	return symbols, nil
 }
@@ -140,74 +166,32 @@ func (f *TagBasedFilter) GetSellCandidates(ctx *domain.OpportunityContext, confi
 	return symbols, nil
 }
 
-// selectOpportunityTags intelligently selects tags based on opportunity context.
-// Adapts tag selection based on available cash, market conditions, strategy, and market regime.
-func (f *TagBasedFilter) selectOpportunityTags(ctx *domain.OpportunityContext, config *domain.PlannerConfiguration) []string {
-	tags := []string{}
+// selectExclusionTags returns tags that should be excluded from opportunity candidates.
+// Reversed logic: Instead of including securities with "good" tags, we exclude securities with "bad" tags.
+// This is more inclusive and aligns with the "tag what's wrong, not what's right" philosophy.
+func (f *TagBasedFilter) selectExclusionTags(ctx *domain.OpportunityContext, config *domain.PlannerConfiguration) []string {
+	exclusionTags := []string{}
 
-	// Always include high-quality securities
-	// Note: We don't pre-filter by quality-gate-pass anymore (removed)
-	// Instead, calculators will exclude quality-gate-fail
-	tags = append(tags, "high-quality")
+	// Core exclusion tags - always exclude these bad qualities
+	// These are fundamental filters that prevent investing in poor-quality securities
 
-	// Detect current market regime for regime-specific tag selection
-	regime := "neutral"
-	if f.securityRepo != nil {
-		// Use same DetectCurrentRegime logic from calculators
-		bearSafe, _ := f.securityRepo.GetByTags([]string{"regime-bear-safe"})
-		bullGrowth, _ := f.securityRepo.GetByTags([]string{"regime-bull-growth"})
-		sidewaysValue, _ := f.securityRepo.GetByTags([]string{"regime-sideways-value"})
-		volatile, _ := f.securityRepo.GetByTags([]string{"regime-volatile"})
+	// Quality gate failures - securities that don't meet minimum quality standards
+	exclusionTags = append(exclusionTags, "quality-gate-fail")
 
-		if len(volatile) > 10 {
-			regime = "volatile"
-		} else if len(bullGrowth) > len(bearSafe) && len(bullGrowth) > len(sidewaysValue) {
-			regime = "bull"
-		} else if len(bearSafe) > len(bullGrowth) && len(bearSafe) > len(sidewaysValue) {
-			regime = "bear"
-		} else if len(sidewaysValue) > len(bullGrowth) && len(sidewaysValue) > len(bearSafe) {
-			regime = "sideways"
-		}
-	}
+	// Below minimum return - securities that can't meet minimum return requirements
+	exclusionTags = append(exclusionTags, "below-minimum-return")
 
-	// Regime-specific tag selection
-	switch regime {
-	case "bear":
-		// Bear market: Focus on defensive, value, and dividend securities
-		tags = append(tags, "regime-bear-safe", "value-opportunity", "deep-value", "quality-value")
-		tags = append(tags, "dividend-opportunity", "high-dividend", "dividend-grower")
-	case "bull":
-		// Bull market: Focus on growth and momentum
-		tags = append(tags, "regime-bull-growth", "recovery-candidate", "oversold")
-		tags = append(tags, "high-total-return", "excellent-total-return")
-	case "sideways":
-		// Sideways market: Focus on dividends and value
-		tags = append(tags, "regime-sideways-value", "dividend-opportunity", "high-dividend")
-		tags = append(tags, "value-opportunity", "deep-value")
-	case "volatile":
-		// Volatile market: Focus on defensive and oversold opportunities
-		tags = append(tags, "regime-bear-safe", "low-risk", "stable")
-		tags = append(tags, "oversold", "recovery-candidate")
-	default:
-		// Neutral market: Use balanced approach
-		// Add value opportunities if we have sufficient cash
-		if ctx.AvailableCashEUR > 1000 {
-			tags = append(tags, "value-opportunity", "deep-value", "quality-value")
-		}
-		// Add technical opportunities if market is volatile (legacy check)
-		if f.IsMarketVolatile(ctx, config) {
-			tags = append(tags, "oversold", "recovery-candidate") // Note: below-ema tag was deleted
-		}
-		// Add dividend opportunities (always relevant for long-term strategy)
-		tags = append(tags, "dividend-opportunity", "high-dividend", "dividend-grower")
-		// Add total return opportunities (enhanced tags)
-		tags = append(tags, "high-total-return", "excellent-total-return")
-	}
+	// Bubble risks - avoid securities with detected bubble characteristics
+	exclusionTags = append(exclusionTags, "bubble-risk")
+	exclusionTags = append(exclusionTags, "quantum-bubble-risk")
+	exclusionTags = append(exclusionTags, "ensemble-bubble-risk")
 
-	// Exclude value traps and bubble risks (use negative filtering in calculators)
-	// We don't add these to tags list, but calculators should check for them
+	// Optional: Exclude regime-volatile in very volatile markets
+	// This is optional as volatile securities might still be acceptable in some contexts
+	// Uncomment if you want stricter filtering:
+	// exclusionTags = append(exclusionTags, "regime-volatile")
 
-	return tags
+	return exclusionTags
 }
 
 // selectSellTags intelligently selects tags for identifying sell opportunities.
