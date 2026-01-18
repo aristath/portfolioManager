@@ -17,7 +17,7 @@ import (
 // Handler handles opportunities HTTP requests
 type Handler struct {
 	service        *opportunities.Service
-	configRepo     *planningrepo.ConfigRepository
+	configRepo     planningrepo.ConfigRepositoryInterface
 	contextBuilder *services.OpportunityContextBuilder
 	log            zerolog.Logger
 }
@@ -25,7 +25,7 @@ type Handler struct {
 // NewHandler creates a new opportunities handler
 func NewHandler(
 	service *opportunities.Service,
-	configRepo *planningrepo.ConfigRepository,
+	configRepo planningrepo.ConfigRepositoryInterface,
 	contextBuilder *services.OpportunityContextBuilder,
 	log zerolog.Logger,
 ) *Handler {

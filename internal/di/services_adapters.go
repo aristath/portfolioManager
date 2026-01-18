@@ -19,6 +19,7 @@ import (
 	"github.com/aristath/sentinel/internal/modules/adaptation"
 	"github.com/aristath/sentinel/internal/modules/allocation"
 	"github.com/aristath/sentinel/internal/modules/optimization"
+	planningdomain "github.com/aristath/sentinel/internal/modules/planning/domain"
 	planningrepo "github.com/aristath/sentinel/internal/modules/planning/repository"
 	"github.com/aristath/sentinel/internal/modules/portfolio"
 	"github.com/aristath/sentinel/internal/modules/settings"
@@ -513,7 +514,7 @@ func (a *ocbScoresRepoAdapter) GetRiskMetrics(isinList []string) (map[string]flo
 // ocbSettingsRepoAdapter adapts settings.Repository to services.SettingsRepository
 type ocbSettingsRepoAdapter struct {
 	repo       *settings.Repository
-	configRepo *planningrepo.ConfigRepository
+	configRepo planningrepo.ConfigRepositoryInterface
 }
 
 func (a *ocbSettingsRepoAdapter) GetTargetReturnSettings() (float64, float64, error) {
@@ -528,10 +529,13 @@ func (a *ocbSettingsRepoAdapter) GetTargetReturnSettings() (float64, float64, er
 }
 
 func (a *ocbSettingsRepoAdapter) GetCooloffDays() (int, error) {
-	if a.configRepo != nil {
-		config, err := a.configRepo.GetDefaultConfig()
-		if err == nil && config != nil && config.SellCooldownDays > 0 {
-			return config.SellCooldownDays, nil
+	// Read from settings (independent of planner config)
+	if a.repo != nil {
+		if val, err := a.repo.Get("sell_cooldown_days"); err == nil && val != nil {
+			var days float64
+			if _, err := fmt.Sscanf(*val, "%f", &days); err == nil && days > 0 {
+				return int(days), nil
+			}
 		}
 	}
 	return 180, nil // Default
@@ -669,4 +673,96 @@ func (a *brokerPriceClientAdapter) GetBatchQuotes(symbolMap map[string]*string) 
 	}
 
 	return prices, nil
+}
+
+// ============================================================================
+// CONFIG REPOSITORY WITH SETTINGS OVERRIDE
+// ============================================================================
+
+// plannerConfigWithSettingsOverride wraps a ConfigRepository and overrides
+// cooloff period values (min_hold_days, sell_cooldown_days) with values from
+// the settings table. This decouples these user-configurable values from
+// the planner configuration database table.
+type plannerConfigWithSettingsOverride struct {
+	repo     *planningrepo.ConfigRepository
+	settings *settings.Repository
+}
+
+// NewPlannerConfigWithSettingsOverride creates a new config repository wrapper
+// that applies settings overrides for cooloff periods.
+func NewPlannerConfigWithSettingsOverride(
+	repo *planningrepo.ConfigRepository,
+	settingsRepo *settings.Repository,
+) planningrepo.ConfigRepositoryInterface {
+	return &plannerConfigWithSettingsOverride{
+		repo:     repo,
+		settings: settingsRepo,
+	}
+}
+
+// GetDefaultConfig retrieves the planner configuration and overrides
+// min_hold_days and sell_cooldown_days with values from the settings table.
+func (w *plannerConfigWithSettingsOverride) GetDefaultConfig() (*planningdomain.PlannerConfiguration, error) {
+	cfg, err := w.repo.GetDefaultConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	// Override cooloff values from settings (these are independent of temperament)
+	if w.settings != nil {
+		if val, err := w.settings.Get("min_hold_days"); err == nil && val != nil {
+			var days float64
+			if _, err := fmt.Sscanf(*val, "%f", &days); err == nil && days >= 0 {
+				cfg.MinHoldDays = int(days)
+			}
+		}
+		if val, err := w.settings.Get("sell_cooldown_days"); err == nil && val != nil {
+			var days float64
+			if _, err := fmt.Sscanf(*val, "%f", &days); err == nil && days >= 0 {
+				cfg.SellCooldownDays = int(days)
+			}
+		}
+	}
+
+	return cfg, nil
+}
+
+// GetConfig delegates to the underlying repository (single config, so ignores ID).
+func (w *plannerConfigWithSettingsOverride) GetConfig(id int64) (*planningdomain.PlannerConfiguration, error) {
+	return w.GetDefaultConfig() // Apply same overrides
+}
+
+// GetConfigByName delegates to the underlying repository (single config, ignores name).
+func (w *plannerConfigWithSettingsOverride) GetConfigByName(name string) (*planningdomain.PlannerConfiguration, error) {
+	return w.GetDefaultConfig() // Apply same overrides
+}
+
+// UpdateConfig delegates to the underlying repository.
+func (w *plannerConfigWithSettingsOverride) UpdateConfig(id int64, cfg *planningdomain.PlannerConfiguration, changedBy, changeNote string) error {
+	return w.repo.UpdateConfig(id, cfg, changedBy, changeNote)
+}
+
+// CreateConfig delegates to the underlying repository.
+func (w *plannerConfigWithSettingsOverride) CreateConfig(cfg *planningdomain.PlannerConfiguration, isDefault bool) (int64, error) {
+	return w.repo.CreateConfig(cfg, isDefault)
+}
+
+// ListConfigs delegates to the underlying repository.
+func (w *plannerConfigWithSettingsOverride) ListConfigs() ([]planningrepo.ConfigRecord, error) {
+	return w.repo.ListConfigs()
+}
+
+// DeleteConfig delegates to the underlying repository.
+func (w *plannerConfigWithSettingsOverride) DeleteConfig(id int64) error {
+	return w.repo.DeleteConfig(id)
+}
+
+// SetDefaultConfig delegates to the underlying repository.
+func (w *plannerConfigWithSettingsOverride) SetDefaultConfig(id int64) error {
+	return w.repo.SetDefaultConfig(id)
+}
+
+// GetConfigHistory delegates to the underlying repository.
+func (w *plannerConfigWithSettingsOverride) GetConfigHistory(configID int64, limit int) ([]planningrepo.ConfigHistoryRecord, error) {
+	return w.repo.GetConfigHistory(configID, limit)
 }

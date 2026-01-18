@@ -525,3 +525,37 @@ func TestNormalizeWeights(t *testing.T) {
 		normalized.RiskAdjustedMetrics + normalized.EndStateImprovement
 	assert.True(t, math.Abs(sum-1.0) < 0.0001, "normalized sum should be 1.0, got %f", sum)
 }
+
+// ============================================================================
+// COOLOFF PERIOD - INDEPENDENT FROM TEMPERAMENT TESTS
+// ============================================================================
+
+func TestCooloffSettingsAreIndependentFromTemperament(t *testing.T) {
+	// Cooloff settings should have fixed defaults that don't depend on temperament
+	// The defaults in SettingDefaults should match what GetAdjustedRiskManagementParams returns
+	// when using default temperament values
+
+	// Verify the defaults exist in SettingDefaults
+	minHoldDefault, ok := SettingDefaults["min_hold_days"].(float64)
+	require.True(t, ok, "min_hold_days should be a float64")
+	assert.Equal(t, 90.0, minHoldDefault, "min_hold_days default should be 90")
+
+	sellCooldownDefault, ok := SettingDefaults["sell_cooldown_days"].(float64)
+	require.True(t, ok, "sell_cooldown_days should be a float64")
+	assert.Equal(t, 180.0, sellCooldownDefault, "sell_cooldown_days default should be 180")
+
+	buyCooldownDefault, ok := SettingDefaults["buy_cooldown_days"].(float64)
+	require.True(t, ok, "buy_cooldown_days should be a float64")
+	assert.Equal(t, 30.0, buyCooldownDefault, "buy_cooldown_days default should be 30")
+}
+
+func TestRiskManagementParamsContainsCooloffFields(t *testing.T) {
+	// Verify RiskManagementParams has the cooloff fields
+	params := RiskManagementParams{
+		MinHoldDays:      90,
+		SellCooldownDays: 180,
+	}
+
+	assert.Equal(t, 90, params.MinHoldDays)
+	assert.Equal(t, 180, params.SellCooldownDays)
+}

@@ -508,12 +508,12 @@ func (a *ConfigRepositoryAdapter) GetDefaultConfig() (interface{}, error) {
 	return a.repo.GetDefaultConfig()
 }
 
-// PlannerConfigRepositoryAdapter adapts *repository.ConfigRepository to PlannerConfigRepositoryInterface
+// PlannerConfigRepositoryAdapter adapts repository.ConfigRepositoryInterface to PlannerConfigRepositoryInterface
 type PlannerConfigRepositoryAdapter struct {
-	repo *repository.ConfigRepository
+	repo repository.ConfigRepositoryInterface
 }
 
-func NewPlannerConfigRepositoryAdapter(repo *repository.ConfigRepository) *PlannerConfigRepositoryAdapter {
+func NewPlannerConfigRepositoryAdapter(repo repository.ConfigRepositoryInterface) *PlannerConfigRepositoryAdapter {
 	return &PlannerConfigRepositoryAdapter{repo: repo}
 }
 

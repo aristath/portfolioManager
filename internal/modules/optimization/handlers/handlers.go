@@ -35,7 +35,7 @@ type Handler struct {
 	currencyExchangeService domain.CurrencyExchangeServiceInterface
 	dividendRepo            *dividends.DividendRepository
 	cashManager             domain.CashManager
-	plannerConfigRepo       *planningrepo.ConfigRepository
+	plannerConfigRepo       planningrepo.ConfigRepositoryInterface
 	cache                   *OptimizationCache
 	log                     zerolog.Logger
 }
@@ -53,7 +53,7 @@ func NewHandler(
 	currencyExchangeService *services.CurrencyExchangeService,
 	dividendRepo *dividends.DividendRepository,
 	cashManager domain.CashManager,
-	plannerConfigRepo *planningrepo.ConfigRepository,
+	plannerConfigRepo planningrepo.ConfigRepositoryInterface,
 	log zerolog.Logger,
 ) *Handler {
 	return &Handler{

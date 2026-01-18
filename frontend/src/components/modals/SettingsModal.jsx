@@ -1,15 +1,15 @@
 /**
  * Settings Modal Component
- * 
+ *
  * Comprehensive settings management modal with multiple tabs for different configuration areas.
- * 
+ *
  * Features:
  * - Trading Settings: Frequency limits, limit order protection, scoring parameters, market regime detection
  * - Display Settings: LED matrix display mode, ticker configuration, brightness
  * - System Settings: Job scheduling, cache management, historical data sync, system restart, hardware management
  * - Backup Settings: Cloudflare R2 backup configuration and management
  * - Credentials: API keys for Tradernet, GitHub, and other services
- * 
+ *
  * All settings are stored in the settings database and take precedence over environment variables.
  */
 import { useState, useEffect } from 'react';
@@ -22,9 +22,9 @@ import { R2BackupModal } from './R2BackupModal';
 
 /**
  * Settings modal component
- * 
+ *
  * Provides a comprehensive interface for managing all application settings.
- * 
+ *
  * @returns {JSX.Element} Settings modal with tabbed interface
  */
 export function SettingsModal() {
@@ -48,7 +48,7 @@ export function SettingsModal() {
 
   /**
    * Handles updating a setting value
-   * 
+   *
    * @param {string} key - Setting key
    * @param {*} value - Setting value
    */
@@ -109,7 +109,7 @@ export function SettingsModal() {
 
   /**
    * Gets a setting value with default fallback
-   * 
+   *
    * @param {string} key - Setting key
    * @param {*} defaultValue - Default value if setting not found
    * @returns {*} Setting value or default
@@ -261,6 +261,78 @@ export function SettingsModal() {
                     size="sm"
                   />
                 </Group>
+              </Stack>
+            </Paper>
+
+            {/* Trade Safety - Cooloff Periods */}
+            <Paper className="settings-modal__section settings-modal__section--trade-safety" p="md" withBorder>
+              <Text className="settings-modal__section-title" size="sm" fw={500} mb="xs" tt="uppercase">Trade Safety</Text>
+              <Text className="settings-modal__section-desc" size="xs" c="dimmed" mb="md">
+                Cooloff periods prevent trading the same security too frequently.
+              </Text>
+              <Stack className="settings-modal__section-content" gap="sm">
+                <Group className="settings-modal__setting-row" justify="space-between">
+                  <div className="settings-modal__setting-label">
+                    <Text className="settings-modal__setting-name" size="sm">Buy Cooldown</Text>
+                    <Text className="settings-modal__setting-hint" size="xs" c="dimmed">Days before re-buying same security</Text>
+                  </div>
+                  <Group className="settings-modal__setting-input" gap="xs">
+                    <NumberInput
+                      className="settings-modal__number-input"
+                      value={getSetting('buy_cooldown_days', 30)}
+                      onChange={(val) => handleUpdateSetting('buy_cooldown_days', val)}
+                      min={0}
+                      max={365}
+                      step={1}
+                      w={80}
+                      size="sm"
+                    />
+                    <Text className="settings-modal__setting-unit" size="sm" c="dimmed">days</Text>
+                  </Group>
+                </Group>
+                <Group className="settings-modal__setting-row" justify="space-between">
+                  <div className="settings-modal__setting-label">
+                    <Text className="settings-modal__setting-name" size="sm">Sell Cooldown</Text>
+                    <Text className="settings-modal__setting-hint" size="xs" c="dimmed">Days after buying before selling allowed</Text>
+                  </div>
+                  <Group className="settings-modal__setting-input" gap="xs">
+                    <NumberInput
+                      className="settings-modal__number-input"
+                      value={getSetting('sell_cooldown_days', 180)}
+                      onChange={(val) => handleUpdateSetting('sell_cooldown_days', val)}
+                      min={0}
+                      max={730}
+                      step={1}
+                      w={80}
+                      size="sm"
+                    />
+                    <Text className="settings-modal__setting-unit" size="sm" c="dimmed">days</Text>
+                  </Group>
+                </Group>
+                <Group className="settings-modal__setting-row" justify="space-between">
+                  <div className="settings-modal__setting-label">
+                    <Text className="settings-modal__setting-name" size="sm">Minimum Hold</Text>
+                    <Text className="settings-modal__setting-hint" size="xs" c="dimmed">Minimum days to hold before selling</Text>
+                  </div>
+                  <Group className="settings-modal__setting-input" gap="xs">
+                    <NumberInput
+                      className="settings-modal__number-input"
+                      value={getSetting('min_hold_days', 90)}
+                      onChange={(val) => handleUpdateSetting('min_hold_days', val)}
+                      min={0}
+                      max={365}
+                      step={1}
+                      w={80}
+                      size="sm"
+                    />
+                    <Text className="settings-modal__setting-unit" size="sm" c="dimmed">days</Text>
+                  </Group>
+                </Group>
+                <Alert className="settings-modal__alert" color="blue" variant="light" styles={{message: {fontSize: '12px'}}}>
+                  <Text className="settings-modal__alert-text" size="xs">
+                    Set any value to 0 to disable that particular cooloff check.
+                  </Text>
+                </Alert>
               </Stack>
             </Paper>
 

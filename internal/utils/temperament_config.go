@@ -355,30 +355,9 @@ var temperamentMappings = map[string]TemperamentMapping{
 	},
 
 	// ==================================================================================
-	// Category 6: RISK MANAGEMENT (7 params)
+	// Category 6: RISK MANAGEMENT (5 params)
+	// NOTE: min_hold_days and sell_cooldown_days removed - now independent settings in UI
 	// ==================================================================================
-	"risk_min_hold_days": {
-		Parameter:   "risk_min_hold_days",
-		Temperament: "patience",
-		Inverse:     false, // Patient = hold longer
-		Min:         30,
-		Max:         180,
-		Base:        90,
-		Progression: "linear",
-		AbsoluteMin: 14,
-		AbsoluteMax: 365,
-	},
-	"risk_sell_cooldown_days": {
-		Parameter:   "risk_sell_cooldown_days",
-		Temperament: "patience",
-		Inverse:     false, // Patient = longer cooldown
-		Min:         60,
-		Max:         365,
-		Base:        180,
-		Progression: "linear",
-		AbsoluteMin: 30,
-		AbsoluteMax: 730,
-	},
 	"risk_max_loss_threshold": {
 		Parameter:   "risk_max_loss_threshold",
 		Temperament: "risk_tolerance",

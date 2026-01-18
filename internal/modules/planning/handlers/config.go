@@ -16,7 +16,7 @@ import (
 
 // ConfigHandler handles CRUD operations for planner configurations.
 type ConfigHandler struct {
-	configRepo   *repository.ConfigRepository
+	configRepo   repository.ConfigRepositoryInterface
 	validator    *config.Validator
 	eventManager *events.Manager
 	log          zerolog.Logger
@@ -24,7 +24,7 @@ type ConfigHandler struct {
 
 // NewConfigHandler creates a new config handler.
 func NewConfigHandler(
-	configRepo *repository.ConfigRepository,
+	configRepo repository.ConfigRepositoryInterface,
 	validator *config.Validator,
 	eventManager *events.Manager,
 	log zerolog.Logger,

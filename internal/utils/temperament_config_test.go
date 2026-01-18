@@ -45,9 +45,7 @@ func TestAllMappingsExist(t *testing.T) {
 		"kelly_bull_threshold",
 		"kelly_bear_threshold",
 
-		// Category 6: Risk management (7)
-		"risk_min_hold_days",
-		"risk_sell_cooldown_days",
+		// Category 6: Risk management (5) - min_hold_days and sell_cooldown_days are now independent UI settings
 		"risk_max_loss_threshold",
 		"risk_max_sell_percentage",
 		"risk_min_time_between_trades",
@@ -248,8 +246,7 @@ func TestBoundaryValues(t *testing.T) {
 		{"kelly_fixed_fractional", "aggression", 0.25, 0.50, 0.75, 0.05},
 		{"kelly_max_position_size", "risk_tolerance", 0.08, 0.15, 0.25, 0.02},
 
-		// Category 6: Risk management
-		{"risk_min_hold_days", "patience", 30, 90, 180, 5},
+		// Category 6: Risk management (min_hold_days/sell_cooldown_days are now independent UI settings)
 		{"risk_max_trades_per_day", "aggression", 2, 4, 8, 1},
 
 		// Category 7: Quality gates
@@ -314,7 +311,7 @@ func TestSafetyBoundsEnforced(t *testing.T) {
 		absoluteMin float64
 		absoluteMax float64
 	}{
-		{"risk_min_hold_days", 14, 365},
+		// min_hold_days removed - now independent UI setting
 		{"risk_max_loss_threshold", -0.50, -0.05},
 		{"opportunity_buys_min_score", 0.50, 0.90},
 		{"kelly_fixed_fractional", 0.15, 0.80},

@@ -126,17 +126,36 @@ func (s *Service) GetAdjustedKellyParams() KellyParams {
 // RISK MANAGEMENT
 // ============================================================================
 
-// GetAdjustedRiskManagementParams returns risk management parameters adjusted by temperament
+// GetAdjustedRiskManagementParams returns risk management parameters.
+// MinHoldDays and SellCooldownDays are read directly from settings (independent of temperament).
+// Other parameters are still adjusted by temperament.
 func (s *Service) GetAdjustedRiskManagementParams() RiskManagementParams {
+	// Read cooloff settings directly from settings (independent of temperament)
+	minHoldDays := s.getSettingFloat("min_hold_days", 90.0)
+	sellCooldownDays := s.getSettingFloat("sell_cooldown_days", 180.0)
+
 	return RiskManagementParams{
-		MinHoldDays:          int(s.getAdjustedParam("risk_min_hold_days")),
-		SellCooldownDays:     int(s.getAdjustedParam("risk_sell_cooldown_days")),
+		MinHoldDays:          int(minHoldDays),
+		SellCooldownDays:     int(sellCooldownDays),
 		MaxLossThreshold:     s.getAdjustedParam("risk_max_loss_threshold"),
 		MaxSellPercentage:    s.getAdjustedParam("risk_max_sell_percentage"),
 		MinTimeBetweenTrades: int(s.getAdjustedParam("risk_min_time_between_trades")),
 		MaxTradesPerDay:      int(s.getAdjustedParam("risk_max_trades_per_day")),
 		MaxTradesPerWeek:     int(s.getAdjustedParam("risk_max_trades_per_week")),
 	}
+}
+
+// getSettingFloat retrieves a float setting value directly from settings (not temperament-adjusted).
+// Returns the default value if the setting doesn't exist or can't be parsed.
+func (s *Service) getSettingFloat(key string, defaultValue float64) float64 {
+	val, err := s.Get(key)
+	if err != nil {
+		return defaultValue
+	}
+	if floatVal, ok := val.(float64); ok {
+		return floatVal
+	}
+	return defaultValue
 }
 
 // ============================================================================

@@ -146,9 +146,14 @@ func InitializeRepositories(container *Container, log zerolog.Logger) error {
 
 	// Planner config repository (needs configDB)
 	// Stores planner configuration (opportunity calculators, filters, etc.)
-	container.PlannerConfigRepo = planningrepo.NewConfigRepository(
+	// Wrapped with settings override to apply min_hold_days and sell_cooldown_days from settings
+	rawConfigRepo := planningrepo.NewConfigRepository(
 		container.ConfigDB,
 		log,
+	)
+	container.PlannerConfigRepo = NewPlannerConfigWithSettingsOverride(
+		rawConfigRepo,
+		container.SettingsRepo,
 	)
 
 	// Planner repository (IN-MEMORY - ephemeral sequences/evaluations/best_results)

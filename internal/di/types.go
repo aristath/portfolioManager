@@ -90,7 +90,7 @@ type Container struct {
 	SettingsRepo       *settings.Repository                       // Application settings
 	CashFlowsRepo      *cash_flows.Repository                     // Cash flow transactions
 	RecommendationRepo planning.RecommendationRepositoryInterface // Planning recommendations (interface - can be DB or in-memory)
-	PlannerConfigRepo  *planningrepo.ConfigRepository             // Planner configuration
+	PlannerConfigRepo  planningrepo.ConfigRepositoryInterface     // Planner configuration (with settings overrides)
 	PlannerRepo        planningrepo.PlannerRepositoryInterface    // Planner sequences/evaluations (interface - can be DB or in-memory)
 	HistoryDBClient    universe.HistoryDBInterface                // Historical price data with read-time filtering
 	ClientDataRepo     *clientdata.Repository                     // Client-specific symbol mappings and cached data

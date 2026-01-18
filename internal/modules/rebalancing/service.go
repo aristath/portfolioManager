@@ -71,7 +71,7 @@ type Service struct {
 	allocRepo          *allocation.Repository
 	cashManager        domain.CashManager
 	brokerClient       domain.BrokerClient
-	configRepo         *planningrepo.ConfigRepository
+	configRepo         planningrepo.ConfigRepositoryInterface
 	recommendationRepo planning.RecommendationRepositoryInterface // Interface - can be DB or in-memory
 	contextBuilder     *services.OpportunityContextBuilder
 	configDB           *sql.DB // For querying settings
@@ -89,7 +89,7 @@ func NewService(
 	allocRepo *allocation.Repository,
 	cashManager domain.CashManager,
 	brokerClient domain.BrokerClient,
-	configRepo *planningrepo.ConfigRepository,
+	configRepo planningrepo.ConfigRepositoryInterface,
 	recommendationRepo planning.RecommendationRepositoryInterface, // Interface - can be DB or in-memory
 	contextBuilder *services.OpportunityContextBuilder,
 	configDB *sql.DB, // For querying settings

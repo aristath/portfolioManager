@@ -129,3 +129,58 @@ func TestJobAutoDeployMinutesHasDescription(t *testing.T) {
 	assert.NotEmpty(t, desc, "description must not be empty")
 	assert.Contains(t, desc, "user-configurable", "description should mention it's user-configurable")
 }
+
+// ============================================================================
+// COOLOFF PERIOD SETTINGS TESTS
+// ============================================================================
+
+func TestSettingDefaults_ContainsCooloffSettings(t *testing.T) {
+	// Verify all cooloff settings exist with correct defaults
+	assert.Contains(t, SettingDefaults, "buy_cooldown_days", "buy_cooldown_days must exist")
+	assert.Contains(t, SettingDefaults, "sell_cooldown_days", "sell_cooldown_days must exist")
+	assert.Contains(t, SettingDefaults, "min_hold_days", "min_hold_days must exist")
+
+	// Verify default values
+	assert.Equal(t, 30.0, SettingDefaults["buy_cooldown_days"], "buy_cooldown_days default should be 30")
+	assert.Equal(t, 180.0, SettingDefaults["sell_cooldown_days"], "sell_cooldown_days default should be 180")
+	assert.Equal(t, 90.0, SettingDefaults["min_hold_days"], "min_hold_days default should be 90")
+}
+
+func TestCooloffSettingsAreFloats(t *testing.T) {
+	// All cooloff settings should be stored as float64
+	cooloffSettings := []string{
+		"buy_cooldown_days",
+		"sell_cooldown_days",
+		"min_hold_days",
+	}
+
+	for _, setting := range cooloffSettings {
+		val, exists := SettingDefaults[setting]
+		assert.True(t, exists, "%s must exist", setting)
+
+		_, ok := val.(float64)
+		assert.True(t, ok, "%s must be float64", setting)
+	}
+}
+
+func TestCooloffSettingsInValidRange(t *testing.T) {
+	// All cooloff settings should have reasonable default values
+	cooloffSettings := map[string]struct {
+		min float64
+		max float64
+	}{
+		"buy_cooldown_days":  {0, 365},
+		"sell_cooldown_days": {0, 730},
+		"min_hold_days":      {0, 365},
+	}
+
+	for setting, bounds := range cooloffSettings {
+		val, exists := SettingDefaults[setting]
+		assert.True(t, exists, "%s must exist", setting)
+
+		floatVal, ok := val.(float64)
+		assert.True(t, ok, "%s must be float64", setting)
+		assert.GreaterOrEqual(t, floatVal, bounds.min, "%s must be >= %.0f", setting, bounds.min)
+		assert.LessOrEqual(t, floatVal, bounds.max, "%s must be <= %.0f", setting, bounds.max)
+	}
+}

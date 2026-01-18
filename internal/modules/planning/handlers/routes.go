@@ -21,7 +21,7 @@ type Handler struct {
 // NewHandler creates a new planning handler with all sub-handlers
 func NewHandler(
 	plannerService *planningplanner.Planner,
-	configRepo *repository.ConfigRepository,
+	configRepo repository.ConfigRepositoryInterface,
 	plannerRepo repository.PlannerRepositoryInterface,
 	recommendationRepo planning.RecommendationRepositoryInterface,
 	validator *config.Validator,
