@@ -131,7 +131,6 @@ type Container struct {
 	SequencesService          *sequences.Service                            // Trade sequence generation
 	EvaluationService         *planningevaluation.Service                   // Sequence evaluation (worker pool)
 	PlannerService            *planningplanner.Planner                      // Core planner (sequence generation)
-	PlanningService           *planning.Service                             // Planning orchestration
 	RebalancingService        *rebalancing.Service                          // Rebalancing logic
 	SecurityScorer            *scorers.SecurityScorer                       // Security scoring
 	MarketIndexService        *market_regime.MarketIndexService             // Market index management

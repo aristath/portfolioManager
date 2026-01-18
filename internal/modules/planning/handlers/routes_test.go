@@ -7,6 +7,7 @@ import (
 
 	"github.com/aristath/sentinel/internal/modules/planning"
 	"github.com/aristath/sentinel/internal/modules/planning/config"
+	planningplanner "github.com/aristath/sentinel/internal/modules/planning/planner"
 	"github.com/aristath/sentinel/internal/modules/planning/repository"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
@@ -18,7 +19,7 @@ func TestRegisterRoutes(t *testing.T) {
 	// Create mock dependencies - we need all the handlers' dependencies
 	// For testing, we'll create a minimal handler with nil dependencies
 	// The actual handler creation is complex, so we'll test route registration differently
-	planningService := &planning.Service{}
+	plannerService := &planningplanner.Planner{}
 	configRepo := &repository.ConfigRepository{}
 	plannerRepo := repository.NewInMemoryPlannerRepository(zerolog.Nop())
 	recommendationRepo := planning.NewInMemoryRecommendationRepository(zerolog.Nop())
@@ -27,7 +28,7 @@ func TestRegisterRoutes(t *testing.T) {
 
 	// Create handler - we're only testing that RegisterRoutes works, not handler execution
 	handler := NewHandler(
-		planningService,
+		plannerService,
 		configRepo,
 		plannerRepo,
 		recommendationRepo,
@@ -97,7 +98,7 @@ func TestRegisterRoutes(t *testing.T) {
 
 func TestRegisterRoutes_RoutePrefix(t *testing.T) {
 	// Verify that routes are registered under /planning prefix
-	planningService := &planning.Service{}
+	plannerService := &planningplanner.Planner{}
 	configRepo := &repository.ConfigRepository{}
 	plannerRepo := repository.NewInMemoryPlannerRepository(zerolog.Nop())
 	recommendationRepo := planning.NewInMemoryRecommendationRepository(zerolog.Nop())
@@ -105,7 +106,7 @@ func TestRegisterRoutes_RoutePrefix(t *testing.T) {
 	eventBroadcaster := NewEventBroadcaster(zerolog.Nop())
 
 	handler := NewHandler(
-		planningService,
+		plannerService,
 		configRepo,
 		plannerRepo,
 		recommendationRepo,

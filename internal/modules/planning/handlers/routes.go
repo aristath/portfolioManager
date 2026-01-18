@@ -4,6 +4,7 @@ import (
 	"github.com/aristath/sentinel/internal/events"
 	"github.com/aristath/sentinel/internal/modules/planning"
 	"github.com/aristath/sentinel/internal/modules/planning/config"
+	planningplanner "github.com/aristath/sentinel/internal/modules/planning/planner"
 	"github.com/aristath/sentinel/internal/modules/planning/repository"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
@@ -19,7 +20,7 @@ type Handler struct {
 
 // NewHandler creates a new planning handler with all sub-handlers
 func NewHandler(
-	planningService *planning.Service,
+	plannerService *planningplanner.Planner,
 	configRepo *repository.ConfigRepository,
 	plannerRepo repository.PlannerRepositoryInterface,
 	recommendationRepo planning.RecommendationRepositoryInterface,
@@ -30,7 +31,7 @@ func NewHandler(
 	log zerolog.Logger,
 ) *Handler {
 	return &Handler{
-		recommendationsHandler: NewRecommendationsHandler(planningService, recommendationRepo, log),
+		recommendationsHandler: NewRecommendationsHandler(plannerService, recommendationRepo, log),
 		configHandler:          NewConfigHandler(configRepo, validator, eventManager, log),
 		executeHandler:         NewExecuteHandler(plannerRepo, tradeExecutor, log),
 		streamHandler:          NewStreamHandler(eventBroadcaster, log),

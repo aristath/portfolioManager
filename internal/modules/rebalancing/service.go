@@ -12,6 +12,7 @@ import (
 	"github.com/aristath/sentinel/internal/modules/planning"
 	planningdomain "github.com/aristath/sentinel/internal/modules/planning/domain"
 	"github.com/aristath/sentinel/internal/modules/planning/hash"
+	planningplanner "github.com/aristath/sentinel/internal/modules/planning/planner"
 	planningrepo "github.com/aristath/sentinel/internal/modules/planning/repository"
 	"github.com/aristath/sentinel/internal/modules/portfolio"
 	"github.com/aristath/sentinel/internal/modules/universe"
@@ -64,7 +65,7 @@ type Service struct {
 	negativeRebalancer *NegativeBalanceRebalancer
 
 	// Planning integration
-	planningService    *planning.Service
+	plannerService     *planningplanner.Planner
 	positionRepo       *portfolio.PositionRepository
 	securityRepo       *universe.SecurityRepository
 	allocRepo          *allocation.Repository
@@ -82,7 +83,7 @@ type Service struct {
 func NewService(
 	triggerChecker *TriggerChecker,
 	negativeRebalancer *NegativeBalanceRebalancer,
-	planningService *planning.Service,
+	plannerService *planningplanner.Planner,
 	positionRepo *portfolio.PositionRepository,
 	securityRepo *universe.SecurityRepository,
 	allocRepo *allocation.Repository,
@@ -97,7 +98,7 @@ func NewService(
 	return &Service{
 		triggerChecker:     triggerChecker,
 		negativeRebalancer: negativeRebalancer,
-		planningService:    planningService,
+		plannerService:     plannerService,
 		positionRepo:       positionRepo,
 		securityRepo:       securityRepo,
 		allocRepo:          allocRepo,
@@ -382,7 +383,7 @@ func (s *Service) CalculateRebalanceTrades(availableCash float64) ([]RebalanceRe
 	if s.allocRepo == nil {
 		return nil, fmt.Errorf("allocation repository is required")
 	}
-	if s.planningService == nil {
+	if s.plannerService == nil {
 		return nil, fmt.Errorf("planning service is required")
 	}
 	if s.configRepo == nil {
@@ -413,7 +414,7 @@ func (s *Service) CalculateRebalanceTrades(availableCash float64) ([]RebalanceRe
 	}
 
 	// Step 4: Call planning service with rejection tracking (nil progress callback)
-	planResult, err := s.planningService.CreatePlanWithRejections(opportunityCtx, config, nil)
+	planResult, err := s.plannerService.CreatePlanWithRejections(opportunityCtx, config, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create plan: %w", err)
 	}

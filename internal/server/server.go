@@ -482,14 +482,14 @@ func (s *Server) setupRoutes() {
 		cashFlowsHandler.RegisterRoutes(r)
 
 		// Planning module
-		planningService := s.container.PlanningService
+		plannerService := s.container.PlannerService
 		planningConfigRepo := s.container.PlannerConfigRepo
 		planningPlannerRepo := s.container.PlannerRepo               // Use in-memory planner repo from container
 		planningRecommendationRepo := s.container.RecommendationRepo // Use in-memory recommendation repo from container
 		planningValidator := planningconfig.NewValidator()
 		planningEventBroadcaster := planninghandlers.NewEventBroadcaster(s.log)
 		planningHandler := planninghandlers.NewHandler(
-			planningService,
+			plannerService,
 			planningConfigRepo,
 			planningPlannerRepo,
 			planningRecommendationRepo,

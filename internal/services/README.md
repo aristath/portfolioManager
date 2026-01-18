@@ -195,7 +195,7 @@ Use module services (`internal/modules/*/service.go`) when:
    - Example: `UniverseService` manages all security-related operations
 
 3. **Encapsulation**: The service hides implementation details from other modules
-   - Example: `PlanningService` orchestrates complex planning workflows
+   - Example: `PlannerService` orchestrates complex planning workflows
 
 ## Dependency Injection
 

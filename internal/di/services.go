@@ -51,7 +51,6 @@ import (
 	"github.com/aristath/sentinel/internal/modules/market_hours"
 	"github.com/aristath/sentinel/internal/modules/opportunities"
 	"github.com/aristath/sentinel/internal/modules/optimization"
-	"github.com/aristath/sentinel/internal/modules/planning"
 	planningconstraints "github.com/aristath/sentinel/internal/modules/planning/constraints"
 	planningevaluation "github.com/aristath/sentinel/internal/modules/planning/evaluation"
 	planninghash "github.com/aristath/sentinel/internal/modules/planning/hash"
@@ -549,18 +548,6 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 		log,
 	)
 
-	// Planning service
-	// High-level planning orchestration (wraps PlannerService)
-	container.PlanningService = planning.NewService(
-		container.OpportunitiesService,
-		container.SequencesService,
-		container.EvaluationService,
-		container.SecurityRepo,
-		container.CurrencyExchangeService,
-		container.BrokerClient,
-		log,
-	)
-
 	// State hash service (calculates unified state hash for change detection)
 	// Calculates a hash of the entire portfolio state (positions, scores, cash, settings, allocation)
 	// Used to detect when portfolio state changes and trigger re-planning
@@ -739,7 +726,7 @@ func InitializeServices(container *Container, cfg *config.Config, displayManager
 	container.RebalancingService = rebalancing.NewService(
 		triggerChecker,
 		container.NegativeBalanceRebalancer,
-		container.PlanningService,
+		container.PlannerService,
 		container.PositionRepo,
 		container.SecurityRepo,
 		container.AllocRepo,

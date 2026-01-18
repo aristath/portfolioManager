@@ -7,22 +7,23 @@ import (
 
 	"github.com/aristath/sentinel/internal/modules/planning"
 	"github.com/aristath/sentinel/internal/modules/planning/domain"
+	planningplanner "github.com/aristath/sentinel/internal/modules/planning/planner"
 	"github.com/rs/zerolog"
 )
 
 type RecommendationsHandler struct {
-	service            *planning.Service
+	plannerService     *planningplanner.Planner
 	recommendationRepo planning.RecommendationRepositoryInterface
 	log                zerolog.Logger
 }
 
 func NewRecommendationsHandler(
-	service *planning.Service,
+	plannerService *planningplanner.Planner,
 	recommendationRepo planning.RecommendationRepositoryInterface,
 	log zerolog.Logger,
 ) *RecommendationsHandler {
 	return &RecommendationsHandler{
-		service:            service,
+		plannerService:     plannerService,
 		recommendationRepo: recommendationRepo,
 		log:                log.With().Str("handler", "recommendations").Logger(),
 	}
@@ -94,7 +95,7 @@ func (h *RecommendationsHandler) handlePost(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	plan, err := h.service.CreatePlan(req.OpportunityContext, req.Config)
+	plan, err := h.plannerService.CreatePlan(req.OpportunityContext, req.Config)
 	if err != nil {
 		h.log.Error().Err(err).Msg("Failed to create plan")
 		http.Error(w, "Failed to create plan", http.StatusInternalServerError)
