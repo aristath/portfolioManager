@@ -352,6 +352,28 @@ type ConcentrationAlertProvider interface {
 }
 
 /**
+ * PositionChecker provides minimal position checking without requiring
+ * a dependency on the portfolio package.
+ *
+ * This interface breaks the circular dependency:
+ * allocation → universe → portfolio → universe
+ *
+ * Used by SecurityDeletionService to check if a security has open positions.
+ */
+type PositionChecker interface {
+	/**
+	 * GetPositionQuantity returns the quantity of a position by ISIN.
+	 *
+	 * Returns 0 if the position doesn't exist (not an error).
+	 *
+	 * @param isin - Security ISIN
+	 * @returns float64 - Position quantity (0 if not found)
+	 * @returns error - Error if lookup fails
+	 */
+	GetPositionQuantity(isin string) (float64, error)
+}
+
+/**
  * PortfolioSummary represents complete portfolio allocation summary.
  *
  * This is the domain model used by the allocation package.

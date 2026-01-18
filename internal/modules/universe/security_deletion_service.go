@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/aristath/sentinel/internal/domain"
-	"github.com/aristath/sentinel/internal/modules/portfolio"
 	"github.com/rs/zerolog"
 )
 
@@ -13,30 +12,30 @@ import (
 // across multiple databases. It validates that no open positions or pending orders
 // exist before deletion.
 type SecurityDeletionService struct {
-	securityRepo SecurityRepositoryInterface
-	positionRepo portfolio.PositionRepositoryInterface
-	scoreRepo    ScoreRepositoryInterface
-	historyDB    HistoryDBInterface
-	brokerClient domain.BrokerClient
-	log          zerolog.Logger
+	securityRepo    SecurityRepositoryInterface
+	positionChecker domain.PositionChecker
+	scoreRepo       ScoreRepositoryInterface
+	historyDB       HistoryDBInterface
+	brokerClient    domain.BrokerClient
+	log             zerolog.Logger
 }
 
 // NewSecurityDeletionService creates a new security deletion service
 func NewSecurityDeletionService(
 	securityRepo SecurityRepositoryInterface,
-	positionRepo portfolio.PositionRepositoryInterface,
+	positionChecker domain.PositionChecker,
 	scoreRepo ScoreRepositoryInterface,
 	historyDB HistoryDBInterface,
 	brokerClient domain.BrokerClient,
 	log zerolog.Logger,
 ) *SecurityDeletionService {
 	return &SecurityDeletionService{
-		securityRepo: securityRepo,
-		positionRepo: positionRepo,
-		scoreRepo:    scoreRepo,
-		historyDB:    historyDB,
-		brokerClient: brokerClient,
-		log:          log.With().Str("service", "security_deletion").Logger(),
+		securityRepo:    securityRepo,
+		positionChecker: positionChecker,
+		scoreRepo:       scoreRepo,
+		historyDB:       historyDB,
+		brokerClient:    brokerClient,
+		log:             log.With().Str("service", "security_deletion").Logger(),
 	}
 }
 
@@ -67,12 +66,12 @@ func (s *SecurityDeletionService) HardDelete(isin string) error {
 	symbol := security.Symbol
 
 	// 2. Check for open positions
-	position, err := s.positionRepo.GetByISIN(isin)
+	quantity, err := s.positionChecker.GetPositionQuantity(isin)
 	if err != nil {
 		return fmt.Errorf("failed to check positions: %w", err)
 	}
-	if position != nil && position.Quantity > 0 {
-		return fmt.Errorf("cannot delete security with open position: %.4f shares held", position.Quantity)
+	if quantity > 0 {
+		return fmt.Errorf("cannot delete security with open position: %.4f shares held", quantity)
 	}
 
 	// 3. Check for pending orders at the broker
@@ -102,13 +101,7 @@ func (s *SecurityDeletionService) HardDelete(isin string) error {
 	// 5. Clean up related data in other databases
 	// These are best-effort - the security is already gone from universe
 	// Errors are logged but don't fail the operation
-
-	// Delete position (if exists with zero quantity)
-	if position != nil {
-		if err := s.positionRepo.Delete(isin); err != nil {
-			s.log.Error().Err(err).Str("isin", isin).Msg("Failed to delete position")
-		}
-	}
+	// Note: Position deletion is handled elsewhere (positions with zero quantity are cleaned up separately)
 
 	// Delete scores (kelly_sizes deleted via CASCADE)
 	if err := s.scoreRepo.Delete(isin); err != nil {

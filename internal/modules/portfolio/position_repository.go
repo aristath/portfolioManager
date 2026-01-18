@@ -721,3 +721,30 @@ func nullString(val string) sql.NullString {
 	}
 	return sql.NullString{String: val, Valid: true}
 }
+
+// GetPositionQuantity returns the quantity of a position by ISIN.
+// Implements domain.PositionChecker interface.
+// Returns 0 if the position doesn't exist (not an error).
+//
+// Parameters:
+//   - isin: Security ISIN
+//
+// Returns:
+//   - float64: Position quantity (0 if not found)
+//   - error: Error if query fails
+func (r *PositionRepository) GetPositionQuantity(isin string) (float64, error) {
+	isin = strings.ToUpper(strings.TrimSpace(isin))
+
+	query := `SELECT quantity FROM positions WHERE isin = ?`
+
+	var quantity float64
+	err := r.portfolioDB.QueryRow(query, isin).Scan(&quantity)
+	if err == sql.ErrNoRows {
+		return 0, nil // Position doesn't exist - return 0 (not an error)
+	}
+	if err != nil {
+		return 0, fmt.Errorf("failed to get position quantity: %w", err)
+	}
+
+	return quantity, nil
+}
