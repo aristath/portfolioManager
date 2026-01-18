@@ -111,8 +111,12 @@ func (a *metadataSyncAdapter) GetAllActiveISINs() []string {
 	return a.service.GetAllActiveISINs()
 }
 
+func (a *metadataSyncAdapter) SyncMetadataBatch(isins []string) (int, error) {
+	return a.service.SyncMetadataBatch(isins)
+}
+
 func registerSecurityWork(registry *work.Registry, container *Container, log zerolog.Logger) {
-	// Use container's MetadataSyncService (shared with scheduled batch job)
+	// Use container's MetadataSyncService (used by work system batch sync)
 	deps := &work.SecurityDeps{
 		HistorySyncService:  &securityHistorySyncAdapter{container: container},
 		TechnicalService:    &securityTechnicalAdapter{container: container},

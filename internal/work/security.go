@@ -33,6 +33,7 @@ type TagUpdateServiceInterface interface {
 // MetadataSyncServiceInterface defines the metadata sync service interface
 type MetadataSyncServiceInterface interface {
 	SyncMetadata(isin string) (string, error)
+	SyncMetadataBatch(isins []string) (int, error) // Batch sync for all securities
 	GetAllActiveISINs() []string
 }
 
@@ -201,6 +202,52 @@ func RegisterSecurityWorkTypes(registry *Registry, deps *SecurityDeps) {
 			// Report progress with symbol
 			if progress != nil && symbol != "" {
 				progress.ReportPhase("completed", fmt.Sprintf("Synced: %s", symbol))
+			}
+
+			return nil
+		},
+	})
+
+	// security:metadata:batch - Batch sync metadata for all active securities
+	//
+	// Interval: 24 hours (hardcoded)
+	// Rationale: Batch sync eliminates 429 rate limit errors by batching all securities into one request.
+	//            Daily batch sync ensures metadata stays current without overwhelming the API.
+	//
+	// Market timing: AnyTime
+	// Rationale: Batch metadata sync is independent of market hours and can run anytime.
+	registry.Register(&WorkType{
+		ID:           "security:metadata:batch",
+		MarketTiming: AnyTime,
+		Interval:     24 * time.Hour, // Hardcoded - daily batch sync
+		FindSubjects: func() []string {
+			// Global work - single subject for batch operation
+			return []string{""}
+		},
+		Execute: func(ctx context.Context, subject string, progress *ProgressReporter) error {
+			// Report started phase
+			if progress != nil {
+				progress.ReportPhase("started", "Batch metadata sync")
+			}
+
+			// Get all active ISINs
+			isins := deps.MetadataSyncService.GetAllActiveISINs()
+			if len(isins) == 0 {
+				if progress != nil {
+					progress.ReportPhase("completed", "No active securities to sync")
+				}
+				return nil
+			}
+
+			// Execute batch sync
+			successCount, err := deps.MetadataSyncService.SyncMetadataBatch(isins)
+			if err != nil {
+				return fmt.Errorf("failed to sync metadata batch: %w", err)
+			}
+
+			// Report completed phase
+			if progress != nil {
+				progress.ReportPhase("completed", fmt.Sprintf("Synced %d/%d securities", successCount, len(isins)))
 			}
 
 			return nil

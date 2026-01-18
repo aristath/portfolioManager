@@ -12,6 +12,7 @@
  * - AllocationTargetProvider: Allocation target access
  * - PortfolioSummaryProvider: Portfolio summary data
  * - ConcentrationAlertProvider: Concentration alert detection
+ * - ScoresRepository: Security scores access (breaks circular dependency)
  */
 package domain
 
@@ -371,6 +372,72 @@ type PositionChecker interface {
 	 * @returns error - Error if lookup fails
 	 */
 	GetPositionQuantity(isin string) (float64, error)
+}
+
+/**
+ * ScoresRepository defines operations for accessing security scores.
+ *
+ * This interface breaks circular dependencies between scheduler, services,
+ * and other packages that need access to security scoring data.
+ *
+ * All scores in the database are stored in normalized 0-1 format.
+ *
+ * Merged from:
+ *   - scheduler.ScoresRepositoryInterface (GetCAGRs, GetQualityScores, GetValueTrapData, GetTotalScores, GetRiskMetrics)
+ *   - services.ScoresRepository (same methods)
+ */
+type ScoresRepository interface {
+	/**
+	 * GetCAGRs retrieves Compound Annual Growth Rate values for securities.
+	 *
+	 * Converts normalized cagr_score (0-1) to CAGR percentage values using
+	 * piecewise linear conversion.
+	 *
+	 * @param isinList - List of security ISINs to fetch
+	 * @returns map[string]float64 - Map of ISIN to CAGR value (e.g., 0.11 for 11%)
+	 * @returns error - Error if retrieval fails
+	 */
+	GetCAGRs(isinList []string) (map[string]float64, error)
+
+	/**
+	 * GetQualityScores retrieves long-term and stability scores for securities.
+	 *
+	 * @param isinList - List of security ISINs to fetch
+	 * @returns map[string]float64 - Long-term scores (normalized 0-1)
+	 * @returns map[string]float64 - Stability scores (normalized 0-1)
+	 * @returns error - Error if retrieval fails
+	 */
+	GetQualityScores(isinList []string) (map[string]float64, map[string]float64, error)
+
+	/**
+	 * GetValueTrapData retrieves opportunity scores, momentum scores, and volatility.
+	 *
+	 * @param isinList - List of security ISINs to fetch
+	 * @returns map[string]float64 - Opportunity scores (normalized 0-1)
+	 * @returns map[string]float64 - Momentum scores (normalized -1 to 1)
+	 * @returns map[string]float64 - Volatility values
+	 * @returns error - Error if retrieval fails
+	 */
+	GetValueTrapData(isinList []string) (map[string]float64, map[string]float64, map[string]float64, error)
+
+	/**
+	 * GetTotalScores retrieves total composite scores for securities.
+	 *
+	 * @param isinList - List of security ISINs to fetch
+	 * @returns map[string]float64 - Map of ISIN to total score
+	 * @returns error - Error if retrieval fails
+	 */
+	GetTotalScores(isinList []string) (map[string]float64, error)
+
+	/**
+	 * GetRiskMetrics retrieves Sharpe ratio and max drawdown for securities.
+	 *
+	 * @param isinList - List of security ISINs to fetch
+	 * @returns map[string]float64 - Sharpe ratios (raw values from database)
+	 * @returns map[string]float64 - Max drawdown values (negative percentages, e.g., -0.25 for 25%)
+	 * @returns error - Error if retrieval fails
+	 */
+	GetRiskMetrics(isinList []string) (map[string]float64, map[string]float64, error)
 }
 
 /**

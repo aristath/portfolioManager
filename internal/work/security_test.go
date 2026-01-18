@@ -100,6 +100,11 @@ func (m *MockMetadataSyncService) GetAllActiveISINs() []string {
 	return args.Get(0).([]string)
 }
 
+func (m *MockMetadataSyncService) SyncMetadataBatch(isins []string) (int, error) {
+	args := m.Called(isins)
+	return args.Int(0), args.Error(1)
+}
+
 func TestRegisterSecurityWorkTypes(t *testing.T) {
 	registry := NewRegistry()
 
@@ -113,12 +118,13 @@ func TestRegisterSecurityWorkTypes(t *testing.T) {
 
 	RegisterSecurityWorkTypes(registry, deps)
 
-	// Verify all 5 security work types are registered
+	// Verify all 6 security work types are registered
 	assert.True(t, registry.Has("security:sync"))
 	assert.True(t, registry.Has("security:technical"))
 	assert.True(t, registry.Has("security:formula"))
 	assert.True(t, registry.Has("security:tags"))
 	assert.True(t, registry.Has("security:metadata"))
+	assert.True(t, registry.Has("security:metadata:batch"))
 }
 
 func TestSecurityWorkTypes_Dependencies(t *testing.T) {
@@ -378,4 +384,115 @@ func TestSecurityMetadata_NoDependencies(t *testing.T) {
 	metadataWt := registry.Get("security:metadata")
 	require.NotNil(t, metadataWt)
 	assert.Empty(t, metadataWt.DependsOn)
+}
+
+func TestSecurityWorkTypes_HasBatchMetadata(t *testing.T) {
+	registry := NewRegistry()
+	deps := &SecurityDeps{
+		HistorySyncService:  &MockSecurityHistorySyncService{},
+		TechnicalService:    &MockTechnicalCalculationService{},
+		FormulaService:      &MockFormulaDiscoveryService{},
+		TagService:          &MockTagUpdateService{},
+		MetadataSyncService: &MockMetadataSyncService{},
+	}
+
+	RegisterSecurityWorkTypes(registry, deps)
+
+	// Verify batch metadata work type is registered
+	assert.True(t, registry.Has("security:metadata:batch"))
+}
+
+func TestSecurityWorkTypes_BatchMetadata_Execute_Success(t *testing.T) {
+	registry := NewRegistry()
+
+	metadataService := &MockMetadataSyncService{}
+	metadataService.On("GetAllActiveISINs").Return([]string{"US0378331005", "US5949181045"})
+	metadataService.On("SyncMetadataBatch", []string{"US0378331005", "US5949181045"}).Return(2, nil)
+
+	deps := &SecurityDeps{
+		HistorySyncService:  &MockSecurityHistorySyncService{},
+		TechnicalService:    &MockTechnicalCalculationService{},
+		FormulaService:      &MockFormulaDiscoveryService{},
+		TagService:          &MockTagUpdateService{},
+		MetadataSyncService: metadataService,
+	}
+
+	RegisterSecurityWorkTypes(registry, deps)
+
+	wt := registry.Get("security:metadata:batch")
+	require.NotNil(t, wt)
+
+	// Execute with empty subject (global work)
+	err := wt.Execute(context.Background(), "", nil)
+	require.NoError(t, err)
+
+	metadataService.AssertCalled(t, "GetAllActiveISINs")
+	metadataService.AssertCalled(t, "SyncMetadataBatch", []string{"US0378331005", "US5949181045"})
+}
+
+func TestSecurityWorkTypes_BatchMetadata_Execute_ProgressReporting(t *testing.T) {
+	registry := NewRegistry()
+
+	metadataService := &MockMetadataSyncService{}
+	metadataService.On("GetAllActiveISINs").Return([]string{"US0378331005"})
+	metadataService.On("SyncMetadataBatch", []string{"US0378331005"}).Return(1, nil)
+
+	deps := &SecurityDeps{
+		HistorySyncService:  &MockSecurityHistorySyncService{},
+		TechnicalService:    &MockTechnicalCalculationService{},
+		FormulaService:      &MockFormulaDiscoveryService{},
+		TagService:          &MockTagUpdateService{},
+		MetadataSyncService: metadataService,
+	}
+
+	RegisterSecurityWorkTypes(registry, deps)
+
+	wt := registry.Get("security:metadata:batch")
+	require.NotNil(t, wt)
+
+	// Execute with nil progress reporter (just verify it doesn't crash)
+	err := wt.Execute(context.Background(), "", nil)
+	require.NoError(t, err)
+
+	// Progress reporting will be tested via integration tests
+	metadataService.AssertCalled(t, "GetAllActiveISINs")
+	metadataService.AssertCalled(t, "SyncMetadataBatch", []string{"US0378331005"})
+}
+
+func TestSecurityWorkTypes_BatchMetadata_Interval(t *testing.T) {
+	registry := NewRegistry()
+	deps := &SecurityDeps{
+		HistorySyncService:  &MockSecurityHistorySyncService{},
+		TechnicalService:    &MockTechnicalCalculationService{},
+		FormulaService:      &MockFormulaDiscoveryService{},
+		TagService:          &MockTagUpdateService{},
+		MetadataSyncService: &MockMetadataSyncService{},
+	}
+
+	RegisterSecurityWorkTypes(registry, deps)
+
+	wt := registry.Get("security:metadata:batch")
+	require.NotNil(t, wt)
+
+	// Batch metadata should have 24h interval
+	assert.Equal(t, 24*time.Hour, wt.Interval)
+}
+
+func TestSecurityWorkTypes_BatchMetadata_MarketTiming(t *testing.T) {
+	registry := NewRegistry()
+	deps := &SecurityDeps{
+		HistorySyncService:  &MockSecurityHistorySyncService{},
+		TechnicalService:    &MockTechnicalCalculationService{},
+		FormulaService:      &MockFormulaDiscoveryService{},
+		TagService:          &MockTagUpdateService{},
+		MetadataSyncService: &MockMetadataSyncService{},
+	}
+
+	RegisterSecurityWorkTypes(registry, deps)
+
+	wt := registry.Get("security:metadata:batch")
+	require.NotNil(t, wt)
+
+	// Batch metadata should run AnyTime (not dependent on market hours)
+	assert.Equal(t, AnyTime, wt.MarketTiming)
 }

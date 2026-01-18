@@ -7,6 +7,9 @@
 package di
 
 import (
+	"time"
+
+	"github.com/aristath/sentinel/internal/modules/market_hours"
 	"github.com/aristath/sentinel/internal/modules/optimization"
 	"github.com/rs/zerolog"
 )
@@ -82,5 +85,34 @@ func initializeOptimizationServices(container *Container, log zerolog.Logger) er
 	// Optimizer can use Black-Litterman for view-based optimization
 	container.OptimizerService.SetBlackLittermanOptimizer(container.BlackLittermanOptimizer)
 
+	// OptimizerWeightsService
+	// Calculates optimizer target weights for portfolio planning
+	// Uses all dependencies that are available by step 10
+	container.OptimizerWeightsService = optimization.NewOptimizerWeightsService(
+		container.PositionRepo,
+		container.SecurityRepo,
+		container.AllocRepo,
+		container.CashManager,
+		container.BrokerClient,
+		container.OptimizerService,
+		container.PriceConversionService,
+		container.PlannerConfigRepo,
+		container.ClientDataRepo,
+		&optimizerMarketHoursAdapter{service: container.MarketHoursService},
+	)
+
 	return nil
+}
+
+// optimizerMarketHoursAdapter adapts MarketHoursService to optimization.MarketHoursForWeights interface
+type optimizerMarketHoursAdapter struct {
+	service *market_hours.MarketHoursService
+}
+
+func (a *optimizerMarketHoursAdapter) AnyMajorMarketOpen(t time.Time) bool {
+	if a.service == nil {
+		return false
+	}
+	openMarkets := a.service.GetOpenMarkets(t)
+	return len(openMarkets) > 0
 }

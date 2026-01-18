@@ -251,8 +251,9 @@ func (a *tagSettingsAdapter) GetAdjustedVolatilityParams() universe.VolatilityPa
 // (they implement the service interfaces via Go's structural typing).
 // Only adapters with actual logic remain below.
 
-// ocbScoresRepoAdapter adapts database to services.ScoresRepository
+// ocbScoresRepoAdapter adapts database to domain.ScoresRepository
 // Uses direct database queries like the scheduler adapters
+// All scores are stored in normalized 0-1 format in the database
 type ocbScoresRepoAdapter struct {
 	db *sql.DB // portfolio.db - scores table
 }
@@ -297,17 +298,24 @@ func (a *ocbScoresRepoAdapter) GetCAGRs(isinList []string) (map[string]float64, 
 		return cagrs, nil
 	}
 
-	query := `SELECT isin, cagr_score FROM scores WHERE cagr_score IS NOT NULL AND cagr_score > 0`
-	rows, err := a.db.Query(query)
+	placeholders := strings.Repeat("?,", len(isinList))
+	placeholders = placeholders[:len(placeholders)-1]
+	query := fmt.Sprintf(`
+		SELECT isin, cagr_score
+		FROM scores
+		WHERE isin IN (%s) AND cagr_score IS NOT NULL AND cagr_score > 0
+	`, placeholders)
+
+	args := make([]interface{}, len(isinList))
+	for i, isin := range isinList {
+		args[i] = isin
+	}
+
+	rows, err := a.db.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-
-	isinSet := make(map[string]bool)
-	for _, isin := range isinList {
-		isinSet[isin] = true
-	}
 
 	for rows.Next() {
 		var isin string
@@ -315,12 +323,8 @@ func (a *ocbScoresRepoAdapter) GetCAGRs(isinList []string) (map[string]float64, 
 		if err := rows.Scan(&isin, &cagrScore); err != nil {
 			continue
 		}
-		if !isinSet[isin] {
-			continue
-		}
 		if cagrScore.Valid && cagrScore.Float64 > 0 {
-			// Convert CAGR score (0-100) to CAGR value (e.g., 0.11 for 11%)
-			cagrValue := (cagrScore.Float64 / 100.0) * 0.30 // Assuming max 30% CAGR
+			cagrValue := convertCAGRScoreToCAGRAdapter(cagrScore.Float64)
 			if cagrValue > 0 {
 				cagrs[isin] = cagrValue
 			}
@@ -336,25 +340,29 @@ func (a *ocbScoresRepoAdapter) GetQualityScores(isinList []string) (map[string]f
 		return longTermScores, stabilityScores, nil
 	}
 
-	query := `SELECT isin, cagr_score, stability_score FROM scores WHERE isin != '' AND isin IS NOT NULL`
-	rows, err := a.db.Query(query)
+	placeholders := strings.Repeat("?,", len(isinList))
+	placeholders = placeholders[:len(placeholders)-1]
+	query := fmt.Sprintf(`
+		SELECT isin, cagr_score, stability_score
+		FROM scores
+		WHERE isin IN (%s)
+	`, placeholders)
+
+	args := make([]interface{}, len(isinList))
+	for i, isin := range isinList {
+		args[i] = isin
+	}
+
+	rows, err := a.db.Query(query, args...)
 	if err != nil {
 		return nil, nil, err
 	}
 	defer rows.Close()
 
-	isinSet := make(map[string]bool)
-	for _, isin := range isinList {
-		isinSet[isin] = true
-	}
-
 	for rows.Next() {
 		var isin string
 		var cagrScore, stabilityScore sql.NullFloat64
 		if err := rows.Scan(&isin, &cagrScore, &stabilityScore); err != nil {
-			continue
-		}
-		if !isinSet[isin] {
 			continue
 		}
 		if cagrScore.Valid {
@@ -379,7 +387,11 @@ func (a *ocbScoresRepoAdapter) GetValueTrapData(isinList []string) (map[string]f
 
 	placeholders := strings.Repeat("?,", len(isinList))
 	placeholders = placeholders[:len(placeholders)-1]
-	query := fmt.Sprintf(`SELECT isin, opportunity_score, volatility, drawdown_score FROM scores WHERE isin IN (%s)`, placeholders)
+	query := fmt.Sprintf(`
+		SELECT isin, opportunity_score, volatility, drawdown_score
+		FROM scores
+		WHERE isin IN (%s)
+	`, placeholders)
 
 	args := make([]interface{}, len(isinList))
 	for i, isin := range isinList {
@@ -399,14 +411,14 @@ func (a *ocbScoresRepoAdapter) GetValueTrapData(isinList []string) (map[string]f
 			continue
 		}
 		if opportunityScore.Valid {
-			normalized := math.Max(0.0, math.Min(1.0, opportunityScore.Float64/100.0))
+			normalized := math.Max(0.0, math.Min(1.0, opportunityScore.Float64))
 			opportunityScores[isin] = normalized
 		}
 		if vol.Valid && vol.Float64 > 0 {
 			volatility[isin] = vol.Float64
 		}
 		if drawdownScore.Valid {
-			rawDrawdown := math.Max(-1.0, math.Min(0.0, drawdownScore.Float64/100.0))
+			rawDrawdown := math.Max(-1.0, math.Min(0.0, drawdownScore.Float64))
 			momentum := 1.0 + rawDrawdown
 			momentum = (momentum * 2.0) - 1.0
 			momentum = math.Max(-1.0, math.Min(1.0, momentum))
@@ -425,7 +437,11 @@ func (a *ocbScoresRepoAdapter) GetRiskMetrics(isinList []string) (map[string]flo
 
 	placeholders := strings.Repeat("?,", len(isinList))
 	placeholders = placeholders[:len(placeholders)-1]
-	query := fmt.Sprintf(`SELECT isin, sharpe_score, drawdown_score FROM scores WHERE isin IN (%s)`, placeholders)
+	query := fmt.Sprintf(`
+		SELECT isin, sharpe_score, drawdown_score
+		FROM scores
+		WHERE isin IN (%s)
+	`, placeholders)
 
 	args := make([]interface{}, len(isinList))
 	for i, isin := range isinList {
@@ -445,15 +461,27 @@ func (a *ocbScoresRepoAdapter) GetRiskMetrics(isinList []string) (map[string]flo
 			continue
 		}
 		if sharpeScore.Valid {
-			// Sharpe score (0-100) to ratio (e.g., 1.5)
-			sharpe[isin] = (sharpeScore.Float64 / 100.0) * 3.0 // Max 3.0 Sharpe
+			sharpe[isin] = sharpeScore.Float64
 		}
 		if drawdownScore.Valid {
-			// Drawdown score to max drawdown (negative percentage)
-			maxDrawdown[isin] = -(100.0 - drawdownScore.Float64) / 100.0
+			// drawdown_score is stored as negative percentage (e.g., -0.25 for 25% drawdown)
+			maxDrawdown[isin] = drawdownScore.Float64
 		}
 	}
 	return sharpe, maxDrawdown, nil
+}
+
+// convertCAGRScoreToCAGRAdapter converts normalized cagr_score (0-1) to CAGR percentage
+func convertCAGRScoreToCAGRAdapter(cagrScore float64) float64 {
+	if cagrScore <= 0 {
+		return 0.0
+	}
+	if cagrScore >= 0.8 {
+		return 0.11 + (cagrScore-0.8)*(0.20-0.11)/(1.0-0.8)
+	} else if cagrScore >= 0.15 {
+		return 0.0 + (cagrScore-0.15)*(0.11-0.0)/(0.8-0.15)
+	}
+	return 0.0
 }
 
 // ocbSettingsRepoAdapter adapts settings.Repository to services.SettingsRepository

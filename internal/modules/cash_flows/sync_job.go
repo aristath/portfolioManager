@@ -7,13 +7,11 @@ import (
 
 	"github.com/aristath/sentinel/internal/events"
 	"github.com/aristath/sentinel/internal/modules/display"
-	"github.com/aristath/sentinel/internal/scheduler/base"
 	"github.com/rs/zerolog"
 )
 
 // SyncJob handles background cash flow synchronization
 type SyncJob struct {
-	base.JobBase
 	repo             *Repository
 	depositProcessor *DepositProcessor
 	dividendCreator  *DividendCreator
@@ -46,7 +44,7 @@ func NewSyncJob(
 
 // SyncCashFlows performs cash flow synchronization from Tradernet API
 // Faithful translation from Python: app/modules/cash_flows/jobs/cash_flow_sync.py
-// Note: If this is called from a scheduled job, concurrent execution is prevented by the scheduler's SkipIfStillRunning wrapper
+// Note: Called by work system which handles concurrency
 func (j *SyncJob) SyncCashFlows() error {
 	// 1. Set LED4 to green
 	j.displayManager.SetLED4(0, 255, 0)

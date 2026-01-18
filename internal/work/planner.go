@@ -16,7 +16,7 @@ type PlannerCache interface {
 
 // OptimizerServiceInterface defines the optimizer service interface
 type OptimizerServiceInterface interface {
-	CalculateWeights() (map[string]float64, error)
+	CalculateWeights(ctx context.Context) (map[string]float64, error)
 }
 
 // OpportunityContextBuilderInterface defines the context builder interface
@@ -62,10 +62,19 @@ func RegisterPlannerWorkTypes(registry *Registry, deps *PlannerDeps) {
 			return []string{""}
 		},
 		Execute: func(ctx context.Context, subject string, progress *ProgressReporter) error {
+			// Report started phase
+			if progress != nil {
+				progress.ReportPhase("started", "Calculating optimizer weights")
+			}
 
-			weights, err := deps.OptimizerService.CalculateWeights()
+			weights, err := deps.OptimizerService.CalculateWeights(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to calculate weights: %w", err)
+			}
+
+			// Report completed phase
+			if progress != nil {
+				progress.ReportPhase("completed", fmt.Sprintf("Calculated weights for %d securities", len(weights)))
 			}
 
 			deps.Cache.Set("optimizer_weights", weights)

@@ -41,7 +41,6 @@ import (
 	"github.com/aristath/sentinel/internal/modules/trading"
 	"github.com/aristath/sentinel/internal/modules/universe"
 	"github.com/aristath/sentinel/internal/reliability"
-	"github.com/aristath/sentinel/internal/scheduler"
 	"github.com/aristath/sentinel/internal/services"
 	"github.com/aristath/sentinel/internal/ticker"
 )
@@ -130,6 +129,7 @@ type Container struct {
 	BlackLittermanOptimizer   *optimization.BlackLittermanOptimizer         // Black-Litterman optimization
 	ViewGenerator             *optimization.ViewGenerator                   // Market views generation
 	OptimizerService          *optimization.OptimizerService                // Portfolio optimization (HRP, MV, BL)
+	OptimizerWeightsService   *optimization.OptimizerWeightsService         // Optimizer weights calculation service
 	SequencesService          *sequences.Service                            // Trade sequence generation
 	EvaluationService         *planningevaluation.Service                   // Sequence evaluation (worker pool)
 	PlannerService            *planningplanner.Planner                      // Core planner (sequence generation)
@@ -150,7 +150,6 @@ type Container struct {
 	SetupService              *universe.SecuritySetupService                // Security setup (auto-add missing)
 	SecurityDeletionService   *universe.SecurityDeletionService             // Security deletion
 	MetadataSyncService       *universe.MetadataSyncService                 // Security metadata synchronization (batch + individual)
-	Scheduler                 *scheduler.Scheduler                          // Cron scheduler for time-based jobs
 	SymbolResolver            *universe.SymbolResolver                      // Symbol resolution (ISIN, symbol)
 	ConcentrationAlertService *allocation.ConcentrationAlertService         // Portfolio concentration alerts
 	BackupService             *reliability.BackupService                    // Local database backups

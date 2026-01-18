@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/aristath/sentinel/internal/domain"
 	planningdomain "github.com/aristath/sentinel/internal/modules/planning/domain"
 	"github.com/aristath/sentinel/internal/modules/portfolio"
 	scoringdomain "github.com/aristath/sentinel/internal/modules/scoring/domain"
@@ -37,7 +38,7 @@ type OpportunityContextBuilder struct {
 	securityRepo           SecurityRepository              // Security repository
 	allocRepo              AllocationRepository            // Allocation repository
 	tradeRepo              TradeRepository                 // Trade repository
-	scoresRepo             ScoresRepository                // Scores repository
+	scoresRepo             domain.ScoresRepository         // Scores repository
 	settingsRepo           SettingsRepository              // Settings repository
 	regimeRepo             RegimeRepository                // Regime repository
 	cashManager            CashManager                     // Cash manager
@@ -71,7 +72,7 @@ func NewOpportunityContextBuilder(
 	securityRepo SecurityRepository,
 	allocRepo AllocationRepository,
 	tradeRepo TradeRepository,
-	scoresRepo ScoresRepository,
+	scoresRepo domain.ScoresRepository,
 	settingsRepo SettingsRepository,
 	regimeRepo RegimeRepository,
 	cashManager CashManager,

@@ -7,10 +7,8 @@
 package di
 
 import (
-	"fmt"
 	"time"
 
-	"github.com/aristath/sentinel/internal/domain"
 	"github.com/aristath/sentinel/internal/events"
 	"github.com/aristath/sentinel/internal/work"
 )
@@ -134,38 +132,4 @@ func (a *eventEmitterAdapter) Emit(event string, data any) {
 	if jobData != nil {
 		a.manager.EmitTyped(eventType, "", jobData)
 	}
-}
-
-// workBrokerPriceAdapter adapts domain.BrokerClient to scheduler.BrokerClientForPrices interface
-type workBrokerPriceAdapter struct {
-	client domain.BrokerClient
-}
-
-func (a *workBrokerPriceAdapter) GetBatchQuotes(symbolMap map[string]*string) (map[string]*float64, error) {
-	if a.client == nil {
-		return nil, fmt.Errorf("broker client not available")
-	}
-
-	// Extract symbols from map
-	symbols := make([]string, 0, len(symbolMap))
-	for symbol := range symbolMap {
-		symbols = append(symbols, symbol)
-	}
-
-	// Get quotes from broker
-	quotes, err := a.client.GetQuotes(symbols)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get broker quotes: %w", err)
-	}
-
-	// Convert to price map
-	prices := make(map[string]*float64)
-	for symbol, quote := range quotes {
-		if quote != nil && quote.Price > 0 {
-			price := quote.Price
-			prices[symbol] = &price
-		}
-	}
-
-	return prices, nil
 }

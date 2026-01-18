@@ -35,15 +35,6 @@ type TradeRepository interface {
 	GetRecentlyBoughtISINs(days int) (map[string]bool, error)
 }
 
-// ScoresRepository provides access to security scores.
-type ScoresRepository interface {
-	GetTotalScores(isinList []string) (map[string]float64, error)
-	GetCAGRs(isinList []string) (map[string]float64, error)
-	GetQualityScores(isinList []string) (longTermScores, stabilityScores map[string]float64, err error)
-	GetValueTrapData(isinList []string) (opportunityScores, momentumScores, volatility map[string]float64, err error)
-	GetRiskMetrics(isinList []string) (sharpe, maxDrawdown map[string]float64, err error)
-}
-
 // SettingsRepository provides access to planner settings.
 type SettingsRepository interface {
 	GetTargetReturnSettings() (targetReturn, thresholdPct float64, err error)

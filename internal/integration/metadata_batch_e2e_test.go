@@ -13,7 +13,6 @@ import (
 	"github.com/aristath/sentinel/internal/clients/tradernet"
 	"github.com/aristath/sentinel/internal/database"
 	"github.com/aristath/sentinel/internal/modules/universe"
-	"github.com/aristath/sentinel/internal/scheduler"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -93,7 +92,6 @@ func TestMetadataBatchSync_EndToEnd(t *testing.T) {
 	brokerClient := tradernet.NewClient(apiKey, apiSecret, log)
 	securityRepo := universe.NewSecurityRepository(db, log)
 	metadataSyncService := universe.NewMetadataSyncService(securityRepo, brokerClient, log)
-	metadataSyncJob := scheduler.NewMetadataSyncJob(metadataSyncService, log)
 
 	// Verify initial state - no securities should be synced
 	var syncedCount int
@@ -130,19 +128,21 @@ func TestMetadataBatchSync_EndToEnd(t *testing.T) {
 
 	t.Logf("E2E Test Summary: Successfully synced %d/%d securities", successCount, len(isins))
 
-	// Test MetadataSyncJob (scheduler job integration)
-	// Reset last_synced to test job execution
+	// Test batch sync again (simulates work processor execution of security:metadata:batch)
+	// Reset last_synced to test second execution
 	_, err = db.Conn.Exec("UPDATE securities SET last_synced = NULL")
 	require.NoError(t, err)
 
-	// Execute the job directly (in production, scheduled by cron at 3 AM)
-	err = metadataSyncJob.Run()
-	assert.NoError(t, err, "Job should execute without error")
+	// Execute batch sync again (in production, this runs via security:metadata:batch work type every 24h)
+	isins = metadataSyncService.GetAllActiveISINs()
+	successCount2, err := metadataSyncService.SyncMetadataBatch(isins)
+	assert.NoError(t, err, "Batch sync should execute without error")
 
-	// Verify job populated data
+	// Verify second execution populated data
 	err = db.Conn.QueryRow("SELECT COUNT(*) FROM securities WHERE last_synced IS NOT NULL").Scan(&syncedCount)
 	require.NoError(t, err)
-	assert.Greater(t, syncedCount, 0, "Job should have synced securities")
+	assert.Greater(t, syncedCount, 0, "Second batch sync should have synced securities")
+	assert.Equal(t, successCount2, syncedCount, "Synced count should match second batch sync")
 
 	t.Log("E2E test completed successfully - full stack verified")
 }

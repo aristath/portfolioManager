@@ -14,8 +14,8 @@ type MockOptimizerService struct {
 	mock.Mock
 }
 
-func (m *MockOptimizerService) CalculateWeights() (map[string]float64, error) {
-	args := m.Called()
+func (m *MockOptimizerService) CalculateWeights(ctx context.Context) (map[string]float64, error) {
+	args := m.Called(ctx)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -164,7 +164,7 @@ func TestPlannerWeights_Execute(t *testing.T) {
 	cache := NewMockPlannerCache()
 
 	optimizerService := &MockOptimizerService{}
-	optimizerService.On("CalculateWeights").Return(map[string]float64{
+	optimizerService.On("CalculateWeights", mock.Anything).Return(map[string]float64{
 		"AAPL":  0.25,
 		"GOOGL": 0.25,
 	}, nil)

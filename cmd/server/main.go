@@ -210,13 +210,6 @@ func main() {
 		log.Info().Msg("Work processor started")
 	}
 
-	// Start scheduler for time-based jobs
-	// Scheduler manages cron-based job execution (e.g., metadata sync at 3 AM)
-	if container.Scheduler != nil {
-		container.Scheduler.Start()
-		log.Info().Msg("Scheduler started (metadata sync scheduled for 3 AM)")
-	}
-
 	// Create context for background services (LED monitors)
 	// LED monitors track system state and update the Arduino Uno Q display.
 	// They run in separate goroutines and can be cancelled via context on shutdown.
@@ -254,14 +247,6 @@ func main() {
 	log.Info().Msg("Stopping LED monitors...")
 
 	log.Info().Msg("Shutting down server...")
-
-	// Stop scheduler
-	// The scheduler manages cron-based jobs. Stopping it prevents new scheduled jobs
-	// from starting during shutdown and waits for running jobs to complete.
-	if container.Scheduler != nil {
-		container.Scheduler.Stop()
-		log.Info().Msg("Scheduler stopped")
-	}
 
 	// Stop state monitor
 	// The state monitor checks portfolio state every minute. Stopping it prevents

@@ -7,13 +7,13 @@
 package di
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/aristath/sentinel/internal/events"
 	planningdomain "github.com/aristath/sentinel/internal/modules/planning/domain"
 	planninghash "github.com/aristath/sentinel/internal/modules/planning/hash"
 	"github.com/aristath/sentinel/internal/modules/universe"
-	"github.com/aristath/sentinel/internal/scheduler"
 	"github.com/aristath/sentinel/internal/work"
 	"github.com/rs/zerolog"
 )
@@ -25,38 +25,18 @@ type plannerOptimizerAdapter struct {
 	log       zerolog.Logger
 }
 
-func (a *plannerOptimizerAdapter) CalculateWeights() (map[string]float64, error) {
-	// Create adapters for the optimizer weights job
-	positionAdapter := scheduler.NewPositionRepositoryAdapter(a.container.PositionRepo)
-	securityAdapter := scheduler.NewSecurityRepositoryAdapter(a.container.SecurityRepo)
-	allocAdapter := scheduler.NewAllocationRepositoryAdapter(a.container.AllocRepo)
-	priceAdapter := scheduler.NewPriceClientAdapter(&workBrokerPriceAdapter{client: a.container.BrokerClient})
-	optimizerAdapter := scheduler.NewOptimizerServiceAdapter(a.container.OptimizerService)
-	priceConversionAdapter := scheduler.NewPriceConversionServiceAdapter(a.container.PriceConversionService)
-	plannerConfigAdapter := scheduler.NewPlannerConfigRepositoryAdapter(a.container.PlannerConfigRepo)
-	clientDataAdapter := scheduler.NewClientDataRepositoryAdapter(a.container.ClientDataRepo)
-	marketHoursAdapter := scheduler.NewMarketHoursServiceAdapter(a.container.MarketHoursService)
-
-	// Create and run the optimizer weights job
-	job := scheduler.NewGetOptimizerWeightsJob(
-		positionAdapter,
-		securityAdapter,
-		allocAdapter,
-		a.container.CashManager,
-		priceAdapter,
-		optimizerAdapter,
-		priceConversionAdapter,
-		plannerConfigAdapter,
-		clientDataAdapter,
-		marketHoursAdapter,
-	)
-	job.SetLogger(a.log)
-
-	if err := job.Run(); err != nil {
-		return nil, err
+func (a *plannerOptimizerAdapter) CalculateWeights(ctx context.Context) (map[string]float64, error) {
+	// Use OptimizerWeightsService directly (replaces scheduler job and adapters)
+	if a.container.OptimizerWeightsService == nil {
+		return nil, fmt.Errorf("optimizer weights service not available")
 	}
 
-	return job.GetTargetWeights(), nil
+	weights, err := a.container.OptimizerWeightsService.CalculateWeights(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to calculate optimizer weights: %w", err)
+	}
+
+	return weights, nil
 }
 
 type plannerContextBuilderAdapter struct {

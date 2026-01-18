@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/aristath/sentinel/internal/database"
-	"github.com/aristath/sentinel/internal/scheduler/base"
 	"github.com/rs/zerolog"
 )
 
@@ -558,88 +557,4 @@ func (s *BackupService) findMostRecentBackup(baseDir, filename, pattern string) 
 	}
 
 	return mostRecent
-}
-
-// HourlyBackupJob wraps BackupService.HourlyBackup for scheduler
-type HourlyBackupJob struct {
-	base.JobBase
-	service *BackupService
-}
-
-// NewHourlyBackupJob creates a new hourly backup job
-func NewHourlyBackupJob(service *BackupService) *HourlyBackupJob {
-	return &HourlyBackupJob{service: service}
-}
-
-// Run executes the hourly backup
-func (j *HourlyBackupJob) Run() error {
-	return j.service.HourlyBackup()
-}
-
-// Name returns the job name for scheduler
-func (j *HourlyBackupJob) Name() string {
-	return "hourly_backup"
-}
-
-// DailyBackupJob wraps BackupService.DailyBackup for scheduler
-type DailyBackupJob struct {
-	base.JobBase
-	service *BackupService
-}
-
-// NewDailyBackupJob creates a new daily backup job
-func NewDailyBackupJob(service *BackupService) *DailyBackupJob {
-	return &DailyBackupJob{service: service}
-}
-
-// Run executes the daily backup
-func (j *DailyBackupJob) Run() error {
-	return j.service.DailyBackup()
-}
-
-// Name returns the job name for scheduler
-func (j *DailyBackupJob) Name() string {
-	return "daily_backup"
-}
-
-// WeeklyBackupJob wraps BackupService.WeeklyBackup for scheduler
-type WeeklyBackupJob struct {
-	base.JobBase
-	service *BackupService
-}
-
-// NewWeeklyBackupJob creates a new weekly backup job
-func NewWeeklyBackupJob(service *BackupService) *WeeklyBackupJob {
-	return &WeeklyBackupJob{service: service}
-}
-
-// Run executes the weekly backup
-func (j *WeeklyBackupJob) Run() error {
-	return j.service.WeeklyBackup()
-}
-
-// Name returns the job name for scheduler
-func (j *WeeklyBackupJob) Name() string {
-	return "weekly_backup"
-}
-
-// MonthlyBackupJob wraps BackupService.MonthlyBackup for scheduler
-type MonthlyBackupJob struct {
-	base.JobBase
-	service *BackupService
-}
-
-// NewMonthlyBackupJob creates a new monthly backup job
-func NewMonthlyBackupJob(service *BackupService) *MonthlyBackupJob {
-	return &MonthlyBackupJob{service: service}
-}
-
-// Run executes the monthly backup
-func (j *MonthlyBackupJob) Run() error {
-	return j.service.MonthlyBackup()
-}
-
-// Name returns the job name for scheduler
-func (j *MonthlyBackupJob) Name() string {
-	return "monthly_backup"
 }
