@@ -37,8 +37,7 @@ func TestNewDefaultConfiguration(t *testing.T) {
 	assert.True(t, config.EnableCorrelationAwareFilter)
 	assert.True(t, config.EnableDiversityFilter)
 
-	// Tag filtering should be enabled by default
-	assert.True(t, config.EnableTagFiltering)
+	// Tag filtering is now mandatory (always enabled)
 }
 
 func TestGetEnabledCalculators(t *testing.T) {

@@ -1,8 +1,8 @@
 /**
  * Planner Management Modal Component
- * 
+ *
  * Comprehensive modal for configuring the portfolio planning system.
- * 
+ *
  * Features:
  * - Temperament Settings: Three sliders (Risk Tolerance, Aggression, Patience) that control 150+ parameters
  * - General Settings: Batch processing, trade permissions
@@ -10,7 +10,7 @@
  * - Transaction Costs: Fixed and variable cost settings
  * - Opportunity Calculators: Enable/disable individual opportunity calculators
  * - Filters: Post-generation filters and tag-based filtering
- * 
+ *
  * The temperament sliders are stored in global settings, while planner-specific
  * configuration is stored in the planner config database.
  */
@@ -48,8 +48,7 @@ const DEFAULT_CONFIG = {
   // Post-generation Filters (eligibility & recently_traded are now handled during generation)
   enable_correlation_aware_filter: true,
   enable_diversity_filter: true,
-  // Tag filtering
-  enable_tag_filtering: true,
+  // Tag filtering is now mandatory (always enabled)
 };
 
 /**
@@ -64,9 +63,9 @@ const DEFAULT_TEMPERAMENT = {
 
 /**
  * Planner management modal component
- * 
+ *
  * Provides comprehensive configuration interface for the portfolio planning system.
- * 
+ *
  * @returns {JSX.Element} Planner configuration modal with tabbed interface
  */
 export function PlannerManagementModal() {
@@ -145,7 +144,7 @@ export function PlannerManagementModal() {
 
   /**
    * Updates a planner configuration field
-   * 
+   *
    * @param {string} field - Configuration field name
    * @param {*} value - New value
    */
@@ -155,7 +154,7 @@ export function PlannerManagementModal() {
 
   /**
    * Updates a temperament setting
-   * 
+   *
    * @param {string} field - Temperament field name
    * @param {*} value - New value
    */
@@ -165,7 +164,7 @@ export function PlannerManagementModal() {
 
   /**
    * Gets a configuration value with default fallback
-   * 
+   *
    * @param {string} field - Configuration field name
    * @param {*} defaultValue - Default value if not found
    * @returns {*} Configuration value or default
@@ -176,7 +175,7 @@ export function PlannerManagementModal() {
 
   /**
    * Gets a temperament value with default fallback
-   * 
+   *
    * @param {string} field - Temperament field name
    * @param {*} defaultValue - Default value if not found
    * @returns {*} Temperament value or default
@@ -618,14 +617,6 @@ export function PlannerManagementModal() {
                       checked={getConfigValue('enable_diversity_filter', true)}
                       onChange={(e) => updateConfig('enable_diversity_filter', e.currentTarget.checked)}
                       description="Ensures sequences include diverse actions"
-                    />
-                    <Divider className="planner-modal__divider" my="sm" />
-                    <Switch
-                      className="planner-modal__switch planner-modal__switch--tag-filtering"
-                      label="Tag-Based Filtering"
-                      checked={getConfigValue('enable_tag_filtering', true)}
-                      onChange={(e) => updateConfig('enable_tag_filtering', e.currentTarget.checked)}
-                      description="Enable tag-based pre-filtering for opportunity identification. When disabled, all active securities are considered (uses score-based quality checks instead)."
                     />
                   </Stack>
                 </Paper>

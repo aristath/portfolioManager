@@ -105,7 +105,6 @@ func TestAveragingDownCalculator_WithTagFiltering_PreFiltersPositions(t *testing
 	}
 
 	config := planningdomain.NewDefaultConfiguration()
-	config.EnableTagFiltering = true
 
 	params := map[string]interface{}{
 		"max_loss_percent": -0.30,
@@ -119,75 +118,6 @@ func TestAveragingDownCalculator_WithTagFiltering_PreFiltersPositions(t *testing
 	// Only TEST.US should be included (tag pre-filtered)
 	assert.Len(t, result.Candidates, 1, "Should only include pre-filtered position")
 	assert.Equal(t, "TEST.US", result.Candidates[0].Symbol)
-}
-
-func TestAveragingDownCalculator_WithoutTagFiltering_ProcessesAllPositions(t *testing.T) {
-	log := zerolog.Nop()
-	tagFilter := &mockTagFilterAveragingDown{
-		opportunityCandidates: []string{"TEST.US"},
-	}
-	securityRepo := &mockSecurityRepoAveragingDown{tags: map[string][]string{}}
-	calc := NewAveragingDownCalculator(tagFilter, securityRepo, log)
-
-	position1 := domain.Position{
-		Symbol:      "TEST.US",
-		ISIN:        "US1234567890",
-		Quantity:    100,
-		AverageCost: 20.0,
-	}
-	position2 := domain.Position{
-		Symbol:      "OTHER.US",
-		ISIN:        "US0987654321",
-		Quantity:    100,
-		AverageCost: 20.0,
-	}
-
-	security1 := universe.Security{
-		Symbol:   "TEST.US",
-		Name:     "Test Security",
-		ISIN:     "US1234567890",
-		AllowBuy: true,
-		Currency: "EUR",
-		MinLot:   1,
-	}
-	security2 := universe.Security{
-		Symbol:   "OTHER.US",
-		Name:     "Other Security",
-		ISIN:     "US0987654321",
-		AllowBuy: true,
-		Currency: "EUR",
-		MinLot:   1,
-	}
-
-	ctx := &planningdomain.OpportunityContext{
-		EnrichedPositions: []planningdomain.EnrichedPosition{
-			createEnrichedPosition(position1, security1, 15.0),
-			createEnrichedPosition(position2, security2, 15.0),
-		},
-		Securities:          []universe.Security{security1, security2},
-		CurrentPrices:       map[string]float64{"US1234567890": 15.0, "US0987654321": 15.0},
-		StocksByISIN:        map[string]universe.Security{"US1234567890": security1, "US0987654321": security2},
-		AvailableCashEUR:    1000.0,
-		IneligibleISINs:     map[string]bool{},
-		RecentlyBoughtISINs: map[string]bool{},
-		AllowBuy:            true,
-		StabilityScores:     map[string]float64{"US1234567890": 0.7, "US0987654321": 0.7},
-	}
-
-	config := planningdomain.NewDefaultConfiguration()
-	config.EnableTagFiltering = false // Tag filtering disabled
-
-	params := map[string]interface{}{
-		"max_loss_percent": -0.30,
-		"min_loss_percent": -0.05,
-		"config":           config,
-	}
-
-	result, err := calc.Calculate(ctx, params)
-	require.NoError(t, err)
-
-	// Both positions should be included (no tag filtering)
-	assert.Len(t, result.Candidates, 2, "Should process all positions when tag filtering disabled")
 }
 
 func TestAveragingDownCalculator_EnforcesAllowBuy(t *testing.T) {
@@ -226,7 +156,6 @@ func TestAveragingDownCalculator_EnforcesAllowBuy(t *testing.T) {
 	}
 
 	config := planningdomain.NewDefaultConfiguration()
-	config.EnableTagFiltering = true
 
 	params := map[string]interface{}{
 		"max_loss_percent": -0.30,
@@ -277,7 +206,6 @@ func TestAveragingDownCalculator_RoundsToLotSize(t *testing.T) {
 	}
 
 	config := planningdomain.NewDefaultConfiguration()
-	config.EnableTagFiltering = true
 
 	params := map[string]interface{}{
 		"max_loss_percent":       -0.30,
@@ -333,7 +261,6 @@ func TestAveragingDownCalculator_KellyBasedQuantity_WhenAvailable(t *testing.T) 
 	}
 
 	config := planningdomain.NewDefaultConfiguration()
-	config.EnableTagFiltering = true
 
 	params := map[string]interface{}{
 		"max_loss_percent":       -0.30,
@@ -392,7 +319,6 @@ func TestAveragingDownCalculator_PercentageBasedQuantity_Fallback(t *testing.T) 
 	}
 
 	config := planningdomain.NewDefaultConfiguration()
-	config.EnableTagFiltering = true
 
 	params := map[string]interface{}{
 		"max_loss_percent":       -0.30,
@@ -445,7 +371,6 @@ func TestAveragingDownCalculator_UsesConfigurablePercent_NotHardcoded(t *testing
 	}
 
 	config := planningdomain.NewDefaultConfiguration()
-	config.EnableTagFiltering = true
 
 	tests := []struct {
 		name                 string
@@ -515,7 +440,6 @@ func TestAveragingDownCalculator_SkipsAveragingDown_WhenAtKellyOptimal(t *testin
 	}
 
 	config := planningdomain.NewDefaultConfiguration()
-	config.EnableTagFiltering = true
 
 	params := map[string]interface{}{
 		"max_loss_percent": -0.30,
@@ -570,7 +494,6 @@ func TestAveragingDownCalculator_TagBasedQualityGates_ValueTrap(t *testing.T) {
 	}
 
 	config := planningdomain.NewDefaultConfiguration()
-	config.EnableTagFiltering = true
 
 	params := map[string]interface{}{
 		"max_loss_percent": -0.30,
@@ -641,7 +564,6 @@ func TestAveragingDownCalculator_TagBasedPriorityBoosting_QualityValue(t *testin
 	}
 
 	config := planningdomain.NewDefaultConfiguration()
-	config.EnableTagFiltering = true
 
 	params := map[string]interface{}{
 		"max_loss_percent": -0.30,
@@ -716,7 +638,6 @@ func TestAveragingDownCalculator_SortsByPriorityDescending(t *testing.T) {
 	}
 
 	config := planningdomain.NewDefaultConfiguration()
-	config.EnableTagFiltering = true
 
 	params := map[string]interface{}{
 		"max_loss_percent": -0.50,
@@ -791,7 +712,6 @@ func TestAveragingDownCalculator_RespectsMaxPositionsLimit(t *testing.T) {
 	}
 
 	config := planningdomain.NewDefaultConfiguration()
-	config.EnableTagFiltering = true
 
 	params := map[string]interface{}{
 		"max_loss_percent": -0.30,

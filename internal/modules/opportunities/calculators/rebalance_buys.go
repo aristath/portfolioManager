@@ -10,7 +10,7 @@ import (
 )
 
 // RebalanceBuysCalculator identifies underweight positions to buy for rebalancing.
-// Supports optional tag-based pre-filtering for performance when EnableTagFiltering=true.
+// Uses mandatory tag-based pre-filtering for performance.
 type RebalanceBuysCalculator struct {
 	*BaseCalculator
 	tagFilter    TagFilter
@@ -48,7 +48,6 @@ func (c *RebalanceBuysCalculator) Calculate(
 	// Parameters with defaults
 	minUnderweightThreshold := GetFloatParam(params, "min_underweight_threshold", 0.05) // 5% underweight
 	maxValuePerPosition := GetFloatParam(params, "max_value_per_position", 500.0)
-	minScore := GetFloatParam(params, "min_score", 0.65)    // Aligned with relaxed Path 3 (0.65 opportunity score)
 	maxPositions := GetIntParam(params, "max_positions", 0) // 0 = unlimited
 
 	// Calculate minimum trade amount based on transaction costs (default: 1% max cost ratio)
@@ -66,9 +65,9 @@ func (c *RebalanceBuysCalculator) Calculate(
 		config = domain.NewDefaultConfiguration()
 	}
 
-	// Tag-based pre-filtering (when enabled)
+	// Tag-based pre-filtering (mandatory)
 	var candidateMap map[string]bool
-	if config.EnableTagFiltering && c.tagFilter != nil {
+	if c.tagFilter != nil {
 		candidateSymbols, err := c.tagFilter.GetOpportunityCandidates(ctx, config)
 		if err != nil {
 			return domain.CalculatorResult{PreFiltered: exclusions.Result()}, fmt.Errorf("failed to get tag-based candidates: %w", err)
@@ -150,9 +149,9 @@ func (c *RebalanceBuysCalculator) Calculate(
 			continue
 		}
 
-		// Skip if tag-based pre-filtering is enabled and symbol not in candidate set
+		// Skip if tag-based pre-filtering excluded symbol (mandatory)
 		// (excluded due to bad tags like quality-gate-fail, bubble-risk, etc.)
-		if config.EnableTagFiltering && candidateMap != nil {
+		if candidateMap != nil {
 			if !candidateMap[symbol] {
 				c.log.Debug().Str("symbol", symbol).Str("geography", security.Geography).Msg("FILTER: excluded by tag filter")
 				exclusions.Add(isin, symbol, securityName, "excluded by tag filter (bad tags)")
@@ -205,10 +204,9 @@ func (c *RebalanceBuysCalculator) Calculate(
 		}
 
 		// Quality gate checks - CRITICAL protection against bad trades
-		// When tag filtering is enabled, rely on tags (quality-gate-fail, below-minimum-return, bubble-risk)
+		// Tags are mandatory - always rely on tags (quality-gate-fail, below-minimum-return, bubble-risk)
 		// Tags encode explicit quality judgments from 7-path quality gates, minimum return requirements, and bubble detection.
-		// Only use score threshold as fallback when tag filtering is disabled.
-		if config.EnableTagFiltering && c.securityRepo != nil {
+		if c.securityRepo != nil {
 			// Tag-based quality checks (when enabled)
 			securityTags, err := c.securityRepo.GetTagsForSecurity(symbol)
 			if err == nil {
@@ -242,42 +240,6 @@ func (c *RebalanceBuysCalculator) Calculate(
 					exclusions.Add(isin, symbol, securityName, "quality gate failed (tag-based)")
 					continue
 				}
-			}
-		} else {
-			// Score-based fallback when tag filtering is disabled
-			// Filter by minimum score threshold when tags are not available
-			if score < minScore {
-				exclusions.Add(isin, symbol, securityName, fmt.Sprintf("score %.2f below minimum %.2f", score, minScore))
-				continue
-			}
-			qualityCheck := CheckQualityGates(ctx, isin, true, config) // ISIN parameter ✅
-			if qualityCheck.IsEnsembleValueTrap {
-				c.log.Debug().
-					Str("symbol", symbol).
-					Msg("Skipping - value trap detected (score-based check)")
-				exclusions.Add(isin, symbol, securityName, "value trap detected (score-based)")
-				continue
-			}
-			if qualityCheck.IsBubbleRisk {
-				c.log.Debug().
-					Str("symbol", symbol).
-					Msg("Skipping - bubble risk detected (score-based check)")
-				exclusions.Add(isin, symbol, securityName, "bubble risk detected (score-based)")
-				continue
-			}
-			if qualityCheck.BelowMinimumReturn {
-				c.log.Debug().
-					Str("symbol", symbol).
-					Msg("Skipping - below minimum return (score-based check)")
-				exclusions.Add(isin, symbol, securityName, "below minimum return (score-based)")
-				continue
-			}
-			if !qualityCheck.PassesQualityGate {
-				c.log.Debug().
-					Str("symbol", symbol).
-					Msg("Skipping - quality gate failed (score-based check)")
-				exclusions.Add(isin, symbol, securityName, fmt.Sprintf("quality gate failed: %s (score-based)", qualityCheck.QualityGateReason))
-				continue
 			}
 		}
 
@@ -385,7 +347,7 @@ func (c *RebalanceBuysCalculator) Calculate(
 		priority := scored.underweight * scored.score * 0.6
 
 		// Apply quantum warning penalty and priority boosts (30% for rebalance buys - new positions)
-		if config.EnableTagFiltering && c.securityRepo != nil {
+		if c.securityRepo != nil {
 			securityTags, err := c.securityRepo.GetTagsForSecurity(symbol)
 			if err == nil && len(securityTags) > 0 {
 				priority = ApplyQuantumWarningPenalty(priority, securityTags, "rebalance_buys")

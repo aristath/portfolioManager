@@ -9,7 +9,7 @@ import (
 )
 
 // ProfitTakingCalculator identifies opportunities to take profits from positions with gains.
-// Supports optional tag-based pre-filtering for performance when EnableTagFiltering=true.
+// Uses mandatory tag-based pre-filtering for performance.
 type ProfitTakingCalculator struct {
 	*BaseCalculator
 	tagFilter    TagFilter
@@ -74,9 +74,9 @@ func (c *ProfitTakingCalculator) Calculate(
 		config = domain.NewDefaultConfiguration()
 	}
 
-	// Tag-based pre-filtering (when enabled)
+	// Tag-based pre-filtering (mandatory)
 	var candidateMap map[string]bool
-	if config.EnableTagFiltering && c.tagFilter != nil {
+	if c.tagFilter != nil {
 		candidateSymbols, err := c.tagFilter.GetSellCandidates(ctx, config)
 		if err != nil {
 			return domain.CalculatorResult{PreFiltered: exclusions.Result()}, fmt.Errorf("failed to get tag-based sell candidates: %w", err)
@@ -104,7 +104,6 @@ func (c *ProfitTakingCalculator) Calculate(
 		Float64("min_gain_threshold", minGainThreshold).
 		Float64("windfall_threshold", windfallThreshold).
 		Int("min_hold_days", minHoldDays).
-		Bool("tag_filtering_enabled", config.EnableTagFiltering).
 		Msg("Calculating profit-taking opportunities")
 
 	for _, position := range ctx.EnrichedPositions {
@@ -257,7 +256,7 @@ func (c *ProfitTakingCalculator) Calculate(
 		}
 
 		// Apply tag-based priority boosts (with regime-aware logic, sell calculator - no quantum penalty)
-		if config.EnableTagFiltering && len(securityTags) > 0 {
+		if len(securityTags) > 0 {
 			priority = ApplyTagBasedPriorityBoosts(priority, securityTags, "profit_taking", c.securityRepo)
 		}
 
@@ -351,8 +350,8 @@ func (c *ProfitTakingCalculator) calculatePriority(
 		priority *= 1.5
 	}
 
-	// Apply tag-based boosts only when tag filtering is enabled and tags are available
-	if config == nil || !config.EnableTagFiltering || len(securityTags) == 0 {
+	// Apply tag-based boosts only when tags are available (tags are mandatory)
+	if len(securityTags) == 0 {
 		return priority
 	}
 

@@ -16,7 +16,7 @@ type WeightBasedCalculator struct {
 }
 
 // NewWeightBasedCalculator creates a new weight-based calculator.
-// securityRepo is required for quality gate checks (conditional on EnableTagFiltering).
+// securityRepo is required for quality gate checks (tags are mandatory).
 func NewWeightBasedCalculator(securityRepo SecurityRepository, log zerolog.Logger) *WeightBasedCalculator {
 	return &WeightBasedCalculator{
 		BaseCalculator: NewBaseCalculator(log, "weight_based"),
@@ -179,7 +179,7 @@ func (c *WeightBasedCalculator) Calculate(
 
 			if c.securityRepo != nil {
 				securityTags, err := c.securityRepo.GetTagsForSecurity(symbol)
-				useTagChecks := err == nil && config != nil && config.EnableTagFiltering && len(securityTags) > 0
+				useTagChecks := err == nil && len(securityTags) > 0
 
 				if useTagChecks {
 					// Use tag-based checks (when tags are enabled)

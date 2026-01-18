@@ -9,7 +9,7 @@ import (
 )
 
 // RebalanceSellsCalculator identifies overweight positions to sell for rebalancing.
-// Supports optional tag-based filtering for performance when EnableTagFiltering=true.
+// Uses mandatory tag-based filtering for performance.
 type RebalanceSellsCalculator struct {
 	*BaseCalculator
 	tagFilter    TagFilter
@@ -196,18 +196,31 @@ func (c *RebalanceSellsCalculator) Calculate(
 				}
 			}
 
-			qualityScore := CalculateSellQualityScore(ctx, posSell.ISIN, securityTags, config)
-
 			// Protect high-quality positions unless really necessary (overweight > 20%)
-			if qualityScore.IsHighQuality && overweight < 0.20 {
+			// Tags are mandatory - always use tag-based checks
+			isHighQuality := false
+			if len(securityTags) > 0 {
+				// Tag-based check: look for protected tags (high-quality, quality-high-cagr, etc.)
+				protectedTags := []string{"high-quality", "quality-high-cagr", "high-stability", "consistent-grower", "meets-target-return", "dividend-grower"}
+				for _, protTag := range protectedTags {
+					if contains(securityTags, protTag) {
+						isHighQuality = true
+						break
+					}
+				}
+			}
+
+			if isHighQuality && overweight < 0.20 {
 				c.log.Debug().
 					Str("symbol", posSell.Symbol).
 					Str("isin", posSell.ISIN).
-					Float64("quality_score", qualityScore.QualityScore).
 					Msg("Protected high-quality position from rebalance sell")
 				exclusions.Add(posSell.ISIN, posSell.Symbol, posSell.Name, "protected high-quality position")
 				continue
 			}
+
+			// Calculate quality score for priority adjustment (still used for SellPriorityBoost)
+			qualityScore := CalculateSellQualityScore(ctx, posSell.ISIN, securityTags, config)
 
 			// Calculate net value after transaction costs
 			valueEUR := posSell.SellValueEUR
@@ -217,8 +230,8 @@ func (c *RebalanceSellsCalculator) Calculate(
 			// Priority based on overweight and quality (low quality = higher priority)
 			priority := overweight * 0.5 * posSell.QualityPriority
 
-			// Apply tag-based priority boosts
-			if config.EnableTagFiltering && len(securityTags) > 0 {
+			// Apply tag-based priority boosts (tags are mandatory)
+			if len(securityTags) > 0 {
 				priority = ApplyTagBasedPriorityBoosts(priority, securityTags, "rebalance_sells", c.securityRepo)
 			}
 

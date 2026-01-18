@@ -9,7 +9,7 @@ import (
 )
 
 // AveragingDownCalculator identifies opportunities to average down on losing positions.
-// Supports optional tag-based pre-filtering for performance when EnableTagFiltering=true.
+// Uses mandatory tag-based pre-filtering for performance.
 type AveragingDownCalculator struct {
 	*BaseCalculator
 	tagFilter    TagFilter
@@ -76,9 +76,9 @@ func (c *AveragingDownCalculator) Calculate(
 		config = domain.NewDefaultConfiguration()
 	}
 
-	// Tag-based pre-filtering (when enabled)
+	// Tag-based pre-filtering (mandatory)
 	var candidateMap map[string]bool
-	if config.EnableTagFiltering && c.tagFilter != nil {
+	if c.tagFilter != nil {
 		candidateSymbols, err := c.tagFilter.GetOpportunityCandidates(ctx, config)
 		if err != nil {
 			return domain.CalculatorResult{PreFiltered: exclusions.Result()}, fmt.Errorf("failed to get tag-based candidates: %w", err)
@@ -106,7 +106,6 @@ func (c *AveragingDownCalculator) Calculate(
 		Float64("max_loss_threshold", maxLossThreshold).
 		Float64("min_loss_threshold", minLossThreshold).
 		Float64("averaging_down_percent", avgDownPercent).
-		Bool("tag_filtering_enabled", config.EnableTagFiltering).
 		Msg("Calculating averaging-down opportunities")
 
 	for _, position := range ctx.EnrichedPositions {
@@ -172,19 +171,17 @@ func (c *AveragingDownCalculator) Calculate(
 			continue
 		}
 
-		// Get security tags for quality gates and priority boosting
+		// Get security tags for quality gates and priority boosting (tags are mandatory)
 		var securityTags []string
-		if config.EnableTagFiltering && c.securityRepo != nil {
+		if c.securityRepo != nil {
 			tags, err := c.securityRepo.GetTagsForSecurity(position.Symbol)
 			if err == nil && len(tags) > 0 {
 				securityTags = tags
 			}
 		}
 
-		// Quality gates: tag-based when available, score-based fallback
-		useTagChecks := len(securityTags) > 0 && config.EnableTagFiltering
-
-		if useTagChecks {
+		// Quality gates: tag-based (tags are mandatory)
+		if len(securityTags) > 0 {
 			// Tag-based checks
 			// CRITICAL: Exclude value traps (classical or ensemble)
 			if contains(securityTags, "value-trap") || contains(securityTags, "ensemble-value-trap") {
@@ -211,42 +208,6 @@ func (c *AveragingDownCalculator) Calculate(
 					Msg("Skipping - quality gate failed (tag-based check)")
 				exclusions.Add(isin, symbol, securityName, "quality gate failed (tag-based)")
 				continue
-			}
-		} else {
-			// Score-based fallback
-			qualityCheck := CheckQualityGates(ctx, isin, false, config)
-
-			if qualityCheck.IsEnsembleValueTrap {
-				c.log.Debug().
-					Str("symbol", symbol).
-					Bool("classical", qualityCheck.IsValueTrap).
-					Bool("quantum", qualityCheck.IsQuantumValueTrap).
-					Float64("quantum_prob", qualityCheck.QuantumValueTrapProb).
-					Msg("Skipping value trap (ensemble detection)")
-				exclusions.Add(isin, symbol, securityName, "value trap detected (score-based)")
-				continue
-			}
-
-			if qualityCheck.BelowMinimumReturn {
-				c.log.Debug().
-					Str("symbol", symbol).
-					Msg("Skipping - below absolute minimum return (score-based filter)")
-				exclusions.Add(isin, symbol, securityName, "below minimum return (score-based)")
-				continue
-			}
-
-			// For averaging down, we're less strict on quality (already in position)
-			// Only skip if quality is very poor
-			if qualityCheck.QualityGateReason == "quality_gate_fail" {
-				stabilityScore := GetScoreFromContext(ctx, isin, ctx.StabilityScores)
-				if stabilityScore > 0 && stabilityScore < 0.4 {
-					c.log.Debug().
-						Str("symbol", symbol).
-						Float64("stability_score", stabilityScore).
-						Msg("Skipping - extremely poor quality (score-based check)")
-					exclusions.Add(isin, symbol, securityName, fmt.Sprintf("extremely poor stability score %.2f (score-based)", stabilityScore))
-					continue
-				}
 			}
 		}
 
@@ -364,12 +325,12 @@ func (c *AveragingDownCalculator) Calculate(
 		priority := c.calculatePriority(lossPercent, securityTags, config)
 
 		// Apply quantum warning penalty (10% for averaging down - already in position)
-		if config.EnableTagFiltering && len(securityTags) > 0 {
+		if len(securityTags) > 0 {
 			priority = ApplyQuantumWarningPenalty(priority, securityTags, "averaging_down")
 		}
 
 		// Apply tag-based priority boosts (with regime-aware logic)
-		if config.EnableTagFiltering && len(securityTags) > 0 {
+		if len(securityTags) > 0 {
 			priority = ApplyTagBasedPriorityBoosts(priority, securityTags, "averaging_down", c.securityRepo)
 		}
 
@@ -443,8 +404,8 @@ func (c *AveragingDownCalculator) calculatePriority(
 	// Convert loss to positive scale: -0.20 loss = 0.20 priority, -0.05 loss = 0.05 priority
 	priority := -lossPercent
 
-	// Apply tag-based boosts only when tag filtering is enabled and tags are available
-	if config == nil || !config.EnableTagFiltering || len(securityTags) == 0 {
+	// Apply tag-based boosts only when tags are available (tags are mandatory)
+	if len(securityTags) == 0 {
 		return priority
 	}
 

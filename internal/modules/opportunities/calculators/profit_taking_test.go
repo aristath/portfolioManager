@@ -127,7 +127,6 @@ func TestProfitTakingCalculator_MaxSellPercentage(t *testing.T) {
 			}
 
 			config := planningdomain.NewDefaultConfiguration()
-			config.EnableTagFiltering = false
 
 			params := map[string]interface{}{
 				"min_gain_threshold":  0.15,                 // 15% minimum
@@ -216,7 +215,6 @@ func TestProfitTakingCalculator_MaxSellPercentage_WithSellPercentageParam(t *tes
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			config := planningdomain.NewDefaultConfiguration()
-			config.EnableTagFiltering = false
 
 			params := map[string]interface{}{
 				"min_gain_threshold":  0.15,
@@ -270,7 +268,6 @@ func TestProfitTakingCalculator_NoMaxSellPercentage_DefaultsTo20Percent(t *testi
 	}
 
 	config := planningdomain.NewDefaultConfiguration()
-	config.EnableTagFiltering = false
 
 	params := map[string]interface{}{
 		"min_gain_threshold": 0.15,
@@ -327,7 +324,6 @@ func TestProfitTakingCalculator_HighQualityProtection(t *testing.T) {
 	}
 
 	config := planningdomain.NewDefaultConfiguration()
-	config.EnableTagFiltering = false // Disable tag pre-filtering for this test
 
 	params := map[string]interface{}{
 		"min_gain_threshold":  0.15,
@@ -389,7 +385,6 @@ func TestProfitTakingCalculator_LowQualityBoostedSelling(t *testing.T) {
 	}
 
 	config := planningdomain.NewDefaultConfiguration()
-	config.EnableTagFiltering = false // Disable tag pre-filtering for this test
 
 	params := map[string]interface{}{
 		"min_gain_threshold":  0.15,
@@ -448,7 +443,6 @@ func TestProfitTakingCalculator_WindfallOverridesQualityProtection(t *testing.T)
 	}
 
 	config := planningdomain.NewDefaultConfiguration()
-	config.EnableTagFiltering = false // Disable tag pre-filtering for this test
 
 	params := map[string]interface{}{
 		"min_gain_threshold":  0.15,

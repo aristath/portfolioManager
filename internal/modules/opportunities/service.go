@@ -17,7 +17,7 @@ type Service struct {
 }
 
 // NewService creates a new opportunities service with unified calculators.
-// Tag-based optimization is controlled by the EnableTagFiltering config option.
+// Tag-based optimization is now mandatory and always enabled.
 // Requires SecurityRepository for tag queries and quality gates.
 // Follows Dependency Inversion Principle - depends on interface, not concrete implementation.
 func NewService(

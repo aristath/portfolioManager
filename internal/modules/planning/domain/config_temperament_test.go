@@ -28,8 +28,7 @@ func TestPlannerConfigNoNameDescription(t *testing.T) {
 	// Config should be usable without relying on Name/Description
 	assert.True(t, config.EnableBatchGeneration,
 		"Config should work without Name/Description fields")
-	assert.True(t, config.EnableTagFiltering,
-		"Tag filtering should be enabled by default")
+	// Tag filtering is now mandatory (always enabled)
 }
 
 // TestPlannerConfigRiskManagementDefaults verifies risk management defaults
@@ -160,10 +159,4 @@ func TestPlannerConfigTradePermissionsDefault(t *testing.T) {
 	assert.True(t, config.AllowBuy, "AllowBuy should be true by default")
 }
 
-// TestPlannerConfigTagFilteringDefault verifies tag filtering enabled
-func TestPlannerConfigTagFilteringDefault(t *testing.T) {
-	config := NewDefaultConfiguration()
-
-	assert.True(t, config.EnableTagFiltering,
-		"Tag filtering should be enabled by default")
-}
+// TestPlannerConfigTagFilteringDefault is removed - tag filtering is now mandatory (always enabled)

@@ -11,7 +11,7 @@ import (
 )
 
 // OpportunityBuysCalculator identifies new buying opportunities based on security scores.
-// Supports optional tag-based pre-filtering for performance when EnableTagFiltering=true.
+// Uses mandatory tag-based pre-filtering for performance.
 type OpportunityBuysCalculator struct {
 	*BaseCalculator
 	tagFilter    TagFilter
@@ -83,11 +83,12 @@ func (c *OpportunityBuysCalculator) Calculate(
 		}
 	}
 
-	// Tag-based pre-filtering (when enabled) - still uses Symbols for tag API
+	// Tag-based pre-filtering (mandatory) - uses Symbols for tag API
 	var candidateMap map[string]bool
 	var candidateSymbols []string
 
-	if config.EnableTagFiltering && c.tagFilter != nil {
+	// Tag-based pre-filtering is mandatory
+	if c.tagFilter != nil {
 		symbols, err := c.tagFilter.GetOpportunityCandidates(ctx, config)
 		if err != nil {
 			return planningdomain.CalculatorResult{PreFiltered: exclusions.Result()}, fmt.Errorf("failed to get tag-based candidates: %w", err)
@@ -108,27 +109,14 @@ func (c *OpportunityBuysCalculator) Calculate(
 			Int("tag_candidates", len(candidateSymbols)).
 			Msg("Tag-based pre-filtering complete")
 	} else {
-		// No tag filtering - process all securities with scores (ISINs from SecurityScores)
-		if len(ctx.SecurityScores) == 0 {
-			c.log.Debug().Msg("No security scores available")
-			return planningdomain.CalculatorResult{PreFiltered: exclusions.Result()}, nil
-		}
-
-		// SecurityScores is ISIN-keyed, but we need to match with tag filter logic
-		// Build candidateSymbols from Securities that have scores
-		for _, security := range ctx.Securities {
-			if security.ISIN != "" {
-				if _, hasScore := ctx.SecurityScores[security.ISIN]; hasScore {
-					candidateSymbols = append(candidateSymbols, security.Symbol)
-				}
-			}
-		}
+		// Tag filter required but not available
+		c.log.Error().Msg("Tag filter not available - tag filtering is mandatory")
+		return planningdomain.CalculatorResult{PreFiltered: exclusions.Result()}, fmt.Errorf("tag filter required but not available")
 	}
 
 	c.log.Debug().
 		Float64("min_score", minScore).
 		Int("max_positions", maxPositions).
-		Bool("tag_filtering_enabled", config.EnableTagFiltering).
 		Msg("Calculating opportunity buys")
 
 	// Build list of scored securities
@@ -161,23 +149,14 @@ func (c *OpportunityBuysCalculator) Calculate(
 		isin := security.ISIN
 		securityName := security.Name
 
-		// Get score by ISIN - used for prioritization, not filtering when tags are available
+		// Get score by ISIN - used for prioritization only (tags handle filtering)
 		score, ok := ctx.SecurityScores[isin] // ISIN key ✅
 		if !ok {
-			// Only require score when tag filtering is disabled (fallback)
-			if !config.EnableTagFiltering {
-				exclusions.Add(isin, symbol, securityName, "no score available")
-				continue
-			}
+			// Score not required for filtering (tags handle that), use default for prioritization
 			score = 0.5 // Default neutral score for prioritization
 		}
-		// Only apply score threshold when tag filtering is disabled
-		// When tag filtering is enabled, rely on tags (quality-gate-fail, below-minimum-return, bubble-risk)
-		// Tags encode explicit quality judgments from 7-path quality gates, minimum return requirements, and bubble detection.
-		if !config.EnableTagFiltering && score < minScore {
-			exclusions.Add(isin, symbol, securityName, fmt.Sprintf("score %.2f below minimum %.2f", score, minScore))
-			continue
-		}
+		// Tags are mandatory and handle all quality filtering
+		// Tags encode explicit quality judgments: quality-gate-fail, below-minimum-return, bubble-risk
 
 		// Skip if we already have this position and exclude_existing is true
 		if excludeExisting && existingPositions[isin] { // ISIN key ✅
@@ -294,18 +273,16 @@ func (c *OpportunityBuysCalculator) Calculate(
 				Msg("Applied flexible penalty (quality-aware)")
 		}
 
-		// Quality gate checks (tag-based or score-based)
+		// Quality gate checks (tags are mandatory)
 		var securityTags []string
-		useTagChecks := false
-		if config.EnableTagFiltering && c.securityRepo != nil {
+		if c.securityRepo != nil {
 			tags, err := c.securityRepo.GetTagsForSecurity(symbol)
 			if err == nil && len(tags) > 0 {
 				securityTags = tags
-				useTagChecks = true
 			}
 		}
 
-		if useTagChecks {
+		if len(securityTags) > 0 {
 			// Tag-based quality gates
 			// Skip value traps (classical or ensemble)
 			if contains(securityTags, "value-trap") || contains(securityTags, "ensemble-value-trap") {
@@ -468,12 +445,12 @@ func (c *OpportunityBuysCalculator) Calculate(
 		priority := c.calculatePriority(score, securityTags, config)
 
 		// Apply quantum warning penalty (30% for new positions)
-		if config.EnableTagFiltering && len(securityTags) > 0 {
+		if len(securityTags) > 0 {
 			priority = ApplyQuantumWarningPenalty(priority, securityTags, "opportunity_buys")
 		}
 
 		// Apply tag-based priority boosts (with regime-aware logic)
-		if config.EnableTagFiltering && len(securityTags) > 0 {
+		if len(securityTags) > 0 {
 			priority = ApplyTagBasedPriorityBoosts(priority, securityTags, "opportunity_buys", c.securityRepo)
 		}
 
@@ -524,11 +501,11 @@ func (c *OpportunityBuysCalculator) Calculate(
 		return candidates[i].Priority > candidates[j].Priority
 	})
 
-	logMsg := c.log.Info().Int("candidates", len(candidates))
-	if candidateMap != nil {
-		logMsg = logMsg.Int("filtered_from", len(candidateMap))
-	}
-	logMsg.Int("pre_filtered", len(exclusions.Result())).Msg("Opportunity buy candidates identified")
+	c.log.Info().
+		Int("candidates", len(candidates)).
+		Int("filtered_from", len(candidateMap)).
+		Int("pre_filtered", len(exclusions.Result())).
+		Msg("Opportunity buy candidates identified")
 
 	return planningdomain.CalculatorResult{
 		Candidates:  candidates,
@@ -544,8 +521,8 @@ func (c *OpportunityBuysCalculator) calculatePriority(
 ) float64 {
 	priority := baseScore
 
-	// Apply tag-based boosts only when tag filtering is enabled and tags are available
-	if config == nil || !config.EnableTagFiltering || len(securityTags) == 0 {
+	// Apply tag-based boosts only when tags are available (tags are mandatory)
+	if len(securityTags) == 0 {
 		return priority
 	}
 

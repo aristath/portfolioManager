@@ -48,8 +48,7 @@ type PlannerConfiguration struct {
 	EnableCorrelationAwareFilter bool `json:"enable_correlation_aware_filter"`
 	EnableDiversityFilter        bool `json:"enable_diversity_filter"`
 
-	// Tag filtering
-	EnableTagFiltering bool `json:"enable_tag_filtering"` // Enable/disable tag-based pre-filtering
+	// Tag filtering is now mandatory and always enabled (no config option)
 }
 
 // NewDefaultConfiguration creates a PlannerConfiguration with default settings.
@@ -85,8 +84,7 @@ func NewDefaultConfiguration() *PlannerConfiguration {
 		// Post-generation filters enabled by default
 		EnableCorrelationAwareFilter: true,
 		EnableDiversityFilter:        true,
-		// Tag filtering enabled by default
-		EnableTagFiltering: true,
+		// Tag filtering is now mandatory (always enabled)
 	}
 }
 

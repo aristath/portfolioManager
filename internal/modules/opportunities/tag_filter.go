@@ -26,7 +26,7 @@ func NewTagBasedFilter(securityRepo SecurityRepository, log zerolog.Logger) *Tag
 // GetOpportunityCandidates uses exclusion-based tag filtering to identify buying opportunity candidates.
 // Returns all active securities EXCEPT those with exclusion tags (bad tags).
 // This is more inclusive than inclusion-based filtering and aligns with "tag what's wrong, not what's right" philosophy.
-// If config is provided and EnableTagFiltering is false, returns all active securities.
+// Tag filtering is now mandatory and always applied.
 func (f *TagBasedFilter) GetOpportunityCandidates(ctx *domain.OpportunityContext, config *domain.PlannerConfiguration) ([]string, error) {
 	if ctx == nil {
 		return nil, nil
@@ -38,24 +38,7 @@ func (f *TagBasedFilter) GetOpportunityCandidates(ctx *domain.OpportunityContext
 		return nil, err
 	}
 
-	// If tag filtering is disabled, return all active securities
-	if config != nil && !config.EnableTagFiltering {
-		f.log.Debug().Msg("Tag filtering disabled, returning all active securities")
-		symbols := make([]string, 0, len(allSecurities))
-		for _, sec := range allSecurities {
-			if sec.Symbol != "" {
-				symbols = append(symbols, sec.Symbol)
-			}
-		}
-
-		f.log.Debug().
-			Int("candidates", len(symbols)).
-			Msg("Returned all active securities (tag filtering disabled)")
-
-		return symbols, nil
-	}
-
-	// Get exclusion tags (bad tags to exclude)
+	// Get exclusion tags (bad tags to exclude) - tags are now mandatory
 	exclusionTags := f.selectExclusionTags(ctx, config)
 	if len(exclusionTags) == 0 {
 		// No exclusions - return all active securities
@@ -110,7 +93,7 @@ func (f *TagBasedFilter) GetOpportunityCandidates(ctx *domain.OpportunityContext
 
 // GetSellCandidates uses tags to quickly identify selling opportunity candidates.
 // Returns a list of security symbols from positions that match sell-related tags.
-// If config is provided and EnableTagFiltering is false, returns all position symbols.
+// Tag filtering is now mandatory and always applied.
 func (f *TagBasedFilter) GetSellCandidates(ctx *domain.OpportunityContext, config *domain.PlannerConfiguration) ([]string, error) {
 	if ctx == nil || len(ctx.EnrichedPositions) == 0 {
 		return []string{}, nil
@@ -128,14 +111,7 @@ func (f *TagBasedFilter) GetSellCandidates(ctx *domain.OpportunityContext, confi
 		return []string{}, nil
 	}
 
-	// If tag filtering is disabled, return all position symbols
-	if config != nil && !config.EnableTagFiltering {
-		f.log.Debug().
-			Int("candidates", len(positionSymbols)).
-			Msg("Returned all position symbols (tag filtering disabled)")
-		return positionSymbols, nil
-	}
-
+	// Tags are now mandatory - always use tag-based filtering
 	tags := f.selectSellTags(ctx)
 	if len(tags) == 0 {
 		f.log.Debug().Msg("No sell tags selected")
@@ -215,16 +191,9 @@ func (f *TagBasedFilter) selectSellTags(ctx *domain.OpportunityContext) []string
 
 // IsMarketVolatile determines if market conditions are volatile.
 // Checks if many securities have volatility-spike tag as a proxy for market volatility.
-// Falls back to checking all securities if tags are disabled.
+// Tags are now mandatory and always used.
 func (f *TagBasedFilter) IsMarketVolatile(ctx *domain.OpportunityContext, config *domain.PlannerConfiguration) bool {
-	// If tag filtering is disabled, we can't use tags to check volatility
-	// Return false (conservative: assume market is not volatile)
-	if config != nil && !config.EnableTagFiltering {
-		f.log.Debug().Msg("Tag filtering disabled, cannot check market volatility via tags")
-		return false
-	}
-
-	// Check if many securities have volatility-spike tag
+	// Check if many securities have volatility-spike tag (tags are now mandatory)
 	volatileSecurities, err := f.securityRepo.GetByTags([]string{"volatility-spike"})
 	if err != nil {
 		f.log.Warn().Err(err).Msg("Failed to check market volatility")
