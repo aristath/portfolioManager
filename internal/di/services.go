@@ -1425,11 +1425,11 @@ func (a *ocbScoresRepoAdapter) GetQualityScores(isinList []string) (map[string]f
 			continue
 		}
 		if cagrScore.Valid {
-			normalized := math.Max(0.0, math.Min(1.0, cagrScore.Float64/100.0))
+			normalized := math.Max(0.0, math.Min(1.0, cagrScore.Float64))
 			longTermScores[isin] = normalized
 		}
 		if stabilityScore.Valid {
-			normalized := math.Max(0.0, math.Min(1.0, stabilityScore.Float64/100.0))
+			normalized := math.Max(0.0, math.Min(1.0, stabilityScore.Float64))
 			stabilityScores[isin] = normalized
 		}
 	}
