@@ -8,6 +8,7 @@ package services
 
 import (
 	"fmt"
+	"strings"
 
 	planningdomain "github.com/aristath/sentinel/internal/modules/planning/domain"
 	"github.com/aristath/sentinel/internal/modules/portfolio"
@@ -205,11 +206,18 @@ func (b *OpportunityContextBuilder) buildContext(
 	enrichedPositions, totalValue := b.buildEnrichedPositions(positions, stocksByISIN, currentPrices, cashBalances)
 
 	// Get geography weights (CRITICAL - was missing from handler)
-	geographyWeights := b.populateGeographyWeights()
+	// Pass securities to filter weights to only active geographies
+	geographyWeights := b.populateGeographyWeights(securities)
 
 	// Calculate geography allocations from positions
 	// Pass geographyWeights so securities without geography can be split across ALL
 	geographyAllocations := b.calculateGeographyAllocations(enrichedPositions, totalValue, geographyWeights)
+
+	// Get industry weights (filter to only active industries)
+	industryWeights := b.populateIndustryWeights(securities)
+
+	// Calculate industry allocations from positions
+	industryAllocations := b.calculateIndustryAllocations(enrichedPositions, totalValue, industryWeights)
 
 	// Get security scores
 	isinList := b.getISINList(securities)
@@ -241,7 +249,7 @@ func (b *OpportunityContextBuilder) buildContext(
 	availableCashEUR := cashBalances["EUR"]
 
 	// Build PortfolioContext for scoring
-	portfolioCtx := b.buildPortfolioContext(enrichedPositions, geographyWeights, currentPrices, totalValue)
+	portfolioCtx := b.buildPortfolioContext(enrichedPositions, geographyWeights, industryWeights, currentPrices, totalValue)
 
 	// Use optimizer weights if provided, otherwise fall back to allocations
 	targetWeights := optimizerWeights
@@ -261,6 +269,8 @@ func (b *OpportunityContextBuilder) buildContext(
 		TargetWeights:            targetWeights,
 		GeographyAllocations:     geographyAllocations,
 		GeographyWeights:         geographyWeights,
+		IndustryAllocations:      industryAllocations,
+		IndustryWeights:          industryWeights,
 		CAGRs:                    cagrs,
 		LongTermScores:           longTermScores,
 		StabilityScores:          stabilityScores,
@@ -391,6 +401,7 @@ func (b *OpportunityContextBuilder) buildEnrichedPositions(
 			CurrentPrice:   currentPrice,
 			SecurityName:   security.Name,
 			Geography:      security.Geography,
+			Industry:       security.Industry,
 			AllowBuy:       allowBuy,
 			AllowSell:      allowSell,
 			MinLot:         minLot,
@@ -410,7 +421,9 @@ func (b *OpportunityContextBuilder) buildEnrichedPositions(
 }
 
 // populateGeographyWeights gets geography weights from allocation targets.
-func (b *OpportunityContextBuilder) populateGeographyWeights() map[string]float64 {
+// Filters weights to only include geographies that exist in the active securities
+// (excluding index securities), then normalizes to sum to 1.0.
+func (b *OpportunityContextBuilder) populateGeographyWeights(securities []universe.Security) map[string]float64 {
 	if b.allocRepo == nil {
 		return make(map[string]float64)
 	}
@@ -421,8 +434,33 @@ func (b *OpportunityContextBuilder) populateGeographyWeights() map[string]float6
 		return make(map[string]float64)
 	}
 
-	// Normalize weights to ensure they sum to 1.0
-	return normalizeWeights(weights)
+	// Extract unique geographies from active non-index securities
+	activeGeographies := extractUniqueGeographies(securities)
+
+	// Filter weights to only include geographies present in the universe
+	filteredWeights := make(map[string]float64)
+	for geo, weight := range weights {
+		if activeGeographies[geo] {
+			filteredWeights[geo] = weight
+		}
+	}
+
+	if len(filteredWeights) == 0 {
+		b.log.Warn().
+			Int("configured_targets", len(weights)).
+			Int("active_geographies", len(activeGeographies)).
+			Msg("No matching geographies found between targets and universe")
+		return make(map[string]float64)
+	}
+
+	b.log.Debug().
+		Int("configured_targets", len(weights)).
+		Int("active_geographies", len(activeGeographies)).
+		Int("filtered_targets", len(filteredWeights)).
+		Msg("Filtered geography weights to active geographies")
+
+	// Normalize filtered weights to ensure they sum to 1.0
+	return normalizeWeights(filteredWeights)
 }
 
 // calculateGeographyAllocations calculates current geography allocations from positions.
@@ -463,6 +501,92 @@ func (b *OpportunityContextBuilder) calculateGeographyAllocations(
 	// Convert to percentages
 	for geo, value := range geographyValues {
 		allocations[geo] = value / totalValue
+	}
+
+	return allocations
+}
+
+// populateIndustryWeights gets industry weights from allocation targets.
+// Filters weights to only include industries that exist in the active securities
+// (excluding index securities), then normalizes to sum to 1.0.
+func (b *OpportunityContextBuilder) populateIndustryWeights(securities []universe.Security) map[string]float64 {
+	if b.allocRepo == nil {
+		return make(map[string]float64)
+	}
+
+	weights, err := b.allocRepo.GetIndustryTargets()
+	if err != nil {
+		b.log.Warn().Err(err).Msg("Failed to get industry weights")
+		return make(map[string]float64)
+	}
+
+	// Extract unique industries from active non-index securities
+	activeIndustries := extractUniqueIndustries(securities)
+
+	// Filter weights to only include industries present in the universe
+	filteredWeights := make(map[string]float64)
+	for industry, weight := range weights {
+		if activeIndustries[industry] {
+			filteredWeights[industry] = weight
+		}
+	}
+
+	if len(filteredWeights) == 0 {
+		b.log.Warn().
+			Int("configured_targets", len(weights)).
+			Int("active_industries", len(activeIndustries)).
+			Msg("No matching industries found between targets and universe")
+		return make(map[string]float64)
+	}
+
+	b.log.Debug().
+		Int("configured_targets", len(weights)).
+		Int("active_industries", len(activeIndustries)).
+		Int("filtered_targets", len(filteredWeights)).
+		Msg("Filtered industry weights to active industries")
+
+	// Normalize filtered weights to ensure they sum to 1.0
+	return normalizeWeights(filteredWeights)
+}
+
+// calculateIndustryAllocations calculates current industry allocations from positions.
+// Securities with multiple industries have their value split proportionally.
+// Securities without an industry are split equally across ALL known industries.
+func (b *OpportunityContextBuilder) calculateIndustryAllocations(
+	positions []planningdomain.EnrichedPosition,
+	totalValue float64,
+	allIndustries map[string]float64,
+) map[string]float64 {
+	allocations := make(map[string]float64)
+
+	if totalValue <= 0 {
+		return allocations
+	}
+
+	// Sum values by industry (direct - no group mapping)
+	industryValues := make(map[string]float64)
+	for _, pos := range positions {
+		// Parse comma-separated industries
+		industries := utils.ParseCSV(pos.Industry)
+
+		if len(industries) == 0 && len(allIndustries) > 0 {
+			// No industry assigned - split equally across ALL known industries
+			valuePerIndustry := pos.MarketValueEUR / float64(len(allIndustries))
+			for industry := range allIndustries {
+				industryValues[industry] += valuePerIndustry
+			}
+		} else if len(industries) > 0 {
+			// Split value proportionally across specified industries
+			valuePerIndustry := pos.MarketValueEUR / float64(len(industries))
+			for _, industry := range industries {
+				industryValues[industry] += valuePerIndustry
+			}
+		}
+	}
+
+	// Convert to percentages
+	for industry, value := range industryValues {
+		allocations[industry] = value / totalValue
 	}
 
 	return allocations
@@ -692,6 +816,7 @@ func (b *OpportunityContextBuilder) addPendingOrdersToCooloff(
 func (b *OpportunityContextBuilder) buildPortfolioContext(
 	positions []planningdomain.EnrichedPosition,
 	geographyWeights map[string]float64,
+	industryWeights map[string]float64,
 	currentPrices map[string]float64,
 	totalValue float64,
 ) *scoringdomain.PortfolioContext {
@@ -699,17 +824,21 @@ func (b *OpportunityContextBuilder) buildPortfolioContext(
 	positionValues := make(map[string]float64)
 	positionAvgPrices := make(map[string]float64)
 	securityGeographies := make(map[string]string)
+	securityIndustries := make(map[string]string)
 
 	for _, pos := range positions {
 		positionValues[pos.ISIN] = pos.MarketValueEUR
 		positionAvgPrices[pos.ISIN] = pos.AverageCost
 		securityGeographies[pos.ISIN] = pos.Geography
+		securityIndustries[pos.ISIN] = pos.Industry
 	}
 
 	return &scoringdomain.PortfolioContext{
 		GeographyWeights:    geographyWeights,
+		IndustryWeights:     industryWeights,
 		Positions:           positionValues,
 		SecurityGeographies: securityGeographies,
+		SecurityIndustries:  securityIndustries,
 		PositionAvgPrices:   positionAvgPrices,
 		CurrentPrices:       currentPrices,
 		TotalValue:          totalValue,
@@ -737,4 +866,58 @@ func normalizeWeights(weights map[string]float64) map[string]float64 {
 	}
 
 	return normalized
+}
+
+// extractUniqueGeographies extracts all unique geographies from non-index securities.
+// Handles comma-separated geographies (e.g., "EU, US, AS") by splitting them.
+// Excludes securities with symbols ending in ".IDX".
+func extractUniqueGeographies(securities []universe.Security) map[string]bool {
+	geographies := make(map[string]bool)
+
+	for _, sec := range securities {
+		// Skip index securities
+		if strings.HasSuffix(sec.Symbol, ".IDX") {
+			continue
+		}
+
+		// Skip if no geography assigned
+		if sec.Geography == "" {
+			continue
+		}
+
+		// Parse comma-separated geographies
+		geos := utils.ParseCSV(sec.Geography)
+		for _, geo := range geos {
+			geographies[geo] = true
+		}
+	}
+
+	return geographies
+}
+
+// extractUniqueIndustries extracts all unique industries from non-index securities.
+// Handles comma-separated industries (e.g., "Finance, Technology") by splitting them.
+// Excludes securities with symbols ending in ".IDX".
+func extractUniqueIndustries(securities []universe.Security) map[string]bool {
+	industries := make(map[string]bool)
+
+	for _, sec := range securities {
+		// Skip index securities
+		if strings.HasSuffix(sec.Symbol, ".IDX") {
+			continue
+		}
+
+		// Skip if no industry assigned
+		if sec.Industry == "" {
+			continue
+		}
+
+		// Parse comma-separated industries
+		inds := utils.ParseCSV(sec.Industry)
+		for _, ind := range inds {
+			industries[ind] = true
+		}
+	}
+
+	return industries
 }

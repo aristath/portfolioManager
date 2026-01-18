@@ -27,6 +27,8 @@ type OpportunityContext struct {
 	SecurityScores       map[string]float64 `json:"security_scores,omitempty"`       // Final scores by ISIN (internal identifier)
 	GeographyAllocations map[string]float64 `json:"geography_allocations,omitempty"` // Current allocations by geography
 	GeographyWeights     map[string]float64 `json:"geography_weights,omitempty"`     // Target weights by geography
+	IndustryAllocations  map[string]float64 `json:"industry_allocations,omitempty"`  // Current allocations by industry
+	IndustryWeights      map[string]float64 `json:"industry_weights,omitempty"`      // Target weights by industry
 	TargetWeights        map[string]float64 `json:"target_weights,omitempty"`        // Optimizer target weights
 
 	// Target return filtering data (for flexible penalty system)

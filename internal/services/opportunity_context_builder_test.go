@@ -427,7 +427,12 @@ func TestOpportunityContextBuilder_Build_PopulatesGeographyWeights(t *testing.T)
 
 	builder := NewOpportunityContextBuilder(
 		&ocbMockPositionRepository{positions: []portfolio.Position{}},
-		&ocbMockSecurityRepository{securities: []universe.Security{}},
+		&ocbMockSecurityRepository{
+			securities: []universe.Security{
+				{Symbol: "AAPL.US", Geography: "North America"},
+				{Symbol: "ASML.EU", Geography: "Europe"},
+			},
+		},
 		&ocbMockAllocationRepository{
 			allocations: map[string]float64{},
 			geographyTargets: map[string]float64{
@@ -452,6 +457,7 @@ func TestOpportunityContextBuilder_Build_PopulatesGeographyWeights(t *testing.T)
 	require.NotNil(t, ctx)
 
 	// GeographyWeights must be populated from allocation targets (normalized to sum to 1.0)
+	// Now filtered to only include geographies present in universe
 	assert.NotNil(t, ctx.GeographyWeights, "GeographyWeights should not be nil")
 	assert.InDelta(t, 0.60, ctx.GeographyWeights["North America"], 0.01, "North America weight should be ~0.60")
 	assert.InDelta(t, 0.40, ctx.GeographyWeights["Europe"], 0.01, "Europe weight should be ~0.40")

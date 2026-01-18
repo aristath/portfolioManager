@@ -29,6 +29,7 @@ type EnrichedPosition struct {
 	// Security metadata (from StocksByISIN map - eliminates lookup)
 	SecurityName string // Company name
 	Geography    string // Geography (comma-separated for multiple)
+	Industry     string // Industry (comma-separated for multiple)
 	Exchange     string // Exchange identifier
 	Active       bool   // Is security active for trading?
 	AllowBuy     bool   // Can buy this security?
