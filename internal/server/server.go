@@ -136,6 +136,7 @@ func New(cfg Config) *Server {
 		marketHoursService,
 		cfg.Container.MarketStatusWS,
 		cfg.Container.MetadataSyncService,
+		cfg.Container.SettingsRepo,
 	)
 
 	// Initialize R2 backup handlers if R2 is configured
@@ -257,14 +258,14 @@ func (s *Server) setupRoutes() {
 			securityRepo,
 			scoreRepo,
 			overrideRepo,
-			s.portfolioDB.Conn(),
+			s.portfolioDB.Conn(), // portfolioDB (still needed by handlers, though GetWithScores uses repos now)
 			positionRepo,
 			securityScorer,
 			historyDB,
 			setupService1,
 			s.container.SecurityDeletionService,
 			syncService1,
-			currencyExchangeService1,
+			currencyExchangeService1, // Implements domain.CurrencyExchangeServiceInterface
 			s.container.EventManager,
 			s.log,
 		)
@@ -357,7 +358,7 @@ func (s *Server) setupRoutes() {
 		portfolioCurrencyExchangeService := s.container.CurrencyExchangeService
 		portfolioCashManager := s.container.CashManager
 		// portfolioService already declared above for allocation module
-		portfolioHandler := portfoliohandlers.NewHandler(portfolioPositionRepo, portfolioService, portfolioTradernetClient, portfolioCurrencyExchangeService, portfolioCashManager, s.configDB.Conn(), s.log)
+		portfolioHandler := portfoliohandlers.NewHandler(portfolioPositionRepo, portfolioService, portfolioTradernetClient, portfolioCurrencyExchangeService, portfolioCashManager, s.container.SettingsRepo, s.log)
 		portfolioHandler.RegisterRoutes(r)
 
 		// Universe module
@@ -374,14 +375,14 @@ func (s *Server) setupRoutes() {
 			universeSecurityRepo,
 			universeScoreRepo,
 			universeOverrideRepo,
-			s.portfolioDB.Conn(), // Pass portfolioDB for GetWithScores
+			s.portfolioDB.Conn(), // portfolioDB (still needed by handlers, though GetWithScores uses repos now)
 			universePositionRepo,
 			universeSecurityScorer,
 			universeHistoryDB,
 			universeSetupService,
 			s.container.SecurityDeletionService,
 			universeSyncService,
-			universeCurrencyExchangeService,
+			universeCurrencyExchangeService, // Implements domain.CurrencyExchangeServiceInterface
 			s.container.EventManager,
 			s.log,
 		)
@@ -451,7 +452,8 @@ func (s *Server) setupRoutes() {
 		optimizationSecurityRepo := s.container.SecurityRepo
 		optimizationHandler := optimizationhandlers.NewHandler(
 			optimizationService,
-			s.configDB.Conn(),
+			s.portfolioDB.Conn(),
+			s.container.SettingsRepo,
 			optimizationSecurityRepo,
 			optimizationTradernetClient,
 			optimizationCurrencyExchangeService,
@@ -813,7 +815,7 @@ func (s *Server) createRiskHandler() *riskhandlers.Handler {
 // createAdaptationHandler creates a handler for adaptation/regime endpoints
 func (s *Server) createAdaptationHandler() *adaptationhandlers.Handler {
 	return adaptationhandlers.NewHandler(
-		s.configDB.Conn(),
+		s.container.RegimePersistence,
 		s.container.AdaptiveMarketService,
 		s.log,
 	)
@@ -843,7 +845,7 @@ func (s *Server) createSnapshotsHandler() *snapshotshandlers.Handler {
 		s.container.PositionRepo,
 		s.container.HistoryDBClient,
 		s.ledgerDB.Conn(),
-		s.configDB.Conn(),
+		s.container.RegimePersistence,
 		s.container.CashManager,
 		s.container.AdaptiveMarketService,
 		s.container.MarketHoursService,
