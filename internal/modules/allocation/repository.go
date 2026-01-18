@@ -9,27 +9,18 @@ import (
 	"sort"
 	"time"
 
+	"github.com/aristath/sentinel/internal/modules/universe"
 	"github.com/aristath/sentinel/internal/utils"
 	"github.com/rs/zerolog"
 )
-
-// SecurityInfo represents security information needed for allocation calculations.
-// This is a simplified view of security data used when determining available
-// geographies and industries from the investment universe.
-type SecurityInfo struct {
-	ISIN      string // Primary identifier
-	Symbol    string // Trading symbol
-	Name      string // Company name
-	Geography string // Country/region (may be comma-separated)
-	Industry  string // Industry sector (may be comma-separated)
-}
 
 // SecurityProvider defines the contract for getting security information.
 // This interface is used to avoid circular dependencies with the universe module.
 // It provides access to active tradable securities for determining available
 // geographies and industries.
+// Uses universe.Security directly to avoid duplicate types.
 type SecurityProvider interface {
-	GetAllActiveTradable() ([]SecurityInfo, error) // Get all tradable securities
+	GetAllActiveTradable() ([]universe.Security, error) // Get all tradable securities
 }
 
 // Repository handles allocation target database operations.

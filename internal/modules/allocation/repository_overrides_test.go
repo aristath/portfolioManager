@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/aristath/sentinel/internal/domain"
+	"github.com/aristath/sentinel/internal/modules/universe"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -22,7 +23,7 @@ func newTestSecurityProvider(db *sql.DB) *testSecurityProvider {
 	return &testSecurityProvider{db: db}
 }
 
-func (p *testSecurityProvider) GetAllActiveTradable() ([]SecurityInfo, error) {
+func (p *testSecurityProvider) GetAllActiveTradable() ([]universe.Security, error) {
 	// Query securities using JSON storage schema (migration 038)
 	// Filter out indices using JSON extraction
 	query := `SELECT isin, symbol, data, last_synced FROM securities
@@ -35,7 +36,7 @@ func (p *testSecurityProvider) GetAllActiveTradable() ([]SecurityInfo, error) {
 	}
 	defer rows.Close()
 
-	var securities []SecurityInfo
+	var securities []universe.Security
 	for rows.Next() {
 		var isin, symbol, jsonData string
 		var lastSynced sql.NullInt64
@@ -54,12 +55,15 @@ func (p *testSecurityProvider) GetAllActiveTradable() ([]SecurityInfo, error) {
 			continue // Skip malformed JSON
 		}
 
-		sec := SecurityInfo{
+		sec := universe.Security{
 			ISIN:      isin,
 			Symbol:    symbol,
 			Name:      data.Name,
 			Geography: data.Geography,
 			Industry:  data.Industry,
+		}
+		if lastSynced.Valid {
+			sec.LastSynced = &lastSynced.Int64
 		}
 
 		securities = append(securities, sec)
@@ -100,7 +104,7 @@ func (p *testSecurityProvider) getOverrides(isin string) (map[string]string, err
 	return overrides, nil
 }
 
-func (p *testSecurityProvider) applyOverrides(sec *SecurityInfo, overrides map[string]string) {
+func (p *testSecurityProvider) applyOverrides(sec *universe.Security, overrides map[string]string) {
 	for field, value := range overrides {
 		switch field {
 		case "geography":

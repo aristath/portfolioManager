@@ -17,6 +17,7 @@ import (
 	"github.com/aristath/sentinel/internal/clientdata"
 	"github.com/aristath/sentinel/internal/modules/allocation"
 	"github.com/aristath/sentinel/internal/modules/cash_flows"
+	"github.com/aristath/sentinel/internal/modules/config"
 	"github.com/aristath/sentinel/internal/modules/dividends"
 	"github.com/aristath/sentinel/internal/modules/planning"
 	planningrepo "github.com/aristath/sentinel/internal/modules/planning/repository"
@@ -129,6 +130,13 @@ func InitializeRepositories(container *Container, log zerolog.Logger) error {
 	// Settings repository (needs configDB)
 	// Manages application settings (credentials, configuration)
 	container.SettingsRepo = settings.NewRepository(
+		container.ConfigDB.Conn(),
+		log,
+	)
+
+	// Market index repository (needs configDB)
+	// Manages market indices configuration (enabled indices for regime calculations)
+	container.MarketIndexRepo = config.NewMarketIndexRepository(
 		container.ConfigDB.Conn(),
 		log,
 	)
