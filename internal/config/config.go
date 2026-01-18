@@ -10,6 +10,11 @@
  * 2. Load from environment variables
  * 3. Update from settings database (takes precedence)
  *
+ * Data Directory Priority (highest to lowest):
+ * 1. --data-dir CLI flag (if provided)
+ * 2. TRADER_DATA_DIR environment variable
+ * 3. /home/arduino/data (default)
+ *
  * This allows credentials and other sensitive settings to be managed via the
  * Settings UI instead of requiring .env file changes.
  */
@@ -127,23 +132,32 @@ func (c *DeploymentConfig) ToDeploymentConfig(githubToken string) *deployment.De
  * Note: Configuration can be updated later from settings database via UpdateFromSettings().
  * Settings database values take precedence over environment variables.
  *
+ * @param dataDirOverride - Optional CLI flag override for data directory (takes highest priority)
  * @returns *Config - Loaded configuration
  * @returns error - Error if configuration loading fails
  */
-func Load() (*Config, error) {
+func Load(dataDirOverride ...string) (*Config, error) {
 	// Load .env file if it exists
 	// godotenv.Load() returns an error if .env doesn't exist, which is fine
 	_ = godotenv.Load()
 
-	// Determine data directory with fallback logic
-	// 1. Check TRADER_DATA_DIR environment variable
-	// 2. If not set, default to /home/arduino/data
-	// 3. Always resolve to absolute path
-	// 4. Ensure directory exists
-	dataDir := getEnv("TRADER_DATA_DIR", "")
-	if dataDir == "" {
-		// Default fallback to absolute path (Arduino Uno Q default)
-		dataDir = "/home/arduino/data"
+	// Determine data directory with fallback logic (priority order):
+	// 1. CLI flag override (if provided) - highest priority
+	// 2. TRADER_DATA_DIR environment variable
+	// 3. Default to /home/arduino/data - lowest priority
+	// 4. Always resolve to absolute path
+	// 5. Ensure directory exists
+	var dataDir string
+	if len(dataDirOverride) > 0 && dataDirOverride[0] != "" {
+		// CLI flag takes highest priority
+		dataDir = dataDirOverride[0]
+	} else {
+		// Fall back to environment variable or default
+		dataDir = getEnv("TRADER_DATA_DIR", "")
+		if dataDir == "" {
+			// Default fallback to absolute path (Arduino Uno Q default)
+			dataDir = "/home/arduino/data"
+		}
 	}
 
 	// Always resolve to absolute path

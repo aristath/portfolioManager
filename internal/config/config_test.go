@@ -305,6 +305,74 @@ func TestLoad_DataDir_WithTemporaryDirectory(t *testing.T) {
 	assert.Equal(t, absPath, cfg.DataDir)
 }
 
+func TestLoad_DataDir_CLIFlagTakesPrecedence(t *testing.T) {
+	// Save original environment
+	originalTraderDataDir := os.Getenv("TRADER_DATA_DIR")
+	originalDataDir := os.Getenv("DATA_DIR")
+	defer func() {
+		if originalTraderDataDir != "" {
+			os.Setenv("TRADER_DATA_DIR", originalTraderDataDir)
+		} else {
+			os.Unsetenv("TRADER_DATA_DIR")
+		}
+		if originalDataDir != "" {
+			os.Setenv("DATA_DIR", originalDataDir)
+		} else {
+			os.Unsetenv("DATA_DIR")
+		}
+	}()
+
+	// Set TRADER_DATA_DIR environment variable
+	envDataDir := t.TempDir()
+	os.Setenv("TRADER_DATA_DIR", envDataDir)
+	os.Unsetenv("DATA_DIR")
+
+	// Test with CLI override
+	cliDataDir := t.TempDir()
+	cfg, err := Load(cliDataDir)
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+
+	// CLI flag should take precedence over environment variable
+	absPath, err := filepath.Abs(cliDataDir)
+	require.NoError(t, err)
+	assert.Equal(t, absPath, cfg.DataDir)
+	assert.NotEqual(t, envDataDir, cfg.DataDir)
+}
+
+func TestLoad_DataDir_CLIFlagEmptyString(t *testing.T) {
+	// Save original environment
+	originalTraderDataDir := os.Getenv("TRADER_DATA_DIR")
+	originalDataDir := os.Getenv("DATA_DIR")
+	defer func() {
+		if originalTraderDataDir != "" {
+			os.Setenv("TRADER_DATA_DIR", originalTraderDataDir)
+		} else {
+			os.Unsetenv("TRADER_DATA_DIR")
+		}
+		if originalDataDir != "" {
+			os.Setenv("DATA_DIR", originalDataDir)
+		} else {
+			os.Unsetenv("DATA_DIR")
+		}
+	}()
+
+	// Set TRADER_DATA_DIR environment variable
+	envDataDir := t.TempDir()
+	os.Setenv("TRADER_DATA_DIR", envDataDir)
+	os.Unsetenv("DATA_DIR")
+
+	// Test with empty string CLI override (should fall back to env var)
+	cfg, err := Load("")
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+
+	// Should fall back to environment variable when CLI flag is empty
+	absPath, err := filepath.Abs(envDataDir)
+	require.NoError(t, err)
+	assert.Equal(t, absPath, cfg.DataDir)
+}
+
 // TestToDeploymentConfig tests the ToDeploymentConfig conversion
 func TestToDeploymentConfig(t *testing.T) {
 	tests := []struct {

@@ -12,6 +12,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"os"
 	"os/signal"
 	"syscall"
@@ -26,16 +27,17 @@ import (
 )
 
 // main is the application entry point. It orchestrates the entire system startup sequence:
-// 1. Loads configuration from environment variables and settings database
-// 2. Initializes logging system
-// 3. Sets up display manager for LED status indicators
-// 4. Checks for and executes pending database restores (if any)
-// 5. Wires all dependencies via DI container (databases, repositories, services)
-// 6. Updates configuration from settings database (credentials, etc.)
-// 7. Initializes deployment manager (if enabled)
-// 8. Starts HTTP server for API endpoints
-// 9. Starts background monitors (state monitor, work processor, LED monitors)
-// 10. Waits for shutdown signal and performs graceful shutdown
+// 1. Parses command-line flags (--data-dir)
+// 2. Loads configuration from environment variables and settings database
+// 3. Initializes logging system
+// 4. Sets up display manager for LED status indicators
+// 5. Checks for and executes pending database restores (if any)
+// 6. Wires all dependencies via DI container (databases, repositories, services)
+// 7. Updates configuration from settings database (credentials, etc.)
+// 8. Initializes deployment manager (if enabled)
+// 9. Starts HTTP server for API endpoints
+// 10. Starts background monitors (state monitor, work processor, LED monitors)
+// 11. Waits for shutdown signal and performs graceful shutdown
 //
 // The application uses a 7-database architecture:
 // - universe.db: Investment universe (securities, groups)
@@ -46,10 +48,17 @@ import (
 // - cache.db: Ephemeral operational data (job history)
 // - client_data.db: Cache for exchange rates and current prices
 func main() {
+	// Parse command-line flags
+	// CLI flags take highest priority over environment variables
+	var dataDirFlag string
+	flag.StringVar(&dataDirFlag, "data-dir", "", "Database directory path (overrides TRADER_DATA_DIR environment variable)")
+	flag.Parse()
+
 	// Load configuration first to get log level
 	// Configuration is loaded from environment variables (.env file) and can be
 	// updated later from the settings database (for credentials, etc.)
-	cfg, err := config.Load()
+	// CLI flag for data directory takes precedence over environment variables
+	cfg, err := config.Load(dataDirFlag)
 	if err != nil {
 		// Use fallback logger if config fails
 		// This ensures we can log the configuration error even if config loading fails
