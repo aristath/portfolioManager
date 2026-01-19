@@ -47,12 +47,19 @@ func (c *RebalanceBuysCalculator) Calculate(
 ) (domain.CalculatorResult, error) {
 	// Parameters with defaults
 	minUnderweightThreshold := GetFloatParam(params, "min_underweight_threshold", 0.05) // 5% underweight
-	maxValuePerPosition := GetFloatParam(params, "max_value_per_position", 500.0)
-	maxPositions := GetIntParam(params, "max_positions", 0) // 0 = unlimited
-
+	
 	// Calculate minimum trade amount based on transaction costs (default: 1% max cost ratio)
+	// Formula: minTrade = fixedCost / (maxCostRatio - transactionCostPercent)
+	// With €2 + 0.2% and 1% max ratio: 2 / (0.01 - 0.002) = €250
 	maxCostRatio := GetFloatParam(params, "max_cost_ratio", 0.01) // Default 1% max cost
 	minTradeAmount := ctx.CalculateMinTradeAmount(maxCostRatio)
+	
+	// Maximum position size constraints (allocation-based sizing with caps)
+	// Percentage-based cap: maximum percentage of portfolio per position (default: 5%)
+	maxPerPositionPct := GetFloatParam(params, "max_per_position_pct", 0.05)
+	// Fixed cap: absolute maximum per position (default: €5000)
+	maxPerPositionFixed := GetFloatParam(params, "max_per_position_fixed", 5000.0)
+	maxPositions := GetIntParam(params, "max_positions", 0) // 0 = unlimited
 
 	// Initialize exclusion collector
 	exclusions := NewExclusionCollector(c.Name())
@@ -124,7 +131,7 @@ func (c *RebalanceBuysCalculator) Calculate(
 	}
 
 	if len(underweightGeographies) == 0 {
-		c.log.Debug().Msg("No underweight geographies")
+		c.log.Info().Msg("No underweight geographies - all geographies are at or above target")
 		return domain.CalculatorResult{PreFiltered: exclusions.Result()}, nil
 	}
 
@@ -264,8 +271,14 @@ func (c *RebalanceBuysCalculator) Calculate(
 		scoredCandidates = scoredCandidates[:maxPositions]
 	}
 
+	c.log.Info().
+		Int("scored_candidates", len(scoredCandidates)).
+		Int("underweight_geographies", len(underweightGeographies)).
+		Msg("Starting candidate creation from scored candidates")
+
 	// Create action candidates
 	var candidates []domain.ActionCandidate
+	filteredCount := 0
 	for _, scored := range scoredCandidates {
 		isin := scored.isin
 		symbol := scored.symbol
@@ -273,6 +286,11 @@ func (c *RebalanceBuysCalculator) Calculate(
 		// Get security info (direct ISIN lookup)
 		security, ok := ctx.StocksByISIN[isin] // ISIN key ✅
 		if !ok {
+			filteredCount++
+			c.log.Debug().
+				Str("symbol", symbol).
+				Str("isin", isin).
+				Msg("FILTER: security not found in StocksByISIN")
 			exclusions.Add(isin, symbol, "", "security not found in StocksByISIN")
 			continue
 		}
@@ -282,15 +300,50 @@ func (c *RebalanceBuysCalculator) Calculate(
 		// Get current price (direct ISIN lookup)
 		currentPrice, ok := ctx.CurrentPrices[isin] // ISIN key ✅
 		if !ok || currentPrice <= 0 {
-			c.log.Warn().
+			filteredCount++
+			c.log.Info().
 				Str("symbol", symbol).
-				Msg("No current price available")
+				Str("isin", isin).
+				Bool("price_exists", ok).
+				Float64("price", currentPrice).
+				Msg("FILTER: no current price available")
 			exclusions.Add(isin, symbol, securityName, "no current price available")
 			continue
 		}
 
-		// Calculate quantity
-		targetValue := maxValuePerPosition
+		// Calculate target value based on allocation gap (allocation-based sizing)
+		// This is mathematically correct for rebalancing: buy enough to move toward target allocation
+		underweightValue := scored.underweight * ctx.TotalPortfolioValueEUR
+		
+		// Apply maximum position size constraints
+		maxPerPositionValue := maxPerPositionPct * ctx.TotalPortfolioValueEUR
+		if maxPerPositionValue > maxPerPositionFixed {
+			maxPerPositionValue = maxPerPositionFixed
+		}
+		
+		// Start with allocation-based target
+		targetValue := underweightValue
+		
+		// Cap at maximum per position
+		if targetValue > maxPerPositionValue {
+			targetValue = maxPerPositionValue
+		}
+		
+		// Ensure minimum trade amount (transaction cost constraint)
+		if targetValue < minTradeAmount {
+			targetValue = minTradeAmount
+		}
+		
+		c.log.Debug().
+			Str("symbol", symbol).
+			Str("geography", scored.geography).
+			Float64("underweight_pct", scored.underweight*100).
+			Float64("underweight_value", underweightValue).
+			Float64("max_per_position", maxPerPositionValue).
+			Float64("target_value", targetValue).
+			Float64("min_trade_amount", minTradeAmount).
+			Msg("Allocation-based position sizing")
+		
 		// NOTE: Cash cap removed - sequence generator handles cash feasibility
 
 		quantity := int(targetValue / currentPrice)
@@ -299,12 +352,16 @@ func (c *RebalanceBuysCalculator) Calculate(
 		}
 
 		// Round quantity to lot size and validate
+		quantityBeforeLot := quantity
 		quantity = RoundToLotSize(quantity, security.MinLot)
 		if quantity <= 0 {
-			c.log.Debug().
+			filteredCount++
+			c.log.Info().
 				Str("symbol", symbol).
+				Int("quantity_before_lot", quantityBeforeLot).
 				Int("min_lot", security.MinLot).
-				Msg("Skipping security: quantity below minimum lot size after rounding")
+				Int("quantity_after_lot", quantity).
+				Msg("FILTER: quantity below minimum lot size after rounding")
 			exclusions.Add(isin, symbol, securityName, fmt.Sprintf("quantity below minimum lot size %d", security.MinLot))
 			continue
 		}
@@ -314,11 +371,14 @@ func (c *RebalanceBuysCalculator) Calculate(
 
 		// Check if rounded quantity still meets minimum trade amount
 		if valueEUR < minTradeAmount {
-			c.log.Debug().
+			filteredCount++
+			c.log.Info().
 				Str("symbol", symbol).
 				Float64("trade_value", valueEUR).
 				Float64("min_trade_amount", minTradeAmount).
-				Msg("Skipping trade below minimum trade amount after lot size rounding")
+				Int("quantity", quantity).
+				Float64("price", currentPrice).
+				Msg("FILTER: trade below minimum trade amount after lot size rounding")
 			exclusions.Add(isin, symbol, securityName, fmt.Sprintf("trade value €%.2f below minimum €%.2f", valueEUR, minTradeAmount))
 			continue
 		}
@@ -328,11 +388,13 @@ func (c *RebalanceBuysCalculator) Calculate(
 		// but we still respect position-level limits
 		passes, concentrationReason := CheckConcentrationGuardrail(isin, security.Geography, valueEUR, ctx)
 		if !passes {
-			c.log.Debug().
+			filteredCount++
+			c.log.Info().
 				Str("symbol", symbol).
 				Str("isin", isin).
 				Str("reason", concentrationReason).
-				Msg("Skipping: concentration limit exceeded")
+				Float64("trade_value", valueEUR).
+				Msg("FILTER: concentration limit exceeded")
 			exclusions.Add(isin, symbol, securityName, concentrationReason)
 			continue
 		}
@@ -383,6 +445,9 @@ func (c *RebalanceBuysCalculator) Calculate(
 		Int("candidates", len(candidates)).
 		Int("underweight_countries", len(underweightGeographies)).
 		Int("pre_filtered", len(exclusions.Result())).
+		Int("scored_candidates_before_filtering", len(scoredCandidates)).
+		Int("filtered_during_candidate_creation", filteredCount).
+		Int("tag_candidates", len(candidateMap)).
 		Msg("Rebalance buy opportunities identified")
 
 	return domain.CalculatorResult{

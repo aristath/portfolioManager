@@ -82,10 +82,11 @@ func (f *TagBasedFilter) GetOpportunityCandidates(ctx *domain.OpportunityContext
 		}
 	}
 
-	f.log.Debug().
+	f.log.Info().
 		Int("candidates", len(symbols)).
 		Int("excluded", len(excludedSymbols)).
 		Int("total_active", len(allSecurities)).
+		Strs("exclusion_tags", exclusionTags).
 		Msg("Tag-based pre-filtering complete (exclusion-based)")
 
 	return symbols, nil

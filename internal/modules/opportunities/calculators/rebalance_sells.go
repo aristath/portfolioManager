@@ -167,6 +167,12 @@ func (c *RebalanceSellsCalculator) Calculate(
 	for geo, overweight := range overweightGeographies {
 		positions := positionsByGeography[geo]
 		if len(positions) == 0 {
+			c.log.Warn().
+				Str("geography", geo).
+				Float64("overweight", overweight).
+				Int("total_positions_checked", len(ctx.EnrichedPositions)).
+				Int("pre_filtered", len(exclusions.Result())).
+				Msg("No eligible positions found for overweight geography - all positions were filtered")
 			continue
 		}
 

@@ -360,6 +360,17 @@ func (p *Planner) CreatePlanWithRejectionsAndCache(ctx *domain.OpportunityContex
 	// Collect all pre-filtered securities across categories
 	preFilteredSecurities := opportunitiesResult.AllPreFiltered()
 
+	// Log opportunity summary for debugging
+	totalCandidates := 0
+	for _, candidates := range opportunities {
+		totalCandidates += len(candidates)
+	}
+	p.log.Info().
+		Int("total_candidates", totalCandidates).
+		Int("total_pre_filtered", len(preFilteredSecurities)).
+		Int("categories_with_candidates", len(opportunities)).
+		Msg("Opportunities extracted for sequence generation")
+
 	// Collect all identified opportunities
 	for _, candidates := range opportunities {
 		for _, candidate := range candidates {

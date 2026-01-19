@@ -133,8 +133,18 @@ func (p *Processor) ExecuteNow(workTypeID string, subject string) error {
 
 	// Still check dependencies - can't run work if deps haven't completed
 	if !p.dependenciesMet(wt, subject) {
+		log.Warn().
+			Str("work_type", workTypeID).
+			Strs("dependencies", wt.DependsOn).
+			Str("subject", subject).
+			Msg("Dependencies not met for ExecuteNow")
 		return fmt.Errorf("dependencies not met for work type %s", workTypeID)
 	}
+
+	log.Debug().
+		Str("work_type", workTypeID).
+		Str("subject", subject).
+		Msg("ExecuteNow: executing work item")
 
 	item := NewWorkItem(wt, subject)
 	return p.executeItem(item, wt)
@@ -398,6 +408,10 @@ func (p *Processor) executeItem(item *WorkItem, wt *WorkType) error {
 		expiresAt := p.cache.GetExpiresAt(item.ID)
 		if time.Now().Unix() < expiresAt {
 			// Cache not expired, skip execution
+			log.Debug().
+				Str("work", item.ID).
+				Int64("expires_at", expiresAt).
+				Msg("Skipping execution - cache not expired")
 			return nil
 		}
 	}
