@@ -30,7 +30,8 @@ jobs:
           - { name: "analytics", packages: "./internal/modules/analytics/..." }
           - { name: "cash-flows", packages: "./internal/modules/cash_flows/..." }
           - { name: "charts", packages: "./internal/modules/charts/..." }
-          - { name: "cleanup", packages: "./internal/modules/cleanup" }
+          # NOTE: cleanup test disabled - directory exists but is empty (no Go files)
+          # - { name: "cleanup", packages: "./internal/modules/cleanup" }
           - { name: "display", packages: "./internal/modules/display/..." }
           - { name: "dividends", packages: "./internal/modules/dividends/..." }
           - { name: "evaluation", packages: "./internal/modules/evaluation/..." }

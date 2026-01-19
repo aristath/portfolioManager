@@ -46,7 +46,7 @@ func (m *mockSecurityRepo) GetByTags(tags []string) ([]universe.Security, error)
 
 func TestProfitTakingCalculator_MaxSellPercentage(t *testing.T) {
 	log := zerolog.Nop()
-	tagFilter := &mockTagFilter{sellCandidates: []string{}}
+	tagFilter := &mockTagFilter{sellCandidates: []string{"TEST.US"}}
 	securityRepo := &mockSecurityRepo{tags: map[string][]string{}}
 	calc := NewProfitTakingCalculator(tagFilter, securityRepo, log)
 
@@ -149,7 +149,7 @@ func TestProfitTakingCalculator_MaxSellPercentage(t *testing.T) {
 
 func TestProfitTakingCalculator_MaxSellPercentage_WithSellPercentageParam(t *testing.T) {
 	log := zerolog.Nop()
-	tagFilter := &mockTagFilter{sellCandidates: []string{}}
+	tagFilter := &mockTagFilter{sellCandidates: []string{"TEST.US"}}
 	securityRepo := &mockSecurityRepo{tags: map[string][]string{}}
 	calc := NewProfitTakingCalculator(tagFilter, securityRepo, log)
 
@@ -235,7 +235,7 @@ func TestProfitTakingCalculator_MaxSellPercentage_WithSellPercentageParam(t *tes
 
 func TestProfitTakingCalculator_NoMaxSellPercentage_DefaultsTo20Percent(t *testing.T) {
 	log := zerolog.Nop()
-	tagFilter := &mockTagFilter{sellCandidates: []string{}}
+	tagFilter := &mockTagFilter{sellCandidates: []string{"TEST.US"}}
 	securityRepo := &mockSecurityRepo{tags: map[string][]string{}}
 	calc := NewProfitTakingCalculator(tagFilter, securityRepo, log)
 
@@ -286,7 +286,7 @@ func TestProfitTakingCalculator_NoMaxSellPercentage_DefaultsTo20Percent(t *testi
 
 func TestProfitTakingCalculator_HighQualityProtection(t *testing.T) {
 	log := zerolog.Nop()
-	tagFilter := &mockTagFilter{sellCandidates: []string{}}
+	tagFilter := &mockTagFilter{sellCandidates: []string{"QUALITY.US"}}
 	securityRepo := &mockSecurityRepo{
 		tags: map[string][]string{
 			"QUALITY.US": {"high-quality", "consistent-grower"},
@@ -348,7 +348,7 @@ func TestProfitTakingCalculator_HighQualityProtection(t *testing.T) {
 
 func TestProfitTakingCalculator_LowQualityBoostedSelling(t *testing.T) {
 	log := zerolog.Nop()
-	tagFilter := &mockTagFilter{sellCandidates: []string{}}
+	tagFilter := &mockTagFilter{sellCandidates: []string{"LOWQ.US"}}
 	securityRepo := &mockSecurityRepo{
 		tags: map[string][]string{
 			"LOWQ.US": {"stagnant", "underperforming"},
@@ -405,7 +405,7 @@ func TestProfitTakingCalculator_LowQualityBoostedSelling(t *testing.T) {
 
 func TestProfitTakingCalculator_WindfallOverridesQualityProtection(t *testing.T) {
 	log := zerolog.Nop()
-	tagFilter := &mockTagFilter{sellCandidates: []string{}}
+	tagFilter := &mockTagFilter{sellCandidates: []string{"QUALITY.US"}}
 	securityRepo := &mockSecurityRepo{
 		tags: map[string][]string{
 			"QUALITY.US": {"high-quality", "consistent-grower"},

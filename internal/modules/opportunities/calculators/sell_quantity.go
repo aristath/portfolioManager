@@ -160,7 +160,7 @@ func CalculateGeographySellPlan(
 		targetSellValue := plan.TotalValueToReduce * positionShare
 
 		// Get quality score for priority adjustment
-		var qualityPriority float64 = 1.0
+		var qualityPriority = 1.0
 		if securityRepo != nil {
 			tags, _ := securityRepo.GetTagsForSecurity(pos.Symbol)
 			qualityScore := CalculateSellQualityScore(ctx, pos.ISIN, tags, config)
@@ -248,7 +248,7 @@ func SortPositionsBySellPriority(
 
 	scored := make([]scoredPosition, len(positions))
 	for i, pos := range positions {
-		var priority float64 = 1.0
+		var priority = 1.0
 
 		// Get quality-based priority
 		if ctx != nil {

@@ -39,12 +39,10 @@ func hashHRPCacheKey(covMatrix [][]float64, isins []string, linkage hrpLinkage) 
 	n := len(covMatrix)
 	for i := 0; i < n && i < 10; i++ {
 		if i < len(covMatrix[i]) {
-			if err := binary.Write(h, binary.LittleEndian, covMatrix[i][i]); err == nil {
-			}
+			_ = binary.Write(h, binary.LittleEndian, covMatrix[i][i])
 		}
 		if len(covMatrix) > 0 && i < len(covMatrix[0]) {
-			if err := binary.Write(h, binary.LittleEndian, covMatrix[0][i]); err == nil {
-			}
+			_ = binary.Write(h, binary.LittleEndian, covMatrix[0][i])
 		}
 	}
 

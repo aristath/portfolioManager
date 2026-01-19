@@ -1,18 +1,16 @@
-/**
- * Package services provides core business services shared across multiple modules.
- *
- * Shared services handle cross-cutting business functionality that doesn't belong
- * to a specific domain but is essential for the system to function.
- *
- * Services in this package:
- * - CurrencyExchangeService: Currency conversion via broker FX pairs
- * - ExchangeRateCacheService: Exchange rate caching (Tradernet + DB)
- * - PriceConversionService: Price conversion to EUR
- * - TradeExecutionService: Trade execution orchestration
- * - OpportunityContextBuilder: Unified context building for opportunities, planning, rebalancing
- *
- * See services/README.md for architecture documentation and usage patterns.
- */
+// Package services provides core business services shared across multiple modules.
+//
+// Shared services handle cross-cutting business functionality that doesn't belong
+// to a specific domain but is essential for the system to function.
+//
+// Services in this package:
+// - CurrencyExchangeService: Currency conversion via broker FX pairs
+// - ExchangeRateCacheService: Exchange rate caching (Tradernet + DB)
+// - PriceConversionService: Price conversion to EUR
+// - TradeExecutionService: Trade execution orchestration
+// - OpportunityContextBuilder: Unified context building for opportunities, planning, rebalancing
+//
+// See services/README.md for architecture documentation and usage patterns.
 package services
 
 import (

@@ -1,8 +1,6 @@
-/**
- * Package services provides core business services shared across multiple modules.
- *
- * This file contains PriceConversionService which handles currency conversion for price data.
- */
+// Package services provides core business services shared across multiple modules.
+//
+// This file contains PriceConversionService which handles currency conversion for price data.
 package services
 
 import (

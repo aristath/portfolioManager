@@ -1,17 +1,15 @@
-/**
- * Package domain provides comprehensive Security model with all data.
- *
- * This file defines the Security struct that contains ALL security data from ALL sources:
- * - Basic security data (from universe.db)
- * - Scores (from portfolio.db)
- * - Position data (from portfolio.db, if held)
- * - Tags (from universe.db security_tags)
- * - Current price (runtime, from broker API or cache)
- *
- * This is the single unified Security type used throughout the system.
- * By having everything in one struct, we can pass it throughout the entire flow
- * from database reads to planning to trade execution without conversions or lookups.
- */
+// Package domain provides comprehensive Security model with all data.
+//
+// This file defines the Security struct that contains ALL security data from ALL sources:
+// - Basic security data (from universe.db)
+// - Scores (from portfolio.db)
+// - Position data (from portfolio.db, if held)
+// - Tags (from universe.db security_tags)
+// - Current price (runtime, from broker API or cache)
+//
+// This is the single unified Security type used throughout the system.
+// By having everything in one struct, we can pass it throughout the entire flow
+// from database reads to planning to trade execution without conversions or lookups.
 package domain
 
 import (

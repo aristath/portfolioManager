@@ -1,19 +1,18 @@
-/**
- * Package services provides SecurityService that loads complete Security data from all sources.
- *
- * SecurityService is the single entry point for getting a complete Security with ALL data:
- * - Basic security data from universe.db
- * - Scores from portfolio.db
- * - Position data from portfolio.db (if held)
- * - Tags from universe.db
- * - Current price from broker API or cache
- *
- * Usage:
- *   security, _ := securityService.Get("FR0014004L86")
- *   name := security.Name
- *   cagr := security.CAGRScore
- *   prices, _ := securityService.GetHistoricalData("FR0014004L86", HistoricalDataOptions{...})
- */
+// Package services provides SecurityService that loads complete Security data from all sources.
+//
+// SecurityService is the single entry point for getting a complete Security with ALL data:
+// - Basic security data from universe.db
+// - Scores from portfolio.db
+// - Position data from portfolio.db (if held)
+// - Tags from universe.db
+// - Current price from broker API or cache
+//
+// Usage:
+//
+//	security, _ := securityService.Get("FR0014004L86")
+//	name := security.Name
+//	cagr := security.CAGRScore
+//	prices, _ := securityService.GetHistoricalData("FR0014004L86", HistoricalDataOptions{...})
 package services
 
 import (

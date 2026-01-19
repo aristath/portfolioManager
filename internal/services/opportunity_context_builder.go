@@ -1,9 +1,7 @@
-/**
- * Package services provides core business services shared across multiple modules.
- *
- * This file contains OpportunityContextBuilder which builds complete opportunity
- * context objects for opportunity calculators, planning, and rebalancing.
- */
+// Package services provides core business services shared across multiple modules.
+//
+// This file contains OpportunityContextBuilder which builds complete opportunity
+// context objects for opportunity calculators, planning, and rebalancing.
 package services
 
 import (

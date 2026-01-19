@@ -1,19 +1,17 @@
-/**
- * Package domain provides core domain interfaces.
- *
- * This package defines interfaces that break circular dependencies and provide
- * clean contracts between packages. These interfaces follow the Dependency
- * Inversion Principle - high-level modules depend on abstractions, not concretions.
- *
- * Key Interfaces:
- * - CashManager: Cash balance management (breaks circular dependency)
- * - BrokerClient: Broker-agnostic trading operations
- * - CurrencyExchangeServiceInterface: Currency exchange operations
- * - AllocationTargetProvider: Allocation target access
- * - PortfolioSummaryProvider: Portfolio summary data
- * - ConcentrationAlertProvider: Concentration alert detection
- * - ScoresRepository: Security scores access (breaks circular dependency)
- */
+// Package domain provides core domain interfaces.
+//
+// This package defines interfaces that break circular dependencies and provide
+// clean contracts between packages. These interfaces follow the Dependency
+// Inversion Principle - high-level modules depend on abstractions, not concretions.
+//
+// Key Interfaces:
+// - CashManager: Cash balance management (breaks circular dependency)
+// - BrokerClient: Broker-agnostic trading operations
+// - CurrencyExchangeServiceInterface: Currency exchange operations
+// - AllocationTargetProvider: Allocation target access
+// - PortfolioSummaryProvider: Portfolio summary data
+// - ConcentrationAlertProvider: Concentration alert detection
+// - ScoresRepository: Security scores access (breaks circular dependency)
 package domain
 
 /**

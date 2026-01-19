@@ -1,9 +1,7 @@
-/**
- * Package services provides core business services shared across multiple modules.
- *
- * This file contains ExchangeRateCacheService which provides cached exchange rates
- * with a two-tier fallback system.
- */
+// Package services provides core business services shared across multiple modules.
+//
+// This file contains ExchangeRateCacheService which provides cached exchange rates
+// with a two-tier fallback system.
 package services
 
 import (

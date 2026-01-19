@@ -1,20 +1,18 @@
-/**
- * Package domain provides core domain models and types.
- *
- * This package defines the core business domain models and value types used throughout
- * the application. These types are pure domain models with no infrastructure dependencies,
- * following clean architecture principles.
- *
- * Domain Models:
- * - Currency: Currency codes (EUR, USD, GBP, TEST)
- * - ProductType: Financial product types (EQUITY, ETF, ETC, etc.)
- * - Position: Portfolio position (holding in a security)
- * - Trade: Executed trade transaction
- * - Money: Monetary value with currency
- *
- * Note: Security type was removed after migration 038. Use universe.Security directly
- * as the single source of truth for security data.
- */
+// Package domain provides core domain models and types.
+//
+// This package defines the core business domain models and value types used throughout
+// the application. These types are pure domain models with no infrastructure dependencies,
+// following clean architecture principles.
+//
+// Domain Models:
+// - Currency: Currency codes (EUR, USD, GBP, TEST)
+// - ProductType: Financial product types (EQUITY, ETF, ETC, etc.)
+// - Position: Portfolio position (holding in a security)
+// - Trade: Executed trade transaction
+// - Money: Monetary value with currency
+//
+// Note: Security type was removed after migration 038. Use universe.Security directly
+// as the single source of truth for security data.
 package domain
 
 import "time"
