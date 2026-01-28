@@ -28,6 +28,7 @@ import { SecurityAllocationCard } from '../components/SecurityAllocationCard';
 import { GeographyRadarCard } from '../components/GeographyRadarCard';
 import { IndustryRadarCard } from '../components/IndustryRadarCard';
 import { JobsCard } from '../components/JobsCard';
+import { MarketsOpenCard } from '../components/MarketsOpenCard';
 import { getUnifiedView, updateSecurity, addSecurity, deleteSecurity, getPortfolio, getRecommendations } from '../api/client';
 
 import { formatEur, formatCurrencySymbol } from '../utils/formatting';
@@ -272,6 +273,7 @@ function UnifiedPage() {
       <div className="unified">
         {/* Left Sidebar - Allocation Cards */}
         <Stack gap="md" className="unified__sidebar">
+          <MarketsOpenCard />
           <SecurityAllocationCard
             securities={securities}
             recommendations={recommendations}

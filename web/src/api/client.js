@@ -122,6 +122,9 @@ export const deleteIndustryTarget = (name) =>
     method: 'DELETE',
   });
 
+// Markets
+export const getMarketsStatus = () => request('/markets/status');
+
 // LED Display
 export const getLedStatus = () => request('/led/status');
 export const setLedEnabled = (enabled) =>

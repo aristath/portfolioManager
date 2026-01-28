@@ -11,10 +11,8 @@ ENV/
 dist/
 build/
 
-# Database
-data/*.db
-data/*.db-shm
-data/*.db-wal
+# Data
+data/
 
 # IDE
 .idea/

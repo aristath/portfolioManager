@@ -42,7 +42,8 @@ RUN pip install --no-cache-dir \
     ta>=0.11.0
 
 RUN pip install --no-cache-dir \
-    tradernet-sdk>=2.0.0
+    tradernet-sdk>=2.0.0 \
+    boto3>=1.26.0
 
 # Copy application code
 COPY sentinel/ ./sentinel/

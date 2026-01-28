@@ -50,17 +50,6 @@ class ScoresCalculatedEvent:
 
 
 @dataclass
-class CorrelationUpdatedEvent:
-    """Emitted when correlation matrices have been updated."""
-
-    symbol_count: int
-    occurred_at: datetime = field(default_factory=datetime.now)
-
-    def type(self) -> str:
-        return "CORRELATION_UPDATED"
-
-
-@dataclass
 class RegimeTrainedEvent:
     """Emitted when regime model has been trained."""
 

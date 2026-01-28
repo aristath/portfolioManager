@@ -38,8 +38,8 @@ async def test_get_job_schedules_returns_all(db):
     """GET /api/jobs/schedules should return all schedules."""
     schedules = await db.get_job_schedules()
 
-    # Should have at least 11 default schedules
-    assert len(schedules) >= 11
+    # Should have at least 14 default schedules
+    assert len(schedules) >= 14
 
     # Check structure
     schedule = schedules[0]
@@ -225,6 +225,7 @@ async def test_all_job_types_present(db):
         'trading:check_markets',
         'ml:retrain',
         'ml:monitor',
+        'backup:r2',
     ]
 
     schedules = await db.get_job_schedules()
@@ -240,5 +241,5 @@ async def test_categories_present(db):
     schedules = await db.get_job_schedules()
     categories = set(s['category'] for s in schedules)
 
-    expected = {'sync', 'scoring', 'analytics', 'trading', 'ml'}
+    expected = {'sync', 'scoring', 'analytics', 'trading', 'ml', 'backup'}
     assert categories == expected

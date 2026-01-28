@@ -12,11 +12,11 @@ from sentinel.jobs.implementations.sync import (
 )
 from sentinel.jobs.implementations.scoring import CalculateScoresJob
 from sentinel.jobs.implementations.analytics import (
-    CorrelationJob,
     RegimeJob,
 )
 from sentinel.jobs.implementations.trading import CheckMarketsJob, RebalanceJob, ExecuteTradesJob, RefreshPlanJob
 from sentinel.jobs.implementations.ml import MLRetrainJob, MLMonitorJob
+from sentinel.jobs.implementations.backup import BackupR2Job
 
 
 async def register_all_jobs(
@@ -25,7 +25,6 @@ async def register_all_jobs(
     broker,
     portfolio,
     analyzer,
-    cleaner,
     detector,
     planner,
     retrainer,
@@ -70,11 +69,6 @@ async def register_all_jobs(
 
     # Analytics
     await registry.register(
-        'analytics:correlation',
-        lambda p: CorrelationJob(cleaner, db),
-        RetryConfig.for_analytics(),
-    )
-    await registry.register(
         'analytics:regime',
         lambda p: RegimeJob(detector, db),
         RetryConfig.for_analytics(),
@@ -118,6 +112,13 @@ async def register_all_jobs(
     await registry.register('ml:retrain', create_ml_retrain, RetryConfig.for_analytics())
     await registry.register('ml:monitor', create_ml_monitor, RetryConfig.default())
 
+    # Backup
+    await registry.register(
+        'backup:r2',
+        lambda p: BackupR2Job(db),
+        RetryConfig.for_sync(),
+    )
+
 
 __all__ = [
     "register_all_jobs",
@@ -127,7 +128,6 @@ __all__ = [
     "MetadataSyncJob",
     "ExchangeRateSyncJob",
     "CalculateScoresJob",
-    "CorrelationJob",
     "RegimeJob",
     "CheckMarketsJob",
     "ExecuteTradesJob",
@@ -135,4 +135,5 @@ __all__ = [
     "RefreshPlanJob",
     "MLRetrainJob",
     "MLMonitorJob",
+    "BackupR2Job",
 ]

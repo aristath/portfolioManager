@@ -52,19 +52,21 @@ DEFAULTS = {
 
     # Advanced Analytics
     'use_regime_adjustment': False,
-    'use_cleaned_correlation': False,
-
     # Regime Detection
     'regime_n_states': 3,
     'regime_lookback_days': 504,
     'regime_weight_adjustment': 0.2,  # ±20% weight adjustments
 
-    # Random Matrix Theory
-    'rmt_auto_q': True,
-
     # LED Display (Arduino UNO Q orbital visualization)
     'led_display_enabled': False,  # Disabled by default for dev environments
     'led_brightness': 200,         # Global LED brightness 0-255
+
+    # Cloudflare R2 Backup
+    'r2_account_id': '',
+    'r2_access_key': '',
+    'r2_secret_key': '',
+    'r2_bucket_name': '',
+    'r2_backup_retention_days': 30,
 
     # ML Per-Security Prediction (per-security settings in securities table)
     'ml_ensemble_nn_weight': 0.5,

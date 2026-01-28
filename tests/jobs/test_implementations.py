@@ -19,6 +19,7 @@ from sentinel.jobs.implementations import (
     RebalanceJob,
     MLRetrainJob,
     MLMonitorJob,
+    BackupR2Job,
     register_all_jobs,
 )
 
@@ -242,3 +243,20 @@ async def test_registry_creates_ml_jobs_with_params(registry_with_all_jobs):
     job = await registry.create('ml:monitor', {'symbol': 'GOOG.US'})
     assert job.id() == 'ml:monitor:GOOG.US'
     assert job.subject() == 'GOOG.US'
+
+
+@pytest.mark.asyncio
+async def test_register_all_jobs_registers_backup_job(registry_with_all_jobs):
+    """register_all_jobs should register backup job type."""
+    registry = registry_with_all_jobs
+
+    assert registry.is_registered('backup:r2')
+
+
+def test_backup_r2_job_config():
+    """BackupR2Job should have correct configuration."""
+    job = BackupR2Job(MockDB())
+
+    assert job.id() == 'backup:r2'
+    assert job.type() == 'backup:r2'
+    assert job.market_timing() == MarketTiming.ANY_TIME

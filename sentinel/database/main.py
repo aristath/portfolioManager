@@ -651,13 +651,13 @@ class Database(BaseDatabase):
             ('sync:metadata', 1440, 1440, 0, 'sync', 'Sync security metadata', False, None, None),
             ('sync:exchange_rates', 60, 60, 0, 'sync', 'Sync exchange rates', False, None, None),
             ('scoring:calculate', 1440, 1440, 0, 'scoring', 'Calculate security scores', False, None, None),
-            ('analytics:correlation', 10080, 10080, 3, 'analytics', 'Update correlation matrices', False, None, None),
             ('analytics:regime', 10080, 10080, 3, 'analytics', 'Train regime detection model', False, None, None),
             ('trading:check_markets', 30, 30, 2, 'trading', 'Check which markets are open', False, None, None),
             ('trading:execute', 30, 15, 2, 'trading', 'Execute pending trade recommendations', False, None, None),
             ('planning:refresh', 60, 30, 0, 'trading', 'Refresh trading plan and recommendations', False, None, None),
             ('ml:retrain', 10080, 10080, 3, 'ml', 'Retrain ML models', True, 'ml_enabled_securities', 'symbol'),
             ('ml:monitor', 10080, 10080, 0, 'ml', 'Monitor ML performance', True, 'ml_enabled_securities', 'symbol'),
+            ('backup:r2', 1440, 1440, 0, 'backup', 'Backup data folder to Cloudflare R2', False, None, None),
         ]
 
         for job_type, interval, interval_open, timing, cat, desc, is_param, param_src, param_field in defaults:
@@ -749,20 +749,8 @@ class Database(BaseDatabase):
             model_params TEXT
         );
 
-        -- Correlation matrices
-        CREATE TABLE IF NOT EXISTS correlation_matrices (
-            matrix_id TEXT PRIMARY KEY,
-            matrix_type TEXT,
-            symbols TEXT,
-            matrix_data TEXT,
-            calculated_at TEXT,
-            n_symbols INTEGER,
-            q_ratio REAL
-        );
-
         -- Indexes
         CREATE INDEX IF NOT EXISTS idx_regime_symbol_date ON regime_states(symbol, date DESC);
-        CREATE INDEX IF NOT EXISTS idx_corr_type ON correlation_matrices(matrix_type, calculated_at DESC);
 
         -- ML Per-Security Prediction Tables
         -- 14 features per security - no cross-security contamination

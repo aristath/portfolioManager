@@ -13,7 +13,7 @@ import {
   Tabs,
   Divider,
 } from '@mantine/core';
-import { IconSettings, IconCoin, IconBrain, IconKey, IconChartDots } from '@tabler/icons-react';
+import { IconSettings, IconCoin, IconBrain, IconKey, IconChartDots, IconCloudUpload } from '@tabler/icons-react';
 import { getSettings, updateSetting } from '../api/client';
 
 export function SettingsModal({ opened, onClose }) {
@@ -61,6 +61,9 @@ export function SettingsModal({ opened, onClose }) {
             </Tabs.Tab>
             <Tabs.Tab value="api" leftSection={<IconKey size={16} />}>
               API
+            </Tabs.Tab>
+            <Tabs.Tab value="backup" leftSection={<IconCloudUpload size={16} />}>
+              Backup
             </Tabs.Tab>
           </Tabs.List>
 
@@ -279,6 +282,56 @@ export function SettingsModal({ opened, onClose }) {
                 value={settings?.tradernet_api_secret || ''}
                 onChange={(e) => handleChange('tradernet_api_secret', e.target.value)}
                 placeholder="Enter API secret"
+              />
+            </Stack>
+          </Tabs.Panel>
+
+          <Tabs.Panel value="backup" pt="md">
+            <Stack gap="md">
+              <Text size="sm" c="dimmed">
+                Back up the data folder (database + ML models) to Cloudflare R2
+              </Text>
+
+              <TextInput
+                label="R2 Account ID"
+                description="Your Cloudflare account ID"
+                value={settings?.r2_account_id || ''}
+                onChange={(e) => handleChange('r2_account_id', e.target.value)}
+                placeholder="Enter account ID"
+              />
+
+              <TextInput
+                label="R2 Access Key"
+                description="R2 API token access key"
+                value={settings?.r2_access_key || ''}
+                onChange={(e) => handleChange('r2_access_key', e.target.value)}
+                placeholder="Enter access key"
+              />
+
+              <PasswordInput
+                label="R2 Secret Key"
+                description="R2 API token secret key"
+                value={settings?.r2_secret_key || ''}
+                onChange={(e) => handleChange('r2_secret_key', e.target.value)}
+                placeholder="Enter secret key"
+              />
+
+              <TextInput
+                label="R2 Bucket Name"
+                description="Name of the R2 bucket to store backups"
+                value={settings?.r2_bucket_name || ''}
+                onChange={(e) => handleChange('r2_bucket_name', e.target.value)}
+                placeholder="Enter bucket name"
+              />
+
+              <NumberInput
+                label="Retention Days"
+                description="Automatically delete backups older than this"
+                value={settings?.r2_backup_retention_days ?? 30}
+                onChange={(value) => handleChange('r2_backup_retention_days', value)}
+                min={1}
+                max={365}
+                suffix=" days"
               />
             </Stack>
           </Tabs.Panel>

@@ -7,7 +7,7 @@ services:
       - "8000:8000"
     volumes:
       # Persist database and ML models
-      - ./data:/app/data
+      - ./data:/app/sentinel/data
     environment:
       - TZ=Europe/Athens
     healthcheck:

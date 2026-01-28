@@ -94,7 +94,6 @@ async def lifespan(app: FastAPI):
 
     # Initialize job system components
     from sentinel.analyzer import Analyzer
-    from sentinel.correlation_cleaner import CorrelationCleaner
     from sentinel.regime_detector import RegimeDetector
     from sentinel.planner import Planner
     from sentinel.ml_retrainer import MLRetrainer
@@ -102,7 +101,6 @@ async def lifespan(app: FastAPI):
 
     portfolio = Portfolio()
     analyzer = Analyzer()
-    cleaner = CorrelationCleaner()
     detector = RegimeDetector()
     planner = Planner()
     retrainer = MLRetrainer()
@@ -114,7 +112,7 @@ async def lifespan(app: FastAPI):
     _registry = Registry()
     await register_all_jobs(
         _registry, db, broker, portfolio, analyzer,
-        cleaner, detector, planner,
+        detector, planner,
         retrainer, monitor, cache,
     )
 
@@ -294,6 +292,61 @@ async def set_exchange_rate(curr: str, data: dict):
     currency = Currency()
     await currency.set_rate(curr, data.get('rate', 1.0))
     return {"status": "ok"}
+
+
+# -----------------------------------------------------------------------------
+# Markets API
+# -----------------------------------------------------------------------------
+
+@app.get("/api/markets/status")
+async def get_markets_status():
+    """Get market status for markets that have securities in our universe."""
+    import json as _json
+
+    db = Database()
+    broker = Broker()
+
+    # Get all active securities and extract their market IDs from metadata
+    securities = await db.get_all_securities(active_only=True)
+
+    market_ids_needed = set()
+    for sec in securities:
+        data = sec.get('data')
+        if data:
+            try:
+                sec_data = _json.loads(data) if isinstance(data, str) else data
+                mkt_id = sec_data.get('mrkt', {}).get('mkt_id')
+                if mkt_id is not None:
+                    market_ids_needed.add(str(mkt_id))
+            except (_json.JSONDecodeError, KeyError, TypeError, ValueError):
+                pass
+
+    # Get market status from broker
+    market_data = await broker.get_market_status('*')
+    if not market_data:
+        return {"markets": [], "any_open": False}
+
+    # Filter to only markets that have securities in our universe
+    markets_list = market_data.get('m', [])
+    filtered_markets = []
+    seen = set()
+    for m in markets_list:
+        mkt_id = str(m.get('i', ''))
+        market_name = m.get('n2', mkt_id)
+        if mkt_id in market_ids_needed and market_name not in seen:
+            seen.add(market_name)
+            filtered_markets.append({
+                "name": market_name,
+                "status": m.get('s', 'UNKNOWN'),
+                "is_open": m.get('s') == 'OPEN',
+            })
+
+    any_open = any(m['is_open'] for m in filtered_markets)
+
+    return {
+        "markets": filtered_markets,
+        "any_open": any_open,
+    }
 
 
 # -----------------------------------------------------------------------------
@@ -1497,21 +1550,62 @@ async def get_all_regimes():
     return results
 
 
-@app.get("/api/analytics/correlation")
-async def get_correlation_matrix(matrix_type: str = 'cleaned'):
-    """Get correlation matrix (raw or cleaned)."""
-    from sentinel.correlation_cleaner import CorrelationCleaner
-    cleaner = CorrelationCleaner()
-    matrix, symbols = await cleaner.get_latest_correlation(matrix_type)
+# -----------------------------------------------------------------------------
+# Backup API
+# -----------------------------------------------------------------------------
 
-    if matrix is None:
-        raise HTTPException(404, "No correlation matrix found")
+@app.post("/api/backup/run")
+async def run_backup():
+    """Trigger an immediate R2 backup."""
+    if not _registry or not _queue:
+        raise HTTPException(status_code=503, detail="Job system not initialized")
 
-    return {
-        'matrix': matrix.tolist(),
-        'symbols': symbols,
-        'matrix_type': matrix_type
-    }
+    try:
+        job = await _registry.create('backup:r2', {})
+        enqueued = await _queue.enqueue(job)
+        return {
+            "status": "enqueued" if enqueued else "already_queued",
+            "job_id": job.id(),
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.get("/api/backup/status")
+async def get_backup_status():
+    """List recent backups from R2."""
+    settings = Settings()
+    account_id = await settings.get('r2_account_id', '')
+    access_key = await settings.get('r2_access_key', '')
+    secret_key = await settings.get('r2_secret_key', '')
+    bucket_name = await settings.get('r2_bucket_name', '')
+
+    if not all([account_id, access_key, secret_key, bucket_name]):
+        return {"configured": False, "backups": []}
+
+    try:
+        from sentinel.jobs.implementations.backup import _get_r2_client
+
+        client = _get_r2_client(account_id, access_key, secret_key)
+        response = client.list_objects_v2(Bucket=bucket_name, Prefix='backups/')
+        contents = response.get('Contents', [])
+
+        backups = sorted(
+            [
+                {
+                    "key": obj['Key'],
+                    "size_bytes": obj.get('Size', 0),
+                    "last_modified": obj['LastModified'].isoformat() if obj.get('LastModified') else None,
+                }
+                for obj in contents
+            ],
+            key=lambda x: x['last_modified'] or '',
+            reverse=True,
+        )
+
+        return {"configured": True, "backups": backups}
+    except Exception as e:
+        return {"configured": True, "backups": [], "error": str(e)}
 
 
 # -----------------------------------------------------------------------------
