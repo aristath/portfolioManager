@@ -38,6 +38,7 @@ TASK_REGISTRY: dict[str, tuple[Callable, list[str]]] = {
     "sync:quotes": (tasks.sync_quotes, ["db", "broker"]),
     "sync:metadata": (tasks.sync_metadata, ["db", "broker"]),
     "sync:exchange_rates": (tasks.sync_exchange_rates, []),
+    "sync:trades": (tasks.sync_trades, ["db", "broker"]),
     "aggregate:compute": (tasks.aggregate_compute, ["db"]),
     "scoring:calculate": (tasks.scoring_calculate, ["analyzer"]),
     "analytics:regime": (tasks.analytics_regime, ["db", "detector"]),

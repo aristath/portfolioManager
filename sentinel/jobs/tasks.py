@@ -92,6 +92,55 @@ async def sync_exchange_rates() -> None:
     logger.info(f"Exchange rates synced: {len(rates)} currencies")
 
 
+async def sync_trades(db, broker) -> None:
+    """
+    Sync trade history from broker.
+
+    Fetches all trades from Tradernet since 2020-01-01 and upserts them.
+    Existing trades (by broker_trade_id) are skipped.
+    """
+    if not broker.connected:
+        logger.warning("Broker not connected, skipping trades sync")
+        return
+
+    # Fetch all trades from broker
+    trades = await broker.get_trades_history(start_date="2020-01-01")
+
+    if not trades:
+        logger.info("No trades returned from broker")
+        return
+
+    new_count = 0
+    skipped_count = 0
+
+    for trade in trades:
+        trade_id = str(trade.get("id", ""))
+        symbol = trade.get("symbol", trade.get("instr_nm", ""))
+        side = trade.get("side", "BUY")
+        date_str = trade.get("date", "")
+
+        if not trade_id or not symbol:
+            continue
+
+        # Convert date format if needed (Tradernet uses "YYYY-MM-DD HH:MM:SS")
+        executed_at = date_str.replace(" ", "T") if " " in date_str else date_str
+
+        row_id = await db.upsert_trade(
+            broker_trade_id=trade_id,
+            symbol=symbol,
+            side=side,
+            executed_at=executed_at,
+            raw_data=trade,
+        )
+
+        if row_id and row_id > 0:
+            new_count += 1
+        else:
+            skipped_count += 1
+
+    logger.info(f"Trades sync complete: {new_count} new, {skipped_count} existing")
+
+
 async def aggregate_compute(db) -> None:
     """Compute aggregate price series for country and industry groups."""
     from sentinel.aggregates import AggregateComputer

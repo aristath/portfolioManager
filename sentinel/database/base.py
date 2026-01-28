@@ -144,18 +144,141 @@ class BaseDatabase:
     # Trades
     # -------------------------------------------------------------------------
 
-    async def get_trades(self, symbol: str = None, limit: int = 100) -> list[dict]:
-        """Get trade history."""
-        query = "SELECT * FROM trades"
+    async def upsert_trade(
+        self,
+        broker_trade_id: str,
+        symbol: str,
+        side: str,
+        executed_at: str,
+        raw_data: dict,
+    ) -> int:
+        """
+        Insert a trade or ignore if broker_trade_id already exists.
+
+        Args:
+            broker_trade_id: Unique trade ID from the broker
+            symbol: Security symbol
+            side: 'BUY' or 'SELL'
+            executed_at: ISO format datetime string
+            raw_data: Full trade data from broker API
+
+        Returns:
+            Row ID of the inserted trade, or 0 if ignored
+        """
+        import json
+
+        cursor = await self.conn.execute(
+            """INSERT OR IGNORE INTO trades (broker_trade_id, symbol, side, executed_at, raw_data)
+               VALUES (?, ?, ?, ?, ?)""",
+            (broker_trade_id, symbol, side, executed_at, json.dumps(raw_data)),
+        )
+        await self.conn.commit()
+        return cursor.lastrowid
+
+    async def get_trades(
+        self,
+        symbol: Optional[str] = None,
+        side: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict]:
+        """
+        Get trade history with optional filters.
+
+        Args:
+            symbol: Filter by security symbol
+            side: Filter by 'BUY' or 'SELL'
+            start_date: Filter trades on or after this date (YYYY-MM-DD)
+            end_date: Filter trades on or before this date (YYYY-MM-DD)
+            limit: Maximum number of trades to return
+            offset: Number of trades to skip (for pagination)
+
+        Returns:
+            List of trade dicts with parsed raw_data
+        """
+        import json
+
+        query = "SELECT * FROM trades WHERE 1=1"
         params = []
+
         if symbol:
-            query += " WHERE symbol = ?"
+            query += " AND symbol = ?"
             params.append(symbol)
-        query += " ORDER BY executed_at DESC LIMIT ?"
-        params.append(limit)
+
+        if side:
+            query += " AND side = ?"
+            params.append(side)
+
+        if start_date:
+            query += " AND executed_at >= ?"
+            params.append(start_date)
+
+        if end_date:
+            query += " AND executed_at <= ?"
+            params.append(end_date + "T23:59:59")  # Include full end date
+
+        query += " ORDER BY executed_at DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+
         cursor = await self.conn.execute(query, params)
         rows = await cursor.fetchall()
-        return [dict(row) for row in rows]
+
+        # Parse raw_data JSON for each trade
+        result = []
+        for row in rows:
+            trade = dict(row)
+            if trade.get("raw_data"):
+                try:
+                    trade["raw_data"] = json.loads(trade["raw_data"])
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            result.append(trade)
+
+        return result
+
+    async def get_trades_count(
+        self,
+        symbol: Optional[str] = None,
+        side: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> int:
+        """
+        Get total count of trades matching filters (for pagination).
+
+        Args:
+            symbol: Filter by security symbol
+            side: Filter by 'BUY' or 'SELL'
+            start_date: Filter trades on or after this date (YYYY-MM-DD)
+            end_date: Filter trades on or before this date (YYYY-MM-DD)
+
+        Returns:
+            Total count of matching trades
+        """
+        query = "SELECT COUNT(*) FROM trades WHERE 1=1"
+        params = []
+
+        if symbol:
+            query += " AND symbol = ?"
+            params.append(symbol)
+
+        if side:
+            query += " AND side = ?"
+            params.append(side)
+
+        if start_date:
+            query += " AND executed_at >= ?"
+            params.append(start_date)
+
+        if end_date:
+            query += " AND executed_at <= ?"
+            params.append(end_date + "T23:59:59")
+
+        cursor = await self.conn.execute(query, params)
+        row = await cursor.fetchone()
+        return row[0] if row else 0
 
     # -------------------------------------------------------------------------
     # Prices (base implementation, can be overridden)

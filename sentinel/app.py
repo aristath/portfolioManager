@@ -853,10 +853,58 @@ async def calculate_scores():
 
 
 @app.get("/api/trades")
-async def get_trades(limit: int = 100):
-    """Get recent trades."""
+async def get_trades(
+    symbol: Optional[str] = None,
+    side: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0,
+):
+    """
+    Get trade history with optional filters.
+
+    Query params:
+        symbol: Filter by security symbol
+        side: Filter by 'BUY' or 'SELL'
+        start_date: Filter trades on or after (YYYY-MM-DD)
+        end_date: Filter trades on or before (YYYY-MM-DD)
+        limit: Max trades to return (default 100)
+        offset: Number to skip for pagination
+
+    Returns:
+        trades: List of trade objects
+        count: Number of trades in this response
+        total: Total number of trades matching filters (for pagination)
+    """
     db = Database()
-    return await db.get_trades(limit=limit)
+    trades = await db.get_trades(
+        symbol=symbol,
+        side=side,
+        start_date=start_date,
+        end_date=end_date,
+        limit=limit,
+        offset=offset,
+    )
+
+    # Get total count for pagination (without limit/offset)
+    total = await db.get_trades_count(
+        symbol=symbol,
+        side=side,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+    return {"trades": trades, "count": len(trades), "total": total}
+
+
+@app.post("/api/trades/sync")
+async def sync_trades_endpoint():
+    """Trigger manual sync of trades from broker."""
+    from sentinel.jobs import run_now
+
+    result = await run_now("sync:trades")
+    return result
 
 
 @app.post("/api/securities/{symbol}/buy")

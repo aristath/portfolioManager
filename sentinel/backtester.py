@@ -677,23 +677,21 @@ class Backtester:
     async def _is_in_cooloff(self, symbol: str, action: str, security_tracking: dict, cooloff_days: int) -> bool:
         """
         Check if security is in cool-off period during backtest.
-        Uses trades table in simulation database.
+        Uses trades table in simulation database with new schema.
         """
         from datetime import datetime
 
-        cursor = await self._sim_db.conn.execute(
-            """SELECT side, executed_at FROM trades
-               WHERE symbol = ?
-               ORDER BY executed_at DESC LIMIT 1""",
-            (symbol,),
-        )
-        row = await cursor.fetchone()
+        # Use get_trades from the database which works with new schema
+        trades = await self._sim_db.get_trades(symbol=symbol, limit=1)
 
-        if not row:
+        if not trades:
             return False  # No trade history
 
-        last_action = row["side"]
-        last_date = datetime.strptime(row["executed_at"][:10], "%Y-%m-%d").date()
+        last_trade = trades[0]
+        last_action = last_trade["side"]
+        # Handle both ISO format with T separator and date-only format
+        executed_at = last_trade["executed_at"]
+        last_date = datetime.fromisoformat(executed_at[:10]).date()
         current_date = datetime.strptime(self._simulation_date, "%Y-%m-%d").date()
         days_since = (current_date - last_date).days
 
@@ -839,12 +837,25 @@ class Backtester:
             tracking[symbol]["num_sells"] += 1
 
         # Record trade in simulation database for cool-off tracking
-        await self._sim_db.conn.execute(
-            """INSERT INTO trades (symbol, side, quantity, price, executed_at)
-               VALUES (?, ?, ?, ?, ?)""",
-            (symbol, action.upper(), quantity, price, self._simulation_date),
+        # Generate a unique broker_trade_id for the simulation
+        import uuid
+
+        broker_trade_id = f"BACKTEST-{uuid.uuid4().hex[:8]}"
+        await self._sim_db.upsert_trade(
+            broker_trade_id=broker_trade_id,
+            symbol=symbol,
+            side=action.upper(),
+            executed_at=self._simulation_date,
+            raw_data={
+                "id": broker_trade_id,
+                "symbol": symbol,
+                "side": action.upper(),
+                "qty": quantity,
+                "price": price,
+                "date": self._simulation_date,
+                "simulated": True,
+            },
         )
-        await self._sim_db.conn.commit()
 
         return SimulatedTrade(
             date=self._simulation_date,

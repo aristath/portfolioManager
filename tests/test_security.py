@@ -375,10 +375,12 @@ class TestTradingBuy:
         tradeable_security._broker.buy.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_buy_records_trade(self, tradeable_security):
-        """buy() records trade in database."""
+    async def test_buy_does_not_record_trade_locally(self, tradeable_security):
+        """buy() does not record trade locally - trades are synced from broker."""
         await tradeable_security.buy(10)
-        tradeable_security._db.record_trade.assert_called_once()
+        # Trades are synced from broker, not recorded locally
+        # Just verify the order was placed
+        tradeable_security._broker.buy.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_buy_rounds_to_lot_size(self):
@@ -482,10 +484,12 @@ class TestTradingSell:
         assert order_id == "ORDER456"
 
     @pytest.mark.asyncio
-    async def test_sell_records_trade(self, sellable_security):
-        """sell() records trade in database."""
+    async def test_sell_does_not_record_trade_locally(self, sellable_security):
+        """sell() does not record trade locally - trades are synced from broker."""
         await sellable_security.sell(10)
-        sellable_security._db.record_trade.assert_called_once()
+        # Trades are synced from broker, not recorded locally
+        # Just verify the order was placed
+        sellable_security._broker.sell.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_sell_fails_when_not_allowed(self):

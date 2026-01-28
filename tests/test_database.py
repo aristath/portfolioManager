@@ -356,23 +356,40 @@ class TestPrices:
 
 
 class TestTrades:
-    """Tests for trade recording operations."""
+    """Tests for trade operations (now using broker-synced trades)."""
 
     @pytest.mark.asyncio
-    async def test_record_trade(self, temp_db):
-        """Record a trade."""
-        trade_id = await temp_db.record_trade("TEST", "BUY", 100, 50.0)
+    async def test_upsert_trade(self, temp_db):
+        """Upsert a trade."""
+        trade_id = await temp_db.upsert_trade(
+            broker_trade_id="123",
+            symbol="TEST",
+            side="BUY",
+            executed_at="2024-01-15T10:00:00",
+            raw_data={"id": "123", "qty": 100, "price": 50.0},
+        )
 
         assert trade_id is not None
-        assert trade_id > 0
 
     @pytest.mark.asyncio
     async def test_get_trades(self, temp_db):
         """Get trade history."""
-        await temp_db.record_trade("TEST", "BUY", 100, 50.0)
-        await temp_db.record_trade("TEST", "SELL", 50, 55.0)
+        await temp_db.upsert_trade(
+            broker_trade_id="1",
+            symbol="TEST",
+            side="BUY",
+            executed_at="2024-01-15T10:00:00",
+            raw_data={"id": "1"},
+        )
+        await temp_db.upsert_trade(
+            broker_trade_id="2",
+            symbol="TEST",
+            side="SELL",
+            executed_at="2024-01-16T10:00:00",
+            raw_data={"id": "2"},
+        )
 
-        result = await temp_db.get_trades("TEST")
+        result = await temp_db.get_trades(symbol="TEST")
 
         assert len(result) == 2
         # Verify both trades exist (order depends on implementation)
@@ -384,9 +401,15 @@ class TestTrades:
     async def test_get_trades_with_limit(self, temp_db):
         """Get trades with limit."""
         for i in range(10):
-            await temp_db.record_trade("TEST", "BUY", 10, 50.0 + i)
+            await temp_db.upsert_trade(
+                broker_trade_id=f"trade_{i}",
+                symbol="TEST",
+                side="BUY",
+                executed_at=f"2024-01-{10 + i:02d}T10:00:00",
+                raw_data={"id": f"trade_{i}"},
+            )
 
-        result = await temp_db.get_trades("TEST", limit=5)
+        result = await temp_db.get_trades(symbol="TEST", limit=5)
 
         assert len(result) == 5
 

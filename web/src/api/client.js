@@ -141,3 +141,17 @@ export const setLedBrightness = (brightness) =>
     body: JSON.stringify({ brightness }),
   });
 export const syncLed = () => request('/led/sync', { method: 'POST' });
+
+// Trades
+export const getTrades = (params = {}) => {
+  const searchParams = new URLSearchParams();
+  if (params.symbol) searchParams.append('symbol', params.symbol);
+  if (params.side) searchParams.append('side', params.side);
+  if (params.start_date) searchParams.append('start_date', params.start_date);
+  if (params.end_date) searchParams.append('end_date', params.end_date);
+  if (params.limit) searchParams.append('limit', params.limit);
+  if (params.offset) searchParams.append('offset', params.offset);
+  const query = searchParams.toString();
+  return request(`/trades${query ? '?' + query : ''}`);
+};
+export const syncTrades = () => request('/trades/sync', { method: 'POST' });

@@ -229,15 +229,7 @@ class Database(BaseDatabase):
     # Trades (extended methods beyond BaseDatabase)
     # -------------------------------------------------------------------------
 
-    async def record_trade(self, symbol: str, side: str, quantity: float, price: float, **extra) -> int:
-        """Record a trade."""
-        cursor = await self.conn.execute(
-            """INSERT INTO trades (symbol, side, quantity, price, executed_at)
-               VALUES (?, ?, ?, ?, datetime('now'))""",
-            (symbol, side, quantity, price),
-        )
-        await self.conn.commit()
-        return cursor.lastrowid
+    # record_trade() removed - trades are now synced from broker via upsert_trade()
 
     # -------------------------------------------------------------------------
     # Allocation Targets (extended methods beyond BaseDatabase)
@@ -625,6 +617,7 @@ class Database(BaseDatabase):
             ("sync:quotes", 1440, 1440, 0, "sync", "Sync current quotes"),
             ("sync:metadata", 1440, 1440, 0, "sync", "Sync security metadata"),
             ("sync:exchange_rates", 60, 60, 0, "sync", "Sync exchange rates"),
+            ("sync:trades", 60, 60, 0, "sync", "Sync trade history from broker"),
             ("aggregate:compute", 1440, 1440, 1, "sync", "Compute aggregate price series"),
             ("scoring:calculate", 1440, 1440, 0, "scoring", "Calculate security scores"),
             ("analytics:regime", 10080, 10080, 3, "analytics", "Train regime detection model"),
@@ -838,6 +831,9 @@ class Database(BaseDatabase):
         CREATE INDEX IF NOT EXISTS idx_job_schedules_category ON job_schedules(category, job_type);
         """)
 
+        # Migration: Migrate trades table to new schema
+        await self._migrate_trades_table()
+
         # Migration: Remove deprecated columns from job_schedules if they exist
         await self._migrate_job_schedules()
 
@@ -863,6 +859,36 @@ class Database(BaseDatabase):
         for col_name, col_type in agg_columns:
             if col_name not in ml_columns:
                 await self.conn.execute(f"ALTER TABLE ml_training_samples ADD COLUMN {col_name} {col_type}")
+
+    async def _migrate_trades_table(self) -> None:
+        """Migrate trades table to new schema with broker_trade_id and raw_data."""
+        cursor = await self.conn.execute("PRAGMA table_info(trades)")
+        columns = {row[1] for row in await cursor.fetchall()}
+
+        # Check if we need to migrate (old schema has 'quantity' and 'price' columns)
+        if "quantity" in columns and "broker_trade_id" not in columns:
+            logger.info("Migrating trades table to new schema...")
+
+            # Drop old table and recreate with new schema
+            # Note: We lose old local trades, but that's expected - broker trades are now the source of truth
+            await self.conn.execute("DROP TABLE IF EXISTS trades")
+            await self.conn.execute("""
+                CREATE TABLE trades (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    broker_trade_id TEXT UNIQUE NOT NULL,
+                    symbol TEXT NOT NULL,
+                    side TEXT NOT NULL CHECK(side IN ('BUY', 'SELL')),
+                    executed_at TEXT NOT NULL,
+                    raw_data TEXT NOT NULL,
+                    FOREIGN KEY (symbol) REFERENCES securities(symbol)
+                )
+            """)
+            await self.conn.execute("CREATE INDEX IF NOT EXISTS idx_trades_broker_id ON trades(broker_trade_id)")
+            await self.conn.execute("CREATE INDEX IF NOT EXISTS idx_trades_symbol ON trades(symbol)")
+            await self.conn.execute("CREATE INDEX IF NOT EXISTS idx_trades_executed_at ON trades(executed_at)")
+            await self.conn.execute("CREATE INDEX IF NOT EXISTS idx_trades_side ON trades(side)")
+            await self.conn.commit()
+            logger.info("trades table migration complete")
 
     async def _migrate_job_schedules(self) -> None:
         """Migrate job_schedules table to remove deprecated columns."""
@@ -975,15 +1001,14 @@ CREATE TABLE IF NOT EXISTS prices (
     PRIMARY KEY (symbol, date)
 );
 
--- Trade history
+-- Trade history (synced from broker)
 CREATE TABLE IF NOT EXISTS trades (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    broker_trade_id TEXT UNIQUE NOT NULL,
     symbol TEXT NOT NULL,
     side TEXT NOT NULL CHECK(side IN ('BUY', 'SELL')),
-    quantity REAL NOT NULL,
-    price REAL NOT NULL,
     executed_at TEXT NOT NULL,
-    order_id TEXT,
+    raw_data TEXT NOT NULL,
     FOREIGN KEY (symbol) REFERENCES securities(symbol)
 );
 
@@ -1020,7 +1045,9 @@ CREATE TABLE IF NOT EXISTS cache (
 
 -- Create indexes
 CREATE INDEX IF NOT EXISTS idx_prices_symbol_date ON prices(symbol, date);
+CREATE INDEX IF NOT EXISTS idx_trades_broker_id ON trades(broker_trade_id);
 CREATE INDEX IF NOT EXISTS idx_trades_symbol ON trades(symbol);
 CREATE INDEX IF NOT EXISTS idx_trades_executed_at ON trades(executed_at);
+CREATE INDEX IF NOT EXISTS idx_trades_side ON trades(side);
 CREATE INDEX IF NOT EXISTS idx_cache_expires_at ON cache(expires_at);
 """

@@ -1,11 +1,12 @@
 import { AppShell, Group, Title, ActionIcon, Badge, Tooltip, Switch, Text } from '@mantine/core';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { IconSettings, IconClock, IconRefresh, IconChartLine, IconPlanet } from '@tabler/icons-react';
+import { IconSettings, IconClock, IconRefresh, IconChartLine, IconPlanet, IconReceipt } from '@tabler/icons-react';
 
 import UnifiedPage from './pages/UnifiedPage';
 import { SchedulerModal } from './components/SchedulerModal';
 import { SettingsModal } from './components/SettingsModal';
 import { BacktestModal } from './components/BacktestModal';
+import { TradesModal } from './components/TradesModal';
 import { getSchedulerStatus, refreshAll, getSettings, updateSetting, getLedStatus, setLedEnabled, getVersion } from './api/client';
 import { useState } from 'react';
 
@@ -13,6 +14,7 @@ function App() {
   const [schedulerOpen, setSchedulerOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [backtestOpen, setBacktestOpen] = useState(false);
+  const [tradesOpen, setTradesOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: schedulerStatus } = useQuery({
@@ -125,6 +127,17 @@ function App() {
                   </Tooltip>
                 )}
 
+                <Tooltip label="Trade History">
+                  <ActionIcon
+                    variant="subtle"
+                    size="lg"
+                    onClick={() => setTradesOpen(true)}
+                    className="app__action-btn app__action-btn--trades"
+                  >
+                    <IconReceipt size={20} />
+                  </ActionIcon>
+                </Tooltip>
+
                 <Tooltip label="Refresh All (sync rates, portfolio, prices, scores)">
                   <ActionIcon
                     variant="subtle"
@@ -186,6 +199,7 @@ function App() {
       <SchedulerModal opened={schedulerOpen} onClose={() => setSchedulerOpen(false)} />
       <SettingsModal opened={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <BacktestModal opened={backtestOpen} onClose={() => setBacktestOpen(false)} />
+      <TradesModal opened={tradesOpen} onClose={() => setTradesOpen(false)} />
     </>
   );
 }

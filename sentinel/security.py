@@ -224,8 +224,7 @@ class Security:
                 raise ValueError(f"Cannot buy {self.symbol}: no ask price available for limit order")
 
         order_id = await self._broker.buy(self.symbol, quantity, price=limit_price)
-        if order_id:
-            await self._db.record_trade(self.symbol, "BUY", quantity, price)
+        # Note: Trades are synced from broker, not recorded locally
         return order_id
 
     async def sell(self, quantity: int) -> Optional[str]:
@@ -253,9 +252,7 @@ class Security:
                 raise ValueError(f"Cannot sell {self.symbol}: no bid price available for limit order")
 
         order_id = await self._broker.sell(self.symbol, quantity, price=limit_price)
-        if order_id:
-            price = await self.get_price()
-            await self._db.record_trade(self.symbol, "SELL", quantity, price or 0)
+        # Note: Trades are synced from broker, not recorded locally
         return order_id
 
     # -------------------------------------------------------------------------

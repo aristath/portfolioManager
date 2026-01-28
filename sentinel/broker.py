@@ -393,6 +393,57 @@ class Broker:
                 return m.get("s") == "OPEN"
         return False
 
+    async def get_trades_history(
+        self,
+        start_date: str = "2020-01-01",
+        end_date: str = None,
+    ) -> list[dict]:
+        """
+        Fetch trade history from Tradernet API.
+
+        Args:
+            start_date: Start date in YYYY-MM-DD format (default: 2020-01-01)
+            end_date: End date in YYYY-MM-DD format (default: today)
+
+        Returns:
+            List of trade dicts with extracted symbol and side fields
+        """
+        if not self._api:
+            return []
+
+        if end_date is None:
+            end_date = datetime.now().strftime("%Y-%m-%d")
+
+        try:
+            response = self._api.get_trades_history(
+                start=start_date,
+                end=end_date,
+                limit=1000,  # Fetch all available trades
+            )
+
+            trades = []
+            if response and "result" in response:
+                raw_trades = response["result"].get("trades", [])
+
+                for trade in raw_trades:
+                    # Extract key fields for indexing
+                    symbol = trade.get("instr_nm", "")
+                    trade_type = trade.get("type")  # 1 = BUY, 2 = SELL
+                    side = "BUY" if trade_type == 1 else "SELL"
+
+                    # Add convenience fields to the trade dict
+                    trade["symbol"] = symbol
+                    trade["side"] = side
+
+                    trades.append(trade)
+
+            logger.info(f"Fetched {len(trades)} trades from Tradernet API")
+            return trades
+
+        except Exception as e:
+            logger.error(f"Failed to get trades history: {e}")
+            return []
+
     async def get_available_securities(self) -> list[str]:
         """
         Get list of top tradeable EU securities from Tradernet API.
