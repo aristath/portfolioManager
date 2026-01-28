@@ -101,7 +101,9 @@ class TrainingDataGenerator:
 
         # Save to CSV for inspection
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        csv_path = f"data/ml_training_data_{timestamp}.csv"
+        from sentinel.paths import DATA_DIR
+
+        csv_path = str(DATA_DIR / f"ml_training_data_{timestamp}.csv")
         df.to_csv(csv_path, index=False)
         logger.info(f"Saved to {csv_path}")
 

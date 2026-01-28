@@ -1989,7 +1989,6 @@ async def train_symbol_stream(symbol: str):
 async def delete_training_data(symbol: str):
     """Delete all training data and model for a symbol."""
     import shutil
-    from pathlib import Path
 
     from sentinel.database import Database
 
@@ -2011,7 +2010,8 @@ async def delete_training_data(symbol: str):
     await db.conn.commit()
 
     # Delete model files
-    model_path = Path("data/ml_models") / symbol
+    from sentinel.paths import DATA_DIR
+    model_path = DATA_DIR / "ml_models" / symbol
     if model_path.exists():
         shutil.rmtree(model_path)
 

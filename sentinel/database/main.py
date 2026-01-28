@@ -33,7 +33,9 @@ class Database(BaseDatabase):
         """
         if path is None:
             if cls._default_path is None:
-                cls._default_path = str(Path(__file__).parent.parent / "data" / "sentinel.db")
+                from sentinel.paths import DATA_DIR
+
+                cls._default_path = str(DATA_DIR / "sentinel.db")
             path = cls._default_path
 
         if path not in cls._instances:

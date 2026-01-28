@@ -945,7 +945,9 @@ class EnsembleBlender:
         # Validate model before saving
         self.validate_before_save()
 
-        path = Path(f"data/ml_models/{symbol}")
+        from sentinel.paths import DATA_DIR
+
+        path = DATA_DIR / "ml_models" / symbol
         path.mkdir(parents=True, exist_ok=True)
 
         # Save both models
@@ -970,7 +972,9 @@ class EnsembleBlender:
         Args:
             symbol: Security ticker
         """
-        path = Path(f"data/ml_models/{symbol}")
+        from sentinel.paths import DATA_DIR
+
+        path = DATA_DIR / "ml_models" / symbol
 
         # Load both models
         self.nn_predictor.load(path)
@@ -985,7 +989,9 @@ class EnsembleBlender:
     @staticmethod
     def model_exists(symbol: str) -> bool:
         """Check if a trained model exists for a symbol."""
-        path = Path(f"data/ml_models/{symbol}")
+        from sentinel.paths import DATA_DIR
+
+        path = DATA_DIR / "ml_models" / symbol
         # Check for all required files (NumPy format)
         required_files = [
             "ensemble_metadata.json",
