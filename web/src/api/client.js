@@ -14,7 +14,17 @@ async function request(endpoint, options = {}) {
   });
 
   if (!response.ok) {
-    throw new Error(`API error: ${response.status} ${response.statusText}`);
+    // Try to extract error detail from response body
+    let errorMessage = `API error: ${response.status} ${response.statusText}`;
+    try {
+      const errorData = await response.json();
+      if (errorData.detail) {
+        errorMessage = errorData.detail;
+      }
+    } catch {
+      // Response body is not JSON, use default message
+    }
+    throw new Error(errorMessage);
   }
 
   return response.json();
@@ -155,3 +165,8 @@ export const getTrades = (params = {}) => {
   return request(`/trades${query ? '?' + query : ''}`);
 };
 export const syncTrades = () => request('/trades/sync', { method: 'POST' });
+
+// ML Reset
+export const resetAndRetrain = () =>
+  request('/ml/reset-and-retrain', { method: 'POST' });
+export const getResetStatus = () => request('/ml/reset-status');

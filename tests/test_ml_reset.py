@@ -1,0 +1,353 @@
+"""Tests for ML reset manager."""
+
+import os
+import tempfile
+from unittest.mock import patch
+
+import pytest
+import pytest_asyncio
+
+from sentinel.database import Database
+from sentinel.ml_reset import (
+    TOTAL_STEPS,
+    MLResetManager,
+    get_active_reset,
+    get_reset_status,
+    is_reset_in_progress,
+    set_active_reset,
+)
+
+
+@pytest_asyncio.fixture
+async def db():
+    """Create test database with required tables."""
+    fd, path = tempfile.mkstemp(suffix=".db")
+    os.close(fd)
+
+    database = Database(path)
+    await database.connect()
+
+    yield database
+
+    await database.close()
+    database.remove_from_cache()
+    if os.path.exists(path):
+        os.remove(path)
+
+
+@pytest.fixture
+def manager(db):
+    """Create MLResetManager with test database."""
+    return MLResetManager(db=db)
+
+
+@pytest.mark.asyncio
+async def test_delete_aggregates_removes_all_agg_symbols(db, manager):
+    """Verify all _AGG_* symbols are deleted from prices table."""
+    # Setup: insert aggregate prices
+    await db.conn.execute(
+        "INSERT INTO prices (symbol, date, open, high, low, close, volume) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("_AGG_COUNTRY_US", "2024-01-01", 100, 100, 100, 100, 0),
+    )
+    await db.conn.execute(
+        "INSERT INTO prices (symbol, date, open, high, low, close, volume) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("_AGG_INDUSTRY_TECH", "2024-01-01", 100, 100, 100, 100, 0),
+    )
+    await db.conn.commit()
+
+    # Verify setup
+    cursor = await db.conn.execute("SELECT COUNT(*) as cnt FROM prices WHERE symbol LIKE '_AGG_%'")
+    row = await cursor.fetchone()
+    assert row["cnt"] == 2
+
+    # Act
+    deleted = await manager.delete_aggregates()
+
+    # Assert
+    assert deleted == 2
+    cursor = await db.conn.execute("SELECT COUNT(*) as cnt FROM prices WHERE symbol LIKE '_AGG_%'")
+    row = await cursor.fetchone()
+    assert row["cnt"] == 0
+
+
+@pytest.mark.asyncio
+async def test_delete_aggregates_preserves_regular_prices(db, manager):
+    """Verify regular security prices are not deleted."""
+    # Setup: insert both aggregate and regular prices
+    await db.conn.execute(
+        "INSERT INTO prices (symbol, date, open, high, low, close, volume) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("_AGG_COUNTRY_US", "2024-01-01", 100, 100, 100, 100, 0),
+    )
+    await db.conn.execute(
+        "INSERT INTO prices (symbol, date, open, high, low, close, volume) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("AAPL", "2024-01-01", 150, 155, 149, 154, 1000000),
+    )
+    await db.conn.execute(
+        "INSERT INTO prices (symbol, date, open, high, low, close, volume) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("MSFT", "2024-01-01", 350, 355, 349, 354, 500000),
+    )
+    await db.conn.commit()
+
+    # Act
+    await manager.delete_aggregates()
+
+    # Assert: regular prices still exist
+    cursor = await db.conn.execute("SELECT COUNT(*) as cnt FROM prices WHERE symbol = 'AAPL'")
+    row = await cursor.fetchone()
+    assert row["cnt"] == 1
+
+    cursor = await db.conn.execute("SELECT COUNT(*) as cnt FROM prices WHERE symbol = 'MSFT'")
+    row = await cursor.fetchone()
+    assert row["cnt"] == 1
+
+
+@pytest.mark.asyncio
+async def test_delete_training_data_clears_all_tables(db, manager):
+    """Verify all ML tables are emptied."""
+    # Setup: insert data into ML tables
+    await db.conn.execute(
+        """INSERT INTO ml_training_samples
+           (sample_id, symbol, sample_date, future_return, prediction_horizon_days, created_at)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        ("sample1", "AAPL", "2024-01-01", 0.05, 14, "2024-01-01T00:00:00"),
+    )
+    await db.conn.execute(
+        """INSERT INTO ml_predictions
+           (symbol, predicted_at, wavelet_score, ml_score, final_score)
+           VALUES (?, ?, ?, ?, ?)""",
+        ("AAPL", "2024-01-01T00:00:00", 0.5, 0.6, 0.55),
+    )
+    await db.conn.execute(
+        """INSERT INTO ml_models
+           (symbol, training_samples, validation_rmse, validation_mae, validation_r2, last_trained_at)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        ("AAPL", 100, 0.03, 0.02, 0.65, "2024-01-01T00:00:00"),
+    )
+    await db.conn.execute(
+        """INSERT INTO ml_performance_tracking
+           (symbol, tracked_at, mean_absolute_error, root_mean_squared_error, predictions_evaluated)
+           VALUES (?, ?, ?, ?, ?)""",
+        ("AAPL", "2024-01-01T00:00:00", 0.02, 0.03, 10),
+    )
+    await db.conn.commit()
+
+    # Act
+    await manager.delete_training_data()
+
+    # Assert: all tables are empty
+    tables = ["ml_training_samples", "ml_predictions", "ml_models", "ml_performance_tracking"]
+    for table in tables:
+        cursor = await db.conn.execute(f"SELECT COUNT(*) as cnt FROM {table}")  # noqa: S608
+        row = await cursor.fetchone()
+        assert row["cnt"] == 0, f"Table {table} should be empty"
+
+
+@pytest.mark.asyncio
+async def test_delete_model_files_removes_directory_contents(manager, tmp_path):
+    """Verify model files are deleted but directory recreated."""
+    # Setup: create model directory with files
+    model_dir = tmp_path / "ml_models"
+    model_dir.mkdir()
+    (model_dir / "AAPL").mkdir()
+    (model_dir / "AAPL" / "model.pt").write_text("fake model")
+    (model_dir / "MSFT").mkdir()
+    (model_dir / "MSFT" / "model.pt").write_text("fake model")
+
+    # Patch DATA_DIR
+    with patch("sentinel.ml_reset.DATA_DIR", tmp_path):
+        await manager.delete_model_files()
+
+    # Assert: directory exists but is empty
+    assert model_dir.exists()
+    assert list(model_dir.iterdir()) == []
+
+
+@pytest.mark.asyncio
+async def test_delete_model_files_handles_nonexistent_directory(manager, tmp_path):
+    """Verify delete_model_files works when directory doesn't exist."""
+    model_dir = tmp_path / "ml_models"
+    assert not model_dir.exists()
+
+    with patch("sentinel.ml_reset.DATA_DIR", tmp_path):
+        await manager.delete_model_files()
+
+    # Directory should be created
+    assert model_dir.exists()
+
+
+@pytest.mark.asyncio
+async def test_reset_all_orchestrates_full_pipeline(db, manager):
+    """Verify reset_all calls all steps in correct order."""
+    # Mock internal methods to track call order
+    call_order = []
+
+    async def mock_delete_agg():
+        call_order.append("delete_aggregates")
+        return 5
+
+    async def mock_delete_training():
+        call_order.append("delete_training_data")
+
+    async def mock_delete_files():
+        call_order.append("delete_model_files")
+
+    async def mock_recompute():
+        call_order.append("recompute_aggregates")
+        return {"country": 2, "industry": 3}
+
+    async def mock_regenerate():
+        call_order.append("regenerate_training_data")
+        return 100
+
+    async def mock_retrain():
+        call_order.append("retrain_all_models")
+        return {"symbols_trained": 5, "symbols_skipped": 1}
+
+    manager.delete_aggregates = mock_delete_agg
+    manager.delete_training_data = mock_delete_training
+    manager.delete_model_files = mock_delete_files
+    manager._recompute_aggregates = mock_recompute
+    manager._regenerate_training_data = mock_regenerate
+    manager._retrain_all_models = mock_retrain
+
+    # Act
+    result = await manager.reset_all()
+
+    # Assert: correct order
+    expected_order = [
+        "delete_aggregates",
+        "delete_training_data",
+        "delete_model_files",
+        "recompute_aggregates",
+        "regenerate_training_data",
+        "retrain_all_models",
+    ]
+    assert call_order == expected_order
+
+    # Assert: result structure
+    assert result["status"] == "completed"
+    assert result["aggregates_deleted"] == 5
+    assert result["aggregates_computed"] == {"country": 2, "industry": 3}
+    assert result["training_samples_generated"] == 100
+    assert result["models_trained"] == 5
+    assert result["models_skipped"] == 1
+
+
+@pytest.mark.asyncio
+async def test_delete_aggregates_returns_zero_when_no_aggregates(db, manager):
+    """Verify delete_aggregates returns 0 when no aggregates exist."""
+    # Insert only regular prices
+    await db.conn.execute(
+        "INSERT INTO prices (symbol, date, open, high, low, close, volume) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("AAPL", "2024-01-01", 150, 155, 149, 154, 1000000),
+    )
+    await db.conn.commit()
+
+    deleted = await manager.delete_aggregates()
+
+    assert deleted == 0
+
+
+# Tests for global state functions
+
+
+def test_is_reset_in_progress_false_by_default():
+    """Verify is_reset_in_progress returns False when no reset is active."""
+    set_active_reset(None)
+    assert is_reset_in_progress() is False
+
+
+def test_is_reset_in_progress_true_when_set():
+    """Verify is_reset_in_progress returns True when a reset is active."""
+    manager = MLResetManager()
+    set_active_reset(manager)
+    try:
+        assert is_reset_in_progress() is True
+    finally:
+        set_active_reset(None)
+
+
+def test_get_active_reset_returns_manager():
+    """Verify get_active_reset returns the active manager."""
+    manager = MLResetManager()
+    set_active_reset(manager)
+    try:
+        assert get_active_reset() is manager
+    finally:
+        set_active_reset(None)
+
+
+def test_set_active_reset_clears_state():
+    """Verify set_active_reset(None) clears the state."""
+    manager = MLResetManager()
+    set_active_reset(manager)
+    set_active_reset(None)
+    assert get_active_reset() is None
+    assert is_reset_in_progress() is False
+
+
+def test_get_reset_status_when_not_running():
+    """Verify get_reset_status returns running=False when no reset is active."""
+    set_active_reset(None)
+    status = get_reset_status()
+    assert status["running"] is False
+    assert "current_step" not in status
+
+
+def test_get_reset_status_when_running():
+    """Verify get_reset_status returns progress info when reset is active."""
+    manager = MLResetManager()
+    manager._set_step(3, "Processing...")
+    set_active_reset(manager)
+    try:
+        status = get_reset_status()
+        assert status["running"] is True
+        assert status["current_step"] == 3
+        assert status["total_steps"] == TOTAL_STEPS
+        assert status["step_name"] == "Deleting model files"
+        assert status["details"] == "Processing..."
+    finally:
+        set_active_reset(None)
+
+
+def test_get_reset_status_includes_model_progress():
+    """Verify get_reset_status includes model training progress in step 6."""
+    manager = MLResetManager()
+    manager._set_step(6)
+    manager._on_model_progress(5, 20, "AAPL")
+    set_active_reset(manager)
+    try:
+        status = get_reset_status()
+        assert status["running"] is True
+        assert status["current_step"] == 6
+        assert status["models_current"] == 5
+        assert status["models_total"] == 20
+        assert status["current_symbol"] == "AAPL"
+    finally:
+        set_active_reset(None)
+
+
+def test_set_step_updates_progress():
+    """Verify _set_step updates all progress fields."""
+    manager = MLResetManager()
+    assert manager.current_step == 0
+
+    manager._set_step(5, "Generating for AAPL")
+
+    assert manager.current_step == 5
+    assert manager.step_name == "Generating training data"
+    assert manager.step_details == "Generating for AAPL"
+
+
+def test_on_model_progress_updates_training_state():
+    """Verify _on_model_progress updates model training state."""
+    manager = MLResetManager()
+    manager._set_step(6)
+
+    manager._on_model_progress(10, 50, "MSFT")
+
+    assert manager.models_current == 10
+    assert manager.models_total == 50
+    assert manager.current_symbol == "MSFT"
+    assert "MSFT" in manager.step_details
+    assert "10/50" in manager.step_details

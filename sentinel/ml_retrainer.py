@@ -19,10 +19,16 @@ logger = logging.getLogger(__name__)
 class MLRetrainer:
     """Per-symbol ML retraining pipeline."""
 
-    def __init__(self):
+    def __init__(self, progress_callback=None):
+        """Initialize retrainer.
+
+        Args:
+            progress_callback: Optional callback(current, total, symbol) for progress updates
+        """
         self.db = Database()
         self.settings = Settings()
         self.trainer = TrainingDataGenerator()
+        self.progress_callback = progress_callback
 
     async def retrain(self) -> Dict:
         """
@@ -65,9 +71,14 @@ class MLRetrainer:
         results = {}
         symbols_trained = 0
         symbols_skipped = 0
+        total_symbols = len(symbols_with_data)
 
         for i, (symbol, sample_count) in enumerate(symbols_with_data.items()):
-            logger.info(f"      [{i + 1}/{len(symbols_with_data)}] {symbol} ({sample_count} samples)...")
+            logger.info(f"      [{i + 1}/{total_symbols}] {symbol} ({sample_count} samples)...")
+
+            # Report progress
+            if self.progress_callback:
+                self.progress_callback(i + 1, total_symbols, symbol)
 
             try:
                 metrics = await self._train_symbol(symbol)

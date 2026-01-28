@@ -1967,6 +1967,69 @@ async def get_training_status(symbol: str):
 
 
 # -----------------------------------------------------------------------------
+# ML Reset API
+# -----------------------------------------------------------------------------
+
+
+@app.post("/api/ml/reset-and-retrain")
+async def reset_and_retrain():
+    """Reset all ML data and retrain all models from scratch.
+
+    This endpoint:
+    1. Deletes all aggregate price series (_AGG_*)
+    2. Clears ML training data tables
+    3. Removes model files
+    4. Recomputes aggregates
+    5. Regenerates training samples
+    6. Retrains all models
+
+    The operation runs in the background and returns immediately.
+    Returns 409 Conflict if a reset is already in progress.
+    """
+    from sentinel.ml_reset import is_reset_in_progress
+
+    if is_reset_in_progress():
+        raise HTTPException(
+            status_code=409,
+            detail="A reset operation is already in progress",
+        )
+
+    asyncio.create_task(_run_reset_and_retrain())
+    return {"status": "started", "message": "Reset and retrain started in background"}
+
+
+@app.get("/api/ml/reset-status")
+async def get_ml_reset_status():
+    """Get the current status of the ML reset operation.
+
+    Returns:
+        - running: bool - whether a reset is in progress
+        - current_step: int - current step number (1-6)
+        - total_steps: int - total number of steps (6)
+        - step_name: str - name of the current step
+        - details: str - additional details about current progress
+    """
+    from sentinel.ml_reset import get_reset_status
+
+    return get_reset_status()
+
+
+async def _run_reset_and_retrain():
+    """Background task to run the full reset and retrain pipeline."""
+    from sentinel.ml_reset import MLResetManager, set_active_reset
+
+    manager = MLResetManager()
+    set_active_reset(manager)
+    try:
+        result = await manager.reset_all()
+        logger.info(f"ML reset and retrain completed: {result}")
+    except Exception as e:
+        logger.error(f"ML reset and retrain failed: {e}")
+    finally:
+        set_active_reset(None)
+
+
+# -----------------------------------------------------------------------------
 # Static Files (Web UI)
 # -----------------------------------------------------------------------------
 
