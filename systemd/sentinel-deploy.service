@@ -1,0 +1,7 @@
+[Unit]
+Description=Sentinel Auto-Deploy
+
+[Service]
+Type=oneshot
+User=arduino
+ExecStart=/home/arduino/sentinel/scripts/auto-deploy.sh
