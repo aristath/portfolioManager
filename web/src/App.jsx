@@ -6,7 +6,7 @@ import UnifiedPage from './pages/UnifiedPage';
 import { SchedulerModal } from './components/SchedulerModal';
 import { SettingsModal } from './components/SettingsModal';
 import { BacktestModal } from './components/BacktestModal';
-import { getSchedulerStatus, refreshAll, getSettings, updateSetting, getLedStatus, setLedEnabled } from './api/client';
+import { getSchedulerStatus, refreshAll, getSettings, updateSetting, getLedStatus, setLedEnabled, getVersion } from './api/client';
 import { useState } from 'react';
 
 function App() {
@@ -30,6 +30,12 @@ function App() {
     queryKey: ['ledStatus'],
     queryFn: getLedStatus,
     refetchInterval: 30000,
+  });
+
+  const { data: versionData } = useQuery({
+    queryKey: ['version'],
+    queryFn: getVersion,
+    staleTime: Infinity,
   });
 
   const refreshMutation = useMutation({
@@ -64,9 +70,16 @@ function App() {
       <AppShell header={{ height: 50 }} padding="md" className="app">
         <AppShell.Header className="app__header">
           <Group h="100%" px="md" justify="space-between" className="app__header-content">
-            <Title order={3} c="blue" className="app__logo">
-              Sentinel
-            </Title>
+            <Group gap={8} align="baseline" className="app__logo">
+              <Title order={3} c="blue">
+                Sentinel
+              </Title>
+              {versionData?.version && (
+                <Text size="xs" c="dimmed">
+                  {versionData.version}
+                </Text>
+              )}
+            </Group>
 
             <Group gap="md" className="app__controls">
               <Group gap="xs" className="app__trading-mode">

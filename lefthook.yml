@@ -83,6 +83,5 @@ pre-commit:
       stage_fixed: true
 
     frontend-build:
-      glob: "web/src/**\nweb/index.html"
-      run: cd web && npm run build
+      run: cd web && npm run build && git add dist/
       stage_fixed: true

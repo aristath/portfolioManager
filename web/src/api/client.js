@@ -20,6 +20,9 @@ async function request(endpoint, options = {}) {
   return response.json();
 }
 
+// Version
+export const getVersion = () => request('/version');
+
 // Portfolio
 export const getPortfolio = () => request('/portfolio');
 export const getPositions = () => request('/positions');
