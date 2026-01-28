@@ -78,6 +78,10 @@ pre-commit:
       glob: "*.py"
       run: .venv/bin/pyright {staged_files}
 
+    generate-version:
+      run: bash scripts/generate-version.sh && git add sentinel/version.py
+      stage_fixed: true
+
     frontend-build:
       glob: "web/src/**\nweb/index.html"
       run: cd web && npm run build

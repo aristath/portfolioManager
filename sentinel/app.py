@@ -40,6 +40,7 @@ from sentinel.portfolio import Portfolio
 from sentinel.price_validator import PriceValidator, get_price_anomaly_warning
 from sentinel.security import Security
 from sentinel.settings import Settings
+from sentinel.version import VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -210,7 +211,7 @@ async def _sync_missing_prices(db: Database, broker: Broker):
 app = FastAPI(
     title="Sentinel",
     description="Long-term portfolio management system",
-    version="1.0.0",
+    version=VERSION,
     lifespan=lifespan,
 )
 
@@ -1670,6 +1671,12 @@ async def get_backup_status():
 # -----------------------------------------------------------------------------
 
 
+@app.get("/api/version")
+async def version():
+    """Return the application version."""
+    return {"version": VERSION}
+
+
 @app.get("/api/health")
 async def health():
     """Health check endpoint."""
@@ -2011,6 +2018,7 @@ async def delete_training_data(symbol: str):
 
     # Delete model files
     from sentinel.paths import DATA_DIR
+
     model_path = DATA_DIR / "ml_models" / symbol
     if model_path.exists():
         shutil.rmtree(model_path)
