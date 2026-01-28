@@ -7,13 +7,13 @@ Usage:
     python main.py --all    # Run web server + scheduler
 """
 
-import asyncio
 import argparse
+import asyncio
 import logging
+
 import uvicorn
 
-from sentinel import Database, Settings, Broker, SyncScheduler
-
+from sentinel import Broker, Database, Settings
 
 logging.basicConfig(
     level=logging.INFO,
