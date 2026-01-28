@@ -429,8 +429,8 @@ class Broker:
                 for trade in raw_trades:
                     # Extract key fields for indexing
                     symbol = trade.get("instr_nm", "")
-                    trade_type = trade.get("type")  # 1 = BUY, 2 = SELL
-                    side = "BUY" if trade_type == 1 else "SELL"
+                    trade_type = str(trade.get("type", ""))  # API returns "1" = BUY, "2" = SELL as strings
+                    side = "BUY" if trade_type == "1" else "SELL"
 
                     # Add convenience fields to the trade dict
                     trade["symbol"] = symbol

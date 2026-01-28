@@ -433,11 +433,12 @@ class TestBrokerGetTradesHistory:
         broker = Broker()
 
         # Mock the API call - actual API returns {"trades": {"trade": [...]}}
+        # Note: type is a string in the real API response ("1" = BUY, "2" = SELL)
         mock_response = {
             "trades": {
                 "trade": [
-                    {"id": "1", "instr_nm": "AAPL.US", "type": 1, "date": "2024-01-15 10:30:00"},
-                    {"id": "2", "instr_nm": "MSFT.US", "type": 2, "date": "2024-01-16 11:00:00"},
+                    {"id": "1", "instr_nm": "AAPL.US", "type": "1", "date": "2024-01-15 10:30:00"},
+                    {"id": "2", "instr_nm": "MSFT.US", "type": "2", "date": "2024-01-16 11:00:00"},
                 ]
             }
         }
@@ -459,11 +460,12 @@ class TestBrokerGetTradesHistory:
         broker = Broker()
 
         # Actual API returns {"trades": {"trade": [...]}}
+        # Note: type is a string in the real API response
         mock_response = {
             "trades": {
                 "trade": [
-                    {"id": "1", "instr_nm": "AAPL.US", "type": 1, "date": "2024-01-15"},  # type 1 = BUY
-                    {"id": "2", "instr_nm": "MSFT.US", "type": 2, "date": "2024-01-16"},  # type 2 = SELL
+                    {"id": "1", "instr_nm": "AAPL.US", "type": "1", "date": "2024-01-15"},  # type "1" = BUY
+                    {"id": "2", "instr_nm": "MSFT.US", "type": "2", "date": "2024-01-16"},  # type "2" = SELL
                 ]
             }
         }
@@ -488,10 +490,11 @@ class TestBrokerGetTradesHistory:
         broker = Broker()
 
         # Actual API returns {"trades": {"trade": [...]}}
+        # Note: type is a string in the real API response
         mock_response = {
             "trades": {
                 "trade": [
-                    {"id": "1", "instr_nm": "AAPL.US", "type": 1, "date": "2024-01-15"},
+                    {"id": "1", "instr_nm": "AAPL.US", "type": "1", "date": "2024-01-15"},
                 ]
             }
         }
