@@ -13,8 +13,10 @@ from pathlib import Path
 from typing import Any, Optional
 import json
 
+from sentinel.database.base import BaseDatabase
 
-class Database:
+
+class Database(BaseDatabase):
     """Single source of truth for all database operations."""
 
     _instances: dict[str, 'Database'] = {}  # path -> instance
@@ -67,13 +69,6 @@ class Database:
         if path_str in self._instances:
             del self._instances[path_str]
 
-    @property
-    def conn(self) -> aiosqlite.Connection:
-        """Get raw connection for advanced operations."""
-        if not self._connection:
-            raise RuntimeError("Database not connected. Call connect() first.")
-        return self._connection
-
     # -------------------------------------------------------------------------
     # Settings
     # -------------------------------------------------------------------------
@@ -113,44 +108,8 @@ class Database:
         return result
 
     # -------------------------------------------------------------------------
-    # Securities
+    # Securities (extended methods beyond BaseDatabase)
     # -------------------------------------------------------------------------
-
-    async def get_security(self, symbol: str) -> Optional[dict]:
-        """Get a security by symbol."""
-        cursor = await self.conn.execute(
-            "SELECT * FROM securities WHERE symbol = ?", (symbol,)
-        )
-        row = await cursor.fetchone()
-        return dict(row) if row else None
-
-    async def get_all_securities(self, active_only: bool = True) -> list[dict]:
-        """Get all securities."""
-        query = "SELECT * FROM securities"
-        if active_only:
-            query += " WHERE active = 1"
-        cursor = await self.conn.execute(query)
-        rows = await cursor.fetchall()
-        return [dict(row) for row in rows]
-
-    async def upsert_security(self, symbol: str, **data) -> None:
-        """Insert or update a security."""
-        existing = await self.get_security(symbol)
-        if existing:
-            sets = ", ".join(f"{k} = ?" for k in data.keys())
-            await self.conn.execute(
-                f"UPDATE securities SET {sets} WHERE symbol = ?",
-                (*data.values(), symbol)
-            )
-        else:
-            data['symbol'] = symbol
-            cols = ", ".join(data.keys())
-            placeholders = ", ".join("?" * len(data))
-            await self.conn.execute(
-                f"INSERT INTO securities ({cols}) VALUES ({placeholders})",
-                tuple(data.values())
-            )
-        await self.conn.commit()
 
     async def update_quote_data(self, symbol: str, quote_data: dict) -> None:
         """Update quote data for a security."""
@@ -173,44 +132,7 @@ class Database:
         await self.conn.commit()
 
     # -------------------------------------------------------------------------
-    # Positions
-    # -------------------------------------------------------------------------
-
-    async def get_position(self, symbol: str) -> Optional[dict]:
-        """Get a position by symbol."""
-        cursor = await self.conn.execute(
-            "SELECT * FROM positions WHERE symbol = ?", (symbol,)
-        )
-        row = await cursor.fetchone()
-        return dict(row) if row else None
-
-    async def get_all_positions(self) -> list[dict]:
-        """Get all positions."""
-        cursor = await self.conn.execute("SELECT * FROM positions WHERE quantity > 0")
-        rows = await cursor.fetchall()
-        return [dict(row) for row in rows]
-
-    async def upsert_position(self, symbol: str, **data) -> None:
-        """Insert or update a position."""
-        existing = await self.get_position(symbol)
-        if existing:
-            sets = ", ".join(f"{k} = ?" for k in data.keys())
-            await self.conn.execute(
-                f"UPDATE positions SET {sets} WHERE symbol = ?",
-                (*data.values(), symbol)
-            )
-        else:
-            data['symbol'] = symbol
-            cols = ", ".join(data.keys())
-            placeholders = ", ".join("?" * len(data))
-            await self.conn.execute(
-                f"INSERT INTO positions ({cols}) VALUES ({placeholders})",
-                tuple(data.values())
-            )
-        await self.conn.commit()
-
-    # -------------------------------------------------------------------------
-    # Prices
+    # Prices (extended methods beyond BaseDatabase)
     # -------------------------------------------------------------------------
 
     async def save_prices(self, symbol: str, prices: list[dict]) -> None:
@@ -236,17 +158,6 @@ class Database:
                  price.get('low'), price['close'], price.get('volume'))
             )
         await self.conn.commit()
-
-    async def get_prices(self, symbol: str, days: int = None) -> list[dict]:
-        """Get historical prices for a security."""
-        query = "SELECT * FROM prices WHERE symbol = ? ORDER BY date DESC"
-        params = [symbol]
-        if days:
-            query += " LIMIT ?"
-            params.append(days)
-        cursor = await self.conn.execute(query, params)
-        rows = await cursor.fetchall()
-        return [dict(row) for row in rows]
 
     async def get_prices_bulk(self, symbols: list[str], days: int = None) -> dict[str, list[dict]]:
         """Get historical prices for multiple securities in a single query.
@@ -297,7 +208,7 @@ class Database:
         return result
 
     # -------------------------------------------------------------------------
-    # Trades
+    # Trades (extended methods beyond BaseDatabase)
     # -------------------------------------------------------------------------
 
     async def record_trade(self, symbol: str, side: str, quantity: float,
@@ -311,33 +222,9 @@ class Database:
         await self.conn.commit()
         return cursor.lastrowid
 
-    async def get_trades(self, symbol: str = None, limit: int = 100) -> list[dict]:
-        """Get trade history."""
-        query = "SELECT * FROM trades"
-        params = []
-        if symbol:
-            query += " WHERE symbol = ?"
-            params.append(symbol)
-        query += " ORDER BY executed_at DESC LIMIT ?"
-        params.append(limit)
-        cursor = await self.conn.execute(query, params)
-        rows = await cursor.fetchall()
-        return [dict(row) for row in rows]
-
     # -------------------------------------------------------------------------
-    # Allocation Targets
+    # Allocation Targets (extended methods beyond BaseDatabase)
     # -------------------------------------------------------------------------
-
-    async def get_allocation_targets(self, target_type: str = None) -> list[dict]:
-        """Get allocation targets (geography or industry weights)."""
-        query = "SELECT * FROM allocation_targets"
-        params = []
-        if target_type:
-            query += " WHERE type = ?"
-            params.append(target_type)
-        cursor = await self.conn.execute(query, params)
-        rows = await cursor.fetchall()
-        return [dict(row) for row in rows]
 
     async def set_allocation_target(self, target_type: str, name: str, weight: float) -> None:
         """Set an allocation target weight."""
@@ -360,7 +247,7 @@ class Database:
     # Cache
     # -------------------------------------------------------------------------
 
-    async def cache_get(self, key: str) -> str | None:
+    async def cache_get(self, key: str) -> Optional[str]:
         """Get a cached value by key. Returns None if not found or expired."""
         import time
         cursor = await self.conn.execute(
@@ -441,37 +328,6 @@ class Database:
             f"UPDATE securities SET {', '.join(updates)} WHERE symbol = ?",
             params
         )
-        await self.conn.commit()
-
-    # -------------------------------------------------------------------------
-    # Cash Balances
-    # -------------------------------------------------------------------------
-
-    async def get_cash_balances(self) -> dict[str, float]:
-        """Get all cash balances as a dictionary of currency -> amount."""
-        cursor = await self.conn.execute("SELECT currency, amount FROM cash_balances")
-        rows = await cursor.fetchall()
-        return {row['currency']: row['amount'] for row in rows}
-
-    async def set_cash_balance(self, currency: str, amount: float) -> None:
-        """Set cash balance for a currency."""
-        await self.conn.execute(
-            """INSERT OR REPLACE INTO cash_balances (currency, amount, updated_at)
-               VALUES (?, ?, datetime('now'))""",
-            (currency, amount)
-        )
-        await self.conn.commit()
-
-    async def set_cash_balances(self, balances: dict[str, float]) -> None:
-        """Set multiple cash balances at once. Clears existing balances."""
-        await self.conn.execute("DELETE FROM cash_balances")
-        for currency, amount in balances.items():
-            if amount > 0:  # Only store non-zero balances
-                await self.conn.execute(
-                    """INSERT INTO cash_balances (currency, amount, updated_at)
-                       VALUES (?, ?, datetime('now'))""",
-                    (currency, amount)
-                )
         await self.conn.commit()
 
     # -------------------------------------------------------------------------
@@ -688,7 +544,7 @@ class Database:
         )
         await self.conn.commit()
 
-    async def get_job_schedule(self, job_type: str) -> dict | None:
+    async def get_job_schedule(self, job_type: str) -> Optional[dict]:
         """Get a single job schedule by type."""
         cursor = await self.conn.execute(
             "SELECT * FROM job_schedules WHERE job_type = ?",
@@ -700,16 +556,16 @@ class Database:
     async def upsert_job_schedule(
         self,
         job_type: str,
-        enabled: bool | None = None,
-        interval_minutes: int | None = None,
-        interval_market_open_minutes: int | None = None,
-        market_timing: int | None = None,
-        dependencies: str | None = None,
-        description: str | None = None,
-        category: str | None = None,
-        is_parameterized: bool | None = None,
-        parameter_source: str | None = None,
-        parameter_field: str | None = None,
+        enabled: Optional[bool] = None,
+        interval_minutes: Optional[int] = None,
+        interval_market_open_minutes: Optional[int] = None,
+        market_timing: Optional[int] = None,
+        dependencies: Optional[str] = None,
+        description: Optional[str] = None,
+        category: Optional[str] = None,
+        is_parameterized: Optional[bool] = None,
+        parameter_source: Optional[str] = None,
+        parameter_field: Optional[str] = None,
     ) -> None:
         """Insert or update a job schedule."""
         from datetime import datetime
@@ -797,7 +653,6 @@ class Database:
             ('scoring:calculate', 1440, 1440, 0, 'scoring', 'Calculate security scores', False, None, None),
             ('analytics:correlation', 10080, 10080, 3, 'analytics', 'Update correlation matrices', False, None, None),
             ('analytics:regime', 10080, 10080, 3, 'analytics', 'Train regime detection model', False, None, None),
-            ('analytics:transfer_entropy', 10080, 10080, 3, 'analytics', 'Calculate transfer entropy', False, None, None),
             ('trading:check_markets', 30, 30, 2, 'trading', 'Check which markets are open', False, None, None),
             ('trading:execute', 30, 15, 2, 'trading', 'Execute pending trade recommendations', False, None, None),
             ('planning:refresh', 60, 30, 0, 'trading', 'Refresh trading plan and recommendations', False, None, None),
@@ -894,16 +749,6 @@ class Database:
             model_params TEXT
         );
 
-        -- Transfer entropy
-        CREATE TABLE IF NOT EXISTS transfer_entropy (
-            source_symbol TEXT NOT NULL,
-            target_symbol TEXT NOT NULL,
-            te_value REAL NOT NULL,
-            calculated_at TEXT,
-            lag INTEGER,
-            PRIMARY KEY (source_symbol, target_symbol)
-        );
-
         -- Correlation matrices
         CREATE TABLE IF NOT EXISTS correlation_matrices (
             matrix_id TEXT PRIMARY KEY,
@@ -915,21 +760,8 @@ class Database:
             q_ratio REAL
         );
 
-        -- Optimization results
-        CREATE TABLE IF NOT EXISTS optimization_results (
-            run_id TEXT PRIMARY KEY,
-            method TEXT,
-            symbols TEXT,
-            allocations TEXT,
-            expected_return REAL,
-            expected_risk REAL,
-            sharpe_ratio REAL,
-            created_at TEXT
-        );
-
         -- Indexes
         CREATE INDEX IF NOT EXISTS idx_regime_symbol_date ON regime_states(symbol, date DESC);
-        CREATE INDEX IF NOT EXISTS idx_te_target ON transfer_entropy(target_symbol, te_value DESC);
         CREATE INDEX IF NOT EXISTS idx_corr_type ON correlation_matrices(matrix_type, calculated_at DESC);
 
         -- ML Per-Security Prediction Tables

@@ -52,7 +52,8 @@
       "Bash(SSHPASS='aristath' sshpass -e ssh -o StrictHostKeyChecking=no -o PreferredAuthentications=password arduino@192.168.1.11 'arduino-app-cli app logs user:sentinel-led 2>&1 | tail -15')",
       "Bash(SSHPASS='aristath' sshpass -e scp:*)",
       "Bash(SSHPASS='aristath' sshpass -e ssh -o StrictHostKeyChecking=no -o PreferredAuthentications=password arduino@192.168.1.11 'arduino-app-cli app restart user:sentinel-led')",
-      "Bash(ssh:*)"
+      "Bash(ssh:*)",
+      "Bash(uv lock:*)"
     ]
   }
 }

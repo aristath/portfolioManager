@@ -15,7 +15,6 @@ from sentinel.jobs.implementations import (
     CalculateScoresJob,
     CorrelationJob,
     RegimeJob,
-    TransferEntropyJob,
     CheckMarketsJob,
     RebalanceJob,
     MLRetrainJob,
@@ -90,11 +89,6 @@ class MockCleaner:
 class MockDetector:
     async def train_model(self, symbols):
         return True
-
-
-class MockTEAnalyzer:
-    async def calculate_matrix(self, symbols):
-        return []
 
 
 class MockPlanner:
@@ -197,7 +191,6 @@ async def registry_with_all_jobs():
         analyzer=MockAnalyzer(),
         cleaner=MockCleaner(),
         detector=MockDetector(),
-        te_analyzer=MockTEAnalyzer(),
         planner=MockPlanner(),
         retrainer=MockRetrainer(),
         monitor=MockMonitor(),
@@ -226,7 +219,6 @@ async def test_register_all_jobs_registers_analytics_jobs(registry_with_all_jobs
 
     assert registry.is_registered('analytics:correlation')
     assert registry.is_registered('analytics:regime')
-    assert registry.is_registered('analytics:transfer_entropy')
 
 
 @pytest.mark.asyncio

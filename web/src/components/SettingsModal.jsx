@@ -206,61 +206,6 @@ export function SettingsModal({ opened, onClose }) {
                 Advanced quantitative finance techniques (all optional)
               </Text>
 
-              <Divider label="Portfolio Optimization" />
-
-              <Select
-                label="Optimization Method"
-                description="Algorithm for calculating ideal portfolio allocations"
-                value={settings?.optimization_method || 'classic'}
-                onChange={(value) => handleChange('optimization_method', value)}
-                data={[
-                  { value: 'classic', label: 'Classic (Wavelet-based)' },
-                  { value: 'entropy', label: 'Entropy Optimization' },
-                  { value: 'skfolio_mv', label: 'Mean-Variance (skfolio)' },
-                  { value: 'skfolio_hrp', label: 'Hierarchical Risk Parity (skfolio)' },
-                  { value: 'skfolio_rp', label: 'Risk Parity (skfolio)' },
-                ]}
-              />
-
-              {settings?.optimization_method === 'entropy' && (
-                <>
-                  <Select
-                    label="Entropy Method"
-                    description="Type of entropy calculation to use"
-                    value={settings?.entropy_method || 'shannon'}
-                    onChange={(value) => handleChange('entropy_method', value)}
-                    data={[
-                      { value: 'shannon', label: 'Shannon Entropy' },
-                      { value: 'tsallis', label: 'Tsallis Entropy' },
-                    ]}
-                  />
-
-                  <NumberInput
-                    label="Entropy Weight"
-                    description="Balance between returns and diversification (0-1)"
-                    value={settings?.entropy_weight || 0.3}
-                    onChange={(value) => handleChange('entropy_weight', value)}
-                    min={0}
-                    max={1}
-                    step={0.1}
-                    decimalScale={2}
-                  />
-
-                  {settings?.entropy_method === 'tsallis' && (
-                    <NumberInput
-                      label="Tsallis Q Parameter"
-                      description="Non-extensivity parameter for Tsallis entropy"
-                      value={settings?.tsallis_q || 2.0}
-                      onChange={(value) => handleChange('tsallis_q', value)}
-                      min={0.5}
-                      max={3}
-                      step={0.1}
-                      decimalScale={1}
-                    />
-                  )}
-                </>
-              )}
-
               <Divider label="Regime Detection" />
 
               <Switch
@@ -311,47 +256,6 @@ export function SettingsModal({ opened, onClose }) {
                 checked={settings?.use_cleaned_correlation || false}
                 onChange={(e) => handleChange('use_cleaned_correlation', e.currentTarget.checked)}
               />
-
-              <Switch
-                label="Enable Transfer Entropy Analysis"
-                description="Identify directional dependencies between securities"
-                checked={settings?.use_transfer_entropy || false}
-                onChange={(e) => handleChange('use_transfer_entropy', e.currentTarget.checked)}
-              />
-
-              {settings?.use_transfer_entropy && (
-                <>
-                  <NumberInput
-                    label="Transfer Entropy Lag"
-                    description="Time lag for causality detection"
-                    value={settings?.te_lag || 5}
-                    onChange={(value) => handleChange('te_lag', value)}
-                    min={1}
-                    max={20}
-                    suffix=" days"
-                  />
-
-                  <NumberInput
-                    label="Transfer Entropy Bins"
-                    description="Discretization bins for entropy calculation"
-                    value={settings?.te_bins || 10}
-                    onChange={(value) => handleChange('te_bins', value)}
-                    min={5}
-                    max={20}
-                  />
-
-                  <NumberInput
-                    label="Influence Threshold"
-                    description="Minimum transfer entropy to consider as influence"
-                    value={settings?.te_influence_threshold || 0.1}
-                    onChange={(value) => handleChange('te_influence_threshold', value)}
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    decimalScale={2}
-                  />
-                </>
-              )}
 
               <Text size="xs" c="dimmed" mt="md">
                 Weekly jobs (Sundays 21:00-23:00) automatically update these analytics

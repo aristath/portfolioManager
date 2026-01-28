@@ -21,10 +21,8 @@ async def verify_setup():
     print("1. Checking dependencies...")
     try:
         import hmmlearn
-        import skfolio
         import sklearn
         print(f"   ✓ hmmlearn: {hmmlearn.__version__}")
-        print(f"   ✓ skfolio: {skfolio.__version__}")
         print(f"   ✓ scikit-learn: {sklearn.__version__}")
     except ImportError as e:
         print(f"   ✗ Missing dependency: {e}")
@@ -36,8 +34,7 @@ async def verify_setup():
     try:
         db = await aiosqlite.connect('data/sentinel.db')
 
-        tables = ['regime_states', 'regime_models', 'transfer_entropy',
-                  'correlation_matrices', 'optimization_results']
+        tables = ['regime_states', 'regime_models', 'correlation_matrices']
 
         for table in tables:
             cursor = await db.execute(
@@ -45,7 +42,7 @@ async def verify_setup():
             )
             count = (await cursor.fetchone())[0]
             print(f"   ✓ {table}: {count} records")
-            if count == 0 and table in ['correlation_matrices', 'regime_models', 'transfer_entropy']:
+            if count == 0 and table in ['correlation_matrices', 'regime_models']:
                 all_good = False
                 print(f"     ⚠ No data - run first-time setup jobs!")
 
@@ -63,9 +60,7 @@ async def verify_setup():
 
         settings = [
             'use_regime_adjustment',
-            'use_transfer_entropy',
             'use_cleaned_correlation',
-            'optimization_method'
         ]
 
         for setting in settings:

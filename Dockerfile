@@ -42,8 +42,7 @@ RUN pip install --no-cache-dir \
     ta>=0.11.0
 
 RUN pip install --no-cache-dir \
-    tradernet-sdk>=2.0.0 \
-    skfolio>=0.1.0
+    tradernet-sdk>=2.0.0
 
 # Copy application code
 COPY sentinel/ ./sentinel/

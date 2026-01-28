@@ -9,21 +9,30 @@ Usage:
 """
 
 from typing import Optional
-from sentinel.utils.currency import CurrencyConverter
 
 
 class PositionCalculator:
     """Calculates position values and allocations."""
 
-    def __init__(self, currency_converter: Optional[CurrencyConverter] = None):
+    def __init__(self, currency_converter=None):
         """
         Initialize the calculator.
 
         Args:
-            currency_converter: CurrencyConverter instance for currency conversions.
-                               If None, creates a new one.
+            currency_converter: Object with async to_eur(amount, currency) method.
+                               If None, creates a Currency instance.
         """
-        self._converter = currency_converter or CurrencyConverter()
+        self._converter = currency_converter
+        self._currency_instance = None
+
+    async def _get_converter(self):
+        """Lazy-load the currency converter."""
+        if self._converter is not None:
+            return self._converter
+        if self._currency_instance is None:
+            from sentinel.currency import Currency
+            self._currency_instance = Currency()
+        return self._currency_instance
 
     async def calculate_value_local(self, quantity: float, price: float) -> float:
         """
@@ -56,7 +65,8 @@ class PositionCalculator:
             Total value in EUR
         """
         local_value = quantity * price
-        return await self._converter.to_eur(local_value, currency)
+        converter = await self._get_converter()
+        return await converter.to_eur(local_value, currency)
 
     def calculate_allocation(self, value_eur: float, total_eur: float) -> float:
         """

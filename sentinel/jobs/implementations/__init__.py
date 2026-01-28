@@ -14,7 +14,6 @@ from sentinel.jobs.implementations.scoring import CalculateScoresJob
 from sentinel.jobs.implementations.analytics import (
     CorrelationJob,
     RegimeJob,
-    TransferEntropyJob,
 )
 from sentinel.jobs.implementations.trading import CheckMarketsJob, RebalanceJob, ExecuteTradesJob, RefreshPlanJob
 from sentinel.jobs.implementations.ml import MLRetrainJob, MLMonitorJob
@@ -28,7 +27,6 @@ async def register_all_jobs(
     analyzer,
     cleaner,
     detector,
-    te_analyzer,
     planner,
     retrainer,
     monitor,
@@ -81,11 +79,6 @@ async def register_all_jobs(
         lambda p: RegimeJob(detector, db),
         RetryConfig.for_analytics(),
     )
-    await registry.register(
-        'analytics:transfer_entropy',
-        lambda p: TransferEntropyJob(te_analyzer, db),
-        RetryConfig.for_analytics(),
-    )
 
     # Trading
     await registry.register(
@@ -136,7 +129,6 @@ __all__ = [
     "CalculateScoresJob",
     "CorrelationJob",
     "RegimeJob",
-    "TransferEntropyJob",
     "CheckMarketsJob",
     "ExecuteTradesJob",
     "RebalanceJob",

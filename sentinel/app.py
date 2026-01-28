@@ -96,7 +96,6 @@ async def lifespan(app: FastAPI):
     from sentinel.analyzer import Analyzer
     from sentinel.correlation_cleaner import CorrelationCleaner
     from sentinel.regime_detector import RegimeDetector
-    from sentinel.transfer_entropy import TransferEntropyAnalyzer
     from sentinel.planner import Planner
     from sentinel.ml_retrainer import MLRetrainer
     from sentinel.ml_monitor import MLMonitor
@@ -105,7 +104,6 @@ async def lifespan(app: FastAPI):
     analyzer = Analyzer()
     cleaner = CorrelationCleaner()
     detector = RegimeDetector()
-    te_analyzer = TransferEntropyAnalyzer()
     planner = Planner()
     retrainer = MLRetrainer()
     monitor = MLMonitor()
@@ -116,7 +114,7 @@ async def lifespan(app: FastAPI):
     _registry = Registry()
     await register_all_jobs(
         _registry, db, broker, portfolio, analyzer,
-        cleaner, detector, te_analyzer, planner,
+        cleaner, detector, planner,
         retrainer, monitor, cache,
     )
 
@@ -1514,116 +1512,6 @@ async def get_correlation_matrix(matrix_type: str = 'cleaned'):
         'symbols': symbols,
         'matrix_type': matrix_type
     }
-
-
-@app.get("/api/analytics/transfer-entropy/{symbol}")
-async def get_transfer_entropy(symbol: str):
-    """Get transfer entropy relationships for a security."""
-    from sentinel.transfer_entropy import TransferEntropyAnalyzer
-    te_analyzer = TransferEntropyAnalyzer()
-
-    leading = await te_analyzer.get_leading_indicators(symbol)
-    return {
-        'symbol': symbol,
-        'leading_indicators': leading,
-    }
-
-
-@app.get("/api/analytics/optimization/compare")
-async def compare_optimization_methods():
-    """Compare different optimization methods."""
-    from sentinel.planner import Planner
-    from sentinel.entropy_optimizer import EntropyOptimizer
-    from sentinel.portfolio_optimizer import PortfolioOptimizer
-
-    db = Database()
-    planner = Planner()
-
-    # Get scores
-    securities = await db.get_all_securities(active_only=True)
-    scores = {}
-    for sec in securities:
-        cursor = await db.conn.execute(
-            "SELECT score FROM scores WHERE symbol = ?", (sec['symbol'],)
-        )
-        row = await cursor.fetchone()
-        if row and row['score'] is not None:
-            scores[sec['symbol']] = row['score']
-
-    constraints = {
-        'max_position': 20,
-        'min_position': 2,
-        'cash_target': 5,
-    }
-
-    results = {}
-
-    # Classic
-    try:
-        results['classic'] = await planner._classic_allocation(scores, constraints)
-    except Exception as e:
-        results['classic'] = {'error': str(e)}
-
-    # Entropy
-    try:
-        entropy_opt = EntropyOptimizer()
-        results['entropy_shannon'] = await entropy_opt.optimize(scores, constraints)
-    except Exception as e:
-        results['entropy_shannon'] = {'error': str(e)}
-
-    # skfolio (if available)
-    try:
-        from sentinel.portfolio_optimizer import SKFOLIO_AVAILABLE
-        if SKFOLIO_AVAILABLE:
-            skfolio_opt = PortfolioOptimizer()
-            symbols = list(scores.keys())
-            results['skfolio_mv'] = await skfolio_opt.optimize_with_skfolio(
-                symbols, method='mean_variance'
-            )
-        else:
-            results['skfolio_mv'] = {'error': 'skfolio not installed'}
-    except Exception as e:
-        results['skfolio_mv'] = {'error': str(e)}
-
-    return results
-
-
-@app.post("/api/analytics/entropy/optimize")
-async def run_entropy_optimization(data: dict):
-    """Run custom entropy optimization."""
-    from sentinel.entropy_optimizer import EntropyOptimizer
-
-    method = data.get('method', 'shannon')
-    entropy_weight = data.get('entropy_weight', 0.3)
-
-    # Update settings temporarily
-    settings = Settings()
-    await settings.set('entropy_method', method)
-    await settings.set('entropy_weight', entropy_weight)
-
-    optimizer = EntropyOptimizer(method=method)
-
-    # Get expected returns
-    db = Database()
-    securities = await db.get_all_securities(active_only=True)
-    scores = {}
-    for sec in securities:
-        cursor = await db.conn.execute(
-            "SELECT score FROM scores WHERE symbol = ?", (sec['symbol'],)
-        )
-        row = await cursor.fetchone()
-        if row and row['score'] is not None:
-            scores[sec['symbol']] = row['score']
-
-    constraints = {
-        'max_position': 20,
-        'min_position': 2,
-        'cash_target': 5,
-    }
-
-    result = await optimizer.optimize(scores, constraints)
-
-    return {'allocations': result, 'method': method}
 
 
 # -----------------------------------------------------------------------------

@@ -122,7 +122,6 @@ async def registry():
     await reg.register('scoring:calculate', lambda p: MockJob(_id='scoring:calculate', _job_type='scoring:calculate'))
     await reg.register('analytics:correlation', lambda p: MockJob(_id='analytics:correlation', _job_type='analytics:correlation'))
     await reg.register('analytics:regime', lambda p: MockJob(_id='analytics:regime', _job_type='analytics:regime'))
-    await reg.register('analytics:transfer_entropy', lambda p: MockJob(_id='analytics:transfer_entropy', _job_type='analytics:transfer_entropy'))
     await reg.register('trading:check_markets', lambda p: MockJob(_id='trading:check_markets', _job_type='trading:check_markets'))
     await reg.register('ml:retrain', lambda p: MockJob(_id=f"ml:retrain:{p.get('symbol', 'AAPL')}", _job_type='ml:retrain'))
     await reg.register('ml:monitor', lambda p: MockJob(_id=f"ml:monitor:{p.get('symbol', 'AAPL')}", _job_type='ml:monitor'))

@@ -38,8 +38,8 @@ async def test_get_job_schedules_returns_all(db):
     """GET /api/jobs/schedules should return all schedules."""
     schedules = await db.get_job_schedules()
 
-    # Should have at least 12 default schedules
-    assert len(schedules) >= 12
+    # Should have at least 11 default schedules
+    assert len(schedules) >= 11
 
     # Check structure
     schedule = schedules[0]
@@ -222,7 +222,6 @@ async def test_all_job_types_present(db):
         'scoring:calculate',
         'analytics:correlation',
         'analytics:regime',
-        'analytics:transfer_entropy',
         'trading:check_markets',
         'ml:retrain',
         'ml:monitor',

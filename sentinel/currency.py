@@ -101,15 +101,6 @@ class Currency:
         rate = await self.get_rate(currency)
         return amount * rate
 
-    async def from_eur(self, amount: float, currency: str) -> float:
-        """Convert amount from EUR to currency."""
-        if currency.upper() == 'EUR':
-            return amount
-        rate = await self.get_rate(currency)
-        if rate == 0:
-            return 0
-        return amount / rate
-
     async def set_rate(self, currency: str, rate: float) -> None:
         """Manually set exchange rate for a currency."""
         rates = await self.get_rates()

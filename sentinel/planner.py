@@ -125,14 +125,7 @@ class Planner:
 
     async def calculate_ideal_portfolio(self) -> dict[str, float]:
         """
-        Calculate ideal portfolio allocations.
-
-        Method determined by 'optimization_method' setting:
-        - 'classic': Current wavelet-based approach
-        - 'entropy': Entropy-based optimization
-        - 'skfolio_mv': Mean-variance (skfolio)
-        - 'skfolio_hrp': Hierarchical Risk Parity
-        - 'skfolio_rp': Risk Parity
+        Calculate ideal portfolio allocations using classic wavelet-based approach.
 
         The user_multiplier is applied to each security's score:
         - 1.0 = neutral (default)
@@ -152,9 +145,6 @@ class Planner:
         cached = await self._db.cache_get('planner:ideal_portfolio')
         if cached is not None:
             return json.loads(cached)
-
-        # Get optimization method from settings
-        optimization_method = await self._settings.get('optimization_method', 'classic')
 
         # Get all securities with scores and user multipliers
         securities = await self._db.get_all_securities(active_only=True)
@@ -209,35 +199,7 @@ class Planner:
             'cash_target': cash_target,
         }
 
-        # Choose optimization method
-        if optimization_method == 'entropy':
-            from sentinel.entropy_optimizer import EntropyOptimizer
-            optimizer = EntropyOptimizer()
-            allocations = await optimizer.optimize(scores, constraints)
-
-        elif optimization_method.startswith('skfolio_'):
-            from sentinel.portfolio_optimizer import PortfolioOptimizer
-            optimizer = PortfolioOptimizer()
-
-            method_map = {
-                'skfolio_mv': 'mean_variance',
-                'skfolio_hrp': 'hierarchical',
-                'skfolio_rp': 'risk_parity',
-            }
-            skfolio_method = method_map.get(optimization_method, 'mean_variance')
-
-            symbols = list(scores.keys())
-            allocations = await optimizer.optimize_with_skfolio(
-                symbols,
-                method=skfolio_method,
-                expected_returns=scores,
-                constraints=constraints
-            )
-
-        else:  # 'classic'
-            allocations = await self._classic_allocation(scores, constraints)
-
-        return allocations
+        return await self._classic_allocation(scores, constraints)
 
     async def _classic_allocation(self, scores: dict, constraints: dict) -> dict:
         """Classic wavelet-based allocation (existing logic)."""

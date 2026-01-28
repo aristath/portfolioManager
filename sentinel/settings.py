@@ -52,26 +52,12 @@ DEFAULTS = {
 
     # Advanced Analytics
     'use_regime_adjustment': False,
-    'use_transfer_entropy': False,
     'use_cleaned_correlation': False,
-
-    # Optimization method: 'classic', 'entropy', 'skfolio_mv', 'skfolio_hrp', 'skfolio_rp'
-    'optimization_method': 'classic',
 
     # Regime Detection
     'regime_n_states': 3,
     'regime_lookback_days': 504,
     'regime_weight_adjustment': 0.2,  # ±20% weight adjustments
-
-    # Entropy Optimization
-    'entropy_method': 'shannon',  # 'shannon' or 'tsallis'
-    'entropy_weight': 0.3,
-    'tsallis_q': 2.0,
-
-    # Transfer Entropy
-    'te_lag': 5,
-    'te_bins': 10,
-    'te_influence_threshold': 0.1,
 
     # Random Matrix Theory
     'rmt_auto_q': True,
