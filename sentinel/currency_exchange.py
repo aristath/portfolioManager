@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 from sentinel.broker import Broker
-from sentinel.config.currencies import DIRECT_PAIRS, RATE_SYMBOLS
+from sentinel.config.currencies import DIRECT_PAIRS
 from sentinel.database import Database
 
 logger = logging.getLogger(__name__)
@@ -34,7 +34,6 @@ class CurrencyExchangeService:
     """
 
     DIRECT_PAIRS = DIRECT_PAIRS
-    RATE_SYMBOLS = RATE_SYMBOLS
 
     _instance: Optional["CurrencyExchangeService"] = None
 
@@ -100,6 +99,9 @@ class CurrencyExchangeService:
     async def get_rate(self, from_currency: str, to_currency: str) -> Optional[float]:
         """Get the current exchange rate between two currencies.
 
+        Uses rates already synced by Currency.sync_rates() (via getCrossRatesForDate API).
+        Rates are stored as currency -> EUR value (e.g. 1 USD = 0.85 EUR).
+
         Args:
             from_currency: Source currency code
             to_currency: Target currency code
@@ -114,44 +116,18 @@ class CurrencyExchangeService:
         if from_curr == to_curr:
             return 1.0
 
-        if not self._broker.connected:
-            logger.error("Broker not connected for rate lookup")
-            return None
-
         try:
-            # Find the symbol for this pair
-            symbol = None
-            inverse = False
+            from sentinel.currency import Currency
 
-            # Check direct lookup
-            if (from_curr, to_curr) in self.RATE_SYMBOLS:
-                symbol = self.RATE_SYMBOLS[(from_curr, to_curr)]
-            elif (to_curr, from_curr) in self.RATE_SYMBOLS:
-                symbol = self.RATE_SYMBOLS[(to_curr, from_curr)]
-                inverse = True
+            currency = Currency()
+            rates = await currency.get_rates()
 
-            if not symbol:
-                # Try via conversion path
-                path = self.get_conversion_path(from_curr, to_curr)
-                if len(path) == 1:
-                    symbol = path[0].symbol
-                elif len(path) == 2:
-                    # Multi-step: calculate combined rate
-                    rate1 = await self.get_rate(path[0].from_currency, path[0].to_currency)
-                    rate2 = await self.get_rate(path[1].from_currency, path[1].to_currency)
-                    if rate1 and rate2:
-                        return rate1 * rate2
-                    return None
+            from_eur = rates.get(from_curr)
+            to_eur = rates.get(to_curr)
+            if from_eur and to_eur:
+                return from_eur / to_eur
 
-            if not symbol:
-                return None
-
-            # Fetch quote
-            quote = await self._broker.get_quote(symbol)
-            if quote and quote.get("price", 0) > 0:
-                rate = quote["price"]
-                return 1.0 / rate if inverse else rate
-
+            logger.error(f"No rate available for {from_curr} or {to_curr}")
             return None
         except Exception as e:
             logger.error(f"Failed to get rate {from_curr}/{to_curr}: {e}")

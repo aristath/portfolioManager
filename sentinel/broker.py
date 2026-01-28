@@ -296,10 +296,10 @@ class Broker:
         if not self._trading:
             return None
         try:
-            kwargs = {"ticker": symbol, "qty": quantity}
+            kwargs = {"quantity": quantity}
             if price is not None:
                 kwargs["price"] = price
-            response = self._trading.buy(**kwargs)
+            response = self._trading.buy(symbol, **kwargs)
             return response.get("order_id") if response else None
         except Exception as e:
             logger.error(f"Failed to buy {symbol}: {e}")
@@ -323,10 +323,10 @@ class Broker:
         if not self._trading:
             return None
         try:
-            kwargs = {"ticker": symbol, "qty": quantity}
+            kwargs = {"quantity": quantity}
             if price is not None:
                 kwargs["price"] = price
-            response = self._trading.sell(**kwargs)
+            response = self._trading.sell(symbol, **kwargs)
             return response.get("order_id") if response else None
         except Exception as e:
             logger.error(f"Failed to sell {symbol}: {e}")
