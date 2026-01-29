@@ -200,7 +200,7 @@ async def test_seed_default_job_schedules_inserts_all(db):
     await db.seed_default_job_schedules()
 
     schedules = await db.get_job_schedules()
-    assert len(schedules) == 17  # 17 default schedules (including aggregate:compute, sync:trades, trading:balance_fix)
+    assert len(schedules) == 18  # 18 default schedules (including sync:cashflows)
 
     # Check some specific defaults
     portfolio = await db.get_job_schedule("sync:portfolio")

@@ -170,3 +170,7 @@ export const syncTrades = () => request('/trades/sync', { method: 'POST' });
 export const resetAndRetrain = () =>
   request('/ml/reset-and-retrain', { method: 'POST' });
 export const getResetStatus = () => request('/ml/reset-status');
+
+// Cash Flows
+export const getCashFlows = () => request('/cashflows');
+export const syncCashFlows = () => request('/cashflows/sync', { method: 'POST' });

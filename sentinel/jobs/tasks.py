@@ -121,6 +121,10 @@ async def sync_trades(db, broker) -> None:
         price = float(trade.get("p", 0))
         date_str = trade.get("date", "")
 
+        # Extract commission
+        commission = float(trade.get("commission", 0) or 0)
+        commission_currency = trade.get("commission_currency", "EUR")
+
         if not trade_id or not symbol:
             continue
 
@@ -135,6 +139,8 @@ async def sync_trades(db, broker) -> None:
             price=price,
             executed_at=executed_at,
             raw_data=trade,
+            commission=commission,
+            commission_currency=commission_currency,
         )
 
         if row_id and row_id > 0:
@@ -143,6 +149,58 @@ async def sync_trades(db, broker) -> None:
             skipped_count += 1
 
     logger.info(f"Trades sync complete: {new_count} new, {skipped_count} existing")
+
+
+async def sync_cashflows(db, broker) -> None:
+    """
+    Sync cash flow history (deposits, withdrawals, dividends, taxes) from broker.
+
+    Fetches all cash flows from Tradernet since 2020-01-01 and upserts them.
+    Existing entries are deduplicated using a content hash of the raw data.
+    """
+    if not broker.connected:
+        logger.warning("Broker not connected, skipping cashflows sync")
+        return
+
+    # Fetch all cash flows from broker
+    cash_flows = await broker.get_cash_flows(start_date="2020-01-01")
+
+    if not cash_flows:
+        logger.info("No cash flows returned from broker")
+        return
+
+    new_count = 0
+    skipped_count = 0
+
+    for flow in cash_flows:
+        try:
+            date = flow.get("date", "")
+            type_id = flow.get("type_id", "")
+            amount = float(flow.get("amount", 0) or 0)
+            currency = flow.get("currency", "EUR")
+            comment = flow.get("comment", "")
+
+            if not date or not type_id:
+                continue
+
+            row_id = await db.upsert_cash_flow(
+                date=date,
+                type_id=type_id,
+                amount=amount,
+                currency=currency,
+                comment=comment,
+                raw_data=flow,
+            )
+
+            if row_id and row_id > 0:
+                new_count += 1
+            else:
+                skipped_count += 1
+        except (ValueError, TypeError) as e:
+            logger.warning(f"Skipping invalid cash flow entry: {e}")
+            continue
+
+    logger.info(f"Cash flows sync complete: {new_count} new, {skipped_count} existing")
 
 
 async def aggregate_compute(db) -> None:

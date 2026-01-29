@@ -445,6 +445,46 @@ class Broker:
             logger.error(f"Failed to get trades history: {e}")
             return []
 
+    async def get_cash_flows(
+        self,
+        start_date: str = "2020-01-01",
+        end_date: str | None = None,
+    ) -> list[dict]:
+        """
+        Fetch cash flow history (deposits, withdrawals, dividends, taxes) from Tradernet API.
+
+        Args:
+            start_date: Start date in YYYY-MM-DD format (default: 2020-01-01)
+            end_date: End date in YYYY-MM-DD format (default: today)
+
+        Returns:
+            List of cash flow entries with type_id: card, card_payout, dividend, tax, block, unblock
+        """
+        if not self._api:
+            return []
+
+        if end_date is None:
+            end_date = datetime.now().strftime("%Y-%m-%d")
+
+        try:
+            response = self._api.get_broker_report(
+                start=start_date,
+                end=end_date,
+                data_block_type="in_outs",
+            )
+
+            cash_flows = []
+            if response and "report" in response:
+                detailed = response.get("report", {}).get("detailed", [])
+                cash_flows = detailed
+
+            logger.info(f"Fetched {len(cash_flows)} cash flow entries from Tradernet API")
+            return cash_flows
+
+        except Exception as e:
+            logger.error(f"Failed to get cash flows: {e}")
+            return []
+
     async def get_available_securities(self) -> list[str]:
         """
         Get list of top tradeable EU securities from Tradernet API.

@@ -621,6 +621,7 @@ class Database(BaseDatabase):
             ("sync:metadata", 1440, 1440, 0, "sync", "Sync security metadata"),
             ("sync:exchange_rates", 60, 60, 0, "sync", "Sync exchange rates"),
             ("sync:trades", 60, 60, 0, "sync", "Sync trade history from broker"),
+            ("sync:cashflows", 1440, 1440, 0, "sync", "Sync cash flows from broker"),
             ("aggregate:compute", 1440, 1440, 1, "sync", "Compute aggregate price series"),
             ("scoring:calculate", 1440, 1440, 0, "scoring", "Calculate security scores"),
             ("analytics:regime", 10080, 10080, 3, "analytics", "Train regime detection model"),
@@ -864,6 +865,48 @@ class Database(BaseDatabase):
             if col_name not in ml_columns:
                 await self.conn.execute(f"ALTER TABLE ml_training_samples ADD COLUMN {col_name} {col_type}")
 
+        # Migration: add sync:cashflows job schedule if missing (only for existing databases)
+        # Check if job_schedules has any data (indicating an existing database, not fresh install)
+        cursor = await self.conn.execute("SELECT COUNT(*) FROM job_schedules")
+        count_row = await cursor.fetchone()
+        if count_row and count_row[0] > 0:
+            # Existing database - check if sync:cashflows is missing
+            cursor = await self.conn.execute("SELECT 1 FROM job_schedules WHERE job_type = 'sync:cashflows'")
+            if not await cursor.fetchone():
+                from datetime import datetime
+
+                now = int(datetime.now().timestamp())
+                await self.conn.execute(
+                    """INSERT INTO job_schedules
+                       (job_type, interval_minutes, interval_market_open_minutes,
+                        market_timing, description, category, created_at, updated_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    ("sync:cashflows", 1440, 1440, 0, "Sync cash flows from broker", "sync", now, now),
+                )
+                logger.info("Added sync:cashflows job schedule")
+
+        # Migration: add commission columns to trades table if missing
+        cursor = await self.conn.execute("PRAGMA table_info(trades)")
+        trade_columns = {row[1] for row in await cursor.fetchall()}
+        if "commission" not in trade_columns:
+            await self.conn.execute("ALTER TABLE trades ADD COLUMN commission REAL DEFAULT 0")
+            await self.conn.execute("ALTER TABLE trades ADD COLUMN commission_currency TEXT DEFAULT 'EUR'")
+            # Backfill commission from raw_data for existing trades
+            cursor = await self.conn.execute("SELECT id, raw_data FROM trades")
+            rows = await cursor.fetchall()
+            for row in rows:
+                try:
+                    data = json.loads(row["raw_data"])
+                    commission = float(data.get("commission", 0) or 0)
+                    commission_currency = data.get("commission_currency", "EUR")
+                    await self.conn.execute(
+                        "UPDATE trades SET commission = ?, commission_currency = ? WHERE id = ?",
+                        (commission, commission_currency, row["id"]),
+                    )
+                except (json.JSONDecodeError, ValueError, TypeError):
+                    pass
+            logger.info("Added commission columns to trades table and backfilled data")
+
     async def _migrate_trades_table(self) -> None:
         """Migrate trades table to new schema with broker_trade_id and raw_data."""
         cursor = await self.conn.execute("PRAGMA table_info(trades)")
@@ -1015,6 +1058,8 @@ CREATE TABLE IF NOT EXISTS trades (
     side TEXT NOT NULL CHECK(side IN ('BUY', 'SELL')),
     quantity REAL NOT NULL,
     price REAL NOT NULL,
+    commission REAL DEFAULT 0,
+    commission_currency TEXT DEFAULT 'EUR',
     executed_at TEXT NOT NULL,
     raw_data TEXT NOT NULL,
     FOREIGN KEY (symbol) REFERENCES securities(symbol)
@@ -1051,6 +1096,18 @@ CREATE TABLE IF NOT EXISTS cache (
     expires_at INTEGER  -- Unix timestamp, NULL = never expires
 );
 
+-- Cash flows (synced from broker: deposits, withdrawals, dividends, taxes)
+CREATE TABLE IF NOT EXISTS cash_flows (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    content_hash TEXT UNIQUE NOT NULL,  -- Hash of raw_data for deduplication
+    date TEXT NOT NULL,
+    type_id TEXT NOT NULL,  -- card, card_payout, dividend, tax, block, unblock
+    amount REAL NOT NULL,
+    currency TEXT NOT NULL,
+    comment TEXT,
+    raw_data TEXT NOT NULL
+);
+
 -- Create indexes
 CREATE INDEX IF NOT EXISTS idx_prices_symbol_date ON prices(symbol, date);
 CREATE INDEX IF NOT EXISTS idx_trades_broker_id ON trades(broker_trade_id);
@@ -1058,4 +1115,6 @@ CREATE INDEX IF NOT EXISTS idx_trades_symbol ON trades(symbol);
 CREATE INDEX IF NOT EXISTS idx_trades_executed_at ON trades(executed_at);
 CREATE INDEX IF NOT EXISTS idx_trades_side ON trades(side);
 CREATE INDEX IF NOT EXISTS idx_cache_expires_at ON cache(expires_at);
+CREATE INDEX IF NOT EXISTS idx_cash_flows_date ON cash_flows(date);
+CREATE INDEX IF NOT EXISTS idx_cash_flows_type ON cash_flows(type_id);
 """

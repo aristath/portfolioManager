@@ -152,6 +152,8 @@ class BaseDatabase:
         price: float,
         executed_at: str,
         raw_data: dict,
+        commission: float = 0,
+        commission_currency: str = "EUR",
     ) -> int:
         """
         Insert a trade or ignore if broker_trade_id already exists.
@@ -164,6 +166,8 @@ class BaseDatabase:
             price: Price per share/unit
             executed_at: ISO format datetime string
             raw_data: Full trade data from broker API
+            commission: Trading commission/fee
+            commission_currency: Currency of the commission
 
         Returns:
             Row ID of the inserted trade, or 0 if ignored
@@ -171,9 +175,20 @@ class BaseDatabase:
         import json
 
         cursor = await self.conn.execute(
-            """INSERT OR IGNORE INTO trades (broker_trade_id, symbol, side, quantity, price, executed_at, raw_data)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (broker_trade_id, symbol, side, quantity, price, executed_at, json.dumps(raw_data)),
+            """INSERT OR IGNORE INTO trades
+               (broker_trade_id, symbol, side, quantity, price, commission, commission_currency, executed_at, raw_data)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                broker_trade_id,
+                symbol,
+                side,
+                quantity,
+                price,
+                commission,
+                commission_currency,
+                executed_at,
+                json.dumps(raw_data),
+            ),
         )
         await self.conn.commit()
         return cursor.lastrowid or 0
@@ -282,6 +297,121 @@ class BaseDatabase:
         cursor = await self.conn.execute(query, params)
         row = await cursor.fetchone()
         return row[0] if row else 0
+
+    async def get_total_fees(self) -> dict[str, float]:
+        """
+        Get total trading fees grouped by currency.
+
+        Returns:
+            Dict mapping currency to total fees in that currency
+        """
+        cursor = await self.conn.execute(
+            """SELECT commission_currency, COALESCE(SUM(commission), 0) as total
+               FROM trades
+               WHERE commission > 0
+               GROUP BY commission_currency"""
+        )
+        rows = await cursor.fetchall()
+        return {row["commission_currency"]: row["total"] or 0.0 for row in rows}
+
+    # -------------------------------------------------------------------------
+    # Cash Flows
+    # -------------------------------------------------------------------------
+
+    async def upsert_cash_flow(
+        self,
+        date: str,
+        type_id: str,
+        amount: float,
+        currency: str,
+        comment: str | None,
+        raw_data: dict,
+    ) -> int:
+        """
+        Insert or ignore a cash flow entry.
+
+        Uses a hash of the raw_data for deduplication to handle identical
+        transactions on the same day.
+
+        Returns row id if inserted, 0 if already exists.
+        """
+        import hashlib
+        import json
+
+        raw_json = json.dumps(raw_data, sort_keys=True)
+        content_hash = hashlib.sha256(raw_json.encode()).hexdigest()[:32]
+
+        cursor = await self.conn.execute(
+            """INSERT OR IGNORE INTO cash_flows
+               (content_hash, date, type_id, amount, currency, comment, raw_data)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (content_hash, date, type_id, amount, currency, comment, raw_json),
+        )
+        await self.conn.commit()
+        return cursor.lastrowid or 0
+
+    async def get_cash_flows(
+        self,
+        type_id: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+    ) -> list[dict]:
+        """
+        Get cash flow entries with optional filters.
+
+        Args:
+            type_id: Filter by type (card, card_payout, dividend, tax)
+            start_date: Filter entries on or after (YYYY-MM-DD)
+            end_date: Filter entries on or before (YYYY-MM-DD)
+
+        Returns:
+            List of cash flow entries
+        """
+        query = "SELECT * FROM cash_flows WHERE 1=1"
+        params: list[str] = []
+
+        if type_id:
+            query += " AND type_id = ?"
+            params.append(type_id)
+
+        if start_date:
+            query += " AND date >= ?"
+            params.append(start_date)
+
+        if end_date:
+            query += " AND date <= ?"
+            params.append(end_date)
+
+        query += " ORDER BY date DESC"
+
+        cursor = await self.conn.execute(query, params)
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def get_cash_flow_summary(self) -> dict[str, dict[str, float]]:
+        """
+        Get aggregated cash flow totals by type and currency.
+
+        Returns:
+            Dict with totals per type_id and currency
+        """
+        cursor = await self.conn.execute(
+            """SELECT type_id, currency, COALESCE(SUM(amount), 0) as total
+               FROM cash_flows
+               GROUP BY type_id, currency"""
+        )
+        rows = await cursor.fetchall()
+
+        summary: dict[str, dict[str, float]] = {}
+        for row in rows:
+            type_id = row["type_id"]
+            currency = row["currency"]
+            total = row["total"] or 0.0
+            if type_id not in summary:
+                summary[type_id] = {}
+            summary[type_id][currency] = total
+
+        return summary
 
     # -------------------------------------------------------------------------
     # Prices (base implementation, can be overridden)

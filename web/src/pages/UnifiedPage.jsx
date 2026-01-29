@@ -20,7 +20,7 @@ import {
   Card,
   Button,
 } from '@mantine/core';
-import { IconPlus, IconArrowRight, IconCash, IconWallet, IconListCheck } from '@tabler/icons-react';
+import { IconPlus, IconArrowRight, IconCash, IconWallet, IconListCheck, IconTrendingUp } from '@tabler/icons-react';
 import { SecurityTable } from '../components/SecurityTable';
 import { AddSecurityModal } from '../components/AddSecurityModal';
 import { DeleteSecurityModal } from '../components/DeleteSecurityModal';
@@ -29,7 +29,7 @@ import { GeographyRadarCard } from '../components/GeographyRadarCard';
 import { IndustryRadarCard } from '../components/IndustryRadarCard';
 import { JobsCard } from '../components/JobsCard';
 import { MarketsOpenCard } from '../components/MarketsOpenCard';
-import { getUnifiedView, updateSecurity, addSecurity, deleteSecurity, getPortfolio, getRecommendations } from '../api/client';
+import { getUnifiedView, updateSecurity, addSecurity, deleteSecurity, getPortfolio, getRecommendations, getCashFlows } from '../api/client';
 
 import { formatEur, formatCurrencySymbol } from '../utils/formatting';
 import './UnifiedPage.css';
@@ -92,6 +92,12 @@ function UnifiedPage() {
   });
   const recommendations = recommendationsData?.recommendations;
   const planSummary = recommendationsData?.summary;
+
+  const { data: cashFlows } = useQuery({
+    queryKey: ['cashflows'],
+    queryFn: getCashFlows,
+    refetchInterval: 300000, // Refresh every 5 minutes
+  });
 
   const updateMutation = useMutation({
     mutationFn: ({ symbol, data }) => updateSecurity(symbol, data),
@@ -326,6 +332,28 @@ function UnifiedPage() {
                   )}
                 </Group>
               </Group>
+
+              {/* Middle row: Cash Flows */}
+              {cashFlows && (
+                <Group gap="xl" className="unified__status-row unified__status-row--cashflows">
+                  <Group gap="xs" className="unified__status-section unified__status-section--cashflows">
+                    <IconTrendingUp size={18} style={{ opacity: 0.6 }} className="unified__status-icon" />
+                    <Text size="sm" c="dimmed">Deposits:</Text>
+                    <Text size="sm" fw={500} c="green">{formatEur(cashFlows.deposits || 0)}</Text>
+                    <Text size="sm" c="dimmed">Withdrawals:</Text>
+                    <Text size="sm" fw={500} c="red">{formatEur(cashFlows.withdrawals || 0)}</Text>
+                    <Text size="sm" c="dimmed">Dividends:</Text>
+                    <Text size="sm" fw={500} c="green">{formatEur(cashFlows.dividends || 0)}</Text>
+                    <Text size="sm" c="dimmed">Fees:</Text>
+                    <Text size="sm" fw={500} c="red">{formatEur((cashFlows.fees || 0) + (cashFlows.taxes || 0))}</Text>
+                    <Text size="sm" c="dimmed">—</Text>
+                    <Text size="sm" c="dimmed">Total Profit:</Text>
+                    <Text size="sm" fw={600} c={(cashFlows.total_profit || 0) >= 0 ? 'green' : 'red'}>
+                      {formatEur(cashFlows.total_profit || 0)}
+                    </Text>
+                  </Group>
+                </Group>
+              )}
 
               {/* Bottom row: Plan */}
               <Group gap="xs" wrap="wrap" className="unified__status-row unified__status-row--plan">
