@@ -2,30 +2,19 @@
 
 import asyncio
 import sys
-from pathlib import Path
-import pandas as pd
-import numpy as np
 from datetime import datetime
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from sentinel.ml_ensemble import EnsembleBlender
-from sentinel.ml_features import FEATURE_NAMES, DEFAULT_FEATURES, NUM_FEATURES
 from sentinel.database import Database
+from sentinel.ml_ensemble import EnsembleBlender
+from sentinel.ml_features import DEFAULT_FEATURES, FEATURE_NAMES
 from sentinel.settings import Settings
-
-
-# Database column names (legacy names for backward compatibility)
-DB_FEATURE_COLUMNS = [
-    'return_1d', 'return_5d', 'return_20d', 'return_60d',
-    'price_normalized', 'volatility_10d', 'volatility_30d',
-    'atr_14d', 'volume_normalized', 'volume_trend',
-    'rsi_14', 'macd', 'bollinger_position',
-    'wavelet_d1', 'wavelet_d4', 'sentiment_score',
-    'spy_return_20d', 'vix_level', 'market_regime',
-    'sector_relative_strength'
-]
 
 
 async def load_training_data_for_symbol(db, symbol: str):
@@ -43,24 +32,16 @@ async def load_training_data_for_symbol(db, symbol: str):
 
     df = pd.DataFrame([dict(row) for row in rows])
 
-    # Mapping from database columns to FEATURE_NAMES for default lookup
-    db_to_feature_name = {
-        'spy_return_20d': 'market_return_20d',
-        'vix_level': 'market_volatility',
-    }
-
-    # Fill missing/NaN values with defaults
-    for col in DB_FEATURE_COLUMNS:
+    # Fill missing/NaN values with defaults from FEATURE_NAMES
+    for col in FEATURE_NAMES:
         if col not in df.columns:
-            feature_name = db_to_feature_name.get(col, col)
-            default_val = DEFAULT_FEATURES.get(feature_name, 0.0)
+            default_val = DEFAULT_FEATURES.get(col, 0.0)
             df[col] = default_val
         else:
-            feature_name = db_to_feature_name.get(col, col)
-            default_val = DEFAULT_FEATURES.get(feature_name, 0.0)
+            default_val = DEFAULT_FEATURES.get(col, 0.0)
             df[col] = df[col].fillna(default_val)
 
-    X = df[DB_FEATURE_COLUMNS].values.astype(np.float32)
+    X = df[FEATURE_NAMES].values.astype(np.float32)
     y = df['future_return'].values.astype(np.float32)
 
     # Remove invalid rows
@@ -122,7 +103,7 @@ async def main():
         X, y = await load_training_data_for_symbol(db, symbol)
 
         if X is None or len(X) == 0:
-            print(f"  SKIP: No valid training data")
+            print("  SKIP: No valid training data")
             failed += 1
             continue
 
@@ -169,16 +150,16 @@ async def main():
     print("="*70)
     print(f"\nModels trained: {trained}")
     print(f"Models failed: {failed}")
-    print(f"\nModels saved to: data/ml_models/<symbol>/")
+    print("\nModels saved to: data/ml_models/<symbol>/")
 
     # Show summary
     cursor = await db.conn.execute("SELECT COUNT(*) as count FROM ml_models")
     row = await cursor.fetchone()
     print(f"Total models in database: {row['count']}")
 
-    print(f"\nTo enable ML predictions, set:")
-    print(f"  ml_enabled = True")
-    print(f"  ml_wavelet_blend_ratio = 0.3  (or desired ratio)")
+    print("\nTo enable ML predictions, set:")
+    print("  ml_enabled = True")
+    print("  ml_wavelet_blend_ratio = 0.3  (or desired ratio)")
 
 
 if __name__ == '__main__':
