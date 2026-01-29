@@ -427,3 +427,80 @@ class BaseDatabase:
         cursor = await self.conn.execute(query, params)
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
+
+    # -------------------------------------------------------------------------
+    # Portfolio Snapshots
+    # -------------------------------------------------------------------------
+
+    async def get_portfolio_snapshots(self, days: int | None = None) -> list[dict]:
+        """
+        Get portfolio snapshots ordered by date ascending.
+
+        Args:
+            days: If specified, only return snapshots from the last N days
+
+        Returns:
+            List of snapshot dicts ordered by date (oldest first)
+        """
+        if days:
+            query = """
+                SELECT * FROM portfolio_snapshots
+                WHERE date >= date('now', ? || ' days')
+                ORDER BY date ASC
+            """
+            cursor = await self.conn.execute(query, (f"-{days}",))
+        else:
+            query = "SELECT * FROM portfolio_snapshots ORDER BY date ASC"
+            cursor = await self.conn.execute(query)
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def upsert_portfolio_snapshot(
+        self,
+        date: str,
+        total_value_eur: float,
+        positions_value_eur: float | None = None,
+        cash_eur: float | None = None,
+        net_deposits_eur: float | None = None,
+        unrealized_pnl_eur: float | None = None,
+    ) -> None:
+        """
+        Insert or update a portfolio snapshot for a given date.
+
+        Args:
+            date: Date in YYYY-MM-DD format
+            total_value_eur: Total portfolio value in EUR
+            positions_value_eur: Value of positions only
+            cash_eur: Cash balance in EUR
+            net_deposits_eur: Net deposits (deposits - withdrawals)
+            unrealized_pnl_eur: Unrealized P&L (total_value - net_deposits)
+        """
+        from datetime import datetime
+
+        await self.conn.execute(
+            """INSERT OR REPLACE INTO portfolio_snapshots
+               (date, total_value_eur, positions_value_eur, cash_eur,
+                net_deposits_eur, unrealized_pnl_eur, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                date,
+                total_value_eur,
+                positions_value_eur,
+                cash_eur,
+                net_deposits_eur,
+                unrealized_pnl_eur,
+                datetime.now().isoformat(),
+            ),
+        )
+        await self.conn.commit()
+
+    async def get_latest_snapshot_date(self) -> str | None:
+        """
+        Get the date of the most recent portfolio snapshot.
+
+        Returns:
+            Date string (YYYY-MM-DD) or None if no snapshots exist
+        """
+        cursor = await self.conn.execute("SELECT date FROM portfolio_snapshots ORDER BY date DESC LIMIT 1")
+        row = await cursor.fetchone()
+        return row["date"] if row else None

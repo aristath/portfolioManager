@@ -106,3 +106,129 @@ class Currency:
     def clear_cache(self) -> None:
         """Clear the rates cache."""
         self._rates_cache = None
+
+    async def get_rate_for_date(self, currency: str, date: str) -> float:
+        """
+        Get exchange rate for a currency to EUR for a specific date.
+
+        Args:
+            currency: Currency code (USD, GBP, HKD, etc.)
+            date: Date in YYYY-MM-DD format
+
+        Returns:
+            Exchange rate (1 currency = X EUR)
+        """
+        currency = currency.upper()
+        if currency == "EUR":
+            return 1.0
+
+        # Check DB cache first
+        cached = await self._get_cached_rate(currency, date)
+        if cached is not None:
+            return cached
+
+        # Fetch from API
+        rate = await self._fetch_historical_rate(currency, date)
+        if rate is not None:
+            await self._cache_rate(currency, date, rate)
+            return rate
+
+        # Fallback to current rate
+        return await self.get_rate(currency)
+
+    async def _get_cached_rate(self, currency: str, date: str) -> Optional[float]:
+        """Get cached historical rate from database."""
+        cursor = await self._db.conn.execute(
+            "SELECT rate_to_eur FROM fx_rates_history WHERE date = ? AND currency = ?",
+            (date, currency),
+        )
+        row = await cursor.fetchone()
+        return row[0] if row else None
+
+    async def _cache_rate(self, currency: str, date: str, rate: float) -> None:
+        """Cache historical rate to database."""
+        await self._db.conn.execute(
+            "INSERT OR REPLACE INTO fx_rates_history (date, currency, rate_to_eur) VALUES (?, ?, ?)",
+            (date, currency, rate),
+        )
+        await self._db.conn.commit()
+
+    async def _fetch_historical_rate(self, currency: str, date: str) -> Optional[float]:
+        """Fetch historical rate from Tradernet API."""
+        try:
+            params = {
+                "cmd": "getCrossRatesForDate",
+                "params": {
+                    "base_currency": "EUR",
+                    "currencies": [currency],
+                    "date": date,
+                },
+            }
+            response = requests.get(
+                "https://tradernet.com/api/",
+                params={"q": json.dumps(params)},
+                timeout=10,
+            )
+            data = response.json()
+
+            if "rates" in data and currency in data["rates"]:
+                # Tradernet returns: 1 EUR = X currency
+                # We need: 1 currency = Y EUR (invert)
+                rate = data["rates"][currency]
+                if rate > 0:
+                    return 1.0 / rate
+        except Exception as e:
+            logger.warning(f"Failed to fetch historical rate for {currency} on {date}: {e}")
+
+        return None
+
+    async def to_eur_for_date(self, amount: float, currency: str, date: str) -> float:
+        """Convert amount from currency to EUR using historical rate."""
+        if currency.upper() == "EUR":
+            return amount
+        rate = await self.get_rate_for_date(currency, date)
+        return amount * rate
+
+    async def prefetch_rates_for_dates(self, currencies: list[str], dates: list[str]) -> None:
+        """
+        Prefetch and cache historical rates for multiple currencies and dates.
+        This minimizes API calls by batching.
+        """
+        # Filter out EUR and get unique currencies
+        currencies = list(set(c.upper() for c in currencies if c.upper() != "EUR"))
+        if not currencies:
+            return
+
+        # Check which dates are missing from cache
+        missing_dates = set()
+        for date in dates:
+            for currency in currencies:
+                cached = await self._get_cached_rate(currency, date)
+                if cached is None:
+                    missing_dates.add(date)
+                    break
+
+        # Fetch missing dates (one API call per date for all currencies)
+        for date in sorted(missing_dates):
+            try:
+                params = {
+                    "cmd": "getCrossRatesForDate",
+                    "params": {
+                        "base_currency": "EUR",
+                        "currencies": currencies,
+                        "date": date,
+                    },
+                }
+                response = requests.get(
+                    "https://tradernet.com/api/",
+                    params={"q": json.dumps(params)},
+                    timeout=10,
+                )
+                data = response.json()
+
+                if "rates" in data:
+                    for curr, rate in data["rates"].items():
+                        if rate > 0:
+                            await self._cache_rate(curr, date, 1.0 / rate)
+            except Exception as e:
+                logger.warning(f"Failed to prefetch rates for {date}: {e}")

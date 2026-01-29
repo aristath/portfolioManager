@@ -29,7 +29,8 @@ import { GeographyRadarCard } from '../components/GeographyRadarCard';
 import { IndustryRadarCard } from '../components/IndustryRadarCard';
 import { JobsCard } from '../components/JobsCard';
 import { MarketsOpenCard } from '../components/MarketsOpenCard';
-import { getUnifiedView, updateSecurity, addSecurity, deleteSecurity, getPortfolio, getRecommendations, getCashFlows } from '../api/client';
+import { PortfolioPnLChart } from '../components/PortfolioPnLChart';
+import { getUnifiedView, updateSecurity, addSecurity, deleteSecurity, getPortfolio, getRecommendations, getCashFlows, getPortfolioPnLHistory } from '../api/client';
 
 import { formatEur, formatCurrencySymbol } from '../utils/formatting';
 import './UnifiedPage.css';
@@ -96,6 +97,13 @@ function UnifiedPage() {
   const { data: cashFlows } = useQuery({
     queryKey: ['cashflows'],
     queryFn: getCashFlows,
+    refetchInterval: 300000, // Refresh every 5 minutes
+  });
+
+  const [pnlPeriod, setPnlPeriod] = useState('1Y');
+  const { data: pnlData } = useQuery({
+    queryKey: ['portfolio-pnl', pnlPeriod],
+    queryFn: () => getPortfolioPnLHistory(pnlPeriod),
     refetchInterval: 300000, // Refresh every 5 minutes
   });
 
@@ -394,6 +402,30 @@ function UnifiedPage() {
                 )}
               </Group>
             </Stack>
+          </Card>
+
+          {/* P&L Chart */}
+          <Card shadow="sm" padding="sm" withBorder className="unified__pnl-chart">
+            <Group justify="space-between" mb="xs">
+              <Text size="sm" fw={500}>Portfolio P&L</Text>
+              <SegmentedControl
+                value={pnlPeriod}
+                onChange={setPnlPeriod}
+                data={[
+                  { value: '1M', label: '1M' },
+                  { value: '3M', label: '3M' },
+                  { value: '1Y', label: '1Y' },
+                  { value: 'MAX', label: 'Max' },
+                ]}
+                size="xs"
+              />
+            </Group>
+            <PortfolioPnLChart
+              snapshots={pnlData?.snapshots}
+              summary={pnlData?.summary}
+              height={160}
+              period={pnlPeriod}
+            />
           </Card>
 
           {/* Global Controls */}

@@ -1117,4 +1117,24 @@ CREATE INDEX IF NOT EXISTS idx_trades_side ON trades(side);
 CREATE INDEX IF NOT EXISTS idx_cache_expires_at ON cache(expires_at);
 CREATE INDEX IF NOT EXISTS idx_cash_flows_date ON cash_flows(date);
 CREATE INDEX IF NOT EXISTS idx_cash_flows_type ON cash_flows(type_id);
+
+-- Portfolio snapshots (daily P&L tracking)
+CREATE TABLE IF NOT EXISTS portfolio_snapshots (
+    date TEXT PRIMARY KEY,
+    total_value_eur REAL NOT NULL,
+    positions_value_eur REAL,
+    cash_eur REAL,
+    net_deposits_eur REAL,
+    unrealized_pnl_eur REAL,
+    created_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_portfolio_snapshots_date ON portfolio_snapshots(date DESC);
+
+-- Historical FX rates cache
+CREATE TABLE IF NOT EXISTS fx_rates_history (
+    date TEXT NOT NULL,
+    currency TEXT NOT NULL,
+    rate_to_eur REAL NOT NULL,
+    PRIMARY KEY (date, currency)
+);
 """

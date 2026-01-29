@@ -174,3 +174,7 @@ export const getResetStatus = () => request('/ml/reset-status');
 // Cash Flows
 export const getCashFlows = () => request('/cashflows');
 export const syncCashFlows = () => request('/cashflows/sync', { method: 'POST' });
+
+// Portfolio P&L History
+export const getPortfolioPnLHistory = (period = '1Y') =>
+  request(`/portfolio/pnl-history?period=${period}`);
