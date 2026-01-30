@@ -20,13 +20,16 @@ class TestDeficitSells:
     async def test_no_sells_when_positive_balances_cover_deficit(self):
         """No sells when positive currency balances can cover the deficit."""
         db = MagicMock()
+
+        portfolio = MagicMock()
         # Negative EUR but plenty of USD to cover it
-        db.get_cash_balances = AsyncMock(return_value={"EUR": -500.0, "USD": 1000.0})
+        portfolio.get_cash_balances = AsyncMock(return_value={"EUR": -500.0, "USD": 1000.0})
 
         planner = Planner(db=db)
         planner._currency = MagicMock()
         planner._currency.to_eur = AsyncMock(side_effect=lambda amt, curr: amt * 0.85 if curr == "USD" else amt)
         planner._db = db
+        planner._portfolio = portfolio
 
         sells = await planner._get_deficit_sells()
 
@@ -38,7 +41,6 @@ class TestDeficitSells:
         """Sell recommendations generated when positive balances can't cover deficit."""
         db = MagicMock()
         # Large deficit, small positive balance
-        db.get_cash_balances = AsyncMock(return_value={"EUR": -5000.0, "USD": 100.0})
         db.get_all_positions = AsyncMock(
             return_value=[
                 {"symbol": "AAPL.US", "quantity": 10, "current_price": 200.0},
@@ -62,6 +64,7 @@ class TestDeficitSells:
         planner._currency.get_rate = AsyncMock(return_value=0.85)
         planner._portfolio = MagicMock()
         planner._portfolio.total_value = AsyncMock(return_value=10000.0)
+        planner._portfolio.get_cash_balances = AsyncMock(return_value={"EUR": -5000.0, "USD": 100.0})
         planner._db = db
 
         sells = await planner._get_deficit_sells()
@@ -74,12 +77,15 @@ class TestDeficitSells:
     async def test_no_sells_when_all_balances_positive(self):
         """No sells when all balances are positive."""
         db = MagicMock()
-        db.get_cash_balances = AsyncMock(return_value={"EUR": 1000.0, "USD": 500.0})
+
+        portfolio = MagicMock()
+        portfolio.get_cash_balances = AsyncMock(return_value={"EUR": 1000.0, "USD": 500.0})
 
         planner = Planner(db=db)
         planner._currency = MagicMock()
         planner._currency.to_eur = AsyncMock(side_effect=lambda amt, curr: amt * 0.85 if curr == "USD" else amt)
         planner._db = db
+        planner._portfolio = portfolio
 
         sells = await planner._get_deficit_sells()
 
@@ -89,7 +95,6 @@ class TestDeficitSells:
     async def test_sells_prioritize_lowest_score(self):
         """Sells prioritize positions with lowest score."""
         db = MagicMock()
-        db.get_cash_balances = AsyncMock(return_value={"EUR": -1000.0})  # No positive balances
         db.get_all_positions = AsyncMock(
             return_value=[
                 {"symbol": "HIGH.EU", "quantity": 10, "current_price": 100.0},
@@ -112,6 +117,7 @@ class TestDeficitSells:
         planner._currency.get_rate = AsyncMock(return_value=1.0)
         planner._portfolio = MagicMock()
         planner._portfolio.total_value = AsyncMock(return_value=10000.0)
+        planner._portfolio.get_cash_balances = AsyncMock(return_value={"EUR": -1000.0})
         planner._db = db
 
         sells = await planner._get_deficit_sells()
@@ -124,7 +130,6 @@ class TestDeficitSells:
     async def test_sells_have_high_priority(self):
         """Deficit-fix sells have high priority (1000)."""
         db = MagicMock()
-        db.get_cash_balances = AsyncMock(return_value={"EUR": -500.0})  # No positive balances
         db.get_all_positions = AsyncMock(
             return_value=[
                 {"symbol": "TEST.EU", "quantity": 10, "current_price": 100.0},
@@ -148,6 +153,7 @@ class TestDeficitSells:
         planner._currency.get_rate = AsyncMock(return_value=1.0)
         planner._portfolio = MagicMock()
         planner._portfolio.total_value = AsyncMock(return_value=10000.0)
+        planner._portfolio.get_cash_balances = AsyncMock(return_value={"EUR": -500.0})
         planner._db = db
 
         sells = await planner._get_deficit_sells()
@@ -159,7 +165,6 @@ class TestDeficitSells:
     async def test_respects_allow_sell_flag(self):
         """Doesn't recommend selling positions with allow_sell=0."""
         db = MagicMock()
-        db.get_cash_balances = AsyncMock(return_value={"EUR": -500.0})  # No positive balances
         db.get_all_positions = AsyncMock(
             return_value=[
                 {"symbol": "NOSELL.EU", "quantity": 10, "current_price": 100.0},
@@ -180,6 +185,7 @@ class TestDeficitSells:
         planner._currency.get_rate = AsyncMock(return_value=1.0)
         planner._portfolio = MagicMock()
         planner._portfolio.total_value = AsyncMock(return_value=10000.0)
+        planner._portfolio.get_cash_balances = AsyncMock(return_value={"EUR": -500.0})
         planner._db = db
 
         sells = await planner._get_deficit_sells()
@@ -189,3 +195,29 @@ class TestDeficitSells:
         assert "NOSELL.EU" not in sell_symbols
         if sells:
             assert "CANSELL.EU" in sell_symbols
+
+
+class TestDeficitSellsSimulatedCash:
+    """Tests that deficit sells respect simulated cash from Portfolio."""
+
+    @pytest.mark.asyncio
+    async def test_deficit_sells_uses_simulated_cash(self):
+        """When portfolio returns simulated positive cash, no deficit sells generated."""
+        db = MagicMock()
+        # DB has negative cash, but portfolio (with simulated cash) will return positive
+        db.get_cash_balances = AsyncMock(return_value={"EUR": -5000.0})
+
+        portfolio = MagicMock()
+        # Simulated cash overrides the negative balance
+        portfolio.get_cash_balances = AsyncMock(return_value={"EUR": 10000.0})
+        portfolio.total_value = AsyncMock(return_value=50000.0)
+
+        planner = Planner(db=db, portfolio=portfolio)
+        planner._currency = MagicMock()
+        planner._currency.to_eur = AsyncMock(side_effect=lambda amt, curr: amt)
+        planner._portfolio = portfolio
+
+        sells = await planner._get_deficit_sells()
+
+        # Portfolio returns positive cash, so no deficit sells needed
+        assert sells == []

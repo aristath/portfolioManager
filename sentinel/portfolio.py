@@ -93,8 +93,24 @@ class Portfolio:
         cash_balances = await self.get_cash_balances()
         return cash_balances.get(currency, 0)
 
+    async def _get_simulated_cash(self) -> float | None:
+        """Return simulated cash if in research mode and setting is set, else None."""
+        mode = await self._settings.get("trading_mode")
+        if mode != "research":
+            return None
+        value = await self._settings.get("simulated_cash_eur")
+        if value is None:
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
     async def get_cash_balances(self) -> dict[str, float]:
         """Get all cash balances per currency."""
+        simulated = await self._get_simulated_cash()
+        if simulated is not None:
+            return {"EUR": simulated}
         # Use memory cache if available, otherwise load from DB
         if self._cash:
             return self._cash
@@ -102,6 +118,9 @@ class Portfolio:
 
     async def total_cash_eur(self) -> float:
         """Get total cash value converted to EUR."""
+        simulated = await self._get_simulated_cash()
+        if simulated is not None:
+            return simulated
         cash_balances = await self.get_cash_balances()
         total = 0.0
         for curr, amount in cash_balances.items():

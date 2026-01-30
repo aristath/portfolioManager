@@ -56,6 +56,7 @@ class TestSettingsDefaults:
             "max_position_pct",
             "min_position_pct",
             "min_cash_buffer",
+            "simulated_cash_eur",
         ]
         for key in required_keys:
             assert key in DEFAULTS, f"Missing required default: {key}"
@@ -63,6 +64,10 @@ class TestSettingsDefaults:
     def test_defaults_trading_mode_is_research(self):
         """Default trading mode should be 'research' for safety."""
         assert DEFAULTS["trading_mode"] == "research"
+
+    def test_defaults_simulated_cash_is_none(self):
+        """Simulated cash default should be None (disabled)."""
+        assert DEFAULTS["simulated_cash_eur"] is None
 
     def test_defaults_transaction_fees_positive(self):
         """Transaction fees should be positive."""

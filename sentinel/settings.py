@@ -30,6 +30,7 @@ DEFAULTS = {
     # Cash management
     "min_cash_buffer": 0.005,  # Keep 0.5% cash minimum
     "target_cash_pct": 5,  # Target 5% cash
+    "simulated_cash_eur": None,  # Override cash in research mode (None = use real)
     # Scoring
     "score_lookback_years": 10,  # Years of history for scoring
     # Rebalancing

@@ -955,8 +955,8 @@ class Planner:
         Returns:
             List of TradeRecommendation for sells to cover uncoverable deficit
         """
-        # Get current cash balances
-        balances = await self._db.get_cash_balances()
+        # Get current cash balances (via portfolio to respect simulated cash)
+        balances = await self._portfolio.get_cash_balances()
 
         # Calculate total deficit (negative balances) in EUR
         # Buffer is always in EUR terms, added after converting to EUR

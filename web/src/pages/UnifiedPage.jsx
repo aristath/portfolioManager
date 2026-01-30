@@ -12,12 +12,14 @@ import {
   SegmentedControl,
   Select,
   TextInput,
+  NumberInput,
   Text,
   Badge,
   Card,
   Button,
+  ActionIcon,
 } from '@mantine/core';
-import { IconPlus, IconArrowRight, IconCash, IconWallet, IconListCheck, IconTrendingUp } from '@tabler/icons-react';
+import { IconPlus, IconArrowRight, IconCash, IconWallet, IconListCheck, IconTrendingUp, IconPencil, IconX } from '@tabler/icons-react';
 import { SecurityTable } from '../components/SecurityTable';
 import { AddSecurityModal } from '../components/AddSecurityModal';
 import { DeleteSecurityModal } from '../components/DeleteSecurityModal';
@@ -28,7 +30,7 @@ import { MarketsOpenCard } from '../components/MarketsOpenCard';
 import { PortfolioPnLChart } from '../components/PortfolioPnLChart';
 import LoadingState from '../components/LoadingState';
 import ErrorState from '../components/ErrorState';
-import { getUnifiedView, updateSecurity, addSecurity, deleteSecurity, getPortfolio, getRecommendations, getCashFlows, getPortfolioPnLHistory } from '../api/client';
+import { getUnifiedView, updateSecurity, addSecurity, deleteSecurity, getPortfolio, getRecommendations, getCashFlows, getPortfolioPnLHistory, getSettings, updateSetting } from '../api/client';
 
 import { formatEur, formatCurrencySymbol } from '../utils/formatting';
 import './UnifiedPage.css';
@@ -103,6 +105,26 @@ function UnifiedPage() {
     queryKey: ['portfolio-pnl', pnlPeriod],
     queryFn: () => getPortfolioPnLHistory(pnlPeriod),
     refetchInterval: 300000, // Refresh every 5 minutes
+  });
+
+  // Settings for simulated cash
+  const { data: settings } = useQuery({
+    queryKey: ['settings'],
+    queryFn: getSettings,
+  });
+  const isResearchMode = settings?.trading_mode === 'research';
+  const simulatedCash = settings?.simulated_cash_eur;
+  const [editingCash, setEditingCash] = useState(false);
+  const [cashValue, setCashValue] = useState('');
+
+  const cashMutation = useMutation({
+    mutationFn: (value) => updateSetting('simulated_cash_eur', value),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+      queryClient.invalidateQueries({ queryKey: ['portfolio'] });
+      queryClient.invalidateQueries({ queryKey: ['recommendations'] });
+      setEditingCash(false);
+    },
   });
 
   const updateMutation = useMutation({
@@ -317,10 +339,52 @@ function UnifiedPage() {
                 <Group gap="xs" className="unified__status-section unified__status-section--cash">
                   <IconCash size={22} style={{ opacity: 0.6 }} className="unified__status-icon" />
                   <Text size="lg" c="dimmed" className="unified__status-label">Cash:</Text>
-                  <Text size="lg" fw={600} className="unified__status-value unified__status-value--cash-total">
-                    {formatEur(portfolio?.total_cash_eur || 0)}
-                  </Text>
-                  {portfolio?.cash && Object.keys(portfolio.cash).length > 0 && (
+                  {editingCash ? (
+                    <NumberInput
+                      size="sm"
+                      value={cashValue}
+                      onChange={setCashValue}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') cashMutation.mutate(cashValue === '' ? null : cashValue);
+                        if (e.key === 'Escape') setEditingCash(false);
+                      }}
+                      suffix=" €"
+                      decimalScale={2}
+                      autoFocus
+                      style={{ width: 150 }}
+                    />
+                  ) : (
+                    <>
+                      <Text size="lg" fw={600} className="unified__status-value unified__status-value--cash-total">
+                        {formatEur(portfolio?.total_cash_eur || 0)}
+                      </Text>
+                      {simulatedCash != null && (
+                        <>
+                          <Badge size="sm" variant="light" color="yellow">simulated</Badge>
+                          <ActionIcon
+                            size="sm"
+                            variant="subtle"
+                            color="red"
+                            onClick={() => cashMutation.mutate(null)}
+                            title="Clear simulated cash"
+                          >
+                            <IconX size={14} />
+                          </ActionIcon>
+                        </>
+                      )}
+                      {isResearchMode && (
+                        <ActionIcon
+                          size="sm"
+                          variant="subtle"
+                          onClick={() => { setCashValue(portfolio?.total_cash_eur || 0); setEditingCash(true); }}
+                          title="Edit simulated cash"
+                        >
+                          <IconPencil size={14} />
+                        </ActionIcon>
+                      )}
+                    </>
+                  )}
+                  {!editingCash && portfolio?.cash && Object.keys(portfolio.cash).length > 0 && simulatedCash == null && (
                     <Text size="lg" c="dimmed" className="unified__status-cash-breakdown">
                       ({Object.entries(portfolio.cash).map(([curr, amt], i) => (
                         <span key={curr} className={`unified__status-cash-item unified__status-cash-item--${curr.toLowerCase()}`}>
