@@ -221,3 +221,256 @@ class TestDeficitSellsSimulatedCash:
 
         # Portfolio returns positive cash, so no deficit sells needed
         assert sells == []
+
+
+class TestFeatureCaching:
+    """Tests for caching feature extraction results with 24h TTL."""
+
+    def _make_planner_with_mocks(self):
+        """Create a Planner with mocked dependencies for feature caching tests."""
+        db = MagicMock()
+        db.conn = MagicMock()
+        db.cache_get = AsyncMock(return_value=None)
+        db.cache_set = AsyncMock()
+        db.get_all_securities = AsyncMock(
+            return_value=[
+                {
+                    "symbol": "TEST.EU",
+                    "currency": "EUR",
+                    "min_lot": 1,
+                    "allow_buy": 1,
+                    "allow_sell": 1,
+                    "ml_enabled": 1,
+                    "ml_blend_ratio": 0.5,
+                    "user_multiplier": 1.0,
+                },
+            ]
+        )
+        db.get_all_positions = AsyncMock(
+            return_value=[
+                {"symbol": "TEST.EU", "quantity": 10, "current_price": 100.0},
+            ]
+        )
+        db.get_scores = AsyncMock(return_value={"TEST.EU": 0.5})
+        db.get_ml_enabled_securities = AsyncMock(
+            return_value=[
+                {"symbol": "TEST.EU"},
+            ]
+        )
+        db.get_trades = AsyncMock(return_value=[])
+
+        planner = Planner(db=db)
+        planner._db = db
+
+        # Mock portfolio
+        planner._portfolio = MagicMock()
+        planner._portfolio.total_value = AsyncMock(return_value=50000.0)
+        planner._portfolio.total_cash_eur = AsyncMock(return_value=5000.0)
+        planner._portfolio.get_cash_balances = AsyncMock(return_value={"EUR": 5000.0})
+
+        # Mock broker
+        planner._broker = MagicMock()
+        planner._broker.get_quotes = AsyncMock(
+            return_value={
+                "TEST.EU": {"price": 100.0},
+            }
+        )
+
+        # Mock currency
+        planner._currency = MagicMock()
+        planner._currency.to_eur = AsyncMock(side_effect=lambda amt, curr: amt)
+        planner._currency.get_rate = AsyncMock(return_value=1.0)
+
+        # Mock settings
+        planner._settings = MagicMock()
+        planner._settings.get = AsyncMock(return_value=100.0)
+
+        # Mock feature extractor
+        planner._feature_extractor = MagicMock()
+        planner._feature_extractor.extract_features = AsyncMock(
+            return_value={
+                "rsi_14": 55.0,
+                "macd_signal": 0.5,
+                "sma_50": 98.0,
+            }
+        )
+
+        # Mock ML predictor
+        planner._ml_predictor = MagicMock()
+        planner._ml_predictor.predict_and_blend = AsyncMock(
+            return_value={
+                "final_score": 0.6,
+                "ml_prediction": None,
+                "blend_ratio": 0.5,
+            }
+        )
+
+        return planner, db
+
+    def _make_hist_rows(self, count=250):
+        """Generate mock historical price rows (desc order)."""
+        rows = []
+        for i in range(count):
+            row = MagicMock()
+            row.__getitem__ = lambda self, k, _i=i: {
+                "date": f"2025-01-{250 - _i:03d}",
+                "open": 100.0,
+                "high": 105.0,
+                "low": 95.0,
+                "close": 102.0,
+                "volume": 10000.0,
+            }.get(k, 0)
+            row.keys = lambda self=row: ["date", "open", "high", "low", "close", "volume"]
+            rows.append(row)
+        return rows
+
+    @pytest.mark.asyncio
+    async def test_features_cached_after_first_computation(self):
+        """On first call, extract_features is called and result is stored in cache."""
+        planner, db = self._make_planner_with_mocks()
+
+        hist_rows = self._make_hist_rows(250)
+
+        # Mock DB cursor for historical prices
+        cursor_mock = MagicMock()
+        cursor_mock.fetchall = AsyncMock(return_value=hist_rows)
+        db.conn.execute = AsyncMock(return_value=cursor_mock)
+
+        # cache_get returns None (cache miss)
+        db.cache_get = AsyncMock(return_value=None)
+
+        # Mock calculate_ideal_portfolio and get_current_allocations
+        planner.calculate_ideal_portfolio = AsyncMock(return_value={"TEST.EU": 0.5})
+        planner.get_current_allocations = AsyncMock(return_value={"TEST.EU": 0.4})
+        planner._get_deficit_sells = AsyncMock(return_value=[])
+
+        await planner.get_recommendations()
+
+        # extract_features should have been called
+        planner._feature_extractor.extract_features.assert_called_once()
+
+        # cache_set should have been called with features key and 24h TTL
+        feature_cache_calls = [c for c in db.cache_set.call_args_list if c.args[0].startswith("features:")]
+        assert len(feature_cache_calls) == 1
+        assert feature_cache_calls[0].args[0].startswith("features:TEST.EU:")
+        assert feature_cache_calls[0].kwargs.get("ttl_seconds") == 86400
+
+    @pytest.mark.asyncio
+    async def test_cached_features_returned_on_subsequent_call(self):
+        """When cache_get returns features, extract_features is NOT called."""
+        import json
+
+        planner, db = self._make_planner_with_mocks()
+
+        hist_rows = self._make_hist_rows(250)
+        cursor_mock = MagicMock()
+        cursor_mock.fetchall = AsyncMock(return_value=hist_rows)
+        db.conn.execute = AsyncMock(return_value=cursor_mock)
+
+        cached_features = {"rsi_14": 55.0, "macd_signal": 0.5, "sma_50": 98.0}
+
+        # cache_get returns None for planner:recommendations (cache miss),
+        # but returns cached features for features:* key
+        async def mock_cache_get(key):
+            if key.startswith("features:"):
+                return json.dumps(cached_features)
+            return None
+
+        db.cache_get = AsyncMock(side_effect=mock_cache_get)
+
+        planner.calculate_ideal_portfolio = AsyncMock(return_value={"TEST.EU": 0.5})
+        planner.get_current_allocations = AsyncMock(return_value={"TEST.EU": 0.4})
+        planner._get_deficit_sells = AsyncMock(return_value=[])
+
+        await planner.get_recommendations()
+
+        # extract_features should NOT have been called (cache hit)
+        planner._feature_extractor.extract_features.assert_not_called()
+
+        # predict_and_blend should have been called with the cached features
+        planner._ml_predictor.predict_and_blend.assert_called_once()
+        call_kwargs = planner._ml_predictor.predict_and_blend.call_args.kwargs
+        assert call_kwargs["features"] == cached_features
+
+    @pytest.mark.asyncio
+    async def test_feature_cache_key_includes_date(self):
+        """Cache key uses current date so next trading day gets fresh features."""
+        from datetime import datetime
+
+        planner, db = self._make_planner_with_mocks()
+
+        hist_rows = self._make_hist_rows(250)
+        cursor_mock = MagicMock()
+        cursor_mock.fetchall = AsyncMock(return_value=hist_rows)
+        db.conn.execute = AsyncMock(return_value=cursor_mock)
+        db.cache_get = AsyncMock(return_value=None)
+
+        planner.calculate_ideal_portfolio = AsyncMock(return_value={"TEST.EU": 0.5})
+        planner.get_current_allocations = AsyncMock(return_value={"TEST.EU": 0.4})
+        planner._get_deficit_sells = AsyncMock(return_value=[])
+
+        await planner.get_recommendations()
+
+        today = datetime.now().strftime("%Y-%m-%d")
+        expected_key = f"features:TEST.EU:{today}"
+
+        # Verify cache_get was called with date-based key
+        feature_get_calls = [c for c in db.cache_get.call_args_list if c.args[0].startswith("features:")]
+        assert len(feature_get_calls) == 1
+        assert feature_get_calls[0].args[0] == expected_key
+
+    @pytest.mark.asyncio
+    async def test_features_not_cached_when_insufficient_history(self):
+        """When hist_rows < 200, extract_features and cache_set are not called."""
+        planner, db = self._make_planner_with_mocks()
+
+        # Only 50 rows — insufficient
+        hist_rows = self._make_hist_rows(50)
+        cursor_mock = MagicMock()
+        cursor_mock.fetchall = AsyncMock(return_value=hist_rows)
+        db.conn.execute = AsyncMock(return_value=cursor_mock)
+        db.cache_get = AsyncMock(return_value=None)
+
+        planner.calculate_ideal_portfolio = AsyncMock(return_value={"TEST.EU": 0.5})
+        planner.get_current_allocations = AsyncMock(return_value={"TEST.EU": 0.4})
+        planner._get_deficit_sells = AsyncMock(return_value=[])
+
+        await planner.get_recommendations()
+
+        # extract_features should NOT have been called
+        planner._feature_extractor.extract_features.assert_not_called()
+
+        # No features:* cache_set calls
+        feature_set_calls = [c for c in db.cache_set.call_args_list if c.args[0].startswith("features:")]
+        assert len(feature_set_calls) == 0
+
+    @pytest.mark.asyncio
+    async def test_corrupted_cache_falls_through_to_extraction(self):
+        """When cached value is corrupted JSON, extraction runs as fallback."""
+        planner, db = self._make_planner_with_mocks()
+
+        hist_rows = self._make_hist_rows(250)
+        cursor_mock = MagicMock()
+        cursor_mock.fetchall = AsyncMock(return_value=hist_rows)
+        db.conn.execute = AsyncMock(return_value=cursor_mock)
+
+        # cache_get returns corrupted data for features key
+        async def mock_cache_get(key):
+            if key.startswith("features:"):
+                return "NOT_VALID_JSON{{"
+            return None
+
+        db.cache_get = AsyncMock(side_effect=mock_cache_get)
+
+        planner.calculate_ideal_portfolio = AsyncMock(return_value={"TEST.EU": 0.5})
+        planner.get_current_allocations = AsyncMock(return_value={"TEST.EU": 0.4})
+        planner._get_deficit_sells = AsyncMock(return_value=[])
+
+        await planner.get_recommendations()
+
+        # Despite cache hit with corrupted data, extraction should have run
+        planner._feature_extractor.extract_features.assert_called_once()
+
+        # And valid features should have been cached (overwriting the corrupt entry)
+        feature_set_calls = [c for c in db.cache_set.call_args_list if c.args[0].startswith("features:")]
+        assert len(feature_set_calls) == 1

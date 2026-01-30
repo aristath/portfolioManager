@@ -12,7 +12,7 @@ async def test_endpoint_returns_started_status():
     from sentinel.app import reset_and_retrain
 
     with patch("sentinel.ml_reset.is_reset_in_progress", return_value=False):
-        with patch("sentinel.app.asyncio.create_task"):
+        with patch("sentinel.app.asyncio.create_task", side_effect=lambda coro: coro.close()):
             result = await reset_and_retrain()
 
     assert result["status"] == "started"
@@ -38,6 +38,7 @@ async def test_endpoint_triggers_background_task():
             await reset_and_retrain()
 
     assert captured_coro is not None
+    captured_coro.close()  # Prevent "coroutine was never awaited" warning
 
 
 @pytest.mark.asyncio

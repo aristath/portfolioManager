@@ -369,6 +369,8 @@ class Planner:
 
         from sentinel.utils.scoring import adjust_score_for_conviction
 
+        today = datetime.now().strftime("%Y-%m-%d")
+
         for symbol in all_symbols:
             sec = securities_map.get(symbol)
             pos = positions_map.get(symbol)
@@ -377,13 +379,22 @@ class Planner:
             # Get wavelet score
             wavelet_score = scores_map.get(symbol, 0)
 
-            # Prepare price data for feature extraction
+            # Prepare price data for feature extraction (cached 24h)
             hist_rows = hist_prices_map.get(symbol, [])
             features = None
+            feature_cache_key = f"features:{symbol}:{today}"
+            cached_features = await self._db.cache_get(feature_cache_key)
 
-            if hist_rows and len(hist_rows) >= 200:
+            if cached_features is not None:
+                try:
+                    features = json.loads(cached_features)
+                except (json.JSONDecodeError, TypeError):
+                    pass  # treat as cache miss — fall through to extraction
+
+            if features is None and hist_rows and len(hist_rows) >= 200:
                 price_df = pd.DataFrame(
-                    [dict(r) for r in hist_rows], columns=["date", "open", "high", "low", "close", "volume"]
+                    [dict(r) for r in hist_rows],
+                    columns=["date", "open", "high", "low", "close", "volume"],
                 )
                 # Reverse to chronological order
                 price_df = price_df.iloc[::-1].reset_index(drop=True)
@@ -391,11 +402,20 @@ class Planner:
                 # Extract features with aggregate market context
                 features = await self._feature_extractor.extract_features(
                     symbol=symbol,
-                    date=datetime.now().strftime("%Y-%m-%d"),
+                    date=today,
                     price_data=price_df,
                     sentiment_score=None,
                     security_data=sec,
                 )
+                if features:
+                    # Ensure native Python floats for JSON serialization
+                    # (feature values may be numpy.float64 from ta/pandas)
+                    native_features = {k: float(v) for k, v in features.items()}
+                    await self._db.cache_set(
+                        feature_cache_key,
+                        json.dumps(native_features),
+                        ttl_seconds=86400,
+                    )
 
             # Apply ML blending if enabled for this security
             sec_ml_enabled = bool(sec.get("ml_enabled", 0)) if sec else False
@@ -403,7 +423,7 @@ class Planner:
 
             ml_result = await self._ml_predictor.predict_and_blend(
                 symbol=symbol,
-                date=datetime.now().strftime("%Y-%m-%d"),
+                date=today,
                 wavelet_score=wavelet_score,
                 ml_enabled=sec_ml_enabled,
                 ml_blend_ratio=sec_ml_blend_ratio,

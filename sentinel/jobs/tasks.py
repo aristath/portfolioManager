@@ -36,6 +36,10 @@ async def sync_prices(db, broker, cache) -> None:
     cleared = cache.clear()
     logger.info(f"Cleared {cleared} cached analyses before price sync")
 
+    # Clear cached feature extraction results (derived from prices)
+    features_cleared = await db.cache_clear("features:")
+    logger.info(f"Cleared {features_cleared} cached feature entries before price sync")
+
     securities = await db.get_all_securities(active_only=True)
     symbols = [s["symbol"] for s in securities]
 
