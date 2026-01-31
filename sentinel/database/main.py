@@ -603,6 +603,7 @@ class Database(BaseDatabase):
             ("sync:exchange_rates", 60, 60, 0, "sync", "Sync exchange rates"),
             ("sync:trades", 60, 60, 0, "sync", "Sync trade history from broker"),
             ("sync:cashflows", 1440, 1440, 0, "sync", "Sync cash flows from broker"),
+            ("sync:dividends", 1440, 1440, 0, "sync", "Sync dividends from broker"),
             ("aggregate:compute", 1440, 1440, 1, "sync", "Compute aggregate price series"),
             ("scoring:calculate", 1440, 1440, 0, "scoring", "Calculate security scores"),
             ("analytics:regime", 10080, 10080, 3, "analytics", "Train regime detection model"),
@@ -866,6 +867,21 @@ class Database(BaseDatabase):
                     ("sync:cashflows", 1440, 1440, 0, "Sync cash flows from broker", "sync", now, now),
                 )
                 logger.info("Added sync:cashflows job schedule")
+
+            # Check if sync:dividends is missing
+            cursor = await self.conn.execute("SELECT 1 FROM job_schedules WHERE job_type = 'sync:dividends'")
+            if not await cursor.fetchone():
+                from datetime import datetime
+
+                now = int(datetime.now().timestamp())
+                await self.conn.execute(
+                    """INSERT INTO job_schedules
+                       (job_type, interval_minutes, interval_market_open_minutes,
+                        market_timing, description, category, created_at, updated_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    ("sync:dividends", 1440, 1440, 0, "Sync dividends from broker", "sync", now, now),
+                )
+                logger.info("Added sync:dividends job schedule")
 
         # Migration: deduplicate trades and enforce UNIQUE on broker_trade_id
         await self._migrate_trades_unique_constraint()
@@ -1185,6 +1201,19 @@ CREATE TABLE IF NOT EXISTS portfolio_snapshots (
     created_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_portfolio_snapshots_date ON portfolio_snapshots(date DESC);
+
+-- Dividends (synced from broker corporate actions)
+CREATE TABLE IF NOT EXISTS dividends (
+    id TEXT PRIMARY KEY,  -- corporate_action_id from broker API
+    symbol TEXT NOT NULL,
+    date TEXT NOT NULL,
+    amount REAL NOT NULL,  -- Net credited amount in original currency (after taxes)
+    currency TEXT NOT NULL,
+    value REAL NOT NULL,  -- EUR-equivalent value (amount converted to EUR)
+    data TEXT NOT NULL  -- Full raw JSON from corporate actions API
+);
+CREATE INDEX IF NOT EXISTS idx_dividends_symbol ON dividends(symbol);
+CREATE INDEX IF NOT EXISTS idx_dividends_date ON dividends(date);
 
 -- Historical FX rates cache
 CREATE TABLE IF NOT EXISTS fx_rates_history (

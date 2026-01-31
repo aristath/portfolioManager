@@ -40,6 +40,7 @@ TASK_REGISTRY: dict[str, tuple[Callable, list[str]]] = {
     "sync:exchange_rates": (tasks.sync_exchange_rates, []),
     "sync:trades": (tasks.sync_trades, ["db", "broker"]),
     "sync:cashflows": (tasks.sync_cashflows, ["db", "broker"]),
+    "sync:dividends": (tasks.sync_dividends, ["db", "broker"]),
     "aggregate:compute": (tasks.aggregate_compute, ["db"]),
     "scoring:calculate": (tasks.scoring_calculate, ["analyzer"]),
     "analytics:regime": (tasks.analytics_regime, ["db", "detector"]),

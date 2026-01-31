@@ -151,6 +151,7 @@ class Planner:
 
         # Get all securities with scores and user multipliers
         securities = await self._db.get_all_securities(active_only=True)
+        securities_by_sym = {sec["symbol"]: sec for sec in securities}
         scores = {}
 
         # Batch-fetch all scores to avoid N+1 queries
@@ -183,9 +184,25 @@ class Planner:
                 div_multiplier = 1.0 + (div_score * div_impact)
                 adjusted_score = adjusted_score * div_multiplier
 
-            # Include if score is positive OR if user has expressed positive conviction
-            if adjusted_score > 0 or user_multiplier > 1.0:
-                scores[symbol] = adjusted_score
+            scores[symbol] = adjusted_score
+
+        # Apply dividend reinvestment boost
+        max_div_boost = await self._settings.get("max_dividend_reinvestment_boost", 0.15)
+        if max_div_boost > 0:
+            uninvested = await self._db.get_uninvested_dividends()
+            total_pool = sum(uninvested.values())
+            if total_pool > 0:
+                for symbol, pool in uninvested.items():
+                    if symbol in scores:
+                        share = pool / total_pool
+                        scores[symbol] = scores[symbol] + share * max_div_boost
+
+        # Filter to positive scores or strong user conviction
+        scores = {
+            sym: sc
+            for sym, sc in scores.items()
+            if sc > 0 or (securities_by_sym.get(sym, {}).get("user_multiplier", 1.0) or 1.0) > 1.0
+        }
 
         if not scores:
             return {}

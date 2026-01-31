@@ -446,6 +446,104 @@ class BaseDatabase:
         return summary
 
     # -------------------------------------------------------------------------
+    # Dividends
+    # -------------------------------------------------------------------------
+
+    async def upsert_dividend(
+        self,
+        id: str,
+        symbol: str,
+        date: str,
+        amount: float,
+        currency: str,
+        value: float,
+        data: dict,
+    ) -> int:
+        """
+        Insert a dividend or ignore if id already exists.
+
+        Args:
+            id: corporate_action_id from broker API (unique)
+            symbol: Ticker symbol
+            date: Payment date
+            amount: Net credited amount in original currency (after taxes)
+            currency: Original currency
+            value: EUR-equivalent value (amount converted to EUR)
+            data: Full raw JSON from corporate actions API
+
+        Returns:
+            Row ID if inserted, 0 if already exists.
+        """
+        import json
+
+        cursor = await self.conn.execute(
+            """INSERT OR IGNORE INTO dividends
+               (id, symbol, date, amount, currency, value, data)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (id, symbol, date, amount, currency, value, json.dumps(data)),
+        )
+        await self.conn.commit()
+        return cursor.lastrowid or 0
+
+    async def get_dividends(
+        self,
+        symbol: Optional[str] = None,
+        start_date: Optional[str] = None,
+    ) -> list[dict]:
+        """
+        Get dividend entries with optional filters.
+
+        Args:
+            symbol: Filter by ticker symbol
+            start_date: Filter entries on or after (YYYY-MM-DD)
+
+        Returns:
+            List of dividend entries ordered by date desc
+        """
+        query = "SELECT * FROM dividends WHERE 1=1"
+        params: list[str] = []
+
+        if symbol:
+            query += " AND symbol = ?"
+            params.append(symbol)
+
+        if start_date:
+            query += " AND date >= ?"
+            params.append(start_date)
+
+        query += " ORDER BY date DESC"
+
+        cursor = await self.conn.execute(query, params)
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def get_uninvested_dividends(self) -> dict[str, float]:
+        """
+        For each symbol with dividends: sum value for dividends dated after the
+        most recent BUY trade on that symbol (or all-time if no BUY).
+
+        Returns:
+            Dict mapping symbol -> uninvested EUR value
+        """
+        cursor = await self.conn.execute(
+            """
+            SELECT d.symbol, SUM(d.value) as pool
+            FROM dividends d
+            LEFT JOIN (
+                SELECT symbol, MAX(executed_at) as last_buy
+                FROM trades
+                WHERE side = 'BUY'
+                GROUP BY symbol
+            ) t ON d.symbol = t.symbol
+            WHERE d.date > COALESCE(SUBSTR(t.last_buy, 1, 10), '1970-01-01')
+            GROUP BY d.symbol
+            HAVING pool > 0
+            """
+        )
+        rows = await cursor.fetchall()
+        return {row["symbol"]: row["pool"] for row in rows}
+
+    # -------------------------------------------------------------------------
     # Prices (base implementation, can be overridden)
     # -------------------------------------------------------------------------
 

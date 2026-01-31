@@ -473,6 +473,46 @@ class Broker:
             logger.error(f"Failed to get cash flows: {e}")
             return []
 
+    async def get_corporate_actions(
+        self,
+        start_date: str = "2020-01-01",
+        end_date: str | None = None,
+    ) -> list[dict]:
+        """
+        Fetch corporate actions (dividends, maturities, etc.) from Tradernet API.
+
+        Args:
+            start_date: Start date in YYYY-MM-DD format (default: 2020-01-01)
+            end_date: End date in YYYY-MM-DD format (default: today)
+
+        Returns:
+            List of corporate action entries from the broker report
+        """
+        if not self._api:
+            return []
+
+        if end_date is None:
+            end_date = datetime.now().strftime("%Y-%m-%d")
+
+        try:
+            response = self._api.get_broker_report(
+                start=start_date,
+                end=end_date,
+                data_block_type="corporate_actions",
+            )
+
+            actions = []
+            if response and "report" in response:
+                detailed = response.get("report", {}).get("detailed", [])
+                actions = detailed
+
+            logger.info(f"Fetched {len(actions)} corporate actions from Tradernet API")
+            return actions
+
+        except Exception as e:
+            logger.error(f"Failed to get corporate actions: {e}")
+            return []
+
     async def get_available_securities(self) -> list[str]:
         """
         Get list of top tradeable EU securities from Tradernet API.

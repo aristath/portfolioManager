@@ -37,6 +37,8 @@ DEFAULTS = {
     "rebalance_threshold_pct": 5,  # Rebalance when 5% off target
     # Diversification
     "diversification_impact_pct": 10,  # Max ±10% score adjustment for diversification
+    # Dividend reinvestment
+    "max_dividend_reinvestment_boost": 0.15,  # Max score boost for uninvested dividends
     # Trade cool-off
     "trade_cooloff_days": 30,  # Days to wait before opposite action after trade
     # API

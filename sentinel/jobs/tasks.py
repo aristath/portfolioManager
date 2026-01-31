@@ -207,6 +207,73 @@ async def sync_cashflows(db, broker) -> None:
     logger.info(f"Cash flows sync complete: {new_count} new, {skipped_count} existing")
 
 
+async def sync_dividends(db, broker) -> None:
+    """
+    Sync dividend history from broker corporate actions report.
+
+    Fetches all corporate actions, filters to dividends, computes net EUR value,
+    and upserts into the dividends table. Deduplicates by corporate_action_id.
+    """
+    from sentinel.currency import Currency
+
+    if not broker.connected:
+        logger.warning("Broker not connected, skipping dividends sync")
+        return
+
+    actions = await broker.get_corporate_actions(start_date="2020-01-01")
+
+    if not actions:
+        logger.info("No corporate actions returned from broker")
+        return
+
+    currency_svc = Currency()
+    new_count = 0
+    skipped_count = 0
+
+    for action in actions:
+        try:
+            if action.get("type_id") != "dividend":
+                continue
+
+            ca_id = action.get("corporate_action_id", "")
+            symbol = action.get("ticker", "")
+            date = action.get("date", "")
+            amount = float(action.get("amount", 0) or 0)
+            cur = action.get("currency", "EUR")
+
+            if not ca_id or not symbol or not date:
+                continue
+
+            # The `amount` field from the API is already net of all taxes
+            # (both tax_amount and external_tax are already deducted from gross).
+            # Convert the net credited amount to EUR.
+            if cur != "EUR":
+                value_eur = await currency_svc.to_eur_for_date(amount, cur, date)
+            else:
+                value_eur = amount
+
+            row_id = await db.upsert_dividend(
+                id=ca_id,
+                symbol=symbol,
+                date=date,
+                amount=amount,
+                currency=cur,
+                value=value_eur,
+                data=action,
+            )
+
+            if row_id and row_id > 0:
+                new_count += 1
+            else:
+                skipped_count += 1
+
+        except (ValueError, TypeError) as e:
+            logger.warning(f"Skipping invalid dividend entry: {e}")
+            continue
+
+    logger.info(f"Dividends sync complete: {new_count} new, {skipped_count} existing")
+
+
 async def aggregate_compute(db) -> None:
     """Compute aggregate price series for country and industry groups."""
     from sentinel.aggregates import AggregateComputer
