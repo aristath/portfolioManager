@@ -37,3 +37,6 @@ web/node_modules/
 sentinel/data/
 
 .claude/settings.local.json
+
+# Worktree directories
+.worktrees/
