@@ -209,9 +209,9 @@ class CurrencyExchangeService:
 
         # FX orders use amount as quantity (the amount to exchange)
         if step.action == "BUY":
-            order_id = await self._broker.buy(step.symbol, int(amount))
+            order_id = await self._broker.buy(step.symbol, int(round(amount)))
         else:
-            order_id = await self._broker.sell(step.symbol, int(amount))
+            order_id = await self._broker.sell(step.symbol, int(round(amount)))
 
         if order_id:
             return {"order_id": order_id, "symbol": step.symbol, "action": step.action, "amount": amount}

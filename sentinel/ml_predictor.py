@@ -27,7 +27,7 @@ class MLPredictor:
         # Cache models per symbol: {symbol: EnsembleBlender}
         self._models: Dict[str, EnsembleBlender] = {}
         self._load_times: Dict[str, float] = {}
-        self._cache_duration = 3600  # 1 hour
+        self._cache_duration = 43200  # 12 hours
 
         self.db = db or Database()
         self.settings = settings or Settings()

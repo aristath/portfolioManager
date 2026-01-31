@@ -198,7 +198,7 @@ class Security:
 
         # Round to lot size
         quantity = (quantity // self.min_lot) * self.min_lot
-        if quantity < self.min_lot:
+        if quantity < self.min_lot or quantity == 0:
             raise ValueError(f"Quantity must be at least {self.min_lot}")
 
         # Get price to calculate trade value
@@ -305,7 +305,7 @@ class Security:
 
         # Round to lot size
         quantity = (quantity // self.min_lot) * self.min_lot
-        if quantity < self.min_lot:
+        if quantity < self.min_lot or quantity == 0:
             raise ValueError(f"Quantity must be at least {self.min_lot}")
 
         # For Asian markets, use limit order at bid price (market orders not supported)

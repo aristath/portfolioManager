@@ -259,9 +259,7 @@ class AggregateComputer:
             else:
                 prices.append(prices[-1])  # Carry forward if NaN
 
-        # Create DataFrame (first price is for the day before returns start)
-        dates = [avg_returns.index[0]] + list(avg_returns.index)
-        # Actually we need dates aligned with prices
+        # Create DataFrame
         # The first return is for avg_returns.index[0], so we need the previous date
         # Let's just use the return dates and drop the initial 100
         prices = prices[1:]  # Drop the initial 100, use computed prices
