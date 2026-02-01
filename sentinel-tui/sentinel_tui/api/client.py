@@ -31,3 +31,18 @@ class SentinelAPI:
         resp = await self._client.get("/api/unified")
         resp.raise_for_status()
         return resp.json()
+
+    async def recommendations(self) -> list[dict]:
+        resp = await self._client.get("/api/planner/recommendations")
+        resp.raise_for_status()
+        return resp.json()
+
+    async def pnl_history(self, period: str = "1M") -> dict:
+        resp = await self._client.get("/api/portfolio/pnl-history", params={"period": period})
+        resp.raise_for_status()
+        return resp.json()
+
+    async def jobs(self) -> list[dict]:
+        resp = await self._client.get("/api/jobs")
+        resp.raise_for_status()
+        return resp.json()

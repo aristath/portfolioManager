@@ -1,0 +1,7 @@
+Screen {
+    background: $background;
+}
+
+#main-scroll {
+    height: 1fr;
+}
