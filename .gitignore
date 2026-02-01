@@ -40,3 +40,6 @@ sentinel/data/
 
 # Worktree directories
 .worktrees/
+
+# Go binaries
+TUI/sentinel-tui-go
