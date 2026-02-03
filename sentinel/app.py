@@ -18,7 +18,13 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 # API routers
-from sentinel.api.routers import led_router, settings_router
+from sentinel.api.routers import (
+    allocation_router,
+    led_router,
+    portfolio_router,
+    settings_router,
+    targets_router,
+)
 from sentinel.api.routers.settings import set_led_controller
 from sentinel.backtester import (
     BacktestConfig,
@@ -42,6 +48,8 @@ from sentinel.security import Security
 from sentinel.settings import Settings
 from sentinel.utils.fees import FeeCalculator
 from sentinel.version import VERSION
+
+# API routers
 
 logger = logging.getLogger(__name__)
 
@@ -191,6 +199,9 @@ app.add_middleware(
 # Include API routers
 app.include_router(settings_router, prefix="/api")
 app.include_router(led_router, prefix="/api")
+app.include_router(portfolio_router, prefix="/api")
+app.include_router(targets_router, prefix="/api")
+app.include_router(allocation_router, prefix="/api")
 
 # -----------------------------------------------------------------------------
 # The following routes have been moved to sentinel/api/routers/:
@@ -367,14 +378,13 @@ async def get_categories():
     db = Database()
     return await db.get_categories()
 
+    # -----------------------------------------------------------------------------
+    # Portfolio API
+    # -----------------------------------------------------------------------------
 
-# -----------------------------------------------------------------------------
-# Portfolio API
-# -----------------------------------------------------------------------------
-
-
-@app.get("/api/portfolio")
-async def get_portfolio():
+    # MOVED to sentinel/api/routers/portfolio.py
+    # @app.get("/api/portfolio")
+    # async def get_portfolio():
     """Get current portfolio state."""
     currency = Currency()
 
@@ -430,17 +440,17 @@ async def get_portfolio():
         "allocations": allocations,
     }
 
-
-@app.post("/api/portfolio/sync")
-async def sync_portfolio():
+    # MOVED to sentinel/api/routers/portfolio.py
+    # @app.post("/api/portfolio/sync")
+    # async def sync_portfolio():
     """Sync portfolio from broker."""
     portfolio = Portfolio()
     await portfolio.sync()
     return {"status": "ok"}
 
-
-@app.get("/api/portfolio/allocations")
-async def get_allocations():
+    # MOVED to sentinel/api/routers/portfolio.py
+    # @app.get("/api/portfolio/allocations")
+    # async def get_allocations():
     """Get current vs target allocations."""
     portfolio = Portfolio()
     current = await portfolio.get_allocations()
@@ -453,98 +463,12 @@ async def get_allocations():
         "deviations": deviations,
     }
 
+    # MOVED to sentinel/api/routers/portfolio.py
+    # @app.get("/api/portfolio/pnl-history")
+    # async def get_portfolio_pnl_history(period: str = "1Y"): ...
 
-@app.get("/api/portfolio/pnl-history")
-async def get_portfolio_pnl_history(period: str = "1Y"):
-    """
-    Get portfolio P&L history for charting.
-
-    Args:
-        period: Time period - 1M, 3M, 6M, 1Y, MAX
-
-    Returns:
-        snapshots: List of {date, pnl_eur, pnl_pct}
-        summary: {start_value, end_value, pnl_absolute, pnl_percent}
-    """
-    from datetime import date as date_type
-    from datetime import timedelta
-
-    db = Database()
-    currency = Currency()
-
-    # Map period to days
-    period_days = {
-        "1M": 30,
-        "3M": 90,
-        "6M": 180,
-        "1Y": 365,
-        "MAX": None,
-    }
-    days = period_days.get(period, 365)
-
-    # Get existing snapshots
-    snapshots = await db.get_portfolio_snapshots(days)
-
-    # Check if we need to backfill
-    latest_date = await db.get_latest_snapshot_date()
-    today = date_type.today().isoformat()
-
-    # If no snapshots or latest is not today, trigger backfill
-    if not latest_date or latest_date < today:
-        await _backfill_portfolio_snapshots(db, currency)
-        # Reload snapshots after backfill
-        snapshots = await db.get_portfolio_snapshots(days)
-
-    # Filter by period
-    if days:
-        start_date = (date_type.today() - timedelta(days=days)).isoformat()
-        snapshots = [s for s in snapshots if s["date"] >= start_date]
-
-    if not snapshots:
-        return {"snapshots": [], "summary": None}
-
-    # Build response with P&L percentages
-    result_snapshots = []
-    for snap in snapshots:
-        net_deposits = snap.get("net_deposits_eur", 0) or 0
-        total_value = snap.get("total_value_eur", 0) or 0
-
-        # P&L relative to net deposits at that point in time
-        pnl_eur = total_value - net_deposits
-        pnl_pct = (pnl_eur / net_deposits * 100) if net_deposits > 0 else 0
-
-        result_snapshots.append(
-            {
-                "date": snap["date"],
-                "total_value_eur": total_value,
-                "net_deposits_eur": net_deposits,
-                "pnl_eur": round(pnl_eur, 2),
-                "pnl_pct": round(pnl_pct, 2),
-            }
-        )
-
-    # Calculate summary
-    first = result_snapshots[0]
-    last = result_snapshots[-1]
-
-    summary = {
-        "start_value": first["total_value_eur"],
-        "end_value": last["total_value_eur"],
-        "start_net_deposits": first["net_deposits_eur"],
-        "end_net_deposits": last["net_deposits_eur"],
-        "pnl_absolute": last["pnl_eur"],
-        "pnl_percent": last["pnl_pct"],
-    }
-
-    return {"snapshots": result_snapshots, "summary": summary}
-
-
-async def _backfill_portfolio_snapshots(db: Database, currency) -> None:
-    """Reconstruct historical portfolio snapshots."""
-    from sentinel.snapshot_service import SnapshotService
-
-    service = SnapshotService(db, currency)
-    await service.backfill()
+    # MOVED to sentinel/api/routers/portfolio.py
+    # async def _backfill_portfolio_snapshots(db: Database, currency) -> None: ...
 
 
 # -----------------------------------------------------------------------------
@@ -1128,14 +1052,13 @@ async def sell_security(symbol: str, quantity: int):
         raise HTTPException(status_code=400, detail="Sell order failed")
     return {"order_id": order_id}
 
+    # -----------------------------------------------------------------------------
+    # Allocation Targets API
+    # -----------------------------------------------------------------------------
 
-# -----------------------------------------------------------------------------
-# Allocation Targets API
-# -----------------------------------------------------------------------------
-
-
-@app.get("/api/allocation-targets")
-async def get_allocation_targets():
+    # MOVED to sentinel/api/routers/portfolio.py
+    # @app.get("/api/allocation-targets")
+    # async def get_allocation_targets():
     """Get all allocation targets."""
     db = Database()
     targets = await db.get_allocation_targets()
@@ -1144,19 +1067,13 @@ async def get_allocation_targets():
         "industry": [t for t in targets if t["type"] == "industry"],
     }
 
+    # MOVED to sentinel/api/routers/portfolio.py
+    # @app.put("/api/allocation-targets/{target_type}/{name}")
+    # async def set_allocation_target(target_type: str, name: str, data: dict): ...
 
-@app.put("/api/allocation-targets/{target_type}/{name}")
-async def set_allocation_target(target_type: str, name: str, data: dict):
-    """Set an allocation target weight."""
-    if target_type not in ("geography", "industry"):
-        raise HTTPException(status_code=400, detail="Invalid target type")
-    db = Database()
-    await db.set_allocation_target(target_type, name, data.get("weight", 1.0))
-    return {"status": "ok"}
-
-
-@app.get("/api/allocation/current")
-async def get_allocation_current():
+    # MOVED to sentinel/api/routers/portfolio.py
+    # @app.get("/api/allocation/current")
+    # async def get_allocation_current():
     """Get current allocation data formatted for radar charts."""
     portfolio = Portfolio()
     current = await portfolio.get_allocations()
@@ -1196,9 +1113,9 @@ async def get_allocation_current():
         "alerts": [],  # TODO: implement concentration alerts if needed
     }
 
-
-@app.get("/api/allocation/targets")
-async def get_allocation_targets_formatted():
+    # MOVED to sentinel/api/routers/portfolio.py
+    # @app.get("/api/allocation/targets")
+    # async def get_allocation_targets_formatted():
     """Get allocation targets as {geography: {name: weight}, industry: {name: weight}}."""
     db = Database()
     targets = await db.get_allocation_targets()
@@ -1213,9 +1130,9 @@ async def get_allocation_targets_formatted():
 
     return {"geography": geography, "industry": industry}
 
-
-@app.get("/api/allocation/available-geographies")
-async def get_available_geographies():
+    # MOVED to sentinel/api/routers/portfolio.py
+    # @app.get("/api/allocation/available-geographies")
+    # async def get_available_geographies():
     """Get available geographies from securities and allocation_targets only (no defaults)."""
     db = Database()
     # Only from securities + allocation_targets, NOT defaults
@@ -1225,9 +1142,9 @@ async def get_available_geographies():
     geographies = sorted(set(existing["geographies"]) | target_geos)
     return {"geographies": geographies}
 
-
-@app.get("/api/allocation/available-industries")
-async def get_available_industries():
+    # MOVED to sentinel/api/routers/portfolio.py
+    # @app.get("/api/allocation/available-industries")
+    # async def get_available_industries():
     """Get available industries from securities and allocation_targets only (no defaults)."""
     db = Database()
     # Only from securities + allocation_targets, NOT defaults
@@ -1237,41 +1154,21 @@ async def get_available_industries():
     industries = sorted(set(existing["industries"]) | target_inds)
     return {"industries": industries}
 
+    # MOVED to sentinel/api/routers/portfolio.py
+    # @app.put("/api/allocation/targets/geography")
+    # async def save_geography_targets(data: dict): ...
 
-@app.put("/api/allocation/targets/geography")
-async def save_geography_targets(data: dict):
-    """Save all geography targets at once."""
-    db = Database()
-    targets = data.get("targets", {})
-    for name, weight in targets.items():
-        await db.set_allocation_target("geography", name, weight)
-    return {"status": "ok"}
+    # MOVED to sentinel/api/routers/portfolio.py
+    # @app.put("/api/allocation/targets/industry")
+    # async def save_industry_targets(data: dict): ...
 
+    # MOVED to sentinel/api/routers/portfolio.py
+    # @app.delete("/api/allocation/targets/geography/{name}")
+    # async def delete_geography_target(name: str): ...
 
-@app.put("/api/allocation/targets/industry")
-async def save_industry_targets(data: dict):
-    """Save all industry targets at once."""
-    db = Database()
-    targets = data.get("targets", {})
-    for name, weight in targets.items():
-        await db.set_allocation_target("industry", name, weight)
-    return {"status": "ok"}
-
-
-@app.delete("/api/allocation/targets/geography/{name}")
-async def delete_geography_target(name: str):
-    """Delete a geography target. Category disappears from UI if not used by any security."""
-    db = Database()
-    await db.delete_allocation_target("geography", name)
-    return {"status": "ok"}
-
-
-@app.delete("/api/allocation/targets/industry/{name}")
-async def delete_industry_target(name: str):
-    """Delete an industry target. Category disappears from UI if not used by any security."""
-    db = Database()
-    await db.delete_allocation_target("industry", name)
-    return {"status": "ok"}
+    # MOVED to sentinel/api/routers/portfolio.py
+    # @app.delete("/api/allocation/targets/industry/{name}")
+    # async def delete_industry_target(name: str): ...
 
 
 # -----------------------------------------------------------------------------
