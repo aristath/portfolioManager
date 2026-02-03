@@ -1,9 +1,9 @@
 package ui
 
 import (
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
 )
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -19,12 +19,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.maxHeight > 0 && m.height > m.maxHeight {
 			m.height = m.maxHeight
 		}
-		m.viewport = viewport.New(m.width, m.height)
+		m.viewport = viewport.New(viewport.WithWidth(m.width), viewport.WithHeight(m.height))
 		m.ready = true
 		m.contentDirty = true
 
-
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch {
 		case key.Matches(msg, keys.Quit):
 			return m, tea.Quit
@@ -78,9 +77,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			lines := int(m.scrollAccum)
 			if lines > 0 {
 				m.scrollAccum -= float64(lines)
-				m.viewport.YOffset += lines
-				if m.contentLines > 0 && m.viewport.YOffset >= m.contentLines {
-					m.viewport.YOffset -= m.contentLines
+				m.viewport.SetYOffset(m.viewport.YOffset() + lines)
+				if m.contentLines > 0 && m.viewport.YOffset() >= m.contentLines {
+					m.viewport.SetYOffset(m.viewport.YOffset() - m.contentLines)
 				}
 			}
 			cmds = append(cmds, tickCmd())

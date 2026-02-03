@@ -2,10 +2,12 @@ package ui
 
 import (
 	"fmt"
+	"image/color"
 	"math"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	figure "github.com/common-nighthawk/go-figure"
 
 	"sentinel-tui-go/internal/api"
@@ -14,11 +16,13 @@ import (
 	"sentinel-tui-go/internal/theme"
 )
 
-func (m Model) View() string {
+func (m Model) View() tea.View {
 	if !m.ready {
-		return "\n  Loading..."
+		return tea.NewView("\n  Loading...")
 	}
-	return m.viewMain()
+	v := tea.NewView(m.viewMain())
+	v.AltScreen = true
+	return v
 }
 
 func (m Model) viewMain() string {
@@ -128,7 +132,7 @@ func (m Model) viewActions() string {
 	type recRow struct {
 		symBlock   string
 		amtBlock   string
-		color      lipgloss.Color
+		color      color.Color
 	}
 	var rows []recRow
 	maxSymWidth := 0
@@ -239,7 +243,7 @@ func (m Model) viewCards() string {
 
 // renderScoreBar renders a center-anchored horizontal bar for a score in [-1, 1].
 // Positive scores fill rightward from center, negative fill leftward.
-func renderScoreBar(score float64, width int, color, emptyColor lipgloss.Color) string {
+func renderScoreBar(score float64, width int, c, emptyColor color.Color) string {
 	// Sub-character block elements for fractional fill (1/8 to 8/8).
 	fractionalBlocks := []rune{'▏', '▎', '▍', '▌', '▋', '▊', '▉', '█'}
 
@@ -289,7 +293,7 @@ func renderScoreBar(score float64, width int, color, emptyColor lipgloss.Color) 
 	}
 
 	// Render: colored fill chars, empty-colored empty chars.
-	fillStyle := lipgloss.NewStyle().Foreground(color)
+	fillStyle := lipgloss.NewStyle().Foreground(c)
 	emptyStyle := lipgloss.NewStyle().Foreground(emptyColor)
 
 	var sb strings.Builder

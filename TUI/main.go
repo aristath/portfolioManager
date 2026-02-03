@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 
 	"sentinel-tui-go/internal/api"
 	"sentinel-tui-go/internal/ui"
@@ -20,7 +20,7 @@ func main() {
 	client := api.NewClient(*apiURL)
 	m := ui.NewModel(client, *apiURL, *maxWidth, *maxHeight)
 
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(m)
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)

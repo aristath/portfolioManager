@@ -2,27 +2,28 @@ package theme
 
 import (
 	"fmt"
+	"image/color"
 	"math"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // Theme holds the semantic color palette for the entire TUI.
 type Theme struct {
-	Base    lipgloss.Color
-	Surface lipgloss.Color
-	Overlay lipgloss.Color
-	Border  lipgloss.Color
-	Muted   lipgloss.Color
-	Text    lipgloss.Color
-	Subtext lipgloss.Color
-	Primary lipgloss.Color
-	Accent  lipgloss.Color
-	Success lipgloss.Color
-	Warning lipgloss.Color
-	Error   lipgloss.Color
-	Info    lipgloss.Color
+	Base    color.Color
+	Surface color.Color
+	Overlay color.Color
+	Border  color.Color
+	Muted   color.Color
+	Text    color.Color
+	Subtext color.Color
+	Primary color.Color
+	Accent  color.Color
+	Success color.Color
+	Warning color.Color
+	Error   color.Color
+	Info    color.Color
 }
 
 // Default theme uses Charmbracelet's CharmTone palette from Crush.
@@ -43,9 +44,9 @@ var Default = Theme{
 }
 
 // GradientText applies a horizontal color gradient across each line of text.
-func GradientText(text string, from, to lipgloss.Color) string {
-	fr, fg, fb := hexToRGB(string(from))
-	tr, tg, tb := hexToRGB(string(to))
+func GradientText(text string, from, to color.Color) string {
+	fr, fg, fb := colorToRGB(from)
+	tr, tg, tb := colorToRGB(to)
 
 	lines := strings.Split(text, "\n")
 	var result []string
@@ -68,20 +69,15 @@ func GradientText(text string, from, to lipgloss.Color) string {
 			cg := uint8(math.Round(float64(fg) + t*float64(int(tg)-int(fg))))
 			cb := uint8(math.Round(float64(fb) + t*float64(int(tb)-int(fb))))
 
-			color := lipgloss.Color(fmt.Sprintf("#%02x%02x%02x", cr, cg, cb))
-			sb.WriteString(lipgloss.NewStyle().Foreground(color).Render(string(r)))
+			c := lipgloss.Color(fmt.Sprintf("#%02x%02x%02x", cr, cg, cb))
+			sb.WriteString(lipgloss.NewStyle().Foreground(c).Render(string(r)))
 		}
 		result = append(result, sb.String())
 	}
 	return strings.Join(result, "\n")
 }
 
-func hexToRGB(hex string) (uint8, uint8, uint8) {
-	hex = strings.TrimPrefix(hex, "#")
-	if len(hex) != 6 {
-		return 0, 0, 0
-	}
-	var r, g, b uint8
-	fmt.Sscanf(hex, "%02x%02x%02x", &r, &g, &b)
-	return r, g, b
+func colorToRGB(c color.Color) (uint8, uint8, uint8) {
+	r, g, b, _ := c.RGBA()
+	return uint8(r >> 8), uint8(g >> 8), uint8(b >> 8)
 }
