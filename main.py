@@ -15,10 +15,7 @@ import uvicorn
 
 from sentinel import Broker, Database, Settings
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -49,11 +46,11 @@ async def run_scheduler():
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Sentinel Portfolio Management')
-    parser.add_argument('--all', action='store_true', help='Run scheduler alongside web server')
-    parser.add_argument('--scheduler-only', action='store_true', help='Run scheduler only (no web server)')
-    parser.add_argument('--host', default='0.0.0.0', help='Web server host')
-    parser.add_argument('--port', type=int, default=8000, help='Web server port')
+    parser = argparse.ArgumentParser(description="Sentinel Portfolio Management")
+    parser.add_argument("--all", action="store_true", help="Run scheduler alongside web server")
+    parser.add_argument("--scheduler-only", action="store_true", help="Run scheduler only (no web server)")
+    parser.add_argument("--host", default="::", help="Web server host")
+    parser.add_argument("--port", type=int, default=8000, help="Web server port")
     args = parser.parse_args()
 
     # Initialize services
@@ -68,12 +65,7 @@ def main():
 
         async def run_all():
             # Note: Scheduler and LED controller are started by app.py's lifespan
-            config = uvicorn.Config(
-                "sentinel.app:app",
-                host=args.host,
-                port=args.port,
-                log_level="info"
-            )
+            config = uvicorn.Config("sentinel.app:app", host=args.host, port=args.port, log_level="info")
             server = uvicorn.Server(config)
             await server.serve()
 
@@ -81,13 +73,8 @@ def main():
     else:
         # Web server only
         logger.info(f"Running web server on {args.host}:{args.port}")
-        uvicorn.run(
-            "sentinel.app:app",
-            host=args.host,
-            port=args.port,
-            log_level="info"
-        )
+        uvicorn.run("sentinel.app:app", host=args.host, port=args.port, log_level="info")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
