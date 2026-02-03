@@ -76,7 +76,11 @@ async def delete_security(
     deps: Annotated[CommonDependencies, Depends(get_common_deps)],
     sell_position: bool = True,
 ) -> dict[str, Any]:
-    """Delete a security from the universe. Optionally sells any existing position first."""
+    """Remove a security from the active universe. Optionally sells any existing position first.
+
+    Soft-deletes: marks the security as inactive (active=0, allow_buy=0, allow_sell=0).
+    Deletes current-state data (positions, scores) but preserves historical prices and trades.
+    """
     # Check if exists
     existing = await deps.db.get_security(symbol)
     if not existing:
@@ -94,11 +98,13 @@ async def delete_security(
         if not order_id:
             raise HTTPException(status_code=400, detail="Failed to sell position")
 
-    # Delete all data for this security from database
-    await deps.db.conn.execute("DELETE FROM securities WHERE symbol = ?", (symbol,))
+    # Soft-delete: mark inactive and disable trading, but preserve historical data
+    await deps.db.conn.execute(
+        "UPDATE securities SET active = 0, allow_buy = 0, allow_sell = 0 WHERE symbol = ?",
+        (symbol,),
+    )
+    # Delete current-state data (not historical)
     await deps.db.conn.execute("DELETE FROM positions WHERE symbol = ?", (symbol,))
-    await deps.db.conn.execute("DELETE FROM prices WHERE symbol = ?", (symbol,))
-    await deps.db.conn.execute("DELETE FROM trades WHERE symbol = ?", (symbol,))
     await deps.db.conn.execute("DELETE FROM scores WHERE symbol = ?", (symbol,))
     await deps.db.conn.commit()
 
