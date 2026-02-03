@@ -264,6 +264,7 @@ async def get_markets_status(
                 if mkt_id is not None:
                     market_ids_needed.add(str(mkt_id))
             except (_json.JSONDecodeError, KeyError, TypeError, ValueError):
+                # Silently skip securities with malformed or missing market data
                 pass
 
     # Get market status from broker
