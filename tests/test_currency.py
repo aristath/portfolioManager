@@ -71,7 +71,7 @@ class TestCurrencyGetCrossRate:
     @pytest.mark.asyncio
     async def test_eur_base_conversion_to_usd(self, currency_with_rates):
         """EUR to USD conversion (EUR is base)."""
-        # 1 EUR = 0.85 EUR (identity)
+        # 1 EUR = 1.0 EUR (identity)
         # 1 USD = 0.85 EUR
         # Therefore: 1 EUR = 1.0/0.85 USD ≈ 1.176 USD
         rate = await currency_with_rates.get_cross_rate("EUR", "USD")
