@@ -19,7 +19,7 @@ async def test_get_unified_view_returns_empty_list_when_no_securities():
 
     # Verify it returns an empty list
     assert result == []
-    
+
     # Verify get_all_securities was called
     mock_deps.db.get_all_securities.assert_called_once_with(active_only=True)
 
