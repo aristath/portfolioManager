@@ -1,9 +1,10 @@
 package ui
 
 import (
+	"image/color"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // Block elements for sub-character vertical resolution (1/8 to 8/8).
@@ -13,7 +14,7 @@ var blockChars = [9]rune{' ', '▁', '▂', '▃', '▄', '▅', '▆', '▇', '
 // data contains the values to plot, baseline determines the color threshold
 // (green above, red below). width and height control the chart dimensions
 // in characters. Returns a multi-line string.
-func RenderAreaChart(data []float64, baseline float64, width, height int, aboveColor, belowColor lipgloss.Color) string {
+func RenderAreaChart(data []float64, baseline float64, width, height int, aboveColor, belowColor color.Color) string {
 	if len(data) == 0 || width <= 0 || height <= 0 {
 		return ""
 	}
