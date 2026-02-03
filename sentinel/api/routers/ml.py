@@ -12,7 +12,7 @@ from sentinel.api.dependencies import CommonDependencies, get_common_deps
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ml", tags=["ml"])
-regime_router = APIRouter(prefix="/analytics/regime", tags=["analytics"])
+regime_router = APIRouter(prefix="/analytics", tags=["analytics"])
 backup_router = APIRouter(prefix="/backup", tags=["backup"])
 
 
@@ -417,7 +417,7 @@ async def _run_reset_and_retrain():
 # Regime router endpoints
 
 
-@regime_router.get("/{symbol}")
+@regime_router.get("/regime/{symbol}")
 async def get_regime_status(symbol: str) -> dict:
     """Get current regime for a security."""
     from sentinel.regime_hmm import RegimeDetector
@@ -428,7 +428,7 @@ async def get_regime_status(symbol: str) -> dict:
     return {"current": regime, "history": history}
 
 
-@regime_router.get("/all/regimes")
+@regime_router.get("/regimes")
 async def get_all_regimes(
     deps: Annotated[CommonDependencies, Depends(get_common_deps)],
 ) -> dict:
