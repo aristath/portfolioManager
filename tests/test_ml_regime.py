@@ -1,6 +1,15 @@
 """Tests for regime detection and ML prediction dampening."""
 
-from sentinel.regime_quote import apply_regime_dampening, calculate_regime_score
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from sentinel.regime_quote import (
+    apply_regime_dampening,
+    calculate_regime_score,
+    get_regime_adjusted_return,
+    quote_data_from_prices,
+)
 
 
 class TestCalculateRegimeScore:
@@ -165,3 +174,91 @@ class TestEdgeCases:
         result = apply_regime_dampening(0.001, -0.5)
         expected = 0.001 * (1 - 0.5 * 0.4)
         assert abs(result - expected) < 0.0001
+
+
+class TestQuoteDataFromPrices:
+    """Tests for quote_data_from_prices (historical OHLCV to quote_data shape)."""
+
+    def test_list_dict_newest_first_returns_ltp_chg_x(self):
+        """Given list[dict] newest first, returns ltp, chg5/chg22/chg110/chg220, x_max/x_min."""
+        # Row 0 = newest (today), row i = i days ago
+        prices = [{"date": f"d{i}", "close": 100.0 - (i * 0.1)} for i in range(300)]
+        result = quote_data_from_prices(prices)
+        assert "ltp" in result
+        assert result["ltp"] == 100.0
+        assert "chg5" in result
+        assert "chg22" in result
+        assert "chg110" in result
+        assert "chg220" in result
+        assert "x_max" in result
+        assert "x_min" in result
+
+    def test_chg5_from_close_delta(self):
+        """chg5 is (close - close_5d_ago) / close_5d_ago * 100."""
+        # Newest first: row 0 close=110, row 5 close=100
+        prices = [{"date": f"d{i}", "close": 110 - i * 2} for i in range(10)]
+        result = quote_data_from_prices(prices)
+        # Row 0 close=110, row 5 close=100 -> chg5 = (110-100)/100*100 = 10
+        assert abs(result["chg5"] - 10.0) < 0.01
+
+    def test_52_week_high_low_from_close(self):
+        """x_max/x_min are max/min of close over up to 252 rows."""
+        # Newest first: row 0 .. 251 used for 52-week
+        prices = [{"date": f"d{i}", "close": 50 + (i % 100)} for i in range(300)]
+        result = quote_data_from_prices(prices)
+        assert result["x_max"] == 149  # max of 50 + (i % 100) in first 252
+        assert result["x_min"] == 50
+
+    def test_fewer_than_252_rows_uses_full_range(self):
+        """When fewer than 252 rows, x_max/x_min use full range."""
+        prices = [{"date": f"d{i}", "close": 100 + i} for i in range(100)]
+        result = quote_data_from_prices(prices)
+        assert result["x_min"] == 100
+        assert result["x_max"] == 199
+
+    def test_dataframe_input(self):
+        """Accepts DataFrame with date, close columns (newest first)."""
+        import pandas as pd
+
+        df = pd.DataFrame([{"date": "2024-01-02", "close": 100}, {"date": "2024-01-01", "close": 98}])
+        result = quote_data_from_prices(df)
+        assert result["ltp"] == 100
+        assert "chg5" in result
+
+
+class TestGetRegimeAdjustedReturnWithQuoteData:
+    """Tests for get_regime_adjusted_return with optional quote_data."""
+
+    @pytest.mark.asyncio
+    async def test_when_quote_data_provided_no_db_call(self):
+        """When quote_data is provided, db.get_security is not called."""
+        db = MagicMock()
+        db.get_security = AsyncMock()
+        quote_data = {"chg5": 2, "chg22": 5, "chg110": 10, "chg220": 15, "ltp": 100, "x_max": 110, "x_min": 90}
+        adjusted, regime_score, dampening = await get_regime_adjusted_return("SYM", 0.05, db, quote_data=quote_data)
+        db.get_security.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_when_quote_data_provided_returns_from_that_data(self):
+        """When quote_data is provided, returns (adjusted_return, regime_score, dampening) from it."""
+        db = MagicMock()
+        quote_data = {"chg5": -5, "chg22": -10, "chg110": -20, "chg220": -30, "ltp": 80, "x_max": 100, "x_min": 60}
+        adjusted, regime_score, dampening = await get_regime_adjusted_return("SYM", 0.08, db, quote_data=quote_data)
+        assert regime_score < 0
+        assert adjusted < 0.08  # dampened
+        assert dampening >= 0
+
+    @pytest.mark.asyncio
+    async def test_when_quote_data_none_uses_db(self):
+        """When quote_data is None, loads from db.get_security."""
+        db = MagicMock()
+        db.get_security = AsyncMock(
+            return_value={
+                "quote_data": (
+                    '{"chg5": 0, "chg22": 0, "chg110": 0, "chg220": 0, "ltp": 100, "x_max": 100, "x_min": 100}'
+                )
+            }
+        )
+        adjusted, regime_score, dampening = await get_regime_adjusted_return("SYM", 0.05, db)
+        db.get_security.assert_awaited_once_with("SYM")
+        assert adjusted == 0.05  # neutral regime, no dampening
