@@ -98,7 +98,7 @@ func (m Model) viewHero() string {
 	}
 
 	// Portfolio value — hero number
-	valText := bigtext.RenderExtraBoldXXL(formatEUR(value))
+	valText := bigtext.RenderExtraBoldXXL(formatWithSeparators(value))
 	valBlock := theme.GradientText(valText, t.Primary, t.Accent)
 
 	// P&L and cash as compact block text
@@ -113,10 +113,7 @@ func (m Model) viewHero() string {
 	pnlCol := lipgloss.JoinVertical(lipgloss.Left, pnlBlock, pnlLabel)
 	cashCol := lipgloss.JoinVertical(lipgloss.Right, cashBlock, cashLabel)
 
-	gap := w - lipgloss.Width(pnlCol) - lipgloss.Width(cashCol)
-	if gap < 0 {
-		gap = 0
-	}
+	gap := max(0, w-lipgloss.Width(pnlCol)-lipgloss.Width(cashCol))
 	infoRow := lipgloss.JoinHorizontal(lipgloss.Top,
 		pnlCol,
 		lipgloss.NewStyle().Width(gap).Render(""),
@@ -280,10 +277,7 @@ func renderScoreBar(score float64, width int, c, emptyColor color.Color) string 
 			bar[halfWidth+i] = '█'
 		}
 		if fraction > 0 && halfWidth+fullCells < width {
-			idx := int(fraction*8) - 1
-			if idx < 0 {
-				idx = 0
-			}
+			idx := max(0, int(fraction*8)-1)
 			bar[halfWidth+fullCells] = fractionalBlocks[idx]
 		}
 	} else {
@@ -291,10 +285,7 @@ func renderScoreBar(score float64, width int, c, emptyColor color.Color) string 
 			bar[halfWidth-1-i] = '█'
 		}
 		if fraction > 0 && halfWidth-1-fullCells >= 0 {
-			idx := int(fraction*8) - 1
-			if idx < 0 {
-				idx = 0
-			}
+			idx := max(0, int(fraction*8)-1)
 			bar[halfWidth-1-fullCells] = fractionalBlocks[idx]
 		}
 	}
@@ -311,10 +302,6 @@ func renderScoreBar(score float64, width int, c, emptyColor color.Color) string 
 		}
 	}
 	return sb.String()
-}
-
-func formatEUR(v float64) string {
-	return formatWithSeparators(v)
 }
 
 func formatWithSeparators(v float64) string {
