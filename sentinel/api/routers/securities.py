@@ -61,8 +61,8 @@ async def add_security(
     # Save full metadata
     await deps.db.update_security_metadata(symbol, info, market_id)
 
-    # Fetch and save 10 years of historical prices
-    prices_data = await deps.broker.get_historical_prices_bulk([symbol], years=10)
+    # Fetch and save 20 years of historical prices (TraderNet getHloc has no documented max range)
+    prices_data = await deps.broker.get_historical_prices_bulk([symbol], years=20)
     prices = prices_data.get(symbol, [])
     if prices:
         await deps.db.save_prices(symbol, prices)
@@ -426,8 +426,8 @@ async def get_unified_view(
                 "base_expected_return": base_expected_return,
                 "score_components": components,
                 # ML prediction breakdown
-                "wavelet_score": ml_preds_map.get(symbol, {}).get("wavelet_score"),
-                "ml_score": ml_preds_map.get(symbol, {}).get("ml_score"),
+                "wavelet_score": ml_pred.get("wavelet_score"),
+                "ml_score": ml_pred.get("ml_score"),
                 # Price history (simplified for charts, oldest first)
                 "prices": [{"date": p["date"], "close": p["close"]} for p in reversed(prices)],
                 # Recommendation
