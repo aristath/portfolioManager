@@ -128,8 +128,17 @@ async def sync_trades(db, broker) -> None:
         if not trade_id or not symbol:
             continue
 
-        # Convert date format if needed (Tradernet uses "YYYY-MM-DD HH:MM:SS")
-        executed_at = date_str.replace(" ", "T") if " " in date_str else date_str
+        # Parse broker date to unix timestamp (Tradernet: "YYYY-MM-DD HH:MM:SS" or "YYYY-MM-DD")
+        from datetime import datetime
+
+        try:
+            if " " in date_str:
+                dt = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
+            else:
+                dt = datetime.strptime(date_str[:10], "%Y-%m-%d")
+            executed_at_ts = int(dt.timestamp())
+        except (ValueError, TypeError):
+            executed_at_ts = 0
 
         row_id = await db.upsert_trade(
             broker_trade_id=trade_id,
@@ -137,7 +146,7 @@ async def sync_trades(db, broker) -> None:
             side=side,
             quantity=quantity,
             price=price,
-            executed_at=executed_at,
+            executed_at=executed_at_ts,
             raw_data=trade,
             commission=commission,
             commission_currency=commission_currency,

@@ -15,6 +15,11 @@ import pytest_asyncio
 from sentinel.database import Database
 
 
+def _ts(iso: str) -> int:
+    """Parse ISO datetime string to unix timestamp (for trades.executed_at)."""
+    return int(datetime.fromisoformat(iso).timestamp())
+
+
 @pytest_asyncio.fixture
 async def temp_db():
     """Create a temporary database for testing."""
@@ -74,7 +79,7 @@ class TestUpsertTrade:
             side="BUY",
             quantity=10.0,
             price=150.0,
-            executed_at="2024-01-15T10:30:00",
+            executed_at=_ts("2024-01-15T10:30:00"),
             raw_data=raw_data,
         )
 
@@ -99,7 +104,7 @@ class TestUpsertTrade:
             side="BUY",
             quantity=10.0,
             price=150.0,
-            executed_at="2024-01-15T10:30:00",
+            executed_at=_ts("2024-01-15T10:30:00"),
             raw_data=raw_data1,
         )
 
@@ -110,7 +115,7 @@ class TestUpsertTrade:
             side="BUY",
             quantity=10.0,
             price=150.0,
-            executed_at="2024-01-15T10:31:00",
+            executed_at=_ts("2024-01-15T10:31:00"),
             raw_data=raw_data2,
         )
 
@@ -137,7 +142,7 @@ class TestUpsertTrade:
             side="SELL",
             quantity=10.0,
             price=150.0,
-            executed_at="2024-01-16T14:00:00",
+            executed_at=_ts("2024-01-16T14:00:00"),
             raw_data=raw_data,
         )
 
@@ -161,7 +166,7 @@ class TestGetTrades:
                 side="BUY",
                 quantity=10.0,
                 price=150.0,
-                executed_at=f"2024-01-{15 + i:02d}T10:00:00",
+                executed_at=_ts(f"2024-01-{15 + i:02d}T10:00:00"),
                 raw_data={"id": f"trade_{i}"},
             )
 
@@ -177,7 +182,7 @@ class TestGetTrades:
             side="BUY",
             quantity=10.0,
             price=150.0,
-            executed_at="2024-01-15T10:00:00",
+            executed_at=_ts("2024-01-15T10:00:00"),
             raw_data={"id": "1"},
         )
         await temp_db.upsert_trade(
@@ -186,7 +191,7 @@ class TestGetTrades:
             side="BUY",
             quantity=10.0,
             price=150.0,
-            executed_at="2024-01-16T10:00:00",
+            executed_at=_ts("2024-01-16T10:00:00"),
             raw_data={"id": "2"},
         )
 
@@ -203,7 +208,7 @@ class TestGetTrades:
             side="BUY",
             quantity=10.0,
             price=150.0,
-            executed_at="2024-01-15T10:00:00",
+            executed_at=_ts("2024-01-15T10:00:00"),
             raw_data={"id": "1"},
         )
         await temp_db.upsert_trade(
@@ -212,7 +217,7 @@ class TestGetTrades:
             side="SELL",
             quantity=10.0,
             price=150.0,
-            executed_at="2024-01-16T10:00:00",
+            executed_at=_ts("2024-01-16T10:00:00"),
             raw_data={"id": "2"},
         )
 
@@ -233,7 +238,7 @@ class TestGetTrades:
             side="BUY",
             quantity=10.0,
             price=150.0,
-            executed_at="2024-01-10T10:00:00",
+            executed_at=_ts("2024-01-10T10:00:00"),
             raw_data={"id": "1"},
         )
         await temp_db.upsert_trade(
@@ -242,7 +247,7 @@ class TestGetTrades:
             side="BUY",
             quantity=10.0,
             price=150.0,
-            executed_at="2024-01-15T10:00:00",
+            executed_at=_ts("2024-01-15T10:00:00"),
             raw_data={"id": "2"},
         )
         await temp_db.upsert_trade(
@@ -251,7 +256,7 @@ class TestGetTrades:
             side="BUY",
             quantity=10.0,
             price=150.0,
-            executed_at="2024-01-20T10:00:00",
+            executed_at=_ts("2024-01-20T10:00:00"),
             raw_data={"id": "3"},
         )
 
@@ -278,7 +283,7 @@ class TestGetTrades:
                 side="BUY",
                 quantity=10.0,
                 price=150.0,
-                executed_at=f"2024-01-{10 + i:02d}T10:00:00",
+                executed_at=_ts(f"2024-01-{10 + i:02d}T10:00:00"),
                 raw_data={"id": f"trade_{i:02d}"},
             )
 
@@ -305,7 +310,7 @@ class TestGetTrades:
             side="BUY",
             quantity=10.0,
             price=150.0,
-            executed_at="2024-01-15T10:00:00",
+            executed_at=_ts("2024-01-15T10:00:00"),
             raw_data=raw_data,
         )
 
@@ -324,7 +329,7 @@ class TestGetTrades:
             side="BUY",
             quantity=10.0,
             price=150.0,
-            executed_at="2024-01-15T10:00:00",
+            executed_at=_ts("2024-01-15T10:00:00"),
             raw_data={"id": "1"},
         )
         await temp_db.upsert_trade(
@@ -333,7 +338,7 @@ class TestGetTrades:
             side="SELL",
             quantity=10.0,
             price=150.0,
-            executed_at="2024-01-16T10:00:00",
+            executed_at=_ts("2024-01-16T10:00:00"),
             raw_data={"id": "2"},
         )
         await temp_db.upsert_trade(
@@ -342,7 +347,7 @@ class TestGetTrades:
             side="BUY",
             quantity=10.0,
             price=150.0,
-            executed_at="2024-01-15T10:00:00",
+            executed_at=_ts("2024-01-15T10:00:00"),
             raw_data={"id": "3"},
         )
 
@@ -365,7 +370,7 @@ class TestGetTradesCount:
                 side="BUY",
                 quantity=10.0,
                 price=150.0,
-                executed_at=f"2024-01-{15 + i:02d}T10:00:00",
+                executed_at=_ts(f"2024-01-{15 + i:02d}T10:00:00"),
                 raw_data={"id": f"trade_{i}"},
             )
 
@@ -381,7 +386,7 @@ class TestGetTradesCount:
             side="BUY",
             quantity=10.0,
             price=150.0,
-            executed_at="2024-01-15T10:00:00",
+            executed_at=_ts("2024-01-15T10:00:00"),
             raw_data={"id": "1"},
         )
         await temp_db.upsert_trade(
@@ -390,7 +395,7 @@ class TestGetTradesCount:
             side="SELL",
             quantity=10.0,
             price=150.0,
-            executed_at="2024-01-16T10:00:00",
+            executed_at=_ts("2024-01-16T10:00:00"),
             raw_data={"id": "2"},
         )
         await temp_db.upsert_trade(
@@ -399,7 +404,7 @@ class TestGetTradesCount:
             side="BUY",
             quantity=10.0,
             price=150.0,
-            executed_at="2024-01-15T10:00:00",
+            executed_at=_ts("2024-01-15T10:00:00"),
             raw_data={"id": "3"},
         )
 
@@ -555,7 +560,7 @@ class TestSyncTradesJob:
             side="BUY",
             quantity=10.0,
             price=150.0,
-            executed_at="2024-01-15T10:30:00",
+            executed_at=_ts("2024-01-15T10:30:00"),
             raw_data={"id": "123", "original": True},
         )
 
@@ -597,14 +602,14 @@ class TestCooloffIntegration:
         from sentinel.planner import RebalanceEngine
 
         # Setup: create a recent SELL trade
-        yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%S")
+        yesterday_ts = int((datetime.now() - timedelta(days=1)).timestamp())
         await temp_db.upsert_trade(
             broker_trade_id="recent_sell",
             symbol="AAPL.US",
             side="SELL",
             quantity=10.0,
             price=150.0,
-            executed_at=yesterday,
+            executed_at=yesterday_ts,
             raw_data={"id": "recent_sell"},
         )
 
@@ -622,14 +627,14 @@ class TestCooloffIntegration:
         """Cooloff allows trades in same direction as last trade."""
         from sentinel.planner import RebalanceEngine
 
-        yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%S")
+        yesterday_ts = int((datetime.now() - timedelta(days=1)).timestamp())
         await temp_db.upsert_trade(
             broker_trade_id="recent_buy",
             symbol="AAPL.US",
             side="BUY",
             quantity=10.0,
             price=150.0,
-            executed_at=yesterday,
+            executed_at=yesterday_ts,
             raw_data={"id": "recent_buy"},
         )
 
@@ -646,14 +651,14 @@ class TestCooloffIntegration:
         from sentinel.planner import RebalanceEngine
 
         # Trade from 60 days ago
-        old_date = (datetime.now() - timedelta(days=60)).strftime("%Y-%m-%dT%H:%M:%S")
+        old_ts = int((datetime.now() - timedelta(days=60)).timestamp())
         await temp_db.upsert_trade(
             broker_trade_id="old_sell",
             symbol="AAPL.US",
             side="SELL",
             quantity=10.0,
             price=150.0,
-            executed_at=old_date,
+            executed_at=old_ts,
             raw_data={"id": "old_sell"},
         )
 
@@ -674,14 +679,14 @@ class TestSecurityHasRecentTrade:
         from sentinel.security import Security
 
         # Create a recent trade
-        now = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+        now_ts = int(datetime.now().timestamp())
         await temp_db.upsert_trade(
             broker_trade_id="recent",
             symbol="AAPL.US",
             side="BUY",
             quantity=10.0,
             price=150.0,
-            executed_at=now,
+            executed_at=now_ts,
             raw_data={"id": "recent"},
         )
 
@@ -706,14 +711,14 @@ class TestSecurityHasRecentTrade:
         from sentinel.security import Security
 
         # Trade from 2 hours ago (cooloff is 60 minutes)
-        old_time = (datetime.now() - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%S")
+        old_ts = int((datetime.now() - timedelta(hours=2)).timestamp())
         await temp_db.upsert_trade(
             broker_trade_id="old",
             symbol="AAPL.US",
             side="BUY",
             quantity=10.0,
             price=150.0,
-            executed_at=old_time,
+            executed_at=old_ts,
             raw_data={"id": "old"},
         )
 

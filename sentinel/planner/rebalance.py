@@ -418,7 +418,7 @@ class RebalanceEngine:
 
         last_trade = trades[0]
         last_action = last_trade["side"]  # 'BUY' or 'SELL'
-        last_date = datetime.fromisoformat(last_trade["executed_at"])
+        last_date = datetime.fromtimestamp(last_trade["executed_at"])
         current_date = datetime.now()
         days_since = (current_date - last_date).days
 
