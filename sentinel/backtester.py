@@ -347,8 +347,8 @@ class BacktestDatabaseBuilder:
             # Create minimal security entry
             await self.temp_db.upsert_security(symbol, name=symbol, currency="EUR", active=True)
 
-        # Fetch historical prices (10 years)
-        prices_data = await self.broker.get_historical_prices_bulk([symbol], years=10)
+        # Fetch historical prices (20 years; TraderNet getHloc has no documented max range)
+        prices_data = await self.broker.get_historical_prices_bulk([symbol], years=20)
         prices = prices_data.get(symbol, [])
         if prices:
             for price in prices:
@@ -692,8 +692,6 @@ class Backtester:
         Check if security is in cool-off period during backtest.
         Uses trades table in simulation database with new schema.
         """
-        from datetime import datetime
-
         assert self._sim_db is not None, "Simulation database not initialized"
         # Use get_trades from the database which works with new schema
         trades = await self._sim_db.get_trades(symbol=symbol, limit=1)
@@ -703,9 +701,11 @@ class Backtester:
 
         last_trade = trades[0]
         last_action = last_trade["side"]
-        # Handle both ISO format with T separator and date-only format
         executed_at = last_trade["executed_at"]
-        last_date = datetime.fromisoformat(executed_at[:10]).date()
+        if isinstance(executed_at, int):
+            last_date = datetime.fromtimestamp(executed_at).date()
+        else:
+            last_date = datetime.fromisoformat(str(executed_at)[:10]).date()
         current_date = datetime.strptime(self._simulation_date, "%Y-%m-%d").date()
         days_since = (current_date - last_date).days
 
