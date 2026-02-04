@@ -79,6 +79,8 @@ class Analyzer:
         """
         Perform multi-scale analysis on a security.
 
+        Delegates to analyze_prices() (single code path for scoring) with use_regime=True.
+
         Args:
             symbol: Security symbol
             years: Years of history to analyze
@@ -87,29 +89,71 @@ class Analyzer:
         Returns:
             Motion object with analysis results, or None if insufficient data
         """
-        # Check cache first
         if use_cache:
             cached = self._cache.get(symbol)
             if cached is not None:
                 return cached
 
-        # Get historical prices
         security = Security(symbol, db=self._db)
         prices = await security.get_historical_prices(days=years * 252)
-
-        if len(prices) < 252:  # Need at least 1 year
+        if len(prices) < 252:
             return None
 
-        # Extract close prices (oldest first)
-        closes = np.array([p["close"] for p in reversed(prices)])
+        result = await self.analyze_prices(symbol, prices, use_regime=True)
+        if result is None:
+            return None
 
-        # Calculate log returns
+        score, comp = result
+        motion = Motion(
+            symbol=symbol,
+            trend_direction=comp["trend"],
+            trend_strength=comp["trend_strength"],
+            momentum=comp["momentum"],
+            cycle_position=comp["cycle_position"],
+            cycle_position_raw=comp["cycle_position_pct"],
+            volatility=comp["volatility"],
+            volatility_trend=comp["volatility_trend"],
+            consistency=comp["consistency"],
+            long_term_component=comp["long_term_component"],
+            medium_term_component=comp["medium_term_component"],
+            short_term_component=comp["short_term_component"],
+            noise_component=comp["noise_component"],
+            cagr=comp["cagr"],
+            sharpe=comp["sharpe"],
+            max_drawdown=comp["max_drawdown"],
+            expected_return=comp["expected_return"],
+        )
+
+        if use_cache:
+            self._cache.set(symbol, motion)
+        return motion
+
+    async def analyze_prices(
+        self,
+        symbol: str,
+        prices: list[dict],
+        use_regime: bool = False,
+    ) -> tuple[float, dict] | None:
+        """
+        Compute score and components from a pre-built price list (single code path for scoring).
+
+        Used by analyze() (use_regime=True) and by backfill (use_regime=False). Does not use DB or cache.
+
+        Args:
+            symbol: Security symbol (for regime key when use_regime=True)
+            prices: List of price dicts with at least "close", newest first (e.g. from get_prices)
+            use_regime: If True, adjust expected return via RegimeDetector; if False, base score only.
+
+        Returns:
+            (score, components) or None if insufficient data (need at least 252 points).
+            components includes serializable fields plus long_term_component, etc. (for building Motion).
+        """
+        if len(prices) < 252:
+            return None
+        # Oldest first for decomposition
+        closes = np.array([float(p["close"]) for p in reversed(prices)])
         returns = np.diff(np.log(closes))
-
-        # Perform wavelet decomposition
         components = self._decompose(closes)
-
-        # Calculate metrics
         trend_dir, trend_str = self._analyze_trend(components["long_term"])
         momentum = self._calculate_momentum(components["medium_term"])
         cycle_pos, cycle_pos_raw = self._calculate_cycle_position(closes)
@@ -118,8 +162,6 @@ class Analyzer:
         cagr = self._calculate_cagr(closes)
         sharpe = self._calculate_sharpe(returns)
         max_dd = self._calculate_max_drawdown(closes)
-
-        # Calculate expected return (the main investment signal)
         expected_return = await self._calculate_expected_return(
             symbol=symbol,
             cagr=cagr,
@@ -127,33 +169,27 @@ class Analyzer:
             cycle_position=cycle_pos,
             momentum=momentum,
             consistency=consistency,
+            use_regime=use_regime,
         )
-
-        motion = Motion(
-            symbol=symbol,
-            trend_direction=trend_dir,
-            trend_strength=trend_str,
-            momentum=momentum,
-            cycle_position=cycle_pos,
-            cycle_position_raw=cycle_pos_raw,
-            volatility=vol,
-            volatility_trend=vol_trend,
-            consistency=consistency,
-            long_term_component=components["long_term"],
-            medium_term_component=components["medium_term"],
-            short_term_component=components["short_term"],
-            noise_component=components["noise"],
-            cagr=cagr,
-            sharpe=sharpe,
-            max_drawdown=max_dd,
-            expected_return=expected_return,
-        )
-
-        # Store in cache
-        if use_cache:
-            self._cache.set(symbol, motion)
-
-        return motion
+        comp_dict = {
+            "trend": trend_dir,
+            "trend_strength": trend_str,
+            "momentum": momentum,
+            "cycle_position": cycle_pos,
+            "cycle_position_pct": cycle_pos_raw,
+            "expected_return": expected_return,
+            "sharpe": sharpe,
+            "cagr": cagr,
+            "consistency": consistency,
+            "max_drawdown": max_dd,
+            "volatility": vol,
+            "volatility_trend": vol_trend,
+            "long_term_component": components["long_term"],
+            "medium_term_component": components["medium_term"],
+            "short_term_component": components["short_term"],
+            "noise_component": components["noise"],
+        }
+        return (expected_return, comp_dict)
 
     def _decompose(self, prices: np.ndarray) -> dict:
         """
@@ -603,6 +639,7 @@ class Analyzer:
         cycle_position: float,
         momentum: float,
         consistency: float,
+        use_regime: bool = True,
     ) -> float:
         """
         Calculate expected return - THE primary investment signal.
@@ -668,12 +705,15 @@ class Analyzer:
         )
 
         # Apply regime adjustment if enabled
-        from sentinel.settings import Settings
-
-        settings = Settings()
-        use_regime = await settings.get("use_regime_adjustment", False)
-
         if use_regime:
+            from sentinel.settings import Settings
+
+            settings = Settings()
+            regime_enabled = await settings.get("use_regime_adjustment", False)
+        else:
+            regime_enabled = False
+
+        if regime_enabled:
             from sentinel.regime_hmm import RegimeDetector
 
             detector = RegimeDetector()
@@ -757,6 +797,7 @@ class Analyzer:
                     "consistency": motion.consistency,
                     "max_drawdown": motion.max_drawdown,
                     "volatility": motion.volatility,
+                    "volatility_trend": motion.volatility_trend,
                 }
                 await security.set_score(motion.expected_return, components)
                 count += 1
