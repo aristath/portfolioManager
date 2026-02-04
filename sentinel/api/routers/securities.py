@@ -456,9 +456,20 @@ async def calculate_scores() -> dict[str, int]:
 async def get_scores(
     deps: Annotated[CommonDependencies, Depends(get_common_deps)],
 ) -> list[dict]:
-    """Get all security scores."""
+    """Get latest score per security (one row per symbol)."""
     cursor = await deps.db.conn.execute(
-        "SELECT symbol, score, components, calculated_at FROM scores ORDER BY score DESC"
+        """SELECT s.id, s.symbol, s.score, s.components, s.calculated_at FROM scores s
+           INNER JOIN (
+             SELECT symbol, MAX(calculated_at) AS calculated_at FROM scores GROUP BY symbol
+           ) latest ON s.symbol = latest.symbol AND s.calculated_at = latest.calculated_at
+           ORDER BY s.score DESC, s.id DESC"""
     )
     rows = await cursor.fetchall()
-    return [dict(row) for row in rows]
+    # One row per symbol (tie-break same calculated_at by max id)
+    by_symbol: dict[str, dict] = {}
+    for row in rows:
+        r = dict(row)
+        sym = r["symbol"]
+        if sym not in by_symbol or r["id"] > by_symbol[sym]["id"]:
+            by_symbol[sym] = r
+    return sorted(by_symbol.values(), key=lambda x: (-(x["score"] or 0), -(x.get("id") or 0)))
