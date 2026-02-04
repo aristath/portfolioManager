@@ -39,11 +39,11 @@ async def sync_prices(db, broker, cache) -> None:
     securities = await db.get_all_securities(active_only=True)
     symbols = [s["symbol"] for s in securities]
 
-    prices = await broker.get_historical_prices_bulk(symbols, years=10)
+    prices = await broker.get_historical_prices_bulk(symbols, years=20)
     synced = 0
 
     for symbol, data in prices.items():
-        if data and len(data) > 0:
+        if data:
             await db.save_prices(symbol, data)
             synced += 1
 
@@ -129,8 +129,6 @@ async def sync_trades(db, broker) -> None:
             continue
 
         # Parse broker date to unix timestamp (Tradernet: "YYYY-MM-DD HH:MM:SS" or "YYYY-MM-DD")
-        from datetime import datetime
-
         try:
             if " " in date_str:
                 dt = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")

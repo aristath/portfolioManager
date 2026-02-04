@@ -1,5 +1,7 @@
 # Get quote historical data (candlesticks).
 
+**Note (Sentinel):** TraderNet does not document a maximum historical range for `date_from`/`date_to`. Sentinel requests 20 years of daily data by default; you can request more if the API accepts it.
+
 ### Description of server request parameters and a sample response:
 
 #### Request:

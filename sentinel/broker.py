@@ -154,7 +154,7 @@ class Broker:
             logger.error(f"Failed to get history for {symbol}: {e}")
         return []
 
-    async def get_historical_prices_bulk(self, symbols: list[str], years: int = 10) -> dict[str, list[dict]]:
+    async def get_historical_prices_bulk(self, symbols: list[str], years: int = 20) -> dict[str, list[dict]]:
         """Get historical prices for multiple symbols in one request."""
         import json
 
