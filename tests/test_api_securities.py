@@ -33,8 +33,8 @@ async def test_get_unified_view_does_not_call_planner_when_no_securities():
     mock_deps = MagicMock()
     mock_deps.db.get_all_securities = AsyncMock(return_value=[])
 
-    # Mock Planner to track if it's instantiated
-    with patch("sentinel.api.routers.securities.Planner") as mock_planner:
+    # Mock Planner where it is defined (router imports it inside the endpoint)
+    with patch("sentinel.planner.Planner") as mock_planner:
         result = await get_unified_view(mock_deps, period="1Y")
 
     # Verify Planner was not instantiated

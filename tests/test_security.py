@@ -322,7 +322,7 @@ class TestMarketData:
         prices = await security.get_historical_prices(days=30)
 
         assert len(prices) == 2
-        db.get_prices.assert_called_once_with("AAPL.US", 30)
+        db.get_prices.assert_called_once_with("AAPL.US", days=30, end_date=None)
 
     @pytest.mark.asyncio
     async def test_sync_prices(self):
@@ -697,7 +697,7 @@ class TestTradeCooloff:
         recent_trade_time = datetime.now() - timedelta(minutes=30)
 
         db = MagicMock()
-        db.get_trades = AsyncMock(return_value=[{"executed_at": recent_trade_time.isoformat()}])
+        db.get_trades = AsyncMock(return_value=[{"executed_at": int(recent_trade_time.timestamp())}])
 
         broker = MagicMock()
         broker.get_quote = AsyncMock(return_value={"price": 100.00})
@@ -715,7 +715,7 @@ class TestTradeCooloff:
         old_trade_time = datetime.now() - timedelta(minutes=TRADE_COOLOFF_MINUTES + 10)
 
         db = MagicMock()
-        db.get_trades = AsyncMock(return_value=[{"executed_at": old_trade_time.isoformat()}])
+        db.get_trades = AsyncMock(return_value=[{"executed_at": int(old_trade_time.timestamp())}])
         db.record_trade = AsyncMock()
         db.upsert_position = AsyncMock()
         db.get_cash_balances = AsyncMock(return_value={"EUR": 10000.0})
@@ -737,7 +737,7 @@ class TestTradeCooloff:
         recent_trade_time = datetime.now() - timedelta(minutes=30)
 
         db = MagicMock()
-        db.get_trades = AsyncMock(return_value=[{"executed_at": recent_trade_time.isoformat()}])
+        db.get_trades = AsyncMock(return_value=[{"executed_at": int(recent_trade_time.timestamp())}])
 
         security = Security("TEST", db=db)
         security._data = {"min_lot": 1, "allow_sell": 1}

@@ -12,11 +12,17 @@ These tests verify the intended behavior of the Database class:
 import json
 import os
 import tempfile
+from datetime import datetime
 
 import pytest
 import pytest_asyncio
 
 from sentinel.database import Database
+
+
+def _ts(iso: str) -> int:
+    """Parse ISO datetime string to unix timestamp (for trades.executed_at)."""
+    return int(datetime.fromisoformat(iso).timestamp())
 
 
 @pytest_asyncio.fixture
@@ -317,6 +323,21 @@ class TestPrices:
         assert len(result) == 5
 
     @pytest.mark.asyncio
+    async def test_get_prices_end_date(self, temp_db):
+        """get_prices with end_date returns only rows with date <= end_date."""
+        prices = [
+            {"date": f"2024-01-{i:02d}", "open": 100, "high": 101, "low": 99, "close": 100 + i, "volume": 1000}
+            for i in range(1, 11)
+        ]
+        await temp_db.save_prices("TEST", prices)
+
+        result = await temp_db.get_prices("TEST", end_date="2024-01-05")
+
+        assert len(result) == 5
+        assert result[0]["date"] == "2024-01-05"
+        assert result[-1]["date"] == "2024-01-01"
+
+    @pytest.mark.asyncio
     async def test_save_prices_upserts(self, temp_db):
         """Saving prices updates existing records."""
         await temp_db.save_prices("TEST", [{"date": "2024-01-01", "close": 100}])
@@ -367,7 +388,7 @@ class TestTrades:
             side="BUY",
             quantity=10.0,
             price=150.0,
-            executed_at="2024-01-15T10:00:00",
+            executed_at=_ts("2024-01-15T10:00:00"),
             raw_data={"id": "123", "qty": 100, "price": 50.0},
         )
 
@@ -382,7 +403,7 @@ class TestTrades:
             side="BUY",
             quantity=10.0,
             price=150.0,
-            executed_at="2024-01-15T10:00:00",
+            executed_at=_ts("2024-01-15T10:00:00"),
             raw_data={"id": "1"},
         )
         await temp_db.upsert_trade(
@@ -391,7 +412,7 @@ class TestTrades:
             side="SELL",
             quantity=10.0,
             price=150.0,
-            executed_at="2024-01-16T10:00:00",
+            executed_at=_ts("2024-01-16T10:00:00"),
             raw_data={"id": "2"},
         )
 
@@ -413,7 +434,7 @@ class TestTrades:
                 side="BUY",
                 quantity=10.0,
                 price=150.0,
-                executed_at=f"2024-01-{10 + i:02d}T10:00:00",
+                executed_at=_ts(f"2024-01-{10 + i:02d}T10:00:00"),
                 raw_data={"id": f"trade_{i}"},
             )
 
@@ -616,7 +637,9 @@ class TestBuildTradesWhere:
         assert "TEST" in params
 
     def test_build_trades_where_all_filters(self, temp_db):
-        """All filters produce all expected AND conditions."""
+        """All filters produce all expected AND conditions (executed_at as unix timestamps)."""
+        from datetime import datetime
+
         where, params = temp_db._build_trades_where(
             symbol="TEST",
             side="BUY",
@@ -629,12 +652,16 @@ class TestBuildTradesWhere:
         assert "AND executed_at <= ?" in where
         assert "TEST" in params
         assert "BUY" in params
-        assert "2024-01-01" in params
+        start_ts = int(datetime.strptime("2024-01-01", "%Y-%m-%d").timestamp())
+        assert start_ts in params
 
     def test_build_trades_where_end_date_appends_time(self, temp_db):
-        """end_date parameter has T23:59:59 appended to include the full day."""
+        """end_date parameter converts to end-of-day unix timestamp."""
+        from datetime import datetime
+
         where, params = temp_db._build_trades_where(end_date="2024-01-15")
-        assert "2024-01-15T23:59:59" in params
+        end_ts = int(datetime.strptime("2024-01-15 23:59:59", "%Y-%m-%d %H:%M:%S").timestamp())
+        assert end_ts in params
 
 
 class TestScores:
@@ -643,9 +670,11 @@ class TestScores:
     @pytest.mark.asyncio
     async def test_get_score_existing(self, temp_db):
         """get_score() returns the score float for an existing symbol."""
+        import time
+
         await temp_db.conn.execute(
-            "INSERT INTO scores (symbol, score, calculated_at) VALUES (?, ?, datetime('now'))",
-            ("TEST", 0.75),
+            "INSERT INTO scores (symbol, score, calculated_at) VALUES (?, ?, ?)",
+            ("TEST", 0.75, int(time.time())),
         )
         await temp_db.conn.commit()
 
@@ -661,16 +690,35 @@ class TestScores:
     @pytest.mark.asyncio
     async def test_get_scores_multiple(self, temp_db):
         """get_scores() returns a dict mapping symbol to score for multiple symbols."""
+        import time
+
+        ts = int(time.time())
         await temp_db.conn.execute(
-            "INSERT INTO scores (symbol, score, calculated_at) VALUES (?, ?, datetime('now'))",
-            ("SYM1", 0.5),
+            "INSERT INTO scores (symbol, score, calculated_at) VALUES (?, ?, ?)",
+            ("SYM1", 0.5, ts),
         )
         await temp_db.conn.execute(
-            "INSERT INTO scores (symbol, score, calculated_at) VALUES (?, ?, datetime('now'))",
-            ("SYM2", 0.8),
+            "INSERT INTO scores (symbol, score, calculated_at) VALUES (?, ?, ?)",
+            ("SYM2", 0.8, ts),
         )
         await temp_db.conn.commit()
 
         result = await temp_db.get_scores(["SYM1", "SYM2"])
         assert result["SYM1"] == 0.5
         assert result["SYM2"] == 0.8
+
+    @pytest.mark.asyncio
+    async def test_get_score_returns_latest_when_multiple_rows(self, temp_db):
+        """get_score() returns the score from the row with latest calculated_at."""
+        await temp_db.conn.execute(
+            "INSERT INTO scores (symbol, score, calculated_at) VALUES (?, ?, ?)",
+            ("LATEST", 0.3, 1000),
+        )
+        await temp_db.conn.execute(
+            "INSERT INTO scores (symbol, score, calculated_at) VALUES (?, ?, ?)",
+            ("LATEST", 0.9, 2000),
+        )
+        await temp_db.conn.commit()
+
+        result = await temp_db.get_score("LATEST")
+        assert result == 0.9
