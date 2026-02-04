@@ -3,7 +3,6 @@
 import json
 import logging
 import time
-from datetime import datetime
 from typing import Dict, Optional
 
 import numpy as np
@@ -188,9 +187,10 @@ class MLPredictor:
     async def _store_prediction(
         self, symbol, features, predicted_return, ml_score, wavelet_score, blend_ratio, final_score, inference_time_ms
     ):
-        """Store prediction in database for tracking."""
+        """Store prediction in database for tracking (predicted_at = unix timestamp)."""
         try:
-            prediction_id = f"{symbol}_{datetime.now().isoformat()}"
+            predicted_at_ts = int(time.time())
+            prediction_id = f"{symbol}_{predicted_at_ts}"
 
             await self.db.conn.execute(
                 """INSERT INTO ml_predictions
@@ -201,7 +201,7 @@ class MLPredictor:
                 (
                     prediction_id,
                     symbol,
-                    datetime.now().isoformat(),
+                    predicted_at_ts,
                     json.dumps(features),
                     predicted_return,
                     ml_score,

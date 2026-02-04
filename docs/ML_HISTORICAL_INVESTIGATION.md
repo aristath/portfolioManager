@@ -25,9 +25,9 @@
 ### 1.3 Current schema: `ml_predictions`
 
 ```text
-prediction_id TEXT PRIMARY KEY,   -- currently: "{symbol}_{datetime.now().isoformat()}"
+prediction_id TEXT PRIMARY KEY,   -- "{symbol}_{unix_ts}"
 symbol TEXT NOT NULL,
-predicted_at TEXT,                -- ISO datetime when prediction was run
+predicted_at INTEGER NOT NULL,   -- Unix timestamp when prediction was run
 features TEXT,                    -- JSON
 predicted_return REAL,
 ml_score REAL,
