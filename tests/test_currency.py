@@ -15,16 +15,16 @@ from sentinel.currency_exchange import CurrencyExchangeService
 def clear_singletons():
     """Clear singleton instances before each test."""
     # Clear Currency singleton
-    if hasattr(Currency, '_clear'):
+    if hasattr(Currency, "_clear"):
         Currency._clear()  # type: ignore
     # Clear CurrencyExchangeService singleton
-    if hasattr(CurrencyExchangeService, '_clear'):
+    if hasattr(CurrencyExchangeService, "_clear"):
         CurrencyExchangeService._clear()  # type: ignore
     yield
     # Clear again after test
-    if hasattr(Currency, '_clear'):
+    if hasattr(Currency, "_clear"):
         Currency._clear()  # type: ignore
-    if hasattr(CurrencyExchangeService, '_clear'):
+    if hasattr(CurrencyExchangeService, "_clear"):
         CurrencyExchangeService._clear()  # type: ignore
 
 
