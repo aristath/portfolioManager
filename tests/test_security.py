@@ -851,7 +851,18 @@ class TestScoring:
         security = Security("AAPL.US", db=db)
         score = await security.get_score()
         assert score == 0.75
-        db.get_score.assert_awaited_once_with("AAPL.US")
+        db.get_score.assert_awaited_once_with("AAPL.US", as_of_date=None)
+
+    @pytest.mark.asyncio
+    async def test_get_score_with_as_of_date_delegates_with_ts(self):
+        """get_score(as_of_date=ts) delegates to db.get_score(symbol, as_of_date=ts)."""
+        db = MagicMock()
+        db.get_score = AsyncMock(return_value=0.6)
+
+        security = Security("AAPL.US", db=db)
+        score = await security.get_score(as_of_date=1700000000)
+        assert score == 0.6
+        db.get_score.assert_awaited_once_with("AAPL.US", as_of_date=1700000000)
 
     @pytest.mark.asyncio
     async def test_get_score_returns_none_when_not_scored(self):

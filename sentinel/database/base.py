@@ -320,27 +320,38 @@ class BaseDatabase:
     # Scores
     # -------------------------------------------------------------------------
 
-    async def get_score(self, symbol: str) -> float | None:
-        """Get the latest score for a single security.
+    async def get_score(self, symbol: str, as_of_date: int | None = None) -> float | None:
+        """Get the latest score for a single security, optionally as of a date.
 
         Args:
             symbol: Security symbol
+            as_of_date: If set (unix timestamp), return score where calculated_at <= as_of_date;
+                otherwise return latest score.
 
         Returns:
             Score value, or None if not found
         """
-        cursor = await self.conn.execute(
-            "SELECT score FROM scores WHERE symbol = ? ORDER BY calculated_at DESC, id DESC LIMIT 1",
-            (symbol,),
-        )
+        if as_of_date is None:
+            cursor = await self.conn.execute(
+                "SELECT score FROM scores WHERE symbol = ? ORDER BY calculated_at DESC, id DESC LIMIT 1",
+                (symbol,),
+            )
+        else:
+            cursor = await self.conn.execute(
+                """SELECT score FROM scores WHERE symbol = ? AND calculated_at <= ?
+                   ORDER BY calculated_at DESC, id DESC LIMIT 1""",
+                (symbol, as_of_date),
+            )
         row = await cursor.fetchone()
         return row["score"] if row else None
 
-    async def get_scores(self, symbols: list[str]) -> dict[str, float]:
-        """Get latest score per symbol for multiple securities.
+    async def get_scores(self, symbols: list[str], as_of_date: int | None = None) -> dict[str, float]:
+        """Get latest score per symbol for multiple securities, optionally as of a date.
 
         Args:
             symbols: List of security symbols
+            as_of_date: If set (unix timestamp), return latest score per symbol where
+                calculated_at <= as_of_date; otherwise return latest per symbol.
 
         Returns:
             Dict mapping symbol to score (only includes symbols that have scores)
@@ -348,20 +359,36 @@ class BaseDatabase:
         if not symbols:
             return {}
         placeholders = ",".join("?" * len(symbols))
-        params = symbols + symbols + symbols
-        cursor = await self.conn.execute(
-            f"""SELECT s.symbol, s.score FROM scores s
-               INNER JOIN (
-                 SELECT symbol, MAX(calculated_at) AS calculated_at FROM scores
-                 WHERE symbol IN ({placeholders}) GROUP BY symbol
-               ) latest ON s.symbol = latest.symbol AND s.calculated_at = latest.calculated_at
-               INNER JOIN (
-                 SELECT symbol, calculated_at, MAX(id) AS id FROM scores
-                 WHERE symbol IN ({placeholders}) GROUP BY symbol, calculated_at
-               ) mid ON s.symbol = mid.symbol AND s.calculated_at = mid.calculated_at AND s.id = mid.id
-               WHERE s.symbol IN ({placeholders})""",  # noqa: S608
-            params,
-        )
+        if as_of_date is None:
+            params = symbols + symbols + symbols
+            cursor = await self.conn.execute(
+                f"""SELECT s.symbol, s.score FROM scores s
+                   INNER JOIN (
+                     SELECT symbol, MAX(calculated_at) AS calculated_at FROM scores
+                     WHERE symbol IN ({placeholders}) GROUP BY symbol
+                   ) latest ON s.symbol = latest.symbol AND s.calculated_at = latest.calculated_at
+                   INNER JOIN (
+                     SELECT symbol, calculated_at, MAX(id) AS id FROM scores
+                     WHERE symbol IN ({placeholders}) GROUP BY symbol, calculated_at
+                   ) mid ON s.symbol = mid.symbol AND s.calculated_at = mid.calculated_at AND s.id = mid.id
+                   WHERE s.symbol IN ({placeholders})""",  # noqa: S608
+                params,
+            )
+        else:
+            params = symbols + [as_of_date] + symbols + [as_of_date] + symbols
+            cursor = await self.conn.execute(
+                f"""SELECT s.symbol, s.score FROM scores s
+                   INNER JOIN (
+                     SELECT symbol, MAX(calculated_at) AS calculated_at FROM scores
+                     WHERE symbol IN ({placeholders}) AND calculated_at <= ? GROUP BY symbol
+                   ) latest ON s.symbol = latest.symbol AND s.calculated_at = latest.calculated_at
+                   INNER JOIN (
+                     SELECT symbol, calculated_at, MAX(id) AS id FROM scores
+                     WHERE symbol IN ({placeholders}) AND calculated_at <= ? GROUP BY symbol, calculated_at
+                   ) mid ON s.symbol = mid.symbol AND s.calculated_at = mid.calculated_at AND s.id = mid.id
+                   WHERE s.symbol IN ({placeholders})""",  # noqa: S608
+                params,
+            )
         rows = await cursor.fetchall()
         return {row["symbol"]: row["score"] for row in rows}
 

@@ -327,9 +327,13 @@ class Security:
     # Scoring
     # -------------------------------------------------------------------------
 
-    async def get_score(self) -> Optional[float]:
-        """Get the calculated score for this security."""
-        return await self._db.get_score(self.symbol)
+    async def get_score(self, as_of_date: int | None = None) -> Optional[float]:
+        """Get the calculated score for this security, optionally as of a date.
+
+        Args:
+            as_of_date: If set (unix timestamp), return score where calculated_at <= as_of_date.
+        """
+        return await self._db.get_score(self.symbol, as_of_date=as_of_date)
 
     async def set_score(self, score: float, components: dict | None = None) -> None:
         """Set the calculated score for this security."""

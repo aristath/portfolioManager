@@ -722,3 +722,62 @@ class TestScores:
 
         result = await temp_db.get_score("LATEST")
         assert result == 0.9
+
+    @pytest.mark.asyncio
+    async def test_get_score_as_of_date_returns_score_at_or_before_ts(self, temp_db):
+        """get_score(symbol, as_of_date=ts) returns score where calculated_at <= ts."""
+        await temp_db.conn.execute(
+            "INSERT INTO scores (symbol, score, calculated_at) VALUES (?, ?, ?)",
+            ("ASOF", 0.2, 100),
+        )
+        await temp_db.conn.execute(
+            "INSERT INTO scores (symbol, score, calculated_at) VALUES (?, ?, ?)",
+            ("ASOF", 0.5, 200),
+        )
+        await temp_db.conn.execute(
+            "INSERT INTO scores (symbol, score, calculated_at) VALUES (?, ?, ?)",
+            ("ASOF", 0.8, 300),
+        )
+        await temp_db.conn.commit()
+
+        assert await temp_db.get_score("ASOF", as_of_date=150) == 0.2
+        assert await temp_db.get_score("ASOF", as_of_date=200) == 0.5
+        assert await temp_db.get_score("ASOF", as_of_date=250) == 0.5
+        assert await temp_db.get_score("ASOF", as_of_date=300) == 0.8
+        assert await temp_db.get_score("ASOF", as_of_date=400) == 0.8
+
+    @pytest.mark.asyncio
+    async def test_get_score_as_of_date_returns_none_when_no_row_before_ts(self, temp_db):
+        """get_score(symbol, as_of_date=ts) returns None when no row has calculated_at <= ts."""
+        await temp_db.conn.execute(
+            "INSERT INTO scores (symbol, score, calculated_at) VALUES (?, ?, ?)",
+            ("ASOF", 0.5, 200),
+        )
+        await temp_db.conn.commit()
+
+        assert await temp_db.get_score("ASOF", as_of_date=100) is None
+
+    @pytest.mark.asyncio
+    async def test_get_scores_as_of_date_returns_latest_per_symbol_at_or_before_ts(self, temp_db):
+        """get_scores(symbols, as_of_date=ts) returns latest score per symbol with calculated_at <= ts."""
+        await temp_db.conn.execute(
+            "INSERT INTO scores (symbol, score, calculated_at) VALUES (?, ?, ?)",
+            ("A", 0.1, 100),
+        )
+        await temp_db.conn.execute(
+            "INSERT INTO scores (symbol, score, calculated_at) VALUES (?, ?, ?)",
+            ("A", 0.2, 200),
+        )
+        await temp_db.conn.execute(
+            "INSERT INTO scores (symbol, score, calculated_at) VALUES (?, ?, ?)",
+            ("B", 0.5, 150),
+        )
+        await temp_db.conn.commit()
+
+        result = await temp_db.get_scores(["A", "B"], as_of_date=175)
+        assert result["A"] == 0.1
+        assert result["B"] == 0.5
+
+        result2 = await temp_db.get_scores(["A", "B"], as_of_date=250)
+        assert result2["A"] == 0.2
+        assert result2["B"] == 0.5
