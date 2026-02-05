@@ -70,12 +70,11 @@ class PortfolioService:
         # Get cash balances
         cash = await self._portfolio.get_cash_balances()
         total_cash_eur = await self._portfolio.total_cash_eur()
-        total_eur = total + total_cash_eur
 
         return {
             "positions": positions,
             "total_value": total,
-            "total_value_eur": total_eur,
+            "total_value_eur": total,
             "cash": cash,
             "total_cash_eur": total_cash_eur,
             "allocations": allocations,

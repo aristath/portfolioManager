@@ -116,17 +116,11 @@ async def get_cashflows(
     # Get portfolio value for total profit calculation
     portfolio_obj = Portfolio()
     total_value = await portfolio_obj.total_value()
-    cash_balances = await portfolio_obj.get_cash_balances()
-
-    # Calculate total cash in EUR
-    total_cash_eur = 0.0
-    for curr, amount in cash_balances.items():
-        total_cash_eur += await deps.currency.to_eur(amount, curr)
 
     net_deposits = deposits_eur - withdrawals_eur
     # Total profit = current value - what we put in (net deposits)
-    # Note: dividends and fees are already reflected in cash balance
-    total_profit = (total_value + total_cash_eur) - net_deposits
+    # Note: dividends and fees are already reflected in portfolio value/cash balance
+    total_profit = total_value - net_deposits
 
     return {
         "deposits": round(deposits_eur, 2),
