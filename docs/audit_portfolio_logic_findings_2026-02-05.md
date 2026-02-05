@@ -14,15 +14,7 @@ Scope: logic flaws and bug risks found during a codebase review, focusing on por
 
 ### A) Accounting / portfolio correctness
 
-1) **Cash double-counting in cashflow endpoint profit calculation**
-   - `Portfolio.total_value()` already includes cash via `total_cash_eur()`.
-   - `/api/cashflows` then adds cash again when computing `total_profit`.
-   - Impact: profit overstated by current cash balance.
-   - Location:
-     - `sentinel/portfolio.py:74-89`
-     - `sentinel/api/routers/trading.py:117-130`
-
-2) **Allocations are calculated as % of (positions + cash)**
+1) **Allocations are calculated as % of (positions + cash)**
    - `PortfolioAnalyzer.get_current_allocations()` divides each position EUR value by `Portfolio.total_value()`.
    - This makes allocations shrink when cash increases, potentially triggering buys even if invested mix is fine.
    - Location: `sentinel/planner/analyzer.py:43-65`, `sentinel/portfolio.py:74-89`
