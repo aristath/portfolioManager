@@ -203,15 +203,11 @@ class TestNeuralNetArchitecture:
         return NeuralNetReturnPredictor()
 
     def test_model_has_correct_layers(self, predictor):
-        """Model has expected layer structure (Linear + BatchNorm + Dropout)."""
+        """Model has expected layer structure."""
         model = predictor.build_model()
-        # NumPy model has 4 linear layers (weights)
-        assert len(model.weights) == 4
-        # Has BatchNorm parameters for first two layers
-        assert hasattr(model, "bn1_gamma")
-        assert hasattr(model, "bn2_gamma")
-        # Has dropout rates
-        assert len(model.dropout_rates) == 5
+        # NumPy model has 2 linear layers (weights)
+        assert len(model.weights) == 2
+        assert len(model.biases) == 2
 
     def test_model_single_output_neuron(self, predictor):
         """Output layer has single neuron for return prediction."""
@@ -220,12 +216,10 @@ class TestNeuralNetArchitecture:
         assert model.weights[-1].shape[1] == 1
 
     def test_model_linear_output_activation(self, predictor):
-        """Output layer uses linear activation for unbounded return prediction."""
-        # NumPy model's final layer has no activation (linear output)
-        # This is verified by the architecture - dims[-1] = 1 with no ReLU
+        """Output layer is bounded for stability."""
         model = predictor.build_model()
-        # Verify the output layer dimensions
         assert model.dims[-1] == 1
+        assert model.max_return > 0
 
     def test_scaler_fit_on_training_data_only(self, predictor):
         """Scaler is fit only on training data, not validation."""

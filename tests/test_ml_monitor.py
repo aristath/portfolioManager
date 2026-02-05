@@ -39,15 +39,14 @@ async def test_track_performance_no_predictions(monitor):
 async def test_get_actual_return(monitor):
     """Test actual return calculation."""
     monitor.db = AsyncMock()
-    monitor.db.conn = AsyncMock()
 
-    # Mock price lookups
-    pred_price_row = {"close": 100.0}
-    future_price_row = {"close": 110.0}
-
-    cursor_mock = AsyncMock()
-    cursor_mock.fetchone = AsyncMock(side_effect=[pred_price_row, future_price_row])
-    monitor.db.conn.execute = AsyncMock(return_value=cursor_mock)
+    # Mock validated price series
+    monitor.db.get_prices = AsyncMock(
+        return_value=[
+            {"date": "2024-01-01", "close": 100.0},
+            {"date": "2024-01-15", "close": 110.0},
+        ]
+    )
 
     result = await monitor._get_actual_return("TEST", "2024-01-01", 14)
 
@@ -144,20 +143,19 @@ async def test_evaluate_symbol(monitor):
     monitor.db = AsyncMock()
     monitor.db.conn = AsyncMock()
 
-    # Mock price lookups for actual return calculation
-    async def mock_execute(query, params=None):
-        cursor = AsyncMock()
-        if "close FROM prices" in query:
-            # Return different prices based on query
-            if "date >=" in query and params:
-                date_str = params[1]
-                if "2024-01-01" in date_str:
-                    cursor.fetchone = AsyncMock(return_value={"close": 100.0})
-                else:
-                    cursor.fetchone = AsyncMock(return_value={"close": 105.0})
-        return cursor
-
-    monitor.db.conn.execute = mock_execute
+    # Mock validated price series
+    monitor.db.get_prices = AsyncMock(
+        side_effect=[
+            [
+                {"date": "2024-01-01", "close": 100.0},
+                {"date": "2024-01-15", "close": 105.0},
+            ],
+            [
+                {"date": "2024-01-02", "close": 100.0},
+                {"date": "2024-01-16", "close": 105.0},
+            ],
+        ]
+    )
 
     predictions = [
         {"symbol": "TEST", "predicted_at": "2024-01-01T12:00:00", "predicted_return": 0.05},

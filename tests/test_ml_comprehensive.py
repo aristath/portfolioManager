@@ -165,27 +165,23 @@ class TestNumpyNeuralNetwork:
         from sentinel.ml_features import NUM_FEATURES
 
         model = NumpyNeuralNetwork()
-        # 4 layers: input->64, 64->32, 32->16, 16->1
-        assert len(model.weights) == 4
-        assert len(model.biases) == 4
-        assert model.weights[0].shape == (NUM_FEATURES, 64)
-        assert model.weights[1].shape == (64, 32)
-        assert model.weights[2].shape == (32, 16)
-        assert model.weights[3].shape == (16, 1)
+        # 2 layers: input->8, 8->1
+        assert len(model.weights) == 2
+        assert len(model.biases) == 2
+        assert model.weights[0].shape == (NUM_FEATURES, 8)
+        assert model.weights[1].shape == (8, 1)
 
     def test_dropout_in_train_mode(self):
-        """Dropout is active in train mode (outputs vary)."""
+        """Dropout is inactive in the tiny model (outputs deterministic)."""
         from sentinel.ml_features import NUM_FEATURES
 
         model = NumpyNeuralNetwork()
         model.training = True
         x = np.random.randn(100, NUM_FEATURES).astype(np.float32)
 
-        # Multiple forward passes should give different results due to dropout
-        outputs = [model.forward(x) for _ in range(10)]
-        stacked = np.stack(outputs)
-        variance = stacked.var(axis=0).mean()
-        assert variance > 0
+        output1 = model.forward(x)
+        output2 = model.forward(x)
+        np.testing.assert_array_almost_equal(output1, output2)
 
     def test_no_dropout_in_eval_mode(self):
         """Dropout is disabled in eval mode (outputs deterministic)."""

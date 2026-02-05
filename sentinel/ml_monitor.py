@@ -7,6 +7,7 @@ from typing import Dict, List, Optional
 import numpy as np
 
 from sentinel.database import Database
+from sentinel.price_validator import PriceValidator
 from sentinel.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -129,43 +130,46 @@ class MLMonitor:
         }
 
     async def _get_actual_return(self, symbol: str, prediction_date: str, horizon_days: int) -> Optional[float]:
-        """Get actual return for a prediction."""
+        """Get actual return for a prediction using validated prices."""
         try:
             pred_dt = datetime.fromisoformat(prediction_date)
         except (ValueError, TypeError) as e:
             logger.debug(f"Invalid prediction date '{prediction_date}': {e}")
             return None
 
-        # Get price at prediction date
-        query_pred = """
-            SELECT close FROM prices
-            WHERE symbol = ? AND date >= ?
-            ORDER BY date ASC LIMIT 1
-        """
-        cursor = await self.db.conn.execute(query_pred, (symbol, pred_dt.strftime("%Y-%m-%d")))
-        pred_price_row = await cursor.fetchone()
-
-        if not pred_price_row:
+        future_dt = pred_dt + timedelta(days=horizon_days)
+        # Fetch enough prices to cover prediction date through future date
+        end_date = (future_dt + timedelta(days=7)).strftime("%Y-%m-%d")
+        prices = await self.db.get_prices(symbol, days=horizon_days + 30, end_date=end_date)
+        if not prices:
             return None
 
-        pred_price = pred_price_row["close"]
+        # Validate prices (DB returns newest-first; validator expects oldest-first)
+        validator = PriceValidator()
+        validated = validator.validate_and_interpolate(list(reversed(prices)))
+        if not validated:
+            return None
+
+        # Build date->close lookup from validated prices
+        price_map = {p["date"]: p["close"] for p in validated}
+
+        # Find closest price on or after prediction date
+        pred_price = None
+        for offset in range(8):
+            d = (pred_dt + timedelta(days=offset)).strftime("%Y-%m-%d")
+            if d in price_map:
+                pred_price = price_map[d]
+                break
         if pred_price is None or pred_price <= 0:
             return None
 
-        # Get price horizon_days later
-        future_dt = pred_dt + timedelta(days=horizon_days)
-        query_future = """
-            SELECT close FROM prices
-            WHERE symbol = ? AND date >= ?
-            ORDER BY date ASC LIMIT 1
-        """
-        cursor = await self.db.conn.execute(query_future, (symbol, future_dt.strftime("%Y-%m-%d")))
-        future_price_row = await cursor.fetchone()
-
-        if not future_price_row:
-            return None
-
-        future_price = future_price_row["close"]
+        # Find closest price on or after future date
+        future_price = None
+        for offset in range(8):
+            d = (future_dt + timedelta(days=offset)).strftime("%Y-%m-%d")
+            if d in price_map:
+                future_price = price_map[d]
+                break
         if future_price is None or future_price <= 0:
             return None
 

@@ -40,31 +40,27 @@ def _compute_regression_metrics(predictions: np.ndarray, labels: np.ndarray) -> 
 
 
 class NumpyNeuralNetwork:
-    """
-    Neural network implemented in pure NumPy.
+    """Neural network implemented in pure NumPy.
 
-    Architecture (matches original PyTorch):
-    - Input: 14 features
-    - Hidden 1: 64 neurons, BatchNorm, ReLU, Dropout(0.3)
-    - Hidden 2: 32 neurons, BatchNorm, ReLU, Dropout(0.2)
-    - Hidden 3: 16 neurons, ReLU, Dropout(0.1)
-    - Output: 1 neuron (predicted return)
+    Architecture (small-data friendly):
+    - Input: NUM_FEATURES
+    - Hidden: 8 neurons, ReLU
+    - Output: 1 neuron (predicted return), bounded via tanh scaling in forward()
+
+    Notes:
+    - No BatchNorm (unstable for tiny per-symbol datasets)
+    - No Dropout (tiny model; regularization handled via early stopping / weight decay if needed)
     """
 
-    def __init__(self, input_dim: int = NUM_FEATURES):
+    def __init__(self, input_dim: int = NUM_FEATURES, max_return: float = 0.3):
         self.input_dim = input_dim
+        self.max_return = float(max_return)
 
         # Layer dimensions
-        self.dims = [input_dim, 64, 32, 16, 1]
-
-        # Dropout rates (0 = no dropout)
-        self.dropout_rates = [0.0, 0.3, 0.2, 0.1, 0.0]
+        self.dims = [input_dim, 8, 1]
 
         # Initialize weights using Xavier initialization
         self._init_weights()
-
-        # BatchNorm parameters for layers 1 and 2
-        self._init_batchnorm()
 
         # Training mode flag
         self.training = True
@@ -84,100 +80,6 @@ class NumpyNeuralNetwork:
             b = np.zeros(fan_out, dtype=np.float32)
             self.weights.append(W)
             self.biases.append(b)
-
-    def _init_batchnorm(self):
-        """Initialize BatchNorm parameters for layers 1 and 2."""
-        # BatchNorm for layer 1 (64 neurons)
-        self.bn1_gamma = np.ones(64, dtype=np.float32)
-        self.bn1_beta = np.zeros(64, dtype=np.float32)
-        self.bn1_running_mean = np.zeros(64, dtype=np.float32)
-        self.bn1_running_var = np.ones(64, dtype=np.float32)
-
-        # BatchNorm for layer 2 (32 neurons)
-        self.bn2_gamma = np.ones(32, dtype=np.float32)
-        self.bn2_beta = np.zeros(32, dtype=np.float32)
-        self.bn2_running_mean = np.zeros(32, dtype=np.float32)
-        self.bn2_running_var = np.ones(32, dtype=np.float32)
-
-        # Momentum for running statistics
-        self.bn_momentum = 0.1
-        self.bn_eps = 1e-5
-
-    def _batchnorm_forward(
-        self,
-        x: np.ndarray,
-        gamma: np.ndarray,
-        beta: np.ndarray,
-        running_mean: np.ndarray,
-        running_var: np.ndarray,
-    ) -> Tuple[np.ndarray, Optional[Dict]]:
-        """
-        BatchNorm forward pass.
-
-        Returns:
-            Tuple of (output, cache for backward pass)
-        """
-        if self.training:
-            # Calculate batch statistics
-            batch_mean = np.mean(x, axis=0)
-            batch_var = np.var(x, axis=0)
-
-            # Update running statistics
-            running_mean[:] = (1 - self.bn_momentum) * running_mean + self.bn_momentum * batch_mean
-            running_var[:] = (1 - self.bn_momentum) * running_var + self.bn_momentum * batch_var
-
-            # Normalize
-            x_norm = (x - batch_mean) / np.sqrt(batch_var + self.bn_eps)
-
-            # Cache for backward pass
-            cache = {
-                "x": x,
-                "x_norm": x_norm,
-                "mean": batch_mean,
-                "var": batch_var,
-                "gamma": gamma,
-            }
-        else:
-            # Use running statistics for inference
-            x_norm = (x - running_mean) / np.sqrt(running_var + self.bn_eps)
-            cache = None
-
-        # Scale and shift
-        out = gamma * x_norm + beta
-        return out, cache
-
-    def _batchnorm_backward(
-        self,
-        dout: np.ndarray,
-        cache: Dict,
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """
-        BatchNorm backward pass.
-
-        Returns:
-            Tuple of (dx, dgamma, dbeta)
-        """
-        x, x_norm, mean, var, gamma = cache["x"], cache["x_norm"], cache["mean"], cache["var"], cache["gamma"]
-        N = x.shape[0]
-
-        # Gradients
-        dgamma = np.sum(dout * x_norm, axis=0)
-        dbeta = np.sum(dout, axis=0)
-
-        # Gradient w.r.t. normalized x
-        dx_norm = dout * gamma
-
-        # Gradient w.r.t. variance
-        std_inv = 1.0 / np.sqrt(var + self.bn_eps)
-        dvar = np.sum(dx_norm * (x - mean) * -0.5 * std_inv**3, axis=0)
-
-        # Gradient w.r.t. mean
-        dmean = np.sum(dx_norm * -std_inv, axis=0) + dvar * np.mean(-2.0 * (x - mean), axis=0)
-
-        # Gradient w.r.t. input
-        dx = dx_norm * std_inv + dvar * 2.0 * (x - mean) / N + dmean / N
-
-        return dx, dgamma, dbeta
 
     def _relu(self, x: np.ndarray) -> np.ndarray:
         """ReLU activation."""
@@ -207,8 +109,7 @@ class NumpyNeuralNetwork:
         return dout
 
     def forward(self, X: np.ndarray) -> np.ndarray:
-        """
-        Forward pass through the network.
+        """Forward pass through the network.
 
         Args:
             X: Input features (batch_size, input_dim)
@@ -216,111 +117,43 @@ class NumpyNeuralNetwork:
         Returns:
             Predictions (batch_size, 1)
         """
-        self.cache = {}  # Store values for backward pass
+        self.cache = {}
 
-        # Layer 1: Linear -> BatchNorm -> ReLU -> Dropout
+        # Hidden: Linear -> ReLU
         z1 = X @ self.weights[0] + self.biases[0]
-        self.cache["z1_pre"] = z1
-        bn1_out, self.cache["bn1"] = self._batchnorm_forward(
-            z1, self.bn1_gamma, self.bn1_beta, self.bn1_running_mean, self.bn1_running_var
-        )
-        a1 = self._relu(bn1_out)
-        self.cache["a1_pre_dropout"] = a1
-        a1, self.cache["dropout1_mask"] = self._dropout(a1, self.dropout_rates[1])
+        self.cache["z1"] = z1
+        a1 = self._relu(z1)
         self.cache["a1"] = a1
 
-        # Layer 2: Linear -> BatchNorm -> ReLU -> Dropout
+        # Output: Linear -> tanh scaling (bounded)
         z2 = a1 @ self.weights[1] + self.biases[1]
-        self.cache["z2_pre"] = z2
-        bn2_out, self.cache["bn2"] = self._batchnorm_forward(
-            z2, self.bn2_gamma, self.bn2_beta, self.bn2_running_mean, self.bn2_running_var
-        )
-        a2 = self._relu(bn2_out)
-        self.cache["a2_pre_dropout"] = a2
-        a2, self.cache["dropout2_mask"] = self._dropout(a2, self.dropout_rates[2])
-        self.cache["a2"] = a2
-
-        # Layer 3: Linear -> ReLU -> Dropout (no BatchNorm)
-        z3 = a2 @ self.weights[2] + self.biases[2]
-        self.cache["z3"] = z3
-        a3 = self._relu(z3)
-        self.cache["a3_pre_dropout"] = a3
-        a3, self.cache["dropout3_mask"] = self._dropout(a3, self.dropout_rates[3])
-        self.cache["a3"] = a3
-
-        # Output layer: Linear (no activation)
-        output = a3 @ self.weights[3] + self.biases[3]
+        self.cache["z2"] = z2
+        output = np.tanh(z2) * self.max_return
+        self.cache["output"] = output
 
         return output
 
     def backward(self, X: np.ndarray, y: np.ndarray, predictions: np.ndarray) -> Dict:
-        """
-        Backward pass to compute gradients.
-
-        Args:
-            X: Input features
-            y: True labels
-            predictions: Model predictions
-
-        Returns:
-            Dictionary of gradients
-        """
+        """Backward pass to compute gradients (MSE loss)."""
         batch_size = X.shape[0]
-        gradients = {}
+        gradients: Dict[str, np.ndarray] = {}
 
-        # Output layer gradient (MSE loss derivative)
+        # dLoss/dOutput
         dout = 2 * (predictions - y.reshape(-1, 1)) / batch_size
 
-        # Layer 4 (output) gradients
-        gradients["W4"] = self.cache["a3"].T @ dout
-        gradients["b4"] = np.sum(dout, axis=0)
-        da3 = dout @ self.weights[3].T
+        # output = tanh(z2) * max_return
+        z2 = self.cache["z2"]
+        dtanh = (1.0 - np.tanh(z2) ** 2).astype(np.float32)
+        dz2 = dout * dtanh * self.max_return
 
-        # Dropout 3 backward
-        da3 = self._dropout_backward(da3, self.cache["dropout3_mask"], self.dropout_rates[3])
-
-        # ReLU 3 backward
-        dz3 = self._relu_backward(da3, self.cache["z3"])
-
-        # Layer 3 gradients
-        gradients["W3"] = self.cache["a2"].T @ dz3
-        gradients["b3"] = np.sum(dz3, axis=0)
-        da2 = dz3 @ self.weights[2].T
-
-        # Dropout 2 backward
-        da2 = self._dropout_backward(da2, self.cache["dropout2_mask"], self.dropout_rates[2])
-
-        # ReLU 2 backward
-        dbn2 = self._relu_backward(da2, self.cache["z2_pre"])
-
-        # BatchNorm 2 backward
-        if self.cache["bn2"] is not None:
-            dz2, gradients["bn2_gamma"], gradients["bn2_beta"] = self._batchnorm_backward(dbn2, self.cache["bn2"])
-        else:
-            dz2 = dbn2
-            gradients["bn2_gamma"] = np.zeros_like(self.bn2_gamma)
-            gradients["bn2_beta"] = np.zeros_like(self.bn2_beta)
-
-        # Layer 2 gradients
+        # Gradients for second (output) layer
         gradients["W2"] = self.cache["a1"].T @ dz2
         gradients["b2"] = np.sum(dz2, axis=0)
+
+        # Backprop to hidden
         da1 = dz2 @ self.weights[1].T
+        dz1 = self._relu_backward(da1, self.cache["z1"])
 
-        # Dropout 1 backward
-        da1 = self._dropout_backward(da1, self.cache["dropout1_mask"], self.dropout_rates[1])
-
-        # ReLU 1 backward
-        dbn1 = self._relu_backward(da1, self.cache["z1_pre"])
-
-        # BatchNorm 1 backward
-        if self.cache["bn1"] is not None:
-            dz1, gradients["bn1_gamma"], gradients["bn1_beta"] = self._batchnorm_backward(dbn1, self.cache["bn1"])
-        else:
-            dz1 = dbn1
-            gradients["bn1_gamma"] = np.zeros_like(self.bn1_gamma)
-            gradients["bn1_beta"] = np.zeros_like(self.bn1_beta)
-
-        # Layer 1 gradients
         gradients["W1"] = X.T @ dz1
         gradients["b1"] = np.sum(dz1, axis=0)
 
@@ -341,18 +174,7 @@ class NumpyNeuralNetwork:
             "b1": self.biases[0],
             "W2": self.weights[1],
             "b2": self.biases[1],
-            "W3": self.weights[2],
-            "b3": self.biases[2],
-            "W4": self.weights[3],
-            "b4": self.biases[3],
-            "bn1_gamma": self.bn1_gamma,
-            "bn1_beta": self.bn1_beta,
-            "bn1_running_mean": self.bn1_running_mean,
-            "bn1_running_var": self.bn1_running_var,
-            "bn2_gamma": self.bn2_gamma,
-            "bn2_beta": self.bn2_beta,
-            "bn2_running_mean": self.bn2_running_mean,
-            "bn2_running_var": self.bn2_running_var,
+            "max_return": np.array([self.max_return], dtype=np.float32),
         }
 
     def set_state(self, state: Dict):
@@ -361,18 +183,8 @@ class NumpyNeuralNetwork:
         self.biases[0] = state["b1"]
         self.weights[1] = state["W2"]
         self.biases[1] = state["b2"]
-        self.weights[2] = state["W3"]
-        self.biases[2] = state["b3"]
-        self.weights[3] = state["W4"]
-        self.biases[3] = state["b4"]
-        self.bn1_gamma = state["bn1_gamma"]
-        self.bn1_beta = state["bn1_beta"]
-        self.bn1_running_mean = state["bn1_running_mean"]
-        self.bn1_running_var = state["bn1_running_var"]
-        self.bn2_gamma = state["bn2_gamma"]
-        self.bn2_beta = state["bn2_beta"]
-        self.bn2_running_mean = state["bn2_running_mean"]
-        self.bn2_running_var = state["bn2_running_var"]
+        if "max_return" in state:
+            self.max_return = float(np.asarray(state["max_return"]).reshape(-1)[0])
 
     def copy_state(self) -> Dict:
         """Create a deep copy of the current state."""
@@ -410,18 +222,14 @@ class NeuralNetReturnPredictor:
         self.model: Optional[NumpyNeuralNetwork] = None
         self.scaler: Optional[StandardScaler] = None
         self.input_dim: int = NUM_FEATURES
+        self.max_return: float = 0.3
 
-    def build_model(self, input_dim: int = NUM_FEATURES) -> NumpyNeuralNetwork:
-        """
-        Build neural network for return prediction.
-
-        Architecture:
-        - Input: 14 features (NUM_FEATURES) - per-security, no cross-security data
-        - Hidden: 64 → 32 → 16 neurons with BatchNorm, ReLU, Dropout
-        - Output: 1 (predicted return %)
-        """
+    def build_model(self, input_dim: int = NUM_FEATURES, max_return: float | None = None) -> NumpyNeuralNetwork:
+        """Build neural network for return prediction."""
         self.input_dim = input_dim
-        self.model = NumpyNeuralNetwork(input_dim=input_dim)
+        if max_return is not None:
+            self.max_return = float(max_return)
+        self.model = NumpyNeuralNetwork(input_dim=input_dim, max_return=self.max_return)
         return self.model
 
     def train(
@@ -456,19 +264,22 @@ class NeuralNetReturnPredictor:
         y_train = y_train.astype(np.float32)
         y_val = y_val.astype(np.float32)
 
+        max_return = float(np.nanpercentile(np.abs(y_train), 99)) if len(y_train) > 0 else 0.3
+        max_return = float(np.clip(max_return, 0.05, 0.5))
+
         # Build model if not exists
         if self.model is None:
-            self.build_model(input_dim=X_train.shape[1])
+            self.build_model(input_dim=X_train.shape[1], max_return=max_return)
+        else:
+            self.max_return = max_return
+            self.model.max_return = max_return
 
         # Assert model is built
         assert self.model is not None
 
-        # Check minimum samples for BatchNorm
         n_train = len(X_train_scaled)
         if n_train < 2:
-            raise ValueError(
-                f"Training requires at least 2 samples, got {n_train}. BatchNorm cannot operate on single samples."
-            )
+            raise ValueError(f"Training requires at least 2 samples, got {n_train}.")
 
         # Adam optimizer state
         adam_state = self._init_adam()
@@ -550,7 +361,7 @@ class NeuralNetReturnPredictor:
             "m": {},  # First moment
             "v": {},  # Second moment
         }
-        param_names = ["W1", "b1", "W2", "b2", "W3", "b3", "W4", "b4", "bn1_gamma", "bn1_beta", "bn2_gamma", "bn2_beta"]
+        param_names = ["W1", "b1", "W2", "b2"]
         for name in param_names:
             state["m"][name] = 0
             state["v"][name] = 0
@@ -574,10 +385,6 @@ class NeuralNetReturnPredictor:
             "b1": (self.model.biases, 0),
             "W2": (self.model.weights, 1),
             "b2": (self.model.biases, 1),
-            "W3": (self.model.weights, 2),
-            "b3": (self.model.biases, 2),
-            "W4": (self.model.weights, 3),
-            "b4": (self.model.biases, 3),
         }
 
         # Update weights and biases
@@ -589,23 +396,6 @@ class NeuralNetReturnPredictor:
                 m_hat = state["m"][name] / (1 - beta1**t)
                 v_hat = state["v"][name] / (1 - beta2**t)
                 container[idx] -= lr * m_hat / (np.sqrt(v_hat) + eps)
-
-        # Update BatchNorm parameters
-        bn_params = [
-            ("bn1_gamma", "bn1_gamma"),
-            ("bn1_beta", "bn1_beta"),
-            ("bn2_gamma", "bn2_gamma"),
-            ("bn2_beta", "bn2_beta"),
-        ]
-        for grad_name, attr_name in bn_params:
-            if grad_name in gradients:
-                g = gradients[grad_name]
-                state["m"][grad_name] = beta1 * state["m"][grad_name] + (1 - beta1) * g
-                state["v"][grad_name] = beta2 * state["v"][grad_name] + (1 - beta2) * (g**2)
-                m_hat = state["m"][grad_name] / (1 - beta1**t)
-                v_hat = state["v"][grad_name] / (1 - beta2**t)
-                current = getattr(self.model, attr_name)
-                setattr(self.model, attr_name, current - lr * m_hat / (np.sqrt(v_hat) + eps))
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         """
@@ -641,7 +431,8 @@ class NeuralNetReturnPredictor:
         metadata = {
             "model_type": "numpy_neural_network",
             "input_dim": self.input_dim,
-            "architecture": [self.input_dim, 64, 32, 16, 1],
+            "architecture": [self.input_dim, 8, 1],
+            "max_return": float(self.max_return),
         }
         with open(save_path / "nn_metadata.json", "w") as f:
             json.dump(metadata, f, indent=2)
@@ -678,8 +469,10 @@ class NeuralNetReturnPredictor:
                 "Delete the old model files and retrain with the new feature set."
             )
 
+        self.max_return = float(metadata.get("max_return", 0.3))
+
         # Rebuild model with correct input dim
-        self.build_model(input_dim=self.input_dim)
+        self.build_model(input_dim=self.input_dim, max_return=self.max_return)
         assert self.model is not None
 
         # Load model state from NumPy archive
