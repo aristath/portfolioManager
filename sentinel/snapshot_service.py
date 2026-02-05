@@ -8,6 +8,7 @@ Usage:
 
 import bisect
 import logging
+import time
 from collections import defaultdict
 from datetime import date as date_type
 from datetime import datetime, timedelta
@@ -16,6 +17,22 @@ from sentinel.database import Database
 from sentinel.price_validator import PriceValidator
 
 logger = logging.getLogger(__name__)
+
+
+def _format_progress(start_ts: float, current_idx: int, total: int, date_str: str, now_ts: float | None = None) -> str:
+    now = time.monotonic() if now_ts is None else now_ts
+    elapsed = max(0.0, now - start_ts)
+    pct = (current_idx / total * 100.0) if total else 0.0
+    if elapsed > 0 and current_idx > 0:
+        rate = current_idx / elapsed
+        remaining = (total - current_idx) / rate if rate > 0 else 0.0
+    else:
+        rate = 0.0
+        remaining = 0.0
+    return (
+        f"Progress {current_idx}/{total} ({pct:.1f}%) date={date_str} "
+        f"elapsed={elapsed:.1f}s eta={remaining:.1f}s rate={rate:.2f}/s"
+    )
 
 
 class SnapshotService:
@@ -38,14 +55,20 @@ class SnapshotService:
         """
         from sentinel.broker import Broker
 
+        start_ts = time.monotonic()
         logger.info("Backfilling portfolio snapshots...")
 
-        # Get all trades ordered by date
         trades = await self._db.get_trades(limit=10000)
         cash_flows = await self._db.get_cash_flows()
         if not trades and not cash_flows:
             logger.info("No trades or cash flows found, skipping backfill")
             return
+        logger.info(
+            "Loaded %s trades and %s cash flows in %.2fs",
+            len(trades),
+            len(cash_flows),
+            time.monotonic() - start_ts,
+        )
 
         # Deduplicate trades by broker_trade_id
         seen_ids = set()
@@ -56,6 +79,7 @@ class SnapshotService:
                 seen_ids.add(trade_id)
                 unique_trades.append(trade)
         trades = unique_trades
+        logger.info("Deduplicated trades: %s", len(trades))
 
         # Sort trades and cash flows by date
         trades_sorted = sorted(trades, key=lambda t: t["executed_at"])
@@ -72,6 +96,7 @@ class SnapshotService:
             return
 
         first_activity_date = min(d for d in [first_trade_date, first_cf_date] if d)
+        logger.info("First activity date: %s", first_activity_date)
 
         # Filter out FX pairs and options for position tracking - only keep actual stock positions
         def is_stock_symbol(symbol: str) -> bool:
@@ -91,12 +116,10 @@ class SnapshotService:
         symbols = list(set(t["symbol"] for t in stock_trades))
         logger.info(f"Symbols to process: {len(symbols)}")
 
-        # Check which symbols are missing price data
         all_prices_raw = await self._db.get_prices_bulk(symbols)
         missing_symbols = [s for s in symbols if not all_prices_raw.get(s)]
-
-        # Fetch missing historical prices from broker
         if missing_symbols:
+            logger.info("Missing price history for %s symbols", len(missing_symbols))
             logger.info(f"Fetching historical prices for {len(missing_symbols)} symbols: {missing_symbols}")
             broker = Broker()
             fetched_prices = await broker.get_historical_prices_bulk(missing_symbols, years=3)
@@ -105,6 +128,8 @@ class SnapshotService:
                     await self._db.save_prices(symbol, prices)
                     all_prices_raw[symbol] = prices
                     logger.info(f"  Fetched {len(prices)} prices for {symbol}")
+        else:
+            logger.info("All price histories found locally (%s symbols)", len(symbols))
 
         # Validate prices using PriceValidator
         price_lookup: dict[str, dict[str, float]] = {}
@@ -112,9 +137,14 @@ class SnapshotService:
             if not raw_prices:
                 price_lookup[symbol] = {}
                 continue
-            # Prices come from DB newest-first, validator expects oldest-first
             validated = self._validator.validate_and_interpolate(list(reversed(raw_prices)))
             price_lookup[symbol] = {p["date"]: p["close"] for p in validated}
+
+        logger.info(
+            "Validated price history for %s symbols in %.2fs",
+            len(price_lookup),
+            time.monotonic() - start_ts,
+        )
 
         # Get securities for currency info
         securities = await self._db.get_all_securities(active_only=False)
@@ -142,6 +172,7 @@ class SnapshotService:
         while current <= end_date:
             all_dates.append(current.isoformat())
             current += timedelta(days=1)
+        logger.info("Date range: %s → %s (%s days)", start_date.isoformat(), end_date.isoformat(), len(all_dates))
 
         # Prefetch historical FX rates for all dates and currencies
         currencies_needed = list(set(sec_currency_map.values()))
@@ -150,7 +181,9 @@ class SnapshotService:
         currencies_needed = list(set(currencies_needed + cf_currencies))
 
         logger.info(f"Prefetching FX rates for {len(all_dates)} dates, currencies: {currencies_needed}")
+        fx_start = time.monotonic()
         await self._currency.prefetch_rates_for_dates(currencies_needed, all_dates)
+        logger.info("FX prefetch complete in %.2fs", time.monotonic() - fx_start)
 
         # Pre-fetch wavelet scores and ML predictions for weighted-average computation
         raw_scores = await self._db.get_all_scores_history()
@@ -166,7 +199,12 @@ class SnapshotService:
                 ml_by_symbol[row["symbol"]].append((row["predicted_at"], row["predicted_return"]))
 
         logger.info(
-            f"Pre-fetched scores for {len(scores_by_symbol)} symbols, ML predictions for {len(ml_by_symbol)} symbols"
+            "Loaded %s score rows for %s symbols, %s ML rows for %s symbols in %.2fs",
+            len(raw_scores),
+            len(scores_by_symbol),
+            len(raw_ml),
+            len(ml_by_symbol),
+            time.monotonic() - start_ts,
         )
 
         # Running state
@@ -179,11 +217,14 @@ class SnapshotService:
         last_trade_idx = 0
         last_cf_idx = 0
 
-        # Process each date
         total_dates = len(all_dates)
+        progress_every = max(1, total_dates // 50)
+        if total_dates > 10 and progress_every < 5:
+            progress_every = 5
+        logger.info("Starting daily backfill for %s days", total_dates)
         for i, date_str in enumerate(all_dates):
-            if i % 100 == 0:
-                logger.info(f"Processing date {i + 1}/{total_dates}: {date_str}")
+            if i == 0 or (i + 1) % progress_every == 0 or i + 1 == total_dates:
+                logger.info(_format_progress(start_ts, i + 1, total_dates, date_str))
 
             # 1. Update cash flows up to this date
             while last_cf_idx < len(cash_flows_sorted):
@@ -332,4 +373,4 @@ class SnapshotService:
                 avg_ml_score=avg_ml,
             )
 
-        logger.info("Portfolio snapshots backfill complete")
+        logger.info("Portfolio snapshots backfill complete in %.2fs", time.monotonic() - start_ts)

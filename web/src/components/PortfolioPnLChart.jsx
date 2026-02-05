@@ -114,7 +114,7 @@ export function PortfolioPnLChart({
     const allValues = [0, targetReturn];
     snapshots.forEach((s) => {
       if (s.actual_ann_return != null) allValues.push(s.actual_ann_return);
-      if (s.wavelet_ann_return != null) allValues.push(s.wavelet_ann_return);
+      if (s.wavelet_ann_return != null) allValues.push(s.wavelet_ann_return * 100);
       if (s.ml_ann_return != null) allValues.push(s.ml_ann_return);
     });
 
@@ -170,7 +170,7 @@ export function PortfolioPnLChart({
     const mlPoints = [];
     snapshots.forEach((s, i) => {
       if (s.wavelet_ann_return != null) {
-        waveletPoints.push({ x: scaleX(i), y: scaleY(s.wavelet_ann_return) });
+        waveletPoints.push({ x: scaleX(i), y: scaleY(s.wavelet_ann_return * 100) });
       }
       if (s.ml_ann_return != null) {
         mlPoints.push({ x: scaleX(i), y: scaleY(s.ml_ann_return) });
