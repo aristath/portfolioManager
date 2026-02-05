@@ -76,6 +76,24 @@ class PortfolioAnalyzer:
 
         return allocations
 
+    async def get_invested_value_eur(self, as_of_date: str | None = None) -> float:
+        positions = await self._portfolio.positions()
+
+        invested_total_eur = 0.0
+        for pos in positions:
+            quantity = pos.get("quantity", 0)
+            price = pos.get("current_price", 0)
+            pos_currency = pos.get("currency", "EUR")
+
+            if quantity <= 0 or price <= 0:
+                continue
+
+            value_local = quantity * price
+            rate = await self._currency.get_rate(pos_currency)
+            invested_total_eur += value_local * rate
+
+        return invested_total_eur
+
     async def get_rebalance_summary(self) -> dict:
         """Get summary of portfolio alignment with ideal allocations.
 
