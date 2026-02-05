@@ -202,6 +202,7 @@ class RebalanceEngine:
                 security_data,
                 expected_returns,
                 min_trade_value,
+                as_of_date=as_of_date,
             )
             if rec:
                 recommendations.append(rec)
@@ -309,6 +310,7 @@ class RebalanceEngine:
         security_data: dict,
         expected_returns: dict[str, float],
         min_trade_value: float,
+        as_of_date: str | None = None,
     ) -> TradeRecommendation | None:
         """Build a single trade recommendation for a symbol."""
         current_alloc = current.get(symbol, 0)
@@ -339,7 +341,12 @@ class RebalanceEngine:
 
         # Check cool-off period
         cooloff_days = await self._settings.get("trade_cooloff_days", 30)
-        is_blocked, _ = await self._check_cooloff_violation(symbol, "buy" if delta > 0 else "sell", cooloff_days)
+        is_blocked, _ = await self._check_cooloff_violation(
+            symbol,
+            "buy" if delta > 0 else "sell",
+            cooloff_days,
+            as_of_date=as_of_date,
+        )
         if is_blocked:
             return None
 
@@ -406,7 +413,13 @@ class RebalanceEngine:
             reason=reason,
         )
 
-    async def _check_cooloff_violation(self, symbol: str, action: str, cooloff_days: int) -> tuple[bool, str]:
+    async def _check_cooloff_violation(
+        self,
+        symbol: str,
+        action: str,
+        cooloff_days: int,
+        as_of_date: str | None = None,
+    ) -> tuple[bool, str]:
         """Check if trade would violate cool-off period.
 
         Returns:
@@ -426,7 +439,12 @@ class RebalanceEngine:
         last_trade = trades[0]
         last_action = last_trade["side"]  # 'BUY' or 'SELL'
         last_date = datetime.fromtimestamp(last_trade["executed_at"])
-        current_date = datetime.now()
+
+        if as_of_date is not None:
+            current_date = datetime.strptime(as_of_date, "%Y-%m-%d")
+        else:
+            current_date = datetime.now()
+
         days_since = (current_date - last_date).days
 
         # Check if action is opposite of last trade
