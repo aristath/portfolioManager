@@ -41,12 +41,10 @@ class PortfolioAnalyzer:
             return json.loads(cached)
 
         positions = await self._portfolio.positions()
-        total_value = await self._portfolio.total_value()
-
-        if total_value <= 0:
-            return {}
 
         allocations = {}
+        invested_total_eur = 0.0
+
         for pos in positions:
             symbol = pos["symbol"]
             quantity = pos.get("quantity", 0)
@@ -61,7 +59,13 @@ class PortfolioAnalyzer:
             rate = await self._currency.get_rate(pos_currency)
             value_eur = value_local * rate
 
-            allocations[symbol] = value_eur / total_value
+            allocations[symbol] = value_eur
+            invested_total_eur += value_eur
+
+        if invested_total_eur <= 0:
+            return {}
+
+        allocations = {symbol: value_eur / invested_total_eur for symbol, value_eur in allocations.items()}
 
         # Cache for 5 minutes
         await self._db.cache_set(
