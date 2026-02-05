@@ -521,6 +521,18 @@ class RebalanceEngine:
         if not buys:
             return recommendations
 
+        # If cash is insufficient, try to add explicit funding sells before scaling buys down.
+        funding_sells = await self._get_funding_sells(
+            buys=buys,
+            already_sells=sells,
+            fixed_fee=fixed_fee,
+            pct_fee=pct_fee,
+        )
+        if funding_sells:
+            funding_symbols = {s.symbol for s in funding_sells}
+            sells = [s for s in sells if s.symbol not in funding_symbols]
+            sells = funding_sells + sells
+
         # Calculate available budget
         current_cash = await self._portfolio.total_cash_eur()
         net_sell_proceeds = sum(
@@ -535,7 +547,7 @@ class RebalanceEngine:
         )
 
         if total_buy_costs <= available_budget:
-            return recommendations
+            return sells + buys
 
         # Scale down buys
         buys_by_priority = sorted(buys, key=lambda x: -x.priority)
@@ -707,6 +719,31 @@ class RebalanceEngine:
     def _calculate_transaction_cost(self, value: float, fixed_fee: float, pct_fee: float) -> float:
         """Calculate transaction cost for a trade."""
         return fixed_fee + (value * pct_fee)
+
+    async def _get_funding_sells(
+        self,
+        buys: list[TradeRecommendation],
+        already_sells: list[TradeRecommendation],
+        fixed_fee: float,
+        pct_fee: float,
+    ) -> list[TradeRecommendation]:
+        current_cash = await self._portfolio.total_cash_eur()
+
+        net_sell_proceeds = sum(
+            abs(r.value_delta_eur) - self._calculate_transaction_cost(abs(r.value_delta_eur), fixed_fee, pct_fee)
+            for r in already_sells
+        )
+        available_budget = current_cash + net_sell_proceeds
+
+        total_buy_costs = sum(
+            r.value_delta_eur + self._calculate_transaction_cost(r.value_delta_eur, fixed_fee, pct_fee) for r in buys
+        )
+
+        if total_buy_costs <= available_budget:
+            return []
+
+        needed = total_buy_costs - available_budget
+        return await self._generate_deficit_sells(needed)
 
     async def _get_deficit_sells(self, as_of_date: str | None = None) -> list[TradeRecommendation]:
         """Generate sell recommendations if negative balances can't be covered."""

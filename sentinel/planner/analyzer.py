@@ -36,15 +36,13 @@ class PortfolioAnalyzer:
             dict: symbol -> allocation percentage (0-1)
         """
         # Check cache first (5 minute TTL)
-        cached = await self._db.cache_get("planner:current_allocations")
+        cached = await self._db.cache_get("planner:current_allocations:invested_only")
         if cached is not None:
             return json.loads(cached)
 
         positions = await self._portfolio.positions()
 
-        allocations = {}
-        invested_total_eur = 0.0
-
+        position_values_eur = {}
         for pos in positions:
             symbol = pos["symbol"]
             quantity = pos.get("quantity", 0)
@@ -59,17 +57,17 @@ class PortfolioAnalyzer:
             rate = await self._currency.get_rate(pos_currency)
             value_eur = value_local * rate
 
-            allocations[symbol] = value_eur
-            invested_total_eur += value_eur
+            position_values_eur[symbol] = value_eur
 
-        if invested_total_eur <= 0:
+        invested_value_eur = sum(position_values_eur.values())
+        if invested_value_eur <= 0:
             return {}
 
-        allocations = {symbol: value_eur / invested_total_eur for symbol, value_eur in allocations.items()}
+        allocations = {symbol: value_eur / invested_value_eur for symbol, value_eur in position_values_eur.items()}
 
         # Cache for 5 minutes
         await self._db.cache_set(
-            "planner:current_allocations",
+            "planner:current_allocations:invested_only",
             json.dumps(allocations),
             ttl_seconds=300,
         )
