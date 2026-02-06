@@ -4,7 +4,7 @@
  * Single page showing all securities as cards with full information.
  * Includes global controls for timeframe, filtering, and sorting.
  */
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Stack,
@@ -29,9 +29,10 @@ import { AllocationRadarCard } from '../components/AllocationRadarCard';
 import { JobsCard } from '../components/JobsCard';
 import { MarketsOpenCard } from '../components/MarketsOpenCard';
 import { PortfolioPnLChart } from '../components/PortfolioPnLChart';
+import { PortfolioWeightControls } from '../components/PortfolioWeightControls';
 import LoadingState from '../components/LoadingState';
 import ErrorState from '../components/ErrorState';
-import { getUnifiedView, getSecurities, updateSecurity, addSecurity, deleteSecurity, getPortfolio, getRecommendations, getCashFlows, getPortfolioPnLHistory, getSettings, updateSetting, getMLPortfolioOverlays } from '../api/client';
+import { getUnifiedView, getSecurities, updateSecurity, addSecurity, deleteSecurity, getPortfolio, getRecommendations, getCashFlows, getPortfolioPnLHistory, getSettings, updateSetting, getMLPortfolioOverlays, updateSettingsBatch } from '../api/client';
 
 import { formatEur, formatCurrencySymbol } from '../utils/formatting';
 import './UnifiedPage.css';
@@ -64,6 +65,36 @@ const SORTS = [
   { value: 'symbol', label: 'Symbol (A-Z)' },
 ];
 
+const DEFAULT_PREDICTION_WEIGHTS = {
+  wavelet: 0.25,
+  xgboost: 0.25,
+  ridge: 0.25,
+  rf: 0.25,
+  svr: 0.25,
+};
+
+function getWeightsFromSettings(settings) {
+  return {
+    wavelet: Number(settings?.ml_weight_wavelet ?? DEFAULT_PREDICTION_WEIGHTS.wavelet),
+    xgboost: Number(settings?.ml_weight_xgboost ?? DEFAULT_PREDICTION_WEIGHTS.xgboost),
+    ridge: Number(settings?.ml_weight_ridge ?? DEFAULT_PREDICTION_WEIGHTS.ridge),
+    rf: Number(settings?.ml_weight_rf ?? DEFAULT_PREDICTION_WEIGHTS.rf),
+    svr: Number(settings?.ml_weight_svr ?? DEFAULT_PREDICTION_WEIGHTS.svr),
+  };
+}
+
+function weightsEqual(a, b) {
+  if (!a || !b) return false;
+  const isClose = (x, y) => Math.abs(Number(x) - Number(y)) < 1e-9;
+  return (
+    isClose(a.wavelet, b.wavelet) &&
+    isClose(a.xgboost, b.xgboost) &&
+    isClose(a.ridge, b.ridge) &&
+    isClose(a.rf, b.rf) &&
+    isClose(a.svr, b.svr)
+  );
+}
+
 function UnifiedPage() {
   const [period, setPeriod] = useState('1Y');
   const [filter, setFilter] = useState('all');
@@ -72,6 +103,10 @@ function UnifiedPage() {
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [securityToDelete, setSecurityToDelete] = useState(null);
+  const [weightsOpen, setWeightsOpen] = useState(false);
+  const [weightsDraft, setWeightsDraft] = useState(DEFAULT_PREDICTION_WEIGHTS);
+  const [weightsBaseline, setWeightsBaseline] = useState(DEFAULT_PREDICTION_WEIGHTS);
+  const [weightsSaveError, setWeightsSaveError] = useState('');
 
   const queryClient = useQueryClient();
 
@@ -154,6 +189,17 @@ function UnifiedPage() {
   const [editingCash, setEditingCash] = useState(false);
   const [cashValue, setCashValue] = useState('');
 
+  const weightsDirty = !weightsEqual(weightsDraft, weightsBaseline);
+
+  useEffect(() => {
+    if (!settings) return;
+    const loaded = getWeightsFromSettings(settings);
+    setWeightsBaseline(loaded);
+    if (!weightsDirty) {
+      setWeightsDraft(loaded);
+    }
+  }, [settings, weightsDirty]);
+
   const cashMutation = useMutation({
     mutationFn: (value) => updateSetting('simulated_cash_eur', value),
     onSuccess: () => {
@@ -191,6 +237,25 @@ function UnifiedPage() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['unified'] });
+    },
+  });
+
+  const weightsMutation = useMutation({
+    mutationFn: (weights) =>
+      updateSettingsBatch({
+        ml_weight_wavelet: weights.wavelet,
+        ml_weight_xgboost: weights.xgboost,
+        ml_weight_ridge: weights.ridge,
+        ml_weight_rf: weights.rf,
+        ml_weight_svr: weights.svr,
+      }),
+    onSuccess: (_, variables) => {
+      setWeightsBaseline(variables);
+      setWeightsSaveError('');
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+    },
+    onError: (err) => {
+      setWeightsSaveError(err?.message || 'Failed to save prediction weights');
     },
   });
 
@@ -244,6 +309,22 @@ function UnifiedPage() {
 
   const handleDelete = async (symbol, sellPosition) => {
     await deleteMutation.mutateAsync({ symbol, sellPosition });
+  };
+
+  const handleWeightChange = (key, value) => {
+    setWeightsSaveError('');
+    const clamped = Math.max(0, Math.min(1, Number(value)));
+    const rounded = Math.round(clamped * 100) / 100;
+    setWeightsDraft((prev) => ({ ...prev, [key]: rounded }));
+  };
+
+  const handleSaveWeights = async () => {
+    await weightsMutation.mutateAsync(weightsDraft);
+  };
+
+  const handleResetWeights = () => {
+    setWeightsSaveError('');
+    setWeightsDraft(weightsBaseline);
   };
 
   // Filter and sort securities
@@ -504,8 +585,22 @@ function UnifiedPage() {
               snapshots={mergedPnlSnapshots}
               summary={pnlData?.summary}
               height={300}
+              weightsDraft={weightsDraft}
+              showCombined
             />
           </Card>
+
+          <PortfolioWeightControls
+            opened={weightsOpen}
+            onToggle={() => setWeightsOpen((open) => !open)}
+            draftWeights={weightsDraft}
+            baselineWeights={weightsBaseline}
+            onWeightChange={handleWeightChange}
+            onSave={handleSaveWeights}
+            onReset={handleResetWeights}
+            isSaving={weightsMutation.isPending}
+            error={weightsSaveError}
+          />
 
           {/* Global Controls */}
           <Card shadow="sm" padding="md" withBorder className="unified__controls">

@@ -185,6 +185,19 @@ export const updateSetting = (key, value) =>
     method: 'PUT',
     body: JSON.stringify({ value }),
   });
+export const updateSettingsBatch = (values) =>
+  request('/settings', {
+    method: 'PUT',
+    body: JSON.stringify({ values }),
+  }).catch(async (error) => {
+    // Backward-compatible fallback when batch endpoint is not available yet.
+    if (!String(error?.message || '').includes('405')) {
+      throw error;
+    }
+    const entries = Object.entries(values);
+    await Promise.all(entries.map(([key, value]) => updateSetting(key, value)));
+    return { status: 'ok' };
+  });
 
 // Unified view
 export const getUnifiedView = (period = '1Y') => request(`/unified?period=${period}`);

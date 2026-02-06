@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { catppuccin } from '../theme';
 import { buildSmoothPath } from '../utils/chartUtils';
+import { computeCombinedPoint, normalizeWeights } from '../utils/mlWeights';
 import { useResponsiveWidth } from '../hooks/useResponsiveWidth';
 
 const ML_LINES = [
@@ -16,6 +17,25 @@ const ML_LINES = [
   { key: 'ml_rf', label: 'RF', color: catppuccin.mauve },
   { key: 'ml_svr', label: 'SVR', color: catppuccin.teal },
 ];
+const SMOOTH_WINDOWS = { '1D': 1, '1W': 7, '2W': 14 };
+const SMOOTH_OPTIONS = ['1D', '1W', '2W'];
+
+function smoothSeries(values, windowSize) {
+  if (windowSize <= 1) return values;
+
+  return values.map((_, i) => {
+    const start = Math.max(0, i - windowSize + 1);
+    let sum = 0;
+    let count = 0;
+    for (let j = start; j <= i; j += 1) {
+      const value = values[j];
+      if (value == null || Number.isNaN(value)) continue;
+      sum += value;
+      count += 1;
+    }
+    return count > 0 ? sum / count : null;
+  });
+}
 
 /**
  * Renders the portfolio annualized return chart
@@ -29,13 +49,20 @@ export function PortfolioPnLChart({
   snapshots = [],
   summary = null,
   height = 300,
+  weightsDraft = null,
+  showCombined = true,
 }) {
   const [containerRef, width] = useResponsiveWidth(300);
+  const [showActual, setShowActual] = useState(true);
+  const [showWavelet, setShowWavelet] = useState(false);
+  const [showTarget, setShowTarget] = useState(false);
+  const [showCombinedLine, setShowCombinedLine] = useState(false);
+  const [smoothWindow, setSmoothWindow] = useState('1D');
   const [visibleML, setVisibleML] = useState({
-    ml_xgboost: true,
-    ml_ridge: true,
-    ml_rf: true,
-    ml_svr: true,
+    ml_xgboost: false,
+    ml_ridge: false,
+    ml_rf: false,
+    ml_svr: false,
   });
 
   const toggleML = (key) => {
@@ -71,24 +98,75 @@ export function PortfolioPnLChart({
         flexWrap: 'wrap',
       }}
     >
-      {/* Static legend items */}
-      {[
-        { color: catppuccin.green, label: 'Actual' },
-        { color: catppuccin.blue, label: 'Wavelet' },
-      ].map(({ color, label }) => (
-        <span key={label} style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-          <span
-            style={{
-              width: '6px',
-              height: '6px',
-              borderRadius: '50%',
-              backgroundColor: color,
-              display: 'inline-block',
-            }}
-          />
-          {label}
-        </span>
-      ))}
+      <span
+        onClick={() => setShowActual((prev) => !prev)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '3px',
+          cursor: 'pointer',
+          opacity: showActual ? 1 : 0.35,
+          userSelect: 'none',
+        }}
+      >
+        <span
+          style={{
+            width: '6px',
+            height: '6px',
+            borderRadius: '50%',
+            backgroundColor: catppuccin.green,
+            display: 'inline-block',
+          }}
+        />
+        Actual
+      </span>
+
+      <span
+        onClick={() => setShowCombinedLine((prev) => !prev)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '3px',
+          cursor: showCombined ? 'pointer' : 'not-allowed',
+          opacity: showCombinedLine && showCombined ? 1 : 0.35,
+          userSelect: 'none',
+        }}
+      >
+        <span
+          style={{
+            width: '6px',
+            height: '6px',
+            borderRadius: '50%',
+            backgroundColor: catppuccin.lavender,
+            display: 'inline-block',
+          }}
+        />
+        Combined
+      </span>
+
+      {/* Toggleable wavelet legend item */}
+      <span
+        onClick={() => setShowWavelet((prev) => !prev)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '3px',
+          cursor: 'pointer',
+          opacity: showWavelet ? 1 : 0.35,
+          userSelect: 'none',
+        }}
+      >
+        <span
+          style={{
+            width: '6px',
+            height: '6px',
+            borderRadius: '50%',
+            backgroundColor: catppuccin.blue,
+            display: 'inline-block',
+          }}
+        />
+        Wavelet
+      </span>
 
       {/* Toggleable ML legend items */}
       {ML_LINES.map(({ key, label, color }) => (
@@ -118,12 +196,38 @@ export function PortfolioPnLChart({
       ))}
 
       {/* Target (dashed) */}
-      <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+      <span
+        onClick={() => setShowTarget((prev) => !prev)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '3px',
+          cursor: 'pointer',
+          opacity: showTarget ? 1 : 0.35,
+          userSelect: 'none',
+        }}
+      >
         <svg width="10" height="10">
           <line x1="0" y1="5" x2="10" y2="5" stroke={catppuccin.overlay0} strokeWidth="1.5" strokeDasharray="2,2" />
         </svg>
         Target
       </span>
+
+      <span style={{ opacity: 0.8 }}>Smooth:</span>
+      {SMOOTH_OPTIONS.map((option) => (
+        <span
+          key={option}
+          onClick={() => setSmoothWindow(option)}
+          style={{
+            cursor: 'pointer',
+            opacity: smoothWindow === option ? 1 : 0.5,
+            textDecoration: smoothWindow === option ? 'underline' : 'none',
+            userSelect: 'none',
+          }}
+        >
+          {option}
+        </span>
+      ))}
     </div>
   );
 
@@ -153,15 +257,48 @@ export function PortfolioPnLChart({
     if (chartWidth <= 0 || chartHeight <= 0) return null;
 
     const targetReturn = summary?.target_ann_return ?? 11.0;
+    const normalizedWeights = normalizeWeights(weightsDraft);
+    const smoothDays = SMOOTH_WINDOWS[smoothWindow] || 1;
+    const combinedEnabled = showCombined && showCombinedLine;
+
+    const actualSeries = smoothSeries(
+      snapshots.map((s) => (s.actual_ann_return != null ? Number(s.actual_ann_return) : null)),
+      smoothDays
+    );
+    const waveletSeries = smoothSeries(
+      snapshots.map((s) => (s.wavelet_ann_return != null ? Number(s.wavelet_ann_return) : null)),
+      smoothDays
+    );
+    const combinedSeries = smoothSeries(
+      snapshots.map((point, i) => {
+        if (!combinedEnabled || !normalizedWeights) return null;
+        return computeCombinedPoint(point, snapshots[i - 14], normalizedWeights);
+      }),
+      smoothDays
+    );
+    const mlSeriesByKey = {};
+    ML_LINES.forEach(({ key }) => {
+      mlSeriesByKey[key] = smoothSeries(
+        snapshots.map((s) => (s[key] != null ? Number(s[key]) : null)),
+        smoothDays
+      );
+    });
 
     // Primary Y-axis: return % (actual, ML models, target)
-    const allValues = [0, targetReturn];
-    snapshots.forEach((s) => {
-      if (s.actual_ann_return != null) allValues.push(s.actual_ann_return);
+    const allValues = [0];
+    if (showTarget) allValues.push(targetReturn);
+    snapshots.forEach((_, i) => {
+      if (showActual && actualSeries[i] != null) allValues.push(actualSeries[i]);
       ML_LINES.forEach(({ key }) => {
-        if (visibleML[key] && s[key] != null) allValues.push(s[key]);
+        const value = mlSeriesByKey[key]?.[i];
+        if (visibleML[key] && value != null) allValues.push(value);
       });
     });
+    if (combinedEnabled) {
+      snapshots.forEach((_, i) => {
+        if (combinedSeries[i] != null) allValues.push(combinedSeries[i]);
+      });
+    }
 
     const rawMin = Math.min(...allValues);
     const rawMax = Math.max(...allValues);
@@ -181,11 +318,14 @@ export function PortfolioPnLChart({
 
     // Build actual return points with area fill (green/red split at zero)
     const actualPoints = [];
-    snapshots.forEach((s, i) => {
-      if (s.actual_ann_return != null) {
-        actualPoints.push({ x: scaleX(i), y: scaleY(s.actual_ann_return), value: s.actual_ann_return });
-      }
-    });
+    if (showActual) {
+      snapshots.forEach((_, i) => {
+        const value = actualSeries[i];
+        if (value != null) {
+          actualPoints.push({ x: scaleX(i), y: scaleY(value), value });
+        }
+      });
+    }
 
     // Split actual points into positive/negative segments at zero crossings
     const segments = [];
@@ -215,25 +355,38 @@ export function PortfolioPnLChart({
 
     // Build wavelet line points
     const waveletPoints = [];
-    snapshots.forEach((s, i) => {
-      if (s.wavelet_ann_return != null) {
-        waveletPoints.push({ x: scaleX(i), y: scaleYWavelet(s.wavelet_ann_return) });
+    snapshots.forEach((_, i) => {
+      const value = waveletSeries[i];
+      if (value != null) {
+        waveletPoints.push({ x: scaleX(i), y: scaleYWavelet(value) });
       }
     });
-    const waveletPath = buildSmoothPath(waveletPoints);
+    const waveletPath = showWavelet ? buildSmoothPath(waveletPoints) : null;
 
     // Build per-model ML line points
     const mlPaths = {};
     ML_LINES.forEach(({ key }) => {
       if (!visibleML[key]) return;
       const points = [];
-      snapshots.forEach((s, i) => {
-        if (s[key] != null) {
-          points.push({ x: scaleX(i), y: scaleY(s[key]) });
+      snapshots.forEach((_, i) => {
+        const value = mlSeriesByKey[key]?.[i];
+        if (value != null) {
+          points.push({ x: scaleX(i), y: scaleY(value) });
         }
       });
       mlPaths[key] = buildSmoothPath(points);
     });
+
+    const combinedPoints = [];
+    if (combinedEnabled) {
+      snapshots.forEach((_, i) => {
+        const value = combinedSeries[i];
+        if (value != null) {
+          combinedPoints.push({ x: scaleX(i), y: scaleY(value) });
+        }
+      });
+    }
+    const combinedPath = buildSmoothPath(combinedPoints);
 
     // Current actual value for the dot
     const lastActual = actualPoints.length > 0 ? actualPoints[actualPoints.length - 1] : null;
@@ -267,19 +420,23 @@ export function PortfolioPnLChart({
         </text>
 
         {/* Target line */}
-        <line
-          x1={padding.left}
-          y1={targetY}
-          x2={width - padding.right}
-          y2={targetY}
-          stroke={catppuccin.overlay0}
-          strokeWidth={1}
-          strokeDasharray="4,4"
-          opacity={0.6}
-        />
-        <text x={width - padding.right + 5} y={targetY + 4} fill={catppuccin.subtext0} fontSize="10">
-          {formatPct(targetReturn)}
-        </text>
+        {showTarget && (
+          <>
+            <line
+              x1={padding.left}
+              y1={targetY}
+              x2={width - padding.right}
+              y2={targetY}
+              stroke={catppuccin.overlay0}
+              strokeWidth={1}
+              strokeDasharray="4,4"
+              opacity={0.6}
+            />
+            <text x={width - padding.right + 5} y={targetY + 4} fill={catppuccin.subtext0} fontSize="10">
+              {formatPct(targetReturn)}
+            </text>
+          </>
+        )}
 
         {/* Actual: area fills */}
         {segments.map((seg, idx) => {
@@ -344,6 +501,19 @@ export function PortfolioPnLChart({
             />
           );
         })}
+
+        {/* Combined weighted line */}
+        {combinedPath && (
+          <path
+            d={combinedPath}
+            fill="none"
+            stroke={catppuccin.lavender}
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            opacity={0.9}
+          />
+        )}
 
         {/* Current value dot */}
         {lastActual && (
