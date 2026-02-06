@@ -634,64 +634,35 @@ class BaseDatabase:
             days: If specified, only return snapshots from the last N days
 
         Returns:
-            List of snapshot dicts ordered by date (oldest first)
+            List of dicts with 'date' (int) and 'data' (dict) keys, oldest first
         """
-        if days:
-            query = """
-                SELECT * FROM portfolio_snapshots
-                WHERE date >= date('now', ? || ' days')
-                ORDER BY date ASC
-            """
-            cursor = await self.conn.execute(query, (f"-{days}",))
-        else:
-            query = "SELECT * FROM portfolio_snapshots ORDER BY date ASC"
-            cursor = await self.conn.execute(query)
-        rows = await cursor.fetchall()
-        return [dict(row) for row in rows]
+        import json
+        import time
 
-    async def upsert_portfolio_snapshot(
-        self,
-        date: str,
-        total_value_eur: float,
-        positions_value_eur: float | None = None,
-        cash_eur: float | None = None,
-        net_deposits_eur: float | None = None,
-        unrealized_pnl_eur: float | None = None,
-        avg_wavelet_score: float | None = None,
-        avg_ml_score: float | None = None,
-    ) -> None:
+        if days:
+            cutoff = int(time.time()) - days * 86400
+            cursor = await self.conn.execute(
+                "SELECT date, data FROM portfolio_snapshots WHERE date >= ? ORDER BY date ASC",
+                (cutoff,),
+            )
+        else:
+            cursor = await self.conn.execute("SELECT date, data FROM portfolio_snapshots ORDER BY date ASC")
+        rows = await cursor.fetchall()
+        return [{"date": row["date"], "data": json.loads(row["data"])} for row in rows]
+
+    async def upsert_portfolio_snapshot(self, date: int, data: dict) -> None:
         """
-        Insert or update a portfolio snapshot for a given date.
+        Insert or replace a portfolio snapshot.
 
         Args:
-            date: Date in YYYY-MM-DD format
-            total_value_eur: Total portfolio value in EUR
-            positions_value_eur: Value of positions only
-            cash_eur: Cash balance in EUR
-            net_deposits_eur: Net deposits (deposits - withdrawals)
-            unrealized_pnl_eur: Unrealized P&L (total_value - net_deposits)
-            avg_wavelet_score: Position-value-weighted average wavelet score
-            avg_ml_score: Position-value-weighted average ML score
+            date: Unix timestamp (midnight UTC)
+            data: Dict with 'positions' and 'cash_eur' keys
         """
-        from datetime import datetime
+        import json
 
         await self.conn.execute(
-            """INSERT OR REPLACE INTO portfolio_snapshots
-               (date, total_value_eur, positions_value_eur, cash_eur,
-                net_deposits_eur, unrealized_pnl_eur,
-                avg_wavelet_score, avg_ml_score, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                date,
-                total_value_eur,
-                positions_value_eur,
-                cash_eur,
-                net_deposits_eur,
-                unrealized_pnl_eur,
-                avg_wavelet_score,
-                avg_ml_score,
-                datetime.now().isoformat(),
-            ),
+            "INSERT OR REPLACE INTO portfolio_snapshots (date, data) VALUES (?, ?)",
+            (date, json.dumps(data)),
         )
         await self.conn.commit()
 
@@ -706,23 +677,12 @@ class BaseDatabase:
         )
         return [dict(row) for row in await cursor.fetchall()]
 
-    async def get_all_ml_predictions_history(self) -> list[dict]:
-        """Get all ML predictions ordered by symbol and date.
-
-        Returns:
-            List of {symbol, predicted_return, predicted_at} dicts
-        """
-        cursor = await self.conn.execute(
-            "SELECT symbol, predicted_return, predicted_at FROM ml_predictions ORDER BY symbol, predicted_at"
-        )
-        return [dict(row) for row in await cursor.fetchall()]
-
-    async def get_latest_snapshot_date(self) -> str | None:
+    async def get_latest_snapshot_date(self) -> int | None:
         """
         Get the date of the most recent portfolio snapshot.
 
         Returns:
-            Date string (YYYY-MM-DD) or None if no snapshots exist
+            Unix timestamp (int) or None if no snapshots exist
         """
         cursor = await self.conn.execute("SELECT date FROM portfolio_snapshots ORDER BY date DESC LIMIT 1")
         row = await cursor.fetchone()

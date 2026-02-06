@@ -9,6 +9,7 @@ from fastapi.responses import StreamingResponse
 from typing_extensions import Annotated
 
 from sentinel.api.dependencies import CommonDependencies, get_common_deps
+from sentinel.database.ml import MODEL_TYPES
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ml", tags=["ml"])
@@ -26,34 +27,28 @@ async def get_ml_status(
     enabled_row = await cursor.fetchone()
     securities_ml_enabled = enabled_row["count"] if enabled_row else 0
 
-    # Count symbols with trained models
-    cursor = await deps.db.conn.execute("SELECT COUNT(*) as count FROM ml_models")
-    total_models_row = await cursor.fetchone()
-    symbols_with_models = total_models_row["count"] if total_models_row else 0
-
-    # Count total training samples
-    cursor = await deps.db.conn.execute("SELECT COUNT(*) as count FROM ml_training_samples")
+    # Count total training samples (from ml_db)
+    cursor = await deps.ml_db.conn.execute("SELECT COUNT(*) as count FROM ml_training_samples")
     total_samples_row = await cursor.fetchone()
     total_samples = total_samples_row["count"] if total_samples_row else 0
 
-    # Get aggregate metrics across all models
-    cursor = await deps.db.conn.execute(
-        """SELECT AVG(validation_rmse) as avg_rmse,
-                  AVG(validation_mae) as avg_mae,
-                  AVG(validation_r2) as avg_r2,
-                  SUM(training_samples) as total_trained_samples
-           FROM ml_models"""
-    )
-    metrics_row = await cursor.fetchone()
+    # Get per-model status from ml_db
+    all_model_status = await deps.ml_db.get_all_model_status()
 
-    aggregate_metrics = None
-    if metrics_row and metrics_row["avg_rmse"] is not None:
-        aggregate_metrics = {
-            "avg_validation_rmse": metrics_row["avg_rmse"],
-            "avg_validation_mae": metrics_row["avg_mae"],
-            "avg_validation_r2": metrics_row["avg_r2"],
-            "total_trained_samples": metrics_row["total_trained_samples"],
-        }
+    # Aggregate: count unique symbols with models across all types
+    symbols_with_models = set()
+    per_model_metrics = {}
+    for mt in MODEL_TYPES:
+        models = all_model_status.get(mt, [])
+        for m in models:
+            symbols_with_models.add(m["symbol"])
+        if models:
+            per_model_metrics[mt] = {
+                "symbols": len(models),
+                "avg_validation_rmse": sum(m["validation_rmse"] or 0 for m in models) / len(models),
+                "avg_validation_mae": sum(m["validation_mae"] or 0 for m in models) / len(models),
+                "avg_validation_r2": sum(m["validation_r2"] or 0 for m in models) / len(models),
+            }
 
     # Get list of ML-enabled securities with their settings
     cursor = await deps.db.conn.execute(
@@ -64,9 +59,9 @@ async def get_ml_status(
 
     return {
         "securities_ml_enabled": securities_ml_enabled,
-        "symbols_with_models": symbols_with_models,
+        "symbols_with_models": len(symbols_with_models),
         "total_training_samples": total_samples,
-        "aggregate_metrics": aggregate_metrics,
+        "per_model_metrics": per_model_metrics,
         "ml_securities": [{"symbol": row["symbol"], "blend_ratio": row["ml_blend_ratio"]} for row in ml_securities],
     }
 
@@ -160,29 +155,9 @@ async def get_ml_performance(
 async def list_ml_models(
     deps: Annotated[CommonDependencies, Depends(get_common_deps)],
 ) -> dict:
-    """List all per-symbol ML models."""
-    query = """
-        SELECT symbol, training_samples, validation_rmse,
-               validation_mae, validation_r2, last_trained_at
-        FROM ml_models
-        ORDER BY last_trained_at DESC
-    """
-    cursor = await deps.db.conn.execute(query)
-    models = await cursor.fetchall()
-
-    return {
-        "models": [
-            {
-                "symbol": m["symbol"],
-                "training_samples": m["training_samples"],
-                "validation_rmse": m["validation_rmse"],
-                "validation_mae": m["validation_mae"],
-                "validation_r2": m["validation_r2"],
-                "last_trained_at": m["last_trained_at"],
-            }
-            for m in models
-        ]
-    }
+    """List all per-symbol ML models grouped by model type."""
+    all_status = await deps.ml_db.get_all_model_status()
+    return {"models": all_status}
 
 
 @router.get("/models/{symbol}")
@@ -190,32 +165,35 @@ async def get_ml_model(
     symbol: str,
     deps: Annotated[CommonDependencies, Depends(get_common_deps)],
 ) -> dict:
-    """Get ML model details for a specific symbol."""
+    """Get ML model details for a specific symbol across all model types."""
     from sentinel.ml_ensemble import EnsembleBlender
 
-    # Get model record
-    cursor = await deps.db.conn.execute("SELECT * FROM ml_models WHERE symbol = ?", (symbol,))
-    model_row = await cursor.fetchone()
+    # Get per-model records from ml_db
+    per_model = {}
+    found_any = False
+    for mt in MODEL_TYPES:
+        status_rows = await deps.ml_db.get_model_status(mt)
+        row = next((r for r in status_rows if r["symbol"] == symbol), None)
+        if row is not None:
+            per_model[mt] = row
+            found_any = True
+        else:
+            per_model[mt] = None
 
-    if not model_row:
+    if not found_any:
         return {"error": f"No model found for {symbol}"}
 
     # Check if model files exist
     model_exists = EnsembleBlender.model_exists(symbol)
 
-    # Get sample count for this symbol
-    cursor = await deps.db.conn.execute("SELECT COUNT(*) as count FROM ml_training_samples WHERE symbol = ?", (symbol,))
-    sample_row = await cursor.fetchone()
+    # Get sample count from ml_db
+    sample_count = await deps.ml_db.get_sample_count(symbol)
 
     return {
-        "symbol": model_row["symbol"],
-        "training_samples": model_row["training_samples"],
-        "validation_rmse": model_row["validation_rmse"],
-        "validation_mae": model_row["validation_mae"],
-        "validation_r2": model_row["validation_r2"],
-        "last_trained_at": model_row["last_trained_at"],
+        "symbol": symbol,
+        "per_model": per_model,
         "model_files_exist": model_exists,
-        "available_samples": sample_row["count"] if sample_row else 0,
+        "available_samples": sample_count,
     }
 
 
@@ -263,8 +241,10 @@ async def train_symbol_stream(symbol: str) -> StreamingResponse:
                 yield f"data: {json.dumps({'error': err_msg})}\n\n"
                 return
 
-            # Step 4: Train model
-            evt = json.dumps({"step": 4, "total": 5, "message": "Training neural network + XGBoost...", "progress": 60})
+            # Step 4: Train models
+            evt = json.dumps(
+                {"step": 4, "total": 5, "message": "Training XGBoost + Ridge + RF + SVR...", "progress": 60}
+            )
             yield f"data: {evt}\n\n"
             retrainer = MLRetrainer()
             metrics = await retrainer.retrain_symbol(symbol)
@@ -279,7 +259,14 @@ async def train_symbol_stream(symbol: str) -> StreamingResponse:
 
             # Step 5: Done
             evt = json.dumps(
-                {"step": 5, "total": 5, "message": "Model saved", "progress": 100, "complete": True, "metrics": metrics}
+                {
+                    "step": 5,
+                    "total": 5,
+                    "message": "Models saved",
+                    "progress": 100,
+                    "complete": True,
+                    "metrics": metrics,
+                }
             )
             yield f"data: {evt}\n\n"
 
@@ -306,19 +293,8 @@ async def delete_training_data(
 
     from sentinel.paths import DATA_DIR
 
-    # Delete training samples
-    await deps.db.conn.execute("DELETE FROM ml_training_samples WHERE symbol = ?", (symbol,))
-
-    # Delete predictions
-    await deps.db.conn.execute("DELETE FROM ml_predictions WHERE symbol = ?", (symbol,))
-
-    # Delete model record
-    await deps.db.conn.execute("DELETE FROM ml_models WHERE symbol = ?", (symbol,))
-
-    # Delete performance tracking
-    await deps.db.conn.execute("DELETE FROM ml_performance_tracking WHERE symbol = ?", (symbol,))
-
-    await deps.db.conn.commit()
+    # Delete all ML data for symbol from ml_db (all 13 tables)
+    await deps.ml_db.delete_symbol_data(symbol)
 
     # Delete model files
     model_path = DATA_DIR / "ml_models" / symbol
@@ -336,14 +312,15 @@ async def get_training_status(
     """Get ML training status for a symbol."""
     from sentinel.ml_ensemble import EnsembleBlender
 
-    # Get sample count
-    cursor = await deps.db.conn.execute("SELECT COUNT(*) as count FROM ml_training_samples WHERE symbol = ?", (symbol,))
-    row = await cursor.fetchone()
-    sample_count = row["count"] if row else 0
+    # Get sample count from ml_db
+    sample_count = await deps.ml_db.get_sample_count(symbol)
 
-    # Get model info
-    cursor = await deps.db.conn.execute("SELECT * FROM ml_models WHERE symbol = ?", (symbol,))
-    model_row = await cursor.fetchone()
+    # Get per-model info from ml_db
+    per_model = {}
+    for mt in MODEL_TYPES:
+        status_rows = await deps.ml_db.get_model_status(mt)
+        row = next((r for r in status_rows if r["symbol"] == symbol), None)
+        per_model[mt] = row
 
     # Check if model files exist
     model_exists = EnsembleBlender.model_exists(symbol)
@@ -352,7 +329,7 @@ async def get_training_status(
         "symbol": symbol,
         "sample_count": sample_count,
         "model_exists": model_exists,
-        "model_info": dict(model_row) if model_row else None,
+        "per_model": per_model,
     }
 
 

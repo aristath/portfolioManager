@@ -1,88 +1,41 @@
-"""Train initial ML models - one per symbol."""
+"""Train initial ML models — 4 models per symbol (XGBoost, Ridge, RF, SVR)."""
 
 import asyncio
 import sys
-from datetime import datetime
 from pathlib import Path
 
-import numpy as np
-import pandas as pd
-
-# Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sentinel.database import Database
+from sentinel.database.ml import MODEL_TYPES, MLDatabase
 from sentinel.ml_ensemble import EnsembleBlender
-from sentinel.ml_features import DEFAULT_FEATURES, FEATURE_NAMES
 from sentinel.settings import Settings
-
-
-async def load_training_data_for_symbol(db, symbol: str):
-    """Load training data for a specific symbol."""
-    query = """
-        SELECT * FROM ml_training_samples
-        WHERE symbol = ? AND future_return IS NOT NULL
-        ORDER BY sample_date DESC
-    """
-    cursor = await db.conn.execute(query, (symbol,))
-    rows = await cursor.fetchall()
-
-    if not rows:
-        return None, None
-
-    df = pd.DataFrame([dict(row) for row in rows])
-
-    # Fill missing/NaN values with defaults from FEATURE_NAMES
-    for col in FEATURE_NAMES:
-        if col not in df.columns:
-            default_val = DEFAULT_FEATURES.get(col, 0.0)
-            df[col] = default_val
-        else:
-            default_val = DEFAULT_FEATURES.get(col, 0.0)
-            df[col] = df[col].fillna(default_val)
-
-    X = df[FEATURE_NAMES].values.astype(np.float32)
-    y = df["future_return"].values.astype(np.float32)
-
-    # Remove invalid rows
-    valid_mask = np.all(np.isfinite(X), axis=1) & np.isfinite(y)
-    X = X[valid_mask]
-    y = y[valid_mask]
-
-    return X, y
 
 
 async def main():
     print("=" * 70)
-    print("Per-Symbol ML Model Training")
+    print("Per-Symbol ML Model Training (XGBoost + Ridge + RF + SVR)")
     print("=" * 70)
 
     db = Database()
     await db.connect()
+    ml_db = MLDatabase()
+    await ml_db.connect()
     settings = Settings()
 
     # Get minimum samples requirement
     min_samples = await settings.get("ml_min_samples_per_symbol", 100)
     print(f"\nMinimum samples per symbol: {min_samples}")
 
-    # Get symbols with sufficient data
-    query = """
-        SELECT symbol, COUNT(*) as sample_count
-        FROM ml_training_samples
-        WHERE future_return IS NOT NULL
-        GROUP BY symbol
-        HAVING sample_count >= ?
-        ORDER BY sample_count DESC
-    """
-    cursor = await db.conn.execute(query, (min_samples,))
-    rows = await cursor.fetchall()
+    # Get symbols with sufficient data from ml_db
+    symbols_data = await ml_db.get_symbols_with_sufficient_data(min_samples)
 
-    if not rows:
+    if not symbols_data:
         print("\nERROR: No symbols with sufficient training samples!")
         print("Please run generate_ml_training_data.py first.")
         return
 
-    symbols = [(row["symbol"], row["sample_count"]) for row in rows]
+    symbols = list(symbols_data.items())
     print(f"\nFound {len(symbols)} symbols with sufficient data:")
     for symbol, count in symbols[:10]:
         print(f"  {symbol}: {count} samples")
@@ -100,9 +53,9 @@ async def main():
     for i, (symbol, sample_count) in enumerate(symbols):
         print(f"\n[{i + 1}/{len(symbols)}] {symbol} ({sample_count} samples)")
 
-        X, y = await load_training_data_for_symbol(db, symbol)
+        X, y = await ml_db.load_training_data(symbol)
 
-        if X is None or len(X) == 0:
+        if len(X) == 0:
             print("  SKIP: No valid training data")
             failed += 1
             continue
@@ -111,33 +64,31 @@ async def main():
         print(f"  Return stats: mean={y.mean():.4f}, std={y.std():.4f}")
 
         try:
-            # Train ensemble
-            ensemble = EnsembleBlender(nn_weight=0.5, xgb_weight=0.5)
+            # Train ensemble (4 models)
+            ensemble = EnsembleBlender()
             metrics = ensemble.train(X, y, validation_split=0.2)
 
-            # Save model
+            # Save model files
             ensemble.save(symbol)
 
-            print(f"  NN:  MAE={metrics['nn_metrics']['val_mae']:.4f}, R²={metrics['nn_metrics']['val_r2']:.4f}")
-            print(f"  XGB: MAE={metrics['xgb_metrics']['val_mae']:.4f}, R²={metrics['xgb_metrics']['val_r2']:.4f}")
-            print(f"  Ensemble: RMSE={metrics['ensemble_val_rmse']:.4f}, R²={metrics['ensemble_val_r2']:.4f}")
+            # Print per-model metrics
+            for mt in MODEL_TYPES:
+                mt_metrics = metrics.get(f"{mt}_metrics", {})
+                mae = mt_metrics.get("val_mae", 0)
+                r2 = mt_metrics.get("val_r2", 0)
+                print(f"  {mt:8s}: MAE={mae:.4f}, R²={r2:.4f}")
 
-            # Register in database
-            await db.conn.execute(
-                """INSERT OR REPLACE INTO ml_models
-                   (symbol, training_samples, validation_rmse, validation_mae,
-                    validation_r2, last_trained_at)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (
-                    symbol,
-                    len(X),
-                    metrics["ensemble_val_rmse"],
-                    metrics["ensemble_val_mae"],
-                    metrics["ensemble_val_r2"],
-                    datetime.now().isoformat(),
-                ),
-            )
-            await db.conn.commit()
+                # Register in ml_db
+                await ml_db.update_model_record(
+                    model_type=mt,
+                    symbol=symbol,
+                    training_samples=len(X),
+                    metrics={
+                        "validation_rmse": mt_metrics.get("val_rmse", 0),
+                        "validation_mae": mae,
+                        "validation_r2": r2,
+                    },
+                )
 
             trained += 1
 
@@ -154,13 +105,13 @@ async def main():
     print("\nModels saved to: data/ml_models/<symbol>/")
 
     # Show summary
-    cursor = await db.conn.execute("SELECT COUNT(*) as count FROM ml_models")
-    row = await cursor.fetchone()
-    print(f"Total models in database: {row['count']}")
+    all_status = await ml_db.get_all_model_status()
+    for mt in MODEL_TYPES:
+        count = len(all_status.get(mt, []))
+        print(f"  {mt}: {count} models")
 
-    print("\nTo enable ML predictions, set:")
-    print("  ml_enabled = True")
-    print("  ml_wavelet_blend_ratio = 0.3  (or desired ratio)")
+    await ml_db.close()
+    await db.close()
 
 
 if __name__ == "__main__":

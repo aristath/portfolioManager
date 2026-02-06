@@ -102,12 +102,12 @@ class Planner:
         ideal = await self.calculate_ideal_portfolio()
         current = await self.get_current_allocations()
 
-        invested_value_eur = await self._portfolio_analyzer.get_invested_value_eur(as_of_date=as_of_date)
+        total_value = await self._portfolio.total_value()
 
         return await self._rebalance_engine.get_recommendations(
             ideal=ideal,
             current=current,
-            total_value=invested_value_eur,
+            total_value=total_value,
             min_trade_value=min_trade_value,
             as_of_date=as_of_date,
         )

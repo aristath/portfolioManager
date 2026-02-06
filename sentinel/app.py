@@ -47,6 +47,7 @@ from sentinel.broker import Broker
 from sentinel.cache import Cache
 from sentinel.currency import Currency
 from sentinel.database import Database
+from sentinel.database.ml import MLDatabase
 from sentinel.jobs import init as init_jobs
 from sentinel.jobs import stop as stop_jobs
 from sentinel.jobs.market import BrokerMarketChecker
@@ -70,6 +71,9 @@ async def lifespan(app: FastAPI):
     # Startup
     db = Database()
     await db.connect()
+
+    ml_db = MLDatabase()
+    await ml_db.connect()
 
     settings = Settings()
     await settings.init_defaults()
@@ -147,6 +151,7 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
 
+    await ml_db.close()
     await db.close()
 
 

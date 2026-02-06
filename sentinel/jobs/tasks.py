@@ -610,21 +610,24 @@ async def ml_monitor(db, monitor) -> None:
 
     for sec in securities:
         symbol = sec["symbol"]
-        result = await monitor.track_symbol_performance(symbol)
+        per_model = await monitor.track_symbol_performance(symbol)
 
-        if result and result.get("predictions_evaluated", 0) > 0:
-            logger.info(
-                f"ML performance for {symbol}: "
-                f"MAE={result.get('mean_absolute_error', 0):.4f}, "
-                f"RMSE={result.get('root_mean_squared_error', 0):.4f}, "
-                f"N={result['predictions_evaluated']}"
-            )
-
-            if result.get("drift_detected"):
-                logger.warning(f"ML DRIFT DETECTED for {symbol}!")
-            monitored += 1
-        else:
+        if not per_model:
             logger.info(f"ML monitoring for {symbol}: no predictions to evaluate")
+            continue
+
+        for mt, metrics in per_model.items():
+            if metrics.get("predictions_evaluated", 0) > 0:
+                logger.info(
+                    f"ML performance for {symbol}/{mt}: "
+                    f"MAE={metrics.get('mean_absolute_error', 0):.4f}, "
+                    f"RMSE={metrics.get('root_mean_squared_error', 0):.4f}, "
+                    f"N={metrics['predictions_evaluated']}"
+                )
+                if metrics.get("drift_detected"):
+                    logger.warning(f"ML DRIFT DETECTED for {symbol}/{mt}!")
+
+        monitored += 1
 
     logger.info(f"ML monitoring complete: {monitored} securities evaluated")
 

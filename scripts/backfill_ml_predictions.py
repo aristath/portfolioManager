@@ -1,11 +1,11 @@
 """
-Resumable backfill of historical ML predictions.
+Resumable backfill of historical ML predictions (per-model).
 
 For each (date, symbol) with a trained model and ml_enabled: computes features and
-wavelet score as of that date, runs the current ML model with historical regime from
-OHLCV, and inserts one row into ml_predictions with predicted_at = end-of-day T.
-Uses current model on historical features (no retraining). Resumable: skips existing
-(symbol, predicted_at).
+wavelet score as of that date, runs the current ML models with historical regime from
+OHLCV, and inserts rows into per-model ml_predictions tables.
+Uses current models on historical features (no retraining). Resumable: skips existing
+(symbol, predicted_at) in any model's table.
 
 Run from repo root with venv active:
 
@@ -23,6 +23,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sentinel import Database
+from sentinel.database.ml import MLDatabase
 from sentinel.ml_ensemble import EnsembleBlender
 from sentinel.ml_features import FeatureExtractor
 from sentinel.ml_predictor import MLPredictor
@@ -48,6 +49,9 @@ def end_of_day_utc_ts(date_str: str) -> int:
 async def main() -> None:
     db = Database()
     await db.connect()
+    ml_db = MLDatabase()
+    await ml_db.connect()
+
     try:
         # Date range from prices
         cursor = await db.conn.execute("SELECT MIN(date) AS min_date, MAX(date) AS max_date FROM prices")
@@ -76,7 +80,7 @@ async def main() -> None:
 
         logger.info("Symbols with ML enabled and model: %d", len(symbols_with_ml))
 
-        predictor = MLPredictor(db=db)
+        predictor = MLPredictor(db=db, ml_db=ml_db)
         feature_extractor = FeatureExtractor(db=db)
         price_validator = PriceValidator()
 
@@ -91,9 +95,9 @@ async def main() -> None:
 
             for symbol in symbols_with_ml:
                 try:
-                    # Resumability
-                    cursor = await db.conn.execute(
-                        "SELECT 1 FROM ml_predictions WHERE symbol = ? AND predicted_at = ?",
+                    # Resumability: check if prediction exists in first model type
+                    cursor = await ml_db.conn.execute(
+                        "SELECT 1 FROM ml_predictions_xgboost WHERE symbol = ? AND predicted_at = ?",
                         (symbol, predicted_at_ts),
                     )
                     if await cursor.fetchone():
@@ -158,13 +162,13 @@ async def main() -> None:
                 except Exception as e:
                     logger.warning("  %s @ %s: %s", symbol, date_str, e)
 
-            await db.conn.commit()
             if current.day == 1 or (current - current.replace(day=1)).days < 2:
                 logger.info("  Date %s: inserted=%d (total), skipped=%d", date_str, total_inserted, total_skipped)
             current = datetime.fromordinal(current.toordinal() + 1).date()
 
         logger.info("Done. Total inserted=%d, skipped (already exist)=%d", total_inserted, total_skipped)
     finally:
+        await ml_db.close()
         await db.close()
 
 

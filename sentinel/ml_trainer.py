@@ -9,7 +9,8 @@ import pandas as pd
 
 from sentinel.analyzer import Analyzer
 from sentinel.database import Database
-from sentinel.ml_features import FEATURE_NAMES, FeatureExtractor
+from sentinel.database.ml import MLDatabase
+from sentinel.ml_features import FeatureExtractor
 from sentinel.price_validator import PriceValidator
 from sentinel.settings import Settings
 
@@ -19,8 +20,9 @@ logger = logging.getLogger(__name__)
 class TrainingDataGenerator:
     """Generate ML training data from historical price data."""
 
-    def __init__(self, db=None, settings=None):
+    def __init__(self, db=None, ml_db=None, settings=None):
         self.db = db or Database()
+        self.ml_db = ml_db or MLDatabase()
         self.feature_extractor = FeatureExtractor(db=self.db)
         self.settings = settings or Settings()
         self.analyzer = Analyzer(db=self.db)
@@ -55,6 +57,7 @@ class TrainingDataGenerator:
             DataFrame with all training samples
         """
         await self.db.connect()
+        await self.ml_db.connect()
 
         if end_date is None:
             end_date = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
@@ -149,14 +152,20 @@ class TrainingDataGenerator:
 
             future_return = (future_price / current_price) - 1.0
 
+            # Convert sample_date to unix timestamp for ml.db
+            if isinstance(sample_date, str):
+                sample_date_ts = int(datetime.strptime(sample_date, "%Y-%m-%d").timestamp())
+            else:
+                sample_date_ts = int(sample_date)
+
             return {
                 "sample_id": str(uuid.uuid4()),
                 "symbol": symbol,
-                "sample_date": sample_date,
+                "sample_date": sample_date_ts,
                 **features,
                 "future_return": future_return,
                 "prediction_horizon_days": prediction_horizon_days,
-                "created_at": datetime.now().isoformat(),
+                "created_at": int(datetime.now().timestamp()),
             }
         except Exception as e:
             logger.debug(f"{symbol} at {sample_date}: Feature extraction failed: {e}")
@@ -229,38 +238,13 @@ class TrainingDataGenerator:
         return [s["symbol"] for s in securities]
 
     async def _store_training_data(self, df: pd.DataFrame):
-        """Store training samples in database."""
+        """Store training samples in ml.db via MLDatabase."""
         if len(df) == 0:
             return
 
-        logger.info(f"Storing {len(df)} samples in database...")
-
-        db_columns = (
-            ["sample_id", "symbol", "sample_date"]
-            + list(FEATURE_NAMES)
-            + ["future_return", "prediction_horizon_days", "created_at"]
-        )
-
-        # Batch insert
-        batch_size = 30
-        insert_sql = f"""
-            INSERT OR REPLACE INTO ml_training_samples
-            ({", ".join(db_columns)})
-            VALUES ({", ".join(["?" for _ in db_columns])})
-        """  # noqa: S608
-
-        for i in range(0, len(df), batch_size):
-            batch = df.iloc[i : i + batch_size]
-
-            for _, row in batch.iterrows():
-                values = [row.get(col, 0.0) for col in db_columns]
-                await self.db.conn.execute(insert_sql, tuple(values))
-
-            await self.db.conn.commit()
-
-            if (i + batch_size) % 1000 == 0:
-                logger.info(f"  Stored {i + batch_size}/{len(df)} samples...")
-
+        logger.info(f"Storing {len(df)} samples in ML database...")
+        await self.ml_db.connect()
+        await self.ml_db.store_training_samples(df)
         logger.info(f"Stored all {len(df)} samples successfully")
 
     async def generate_training_data_for_symbol(
@@ -281,6 +265,7 @@ class TrainingDataGenerator:
             DataFrame with training samples for this symbol
         """
         await self.db.connect()
+        await self.ml_db.connect()
 
         # Calculate date range
         end_date = (datetime.now() - timedelta(days=prediction_horizon_days)).strftime("%Y-%m-%d")
@@ -338,6 +323,7 @@ class TrainingDataGenerator:
             DataFrame with new training samples
         """
         await self.db.connect()
+        await self.ml_db.connect()
 
         # Calculate date range
         if backfill_years is not None and backfill_years > 0:

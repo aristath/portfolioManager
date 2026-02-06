@@ -19,6 +19,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sentinel import Database
+from sentinel.database.ml import MLDatabase
 from sentinel.regime_hmm import RegimeDetector
 
 logging.basicConfig(
@@ -33,6 +34,8 @@ LOOKBACK_DAYS = 504  # ~2 years for HMM feature extraction (align with RegimeDet
 async def main() -> None:
     db = Database()
     await db.connect()
+    ml_db = MLDatabase()
+    await ml_db.connect()
     try:
         # Date range from prices
         cursor = await db.conn.execute("SELECT MIN(date) AS min_date, MAX(date) AS max_date FROM prices")
@@ -52,6 +55,7 @@ async def main() -> None:
 
         detector = RegimeDetector(lookback_days=LOOKBACK_DAYS)
         detector._db = db
+        detector._ml_db = ml_db
 
         current = datetime.strptime(min_date, "%Y-%m-%d").date()
         end = datetime.strptime(max_date, "%Y-%m-%d").date()
@@ -64,7 +68,7 @@ async def main() -> None:
             for symbol in symbols:
                 try:
                     # Resumability
-                    cursor = await db.conn.execute(
+                    cursor = await ml_db.conn.execute(
                         "SELECT 1 FROM regime_states WHERE symbol = ? AND date = ?",
                         (symbol, date_str),
                     )
@@ -86,13 +90,13 @@ async def main() -> None:
                 except Exception as e:
                     logger.warning("  %s @ %s: %s", symbol, date_str, e)
 
-            await db.conn.commit()
             if current.day == 1 or (current - current.replace(day=1)).days < 2:
                 logger.info("  Date %s: inserted=%d (total), skipped=%d", date_str, total_inserted, total_skipped)
             current = datetime.fromordinal(current.toordinal() + 1).date()
 
         logger.info("Done. Total inserted=%d, skipped (already exist)=%d", total_inserted, total_skipped)
     finally:
+        await ml_db.close()
         await db.close()
 
 

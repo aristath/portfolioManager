@@ -1,15 +1,21 @@
 """Portfolio and allocation API routes."""
 
+import bisect
+import logging
+from collections import defaultdict
 from datetime import date as date_type
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends
 from typing_extensions import Annotated
 
 from sentinel.api.dependencies import CommonDependencies, get_common_deps
+from sentinel.database.ml import MODEL_TYPES
 from sentinel.portfolio import Portfolio
 from sentinel.services.portfolio import PortfolioService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 allocation_router = APIRouter(prefix="/allocation", tags=["allocation"])
@@ -51,6 +57,16 @@ async def _backfill_portfolio_snapshots(db, currency) -> None:
     await service.backfill()
 
 
+def _ts_to_iso(ts: int) -> str:
+    """Convert unix timestamp to YYYY-MM-DD string."""
+    return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d")
+
+
+def _midnight_utc_ts(iso_date: str) -> int:
+    """Convert YYYY-MM-DD to midnight UTC unix timestamp."""
+    return int(datetime.strptime(iso_date, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp())
+
+
 @router.get("/pnl-history")
 async def get_portfolio_pnl_history(
     deps: Annotated[CommonDependencies, Depends(get_common_deps)],
@@ -58,84 +74,174 @@ async def get_portfolio_pnl_history(
     """
     Get portfolio P&L history for charting (hardcoded 1Y).
 
-    All three series use 14-day windows with 7-day steps.
-    ML predicts 14-day forward returns, so ML/wavelet are offset by 14 days:
-      predictions from [i-27, i-14] cover returns ending between i-13 and i.
-
-    Returns weekly-sampled data points with:
-    - actual_ann_return: 14-day rolling TWR as %
-    - wavelet_ann_return: 14-day avg of raw wavelet scores, offset 14 days
-    - ml_ann_return: 14-day avg of predicted_return as %, offset 14 days
-    - target_ann_return in summary
+    Snapshots store only positions + cash. All derived metrics
+    (total_value, net_deposits, wavelet, ML) are computed at query time.
     """
     days = 365
 
-    # Get daily snapshots (need extra 28 days for 14-day window + 14-day offset)
-    snapshots = await deps.db.get_portfolio_snapshots(days + 28)
+    # Get daily snapshots (need extra 365 days for 1-year rolling window)
+    snapshots = await deps.db.get_portfolio_snapshots(days + 365)
 
     # Check if we need to backfill
-    latest_date = await deps.db.get_latest_snapshot_date()
-    today = date_type.today().isoformat()
-    if not latest_date or latest_date < today:
+    latest_ts = await deps.db.get_latest_snapshot_date()
+    today_ts = _midnight_utc_ts(date_type.today().isoformat())
+    if not latest_ts or latest_ts < today_ts:
         await _backfill_portfolio_snapshots(deps.db, deps.currency)
-        snapshots = await deps.db.get_portfolio_snapshots(days + 44)
+        snapshots = await deps.db.get_portfolio_snapshots(days + 365)
 
     if not snapshots:
         return {"snapshots": [], "summary": None}
 
-    # Build daily data arrays from raw snapshots
+    # --- Compute net deposits from cash_flows ---
+    cash_flows = await deps.db.get_cash_flows()
+    cf_sorted = sorted(
+        [cf for cf in cash_flows if cf["type_id"] in ("card", "card_payout")],
+        key=lambda cf: cf["date"],
+    )
+
+    cumulative_deposits: dict[str, float] = {}
+    running_nd = 0.0
+    for cf in cf_sorted:
+        amount_eur = await deps.currency.to_eur_for_date(cf["amount"], cf["currency"], cf["date"])
+        running_nd += amount_eur
+        cumulative_deposits[cf["date"]] = running_nd
+
+    nd_dates = sorted(cumulative_deposits.keys())
+    nd_values = [cumulative_deposits[d] for d in nd_dates]
+
+    def _get_net_deposits_as_of(iso_date: str) -> float:
+        idx = bisect.bisect_right(nd_dates, iso_date) - 1
+        return nd_values[idx] if idx >= 0 else 0.0
+
+    # --- Pre-fetch wavelet scores ---
+    raw_scores = await deps.db.get_all_scores_history()
+    scores_by_symbol: dict[str, list[tuple[int, float]]] = defaultdict(list)
+    for row in raw_scores:
+        if row["score"] is not None:
+            scores_by_symbol[row["symbol"]].append((row["calculated_at"], row["score"]))
+
+    # --- Pre-fetch ML predictions per model ---
+    await deps.ml_db.connect()
+    ml_per_model: dict[str, dict[str, list[tuple[int, float]]]] = {}
+    for mt in MODEL_TYPES:
+        ml_per_model[mt] = defaultdict(list)
+        raw_ml = await deps.ml_db.get_all_predictions_history(mt)
+        for row in raw_ml:
+            if row["predicted_return"] is not None:
+                ml_per_model[mt][row["symbol"]].append((row["predicted_at"], row["predicted_return"]))
+        for symbol in ml_per_model[mt]:
+            ml_per_model[mt][symbol].sort(key=lambda x: x[0])
+
+    # --- Build daily data from snapshots ---
     daily = []
-    for i, snap in enumerate(snapshots):
-        net_deposits = snap.get("net_deposits_eur", 0) or 0
-        total_value = snap.get("total_value_eur", 0) or 0
-        pnl_eur = snap.get("unrealized_pnl_eur", 0) or (total_value - net_deposits)
+    for snap in snapshots:
+        date_ts = snap["date"]
+        data = snap["data"]
+        iso_date = _ts_to_iso(date_ts)
 
-        denominator = net_deposits
-        if i > 0:
-            prev_nd = snapshots[i - 1].get("net_deposits_eur", 0) or 0
-            if net_deposits > prev_nd:
-                denominator = prev_nd
+        positions = data.get("positions", {})
+        cash_eur = data.get("cash_eur", 0.0) or 0.0
+        positions_value = sum(p.get("value_eur", 0) for p in positions.values())
+        total_value = positions_value + cash_eur
 
-        pnl_pct = (pnl_eur / denominator * 100) if denominator > 0 else 0
+        net_deposits = _get_net_deposits_as_of(iso_date)
+        pnl_eur = total_value - net_deposits
+        pnl_pct = (pnl_eur / net_deposits * 100) if net_deposits > 0 else 0.0
+
+        # Position-value-weighted wavelet score
+        eod_ts = int(datetime.strptime(iso_date + " 23:59:59", "%Y-%m-%d %H:%M:%S").timestamp())
+        wavelet_score = None
+        if positions_value > 0:
+            w_sum = 0.0
+            w_total = 0.0
+            for symbol, pos in positions.items():
+                pos_val = pos.get("value_eur", 0)
+                if pos_val <= 0:
+                    continue
+                ts_list = scores_by_symbol.get(symbol, [])
+                if ts_list:
+                    idx = bisect.bisect_right(ts_list, (eod_ts, float("inf"))) - 1
+                    if idx >= 0:
+                        w_sum += ts_list[idx][1] * pos_val
+                        w_total += pos_val
+            if w_total > 0:
+                wavelet_score = round(w_sum / w_total, 6)
+
+        # Per-model ML scores
+        ml_scores = {}
+        for mt in MODEL_TYPES:
+            ml_scores[mt] = None
+            if positions_value > 0:
+                m_sum = 0.0
+                m_total = 0.0
+                for symbol, pos in positions.items():
+                    pos_val = pos.get("value_eur", 0)
+                    if pos_val <= 0:
+                        continue
+                    pm_list = ml_per_model[mt].get(symbol, [])
+                    if pm_list:
+                        idx = bisect.bisect_right(pm_list, (eod_ts, float("inf"))) - 1
+                        if idx >= 0:
+                            m_sum += pm_list[idx][1] * pos_val
+                            m_total += pos_val
+                if m_total > 0:
+                    ml_scores[mt] = round(m_sum / m_total, 6)
 
         daily.append(
             {
-                "date": snap["date"],
-                "total_value_eur": total_value,
-                "net_deposits_eur": net_deposits,
+                "date": iso_date,
+                "total_value_eur": round(total_value, 2),
+                "net_deposits_eur": round(net_deposits, 2),
                 "pnl_eur": round(pnl_eur, 2),
                 "pnl_pct": round(pnl_pct, 2),
-                "wavelet_score": snap.get("avg_wavelet_score"),
-                "ml_predicted_return": snap.get("avg_ml_score"),
+                "wavelet_score": wavelet_score,
+                "ml_xgboost_return": ml_scores.get("xgboost"),
+                "ml_ridge_return": ml_scores.get("ridge"),
+                "ml_rf_return": ml_scores.get("rf"),
+                "ml_svr_return": ml_scores.get("svr"),
             }
         )
 
-    # Determine the 1Y output range (indices into daily array)
+    # --- Build output with rolling TWR ---
     start_date = (date_type.today() - timedelta(days=days)).isoformat()
     output_start = 0
     for idx, d in enumerate(daily):
         if d["date"] >= start_date:
             output_start = idx
             break
+    window = 365
+    offset = 14
+    output_start = max(output_start, window)
 
-    # Sample at 7-day steps within the 1Y range
-    window = 14  # 14-day rolling window (matches ML prediction horizon)
-    offset = 14  # ML predictions are 14-day forward-looking
+    last_daily_idx = len(daily) - 1
 
     result_snapshots = []
     i = output_start
-    while i < len(daily):
-        d = daily[i]
-        point = {
-            "date": d["date"],
-            "total_value_eur": d["total_value_eur"],
-            "net_deposits_eur": d["net_deposits_eur"],
-            "pnl_eur": d["pnl_eur"],
-            "pnl_pct": d["pnl_pct"],
-        }
+    while i < last_daily_idx + offset + 1:
+        in_future = i > last_daily_idx
 
-        # Actual: 14-day rolling TWR as %
-        if i >= window:
+        if in_future:
+            last_date = datetime.strptime(daily[last_daily_idx]["date"], "%Y-%m-%d")
+            future_date = last_date + timedelta(days=i - last_daily_idx)
+            point = {
+                "date": future_date.strftime("%Y-%m-%d"),
+                "total_value_eur": None,
+                "net_deposits_eur": None,
+                "pnl_eur": None,
+                "pnl_pct": None,
+            }
+        else:
+            d = daily[i]
+            point = {
+                "date": d["date"],
+                "total_value_eur": d["total_value_eur"],
+                "net_deposits_eur": d["net_deposits_eur"],
+                "pnl_eur": d["pnl_eur"],
+                "pnl_pct": d["pnl_pct"],
+            }
+
+        # Actual: 365-day rolling TWR
+        if not in_future and i >= window:
             cumulative = 1.0
             valid = True
             for j in range(i - window + 1, i + 1):
@@ -155,36 +261,58 @@ async def get_portfolio_pnl_history(
         else:
             point["actual_ann_return"] = None
 
-        # Prediction window: [i-27, i-14] — offset by 14 days
-        p_start = max(0, i - offset - window + 1)
-        p_end = max(0, i - offset + 1)
-
-        # Wavelet: 14-day avg of raw scores, offset 14 days
-        w_vals = [daily[j]["wavelet_score"] for j in range(p_start, p_end) if daily[j]["wavelet_score"] is not None]
-        if w_vals:
-            point["wavelet_ann_return"] = round(sum(w_vals) / len(w_vals), 4)
+        # Wavelet
+        if not in_future:
+            point["wavelet_ann_return"] = daily[i].get("wavelet_score")
         else:
             point["wavelet_ann_return"] = None
 
-        # ML: 14-day avg of predicted_return (14-day forward), offset 14 days, as %
-        m_vals = [
-            daily[j]["ml_predicted_return"]
-            for j in range(p_start, p_end)
-            if daily[j]["ml_predicted_return"] is not None
-        ]
-        if m_vals:
-            point["ml_ann_return"] = round(sum(m_vals) / len(m_vals) * 100.0, 2)
-        else:
-            point["ml_ann_return"] = None
+        # ML: actual CAGR from 14 days ago + ML prediction
+        past_i = i - offset
+        past_cumulative = None
+        if past_i >= (window - offset) and past_i >= 0 and past_i <= last_daily_idx:
+            past_cumulative = 1.0
+            past_valid = True
+            for j in range(max(1, past_i - window + 1), past_i + 1):
+                prev_val = daily[j - 1]["total_value_eur"]
+                curr_val = daily[j]["total_value_eur"]
+                cash_flow = daily[j]["net_deposits_eur"] - daily[j - 1]["net_deposits_eur"]
+                if prev_val and prev_val > 0:
+                    hpr = (curr_val - prev_val - cash_flow) / prev_val
+                    past_cumulative *= 1.0 + hpr
+                else:
+                    past_valid = False
+                    break
+            if not past_valid:
+                past_cumulative = None
+
+        for mt, key in [
+            ("xgboost", "ml_xgboost_return"),
+            ("ridge", "ml_ridge_return"),
+            ("rf", "ml_rf_return"),
+            ("svr", "ml_svr_return"),
+        ]:
+            if past_cumulative is not None and past_i >= 0 and past_i <= last_daily_idx:
+                ml_pred = daily[past_i].get(key)
+                if ml_pred is not None:
+                    past_cagr = (past_cumulative - 1.0) * 100.0
+                    point[f"ml_{mt}"] = round(past_cagr + ml_pred * 100.0, 2)
+                else:
+                    point[f"ml_{mt}"] = None
+            else:
+                point[f"ml_{mt}"] = None
 
         result_snapshots.append(point)
-        i += 7  # 1-week step
+        i += 1
 
     if not result_snapshots:
         return {"snapshots": [], "summary": None}
 
     first = result_snapshots[0]
-    last = result_snapshots[-1]
+    last = first
+    for s in result_snapshots:
+        if s["total_value_eur"] is not None:
+            last = s
 
     summary = {
         "start_value": first["total_value_eur"],

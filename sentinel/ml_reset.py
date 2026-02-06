@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Optional
 
 from sentinel.database import Database
+from sentinel.database.ml import MLDatabase
 from sentinel.paths import DATA_DIR
 
 logger = logging.getLogger(__name__)
@@ -48,19 +49,7 @@ def is_reset_in_progress() -> bool:
 
 
 def get_reset_status() -> dict:
-    """Get the current status of the reset operation.
-
-    Returns:
-        Dict with status info:
-        - running: bool
-        - current_step: int (1-6)
-        - total_steps: int (6)
-        - step_name: str
-        - details: str (optional extra info)
-        - models_current: int (during training step)
-        - models_total: int (during training step)
-        - current_symbol: str (during training step)
-    """
+    """Get the current status of the reset operation."""
     if _active_reset is None:
         return {"running": False}
 
@@ -72,7 +61,6 @@ def get_reset_status() -> dict:
         "details": _active_reset.step_details,
     }
 
-    # Include model training progress if in step 6
     if _active_reset.current_step == 6 and _active_reset.models_total > 0:
         status["models_current"] = _active_reset.models_current
         status["models_total"] = _active_reset.models_total
@@ -84,17 +72,18 @@ def get_reset_status() -> dict:
 class MLResetManager:
     """Manages full ML system reset and retrain operations."""
 
-    def __init__(self, db: Database | None = None):
+    def __init__(self, db: Database | None = None, ml_db: MLDatabase | None = None):
         """Initialize reset manager.
 
         Args:
             db: Optional Database instance (creates one if not provided)
+            ml_db: Optional MLDatabase instance (creates one if not provided)
         """
         self.db = db or Database()
+        self.ml_db = ml_db or MLDatabase()
         self.current_step = 0
         self.step_name = ""
         self.step_details = ""
-        # Model training progress (for step 6)
         self.models_current = 0
         self.models_total = 0
         self.current_symbol = ""
@@ -104,7 +93,6 @@ class MLResetManager:
         self.current_step = step
         self.step_name = RESET_STEPS[step - 1][1]
         self.step_details = details
-        # Reset model progress when changing steps
         if step != 6:
             self.models_current = 0
             self.models_total = 0
@@ -119,20 +107,9 @@ class MLResetManager:
         self.step_details = f"Training {symbol} ({current}/{total})"
 
     async def reset_all(self) -> dict:
-        """Execute full reset and retrain pipeline.
-
-        Steps:
-        1. Delete all aggregate price series
-        2. Delete all ML data from tables
-        3. Delete all model files
-        4. Recompute aggregates with current categorizations
-        5. Regenerate training data
-        6. Retrain all models
-
-        Returns:
-            Dict with status and counts
-        """
+        """Execute full reset and retrain pipeline."""
         await self.db.connect()
+        await self.ml_db.connect()
 
         self._set_step(1)
         agg_deleted = await self.delete_aggregates()
@@ -170,11 +147,7 @@ class MLResetManager:
         }
 
     async def delete_aggregates(self) -> int:
-        """Delete all aggregate price series rows from prices table.
-
-        Returns:
-            Count of deleted rows
-        """
+        """Delete all aggregate price series rows from prices table."""
         await self.db.connect()
 
         cursor = await self.db.conn.execute("DELETE FROM prices WHERE symbol LIKE '_AGG_%'")
@@ -183,20 +156,9 @@ class MLResetManager:
         return cursor.rowcount
 
     async def delete_training_data(self) -> None:
-        """Delete all ML training data from database tables."""
-        await self.db.connect()
-
-        tables = [
-            "ml_training_samples",
-            "ml_predictions",
-            "ml_models",
-            "ml_performance_tracking",
-        ]
-
-        for table in tables:
-            await self.db.conn.execute(f"DELETE FROM {table}")  # noqa: S608
-
-        await self.db.conn.commit()
+        """Delete all ML data from ml.db (all 13 tables)."""
+        await self.ml_db.connect()
+        await self.ml_db.delete_all_data()
 
     async def delete_model_files(self) -> None:
         """Delete all model files from data/ml_models/ directory."""
@@ -208,27 +170,19 @@ class MLResetManager:
         model_dir.mkdir(exist_ok=True)
 
     async def _recompute_aggregates(self) -> dict:
-        """Recompute all aggregate price series.
-
-        Returns:
-            Dict with counts: {"country": N, "industry": M}
-        """
+        """Recompute all aggregate price series."""
         from sentinel.aggregates import AggregateComputer
 
         computer = AggregateComputer(self.db)
         return await computer.compute_all_aggregates()
 
     async def _regenerate_training_data(self) -> int:
-        """Regenerate all training samples.
-
-        Returns:
-            Number of samples generated
-        """
+        """Regenerate all training samples."""
         from sentinel.ml_trainer import TrainingDataGenerator
         from sentinel.settings import Settings
 
         settings = Settings()
-        generator = TrainingDataGenerator()
+        generator = TrainingDataGenerator(db=self.db, ml_db=self.ml_db)
 
         horizon_days = await settings.get("ml_prediction_horizon_days", 14)
         lookback_years = await settings.get("ml_training_lookback_years", 8)
@@ -242,12 +196,8 @@ class MLResetManager:
         return len(df) if df is not None else 0
 
     async def _retrain_all_models(self) -> dict:
-        """Retrain all ML models.
-
-        Returns:
-            Dict with training results
-        """
+        """Retrain all ML models."""
         from sentinel.ml_retrainer import MLRetrainer
 
-        retrainer = MLRetrainer(progress_callback=self._on_model_progress)
+        retrainer = MLRetrainer(progress_callback=self._on_model_progress, db=self.db, ml_db=self.ml_db)
         return await retrainer.retrain()

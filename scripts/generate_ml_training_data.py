@@ -7,23 +7,28 @@ from pathlib import Path
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from sentinel.database import Database
+from sentinel.database.ml import MLDatabase
 from sentinel.ml_trainer import TrainingDataGenerator
 
 
 async def main():
-    generator = TrainingDataGenerator()
+    db = Database()
+    await db.connect()
+    ml_db = MLDatabase()
+    await ml_db.connect()
+
+    generator = TrainingDataGenerator(db=db, ml_db=ml_db)
 
     print("=" * 70)
     print("ML Training Data Generation")
     print("=" * 70)
     print("\nThis will generate training samples from historical data.")
-    print("Estimated time: 30-60 minutes depending on universe size.")
+    print("Training data stored in: data/ml.db")
     print("\nPress Ctrl+C to cancel\n")
 
     try:
         df = await generator.generate_training_data(
-            start_date="2017-01-01",
-            end_date="2025-01-27",
             prediction_horizon_days=14,
         )
 
@@ -44,6 +49,9 @@ async def main():
         import traceback
 
         traceback.print_exc()
+    finally:
+        await ml_db.close()
+        await db.close()
 
 
 if __name__ == "__main__":

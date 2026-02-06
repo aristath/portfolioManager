@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing_extensions import Annotated
 
 from sentinel.api.dependencies import CommonDependencies, get_common_deps
+from sentinel.database.ml import MODEL_TYPES
 from sentinel.security import Security
 
 router = APIRouter(prefix="/securities", tags=["securities"])
@@ -226,6 +227,52 @@ def _end_of_day_utc_ts(date_str: str) -> int:
     return int(dt.timestamp())
 
 
+async def _get_blended_prediction(
+    deps: CommonDependencies,
+    symbol: str,
+    as_of_ts: int | None = None,
+) -> dict:
+    """Read latest prediction from each per-model table and blend using settings weights.
+
+    Returns dict with wavelet_score, ml_score (weighted blend), and per-model scores.
+    """
+    weights = {}
+    for mt in MODEL_TYPES:
+        weights[mt] = await deps.settings.get(f"ml_weight_{mt}", 0.25)
+
+    per_model = {}
+    for mt in MODEL_TYPES:
+        if as_of_ts is not None:
+            row = await deps.ml_db.get_prediction_as_of(mt, symbol, as_of_ts)
+        else:
+            # Get the most recent prediction as of "now"
+            row = await deps.ml_db.get_prediction_as_of(mt, symbol, int(datetime.now().timestamp()))
+        if row:
+            per_model[mt] = row
+
+    if not per_model:
+        return {}
+
+    # Weighted blend of predicted_return across available models
+    total_weight = 0.0
+    weighted_return = 0.0
+    for mt, pred in per_model.items():
+        pr = pred.get("predicted_return")
+        if pr is not None:
+            w = weights.get(mt, 0.25)
+            weighted_return += pr * w
+            total_weight += w
+
+    blended_return = (weighted_return / total_weight) if total_weight > 0 else None
+
+    return {
+        "ml_score": blended_return,
+        "final_score": blended_return,
+        "wavelet_score": None,  # wavelet is separate, not stored in ML prediction tables
+        "per_model": {mt: pred.get("predicted_return") for mt, pred in per_model.items()},
+    }
+
+
 @unified_router.get("")
 async def get_unified_view(
     deps: Annotated[CommonDependencies, Depends(get_common_deps)],
@@ -278,28 +325,19 @@ async def get_unified_view(
             d = dict(s)
             d.pop("rn", None)
             scores_map[d["symbol"]] = d
-        # ML predictions as of date
+        # ML predictions as of date — read from per-model tables, blend on the fly
         ml_preds_map = {}
         for symbol in all_symbols:
-            row = await deps.db.get_ml_prediction_as_of(symbol, as_of_ts)
-            if row is not None:
-                ml_preds_map[symbol] = row
+            ml_preds_map[symbol] = await _get_blended_prediction(deps, symbol, as_of_ts)
     else:
         cursor = await deps.db.conn.execute("SELECT * FROM scores")
         scores = await cursor.fetchall()
         scores_map = {s["symbol"]: dict(s) for s in scores}
 
-        # Latest ML predictions per symbol (wavelet/ML score breakdown)
-        cursor = await deps.db.conn.execute(
-            """SELECT symbol, wavelet_score, ml_score, final_score
-               FROM ml_predictions
-               WHERE predicted_at = (
-                   SELECT MAX(predicted_at) FROM ml_predictions p2
-                   WHERE p2.symbol = ml_predictions.symbol
-               )"""
-        )
-        ml_preds = await cursor.fetchall()
-        ml_preds_map = {p["symbol"]: dict(p) for p in ml_preds}
+        # Latest ML predictions per symbol — blend from per-model tables
+        ml_preds_map = {}
+        for symbol in all_symbols:
+            ml_preds_map[symbol] = await _get_blended_prediction(deps, symbol)
 
     # Recommendations using settings default for min_trade_value
     recommendations = await planner.get_recommendations()

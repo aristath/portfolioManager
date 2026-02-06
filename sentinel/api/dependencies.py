@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from sentinel.broker import Broker
 from sentinel.currency import Currency
 from sentinel.database import Database
+from sentinel.database.ml import MLDatabase
 from sentinel.settings import Settings
 
 
@@ -26,16 +27,18 @@ class CommonDependencies:
     settings: Settings
     broker: Broker
     currency: Currency
+    ml_db: MLDatabase
 
 
 async def get_common_deps() -> CommonDependencies:
     """Factory for common dependencies.
 
-    Returns singleton instances of Database, Settings, Broker, and Currency.
+    Returns singleton instances of Database, Settings, Broker, Currency, and MLDatabase.
     """
     return CommonDependencies(
         db=Database(),
         settings=Settings(),
         broker=Broker(),
         currency=Currency(),
+        ml_db=MLDatabase(),
     )

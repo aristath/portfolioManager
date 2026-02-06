@@ -1,8 +1,7 @@
 """
 Clear all ML tables and model files for a fresh backfill.
 
-Clears: ml_training_samples, ml_predictions, ml_models, ml_performance_tracking,
-and the data/ml_models/ directory.
+Clears all ML tables in data/ml.db and the data/ml_models/ directory.
 
 Run from repo root with venv active:
 
@@ -27,12 +26,14 @@ from sentinel.ml_reset import MLResetManager
 async def main() -> None:
     manager = MLResetManager()
     await manager.db.connect()
+    await manager.ml_db.connect()
     try:
         await manager.delete_training_data()
-        print("Cleared ML tables: ml_training_samples, ml_predictions, ml_models, ml_performance_tracking")
+        print("Cleared all ML tables in ml.db (training samples + per-model predictions/models/performance)")
         await manager.delete_model_files()
         print("Removed data/ml_models/ contents")
     finally:
+        await manager.ml_db.close()
         await manager.db.close()
     print("Done. Next: generate_ml_training_data.py -> train_initial_ml_models.py -> backfill_ml_predictions.py")
 

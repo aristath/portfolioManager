@@ -36,13 +36,17 @@ class PortfolioAnalyzer:
             dict: symbol -> allocation percentage (0-1)
         """
         # Check cache first (5 minute TTL)
-        cached = await self._db.cache_get("planner:current_allocations:invested_only")
+        cached = await self._db.cache_get("planner:current_allocations")
         if cached is not None:
             return json.loads(cached)
 
         positions = await self._portfolio.positions()
+        total_value = await self._portfolio.total_value()
 
-        position_values_eur = {}
+        if total_value <= 0:
+            return {}
+
+        allocations = {}
         for pos in positions:
             symbol = pos["symbol"]
             quantity = pos.get("quantity", 0)
@@ -57,55 +61,16 @@ class PortfolioAnalyzer:
             rate = await self._currency.get_rate(pos_currency)
             value_eur = value_local * rate
 
-            position_values_eur[symbol] = value_eur
-
-        invested_value_eur = sum(position_values_eur.values())
-        if invested_value_eur <= 0:
-            return {}
-
-        allocations = {symbol: value_eur / invested_value_eur for symbol, value_eur in position_values_eur.items()}
+            allocations[symbol] = value_eur / total_value
 
         # Cache for 5 minutes
         await self._db.cache_set(
-            "planner:current_allocations:invested_only",
+            "planner:current_allocations",
             json.dumps(allocations),
             ttl_seconds=300,
         )
 
         return allocations
-
-    async def get_invested_value_eur(self, as_of_date: str | None = None, **kwargs) -> float:
-        as_of_date = kwargs.get("as_of_date", as_of_date)
-        positions = await self._portfolio.positions()
-
-        invested_total_eur = 0.0
-        for pos in positions:
-            symbol = pos.get("symbol")
-            quantity = pos.get("quantity", 0)
-            pos_currency = pos.get("currency", "EUR")
-
-            if not symbol or quantity <= 0:
-                continue
-
-            price = pos.get("current_price", 0)
-            if as_of_date is not None:
-                hist = await self._db.get_prices(symbol, days=1, end_date=as_of_date)
-                if hist:
-                    close = hist[0].get("close")
-                    if close is not None:
-                        try:
-                            price = float(close)
-                        except (TypeError, ValueError):
-                            price = 0
-
-            if price <= 0:
-                continue
-
-            value_local = quantity * price
-            rate = await self._currency.get_rate(pos_currency)
-            invested_total_eur += value_local * rate
-
-        return invested_total_eur
 
     async def get_rebalance_summary(self) -> dict:
         """Get summary of portfolio alignment with ideal allocations.

@@ -1,15 +1,13 @@
-"""ML model retraining pipeline - per-symbol models."""
+"""ML model retraining pipeline - per-symbol, 4 model types."""
 
 import logging
-from datetime import datetime
 from typing import Dict, Optional
 
 import numpy as np
-import pandas as pd
 
 from sentinel.database import Database
+from sentinel.database.ml import MODEL_TYPES, MLDatabase
 from sentinel.ml_ensemble import EnsembleBlender
-from sentinel.ml_features import FEATURE_NAMES
 from sentinel.ml_trainer import TrainingDataGenerator
 from sentinel.settings import Settings
 
@@ -17,19 +15,21 @@ logger = logging.getLogger(__name__)
 
 
 class MLRetrainer:
-    """Per-symbol ML retraining pipeline."""
+    """Per-symbol ML retraining pipeline using 4 model types."""
 
-    def __init__(self, progress_callback=None, db=None, settings=None):
+    def __init__(self, progress_callback=None, db=None, ml_db=None, settings=None):
         """Initialize retrainer.
 
         Args:
             progress_callback: Optional callback(current, total, symbol) for progress updates
             db: Optional Database instance (defaults to new Database())
+            ml_db: Optional MLDatabase instance (defaults to new MLDatabase())
             settings: Optional Settings instance (defaults to new Settings())
         """
         self.db = db or Database()
+        self.ml_db = ml_db or MLDatabase()
         self.settings = settings or Settings()
-        self.trainer = TrainingDataGenerator(db=self.db, settings=self.settings)
+        self.trainer = TrainingDataGenerator(db=self.db, ml_db=self.ml_db, settings=self.settings)
         self.progress_callback = progress_callback
 
     async def retrain(self) -> Dict:
@@ -51,6 +51,7 @@ class MLRetrainer:
             }
         """
         await self.db.connect()
+        await self.ml_db.connect()
 
         logger.info("[1/4] Generating new training samples from recent data...")
         new_samples = await self._generate_new_samples()
@@ -58,7 +59,7 @@ class MLRetrainer:
 
         logger.info("[2/4] Finding symbols with sufficient training data...")
         min_samples = await self.settings.get("ml_min_samples_per_symbol", 100)
-        symbols_with_data = await self._get_symbols_with_sufficient_data(min_samples)
+        symbols_with_data = await self.ml_db.get_symbols_with_sufficient_data(min_samples)
         logger.info(f"      Found {len(symbols_with_data)} symbols with >= {min_samples} samples")
 
         if not symbols_with_data:
@@ -78,7 +79,6 @@ class MLRetrainer:
         for i, (symbol, sample_count) in enumerate(symbols_with_data.items()):
             logger.info(f"      [{i + 1}/{total_symbols}] {symbol} ({sample_count} samples)...")
 
-            # Report progress
             if self.progress_callback:
                 self.progress_callback(i + 1, total_symbols, symbol)
 
@@ -87,9 +87,6 @@ class MLRetrainer:
                 if metrics:
                     results[symbol] = metrics
                     symbols_trained += 1
-                    logger.info(
-                        f"      {symbol}: RMSE={metrics['validation_rmse']:.4f}, R²={metrics['validation_r2']:.4f}"
-                    )
                 else:
                     symbols_skipped += 1
             except Exception as e:
@@ -107,19 +104,12 @@ class MLRetrainer:
         }
 
     async def retrain_symbol(self, symbol: str) -> Optional[Dict]:
-        """
-        Retrain model for a single symbol.
-
-        Args:
-            symbol: Security ticker
-
-        Returns:
-            Training metrics or None if failed
-        """
+        """Retrain model for a single symbol."""
         await self.db.connect()
+        await self.ml_db.connect()
 
         min_samples = await self.settings.get("ml_min_samples_per_symbol", 100)
-        sample_count = await self._get_sample_count(symbol)
+        sample_count = await self.ml_db.get_sample_count(symbol)
 
         if sample_count < min_samples:
             logger.warning(f"{symbol}: Insufficient samples ({sample_count} < {min_samples})")
@@ -128,35 +118,50 @@ class MLRetrainer:
         return await self._train_symbol(symbol)
 
     async def _train_symbol(self, symbol: str) -> Optional[Dict]:
-        """Train model for a single symbol."""
-        # Load training data for this symbol
-        X, y = await self._load_training_data(symbol)
+        """Train all 4 models for a single symbol."""
+        X, y = await self.ml_db.load_training_data(symbol)
 
         if len(X) == 0:
             logger.warning(f"{symbol}: No valid training data")
             return None
 
-        # Train ensemble
-        ensemble = EnsembleBlender(nn_weight=0.5, xgb_weight=0.5)
-        metrics = ensemble.train(X, y, validation_split=0.2)
+        # Train ensemble (all 4 models)
+        ensemble = EnsembleBlender()
+        all_metrics = ensemble.train(X, y, validation_split=0.2)
 
-        # Save model (overwrites existing)
+        # Save model files (overwrites existing)
         ensemble.save(symbol)
 
-        # Update database
-        await self._update_model_record(symbol, len(X), metrics)
+        # Update model record in each per-model table
+        for mt in MODEL_TYPES:
+            mt_metrics = all_metrics.get(f"{mt}_metrics", {})
+            await self.ml_db.update_model_record(
+                model_type=mt,
+                symbol=symbol,
+                training_samples=len(X),
+                metrics={
+                    "validation_rmse": mt_metrics.get("val_rmse", 0.0),
+                    "validation_mae": mt_metrics.get("val_mae", 0.0),
+                    "validation_r2": mt_metrics.get("val_r2", 0.0),
+                },
+            )
+
+        # Return summary (average across models)
+        avg_rmse = np.mean([all_metrics[f"{mt}_metrics"]["val_rmse"] for mt in MODEL_TYPES])
+        avg_mae = np.mean([all_metrics[f"{mt}_metrics"]["val_mae"] for mt in MODEL_TYPES])
+        avg_r2 = np.mean([all_metrics[f"{mt}_metrics"]["val_r2"] for mt in MODEL_TYPES])
 
         return {
-            "validation_rmse": metrics["ensemble_val_rmse"],
-            "validation_mae": metrics["ensemble_val_mae"],
-            "validation_r2": metrics["ensemble_val_r2"],
+            "validation_rmse": float(avg_rmse),
+            "validation_mae": float(avg_mae),
+            "validation_r2": float(avg_r2),
             "training_samples": len(X),
+            "per_model": {mt: all_metrics[f"{mt}_metrics"] for mt in MODEL_TYPES},
         }
 
     async def _generate_new_samples(self) -> int:
         """Generate training samples from recent data."""
         horizon_days = await self.settings.get("ml_prediction_horizon_days", 14)
-
         lookback_years = await self.settings.get("ml_training_lookback_years", 8)
         feature_lookback_days = await self.settings.get("ml_training_feature_lookback_days", 365)
 
@@ -168,100 +173,14 @@ class MLRetrainer:
 
         return len(df) if df is not None else 0
 
-    async def _get_symbols_with_sufficient_data(self, min_samples: int) -> Dict[str, int]:
-        """Get symbols that have at least min_samples training samples."""
-        query = """
-            SELECT symbol, COUNT(*) as sample_count
-            FROM ml_training_samples
-            WHERE future_return IS NOT NULL
-            GROUP BY symbol
-            HAVING sample_count >= ?
-            ORDER BY sample_count DESC
-        """
-        cursor = await self.db.conn.execute(query, (min_samples,))
-        rows = await cursor.fetchall()
-
-        return {row["symbol"]: row["sample_count"] for row in rows}
-
-    async def _get_sample_count(self, symbol: str) -> int:
-        """Get training sample count for a symbol."""
-        query = """
-            SELECT COUNT(*) as count
-            FROM ml_training_samples
-            WHERE symbol = ? AND future_return IS NOT NULL
-        """
-        cursor = await self.db.conn.execute(query, (symbol,))
-        row = await cursor.fetchone()
-        return row["count"] if row else 0
-
-    async def _load_training_data(self, symbol: str) -> tuple[np.ndarray, np.ndarray]:
-        """Load training data for a specific symbol."""
-        query = """
-            SELECT * FROM ml_training_samples
-            WHERE symbol = ? AND future_return IS NOT NULL
-            ORDER BY sample_date DESC
-        """
-        cursor = await self.db.conn.execute(query, (symbol,))
-        rows = await cursor.fetchall()
-
-        if not rows:
-            return np.array([]), np.array([])
-
-        df = pd.DataFrame([dict(row) for row in rows])
-
-        # 14 features per security - no cross-security data
-        from sentinel.ml_features import DEFAULT_FEATURES
-
-        db_feature_columns = FEATURE_NAMES
-
-        # Use default values from centralized definition
-        defaults = DEFAULT_FEATURES
-
-        for col in db_feature_columns:
-            if col not in df.columns:
-                df[col] = defaults.get(col, 0.0)
-            else:
-                df[col] = df[col].fillna(defaults.get(col, 0.0))
-
-        X = df[db_feature_columns].values.astype(np.float32)
-        y = df["future_return"].values.astype(np.float32)
-
-        # Remove any remaining NaN/Inf values
-        valid_mask = np.all(np.isfinite(X), axis=1) & np.isfinite(y)
-        X = X[valid_mask]
-        y = y[valid_mask]
-
-        return X, y
-
-    async def _update_model_record(self, symbol: str, training_samples: int, metrics: Dict):
-        """Update or insert model record in database."""
-        await self.db.conn.execute(
-            """INSERT OR REPLACE INTO ml_models
-               (symbol, training_samples, validation_rmse, validation_mae,
-                validation_r2, last_trained_at)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (
-                symbol,
-                training_samples,
-                metrics["ensemble_val_rmse"],
-                metrics["ensemble_val_mae"],
-                metrics["ensemble_val_r2"],
-                datetime.now().isoformat(),
-            ),
-        )
-        await self.db.conn.commit()
-
     async def get_model_status(self) -> Dict:
-        """Get status of all trained models."""
-        await self.db.connect()
+        """Get status of all trained models across all model types."""
+        await self.ml_db.connect()
+        all_status = await self.ml_db.get_all_model_status()
 
-        query = "SELECT * FROM ml_models ORDER BY last_trained_at DESC"
-        cursor = await self.db.conn.execute(query)
-        rows = await cursor.fetchall()
-
-        models = [dict(row) for row in rows]
+        total_models = sum(len(models) for models in all_status.values())
 
         return {
-            "total_models": len(models),
-            "models": models,
+            "total_models": total_models,
+            "per_type": all_status,
         }

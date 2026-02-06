@@ -446,27 +446,6 @@ class Database(BaseDatabase):
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
 
-    async def get_ml_prediction_as_of(self, symbol: str, as_of_ts: int) -> dict | None:
-        """
-        Get the most recent ML prediction for a symbol as of a given timestamp.
-
-        Args:
-            symbol: Security symbol
-            as_of_ts: Unix timestamp; returns row with largest predicted_at <= as_of_ts
-
-        Returns:
-            Row as dict (includes prediction_id, symbol, predicted_at, final_score, etc.) or None
-        """
-        cursor = await self.conn.execute(
-            """SELECT * FROM ml_predictions
-               WHERE symbol = ? AND predicted_at <= ?
-               ORDER BY predicted_at DESC
-               LIMIT 1""",
-            (symbol, as_of_ts),
-        )
-        row = await cursor.fetchone()
-        return dict(row) if row is not None else None
-
     # -------------------------------------------------------------------------
     # Job Schedules
     # -------------------------------------------------------------------------
@@ -718,104 +697,8 @@ class Database(BaseDatabase):
         for col_name, definition in migrations:
             await self._add_column_if_missing("securities", col_name, definition)
 
-        # Create advanced analytics tables
+        # Create job system tables
         await self.conn.executescript("""
-        -- Regime detection
-        CREATE TABLE IF NOT EXISTS regime_states (
-            symbol TEXT NOT NULL,
-            date TEXT NOT NULL,
-            regime INTEGER NOT NULL,
-            regime_name TEXT,
-            confidence REAL,
-            PRIMARY KEY (symbol, date)
-        );
-
-        CREATE TABLE IF NOT EXISTS regime_models (
-            model_id TEXT PRIMARY KEY,
-            symbols TEXT,
-            n_states INTEGER,
-            trained_at TEXT,
-            model_params TEXT
-        );
-
-        -- Indexes
-        CREATE INDEX IF NOT EXISTS idx_regime_symbol_date ON regime_states(symbol, date DESC);
-
-        -- ML Per-Security Prediction Tables
-        -- 20 features per security (14 core + 6 aggregate market context)
-        CREATE TABLE IF NOT EXISTS ml_training_samples (
-            sample_id TEXT PRIMARY KEY,
-            symbol TEXT NOT NULL,
-            sample_date TEXT NOT NULL,
-            return_1d REAL,
-            return_5d REAL,
-            return_20d REAL,
-            return_60d REAL,
-            price_normalized REAL,
-            volatility_10d REAL,
-            volatility_30d REAL,
-            atr_14d REAL,
-            volume_normalized REAL,
-            volume_trend REAL,
-            rsi_14 REAL,
-            macd REAL,
-            bollinger_position REAL,
-            sentiment_score REAL,
-            country_agg_momentum REAL,
-            country_agg_rsi REAL,
-            country_agg_volatility REAL,
-            industry_agg_momentum REAL,
-            industry_agg_rsi REAL,
-            industry_agg_volatility REAL,
-            future_return REAL,
-            prediction_horizon_days INTEGER,
-            created_at TEXT,
-            UNIQUE(symbol, sample_date)
-        );
-
-        -- Per-symbol ML models (one model per symbol, overwritten on retrain)
-        CREATE TABLE IF NOT EXISTS ml_models (
-            symbol TEXT PRIMARY KEY,
-            training_samples INTEGER,
-            validation_rmse REAL,
-            validation_mae REAL,
-            validation_r2 REAL,
-            last_trained_at TEXT
-        );
-
-        CREATE TABLE IF NOT EXISTS ml_predictions (
-            prediction_id TEXT PRIMARY KEY,
-            symbol TEXT NOT NULL,
-            predicted_at INTEGER NOT NULL,
-            features TEXT,
-            predicted_return REAL,
-            ml_score REAL,
-            wavelet_score REAL,
-            blend_ratio REAL,
-            final_score REAL,
-            inference_time_ms REAL,
-            regime_score REAL,
-            regime_dampening REAL
-        );
-
-        -- Per-symbol ML performance tracking
-        CREATE TABLE IF NOT EXISTS ml_performance_tracking (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            symbol TEXT NOT NULL,
-            tracked_at TEXT NOT NULL,
-            mean_absolute_error REAL,
-            root_mean_squared_error REAL,
-            prediction_bias REAL,
-            drift_detected INTEGER DEFAULT 0,
-            predictions_evaluated INTEGER DEFAULT 0,
-            UNIQUE(symbol, tracked_at)
-        );
-
-        -- ML Indexes
-        CREATE INDEX IF NOT EXISTS idx_ml_samples_symbol_date ON ml_training_samples(symbol, sample_date DESC);
-        CREATE INDEX IF NOT EXISTS idx_ml_predictions_symbol_date ON ml_predictions(symbol, predicted_at DESC);
-        CREATE INDEX IF NOT EXISTS idx_ml_perf_symbol ON ml_performance_tracking(symbol, tracked_at DESC);
-
         -- Job History (for job system)
         CREATE TABLE IF NOT EXISTS job_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -860,28 +743,16 @@ class Database(BaseDatabase):
         if "consecutive_failures" not in columns:
             await self.conn.execute("ALTER TABLE job_schedules ADD COLUMN consecutive_failures INTEGER DEFAULT 0")
 
-        # Migration: add regime_score, regime_dampening to ml_predictions (one-time)
-        cursor = await self.conn.execute("PRAGMA table_info(ml_predictions)")
-        pred_columns = {row[1] for row in await cursor.fetchall()}
-        if "regime_score" not in pred_columns:
-            await self.conn.execute("ALTER TABLE ml_predictions ADD COLUMN regime_score REAL")
-        if "regime_dampening" not in pred_columns:
-            await self.conn.execute("ALTER TABLE ml_predictions ADD COLUMN regime_dampening REAL")
-
-        # Migration: add aggregate feature columns to ml_training_samples if missing
-        cursor = await self.conn.execute("PRAGMA table_info(ml_training_samples)")
-        ml_columns = {row[1] for row in await cursor.fetchall()}
-        agg_columns = [
-            ("country_agg_momentum", "REAL"),
-            ("country_agg_rsi", "REAL"),
-            ("country_agg_volatility", "REAL"),
-            ("industry_agg_momentum", "REAL"),
-            ("industry_agg_rsi", "REAL"),
-            ("industry_agg_volatility", "REAL"),
-        ]
-        for col_name, col_type in agg_columns:
-            if col_name not in ml_columns:
-                await self.conn.execute(f"ALTER TABLE ml_training_samples ADD COLUMN {col_name} {col_type}")
+        # Drop old ML tables (now in ml.db)
+        for old_table in [
+            "ml_training_samples",
+            "ml_models",
+            "ml_predictions",
+            "ml_performance_tracking",
+            "regime_states",
+            "regime_models",
+        ]:
+            await self.conn.execute(f"DROP TABLE IF EXISTS {old_table}")
 
         # Migration: add sync:cashflows job schedule if missing (only for existing databases)
         # Check if job_schedules has any data (indicating an existing database, not fresh install)
@@ -914,9 +785,8 @@ class Database(BaseDatabase):
                 )
                 logger.info("Added sync:dividends job schedule")
 
-        # Migration: add avg_wavelet_score, avg_ml_score to portfolio_snapshots
-        for col_name, col_def in [("avg_wavelet_score", "REAL"), ("avg_ml_score", "REAL")]:
-            await self._add_column_if_missing("portfolio_snapshots", col_name, col_def)
+        # Migration: portfolio_snapshots old schema → new JSON schema
+        await self._migrate_portfolio_snapshots()
 
         # Migration: deduplicate trades and enforce UNIQUE on broker_trade_id
         await self._migrate_trades_unique_constraint()
@@ -1104,6 +974,22 @@ class Database(BaseDatabase):
         await self.conn.commit()
         logger.info("job_schedules migration complete")
 
+    async def _migrate_portfolio_snapshots(self) -> None:
+        """Drop old wide-column portfolio_snapshots and recreate with JSON schema."""
+        cursor = await self.conn.execute("PRAGMA table_info(portfolio_snapshots)")
+        columns = {row[1] for row in await cursor.fetchall()}
+        if "total_value_eur" in columns:
+            logger.info("Migrating portfolio_snapshots to JSON schema (dropping old table)...")
+            await self.conn.execute("DROP TABLE portfolio_snapshots")
+            await self.conn.execute("""
+                CREATE TABLE portfolio_snapshots (
+                    date INTEGER PRIMARY KEY,
+                    data TEXT NOT NULL
+                )
+            """)
+            await self.conn.commit()
+            logger.info("portfolio_snapshots migration complete")
+
 
 SCHEMA = """
 -- Settings (key-value store)
@@ -1227,17 +1113,11 @@ CREATE INDEX IF NOT EXISTS idx_cache_expires_at ON cache(expires_at);
 CREATE INDEX IF NOT EXISTS idx_cash_flows_date ON cash_flows(date);
 CREATE INDEX IF NOT EXISTS idx_cash_flows_type ON cash_flows(type_id);
 
--- Portfolio snapshots (daily P&L tracking)
+-- Portfolio snapshots (daily composition tracking — JSON blob)
 CREATE TABLE IF NOT EXISTS portfolio_snapshots (
-    date TEXT PRIMARY KEY,
-    total_value_eur REAL NOT NULL,
-    positions_value_eur REAL,
-    cash_eur REAL,
-    net_deposits_eur REAL,
-    unrealized_pnl_eur REAL,
-    created_at TEXT
+    date INTEGER PRIMARY KEY,  -- unix timestamp, midnight UTC
+    data TEXT NOT NULL          -- JSON: {positions: {symbol: {quantity, value_eur}}, cash_eur}
 );
-CREATE INDEX IF NOT EXISTS idx_portfolio_snapshots_date ON portfolio_snapshots(date DESC);
 
 -- Dividends (synced from broker corporate actions)
 CREATE TABLE IF NOT EXISTS dividends (

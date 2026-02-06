@@ -15,6 +15,7 @@ import ta
 from hmmlearn import hmm
 
 from sentinel.database import Database
+from sentinel.database.ml import MLDatabase
 from sentinel.price_validator import PriceValidator
 from sentinel.security import Security
 
@@ -22,6 +23,7 @@ from sentinel.security import Security
 class RegimeDetector:
     def __init__(self, n_states: int = 3, lookback_days: int = 504):
         self._db = Database()
+        self._ml_db = MLDatabase()
         self.n_states = n_states
         self.lookback_days = lookback_days
         self._model: Optional[hmm.GaussianHMM] = None
@@ -136,13 +138,14 @@ class RegimeDetector:
         self, symbol: str, date_str: str, regime: int, regime_name: str, confidence: float
     ) -> None:
         """Store regime state for (symbol, date_str). Idempotent (INSERT OR REPLACE)."""
-        await self._db.conn.execute(
+        await self._ml_db.connect()
+        await self._ml_db.conn.execute(
             """INSERT OR REPLACE INTO regime_states
                (symbol, date, regime, regime_name, confidence)
                VALUES (?, ?, ?, ?, ?)""",
             (symbol, date_str, regime, regime_name, confidence),
         )
-        await self._db.conn.commit()
+        await self._ml_db.conn.commit()
 
     def _map_regime_to_name(self, regime: int, features: np.ndarray) -> str:
         """Map regime number to descriptive name based on characteristics."""
@@ -170,7 +173,8 @@ class RegimeDetector:
         """Get historical regime states."""
         date_threshold = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
 
-        cursor = await self._db.conn.execute(
+        await self._ml_db.connect()
+        cursor = await self._ml_db.conn.execute(
             """SELECT date, regime, regime_name, confidence
                FROM regime_states
                WHERE symbol = ? AND date >= ?
@@ -191,22 +195,24 @@ class RegimeDetector:
 
     async def _store_model(self, model: hmm.GaussianHMM, symbols: list[str]):
         """Store trained model in database."""
+        await self._ml_db.connect()
         model_bytes = pickle.dumps(model)
         model_b64 = base64.b64encode(model_bytes).decode("utf-8")
 
         model_id = f"hmm_{datetime.now(timezone.utc).isoformat()}"
 
-        await self._db.conn.execute(
+        await self._ml_db.conn.execute(
             """INSERT INTO regime_models
                (model_id, symbols, n_states, trained_at, model_params)
                VALUES (?, ?, ?, ?, ?)""",
             (model_id, json.dumps(symbols), self.n_states, datetime.now(timezone.utc).isoformat(), model_b64),
         )
-        await self._db.conn.commit()
+        await self._ml_db.conn.commit()
 
     async def _load_model(self):
         """Load most recent model from database."""
-        cursor = await self._db.conn.execute(
+        await self._ml_db.connect()
+        cursor = await self._ml_db.conn.execute(
             """SELECT model_params FROM regime_models
                ORDER BY trained_at DESC LIMIT 1"""
         )
@@ -219,10 +225,11 @@ class RegimeDetector:
 
     async def _store_regime_state(self, symbol: str, regime: int, regime_name: str, confidence: float):
         """Store regime state for a symbol."""
-        await self._db.conn.execute(
+        await self._ml_db.connect()
+        await self._ml_db.conn.execute(
             """INSERT OR REPLACE INTO regime_states
                (symbol, date, regime, regime_name, confidence)
                VALUES (?, ?, ?, ?, ?)""",
             (symbol, datetime.now(timezone.utc).date().isoformat(), regime, regime_name, confidence),
         )
-        await self._db.conn.commit()
+        await self._ml_db.conn.commit()
