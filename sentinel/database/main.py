@@ -743,7 +743,7 @@ class Database(BaseDatabase):
         if "consecutive_failures" not in columns:
             await self.conn.execute("ALTER TABLE job_schedules ADD COLUMN consecutive_failures INTEGER DEFAULT 0")
 
-        # Drop old ML tables (now in ml.db)
+        # Drop orphaned tables (ML/regime moved to ml.db; others unused)
         for old_table in [
             "ml_training_samples",
             "ml_models",
@@ -751,6 +751,9 @@ class Database(BaseDatabase):
             "ml_performance_tracking",
             "regime_states",
             "regime_models",
+            "correlation_matrices",
+            "hidden_categories",
+            "optimization_results",
         ]:
             await self.conn.execute(f"DROP TABLE IF EXISTS {old_table}")
 
