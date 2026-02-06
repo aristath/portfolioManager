@@ -7,9 +7,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sentinel.database import Database
-from sentinel.database.ml import MODEL_TYPES, MLDatabase
-from sentinel.ml_ensemble import EnsembleBlender
 from sentinel.settings import Settings
+from sentinel_ml.database.ml import MODEL_TYPES, MLDatabase
+from sentinel_ml.ml_ensemble import EnsembleBlender
 
 
 async def main():

@@ -23,12 +23,12 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sentinel import Database
-from sentinel.database.ml import MLDatabase
-from sentinel.ml_ensemble import EnsembleBlender
-from sentinel.ml_features import FeatureExtractor
-from sentinel.ml_predictor import MLPredictor
 from sentinel.price_validator import PriceValidator
-from sentinel.regime_quote import quote_data_from_prices
+from sentinel_ml.database.ml import MLDatabase
+from sentinel_ml.ml_ensemble import EnsembleBlender
+from sentinel_ml.ml_features import FeatureExtractor
+from sentinel_ml.ml_predictor import MLPredictor
+from sentinel_ml.regime_quote import quote_data_from_prices
 
 logging.basicConfig(
     level=logging.INFO,

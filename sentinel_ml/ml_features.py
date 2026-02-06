@@ -81,6 +81,17 @@ DEFAULT_FEATURES: Dict[str, float] = {
     "industry_agg_volatility": 0.02,
 }
 
+COUNTRY_AGG_PREFIX = "_AGG_COUNTRY_"
+INDUSTRY_AGG_PREFIX = "_AGG_INDUSTRY_"
+
+
+def _country_aggregate_symbol(geography: str) -> str:
+    return f"{COUNTRY_AGG_PREFIX}{geography.upper().replace(' ', '_')}"
+
+
+def _industry_aggregate_symbol(industry: str) -> str:
+    return f"{INDUSTRY_AGG_PREFIX}{industry.upper().replace(' ', '_')}"
+
 
 def features_to_array(features: Dict[str, float]) -> np.ndarray:
     """Convert feature dict to numpy array in correct order.
@@ -361,15 +372,10 @@ class FeatureExtractor:
         if not security_data or not self.db:
             return features
 
-        # Import here to avoid circular imports
-        from sentinel.aggregates import AggregateComputer
-
-        agg_computer = AggregateComputer(self.db)
-
         # Extract country aggregate features
         geography = security_data.get("geography", "")
         if geography:
-            country_symbol = agg_computer.get_country_aggregate_symbol(geography)
+            country_symbol = _country_aggregate_symbol(geography)
             if country_symbol:
                 country_features = await self._compute_aggregate_features(country_symbol, date, "country")
                 features.update(country_features)
@@ -377,7 +383,7 @@ class FeatureExtractor:
         # Extract industry aggregate features
         industry = security_data.get("industry", "")
         if industry:
-            industry_symbol = agg_computer.get_industry_aggregate_symbol(industry)
+            industry_symbol = _industry_aggregate_symbol(industry)
             if industry_symbol:
                 industry_features = await self._compute_aggregate_features(industry_symbol, date, "industry")
                 features.update(industry_features)

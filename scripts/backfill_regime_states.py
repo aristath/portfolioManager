@@ -19,8 +19,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sentinel import Database
-from sentinel.database.ml import MLDatabase
-from sentinel.regime_hmm import RegimeDetector
+from sentinel_ml.database.ml import MLDatabase
+from sentinel_ml.regime_hmm import RegimeDetector
 
 logging.basicConfig(
     level=logging.INFO,

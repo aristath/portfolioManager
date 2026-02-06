@@ -17,8 +17,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVR
 
-from sentinel.database.ml import MODEL_TYPES
-from sentinel.ml_features import FEATURE_NAMES, NUM_FEATURES
+from sentinel_ml.database.ml import MODEL_TYPES
+from sentinel_ml.ml_features import FEATURE_NAMES, NUM_FEATURES
 
 logger = logging.getLogger(__name__)
 
@@ -299,7 +299,7 @@ class EnsembleBlender:
 
     def save(self, symbol: str) -> None:
         """Save all 4 models for a symbol."""
-        from sentinel.paths import DATA_DIR
+        from sentinel_ml.paths import DATA_DIR
 
         path = DATA_DIR / "ml_models" / symbol
         path.mkdir(parents=True, exist_ok=True)
@@ -308,7 +308,7 @@ class EnsembleBlender:
 
     def load(self, symbol: str) -> None:
         """Load all 4 models for a symbol."""
-        from sentinel.paths import DATA_DIR
+        from sentinel_ml.paths import DATA_DIR
 
         path = DATA_DIR / "ml_models" / symbol
         for mt in MODEL_TYPES:
@@ -317,7 +317,7 @@ class EnsembleBlender:
     @staticmethod
     def model_exists(symbol: str) -> bool:
         """Check if all 4 trained models exist for a symbol."""
-        from sentinel.paths import DATA_DIR
+        from sentinel_ml.paths import DATA_DIR
 
         path = DATA_DIR / "ml_models" / symbol
         return all(_PREDICTOR_MAP[mt].files_exist(path) for mt in MODEL_TYPES)

@@ -5,11 +5,11 @@ from typing import Dict, Optional
 
 import numpy as np
 
-from sentinel.database import Database
-from sentinel.database.ml import MODEL_TYPES, MLDatabase
-from sentinel.ml_ensemble import EnsembleBlender
-from sentinel.ml_trainer import TrainingDataGenerator
-from sentinel.settings import Settings
+from sentinel_ml.adapters import MonolithDBAdapter, MonolithSettingsAdapter
+from sentinel_ml.clients.monolith_client import MonolithDataClient
+from sentinel_ml.database.ml import MODEL_TYPES, MLDatabase
+from sentinel_ml.ml_ensemble import EnsembleBlender
+from sentinel_ml.ml_trainer import TrainingDataGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +26,10 @@ class MLRetrainer:
             ml_db: Optional MLDatabase instance (defaults to new MLDatabase())
             settings: Optional Settings instance (defaults to new Settings())
         """
-        self.db = db or Database()
+        client = MonolithDataClient()
+        self.db = db or MonolithDBAdapter(client)
         self.ml_db = ml_db or MLDatabase()
-        self.settings = settings or Settings()
+        self.settings = settings or MonolithSettingsAdapter(client)
         self.trainer = TrainingDataGenerator(db=self.db, ml_db=self.ml_db, settings=self.settings)
         self.progress_callback = progress_callback
 

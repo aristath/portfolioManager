@@ -7,12 +7,9 @@ and dampen ML predictions when regime disagrees with prediction direction.
 
 import json
 import logging
-from typing import TYPE_CHECKING, Tuple, Union
+from typing import Any, Tuple, Union
 
 import pandas as pd
-
-if TYPE_CHECKING:
-    from sentinel.database import Database
 
 logger = logging.getLogger(__name__)
 
@@ -156,7 +153,7 @@ def apply_regime_dampening(ml_return: float, regime_score: float, max_dampening:
 async def get_regime_adjusted_return(
     symbol: str,
     ml_return: float,
-    db: "Database",
+    db: Any,
     quote_data: dict | None = None,
 ) -> Tuple[float, float, float]:
     """

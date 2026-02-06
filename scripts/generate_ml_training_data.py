@@ -8,8 +8,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sentinel.database import Database
-from sentinel.database.ml import MLDatabase
-from sentinel.ml_trainer import TrainingDataGenerator
+from sentinel_ml.database.ml import MLDatabase
+from sentinel_ml.ml_trainer import TrainingDataGenerator
 
 
 async def main():

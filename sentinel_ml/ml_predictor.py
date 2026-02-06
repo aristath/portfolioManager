@@ -11,15 +11,15 @@ from typing import Any, Dict, Optional
 
 import numpy as np
 
-from sentinel.database import Database
-from sentinel.database.ml import MODEL_TYPES, MLDatabase
-from sentinel.ml_ensemble import EnsembleBlender
-from sentinel.ml_features import (
+from sentinel_ml.adapters import MonolithDBAdapter, MonolithSettingsAdapter
+from sentinel_ml.clients.monolith_client import MonolithDataClient
+from sentinel_ml.database.ml import MODEL_TYPES, MLDatabase
+from sentinel_ml.ml_ensemble import EnsembleBlender
+from sentinel_ml.ml_features import (
     DEFAULT_FEATURES,
     features_to_array,
 )
-from sentinel.regime_quote import get_regime_adjusted_return
-from sentinel.settings import Settings
+from sentinel_ml.regime_quote import get_regime_adjusted_return
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +33,10 @@ class MLPredictor:
         self._load_times: Dict[str, float] = {}
         self._cache_duration = 43200  # 12 hours
 
-        self.db = db or Database()
+        client = MonolithDataClient()
+        self.db = db or MonolithDBAdapter(client)
         self.ml_db = ml_db or MLDatabase()
-        self.settings = settings or Settings()
+        self.settings = settings or MonolithSettingsAdapter(client)
 
     async def predict_and_blend(
         self,
@@ -73,18 +74,8 @@ class MLPredictor:
                 'wavelet_score': float,
             }
         """
-        await self.db.connect()
-
         if not ml_enabled:
             return self._fallback_to_wavelet(wavelet_score)
-
-        # Check cache first (unless skip_cache e.g. for backfill)
-        cache_key = f"ml:prediction:{symbol}:{date}"
-        if not skip_cache:
-            cached = await self.db.cache_get(cache_key)
-            if cached is not None:
-                logger.debug(f"{symbol}: Using cached ML prediction")
-                return json.loads(cached)
 
         # Get model for this symbol
         ensemble = await self._get_model(symbol)
@@ -171,8 +162,6 @@ class MLPredictor:
             "wavelet_score": float(wavelet_score),
         }
 
-        if not skip_cache:
-            await self.db.cache_set(cache_key, json.dumps(result), ttl_seconds=43200)
         return result
 
     def _normalize_return_to_score(self, predicted_return: float) -> float:

@@ -20,7 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from sentinel.ml_reset import MLResetManager
+from sentinel_ml.ml_reset import MLResetManager
 
 
 async def main() -> None:

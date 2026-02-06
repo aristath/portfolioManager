@@ -6,9 +6,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from sentinel_ml.api.routers import analytics_router, jobs_router, ml_router
+from sentinel_ml.api.routers import analytics_router, jobs_router, ml_router, ui_router
 from sentinel_ml.api.routers.jobs import set_scheduler
-from sentinel_ml.clients.monolith_client import MonolithDataClient
+from sentinel_ml.clients.monolith_client import MonolithDataClient, set_monolith_base_url
 from sentinel_ml.database.ml import MLDatabase
 from sentinel_ml.jobs import init as init_jobs
 from sentinel_ml.jobs import stop as stop_jobs
@@ -28,6 +28,9 @@ async def lifespan(app: FastAPI):
 
     ml_db = MLDatabase()
     await ml_db.connect()
+    saved_monolith_url = await ml_db.get_service_setting("monolith_base_url")
+    if saved_monolith_url:
+        set_monolith_base_url(saved_monolith_url)
 
     monolith = MonolithDataClient()
     detector = RegimeDetector()
@@ -73,3 +76,4 @@ async def version() -> dict[str, str]:
 app.include_router(ml_router)
 app.include_router(analytics_router)
 app.include_router(jobs_router)
+app.include_router(ui_router)
