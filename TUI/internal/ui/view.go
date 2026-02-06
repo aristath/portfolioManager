@@ -18,7 +18,11 @@ func (m Model) View() tea.View {
 	if !m.ready {
 		return tea.NewView("\n  Loading...")
 	}
-	v := tea.NewView(m.viewMain())
+	content := m.viewMain()
+	if m.inSettings {
+		content = m.viewSettings()
+	}
+	v := tea.NewView(content)
 	v.AltScreen = true
 	return v
 }
@@ -28,6 +32,43 @@ func (m Model) viewMain() string {
 		Width(m.width).
 		Height(m.height)
 	return page.Render(m.viewport.View())
+}
+
+func (m Model) viewSettings() string {
+	t := theme.Default
+
+	title := lipgloss.NewStyle().Foreground(t.Primary).Bold(true).Render("SETTINGS")
+	label := lipgloss.NewStyle().Foreground(t.Muted).Render("API URL")
+	input := lipgloss.NewStyle().Foreground(t.Text).Render(m.apiURLInput)
+	hints := lipgloss.NewStyle().Foreground(t.Subtext).Render("ENTER save   ESC cancel   Ctrl+U clear")
+
+	status := ""
+	if m.statusMsg != "" {
+		color := t.Success
+		if strings.Contains(strings.ToLower(m.statusMsg), "invalid") || strings.Contains(strings.ToLower(m.statusMsg), "cannot") {
+			color = t.Error
+		}
+		status = lipgloss.NewStyle().Foreground(color).Render(m.statusMsg)
+	}
+
+	body := []string{
+		"",
+		title,
+		"",
+		label,
+		input,
+		"",
+		hints,
+	}
+	if status != "" {
+		body = append(body, "", status)
+	}
+
+	return lipgloss.NewStyle().
+		Width(m.width).
+		Height(m.height).
+		Padding(1, 2).
+		Render(strings.Join(body, "\n"))
 }
 
 // contentWidth returns the usable content width after outer padding.

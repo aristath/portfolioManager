@@ -11,8 +11,9 @@ import (
 )
 
 type Model struct {
-	client *api.Client
-	apiURL string
+	client       *api.Client
+	apiURL       string
+	settingsFile string
 
 	// Data
 	connected       bool
@@ -23,11 +24,14 @@ type Model struct {
 	securities      []api.Security
 
 	// UI state
-	width     int
-	height    int
-	maxWidth  int
-	maxHeight int
-	ready     bool
+	width       int
+	height      int
+	maxWidth    int
+	maxHeight   int
+	ready       bool
+	inSettings  bool
+	apiURLInput string
+	statusMsg   string
 
 	// Auto-scroll
 	scrolling    bool
@@ -76,12 +80,13 @@ const refreshInterval = 10 * time.Second
 
 type refreshMsg struct{}
 
-func NewModel(client *api.Client, apiURL string, maxWidth, maxHeight int) Model {
+func NewModel(client *api.Client, apiURL, settingsFile string, maxWidth, maxHeight int) Model {
 	return Model{
-		client:    client,
-		apiURL:    apiURL,
-		maxWidth:  maxWidth,
-		maxHeight: maxHeight,
+		client:       client,
+		apiURL:       apiURL,
+		settingsFile: settingsFile,
+		maxWidth:     maxWidth,
+		maxHeight:    maxHeight,
 	}
 }
 
