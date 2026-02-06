@@ -2,36 +2,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from sentinel.planner.analyzer import PortfolioAnalyzer
 from sentinel.planner.rebalance import RebalanceEngine
-
-
-@pytest.mark.asyncio
-async def test_analyzer_invested_value_uses_historical_close_on_as_of_date():
-    db = MagicMock()
-    currency = MagicMock()
-    portfolio = MagicMock()
-
-    portfolio.positions = AsyncMock(
-        return_value=[
-            {
-                "symbol": "AAA",
-                "quantity": 2,
-                "current_price": 999.0,
-                "currency": "EUR",
-            }
-        ]
-    )
-
-    db.get_prices = AsyncMock(return_value=[{"symbol": "AAA", "date": "2025-01-01", "close": 10.0}])
-    currency.get_rate = AsyncMock(return_value=1.0)
-
-    analyzer = PortfolioAnalyzer(db=db, portfolio=portfolio, currency=currency)
-
-    invested = await analyzer.get_invested_value_eur("2025-01-01")
-    assert invested == 20.0
-
-    db.get_prices.assert_awaited_once_with("AAA", days=1, end_date="2025-01-01")
 
 
 @pytest.mark.asyncio

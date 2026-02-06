@@ -7,18 +7,40 @@ import pytest
 import pytest_asyncio
 
 from sentinel.database import Database
+from sentinel.database.ml import MLDatabase
 from sentinel.regime_hmm import RegimeDetector
 
 
 @pytest_asyncio.fixture
 async def temp_db():
-    """Temporary database for regime_states tests."""
+    """Temporary main database for price-history operations."""
     import os
     import tempfile
 
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
         db_path = f.name
     db = Database(db_path)
+    await db.connect()
+    yield db
+    await db.close()
+    db.remove_from_cache()
+    if os.path.exists(db_path):
+        os.unlink(db_path)
+    for ext in ["-wal", "-shm"]:
+        wal_path = db_path + ext
+        if os.path.exists(wal_path):
+            os.unlink(wal_path)
+
+
+@pytest_asyncio.fixture
+async def temp_ml_db():
+    """Temporary ML database for regime model/state storage tests."""
+    import os
+    import tempfile
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+        db_path = f.name
+    db = MLDatabase(db_path)
     await db.connect()
     yield db
     await db.close()
@@ -86,13 +108,13 @@ async def test_detect_regime_as_of_returns_dict():
 
 
 @pytest.mark.asyncio
-async def test_store_regime_state_for_date_writes_to_db(temp_db):
+async def test_store_regime_state_for_date_writes_to_db(temp_ml_db):
     """store_regime_state_for_date writes (symbol, date_str, ...) to regime_states."""
     detector = RegimeDetector()
-    detector._db = temp_db
+    detector._ml_db = temp_ml_db
     await detector.store_regime_state_for_date("X", "2025-01-28", 0, "Bull", 0.85)
 
-    cursor = await temp_db.conn.execute(
+    cursor = await temp_ml_db.conn.execute(
         "SELECT symbol, date, regime, regime_name, confidence FROM regime_states WHERE symbol = ?",
         ("X",),
     )
@@ -106,14 +128,14 @@ async def test_store_regime_state_for_date_writes_to_db(temp_db):
 
 
 @pytest.mark.asyncio
-async def test_store_regime_state_for_date_idempotent(temp_db):
+async def test_store_regime_state_for_date_idempotent(temp_ml_db):
     """store_regime_state_for_date is idempotent (INSERT OR REPLACE)."""
     detector = RegimeDetector()
-    detector._db = temp_db
+    detector._ml_db = temp_ml_db
     await detector.store_regime_state_for_date("Y", "2025-01-29", 1, "Sideways", 0.6)
     await detector.store_regime_state_for_date("Y", "2025-01-29", 2, "Bear", 0.9)
 
-    cursor = await temp_db.conn.execute(
+    cursor = await temp_ml_db.conn.execute(
         "SELECT regime, regime_name, confidence FROM regime_states WHERE symbol = ? AND date = ?",
         ("Y", "2025-01-29"),
     )

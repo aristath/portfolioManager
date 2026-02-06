@@ -8,6 +8,7 @@ import pytest
 import pytest_asyncio
 
 from sentinel.database import Database
+from sentinel.database.ml import MODEL_TYPES, MLDatabase
 from sentinel.ml_reset import (
     TOTAL_STEPS,
     MLResetManager,
@@ -35,10 +36,31 @@ async def db():
         os.remove(path)
 
 
+@pytest_asyncio.fixture
+async def ml_db():
+    """Create test ML database."""
+    fd, path = tempfile.mkstemp(suffix=".db")
+    os.close(fd)
+
+    database = MLDatabase(path)
+    await database.connect()
+
+    yield database
+
+    await database.close()
+    database.remove_from_cache()
+    if os.path.exists(path):
+        os.remove(path)
+    for ext in ["-wal", "-shm"]:
+        wal_path = path + ext
+        if os.path.exists(wal_path):
+            os.unlink(wal_path)
+
+
 @pytest.fixture
-def manager(db):
-    """Create MLResetManager with test database."""
-    return MLResetManager(db=db)
+def manager(db, ml_db):
+    """Create MLResetManager with test databases."""
+    return MLResetManager(db=db, ml_db=ml_db)
 
 
 @pytest.mark.asyncio
@@ -102,44 +124,62 @@ async def test_delete_aggregates_preserves_regular_prices(db, manager):
 
 
 @pytest.mark.asyncio
-async def test_delete_training_data_clears_all_tables(db, manager):
-    """Verify all ML tables are emptied."""
-    # Setup: insert data into ML tables
-    await db.conn.execute(
+async def test_delete_training_data_clears_all_tables(ml_db, manager):
+    """Verify all ML tables in ml.db are emptied."""
+    # Setup: insert data into ML tables via ml_db
+    await ml_db.conn.execute(
         """INSERT INTO ml_training_samples
            (sample_id, symbol, sample_date, future_return, prediction_horizon_days, created_at)
            VALUES (?, ?, ?, ?, ?, ?)""",
-        ("sample1", "AAPL", "2024-01-01", 0.05, 14, "2024-01-01T00:00:00"),
+        ("sample1", "AAPL", 1704067200, 0.05, 14, 1704067200),
     )
-    await db.conn.execute(
-        """INSERT INTO ml_predictions
-           (symbol, predicted_at, wavelet_score, ml_score, final_score)
-           VALUES (?, ?, ?, ?, ?)""",
-        ("AAPL", "2024-01-01T00:00:00", 0.5, 0.6, 0.55),
+    for mt in MODEL_TYPES:
+        await ml_db.conn.execute(
+            f"INSERT INTO ml_predictions_{mt} "  # noqa: S608
+            "(prediction_id, symbol, predicted_at, predicted_return, ml_score, inference_time_ms) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (f"pred_{mt}", "AAPL", 1704067200, 0.03, 0.65, 5.0),
+        )
+        await ml_db.conn.execute(
+            f"INSERT INTO ml_models_{mt} "  # noqa: S608
+            "(symbol, training_samples, validation_rmse, validation_mae, validation_r2, last_trained_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            ("AAPL", 100, 0.03, 0.02, 0.65, 1704067200),
+        )
+        await ml_db.conn.execute(
+            f"INSERT INTO ml_performance_{mt} "  # noqa: S608
+            "(symbol, tracked_at, mean_absolute_error, root_mean_squared_error, predictions_evaluated) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("AAPL", 1704067200, 0.02, 0.03, 10),
+        )
+    await ml_db.conn.execute(
+        "INSERT INTO regime_states (symbol, date, regime, regime_name, confidence) VALUES (?, ?, ?, ?, ?)",
+        ("AAPL", "2025-01-01", 0, "Bull", 0.9),
     )
-    await db.conn.execute(
-        """INSERT INTO ml_models
-           (symbol, training_samples, validation_rmse, validation_mae, validation_r2, last_trained_at)
-           VALUES (?, ?, ?, ?, ?, ?)""",
-        ("AAPL", 100, 0.03, 0.02, 0.65, "2024-01-01T00:00:00"),
+    await ml_db.conn.execute(
+        "INSERT INTO regime_models (model_id, symbols, n_states, trained_at, model_params) VALUES (?, ?, ?, ?, ?)",
+        ("hmm_test", '["AAPL"]', 3, "2025-01-01T00:00:00+00:00", "abc"),
     )
-    await db.conn.execute(
-        """INSERT INTO ml_performance_tracking
-           (symbol, tracked_at, mean_absolute_error, root_mean_squared_error, predictions_evaluated)
-           VALUES (?, ?, ?, ?, ?)""",
-        ("AAPL", "2024-01-01T00:00:00", 0.02, 0.03, 10),
-    )
-    await db.conn.commit()
+    await ml_db.conn.commit()
 
     # Act
     await manager.delete_training_data()
 
     # Assert: all tables are empty
-    tables = ["ml_training_samples", "ml_predictions", "ml_models", "ml_performance_tracking"]
-    for table in tables:
-        cursor = await db.conn.execute(f"SELECT COUNT(*) as cnt FROM {table}")  # noqa: S608
+    cursor = await ml_db.conn.execute("SELECT COUNT(*) as cnt FROM ml_training_samples")
+    row = await cursor.fetchone()
+    assert row["cnt"] == 0, "ml_training_samples should be empty"
+
+    for mt in MODEL_TYPES:
+        for table in [f"ml_predictions_{mt}", f"ml_models_{mt}", f"ml_performance_{mt}"]:
+            cursor = await ml_db.conn.execute(f"SELECT COUNT(*) as cnt FROM {table}")  # noqa: S608
+            row = await cursor.fetchone()
+            assert row["cnt"] == 0, f"{table} should be empty"
+
+    for table in ["regime_states", "regime_models"]:
+        cursor = await ml_db.conn.execute(f"SELECT COUNT(*) as cnt FROM {table}")  # noqa: S608
         row = await cursor.fetchone()
-        assert row["cnt"] == 0, f"Table {table} should be empty"
+        assert row["cnt"] == 0, f"{table} should be empty"
 
 
 @pytest.mark.asyncio
@@ -176,7 +216,7 @@ async def test_delete_model_files_handles_nonexistent_directory(manager, tmp_pat
 
 
 @pytest.mark.asyncio
-async def test_reset_all_orchestrates_full_pipeline(db, manager):
+async def test_reset_all_orchestrates_full_pipeline(db, ml_db, manager):
     """Verify reset_all calls all steps in correct order."""
     # Mock internal methods to track call order
     call_order = []

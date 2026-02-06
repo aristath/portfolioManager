@@ -397,64 +397,6 @@ class TestPrices:
             assert rows[-1]["date"] == "2024-01-01"
 
 
-class TestMLPredictions:
-    """Tests for ML prediction as-of queries."""
-
-    @pytest.mark.asyncio
-    async def test_get_ml_prediction_as_of_returns_latest_on_or_before_ts(self, temp_db):
-        """get_ml_prediction_as_of(symbol, ts) returns row with largest predicted_at <= ts."""
-        await temp_db.conn.execute(
-            """INSERT INTO ml_predictions
-               (prediction_id, symbol, predicted_at, features, predicted_return, ml_score, wavelet_score,
-                blend_ratio, final_score, inference_time_ms, regime_score, regime_dampening)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            ("S_100", "S", 100, "{}", 0.01, 0.6, 0.5, 0.4, 0.55, 5.0, 0.7, 0.9),
-        )
-        await temp_db.conn.execute(
-            """INSERT INTO ml_predictions
-               (prediction_id, symbol, predicted_at, features, predicted_return, ml_score, wavelet_score,
-                blend_ratio, final_score, inference_time_ms, regime_score, regime_dampening)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            ("S_200", "S", 200, "{}", 0.02, 0.65, 0.5, 0.4, 0.58, 5.0, 0.72, 0.88),
-        )
-        await temp_db.conn.execute(
-            """INSERT INTO ml_predictions
-               (prediction_id, symbol, predicted_at, features, predicted_return, ml_score, wavelet_score,
-                blend_ratio, final_score, inference_time_ms, regime_score, regime_dampening)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            ("S_300", "S", 300, "{}", 0.03, 0.7, 0.5, 0.4, 0.62, 5.0, 0.75, 0.85),
-        )
-        await temp_db.conn.commit()
-
-        row = await temp_db.get_ml_prediction_as_of("S", 250)
-        assert row is not None
-        assert row["symbol"] == "S"
-        assert row["predicted_at"] == 200
-        assert row["prediction_id"] == "S_200"
-
-        row_exact = await temp_db.get_ml_prediction_as_of("S", 200)
-        assert row_exact is not None
-        assert row_exact["predicted_at"] == 200
-
-    @pytest.mark.asyncio
-    async def test_get_ml_prediction_as_of_returns_none_when_no_row(self, temp_db):
-        """get_ml_prediction_as_of(symbol, ts) returns None when no row has predicted_at <= ts."""
-        await temp_db.conn.execute(
-            """INSERT INTO ml_predictions
-               (prediction_id, symbol, predicted_at, features, predicted_return, ml_score, wavelet_score,
-                blend_ratio, final_score, inference_time_ms, regime_score, regime_dampening)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            ("X_500", "X", 500, "{}", 0.01, 0.5, 0.5, 0.3, 0.5, 5.0, 0.5, 1.0),
-        )
-        await temp_db.conn.commit()
-
-        row = await temp_db.get_ml_prediction_as_of("X", 400)
-        assert row is None
-
-        row_other = await temp_db.get_ml_prediction_as_of("Y", 1000)
-        assert row_other is None
-
-
 class TestTrades:
     """Tests for trade operations (now using broker-synced trades)."""
 
@@ -649,15 +591,21 @@ class TestSchemaInitialization:
             assert table in tables, f"Missing table: {table}"
 
     @pytest.mark.asyncio
-    async def test_ml_tables_created(self, temp_db):
-        """ML-related tables are created."""
+    async def test_old_ml_tables_removed(self, temp_db):
+        """Old ML tables are dropped from main database (now in ml.db)."""
         cursor = await temp_db.conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
         tables = [row[0] for row in await cursor.fetchall()]
 
-        ml_tables = ["ml_training_samples", "ml_models", "ml_predictions", "ml_performance_tracking"]
-
-        for table in ml_tables:
-            assert table in tables, f"Missing ML table: {table}"
+        old_ml_tables = [
+            "ml_training_samples",
+            "ml_models",
+            "ml_predictions",
+            "ml_performance_tracking",
+            "regime_states",
+            "regime_models",
+        ]
+        for table in old_ml_tables:
+            assert table not in tables, f"Old ML table should be removed: {table}"
 
 
 class TestCategories:
@@ -860,3 +808,104 @@ class TestScores:
         result2 = await temp_db.get_scores(["A", "B"], as_of_date=250)
         assert result2["A"] == 0.2
         assert result2["B"] == 0.5
+
+
+class TestPortfolioSnapshots:
+    """Tests for JSON-based portfolio_snapshots table."""
+
+    @pytest.mark.asyncio
+    async def test_upsert_and_get_snapshot(self, temp_db):
+        """Round-trip: upsert a snapshot with positions + cash, get it back."""
+        data = {
+            "positions": {
+                "AAPL.US": {"quantity": 10, "value_eur": 2500.00},
+                "VUAA.EU": {"quantity": 50, "value_eur": 3200.00},
+            },
+            "cash_eur": 1500.00,
+        }
+        ts = 1706745600  # 2024-02-01 midnight UTC
+        await temp_db.upsert_portfolio_snapshot(ts, data)
+
+        snapshots = await temp_db.get_portfolio_snapshots()
+        assert len(snapshots) == 1
+        snap = snapshots[0]
+        assert snap["date"] == ts
+        assert isinstance(snap["data"], dict)
+        assert snap["data"]["cash_eur"] == 1500.00
+        assert snap["data"]["positions"]["AAPL.US"]["quantity"] == 10
+        assert snap["data"]["positions"]["VUAA.EU"]["value_eur"] == 3200.00
+
+    @pytest.mark.asyncio
+    async def test_get_snapshots_returns_date_and_data(self, temp_db):
+        """Each returned dict has 'date' (int) and 'data' (dict)."""
+        await temp_db.upsert_portfolio_snapshot(1706745600, {"positions": {}, "cash_eur": 100.0})
+        snapshots = await temp_db.get_portfolio_snapshots()
+        snap = snapshots[0]
+        assert "date" in snap
+        assert "data" in snap
+        assert isinstance(snap["date"], int)
+        assert isinstance(snap["data"], dict)
+
+    @pytest.mark.asyncio
+    async def test_get_snapshots_ordered_ascending(self, temp_db):
+        """Multiple dates are returned oldest first."""
+        ts1 = 1706745600  # Feb 1
+        ts2 = 1706832000  # Feb 2
+        ts3 = 1706918400  # Feb 3
+        for ts in [ts3, ts1, ts2]:  # Insert out of order
+            await temp_db.upsert_portfolio_snapshot(ts, {"positions": {}, "cash_eur": 0.0})
+        snapshots = await temp_db.get_portfolio_snapshots()
+        dates = [s["date"] for s in snapshots]
+        assert dates == [ts1, ts2, ts3]
+
+    @pytest.mark.asyncio
+    async def test_get_snapshots_days_filter(self, temp_db):
+        """Insert 30 days of snapshots, request last 7, verify only 7 returned."""
+        import time
+
+        now = int(time.time())
+        base = now - 30 * 86400  # 30 days ago
+        for i in range(30):
+            ts = base + i * 86400
+            await temp_db.upsert_portfolio_snapshot(ts, {"positions": {}, "cash_eur": float(i)})
+
+        snapshots = await temp_db.get_portfolio_snapshots(days=7)
+        assert len(snapshots) == 7
+        # All returned dates should be within last 7 days
+        cutoff = now - 7 * 86400
+        for s in snapshots:
+            assert s["date"] >= cutoff
+
+    @pytest.mark.asyncio
+    async def test_get_latest_snapshot_date(self, temp_db):
+        """Returns int timestamp of most recent snapshot."""
+        ts1 = 1706745600
+        ts2 = 1706832000
+        await temp_db.upsert_portfolio_snapshot(ts1, {"positions": {}, "cash_eur": 0.0})
+        await temp_db.upsert_portfolio_snapshot(ts2, {"positions": {}, "cash_eur": 0.0})
+        latest = await temp_db.get_latest_snapshot_date()
+        assert latest == ts2
+        assert isinstance(latest, int)
+
+    @pytest.mark.asyncio
+    async def test_get_latest_snapshot_date_empty(self, temp_db):
+        """Returns None when no snapshots exist."""
+        latest = await temp_db.get_latest_snapshot_date()
+        assert latest is None
+
+    @pytest.mark.asyncio
+    async def test_upsert_replaces_existing(self, temp_db):
+        """Upsert same date twice, second data wins."""
+        ts = 1706745600
+        await temp_db.upsert_portfolio_snapshot(
+            ts, {"positions": {"A": {"quantity": 1, "value_eur": 100}}, "cash_eur": 50.0}
+        )
+        await temp_db.upsert_portfolio_snapshot(
+            ts, {"positions": {"B": {"quantity": 2, "value_eur": 200}}, "cash_eur": 75.0}
+        )
+
+        snapshots = await temp_db.get_portfolio_snapshots()
+        assert len(snapshots) == 1
+        assert "B" in snapshots[0]["data"]["positions"]
+        assert "A" not in snapshots[0]["data"]["positions"]
+        assert snapshots[0]["data"]["cash_eur"] == 75.0

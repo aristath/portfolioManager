@@ -82,8 +82,10 @@ class TestSettingsDefaults:
     def test_defaults_ml_settings_exist(self):
         """ML-related settings should have defaults."""
         ml_keys = [
-            "ml_ensemble_nn_weight",
-            "ml_ensemble_xgb_weight",
+            "ml_weight_xgboost",
+            "ml_weight_ridge",
+            "ml_weight_rf",
+            "ml_weight_svr",
             "ml_prediction_horizon_days",
             "ml_training_lookback_years",
         ]
@@ -92,9 +94,8 @@ class TestSettingsDefaults:
 
     def test_defaults_ml_weights_sum_to_one(self):
         """ML ensemble weights should sum to 1.0."""
-        nn_weight = DEFAULTS["ml_ensemble_nn_weight"]
-        xgb_weight = DEFAULTS["ml_ensemble_xgb_weight"]
-        assert abs(nn_weight + xgb_weight - 1.0) < 0.01
+        total = sum(DEFAULTS[f"ml_weight_{mt}"] for mt in ["xgboost", "ridge", "rf", "svr"])
+        assert abs(total - 1.0) < 0.01
 
 
 class TestSettingsGet:

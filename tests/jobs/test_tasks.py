@@ -122,8 +122,10 @@ def mock_monitor():
     monitor = AsyncMock()
     monitor.track_symbol_performance = AsyncMock(
         return_value={
-            "mean_absolute_error": 0.03,
-            "predictions_evaluated": 10,
+            "xgboost": {"mean_absolute_error": 0.03, "predictions_evaluated": 10},
+            "ridge": {"mean_absolute_error": 0.04, "predictions_evaluated": 10},
+            "rf": {"mean_absolute_error": 0.035, "predictions_evaluated": 10},
+            "svr": {"mean_absolute_error": 0.038, "predictions_evaluated": 10},
         }
     )
     return monitor

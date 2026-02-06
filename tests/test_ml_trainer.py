@@ -284,24 +284,23 @@ class TestDataStorage:
     @pytest.mark.asyncio
     async def test_store_training_data_empty(self, trainer):
         """Empty DataFrame is handled gracefully."""
-        trainer.db = AsyncMock()
+        trainer.ml_db = AsyncMock()
+        trainer.ml_db.connect = AsyncMock()
+        trainer.ml_db.store_training_samples = AsyncMock()
         empty_df = pd.DataFrame()
 
         # Should not raise
         await trainer._store_training_data(empty_df)
 
-        # No execute calls should be made
-        trainer.db.conn = MagicMock()
-        trainer.db.conn.execute = AsyncMock()
-        # execute should not be called for empty df
+        # store_training_samples should not be called for empty df
+        trainer.ml_db.store_training_samples.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_store_training_data_batch(self, trainer):
-        """Training data is stored in batches."""
-        trainer.db = AsyncMock()
-        trainer.db.conn = AsyncMock()
-        trainer.db.conn.execute = AsyncMock()
-        trainer.db.conn.commit = AsyncMock()
+    async def test_store_training_data_calls_ml_db(self, trainer):
+        """Training data is stored via ml_db.store_training_samples."""
+        trainer.ml_db = AsyncMock()
+        trainer.ml_db.connect = AsyncMock()
+        trainer.ml_db.store_training_samples = AsyncMock()
 
         # Create sample DataFrame
         df = pd.DataFrame(
@@ -309,7 +308,7 @@ class TestDataStorage:
                 {
                     "sample_id": "id1",
                     "symbol": "TEST",
-                    "sample_date": "2024-01-01",
+                    "sample_date": 1704067200,
                     "return_1d": 0.01,
                     "return_5d": 0.02,
                     "return_20d": 0.05,
@@ -324,17 +323,23 @@ class TestDataStorage:
                     "macd": 0.0,
                     "bollinger_position": 0.5,
                     "sentiment_score": 0.0,
+                    "country_agg_momentum": 0.0,
+                    "country_agg_rsi": 0.0,
+                    "country_agg_volatility": 0.0,
+                    "industry_agg_momentum": 0.0,
+                    "industry_agg_rsi": 0.0,
+                    "industry_agg_volatility": 0.0,
                     "future_return": 0.05,
                     "prediction_horizon_days": 14,
-                    "created_at": "2024-01-01T00:00:00",
+                    "created_at": 1704067200,
                 }
             ]
         )
 
         await trainer._store_training_data(df)
 
-        # Should have called execute for each row
-        assert trainer.db.conn.execute.called
+        # Should have called ml_db.store_training_samples with the df
+        trainer.ml_db.store_training_samples.assert_called_once()
 
 
 class TestFeatureConsistency:

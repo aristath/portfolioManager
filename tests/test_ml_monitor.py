@@ -1,31 +1,71 @@
-"""Test ML monitor module - per-symbol tracking."""
+"""Test ML monitor module - per-model, per-symbol tracking."""
 
+import os
+import tempfile
 from unittest.mock import AsyncMock
 
 import pytest
+import pytest_asyncio
 
+from sentinel.database import Database
+from sentinel.database.ml import MLDatabase
 from sentinel.ml_monitor import MLMonitor
+
+
+@pytest_asyncio.fixture
+async def db():
+    """Create test database."""
+    fd, path = tempfile.mkstemp(suffix=".db")
+    os.close(fd)
+    database = Database(path)
+    await database.connect()
+    yield database
+    await database.close()
+    database.remove_from_cache()
+    if os.path.exists(path):
+        os.unlink(path)
+
+
+@pytest_asyncio.fixture
+async def ml_db():
+    """Create test ML database."""
+    fd, path = tempfile.mkstemp(suffix=".db")
+    os.close(fd)
+    database = MLDatabase(path)
+    await database.connect()
+    yield database
+    await database.close()
+    database.remove_from_cache()
+    if os.path.exists(path):
+        os.unlink(path)
+    for ext in ["-wal", "-shm"]:
+        wal_path = path + ext
+        if os.path.exists(wal_path):
+            os.unlink(wal_path)
 
 
 @pytest.fixture
 def monitor():
-    """Create monitor instance."""
-    return MLMonitor()
+    """Create monitor instance with mocked dbs."""
+    m = MLMonitor()
+    m.db = AsyncMock()
+    m.db.connect = AsyncMock()
+    m.ml_db = AsyncMock()
+    m.ml_db.connect = AsyncMock()
+    return m
 
 
 @pytest.mark.asyncio
 async def test_track_performance_no_predictions(monitor):
     """Test tracking when no predictions exist."""
-    monitor.db = AsyncMock()
-    monitor.db.connect = AsyncMock()
-    monitor.db.conn = AsyncMock()
     monitor.settings = AsyncMock()
     monitor.settings.get = AsyncMock(return_value=14)
 
-    # No predictions
+    # No predictions in any model type
     cursor_mock = AsyncMock()
     cursor_mock.fetchall = AsyncMock(return_value=[])
-    monitor.db.conn.execute = AsyncMock(return_value=cursor_mock)
+    monitor.ml_db.conn = AsyncMock()
+    monitor.ml_db.conn.execute = AsyncMock(return_value=cursor_mock)
 
     result = await monitor.track_performance()
 
@@ -36,133 +76,126 @@ async def test_track_performance_no_predictions(monitor):
 
 
 @pytest.mark.asyncio
-async def test_get_actual_return(monitor):
-    """Test actual return calculation."""
+async def test_get_actual_return_with_timestamp(monitor):
+    """Test actual return calculation using unix timestamp."""
     monitor.db = AsyncMock()
-
-    # Mock validated price series
     monitor.db.get_prices = AsyncMock(
         return_value=[
-            {"date": "2024-01-01", "close": 100.0},
             {"date": "2024-01-15", "close": 110.0},
+            {"date": "2024-01-01", "close": 100.0},
         ]
     )
 
-    result = await monitor._get_actual_return("TEST", "2024-01-01", 14)
+    # 1704067200 = 2024-01-01T00:00:00 UTC
+    result = await monitor._get_actual_return("TEST", 1704067200, 14)
 
-    # 10% return
     assert result is not None
     assert abs(result - 0.10) < 0.001
 
 
 @pytest.mark.asyncio
-async def test_get_actual_return_invalid_date(monitor):
-    """Test actual return with invalid date."""
+async def test_get_actual_return_no_prices(monitor):
+    """Test actual return when no prices found."""
     monitor.db = AsyncMock()
+    monitor.db.get_prices = AsyncMock(return_value=[])
 
-    result = await monitor._get_actual_return("TEST", "invalid-date", 14)
+    result = await monitor._get_actual_return("TEST", 1704067200, 14)
     assert result is None
 
 
 @pytest.mark.asyncio
-async def test_get_actual_return_no_price(monitor):
-    """Test actual return when price not found."""
-    monitor.db = AsyncMock()
-    monitor.db.conn = AsyncMock()
+async def test_check_symbol_drift_insufficient_history(db, ml_db):
+    """Test drift detection with insufficient history."""
+    monitor = MLMonitor(db=db, ml_db=ml_db)
 
-    cursor_mock = AsyncMock()
-    cursor_mock.fetchone = AsyncMock(return_value=None)
-    monitor.db.conn.execute = AsyncMock(return_value=cursor_mock)
+    # Only 3 records (< 5 required)
+    for i in range(3):
+        await ml_db.conn.execute(
+            "INSERT INTO ml_performance_xgboost "
+            "(symbol, tracked_at, mean_absolute_error, root_mean_squared_error, predictions_evaluated) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("TEST", 1704067200 + i * 86400, 0.02, 0.03, 10),
+        )
+    await ml_db.conn.commit()
 
-    result = await monitor._get_actual_return("TEST", "2024-01-01", 14)
-    assert result is None
-
-
-@pytest.mark.asyncio
-async def test_check_symbol_drift_insufficient_history(monitor):
-    """Test drift detection with insufficient history for a symbol."""
-    monitor.db = AsyncMock()
-    monitor.db.conn = AsyncMock()
-
-    # Less than 5 historical records
-    cursor_mock = AsyncMock()
-    cursor_mock.fetchall = AsyncMock(
-        return_value=[{"mean_absolute_error": 0.02, "root_mean_squared_error": 0.03} for _ in range(3)]
-    )
-    monitor.db.conn.execute = AsyncMock(return_value=cursor_mock)
-
-    result = await monitor._check_symbol_drift("TEST", 0.05, 0.06)
-
-    # Should not detect drift with insufficient history
+    result = await monitor._check_symbol_drift("xgboost", "TEST", 0.05)
     assert result is False
 
 
 @pytest.mark.asyncio
-async def test_check_symbol_drift_normal(monitor):
-    """Test drift detection with normal error for a symbol."""
-    monitor.db = AsyncMock()
-    monitor.db.conn = AsyncMock()
+async def test_check_symbol_drift_normal(db, ml_db):
+    """Test drift detection with normal error."""
+    monitor = MLMonitor(db=db, ml_db=ml_db)
 
-    # Historical data with consistent error
-    historical = [{"mean_absolute_error": 0.02, "root_mean_squared_error": 0.03} for _ in range(15)]
-    cursor_mock = AsyncMock()
-    cursor_mock.fetchall = AsyncMock(return_value=historical)
-    monitor.db.conn.execute = AsyncMock(return_value=cursor_mock)
+    for i in range(15):
+        await ml_db.conn.execute(
+            "INSERT INTO ml_performance_xgboost "
+            "(symbol, tracked_at, mean_absolute_error, root_mean_squared_error, predictions_evaluated) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("TEST", 1704067200 + i * 86400, 0.02, 0.03, 10),
+        )
+    await ml_db.conn.commit()
 
     # Current error within normal range
-    result = await monitor._check_symbol_drift("TEST", 0.021, 0.031)
-    assert not result
+    result = await monitor._check_symbol_drift("xgboost", "TEST", 0.021)
+    assert result is False
 
 
 @pytest.mark.asyncio
-async def test_check_symbol_drift_detected(monitor):
-    """Test drift detection with abnormal error for a symbol."""
-    monitor.db = AsyncMock()
-    monitor.db.conn = AsyncMock()
+async def test_check_symbol_drift_detected(db, ml_db):
+    """Test drift detection with abnormal error."""
+    monitor = MLMonitor(db=db, ml_db=ml_db)
 
-    # Historical data with some variance (required to establish drift baseline)
-    # Mean MAE ≈ 0.02, std ≈ 0.005
-    historical = [
-        {"mean_absolute_error": 0.015 + (i % 5) * 0.002, "root_mean_squared_error": 0.025 + (i % 5) * 0.002}
-        for i in range(15)
-    ]
-    cursor_mock = AsyncMock()
-    cursor_mock.fetchall = AsyncMock(return_value=historical)
-    monitor.db.conn.execute = AsyncMock(return_value=cursor_mock)
+    for i in range(15):
+        await ml_db.conn.execute(
+            "INSERT INTO ml_performance_xgboost "
+            "(symbol, tracked_at, mean_absolute_error, root_mean_squared_error, predictions_evaluated) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("TEST", 1704067200 + i * 86400, 0.015 + (i % 5) * 0.002, 0.025, 10),
+        )
+    await ml_db.conn.commit()
 
-    # Current error much higher than historical (> baseline + 2σ)
-    # With mean ≈ 0.02 and std ≈ 0.003, threshold is about 0.026
-    # Current MAE of 0.10 should definitely trigger drift
-    result = await monitor._check_symbol_drift("TEST", 0.10, 0.15)
-    assert result
+    # Current MAE much higher than historical
+    result = await monitor._check_symbol_drift("xgboost", "TEST", 0.10)
+    assert result is True
 
 
 @pytest.mark.asyncio
-async def test_evaluate_symbol(monitor):
-    """Test evaluating predictions for a single symbol."""
+async def test_evaluate_model_symbol(db, ml_db):
+    """Test evaluating predictions for a single model type and symbol."""
+    monitor = MLMonitor(db=db, ml_db=ml_db)
     monitor.db = AsyncMock()
-    monitor.db.conn = AsyncMock()
-
-    # Mock validated price series
     monitor.db.get_prices = AsyncMock(
         side_effect=[
             [
-                {"date": "2024-01-01", "close": 100.0},
                 {"date": "2024-01-15", "close": 105.0},
+                {"date": "2024-01-01", "close": 100.0},
             ],
             [
-                {"date": "2024-01-02", "close": 100.0},
                 {"date": "2024-01-16", "close": 105.0},
+                {"date": "2024-01-02", "close": 100.0},
             ],
         ]
     )
 
-    predictions = [
-        {"symbol": "TEST", "predicted_at": "2024-01-01T12:00:00", "predicted_return": 0.05},
-        {"symbol": "TEST", "predicted_at": "2024-01-02T12:00:00", "predicted_return": 0.03},
-    ]
+    # Insert test predictions
+    ts1 = 1704067200  # 2024-01-01
+    ts2 = 1704153600  # 2024-01-02
+    await ml_db.conn.execute(
+        "INSERT INTO ml_predictions_xgboost "
+        "(prediction_id, symbol, predicted_at, predicted_return, ml_score, inference_time_ms) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        ("pred1", "TEST", ts1, 0.05, 0.75, 5.0),
+    )
+    await ml_db.conn.execute(
+        "INSERT INTO ml_predictions_xgboost "
+        "(prediction_id, symbol, predicted_at, predicted_return, ml_score, inference_time_ms) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        ("pred2", "TEST", ts2, 0.03, 0.65, 5.0),
+    )
+    await ml_db.conn.commit()
 
-    result = await monitor._evaluate_symbol("TEST", predictions, 14)
+    result = await monitor._evaluate_model_symbol("xgboost", "TEST", ts1 - 1, ts2 + 1, 14)
 
     assert result is not None
     assert "mean_absolute_error" in result
@@ -172,96 +205,47 @@ async def test_evaluate_symbol(monitor):
 
 
 @pytest.mark.asyncio
-async def test_generate_report_no_data(monitor):
+async def test_generate_report_no_data(db, ml_db):
     """Test report generation with no data."""
-    monitor.db = AsyncMock()
-    monitor.db.connect = AsyncMock()
-    monitor.db.conn = AsyncMock()
-
-    cursor_mock = AsyncMock()
-    cursor_mock.fetchone = AsyncMock(return_value={"symbols": None})
-    cursor_mock.fetchall = AsyncMock(return_value=[])
-    monitor.db.conn.execute = AsyncMock(return_value=cursor_mock)
-
-    result = await monitor.generate_report()
-
-    assert "No performance data available" in result
-
-
-@pytest.mark.asyncio
-async def test_generate_report_with_data(monitor):
-    """Test report generation with data."""
-    monitor.db = AsyncMock()
-    monitor.db.connect = AsyncMock()
-    monitor.db.conn = AsyncMock()
-
-    # Mock aggregate query result
-    agg_result = {
-        "symbols": 5,
-        "avg_mae": 0.025,
-        "avg_rmse": 0.035,
-        "avg_bias": 0.002,
-        "drift_count": 1,
-        "total_predictions": 100,
-    }
-
-    # Mock per-symbol query result
-    symbol_stats = [
-        {"symbol": "AAPL", "avg_mae": 0.03, "avg_rmse": 0.04, "drift_count": 1},
-        {"symbol": "MSFT", "avg_mae": 0.02, "avg_rmse": 0.03, "drift_count": 0},
-    ]
-
-    # Mock drifting symbols
-    drifting = [{"symbol": "AAPL"}]
-
-    call_count = [0]
-
-    async def mock_execute(query, params=None):
-        cursor = AsyncMock()
-        call_count[0] += 1
-        if call_count[0] == 1:
-            cursor.fetchone = AsyncMock(return_value=agg_result)
-        elif call_count[0] == 2:
-            cursor.fetchall = AsyncMock(return_value=symbol_stats)
-        else:
-            cursor.fetchall = AsyncMock(return_value=drifting)
-        return cursor
-
-    monitor.db.conn.execute = mock_execute
+    monitor = MLMonitor(db=db, ml_db=ml_db)
 
     result = await monitor.generate_report()
 
     assert "ML Performance Report" in result
-    assert "Symbols tracked: 5" in result
-    assert "Mean MAE" in result
-    assert "AAPL" in result
-    assert "DRIFT" in result
+    assert "No data" in result
 
 
 @pytest.mark.asyncio
-async def test_get_symbol_history(monitor):
-    """Test getting performance history for a symbol."""
+async def test_generate_report_with_data(db, ml_db):
+    """Test report generation with performance data."""
+    monitor = MLMonitor(db=db, ml_db=ml_db)
+
+    # Insert performance data for xgboost
+    await ml_db.conn.execute(
+        "INSERT INTO ml_performance_xgboost "
+        "(symbol, tracked_at, mean_absolute_error, root_mean_squared_error, "
+        "prediction_bias, predictions_evaluated) VALUES (?, ?, ?, ?, ?, ?)",
+        ("AAPL", 1704067200, 0.025, 0.035, 0.002, 50),
+    )
+    await ml_db.conn.commit()
+
+    result = await monitor.generate_report()
+
+    assert "ML Performance Report" in result
+    assert "xgboost" in result
+    assert "1 symbols" in result
+
+
+@pytest.mark.asyncio
+async def test_track_symbol_performance(db, ml_db):
+    """Test tracking performance for a single symbol across all models."""
+    monitor = MLMonitor(db=db, ml_db=ml_db)
     monitor.db = AsyncMock()
     monitor.db.connect = AsyncMock()
-    monitor.db.conn = AsyncMock()
+    monitor.db.get_prices = AsyncMock(return_value=[])
+    monitor.settings = AsyncMock()
+    monitor.settings.get = AsyncMock(return_value=14)
 
-    history = [
-        {
-            "tracked_at": "2024-01-15T12:00:00",
-            "mean_absolute_error": 0.02,
-            "root_mean_squared_error": 0.03,
-            "prediction_bias": 0.001,
-            "drift_detected": 0,
-            "predictions_evaluated": 10,
-        }
-        for _ in range(5)
-    ]
-
-    cursor_mock = AsyncMock()
-    cursor_mock.fetchall = AsyncMock(return_value=history)
-    monitor.db.conn.execute = AsyncMock(return_value=cursor_mock)
-
-    result = await monitor.get_symbol_history("TEST", days=30)
-
-    assert len(result) == 5
-    assert result[0]["mean_absolute_error"] == 0.02
+    # No predictions exist, should return None
+    result = await monitor.track_symbol_performance("TEST")
+    assert result is None
