@@ -1,15 +1,21 @@
 /**
  * Portfolio P&L Chart Component
  *
- * SVG-based chart showing annualized return % with:
- * - Actual (green/red area fill): 14-day rolling TWR, annualized
- * - Wavelet (blue line): portfolio-weighted wavelet score as annualized return
- * - ML (peach line): portfolio-weighted ML score as annualized return
- * - Target (dashed line): horizontal at 11%
+ * SVG-based chart with dual Y-axes:
+ * Left axis [-1, +1]: Wavelet portfolio quality score (blue line)
+ * Right axis [%]: Actual trailing CAGR (green/red area), 4 ML models (toggleable), Target (dashed)
  */
+import { useState } from 'react';
 import { catppuccin } from '../theme';
 import { buildSmoothPath } from '../utils/chartUtils';
 import { useResponsiveWidth } from '../hooks/useResponsiveWidth';
+
+const ML_LINES = [
+  { key: 'ml_xgboost', label: 'XGBoost', color: catppuccin.yellow },
+  { key: 'ml_ridge', label: 'Ridge', color: catppuccin.peach },
+  { key: 'ml_rf', label: 'RF', color: catppuccin.mauve },
+  { key: 'ml_svr', label: 'SVR', color: catppuccin.teal },
+];
 
 /**
  * Renders the portfolio annualized return chart
@@ -17,14 +23,24 @@ import { useResponsiveWidth } from '../hooks/useResponsiveWidth';
  * @param {Object} props
  * @param {Array} props.snapshots - Array of snapshot objects with annualized return fields
  * @param {Object} props.summary - Summary with target_ann_return
- * @param {number} props.height - Chart height (default 160)
+ * @param {number} props.height - Chart height (default 300)
  */
 export function PortfolioPnLChart({
   snapshots = [],
   summary = null,
-  height = 160,
+  height = 300,
 }) {
   const [containerRef, width] = useResponsiveWidth(300);
+  const [visibleML, setVisibleML] = useState({
+    ml_xgboost: true,
+    ml_ridge: true,
+    ml_rf: true,
+    ml_svr: true,
+  });
+
+  const toggleML = (key) => {
+    setVisibleML((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
 
   const formatPct = (value) => {
     if (value == null) return '';
@@ -42,7 +58,7 @@ export function PortfolioPnLChart({
     })}`;
   };
 
-  // Legend component
+  // Legend component with clickable ML lines
   const Legend = () => (
     <div
       style={{
@@ -55,31 +71,59 @@ export function PortfolioPnLChart({
         flexWrap: 'wrap',
       }}
     >
+      {/* Static legend items */}
       {[
         { color: catppuccin.green, label: 'Actual' },
         { color: catppuccin.blue, label: 'Wavelet' },
-        { color: catppuccin.yellow, label: 'ML' },
-        { color: catppuccin.overlay0, label: 'Target', dashed: true },
-      ].map(({ color, label, dashed }) => (
+      ].map(({ color, label }) => (
         <span key={label} style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-          {dashed ? (
-            <svg width="10" height="10">
-              <line x1="0" y1="5" x2="10" y2="5" stroke={color} strokeWidth="1.5" strokeDasharray="2,2" />
-            </svg>
-          ) : (
-            <span
-              style={{
-                width: '6px',
-                height: '6px',
-                borderRadius: '50%',
-                backgroundColor: color,
-                display: 'inline-block',
-              }}
-            />
-          )}
+          <span
+            style={{
+              width: '6px',
+              height: '6px',
+              borderRadius: '50%',
+              backgroundColor: color,
+              display: 'inline-block',
+            }}
+          />
           {label}
         </span>
       ))}
+
+      {/* Toggleable ML legend items */}
+      {ML_LINES.map(({ key, label, color }) => (
+        <span
+          key={key}
+          onClick={() => toggleML(key)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '3px',
+            cursor: 'pointer',
+            opacity: visibleML[key] ? 1 : 0.35,
+            userSelect: 'none',
+          }}
+        >
+          <span
+            style={{
+              width: '6px',
+              height: '6px',
+              borderRadius: '50%',
+              backgroundColor: color,
+              display: 'inline-block',
+            }}
+          />
+          {label}
+        </span>
+      ))}
+
+      {/* Target (dashed) */}
+      <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
+        <svg width="10" height="10">
+          <line x1="0" y1="5" x2="10" y2="5" stroke={catppuccin.overlay0} strokeWidth="1.5" strokeDasharray="2,2" />
+        </svg>
+        Target
+      </span>
     </div>
   );
 
@@ -102,7 +146,7 @@ export function PortfolioPnLChart({
       );
     }
 
-    const padding = { top: 20, right: 60, bottom: 20, left: 10 };
+    const padding = { top: 20, right: 60, bottom: 32, left: 30 };
     const chartWidth = width - padding.left - padding.right;
     const chartHeight = height - padding.top - padding.bottom;
 
@@ -110,12 +154,13 @@ export function PortfolioPnLChart({
 
     const targetReturn = summary?.target_ann_return ?? 11.0;
 
-    // Collect all non-null values across series for Y-axis scaling
+    // Primary Y-axis: return % (actual, ML models, target)
     const allValues = [0, targetReturn];
     snapshots.forEach((s) => {
       if (s.actual_ann_return != null) allValues.push(s.actual_ann_return);
-      if (s.wavelet_ann_return != null) allValues.push(s.wavelet_ann_return * 100);
-      if (s.ml_ann_return != null) allValues.push(s.ml_ann_return);
+      ML_LINES.forEach(({ key }) => {
+        if (visibleML[key] && s[key] != null) allValues.push(s[key]);
+      });
     });
 
     const rawMin = Math.min(...allValues);
@@ -127,6 +172,9 @@ export function PortfolioPnLChart({
 
     const scaleX = (i) => padding.left + (i / (snapshots.length - 1)) * chartWidth;
     const scaleY = (v) => padding.top + chartHeight - ((v - paddedMin) / valueRange) * chartHeight;
+
+    // Secondary Y-axis: wavelet score [-1, +1]
+    const scaleYWavelet = (v) => padding.top + chartHeight - ((v - (-1)) / 2) * chartHeight;
 
     const zeroY = scaleY(0);
     const targetY = scaleY(targetReturn);
@@ -165,20 +213,27 @@ export function PortfolioPnLChart({
       segments.push({ points: currentSegment, isPositive: currentIsPositive });
     }
 
-    // Build overlay line points (wavelet, ML) - skip nulls
+    // Build wavelet line points
     const waveletPoints = [];
-    const mlPoints = [];
     snapshots.forEach((s, i) => {
       if (s.wavelet_ann_return != null) {
-        waveletPoints.push({ x: scaleX(i), y: scaleY(s.wavelet_ann_return * 100) });
-      }
-      if (s.ml_ann_return != null) {
-        mlPoints.push({ x: scaleX(i), y: scaleY(s.ml_ann_return) });
+        waveletPoints.push({ x: scaleX(i), y: scaleYWavelet(s.wavelet_ann_return) });
       }
     });
-
     const waveletPath = buildSmoothPath(waveletPoints);
-    const mlPath = buildSmoothPath(mlPoints);
+
+    // Build per-model ML line points
+    const mlPaths = {};
+    ML_LINES.forEach(({ key }) => {
+      if (!visibleML[key]) return;
+      const points = [];
+      snapshots.forEach((s, i) => {
+        if (s[key] != null) {
+          points.push({ x: scaleX(i), y: scaleY(s[key]) });
+        }
+      });
+      mlPaths[key] = buildSmoothPath(points);
+    });
 
     // Current actual value for the dot
     const lastActual = actualPoints.length > 0 ? actualPoints[actualPoints.length - 1] : null;
@@ -272,18 +327,23 @@ export function PortfolioPnLChart({
           />
         )}
 
-        {/* ML line */}
-        {mlPath && (
-          <path
-            d={mlPath}
-            fill="none"
-            stroke={catppuccin.yellow}
-            strokeWidth={1.5}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            opacity={0.8}
-          />
-        )}
+        {/* Per-model ML lines */}
+        {ML_LINES.map(({ key, color }) => {
+          const path = mlPaths[key];
+          if (!path) return null;
+          return (
+            <path
+              key={key}
+              d={path}
+              fill="none"
+              stroke={color}
+              strokeWidth={1.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              opacity={0.8}
+            />
+          );
+        })}
 
         {/* Current value dot */}
         {lastActual && (
@@ -297,13 +357,52 @@ export function PortfolioPnLChart({
           />
         )}
 
-        {/* Y-axis min/max labels */}
+        {/* Right Y-axis: return % labels */}
         <text x={width - padding.right + 5} y={padding.top + 10} fill={catppuccin.subtext0} fontSize="10">
           {formatPct(rawMax)}
         </text>
         <text x={width - padding.right + 5} y={height - padding.bottom} fill={catppuccin.subtext0} fontSize="10">
           {formatPct(rawMin)}
         </text>
+
+        {/* Left Y-axis: wavelet [-1, +1] labels */}
+        <text x={2} y={padding.top + 10} fill={catppuccin.blue} fontSize="9" opacity={0.6}>
+          +1
+        </text>
+        <text x={2} y={padding.top + chartHeight / 2 + 3} fill={catppuccin.blue} fontSize="9" opacity={0.6}>
+          0
+        </text>
+        <text x={2} y={height - padding.bottom} fill={catppuccin.blue} fontSize="9" opacity={0.6}>
+          -1
+        </text>
+
+        {/* X-axis: date labels */}
+        {(() => {
+          const tickCount = Math.min(6, snapshots.length);
+          const step = (snapshots.length - 1) / (tickCount - 1);
+          const ticks = [];
+          for (let t = 0; t < tickCount; t++) {
+            const idx = Math.round(t * step);
+            const s = snapshots[idx];
+            if (!s?.date) continue;
+            const [, mon, day] = s.date.split('-');
+            const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            const label = `${monthNames[parseInt(mon, 10) - 1]} ${parseInt(day, 10)}`;
+            ticks.push(
+              <text
+                key={`xtick-${idx}`}
+                x={scaleX(idx)}
+                y={height - 4}
+                fill={catppuccin.subtext0}
+                fontSize="9"
+                textAnchor="middle"
+              >
+                {label}
+              </text>
+            );
+          }
+          return ticks;
+        })()}
       </svg>
     );
   };

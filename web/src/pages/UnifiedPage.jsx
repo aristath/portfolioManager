@@ -477,7 +477,7 @@ function UnifiedPage() {
             <PortfolioPnLChart
               snapshots={pnlData?.snapshots}
               summary={pnlData?.summary}
-              height={160}
+              height={300}
             />
           </Card>
 
