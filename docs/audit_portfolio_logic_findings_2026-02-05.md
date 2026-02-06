@@ -126,53 +126,10 @@ Scope: logic flaws and bug risks found during a codebase review, focusing on por
 5) Align planner fee model with broker commissions:
    - optionally compute a rolling average commission by market/symbol to estimate feasibility more accurately.
 
-## Snapshots & PnL history (API `/portfolio/pnl-history`)
-
-13) **Request-path snapshot backfill can be expensive and surprising**
-   - `GET /portfolio/pnl-history` calls `db.get_portfolio_snapshots(days + 44)` first.
-   - It then checks `db.get_latest_snapshot_date()` and, if missing or stale vs `date.today()`, runs `SnapshotService.backfill()` inside the request path.
-   - Impact:
-     - slow responses/timeouts when the DB is behind (especially on first call),
-     - competing with other startup/background tasks,
-     - “read” API endpoint triggers heavy writes and broker fetches.
-   - Location: `sentinel/api/routers/portfolio.py:69-78`
-
-14) **`pnl_pct` denominator heuristic changes when net deposits increase**
-   - The endpoint computes `pnl_eur` as `unrealized_pnl_eur` (if present) else `total_value - net_deposits`.
-   - It then uses `denominator = net_deposits` except when deposits increased vs the previous snapshot, where it uses the *previous* net deposits.
-   - Impact:
-     - discontinuous percentage series around deposit events,
-     - can mislead the UI into showing “better” or “worse” returns depending on deposit timing.
-   - Location: `sentinel/api/routers/portfolio.py:85-96`
-
-15) **Misleading naming: `actual_ann_return` is not annualized**
-   - Docstring says “annualized”, variable name includes `_ann_`, but the calculation is `(cumulative - 1) * 100` over a 30-day rolling TWR window.
-   - Comment explicitly says “No annualization”.
-   - Impact: UI/consumers may interpret this as annual return when it’s actually ~30-day rolling return %.
-   - Location: `sentinel/api/routers/portfolio.py:132-157`, `sentinel/api/routers/portfolio.py:118-119`
-
-16) **Ad-hoc mapping from wavelet score → “return %”**
-   - `wavelet_ann_return` is derived from an average wavelet score using:
-     - `((avg_w - 0.05) / 1.5) / 12.0 * 100`
-   - This is a brittle calibration baked into the API route.
-   - Impact:
-     - mixing of “signal score” units with return units,
-     - unclear calibration and hard to validate, easy to break if analyzer score scaling changes.
-   - Location: `sentinel/api/routers/portfolio.py:158-176`
-
-17) **Mixed horizons/semantics in one chart series**
-   - `actual_ann_return`: 30-day rolling TWR (%).
-   - `ml_ann_return`: averages `return_20d` and shows as %.
-   - `wavelet_ann_return`: score mapped to “monthly %” via heuristic.
-   - Impact: plotted lines are not strictly comparable (different horizons, units, and calibration).
-   - Location: `sentinel/api/routers/portfolio.py:132-189`
-
 ## Frontend consumption notes (web)
 
-- Unified UI calls both:
-  - `GET /cashflows` (query key `cashflows`) via `getCashFlows()`
-  - `GET /portfolio/pnl-history` (query key `portfolio-pnl`) via `getPortfolioPnLHistory()`
-  - Location: `web/src/pages/UnifiedPage.jsx:109-119`, `web/src/api/client.js:187-192`
+- Unified UI calls `GET /cashflows` (query key `cashflows`) via `getCashFlows()`.
+  - Location: `web/src/pages/UnifiedPage.jsx:109-119`, `web/src/api/client.js:187-188`
 
 19) **Cashflow endpoint profit bug is user-visible in Unified UI**
    - Unified UI displays `cashFlows.total_profit` directly as “Total Profit”.
@@ -180,11 +137,6 @@ Scope: logic flaws and bug risks found during a codebase review, focusing on por
    - Location:
      - UI: `web/src/pages/UnifiedPage.jsx:411-429`
      - API: `sentinel/api/routers/trading.py:116-130`
-
-20) **Chart/UI naming mismatch reinforces confusion**
-   - `PortfolioPnLChart` is documented as “annualized return %”, but the API currently returns 30-day rolling returns (%) and mixes horizons/units across actual/wavelet/ML series.
-   - Impact: the UI likely labels/interprets the plotted values as annualized even when they are not.
-   - Location: `web/src/components/PortfolioPnLChart.jsx:1-9`, `sentinel/api/routers/portfolio.py:118-119`, `:132-157`
 
 21) **Portfolio value is double-counted end-to-end in the UI status bar**
    - Backend `/portfolio`:
