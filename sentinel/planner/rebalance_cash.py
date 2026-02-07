@@ -34,6 +34,10 @@ async def apply_cash_constraint(
     current: dict[str, float] | None = None,
     total_value: float | None = None,
     symbol_convictions: dict[str, float] | None = None,
+    preloaded_positions: list[dict] | None = None,
+    preloaded_securities_map: dict[str, dict] | None = None,
+    preloaded_symbol_scores: dict[str, float] | None = None,
+    preloaded_symbol_prices: dict[str, float] | None = None,
 ) -> list[TradeRecommendation]:
     """Scale down buy recommendations to fit within available cash."""
     fixed_fee = await engine._settings.get("transaction_fee_fixed", 2.0)
@@ -44,6 +48,9 @@ async def apply_cash_constraint(
 
     if not buys:
         return recommendations
+
+    currencies = {b.currency for b in buys if b.currency != "EUR"}
+    fx_rates = {currency: await engine._currency.get_rate(currency) for currency in currencies}
 
     # Calculate available budget
     current_cash = await engine._portfolio.total_cash_eur()
@@ -121,6 +128,10 @@ async def apply_cash_constraint(
             total_value=total_value,
             reason_kind="funding_rotation",
             max_sell_conviction=buy_conviction_cap,
+            preloaded_positions=preloaded_positions,
+            preloaded_securities_map=preloaded_securities_map,
+            preloaded_symbol_scores=preloaded_symbol_scores,
+            preloaded_symbol_prices=preloaded_symbol_prices,
         )
         if funding_sells:
             max_sells = int(await _setting(engine, "strategy_max_funding_sells_per_cycle", 2))
@@ -169,7 +180,11 @@ async def apply_cash_constraint(
     for buy in buys_by_priority:
         one_lot_local = buy.lot_size * buy.price
         if buy.currency != "EUR":
-            one_lot_eur = await engine._currency.to_eur(one_lot_local, buy.currency)
+            rate = fx_rates.get(buy.currency, 0.0)
+            if rate > 0:
+                one_lot_eur = one_lot_local * rate
+            else:
+                one_lot_eur = await engine._currency.to_eur(one_lot_local, buy.currency)
         else:
             one_lot_eur = one_lot_local
 
@@ -187,7 +202,10 @@ async def apply_cash_constraint(
             min_qty = buy.quantity
             min_local_value = min_qty * buy.price
             if buy.currency != "EUR":
-                min_eur = await engine._currency.to_eur(min_local_value, buy.currency)
+                rate = fx_rates.get(buy.currency, 0.0)
+                min_eur = (
+                    min_local_value * rate if rate > 0 else await engine._currency.to_eur(min_local_value, buy.currency)
+                )
             else:
                 min_eur = min_local_value
 
@@ -232,7 +250,7 @@ async def apply_cash_constraint(
 
         # Convert back to quantity
         if buy.currency != "EUR":
-            rate = await engine._currency.get_rate(buy.currency)
+            rate = fx_rates.get(buy.currency, 0.0)
             local_value = allocated_eur / rate if rate > 0 else allocated_eur
         else:
             local_value = allocated_eur
@@ -245,7 +263,8 @@ async def apply_cash_constraint(
 
         actual_local = rounded_qty * buy.price
         if buy.currency != "EUR":
-            actual_eur = await engine._currency.to_eur(actual_local, buy.currency)
+            rate = fx_rates.get(buy.currency, 0.0)
+            actual_eur = actual_local * rate if rate > 0 else await engine._currency.to_eur(actual_local, buy.currency)
         else:
             actual_eur = actual_local
 
@@ -292,7 +311,10 @@ async def apply_cash_constraint(
         for i, buy in enumerate(final_buys):
             one_lot_local = buy.lot_size * buy.price
             if buy.currency != "EUR":
-                one_lot_eur = await engine._currency.to_eur(one_lot_local, buy.currency)
+                rate = fx_rates.get(buy.currency, 0.0)
+                one_lot_eur = (
+                    one_lot_local * rate if rate > 0 else await engine._currency.to_eur(one_lot_local, buy.currency)
+                )
             else:
                 one_lot_eur = one_lot_local
             one_lot_cost = one_lot_eur + calculate_transaction_cost(one_lot_eur, fixed_fee, pct_fee)
@@ -301,7 +323,12 @@ async def apply_cash_constraint(
                 new_qty = buy.quantity + buy.lot_size
                 new_local_value = new_qty * buy.price
                 if buy.currency != "EUR":
-                    new_eur = await engine._currency.to_eur(new_local_value, buy.currency)
+                    rate = fx_rates.get(buy.currency, 0.0)
+                    new_eur = (
+                        new_local_value * rate
+                        if rate > 0
+                        else await engine._currency.to_eur(new_local_value, buy.currency)
+                    )
                 else:
                     new_eur = new_local_value
 
@@ -388,14 +415,25 @@ async def generate_deficit_sells(
     total_value: float | None = None,
     reason_kind: str = "cash_deficit",
     max_sell_conviction: float | None = None,
+    preloaded_positions: list[dict] | None = None,
+    preloaded_securities_map: dict[str, dict] | None = None,
+    preloaded_symbol_scores: dict[str, float] | None = None,
+    preloaded_symbol_prices: dict[str, float] | None = None,
 ) -> list[TradeRecommendation]:
     """Generate sell recommendations to cover remaining deficit."""
     sells: list[TradeRecommendation] = []
     remaining_deficit = deficit_eur
 
-    all_securities = await engine._db.get_all_securities(active_only=False)
-    securities_map = {s["symbol"]: s for s in all_securities}
-    positions = await engine._get_positions_for_context(as_of_date=as_of_date, securities_map=securities_map)
+    if preloaded_securities_map is not None:
+        securities_map = preloaded_securities_map
+    else:
+        all_securities = await engine._db.get_all_securities(active_only=False)
+        securities_map = {s["symbol"]: s for s in all_securities}
+
+    if preloaded_positions is not None:
+        positions = preloaded_positions
+    else:
+        positions = await engine._get_positions_for_context(as_of_date=as_of_date, securities_map=securities_map)
     if not positions:
         return sells
 
@@ -408,7 +446,9 @@ async def generate_deficit_sells(
             continue
 
         price = pos.get("current_price", 0)
-        if as_of_date is not None:
+        if preloaded_symbol_prices is not None and symbol in preloaded_symbol_prices:
+            price = preloaded_symbol_prices[symbol]
+        elif as_of_date is not None:
             hist = await engine._db.get_prices(symbol, days=1, end_date=as_of_date)
             if hist:
                 close = hist[0].get("close")
@@ -430,9 +470,12 @@ async def generate_deficit_sells(
 
         currency = sec.get("currency", "EUR")
         lot_size = sec.get("min_lot", 1)
-        hist = await engine._db.get_prices(symbol, days=250, end_date=as_of_date)
-        closes = [float(r["close"]) for r in reversed(hist) if r.get("close") is not None]
-        score = float(compute_contrarian_signal(closes).get("opp_score", 0.0))
+        if preloaded_symbol_scores is not None and symbol in preloaded_symbol_scores:
+            score = float(preloaded_symbol_scores[symbol])
+        else:
+            hist = await engine._db.get_prices(symbol, days=250, end_date=as_of_date)
+            closes = [float(r["close"]) for r in reversed(hist) if r.get("close") is not None]
+            score = float(compute_contrarian_signal(closes).get("opp_score", 0.0))
 
         local_value = qty * price
         eur_value = await engine._currency.to_eur(local_value, currency)

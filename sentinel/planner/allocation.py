@@ -43,6 +43,16 @@ class AllocationCalculator:
         self._portfolio = portfolio or Portfolio()
         self._currency = currency or Currency()
         self._settings = settings or Settings()
+        self._last_signal_bundle: dict | None = None
+
+    def get_last_signal_bundle(self, as_of_date: str | None = None) -> dict | None:
+        """Return most recent signal bundle for the given as-of context."""
+        bundle = self._last_signal_bundle
+        if not isinstance(bundle, dict):
+            return None
+        if bundle.get("as_of_date") != as_of_date:
+            return None
+        return bundle
 
     def _calculate_diversification_score(
         self,
@@ -174,12 +184,24 @@ class AllocationCalculator:
         memory_max_boost = config["strategy_memory_max_boost"]
 
         symbol_signals: dict[str, dict[str, float | int]] = {}
+        rebalance_signals: dict[str, dict[str, float | int]] = {}
         user_multipliers: dict[str, float] = {}
         symbols = [sec["symbol"] for sec in securities]
-        all_prices = await asyncio.gather(
-            *[self._db.get_prices(symbol, days=300, end_date=as_of_date) for symbol in symbols]
-        )
-        prices_by_symbol = {symbol: prices for symbol, prices in zip(symbols, all_prices, strict=False)}
+        prices_by_symbol: dict[str, list[dict]] | None = None
+        get_prices_multi = getattr(self._db, "get_prices_for_symbols", None)
+        if callable(get_prices_multi):
+            maybe_prices = get_prices_multi(symbols, days=300, end_date=as_of_date)
+            if inspect.isawaitable(maybe_prices):
+                resolved = await maybe_prices
+                if isinstance(resolved, dict):
+                    prices_by_symbol = resolved
+            elif isinstance(maybe_prices, dict):
+                prices_by_symbol = maybe_prices
+        if prices_by_symbol is None:
+            all_prices = await asyncio.gather(
+                *[self._db.get_prices(symbol, days=300, end_date=as_of_date) for symbol in symbols]
+            )
+            prices_by_symbol = {symbol: prices for symbol, prices in zip(symbols, all_prices, strict=False)}
         for sec in securities:
             symbol = sec["symbol"]
             conviction = self._normalize_conviction(sec.get("user_multiplier", 0.5))
@@ -204,6 +226,7 @@ class AllocationCalculator:
             signal["dd252_recent_min"] = recent_min
             signal["opp_score"] = effective_opp
             signal["memory_boosted"] = 1 if effective_opp > raw_opp else 0
+            rebalance_signals[symbol] = dict(signal)
             # Conviction influences tactical opportunity intensity continuously.
             signal["opp_score"] = max(0.0, min(1.0, float(signal["opp_score"]) * (0.2 + (0.8 * conviction))))
 
@@ -241,6 +264,11 @@ class AllocationCalculator:
             min_opp_score=min_opp_score,
             max_opportunity_target=max_opportunity_target,
         )
+        self._last_signal_bundle = {
+            "as_of_date": as_of_date,
+            "rebalance_signals": rebalance_signals,
+            "sleeves": sleeves,
+        }
 
         # Enforce position bounds and renormalize to 100% invested
         max_position = config["max_position_pct"] / 100.0
@@ -259,6 +287,9 @@ class AllocationCalculator:
                 if inspect.isawaitable(maybe_set):
                     await maybe_set
                 maybe_set = cache_setter("planner:contrarian_signals", json.dumps(symbol_signals), ttl_seconds=600)
+                if inspect.isawaitable(maybe_set):
+                    await maybe_set
+                maybe_set = cache_setter("planner:rebalance_signals", json.dumps(rebalance_signals), ttl_seconds=600)
                 if inspect.isawaitable(maybe_set):
                     await maybe_set
                 maybe_set = cache_setter("planner:contrarian_sleeves", json.dumps(sleeves), ttl_seconds=600)

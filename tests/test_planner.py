@@ -531,6 +531,8 @@ class TestPlannerAsOfPropagation:
             total_value=1000.0,
             min_trade_value=None,
             as_of_date="2025-01-01",
+            precomputed_rebalance_signals=None,
+            precomputed_sleeves=None,
         )
 
 

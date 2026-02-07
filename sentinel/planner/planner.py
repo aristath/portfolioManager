@@ -98,6 +98,7 @@ class Planner:
         ideal = await self.calculate_ideal_portfolio(as_of_date=as_of_date)
         current = await self.get_current_allocations(as_of_date=as_of_date)
         total_value = await self._portfolio_analyzer.get_total_value(as_of_date=as_of_date)
+        signal_bundle = self._allocation_calculator.get_last_signal_bundle(as_of_date=as_of_date) or {}
 
         return await self._rebalance_engine.get_recommendations(
             ideal=ideal,
@@ -105,6 +106,8 @@ class Planner:
             total_value=total_value,
             min_trade_value=min_trade_value,
             as_of_date=as_of_date,
+            precomputed_rebalance_signals=signal_bundle.get("rebalance_signals"),
+            precomputed_sleeves=signal_bundle.get("sleeves"),
         )
 
     async def get_rebalance_summary(self) -> dict:

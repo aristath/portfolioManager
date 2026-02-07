@@ -114,6 +114,8 @@ class RebalanceEngine:
         total_value: float,
         min_trade_value: float | None = None,
         as_of_date: str | None = None,
+        precomputed_rebalance_signals: dict[str, dict[str, float | int | str]] | None = None,
+        precomputed_sleeves: dict[str, str] | None = None,
     ) -> list[TradeRecommendation]:
         """Generate trade recommendations to move toward ideal portfolio.
 
@@ -179,40 +181,80 @@ class RebalanceEngine:
 
         # Fetch historical prices: single path via get_prices(end_date=as_of_date).
         # When as_of_date is None we get latest 250; when set we get only data on or before that date.
+        # As-of/backtest mode uses trusted DB snapshots, so skip expensive validator passes.
+        use_price_validation = as_of_date is None
         price_validator = PriceValidator()
 
-        async def get_historical_ohlcv(symbol):
-            raw = await self._db.get_prices(symbol, days=250, end_date=as_of_date)
-            if not raw:
-                return []
-            for price in raw:
-                for col in ["open", "high", "low", "close", "volume"]:
-                    if col in price and price[col] is not None:
-                        try:
-                            price[col] = float(price[col])
-                        except (ValueError, TypeError):
-                            price[col] = 0.0
-            return price_validator.validate_price_series_desc(raw)
+        get_prices_multi = getattr(self._db, "get_prices_for_symbols", None)
+        raw_hist_map: dict[str, list[dict]] | None = None
+        if callable(get_prices_multi):
+            maybe_hist = get_prices_multi(all_symbols, days=250, end_date=as_of_date)
+            if inspect.isawaitable(maybe_hist):
+                resolved = await maybe_hist
+                if isinstance(resolved, dict):
+                    raw_hist_map = resolved
+            elif isinstance(maybe_hist, dict):
+                raw_hist_map = maybe_hist
+        if raw_hist_map is None:
 
-        hist_prices_list = await asyncio.gather(*[get_historical_ohlcv(s) for s in all_symbols])
-        hist_prices_map = {all_symbols[i]: hist_prices_list[i] for i in range(len(all_symbols))}
+            async def get_historical_rows(symbol: str) -> list[dict]:
+                return await self._db.get_prices(symbol, days=250, end_date=as_of_date)
+
+            hist_prices_list = await asyncio.gather(*[get_historical_rows(s) for s in all_symbols])
+            raw_hist_map = {all_symbols[i]: hist_prices_list[i] for i in range(len(all_symbols))}
+
+        hist_prices_map: dict[str, list[dict]] = {}
+        for symbol in all_symbols:
+            raw = raw_hist_map.get(symbol, [])
+            if not raw:
+                hist_prices_map[symbol] = []
+                continue
+            for price in raw:
+                if price.get("close") is not None:
+                    try:
+                        price["close"] = float(price["close"])
+                    except (ValueError, TypeError):
+                        price["close"] = 0.0
+            if use_price_validation:
+                hist_prices_map[symbol] = price_validator.validate_price_series_desc(raw)
+            else:
+                hist_prices_map[symbol] = raw
 
         symbol_signals: dict[str, dict[str, float | int | str]] = {}
-        sleeves_map = {}
+        sleeves_map = dict(precomputed_sleeves or {})
+        rebalance_signals_map: dict[str, dict[str, float | int | str]] = dict(precomputed_rebalance_signals or {})
         cache_getter = getattr(self._db, "cache_get", None)
-        if callable(cache_getter):
+        if callable(cache_getter) and as_of_date is None:
             maybe_sleeves = cache_getter("planner:contrarian_sleeves")
             if inspect.isawaitable(maybe_sleeves):
                 sleeves_cache = await maybe_sleeves
-                sleeves_map = json.loads(sleeves_cache) if sleeves_cache else {}
+                if not sleeves_map:
+                    sleeves_map = json.loads(sleeves_cache) if sleeves_cache else {}
+            maybe_rebalance_signals = cache_getter("planner:rebalance_signals")
+            if inspect.isawaitable(maybe_rebalance_signals):
+                rebalance_signals_cache = await maybe_rebalance_signals
+                if not rebalance_signals_map:
+                    rebalance_signals_map = json.loads(rebalance_signals_cache) if rebalance_signals_cache else {}
         strategy_states_getter = getattr(self._db, "get_strategy_states", None)
         strategy_states = {}
         if callable(strategy_states_getter):
             maybe_states = strategy_states_getter(all_symbols)
             if inspect.isawaitable(maybe_states):
                 strategy_states = await maybe_states
+        latest_trades_map: dict[str, dict] = {}
+        latest_trades_getter = getattr(self._db, "get_latest_trades_for_symbols", None)
+        if callable(latest_trades_getter):
+            maybe_latest = latest_trades_getter(all_symbols)
+            if inspect.isawaitable(maybe_latest):
+                resolved_latest = await maybe_latest
+                if isinstance(resolved_latest, dict):
+                    latest_trades_map = resolved_latest
+            elif isinstance(maybe_latest, dict):
+                latest_trades_map = maybe_latest
+
         currencies = {(securities_map.get(symbol) or {}).get("currency", "EUR") for symbol in all_symbols}
-        fx_rates = {currency: await self._currency.get_rate(currency) for currency in currencies}
+        fx_values = await asyncio.gather(*[self._currency.get_rate(currency) for currency in currencies])
+        fx_rates = {currency: rate for currency, rate in zip(currencies, fx_values, strict=False)}
         # Process each symbol
         for symbol in all_symbols:
             sec = securities_map.get(symbol)
@@ -221,28 +263,37 @@ class RebalanceEngine:
 
             hist_rows = hist_prices_map.get(symbol, [])
             closes = [float(r["close"]) for r in reversed(hist_rows) if r.get("close") is not None]
-            signal: dict[str, float | int | str] = dict(compute_contrarian_signal(closes))
-            signal["dd252_recent_min"] = recent_dd252_min(closes, window_days=entry_memory_days)
-            raw_score = float(signal.get("opp_score", 0.0) or 0.0)
-            effective_score = effective_opportunity_score(
-                raw_opp_score=raw_score,
-                cycle_turn=int(signal.get("cycle_turn", 0) or 0),
-                freefall_block=int(signal.get("freefall_block", 0) or 0),
-                recent_dd252_min_value=float(signal.get("dd252_recent_min", 0.0) or 0.0),
-                entry_t1_dd=entry_t1_dd,
-                entry_t3_dd=entry_t3_dd,
-                max_boost=memory_max_boost,
-            )
-            signal["opp_score_raw"] = raw_score
-            signal["opp_score"] = effective_score
-            signal["memory_boosted"] = 1 if effective_score > raw_score else 0
+            cached_signal = rebalance_signals_map.get(symbol)
+            if isinstance(cached_signal, dict):
+                signal = dict(cached_signal)
+                raw_score = float(signal.get("opp_score_raw", signal.get("opp_score", 0.0)) or 0.0)
+                effective_score = float(signal.get("opp_score", 0.0) or 0.0)
+                if "dd252_recent_min" not in signal:
+                    signal["dd252_recent_min"] = recent_dd252_min(closes, window_days=entry_memory_days)
+                signal["memory_boosted"] = int(signal.get("memory_boosted", 0) or 0)
+            else:
+                signal = dict(compute_contrarian_signal(closes))
+                signal["dd252_recent_min"] = recent_dd252_min(closes, window_days=entry_memory_days)
+                raw_score = float(signal.get("opp_score", 0.0) or 0.0)
+                effective_score = effective_opportunity_score(
+                    raw_opp_score=raw_score,
+                    cycle_turn=int(signal.get("cycle_turn", 0) or 0),
+                    freefall_block=int(signal.get("freefall_block", 0) or 0),
+                    recent_dd252_min_value=float(signal.get("dd252_recent_min", 0.0) or 0.0),
+                    entry_t1_dd=entry_t1_dd,
+                    entry_t3_dd=entry_t3_dd,
+                    max_boost=memory_max_boost,
+                )
+                signal["opp_score_raw"] = raw_score
+                signal["opp_score"] = effective_score
+                signal["memory_boosted"] = 1 if effective_score > raw_score else 0
             contrarian_scores[symbol] = adjust_score_for_conviction(effective_score, conviction)
 
             # Get price
             price = self._get_price(symbol, current_quotes, pos, hist_rows)
 
-            # Check for price anomaly
-            trade_blocked, block_reason = self._check_price_anomaly(price, hist_rows, symbol)
+            # Check for price anomaly using already prepared close series.
+            trade_blocked, block_reason = self._check_price_anomaly_closes(price, closes, symbol)
 
             symbol_currency = sec.get("currency", "EUR") if sec else "EUR"
             fx_rate = fx_rates.get(symbol_currency, 1.0)
@@ -270,6 +321,7 @@ class RebalanceEngine:
             security_data[symbol] = {
                 "price": price,
                 "currency": sec.get("currency", "EUR") if sec else "EUR",
+                "fx_rate": fx_rate,
                 "lot_size": sec.get("min_lot", 1) if sec else 1,
                 "current_qty": pos.get("quantity", 0) if pos else 0,
                 "avg_cost": pos.get("avg_cost", 0) if pos else 0,
@@ -297,6 +349,7 @@ class RebalanceEngine:
                 symbol_signals,
                 min_trade_value,
                 settings_ctx=settings_ctx,
+                latest_trade=latest_trades_map.get(symbol),
                 as_of_date=as_of_date,
             )
             if rec:
@@ -335,6 +388,15 @@ class RebalanceEngine:
             symbol_convictions={
                 symbol: self._normalize_conviction(sec.get("user_multiplier", 0.5))
                 for symbol, sec in securities_map.items()
+            },
+            preloaded_positions=all_positions,
+            preloaded_securities_map=securities_map,
+            preloaded_symbol_scores={
+                symbol: float(signal.get("opp_score_raw", signal.get("opp_score", 0.0)) or 0.0)
+                for symbol, signal in symbol_signals.items()
+            },
+            preloaded_symbol_prices={
+                symbol: float(sec.get("price", 0.0) or 0.0) for symbol, sec in security_data.items()
             },
         )
 
@@ -423,6 +485,17 @@ class RebalanceEngine:
 
         return False, ""
 
+    def _check_price_anomaly_closes(
+        self, price: float, closes_oldest_first: list[float], symbol: str
+    ) -> tuple[bool, str]:
+        """Check if current price indicates an anomaly using precomputed closes."""
+        if price <= 0:
+            return False, ""
+        if closes_oldest_first:
+            allow_trade, reason = check_trade_blocking(price, closes_oldest_first, symbol)
+            return not allow_trade, reason
+        return False, ""
+
     async def _build_recommendation(
         self,
         symbol: str,
@@ -434,6 +507,7 @@ class RebalanceEngine:
         signal_data: dict[str, dict[str, float | int | str]],
         min_trade_value: float,
         settings_ctx: dict[str, float],
+        latest_trade: dict | None = None,
         as_of_date: str | None = None,
     ) -> TradeRecommendation | None:
         """Build a single trade recommendation for a symbol."""
@@ -449,6 +523,7 @@ class RebalanceEngine:
 
         price = sec_data["price"]
         currency = sec_data["currency"]
+        fx_rate = float(sec_data.get("fx_rate", 1.0) or 1.0)
         lot_size = sec_data["lot_size"]
         current_qty = sec_data["current_qty"]
         avg_cost = sec_data.get("avg_cost", 0)
@@ -506,6 +581,7 @@ class RebalanceEngine:
             symbol,
             action_for_cooloff,
             cooloff_days,
+            latest_trade=latest_trade,
             as_of_date=as_of_date,
         )
         if is_blocked:
@@ -518,8 +594,7 @@ class RebalanceEngine:
 
         # Convert to local currency
         if currency != "EUR":
-            rate = await self._currency.get_rate(currency)
-            local_value_delta = raw_value_delta / rate if rate > 0 else raw_value_delta
+            local_value_delta = raw_value_delta / fx_rate if fx_rate > 0 else raw_value_delta
         else:
             local_value_delta = raw_value_delta
 
@@ -596,8 +671,7 @@ class RebalanceEngine:
                 if max_sell_value_eur <= 0:
                     return None
                 if currency != "EUR":
-                    rate = await self._currency.get_rate(currency)
-                    max_sell_local = max_sell_value_eur / rate if rate > 0 else max_sell_value_eur
+                    max_sell_local = max_sell_value_eur / fx_rate if fx_rate > 0 else max_sell_value_eur
                 else:
                     max_sell_local = max_sell_value_eur
                 max_sell_qty = (int(max_sell_local / price) // lot_size) * lot_size
@@ -611,7 +685,10 @@ class RebalanceEngine:
         # Recalculate EUR value
         local_value = rounded_qty * price
         if currency != "EUR":
-            actual_value_eur = await self._currency.to_eur(local_value, currency)
+            if fx_rate > 0:
+                actual_value_eur = local_value * fx_rate
+            else:
+                actual_value_eur = await self._currency.to_eur(local_value, currency)
         else:
             actual_value_eur = local_value
 
@@ -624,8 +701,7 @@ class RebalanceEngine:
                 return None
             if actual_value_eur > max_buy_eur:
                 if currency != "EUR":
-                    rate = await self._currency.get_rate(currency)
-                    max_buy_local = max_buy_eur / rate if rate > 0 else max_buy_eur
+                    max_buy_local = max_buy_eur / fx_rate if fx_rate > 0 else max_buy_eur
                 else:
                     max_buy_local = max_buy_eur
                 capped_qty = (int(max_buy_local / price) // lot_size) * lot_size
@@ -634,7 +710,9 @@ class RebalanceEngine:
                 rounded_qty = capped_qty
                 local_value = rounded_qty * price
                 if currency != "EUR":
-                    actual_value_eur = await self._currency.to_eur(local_value, currency)
+                    actual_value_eur = (
+                        local_value * fx_rate if fx_rate > 0 else await self._currency.to_eur(local_value, currency)
+                    )
                 else:
                     actual_value_eur = local_value
 
@@ -710,6 +788,7 @@ class RebalanceEngine:
         symbol: str,
         action: str,
         cooloff_days: int,
+        latest_trade: dict | None = None,
         as_of_date: str | None = None,
     ) -> tuple[bool, str]:
         """Check if trade would violate cool-off period.
@@ -721,19 +800,20 @@ class RebalanceEngine:
         if cooloff_days <= 0:
             return False, ""
 
-        # Get last trade for this symbol
-        trades_fn = getattr(self._db, "get_trades", None)
-        if not callable(trades_fn):
-            return False, ""
-        maybe_trades = trades_fn(symbol=symbol, limit=1)
-        if not inspect.isawaitable(maybe_trades):
-            return False, ""
-        trades = await maybe_trades
+        last_trade = latest_trade
+        if not last_trade:
+            # Fallback: fetch latest trade if caller did not preload it.
+            trades_fn = getattr(self._db, "get_trades", None)
+            if not callable(trades_fn):
+                return False, ""
+            maybe_trades = trades_fn(symbol=symbol, limit=1)
+            if not inspect.isawaitable(maybe_trades):
+                return False, ""
+            trades = await maybe_trades
+            if not trades:
+                return False, ""  # No trade history, allow trade
+            last_trade = trades[0]
 
-        if not trades:
-            return False, ""  # No trade history, allow trade
-
-        last_trade = trades[0]
         last_action = last_trade["side"]  # 'BUY' or 'SELL'
         last_date = datetime.fromtimestamp(last_trade["executed_at"])
 
@@ -766,6 +846,10 @@ class RebalanceEngine:
         current: dict[str, float] | None = None,
         total_value: float | None = None,
         symbol_convictions: dict[str, float] | None = None,
+        preloaded_positions: list[dict] | None = None,
+        preloaded_securities_map: dict[str, dict] | None = None,
+        preloaded_symbol_scores: dict[str, float] | None = None,
+        preloaded_symbol_prices: dict[str, float] | None = None,
     ) -> list[TradeRecommendation]:
         """Scale down buy recommendations to fit within available cash."""
         return await apply_cash_constraint(
@@ -777,6 +861,10 @@ class RebalanceEngine:
             current=current,
             total_value=total_value,
             symbol_convictions=symbol_convictions,
+            preloaded_positions=preloaded_positions,
+            preloaded_securities_map=preloaded_securities_map,
+            preloaded_symbol_scores=preloaded_symbol_scores,
+            preloaded_symbol_prices=preloaded_symbol_prices,
         )
 
     async def _get_deficit_sells(
@@ -804,6 +892,10 @@ class RebalanceEngine:
         total_value: float | None = None,
         reason_kind: str = "cash_deficit",
         max_sell_conviction: float | None = None,
+        preloaded_positions: list[dict] | None = None,
+        preloaded_securities_map: dict[str, dict] | None = None,
+        preloaded_symbol_scores: dict[str, float] | None = None,
+        preloaded_symbol_prices: dict[str, float] | None = None,
     ) -> list[TradeRecommendation]:
         """Generate sell recommendations to cover remaining deficit."""
         return await generate_deficit_sells(
@@ -815,6 +907,10 @@ class RebalanceEngine:
             total_value=total_value,
             reason_kind=reason_kind,
             max_sell_conviction=max_sell_conviction,
+            preloaded_positions=preloaded_positions,
+            preloaded_securities_map=preloaded_securities_map,
+            preloaded_symbol_scores=preloaded_symbol_scores,
+            preloaded_symbol_prices=preloaded_symbol_prices,
         )
 
     async def _get_positions_for_context(
