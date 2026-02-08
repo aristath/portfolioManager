@@ -47,14 +47,6 @@ async def get_portfolio_allocations() -> dict[str, Any]:
     return await service.get_allocation_comparison()
 
 
-async def _backfill_portfolio_snapshots(db, currency) -> None:
-    """Reconstruct historical portfolio snapshots."""
-    from sentinel.snapshot_service import SnapshotService
-
-    service = SnapshotService(db, currency)
-    await service.backfill()
-
-
 def _ts_to_iso(ts: int) -> str:
     """Convert unix timestamp to YYYY-MM-DD string."""
     return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d")
@@ -77,15 +69,9 @@ async def get_portfolio_pnl_history(
     """
     days = 365
 
-    # Get daily snapshots (need extra 365 days for 1-year rolling window)
+    # Get daily snapshots (need extra 365 days for 1-year rolling window).
+    # Snapshot maintenance is handled by scheduled jobs; avoid backfill work on request path.
     snapshots = await deps.db.get_portfolio_snapshots(days + 365)
-
-    # Check if we need to backfill
-    latest_ts = await deps.db.get_latest_snapshot_date()
-    today_ts = _midnight_utc_ts(date_type.today().isoformat())
-    if not latest_ts or latest_ts < today_ts:
-        await _backfill_portfolio_snapshots(deps.db, deps.currency)
-        snapshots = await deps.db.get_portfolio_snapshots(days + 365)
 
     if not snapshots:
         return {"snapshots": [], "summary": None}

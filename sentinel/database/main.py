@@ -593,15 +593,7 @@ class Database(BaseDatabase):
         await self.conn.commit()
 
     async def seed_default_job_schedules(self) -> None:
-        """Seed default job schedules if table is empty."""
-        cursor = await self.conn.execute("SELECT COUNT(*) FROM job_schedules")
-        row = await cursor.fetchone()
-        count = row[0] if row else 0
-        if count > 0:
-            return
-
-        now = int(datetime.now().timestamp())
-
+        """Ensure default job schedules exist without overriding user-customized values."""
         # Default job schedules
         # (job_type, interval, interval_open, timing, category, description)
         defaults = [
@@ -613,6 +605,14 @@ class Database(BaseDatabase):
             ("sync:trades", 60, 60, 0, "sync", "Sync trade history from broker"),
             ("sync:cashflows", 1440, 1440, 0, "sync", "Sync cash flows from broker"),
             ("sync:dividends", 1440, 1440, 0, "sync", "Sync dividends from broker"),
+            (
+                "snapshot:backfill",
+                1440,
+                1440,
+                0,
+                "sync",
+                "Maintain portfolio snapshots by filling missing dates",
+            ),
             ("aggregate:compute", 1440, 1440, 1, "sync", "Compute aggregate price series"),
             ("trading:check_markets", 30, 30, 2, "trading", "Check which markets are open"),
             ("trading:execute", 30, 15, 2, "trading", "Execute pending trade recommendations"),
@@ -623,24 +623,17 @@ class Database(BaseDatabase):
         ]
 
         for job_type, interval, interval_open, timing, cat, desc in defaults:
-            await self.conn.execute(
-                """INSERT INTO job_schedules
-                   (job_type, interval_minutes, interval_market_open_minutes,
-                    market_timing, description, category,
-                    created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    job_type,
-                    interval,
-                    interval_open,
-                    timing,
-                    desc,
-                    cat,
-                    now,
-                    now,
-                ),
+            existing = await self.get_job_schedule(job_type)
+            if existing:
+                continue
+            await self.upsert_job_schedule(
+                job_type=job_type,
+                interval_minutes=interval,
+                interval_market_open_minutes=interval_open,
+                market_timing=timing,
+                description=desc,
+                category=cat,
             )
-        await self.conn.commit()
 
     async def get_last_job_completion_by_prefix(self, prefix: str) -> Optional[datetime]:
         """Get most recent completion time for jobs matching prefix."""

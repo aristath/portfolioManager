@@ -104,6 +104,7 @@ async def lifespan(app: FastAPI):
         planner,
         cache,
         market_checker,
+        currency,
     )
     logger.info("Job scheduler started")
 

@@ -274,6 +274,14 @@ async def sync_dividends(db, broker) -> None:
     logger.info(f"Dividends sync complete: {new_count} new, {skipped_count} existing")
 
 
+async def snapshot_backfill(db, currency) -> None:
+    """Maintain portfolio snapshots by filling only missing dates."""
+    from sentinel.snapshot_service import SnapshotService
+
+    service = SnapshotService(db, currency)
+    await service.backfill()
+
+
 async def aggregate_compute(db) -> None:
     """Compute aggregate price series for country and industry groups."""
     from sentinel.aggregates import AggregateComputer

@@ -38,6 +38,7 @@ TASK_REGISTRY: dict[str, tuple[Callable, list[str]]] = {
     "sync:trades": (tasks.sync_trades, ["db", "broker"]),
     "sync:cashflows": (tasks.sync_cashflows, ["db", "broker"]),
     "sync:dividends": (tasks.sync_dividends, ["db", "broker"]),
+    "snapshot:backfill": (tasks.snapshot_backfill, ["db", "currency"]),
     "aggregate:compute": (tasks.aggregate_compute, ["db"]),
     "trading:check_markets": (tasks.trading_check_markets, ["broker", "db", "planner"]),
     "trading:execute": (tasks.trading_execute, ["broker", "db", "planner"]),
@@ -61,6 +62,7 @@ async def init(
     planner,
     cache,
     market_checker,
+    currency,
 ) -> AsyncIOScheduler:
     """Create scheduler, load schedules from DB, add all jobs, start.
 
@@ -85,6 +87,7 @@ async def init(
         "planner": planner,
         "cache": cache,
         "market_checker": market_checker,
+        "currency": currency,
     }
     _current_job = None
 

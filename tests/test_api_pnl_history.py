@@ -3,7 +3,7 @@
 import os
 import tempfile
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import pytest_asyncio
@@ -45,8 +45,7 @@ class TestPnlHistoryResponseFormat:
         deps.db = temp_db
         deps.currency = currency
 
-        with patch("sentinel.api.routers.portfolio._backfill_portfolio_snapshots", new_callable=AsyncMock):
-            result = await get_portfolio_pnl_history(deps)
+        result = await get_portfolio_pnl_history(deps)
 
         assert result == {"snapshots": [], "summary": None}
 
@@ -83,8 +82,7 @@ class TestPnlHistoryResponseFormat:
         deps.db = temp_db
         deps.currency = currency
 
-        with patch("sentinel.api.routers.portfolio._backfill_portfolio_snapshots", new_callable=AsyncMock):
-            result = await get_portfolio_pnl_history(deps)
+        result = await get_portfolio_pnl_history(deps)
 
         assert "snapshots" in result
         assert "summary" in result
@@ -140,8 +138,7 @@ class TestPnlHistoryComputations:
         deps.db = temp_db
         deps.currency = currency
 
-        with patch("sentinel.api.routers.portfolio._backfill_portfolio_snapshots", new_callable=AsyncMock):
-            result = await get_portfolio_pnl_history(deps)
+        result = await get_portfolio_pnl_history(deps)
 
         # All points should have total_value = 500 + 300 + 200 = 1000
         for snap in result["snapshots"]:
@@ -178,8 +175,7 @@ class TestPnlHistoryComputations:
         deps.db = temp_db
         deps.currency = currency
 
-        with patch("sentinel.api.routers.portfolio._backfill_portfolio_snapshots", new_callable=AsyncMock):
-            result = await get_portfolio_pnl_history(deps)
+        result = await get_portfolio_pnl_history(deps)
 
         # All points should have net_deposits = 5000
         for snap in result["snapshots"]:
@@ -187,12 +183,11 @@ class TestPnlHistoryComputations:
                 assert snap["net_deposits_eur"] == 5000.0
 
     @pytest.mark.asyncio
-    @pytest.mark.asyncio
-    async def test_backfill_triggered_when_stale(self, temp_db):
-        """Backfill runs when latest snapshot is older than today."""
+    async def test_stale_snapshots_do_not_trigger_backfill_on_read(self, temp_db):
+        """P&L endpoint does not perform backfill work on request path."""
         from sentinel.api.routers.portfolio import get_portfolio_pnl_history
 
-        # Insert a snapshot from yesterday
+        # Insert a snapshot from yesterday.
         yesterday = datetime.now(tz=timezone.utc).date() - timedelta(days=1)
         ts = _midnight_utc(yesterday.isoformat())
         await temp_db.upsert_portfolio_snapshot(ts, {"positions": {}, "cash_eur": 0.0})
@@ -204,9 +199,5 @@ class TestPnlHistoryComputations:
         deps.db = temp_db
         deps.currency = currency
 
-        backfill_mock = AsyncMock()
-        with patch("sentinel.api.routers.portfolio._backfill_portfolio_snapshots", backfill_mock):
-            await get_portfolio_pnl_history(deps)
-
-        # Backfill should have been called since yesterday < today
-        backfill_mock.assert_called_once()
+        result = await get_portfolio_pnl_history(deps)
+        assert "snapshots" in result
