@@ -36,7 +36,10 @@ async def add_security(
     # Check if already exists
     existing = await deps.db.get_security(symbol)
     if existing:
-        raise HTTPException(status_code=400, detail="Security already exists")
+        # If security exists but is inactive, treat this as a re-enable.
+        # This matches the UX expectation that "adding" an inactive symbol brings it back into the universe.
+        if int(existing.get("active", 0) or 0) == 1:
+            raise HTTPException(status_code=400, detail="Security already exists")
 
     # Get info from broker
     info = await deps.broker.get_security_info(symbol)
@@ -50,6 +53,7 @@ async def add_security(
     min_lot = int(float(info.get("lot", 1)))
 
     # Save to database
+    was_reenabled = bool(existing and int(existing.get("active", 0) or 0) == 0)
     await deps.db.upsert_security(
         symbol,
         name=name,
@@ -57,6 +61,10 @@ async def add_security(
         market_id=market_id,
         min_lot=min_lot,
         active=True,
+        # If this is a previously-inactive security, restore trading flags by default.
+        # If the caller explicitly provided allow_buy/allow_sell, honor those.
+        allow_buy=data.get("allow_buy", 1 if was_reenabled else existing.get("allow_buy", 1) if existing else 1),
+        allow_sell=data.get("allow_sell", 1 if was_reenabled else existing.get("allow_sell", 1) if existing else 1),
         geography=data.get("geography", ""),
         industry=data.get("industry", ""),
     )
@@ -70,7 +78,13 @@ async def add_security(
     if prices:
         await deps.db.save_prices(symbol, prices)
 
-    return {"status": "ok", "symbol": symbol, "name": name, "prices_count": len(prices)}
+    return {
+        "status": "ok",
+        "symbol": symbol,
+        "name": name,
+        "prices_count": len(prices),
+        "re_enabled": was_reenabled,
+    }
 
 
 @router.delete("/{symbol}")
