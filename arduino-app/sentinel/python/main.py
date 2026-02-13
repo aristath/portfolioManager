@@ -4,8 +4,8 @@ Sentinel LED App - NeoPixel heatmap display for Arduino UNO Q.
 
 Transport follows Arduino router docs and our prior working app:
 - The MPU (this Python process) polls Sentinel API, computes before/after scores,
-  then *pushes* them to the MCU with `Bridge.call("heatmap/update", before, after)`.
-- The MCU registers `Bridge.provide("heatmap/update", ...)` and renders locally.
+  then *pushes* them to the MCU with `Bridge.call("heatmap.update", before, after)`.
+- The MCU registers `Bridge.provide("heatmap.update", ...)` and renders locally.
 """
 
 from __future__ import annotations
@@ -165,7 +165,7 @@ class HeatmapPusher:
             self._after = after40
             self._last_refresh = time.time()
         # Push to MCU; if it fails, keep cached data for next try.
-        Bridge.call("heatmap/update", before40, after40, timeout=10)
+        Bridge.call("heatmap.update", before40, after40, timeout=10)
 
 
 pusher = HeatmapPusher()
@@ -185,7 +185,7 @@ def main() -> None:
         pusher.push_once()
     except Exception as e:  # noqa: BLE001
         logger.warning("Initial heatmap push failed: %s", e)
-    logger.info("Ready: pushing heatmap/update every %ss", REFRESH_INTERVAL_SEC)
+    logger.info("Ready: pushing heatmap.update every %ss", REFRESH_INTERVAL_SEC)
     App.run(user_loop=loop)
 
 

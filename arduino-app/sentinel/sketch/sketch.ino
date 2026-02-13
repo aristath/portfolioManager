@@ -13,13 +13,10 @@
 // Pin:
 // - NeoPixel data on D6 (per your wiring).
 
-#define MSGPACK_MAX_ARRAY_SIZE 96
-#define MSGPACK_MAX_PACKET_BYTE_SIZE 96
-#define MSGPACK_MAX_OBJECT_SIZE 256
-// Force MsgPack to use ArxContainer types so we don't pull libstdc++ on UNO Q.
-#define ARX_HAVE_LIBSTDCPLUSPLUS 0
-// Force MsgPack to use the lightweight ArxContainer types instead of
-// pulling in libstdc++ (the Zephyr core already provides minimal ABI).
+#define MSGPACK_MAX_ARRAY_SIZE 512
+#define MSGPACK_MAX_PACKET_BYTE_SIZE 512
+#define MSGPACK_MAX_OBJECT_SIZE 512
+// Force MsgPack to use lightweight ArxContainer types to avoid pulling libstdc++.
 #define ARX_HAVE_LIBSTDCPLUSPLUS 0
 
 #include <Arduino_RouterBridge.h>
@@ -70,18 +67,6 @@ static float clampf(float v, float lo, float hi) {
 
 static float absf(float v) {
   return (v < 0.0f) ? -v : v;
-}
-
-// Parse a MsgPack array of floats into a fixed C array; returns true on success.
-static bool unpackFloatArray(MsgPack::object obj, float* outArr, int needed) {
-  if (!obj.is<MsgPack::arr_t<MsgPack::object>>()) return false;
-  MsgPack::arr_t<MsgPack::object> arr = obj.as<MsgPack::arr_t<MsgPack::object>>();
-  if ((int)arr.size() < needed) return false;
-  for (int i = 0; i < needed; i++) {
-    if (!arr[i].is<float>()) return false;
-    outArr[i] = clampf(arr[i].as<float>(), -0.5f, 0.5f);
-  }
-  return true;
 }
 
 static uint8_t gamma8(uint8_t x) {
@@ -141,12 +126,12 @@ static void driftPoints(float dt) {
   edy += 0.002f * sinf(tSec * 0.6f);
 }
 
-static void updateHeatmap(MsgPack::arr_t<MsgPack::object> payload) {
-  // Expect [before40, after40]; each is an array of floats.
-  if (payload.size() < 2) return;
-  if (!payload[0].is<MsgPack::object>() || !payload[1].is<MsgPack::object>()) return;
-  if (!unpackFloatArray(payload[0].as<MsgPack::object>(), before40, 40)) return;
-  if (!unpackFloatArray(payload[1].as<MsgPack::object>(), after40, 40)) return;
+static void updateHeatmap(MsgPack::arr_t<float> inBefore, MsgPack::arr_t<float> inAfter) {
+  if ((int)inBefore.size() < 40 || (int)inAfter.size() < 40) return;
+  for (int i = 0; i < 40; i++) {
+    before40[i] = clampf(inBefore[i], -0.5f, 0.5f);
+    after40[i] = clampf(inAfter[i], -0.5f, 0.5f);
+  }
   hasHeatmapData = true;
 }
 
@@ -259,12 +244,14 @@ void setup() {
   for (int i = 0; i < 40; i++) { before40[i] = 0.0f; after40[i] = 0.0f; }
 
   Bridge.begin();
-  Bridge.provide("heatmap/update", updateHeatmap);
+  Bridge.provide("heatmap.update", updateHeatmap);
 
   lastFrameMs = millis();
 }
 
 void loop() {
+  Bridge.update();
+
   uint32_t now = millis();
   uint32_t dtMs = now - lastFrameMs;
   if (dtMs > 100) dtMs = 100;
