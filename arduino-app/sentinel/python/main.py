@@ -50,8 +50,14 @@ def _default_gateway_ip() -> str | None:
     return None
 
 
+_host_ip = os.environ.get("HOST_IP")
 _gw = _default_gateway_ip()
-SENTINEL_API_URL = os.environ.get("SENTINEL_API_URL") or (f"http://{_gw}:8000" if _gw else "http://172.17.0.1:8000")
+SENTINEL_API_URL = (
+    os.environ.get("SENTINEL_API_URL")
+    or (f"http://{_host_ip}:8000" if _host_ip else None)
+    or (f"http://{_gw}:8000" if _gw else None)
+    or "http://172.17.0.1:8000"
+)
 REFRESH_INTERVAL_SEC = 30  # MCU polls every 30s; keep cache roughly aligned.
 SCORE_CLAMP_ABS = 0.5
 PARTS = 40
