@@ -1,8 +1,8 @@
 # Sentinel LED - Arduino App configuration
 # Orbital portfolio visualization for Arduino UNO Q LED matrix
 
-name: sentinel-led
-description: "Orbital portfolio visualization - displays holdings as orbiting bodies"
+name: sentinel
+description: "Portfolio heatmap visualization - NeoPixel shield"
 icon: "\U0001F4CA"
 
 # Expose no ports - this app only communicates with MCU and fetches from sentinel API

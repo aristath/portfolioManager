@@ -59,20 +59,25 @@ static float clampf(float v, float lo, float hi) {
   return v;
 }
 
+static float absf(float v) {
+  return (v < 0.0f) ? -v : v;
+}
+
 static uint8_t gamma8(uint8_t x) {
-  float xf = (float)x / 255.0f;
-  float yf = powf(xf, 2.2f);
-  int yi = (int)(yf * 255.0f + 0.5f);
-  if (yi < 0) yi = 0;
-  if (yi > 255) yi = 255;
-  return (uint8_t)yi;
+  // Avoid powf(). A simple gamma~2 curve is fine at our low brightness cap.
+  uint16_t y = (uint16_t)x * (uint16_t)x; // 0..65025
+  return (uint8_t)((y + 255) / 255);
 }
 
 static void hsv2rgb(float h, float s, float v, uint8_t &r, uint8_t &g, uint8_t &b) {
-  h = h - floorf(h);
+  // Avoid floorf()/fmodf() to keep the link simple on Zephyr.
+  h = h - (int)h;
+  if (h < 0.0f) h += 1.0f;
   float c = v * s;
   float hp = h * 6.0f;
-  float x = c * (1.0f - fabsf(fmodf(hp, 2.0f) - 1.0f));
+  float hp_mod2 = hp;
+  if (hp_mod2 >= 2.0f) hp_mod2 -= 2.0f * (int)(hp_mod2 / 2.0f); // since hp>=0
+  float x = c * (1.0f - absf(hp_mod2 - 1.0f));
   float r1 = 0, g1 = 0, b1 = 0;
   if (hp < 1) { r1 = c; g1 = x; b1 = 0; }
   else if (hp < 2) { r1 = x; g1 = c; b1 = 0; }
@@ -99,15 +104,15 @@ static void driftPoints(float dt) {
   ex += edx * dt * DRIFT_SPEED * 10.0f;
   ey += edy * dt * DRIFT_SPEED * 10.0f;
 
-  if (cx < 0.0f) { cx = 0.0f; cdx = fabsf(cdx); }
-  if (cx > (float)(W - 1)) { cx = (float)(W - 1); cdx = -fabsf(cdx); }
-  if (cy < 0.0f) { cy = 0.0f; cdy = fabsf(cdy); }
-  if (cy > (float)(H - 1)) { cy = (float)(H - 1); cdy = -fabsf(cdy); }
+  if (cx < 0.0f) { cx = 0.0f; cdx = absf(cdx); }
+  if (cx > (float)(W - 1)) { cx = (float)(W - 1); cdx = -absf(cdx); }
+  if (cy < 0.0f) { cy = 0.0f; cdy = absf(cdy); }
+  if (cy > (float)(H - 1)) { cy = (float)(H - 1); cdy = -absf(cdy); }
 
-  if (ex < 0.0f) { ex = 0.0f; edx = fabsf(edx); }
-  if (ex > (float)(W - 1)) { ex = (float)(W - 1); edx = -fabsf(edx); }
-  if (ey < 0.0f) { ey = 0.0f; edy = fabsf(edy); }
-  if (ey > (float)(H - 1)) { ey = (float)(H - 1); edy = -fabsf(edy); }
+  if (ex < 0.0f) { ex = 0.0f; edx = absf(edx); }
+  if (ex > (float)(W - 1)) { ex = (float)(W - 1); edx = -absf(edx); }
+  if (ey < 0.0f) { ey = 0.0f; edy = absf(edy); }
+  if (ey > (float)(H - 1)) { ey = (float)(H - 1); edy = -absf(edy); }
 
   cdx += 0.002f * sinf(tSec * 0.7f);
   cdy += 0.002f * cosf(tSec * 0.9f);
@@ -134,12 +139,13 @@ static void maybePoll() {
 }
 
 static void renderFrame() {
-  float phase = fmodf(tSec, PULSE_PERIOD_S) / PULSE_PERIOD_S;
+  float cycles = tSec / PULSE_PERIOD_S;
+  float phase = cycles - (int)cycles; // 0..1 for tSec>=0
   float pulse = 0.5f + 0.5f * sinf(phase * 2.0f * (float)M_PI);
 
   float maxAbsDiff = 0.0f;
   for (int i = 0; i < 40; i++) {
-    float d = fabsf(after40[i] - before40[i]);
+    float d = absf(after40[i] - before40[i]);
     if (d > maxAbsDiff) maxAbsDiff = d;
   }
   if (maxAbsDiff < 0.001f) maxAbsDiff = 0.001f;
@@ -183,11 +189,11 @@ static void renderFrame() {
     for (int x = 0; x < W; x++) {
       int p = XY(x, y);
       float uNorm = (uField[p] - uMin) / denom;
-      int idx = (int)floorf(uNorm * 39.999f);
+      int idx = (int)(uNorm * 40.0f);
       if (idx < 0) idx = 0;
       if (idx > 39) idx = 39;
 
-      float diff = fabsf(after40[idx] - before40[idx]);
+      float diff = absf(after40[idx] - before40[idx]);
       float strength = clampf(diff / maxAbsDiff, 0.0f, 1.0f);
       float mix = strength * pulse;
       float s = after40[idx] * (1.0f - mix) + before40[idx] * mix;

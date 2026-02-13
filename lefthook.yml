@@ -1,5 +1,5 @@
 pre-commit:
-  parallel: true
+  parallel: false
   commands:
     trailing-whitespace:
       glob: "*.{py,js,ts,jsx,tsx,json,yml,yaml,toml,md,html,css}"

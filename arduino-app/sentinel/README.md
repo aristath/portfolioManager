@@ -73,7 +73,7 @@ Sentinel API (port 8000)
         │  GET /api/portfolio
         │  GET /api/planner/actions
         ▼
-sentinel-led App (Docker)
+sentinel App (Docker)
         │
         │  Bridge.call("updateTreemap", bytes)
         ▼
@@ -102,11 +102,11 @@ Each region (11 bytes):
 
 ```bash
 # View logs
-ssh arduino@192.168.1.11 'arduino-app-cli app logs user:sentinel-led'
+ssh arduino@192.168.1.11 'arduino-app-cli app logs user:sentinel'
 
 # Restart
-ssh arduino@192.168.1.11 'arduino-app-cli app restart user:sentinel-led'
+ssh arduino@192.168.1.11 'arduino-app-cli app restart user:sentinel'
 
 # Stop
-ssh arduino@192.168.1.11 'arduino-app-cli app stop user:sentinel-led'
+ssh arduino@192.168.1.11 'arduino-app-cli app stop user:sentinel'
 ```
