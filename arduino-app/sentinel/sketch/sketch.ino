@@ -14,7 +14,13 @@
 // - NeoPixel data on D6 (per your wiring).
 
 #define MSGPACK_MAX_ARRAY_SIZE 96
+#define MSGPACK_MAX_PACKET_BYTE_SIZE 96
 #define MSGPACK_MAX_OBJECT_SIZE 256
+// Force MsgPack to use ArxContainer types so we don't pull libstdc++ on UNO Q.
+#define ARX_HAVE_LIBSTDCPLUSPLUS 0
+// Force MsgPack to use the lightweight ArxContainer types instead of
+// pulling in libstdc++ (the Zephyr core already provides minimal ABI).
+#define ARX_HAVE_LIBSTDCPLUSPLUS 0
 
 #include <Arduino_RouterBridge.h>
 #include <Adafruit_NeoPixel.h>
