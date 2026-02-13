@@ -57,6 +57,46 @@ def _midnight_utc_ts(iso_date: str) -> int:
     return int(datetime.strptime(iso_date, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp())
 
 
+@router.get("/cagr")
+async def get_portfolio_cagr(
+    deps: Annotated[CommonDependencies, Depends(get_common_deps)],
+) -> dict[str, Any]:
+    """Lightweight CAGR from inception for ambient display."""
+    snapshots = await deps.db.get_portfolio_snapshots()
+    if not snapshots:
+        return {"cagr": 0.0, "years": 0.0, "target": 11.0}
+
+    # Latest snapshot → final value
+    latest = snapshots[-1]
+    data = latest["data"]
+    positions_value = sum(p.get("value_eur", 0) for p in data.get("positions", {}).values())
+    final_value = positions_value + (data.get("cash_eur", 0.0) or 0.0)
+
+    # Net deposits from card cash flows
+    cash_flows = await deps.db.get_cash_flows()
+    total_deposits = 0.0
+    for cf in cash_flows:
+        if cf["type_id"] in ("card", "card_payout"):
+            amount_eur = await deps.currency.to_eur_for_date(cf["amount"], cf["currency"], cf["date"])
+            total_deposits += amount_eur
+
+    # Years from first snapshot to now
+    first_ts = snapshots[0]["date"]
+    last_ts = snapshots[-1]["date"]
+    years = (last_ts - first_ts) / (365.25 * 86400)
+
+    if years > 0 and total_deposits > 0 and final_value > 0:
+        cagr = ((final_value / total_deposits) ** (1 / years) - 1) * 100
+    else:
+        cagr = 0.0
+
+    return {
+        "cagr": round(cagr, 2),
+        "years": round(years, 2),
+        "target": 11.0,
+    }
+
+
 @router.get("/pnl-history")
 async def get_portfolio_pnl_history(
     deps: Annotated[CommonDependencies, Depends(get_common_deps)],

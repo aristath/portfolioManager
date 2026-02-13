@@ -122,6 +122,7 @@ class TestRunnerInit:
             mock_sched.add_job = MagicMock()
             MockScheduler.return_value = mock_sched
 
+            mock_currency = MagicMock()
             scheduler = await runner.init(
                 mock_db,
                 mock_broker,
@@ -129,6 +130,7 @@ class TestRunnerInit:
                 mock_planner,
                 mock_cache,
                 mock_market_checker,
+                mock_currency,
             )
 
             assert scheduler is not None
@@ -157,6 +159,7 @@ class TestRunnerInit:
             mock_sched.add_job = MagicMock()
             MockScheduler.return_value = mock_sched
 
+            mock_currency = MagicMock()
             await runner.init(
                 mock_db,
                 mock_broker,
@@ -164,6 +167,7 @@ class TestRunnerInit:
                 mock_planner,
                 mock_cache,
                 mock_market_checker,
+                mock_currency,
             )
 
             # Verify get_job_schedules was called

@@ -45,3 +45,6 @@ sentinel/data/
 TUI/sentinel-tui-go
 
 TUI/sentinel-tui
+
+# World binary
+world/world
