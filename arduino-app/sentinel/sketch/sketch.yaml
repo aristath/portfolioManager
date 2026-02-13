@@ -6,6 +6,10 @@ profiles:
     fqbn: arduino:zephyr:unoq
     platforms:
       - platform: arduino:zephyr
+        platform_flags:
+          # Avoid pulling in libstdc++ exception/Rtti stubs that clash with core abi.
+          - -fno-exceptions
+          - -fno-rtti
     libraries:
       - Arduino_RouterBridge (0.3.0)
       - Arduino_RPClite (0.2.1)
