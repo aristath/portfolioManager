@@ -27,7 +27,31 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 
-SENTINEL_API_URL = os.environ.get("SENTINEL_API_URL", "http://172.17.0.1:8000")
+def _default_gateway_ip() -> str | None:
+    """Best-effort container->host gateway discovery (no external deps)."""
+    try:
+        with open("/proc/net/route") as f:
+            # Iface  Destination  Gateway  Flags ...
+            for line in f.readlines()[1:]:
+                parts = line.strip().split()
+                if len(parts) < 4:
+                    continue
+                dest, gw, flags = parts[1], parts[2], parts[3]
+                if dest != "00000000":
+                    continue
+                if int(flags, 16) & 0x2 == 0:
+                    continue
+                # Gateway is little-endian hex.
+                b = bytes.fromhex(gw)
+                ip = ".".join(str(x) for x in b[::-1])
+                return ip
+    except Exception:
+        return None
+    return None
+
+
+_gw = _default_gateway_ip()
+SENTINEL_API_URL = os.environ.get("SENTINEL_API_URL") or (f"http://{_gw}:8000" if _gw else "http://172.17.0.1:8000")
 REFRESH_INTERVAL_SEC = 30  # MCU polls every 30s; keep cache roughly aligned.
 SCORE_CLAMP_ABS = 0.5
 PARTS = 40
