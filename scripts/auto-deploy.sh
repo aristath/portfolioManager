@@ -109,7 +109,9 @@ if git diff --name-only "$LOCAL" "$REMOTE" -- arduino-app/sentinel/ | grep -q .;
     cp "$LED_APP_SRC/app.yaml" "$LED_APP_DEST/"
     cp -R "$LED_APP_SRC/python" "$LED_APP_DEST/"
     cp -R "$LED_APP_SRC/sketch" "$LED_APP_DEST/"
-    arduino-app-cli app stop sentinel 2>/dev/null || true
+    # On-device, the running app id shows up as "user:sentinel".
+    # Stop by id first (most reliable), then fall back to the short name.
+    arduino-app-cli app stop user:sentinel 2>/dev/null || arduino-app-cli app stop sentinel 2>/dev/null || true
     cd "$LED_APP_DEST" && arduino-app-cli app start .
     cd "$REPO_DIR"
     log "LED app updated and restarted"
