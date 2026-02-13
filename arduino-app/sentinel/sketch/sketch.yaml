@@ -6,7 +6,7 @@ profiles:
     fqbn: arduino:zephyr:unoq
     platforms:
       - platform: arduino:zephyr
-        platform_flags: "-fno-exceptions -fno-rtti"
+        platform_flags: "-fno-exceptions -fno-rtti -nostdlib++"
     libraries:
       - Arduino_RouterBridge (0.3.0)
       - Arduino_RPClite (0.2.1)
