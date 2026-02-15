@@ -7,8 +7,8 @@
 //   Rows 1-4: earth bead position marker (amber, worth 1-4)
 //   Only the single position-indicator bead is lit per earth section.
 // Column 0 indicators:
-//   r0: heartbeat (red, 50ms on / 1950ms off) — alive if RPC received recently
-//   r1-r3: P/L bar (green up / red down, 500ms blink)
+//   r0: heartbeat (red, 200ms on / 1000ms off) — alive if RPC received recently
+//   r1-r3: P/L bar (green up / red down, 800ms blink)
 //   r4: recommendations (blue, 100ms on / 300ms off) — pending trades exist
 //
 // Device-only patches (not in this repo):
@@ -186,8 +186,8 @@ void loop() {
   unsigned long now = millis();
 
   // Compute blink states from time (avoids per-feature timers).
-  bool newPnlBlink = (now % 1000) < 500;
-  bool newHeartbeat = (now % 600) < 150;
+  bool newPnlBlink = (now % 1600) < 800;
+  bool newHeartbeat = (now % 1200) < 200;
   bool newRecBlink  = (now % 400) < 100;
 
   // Redraw only when a visible blink state changes.
