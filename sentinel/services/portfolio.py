@@ -58,6 +58,7 @@ class PortfolioService:
 
             pos["value_local"] = await pos_calc.calculate_value_local(qty, price)
             pos["value_eur"] = await pos_calc.calculate_value_eur(qty, price, pos_currency)
+            pos["invested_eur"] = await pos_calc.calculate_value_eur(qty, avg_cost, pos_currency)
 
             profit_pct, _ = pos_calc.calculate_profit(qty, price, avg_cost)
             pos["profit_pct"] = profit_pct
@@ -67,6 +68,14 @@ class PortfolioService:
             if sec:
                 pos["name"] = sec.get("name", symbol)
 
+        # Portfolio-level return (EUR-converted cost basis vs current value)
+        total_current_eur = sum(p.get("value_eur", 0) for p in positions)
+        total_invested_eur = sum(p.get("invested_eur", 0) for p in positions)
+        if total_invested_eur > 0:
+            portfolio_return_pct = round((total_current_eur - total_invested_eur) / total_invested_eur * 100, 2)
+        else:
+            portfolio_return_pct = 0.0
+
         # Get cash balances
         cash = await self._portfolio.get_cash_balances()
         total_cash_eur = await self._portfolio.total_cash_eur()
@@ -75,6 +84,7 @@ class PortfolioService:
             "positions": positions,
             "total_value": total,
             "total_value_eur": total,
+            "portfolio_return_pct": portfolio_return_pct,
             "cash": cash,
             "total_cash_eur": total_cash_eur,
             "allocations": allocations,

@@ -65,23 +65,7 @@ def push_once() -> None:
     total_eur = portfolio.get("total_value_eur", 0)
     value = max(0, min(99999999, round(total_eur)))
 
-    positions = portfolio.get("positions", []) or []
-    total_invested = 0.0
-    total_current = 0.0
-    for p in positions:
-        qty = float(p.get("quantity") or 0.0)
-        price = float(p.get("current_price") or 0.0)
-        avg_cost = float(p.get("avg_cost") or 0.0)
-        if qty <= 0 or avg_cost <= 0:
-            continue
-        total_invested += avg_cost * qty
-        total_current += price * qty
-
-    if total_invested > 0:
-        return_pct = round((total_current - total_invested) / total_invested * 100)
-    else:
-        return_pct = 0
-    return_pct = max(-99, min(99, return_pct))
+    return_pct = max(-99, min(99, round(portfolio.get("portfolio_return_pct", 0))))
 
     logger.info("Portfolio: EUR %d, P/L %d%%, sending to MCU", value, return_pct)
     Bridge.call("hm.u", [value, return_pct], timeout=10)

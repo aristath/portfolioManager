@@ -7,6 +7,7 @@
 //   Rows 1-4: earth bead position marker (amber, worth 1-4)
 //   Only the single position-indicator bead is lit per earth section.
 // Column 0 is a blinking P/L bar: green up from r2, red down from r2.
+// Corners (r0c0, r4c0) are reserved; P/L uses only r1-r3.
 //
 // Device-only patches (not in this repo):
 // - bridge.h UPDATE_THREAD_STACK_SIZE changed from 500 to 8192
@@ -108,22 +109,20 @@ static void renderDisplay() {
     }
   }
 
-  // P/L bar on column 0 — blinks.
+  // P/L bar on column 0 — blinks. Corners (r0, r4) reserved.
   if (blinkOn && displayPnl != 0) {
     int pnl = displayPnl;
     if (pnl > 0) {
-      // Green, upward from r2: 0-10% = r2, 10-20% += r1, 20-30% += r0.
-      int bars = (pnl - 1) / 10 + 1;
-      if (bars > 3) bars = 3;
-      for (int b = 0; b < bars; b++) {
-        pixels.setPixelColor((2 - b) * 8, pixels.Color(0, BRIGHTNESS, 0));
+      // Green, upward from r2: 0-10% = r2, 10%+ = r2 + r1.
+      pixels.setPixelColor(2 * 8, pixels.Color(0, BRIGHTNESS, 0));
+      if (pnl > 10) {
+        pixels.setPixelColor(1 * 8, pixels.Color(0, BRIGHTNESS, 0));
       }
     } else {
-      // Red, downward from r2: 0-10% = r2, 10-20% += r3, 20-30% += r4.
-      int bars = (-pnl - 1) / 10 + 1;
-      if (bars > 3) bars = 3;
-      for (int b = 0; b < bars; b++) {
-        pixels.setPixelColor((2 + b) * 8, pixels.Color(BRIGHTNESS, 0, 0));
+      // Red, downward from r2: 0-10% = r2, 10%+ = r2 + r3.
+      pixels.setPixelColor(2 * 8, pixels.Color(BRIGHTNESS, 0, 0));
+      if (pnl < -10) {
+        pixels.setPixelColor(3 * 8, pixels.Color(BRIGHTNESS, 0, 0));
       }
     }
   }
