@@ -60,15 +60,23 @@ def _fetch(path: str) -> dict:
 
 
 def push_once() -> None:
-    """Fetch portfolio value and P/L, send both to MCU."""
+    """Fetch portfolio value, P/L, and recommendations, send to MCU."""
     portfolio = _fetch("/api/portfolio")
     total_eur = portfolio.get("total_value_eur", 0)
     value = max(0, min(99999999, round(total_eur)))
 
     return_pct = max(-99, min(99, round(portfolio.get("portfolio_return_pct", 0))))
 
-    logger.info("Portfolio: EUR %d, P/L %d%%, sending to MCU", value, return_pct)
-    Bridge.call("hm.u", [value, return_pct], timeout=10)
+    has_recs = 0
+    try:
+        planner = _fetch("/api/planner/recommendations")
+        recs = planner.get("recommendations", [])
+        has_recs = 1 if recs else 0
+    except Exception:  # noqa: BLE001, S110
+        pass  # Recommendations are optional; don't block the main update
+
+    logger.info("Portfolio: EUR %d, P/L %d%%, recs=%d, sending to MCU", value, return_pct, has_recs)
+    Bridge.call("hm.u", [value, return_pct, has_recs], timeout=10)
 
 
 def loop() -> None:

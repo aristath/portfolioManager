@@ -1,13 +1,15 @@
 // NeoPixel Shield (8x5) — soroban abacus portfolio value display.
 //
 // Shield is natively 8 wide x 5 tall, progressive (non-serpentine) wiring.
-// MPU sends Bridge.call("hm.u", [total_value_eur, return_pct]).
+// MPU sends Bridge.call("hm.u", [total_value_eur, return_pct, has_recs]).
 // MCU displays the value as soroban-style decimal digits:
 //   Row 0 (top): heaven bead (orange, worth 5)
 //   Rows 1-4: earth bead position marker (amber, worth 1-4)
 //   Only the single position-indicator bead is lit per earth section.
-// Column 0 is a blinking P/L bar: green up from r2, red down from r2.
-// Corners (r0c0, r4c0) are reserved; P/L uses only r1-r3.
+// Column 0 indicators:
+//   r0: heartbeat (red, 50ms on / 1950ms off) — alive if RPC received recently
+//   r1-r3: P/L bar (green up / red down, 500ms blink)
+//   r4: recommendations (blue, 100ms on / 300ms off) — pending trades exist
 //
 // Device-only patches (not in this repo):
 // - bridge.h UPDATE_THREAD_STACK_SIZE changed from 500 to 8192
@@ -71,12 +73,18 @@ Adafruit_NeoPixel pixels(NUMPIXELS, PIN, NEO_GRB + NEO_KHZ800);
 
 static int displayValue = 0;
 static int displayPnl = 0;
+static int hasRecs = 0;
 static bool needsRedraw = false;
 
-// Blink timing for P/L bar.
-#define BLINK_MS 500
-static unsigned long lastBlink = 0;
-static bool blinkOn = true;
+// Last successful RPC timestamp (millis).
+static unsigned long lastRpcMs = 0;
+// Heartbeat considered alive if RPC within 10 minutes.
+#define HEARTBEAT_TIMEOUT_MS 600000UL
+
+// Blink states (computed from millis modulo).
+static bool pnlBlinkOn = true;
+static bool heartbeatOn = false;
+static bool recBlinkOn = false;
 
 static void renderDisplay() {
   pixels.clear();
@@ -91,7 +99,7 @@ static void renderDisplay() {
     val /= 10;
   }
 
-  // Abacus on columns 1-7 (column 0 reserved for P/L bar).
+  // Abacus on columns 1-7 (column 0 reserved for indicators).
   for (int col = 1; col < 8; col++) {
     uint8_t d = digits[col];
 
@@ -109,22 +117,33 @@ static void renderDisplay() {
     }
   }
 
-  // P/L bar on column 0 — blinks. Corners (r0, r4) reserved.
-  if (blinkOn && displayPnl != 0) {
+  // --- Column 0 indicators ---
+
+  // Heartbeat: c0r0, red, 50ms on / 1950ms off.
+  unsigned long now = millis();
+  if (heartbeatOn && (now - lastRpcMs < HEARTBEAT_TIMEOUT_MS)) {
+    pixels.setPixelColor(0, pixels.Color(BRIGHTNESS, 0, 0));
+  }
+
+  // P/L bar: c0r1-r3, green/red, 500ms blink.
+  if (pnlBlinkOn && displayPnl != 0) {
     int pnl = displayPnl;
     if (pnl > 0) {
-      // Green, upward from r2: 0-10% = r2, 10%+ = r2 + r1.
       pixels.setPixelColor(2 * 8, pixels.Color(0, BRIGHTNESS, 0));
       if (pnl > 10) {
         pixels.setPixelColor(1 * 8, pixels.Color(0, BRIGHTNESS, 0));
       }
     } else {
-      // Red, downward from r2: 0-10% = r2, 10%+ = r2 + r3.
       pixels.setPixelColor(2 * 8, pixels.Color(BRIGHTNESS, 0, 0));
       if (pnl < -10) {
         pixels.setPixelColor(3 * 8, pixels.Color(BRIGHTNESS, 0, 0));
       }
     }
+  }
+
+  // Recommendations: c0r4, blue, 100ms on / 300ms off.
+  if (recBlinkOn && hasRecs > 0) {
+    pixels.setPixelColor(4 * 8, pixels.Color(0, 0, BRIGHTNESS));
   }
 
   ws2812_show(pixels);
@@ -144,6 +163,11 @@ static void hmUpdate(MsgPack::arr_t<int> data) {
     if (displayPnl >  99) displayPnl =  99;
   }
 
+  if ((int)data.size() >= 3) {
+    hasRecs = data[2];
+  }
+
+  lastRpcMs = millis();
   needsRedraw = true;
 }
 
@@ -159,13 +183,24 @@ void setup() {
 void loop() {
   Bridge.update();
 
-  // Toggle blink state for P/L bar.
   unsigned long now = millis();
-  if (now - lastBlink >= BLINK_MS) {
-    lastBlink = now;
-    blinkOn = !blinkOn;
-    if (displayPnl != 0) needsRedraw = true;
-  }
+
+  // Compute blink states from time (avoids per-feature timers).
+  bool newPnlBlink = (now % 1000) < 500;
+  bool newHeartbeat = (now % 2000) < 50;
+  bool newRecBlink  = (now % 400) < 100;
+
+  // Redraw only when a visible blink state changes.
+  bool changed = false;
+  if (newPnlBlink != pnlBlinkOn && displayPnl != 0) changed = true;
+  if (newHeartbeat != heartbeatOn && (now - lastRpcMs < HEARTBEAT_TIMEOUT_MS)) changed = true;
+  if (newRecBlink != recBlinkOn && hasRecs > 0) changed = true;
+
+  pnlBlinkOn = newPnlBlink;
+  heartbeatOn = newHeartbeat;
+  recBlinkOn = newRecBlink;
+
+  if (changed) needsRedraw = true;
 
   if (needsRedraw) {
     needsRedraw = false;
